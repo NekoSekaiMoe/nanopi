@@ -69,7 +69,7 @@ import {
 	type AgentSession,
 	type AgentSessionEvent,
 	parseSkillBlock,
-	type RuntimeReloadHost,
+	type RuntimeReloadHooks,
 } from "../../core/agent-session.ts";
 import { type AgentSessionRuntime, SessionImportFileNotFoundError } from "../../core/agent-session-runtime.ts";
 import type { AgentSessionRuntimeDiagnostic } from "../../core/agent-session-services.ts";
@@ -2153,7 +2153,7 @@ export class InteractiveMode {
 					return this.handleResumeSession(sessionPath, options);
 				},
 			},
-			reloadHost: this.createReloadHost(),
+			reloadHooks: this.createReloadHooks(),
 			shutdownHandler: () => {
 				this.shutdownRequested = true;
 				if (this.session.isIdle) {
@@ -6548,7 +6548,7 @@ export class InteractiveMode {
 		}
 	}
 
-	private createReloadHost(): RuntimeReloadHost {
+	private createReloadHooks(): RuntimeReloadHooks {
 		let previousEditor: Component | undefined;
 		let reloadBoxDismissed = true;
 		let chatRestoredBeforeSessionStart = false;

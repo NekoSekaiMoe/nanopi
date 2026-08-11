@@ -22,7 +22,7 @@ export {
 	type PromptOptions,
 	parseSkillBlock,
 	RuntimeReloadError,
-	type RuntimeReloadHost,
+	type RuntimeReloadHooks,
 	type SessionStats,
 } from "./core/agent-session.ts";
 export { readStoredCredential } from "./core/auth-storage.ts";

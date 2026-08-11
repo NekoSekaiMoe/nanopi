@@ -9,7 +9,7 @@ import type {
 	ExtensionFactory,
 	LoadExtensionsResult,
 	ResourceLoader,
-	RuntimeReloadHost,
+	RuntimeReloadHooks,
 } from "../../../src/index.ts";
 import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
@@ -47,7 +47,7 @@ async function createReloadingResourceLoader(factory: ExtensionFactory): Promise
 	};
 }
 
-const reloadHost = (beforeReload?: () => void): RuntimeReloadHost => ({ beforeReload });
+const reloadHooks = (beforeReload?: () => void): RuntimeReloadHooks => ({ beforeReload });
 
 describe("issue #6552 deferred extension reload", () => {
 	const harnesses: Harness[] = [];
@@ -81,7 +81,7 @@ describe("issue #6552 deferred extension reload", () => {
 		const harness = await createHarness({ resourceLoader });
 		harnesses.push(harness);
 		await harness.session.bindExtensions({
-			reloadHost: reloadHost(() => {
+			reloadHooks: reloadHooks(() => {
 				events.push("reload");
 			}),
 		});
@@ -108,7 +108,7 @@ describe("issue #6552 deferred extension reload", () => {
 		});
 		const harness = await createHarness({ resourceLoader, withConfiguredAuth: false });
 		harnesses.push(harness);
-		await harness.session.bindExtensions({ reloadHost: reloadHost() });
+		await harness.session.bindExtensions({ reloadHooks: reloadHooks() });
 
 		await expect(harness.session.prompt("/reload-runtime")).resolves.toBeUndefined();
 		expect(getReloadCount()).toBe(1);
@@ -123,7 +123,7 @@ describe("issue #6552 deferred extension reload", () => {
 		let hostReloadCount = 0;
 
 		await harness.session.bindExtensions({
-			reloadHost: reloadHost(() => {
+			reloadHooks: reloadHooks(() => {
 				hostReloadCount++;
 			}),
 		});
@@ -148,7 +148,7 @@ describe("issue #6552 deferred extension reload", () => {
 		});
 		const harness = await createHarness({ resourceLoader, settings: { compaction: { keepRecentTokens: 1 } } });
 		harnesses.push(harness);
-		await harness.session.bindExtensions({ reloadHost: reloadHost() });
+		await harness.session.bindExtensions({ reloadHooks: reloadHooks() });
 		harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 		await harness.session.prompt("first");
 		await harness.session.prompt("second");
@@ -167,7 +167,7 @@ describe("issue #6552 deferred extension reload", () => {
 		});
 		const harness = await createHarness({ resourceLoader });
 		harnesses.push(harness);
-		await harness.session.bindExtensions({ reloadHost: reloadHost() });
+		await harness.session.bindExtensions({ reloadHooks: reloadHooks() });
 		const targetId = harness.sessionManager.appendMessage(userMsg("first branch"));
 		harness.sessionManager.appendMessage(assistantMsg("first reply"));
 		harness.sessionManager.appendMessage(userMsg("abandoned work"));
@@ -208,7 +208,7 @@ describe("issue #6552 deferred extension reload", () => {
 		};
 		const harness = await createHarness({ resourceLoader });
 		harnesses.push(harness);
-		await harness.session.bindExtensions({ reloadHost: reloadHost() });
+		await harness.session.bindExtensions({ reloadHooks: reloadHooks() });
 
 		await expect(harness.session.prompt("reload")).rejects.toBeInstanceOf(RuntimeReloadError);
 		expect(() => oldContext?.isIdle()).toThrow("stale after session replacement or reload");

@@ -339,7 +339,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 					return runtimeHost.switchSession(sessionPath, options);
 				},
 			},
-			reloadHost: {},
+			reloadHooks: {},
 			shutdownHandler: () => {
 				shutdownRequested = true;
 			},

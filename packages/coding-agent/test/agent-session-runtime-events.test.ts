@@ -35,7 +35,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		}
 	});
 
-	async function createRuntimeHost(extensionFactory: ExtensionFactory, options?: { reloadHost?: boolean }) {
+	async function createRuntimeHost(extensionFactory: ExtensionFactory, options?: { reloadHooks?: boolean }) {
 		const tempDir = join(tmpdir(), `pi-runtime-events-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 
@@ -99,7 +99,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 			agentDir: tempDir,
 			sessionManager: SessionManager.create(tempDir),
 		});
-		await runtimeHost.session.bindExtensions(options?.reloadHost ? { reloadHost: {} } : {});
+		await runtimeHost.session.bindExtensions(options?.reloadHooks ? { reloadHooks: {} } : {});
 		let disposed = false;
 		const dispose = async () => {
 			if (disposed) return;
@@ -129,7 +129,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 					if (event.reason === "reload") reloadStarts++;
 				});
 			},
-			{ reloadHost: true },
+			{ reloadHooks: true },
 		);
 
 		await runtimeHost.session.prompt("hello");
@@ -137,9 +137,9 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		expect(originalSessionFile).toBeTruthy();
 
 		await runtimeHost.newSession();
-		await runtimeHost.session.bindExtensions({ reloadHost: {} });
+		await runtimeHost.session.bindExtensions({ reloadHooks: {} });
 		await runtimeHost.switchSession(originalSessionFile!);
-		await runtimeHost.session.bindExtensions({ reloadHost: {} });
+		await runtimeHost.session.bindExtensions({ reloadHooks: {} });
 		await dispose();
 
 		expect(reloadStarts).toBe(0);

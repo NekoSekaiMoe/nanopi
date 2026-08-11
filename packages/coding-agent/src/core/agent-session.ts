@@ -262,7 +262,7 @@ export class RuntimeReloadError extends Error {
 	}
 }
 
-export interface RuntimeReloadHost {
+export interface RuntimeReloadHooks {
 	beforeReload?(): void | Promise<void>;
 	beforeSessionStart?(): void | Promise<void>;
 	afterReload?(): void | Promise<void>;
@@ -325,7 +325,7 @@ export interface ExtensionBindings {
 	abortHandler?: () => void;
 	shutdownHandler?: ShutdownHandler;
 	onError?: ExtensionErrorListener;
-	reloadHost?: RuntimeReloadHost;
+	reloadHooks?: RuntimeReloadHooks;
 }
 
 export type QueuedInputDisposition = "handled" | "queued";
@@ -380,10 +380,6 @@ export interface SessionStats {
 }
 
 type RuntimeAvailability = "available" | "reloadRequested" | "reloading" | "failed" | "shuttingDown";
-interface ReloadOptions {
-	beforeSessionStart?: () => void | Promise<void>;
-}
-
 interface ToolDefinitionEntry {
 	definition: ToolDefinition;
 	sourceInfo: SourceInfo;
@@ -502,7 +498,7 @@ export class AgentSession {
 	private _extensionShutdownHandler?: ShutdownHandler;
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
-	private _runtimeReloadHost?: RuntimeReloadHost;
+	private _runtimeReloadHooks?: RuntimeReloadHooks;
 	private _extensionsBound = false;
 	private _runtimeAvailability: RuntimeAvailability = "available";
 	private _runtimeReloadError?: RuntimeReloadError;
@@ -1141,7 +1137,7 @@ export class AgentSession {
 	}
 
 	private _requestReload(): void {
-		if (this._runtimeReloadHost && this._runtimeAvailability === "available") {
+		if (this._runtimeReloadHooks && this._runtimeAvailability === "available") {
 			this._runtimeAvailability = "reloadRequested";
 		}
 	}
@@ -1163,7 +1159,7 @@ export class AgentSession {
 		}
 
 		try {
-			await this._performReload(this._runtimeReloadHost);
+			await this._performReload(this._runtimeReloadHooks);
 		} catch (error) {
 			this._extensionRunner.emitError({
 				extensionPath: "<runtime>",
@@ -1190,22 +1186,15 @@ export class AgentSession {
 		}
 	}
 
-	private async _performReload(host: RuntimeReloadHost | undefined, options?: ReloadOptions): Promise<void> {
+	private async _performReload(hooks: RuntimeReloadHooks | undefined): Promise<void> {
 		let runtimeInvalidated = false;
 		this._runtimeAvailability = "reloading";
 		try {
-			await host?.beforeReload?.();
-			const beforeSessionStart =
-				options?.beforeSessionStart || host?.beforeSessionStart
-					? async () => {
-							await options?.beforeSessionStart?.();
-							await host?.beforeSessionStart?.();
-						}
-					: undefined;
-			await this._reloadRuntime(beforeSessionStart ? { beforeSessionStart } : undefined, () => {
+			await hooks?.beforeReload?.();
+			await this._reloadRuntime(hooks?.beforeSessionStart, () => {
 				runtimeInvalidated = true;
 			});
-			await host?.afterReload?.();
+			await hooks?.afterReload?.();
 			if (!this._isShuttingDown()) {
 				this._runtimeAvailability = "available";
 				this._runtimeReloadError = undefined;
@@ -1213,9 +1202,9 @@ export class AgentSession {
 		} catch (cause) {
 			let error: unknown = cause;
 			try {
-				await host?.reloadFailed?.(cause);
-			} catch (hostCause) {
-				error = new AggregateError([cause, hostCause], "Runtime reload failed and host cleanup also failed");
+				await hooks?.reloadFailed?.(cause);
+			} catch (hookCause) {
+				error = new AggregateError([cause, hookCause], "Runtime reload failed and reload failure hook also failed");
 			}
 			if (runtimeInvalidated) {
 				const terminalError = error instanceof RuntimeReloadError ? error : new RuntimeReloadError(error);
@@ -3549,8 +3538,8 @@ export class AgentSession {
 		if (bindings.onError !== undefined) {
 			this._extensionErrorListener = bindings.onError;
 		}
-		if (bindings.reloadHost !== undefined) {
-			this._runtimeReloadHost = bindings.reloadHost;
+		if (bindings.reloadHooks !== undefined) {
+			this._runtimeReloadHooks = bindings.reloadHooks;
 		}
 
 		this._extensionsBound = false;
@@ -3560,8 +3549,11 @@ export class AgentSession {
 		await this._flushRequestedReload();
 	}
 
-	private async _startRuntime(event: SessionStartEvent, options?: ReloadOptions): Promise<void> {
-		await options?.beforeSessionStart?.();
+	private async _startRuntime(
+		event: SessionStartEvent,
+		beforeSessionStart?: () => void | Promise<void>,
+	): Promise<void> {
+		await beforeSessionStart?.();
 		await this._extensionRunner.emit(event);
 		this._extensionRunner.reportUnhandledMcpServers();
 		await this.extendResourcesFromExtensions(event.reason === "reload" ? "reload" : "startup");
@@ -3951,16 +3943,19 @@ export class AgentSession {
 		});
 	}
 
-	async reload(options?: ReloadOptions): Promise<void> {
+	async reload(): Promise<void> {
 		this.assertRuntimeAvailable();
 		if (!this.isIdle || this.isCompacting || this._extensionRunner.hasActiveOperation()) {
 			throw new Error("Cannot reload while a runtime operation is active");
 		}
-		await this._performReload(this._runtimeReloadHost, options);
+		await this._performReload(this._runtimeReloadHooks);
 	}
 
 	/** Tear down the old runtime, then enter the same load and start path used during startup. */
-	private async _reloadRuntime(options: ReloadOptions | undefined, onInvalidated: () => void): Promise<void> {
+	private async _reloadRuntime(
+		beforeSessionStart: RuntimeReloadHooks["beforeSessionStart"],
+		onInvalidated: () => void,
+	): Promise<void> {
 		const oldRunner = this._extensionRunner;
 		const previousFlagValues = oldRunner.getFlagValues();
 		const activeToolNames = this.getActiveToolNames();
@@ -3990,7 +3985,7 @@ export class AgentSession {
 			includeAllExtensionTools: true,
 		});
 		if (this._extensionsBound) {
-			await this._startRuntime({ type: "session_start", reason: "reload" }, options);
+			await this._startRuntime({ type: "session_start", reason: "reload" }, beforeSessionStart);
 		}
 	}
 
