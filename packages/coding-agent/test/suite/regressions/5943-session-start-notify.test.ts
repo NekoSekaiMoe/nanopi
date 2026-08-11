@@ -1,7 +1,8 @@
 import { fauxAssistantMessage } from "@earendil-works/pi-ai";
 import { Container, Text } from "@earendil-works/pi-tui";
 import { describe, expect, it, vi } from "vitest";
-import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
+import type { AgentSessionEvent, RuntimeReloadHost } from "../../../src/core/agent-session.ts";
+import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { createHarness, createTestUiContext } from "../harness.ts";
@@ -58,7 +59,7 @@ type ReloadCommandContext = {
 		reload: (options?: { beforeSessionStart?: () => void | Promise<void> }) => Promise<void>;
 		resourceLoader: { getThemes: () => { themes: [] } };
 		extensionRunner: unknown;
-		modelRegistry: { getError: () => string | undefined };
+		modelRuntime: { getError: () => string | undefined };
 	};
 	settingsManager: {
 		getHttpIdleTimeoutMs: () => number;
@@ -82,6 +83,7 @@ type ReloadCommandContext = {
 	editor: unknown;
 	defaultEditor: { setPaddingX: (padding: number) => void; setAutocompleteMaxVisible: (maxVisible: number) => void };
 	themeController: { applyFromSettings: () => Promise<void> };
+	applyRuntimeSettings: () => void;
 	resetExtensionUI: () => void;
 	rebuildChatFromMessages: () => void;
 	setupAutocompleteProvider: () => void;
@@ -100,6 +102,7 @@ type InteractiveModePrototype = {
 	): void;
 	rebindCurrentSession(this: RebindContext, options?: { renderBeforeBind?: boolean }): Promise<void>;
 	handleReloadCommand(this: ReloadCommandContext): Promise<void>;
+	createReloadHost(this: ReloadCommandContext): RuntimeReloadHost;
 };
 
 const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
@@ -129,7 +132,7 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 			},
 			resourceLoader: { getThemes: () => ({ themes: [] }) },
 			extensionRunner: {},
-			modelRegistry: { getError: () => undefined },
+			modelRuntime: { getError: () => undefined },
 			...overrides.session,
 		},
 		settingsManager: {
@@ -154,6 +157,7 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		editor,
 		defaultEditor: { setPaddingX: () => {}, setAutocompleteMaxVisible: () => {}, ...overrides.defaultEditor },
 		themeController: { applyFromSettings: async () => {}, ...overrides.themeController },
+		applyRuntimeSettings: overrides.applyRuntimeSettings ?? (() => {}),
 		customHeader: overrides.customHeader,
 		builtInHeader: overrides.builtInHeader,
 		resetExtensionUI: overrides.resetExtensionUI ?? (() => {}),
@@ -434,10 +438,31 @@ describe("regression #5943: session_start transient UI", () => {
 			},
 		});
 
-		await interactiveModePrototype.handleReloadCommand.call(context);
+		const host = interactiveModePrototype.createReloadHost.call(context);
+		await host.beforeReload?.();
+		await context.session.reload({ beforeSessionStart: host.beforeSessionStart });
+		await host.afterReload?.();
 
 		expect(context.hideThinkingBlock).toBe(true);
 		expect(events).toEqual(["reload", "rebuild:true", "start:true"]);
+	});
+
+	it("restores the editor when reload fails", async () => {
+		initTheme("dark", false);
+		const editor = {};
+		let focused: unknown;
+		const context = createReloadCommandContext({
+			editor,
+			ui: {
+				setFocus: (component) => {
+					focused = component;
+				},
+			},
+		});
+		const host = interactiveModePrototype.createReloadHost.call(context);
+		await host.beforeReload?.();
+		await host.reloadFailed?.(new Error("resource reload failed"));
+		expect(focused).toBe(editor);
 	});
 
 	it("keeps the reload blocker focused until async reload completes", async () => {
@@ -473,7 +498,12 @@ describe("regression #5943: session_start transient UI", () => {
 			},
 		});
 
-		const reloadPromise = interactiveModePrototype.handleReloadCommand.call(context);
+		const host = interactiveModePrototype.createReloadHost.call(context);
+		await host.beforeReload?.();
+		const reloadPromise = (async () => {
+			await context.session.reload({ beforeSessionStart: host.beforeSessionStart });
+			await host.afterReload?.();
+		})();
 		await reloadWaiting;
 
 		expect(chatRestored).toBe(true);
