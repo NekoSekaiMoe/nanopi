@@ -1,16 +1,10 @@
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
-import { RuntimeReloadError } from "../../../src/core/agent-session.ts";
+import { type RuntimeReloadCallbacks, RuntimeReloadError } from "../../../src/core/agent-session.ts";
 import { createEventBus } from "../../../src/core/event-bus.ts";
 import { createExtensionRuntime, loadExtensionFromFactory } from "../../../src/core/extensions/loader.ts";
-import type {
-	ExtensionContext,
-	ExtensionFactory,
-	LoadExtensionsResult,
-	ResourceLoader,
-	RuntimeReloadHooks,
-} from "../../../src/index.ts";
+import type { ExtensionContext, ExtensionFactory, LoadExtensionsResult, ResourceLoader } from "../../../src/index.ts";
 import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
 
@@ -47,7 +41,7 @@ async function createReloadingResourceLoader(factory: ExtensionFactory): Promise
 	};
 }
 
-const reloadHooks = (beforeReload?: () => void): RuntimeReloadHooks => ({ beforeReload });
+const reloadHooks = (beforeReload?: () => void): RuntimeReloadCallbacks => ({ beforeReload });
 
 describe("issue #6552 deferred extension reload", () => {
 	const harnesses: Harness[] = [];
