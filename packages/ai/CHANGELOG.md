@@ -300,6 +300,7 @@
 
 ### Added
 
+- Added Amazon Bedrock Mantle as a built-in provider for OpenAI Responses-compatible Bedrock models.
 - Added provider-neutral `toolChoice` support to simple stream requests.
 - Added automatic Anthropic server-side refusal fallback for supported first-party models, including returned-model usage pricing ([#8017](https://github.com/earendil-works/pi/issues/8017)).
 - Added configurable OpenAI-compatible thinking-token budget fields for vLLM, Qwen/SGLang, and llama.cpp servers ([#8275](https://github.com/earendil-works/pi/pull/8275) by [@bnsd55](https://github.com/bnsd55)).
