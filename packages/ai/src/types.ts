@@ -86,7 +86,6 @@ export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
 	| "amazon-bedrock"
-	| "amazon-bedrock-mantle"
 	| "ant-ling"
 	| "anthropic"
 	| "google"
