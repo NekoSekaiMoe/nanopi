@@ -27,6 +27,17 @@ export function getSyntheticPathSource(path: string): string | undefined {
 
 export function isSyntheticPath(path: string): boolean {
 	return path.startsWith(BUILTIN_PATH_PREFIX) || path.startsWith("<");
+
+export interface SourcePackageIdentity {
+	source: string;
+	scope: SourceScope;
+}
+
+export function getSourcePackageKey(identity: SourcePackageIdentity): string {
+	return JSON.stringify({
+		source: identity.source,
+		scope: identity.scope,
+	});
 }
 
 export function createSourceInfo(path: string, metadata: PathMetadata): SourceInfo {
