@@ -301,7 +301,9 @@ async function runLoop(
 		// Agent would stop here. Check for follow-up messages.
 		const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 		if (followUpMessages.length > 0) {
-			// Set as pending so inner loop processes them
+			// A follow-up is a new top-level turn, unlike tool and steering continuations.
+			const requestIdentity = config.createRequestIdentity?.();
+			if (requestIdentity) config = { ...config, requestIdentity };
 			explicitContinuation = false;
 			pendingMessages = followUpMessages;
 			continue;

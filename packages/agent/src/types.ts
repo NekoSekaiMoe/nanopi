@@ -1,4 +1,5 @@
 import type {
+	AgentRequestIdentity,
 	Api,
 	AssistantMessage,
 	AssistantMessageEvent,
@@ -192,6 +193,8 @@ export interface PrepareNextTurnContext extends AgentTurnContext {}
 
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model<any>;
+	/** Rotate the identity when a queued follow-up starts a new top-level turn. */
+	createRequestIdentity?: () => AgentRequestIdentity;
 
 	/**
 	 * Converts AgentMessage[] to LLM-compatible Message[] before each LLM call.

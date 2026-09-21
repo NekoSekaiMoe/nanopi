@@ -9,6 +9,7 @@ import type {
 import { clampThinkingLevel } from "../models.ts";
 import { registerSessionResourceCleanup } from "../session-resources.ts";
 import type {
+	AgentRequestIdentity,
 	Api,
 	AssistantMessage,
 	Model,
@@ -62,6 +63,42 @@ const CODEX_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]
 const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
+const TURN_STATE_HEADER = "x-codex-turn-state";
+
+interface CodexTurnState {
+	resourceSessionId: string;
+	turnId: string;
+	value?: string;
+}
+
+const codexTurnStates = new Map<string, CodexTurnState>();
+
+function getCodexTurnState(
+	identity: AgentRequestIdentity | undefined,
+	accountId: string,
+	url: string,
+	modelId: string,
+): CodexTurnState | undefined {
+	if (!identity) return undefined;
+	const key = JSON.stringify([identity.sessionId, identity.threadId, accountId, url, modelId]);
+	const previous = codexTurnStates.get(key);
+	if (previous?.turnId === identity.turnId) return previous;
+	const state = { resourceSessionId: identity.threadId, turnId: identity.turnId };
+	codexTurnStates.set(key, state);
+	return state;
+}
+
+function captureCodexTurnState(state: CodexTurnState | undefined, value: unknown): void {
+	if (state && state.value === undefined && typeof value === "string" && /^[\x21-\x7e]+$/.test(value)) {
+		state.value = value;
+	}
+}
+
+registerSessionResourceCleanup((sessionId) => {
+	for (const [key, state] of codexTurnStates) {
+		if (sessionId === undefined || state.resourceSessionId === sessionId) codexTurnStates.delete(key);
+	}
+});
 
 const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
 	"completed",
@@ -88,6 +125,7 @@ type CodexResponseStatus = "completed" | "incomplete" | "failed" | "cancelled" |
 
 interface RequestBody {
 	model: string;
+	client_metadata?: Record<string, string>;
 	store?: boolean;
 	stream?: boolean;
 	instructions?: string;
@@ -106,6 +144,42 @@ interface RequestBody {
 }
 
 type SuccessfulAssistantMessage = AssistantMessage & { stopReason: "stop" | "length" | "toolUse" };
+
+function buildCodexRequestMetadata(identity: AgentRequestIdentity | undefined):
+	| {
+			clientMetadata: Record<string, string>;
+			headers: Record<string, string>;
+	  }
+	| undefined {
+	if (!identity) return undefined;
+	const windowId = identity.windowId ?? `${identity.threadId}:0`;
+	const turnMetadata = JSON.stringify({
+		session_id: identity.sessionId,
+		thread_id: identity.threadId,
+		turn_id: identity.turnId,
+		window_id: windowId,
+		...(identity.windowNumber !== undefined ? { window_number: identity.windowNumber } : {}),
+		...(identity.contextWindowId ? { context_window_id: identity.contextWindowId } : {}),
+		request_kind: identity.requestKind,
+		turn_started_at_unix_ms: identity.startedAt,
+	}).replace(/[\u007f-\uffff]/g, (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}`);
+	return {
+		clientMetadata: {
+			session_id: identity.sessionId,
+			thread_id: identity.threadId,
+			turn_id: identity.turnId,
+			"x-codex-window-id": windowId,
+			"x-codex-turn-metadata": turnMetadata,
+		},
+		headers: {
+			"session-id": identity.sessionId,
+			"thread-id": identity.threadId,
+			"x-client-request-id": identity.threadId,
+			"x-codex-window-id": windowId,
+			"x-codex-turn-metadata": turnMetadata,
+		},
+	};
+}
 
 function assertSuccessfulOutput(output: AssistantMessage): asserts output is SuccessfulAssistantMessage {
 	if (output.stopReason === "pending") {
@@ -268,6 +342,12 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			}
 
 			const accountId = extractAccountId(apiKey);
+			const turnState = getCodexTurnState(
+				options?.requestIdentity,
+				accountId,
+				resolveCodexUrl(model.baseUrl),
+				model.id,
+			);
 			const grammarToolInputProperties = createGrammarToolInputProperties(
 				getDeclaredTools(normalizedContext.messages),
 				model.compat?.supportsOpenAIGrammarTools ?? false,
@@ -275,18 +355,28 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			const cacheSessionId = options?.cacheRetention === "none" ? undefined : options?.sessionId;
 			const codexSessionId = clampOpenAIPromptCacheKey(cacheSessionId);
 			let body = buildRequestBody(model, normalizedContext, options, codexSessionId, grammarToolInputProperties);
+			const requestMetadata = buildCodexRequestMetadata(options?.requestIdentity);
+			if (requestMetadata) body.client_metadata = requestMetadata.clientMetadata;
 			const nextBody = await options?.onPayload?.(body, model);
 			if (nextBody !== undefined) {
 				body = nextBody as RequestBody;
 			}
-			const websocketRequestId = codexSessionId || uuidv7();
-			const sseHeaders = buildSSEHeaders(model.headers, options?.headers, accountId, apiKey, codexSessionId);
+			const websocketRequestId = options?.requestIdentity?.threadId ?? codexSessionId ?? uuidv7();
+			const sseHeaders = buildSSEHeaders(
+				model.headers,
+				options?.headers,
+				accountId,
+				apiKey,
+				codexSessionId,
+				options?.requestIdentity,
+			);
 			const websocketHeaders = buildWebSocketHeaders(
 				model.headers,
 				options?.headers,
 				accountId,
 				apiKey,
 				websocketRequestId,
+				options?.requestIdentity,
 			);
 			const bodyJson = JSON.stringify(body);
 			const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
@@ -324,6 +414,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 							cacheSessionId,
 							accountId,
 							grammarToolInputProperties,
+							turnState,
 							options,
 						);
 
@@ -393,6 +484,9 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				}
 
 				try {
+					if (!sseHeaders.has(TURN_STATE_HEADER) && turnState?.value) {
+						sseHeaders.set(TURN_STATE_HEADER, turnState.value);
+					}
 					const headerTimeoutSignal =
 						httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
 					const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
@@ -411,6 +505,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 					} finally {
 						combinedSignal.cleanup();
 					}
+					captureCodexTurnState(turnState, response.headers.get(TURN_STATE_HEADER));
 					await options?.onResponse?.(
 						{ status: response.status, headers: headersToRecord(response.headers) },
 						model,
@@ -472,7 +567,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				startEmitted = true;
 				stream.push({ type: "start", partial: output });
 			}
-			await processStream(response, output, stream, model, grammarToolInputProperties, options);
+			await processStream(response, output, stream, model, grammarToolInputProperties, turnState, options);
 
 			if (options?.signal?.aborted) {
 				throw new Error("Request was aborted");
@@ -663,10 +758,11 @@ async function processStream(
 	stream: AssistantMessageEventStream,
 	model: Model<"openai-codex-responses">,
 	grammarToolInputProperties: ReadonlyMap<string, string>,
+	turnState: CodexTurnState | undefined,
 	options?: OpenAICodexResponsesOptions,
 ): Promise<void> {
 	await processResponsesStream(
-		mapCodexEvents(parseSSE(response, options?.signal), output, model, options?.onProviderStreamEvent),
+		mapCodexEvents(parseSSE(response, options?.signal), output, model, options?.onProviderStreamEvent, turnState),
 		output,
 		stream,
 		model,
@@ -745,6 +841,7 @@ async function* mapCodexEvents(
 	output: AssistantMessage,
 	model: Model<"openai-codex-responses">,
 	onProviderStreamEvent: StreamOptions["onProviderStreamEvent"] | undefined,
+	turnState?: CodexTurnState,
 ): AsyncGenerator<ResponseStreamEvent> {
 	for await (const event of events) {
 		try {
@@ -755,6 +852,12 @@ async function* mapCodexEvents(
 		}
 		const type = typeof event.type === "string" ? event.type : undefined;
 		if (!type) continue;
+		if (type === "codex.response.metadata" || type === "response.metadata") {
+			if (event.headers && typeof event.headers === "object") {
+				captureCodexTurnState(turnState, (event.headers as Record<string, unknown>)[TURN_STATE_HEADER]);
+			}
+			continue;
+		}
 
 		if (type === "error") {
 			const { code, message } = extractCodexEventError(event);
@@ -1423,7 +1526,7 @@ async function* parseWebSocket(
 }
 
 function requestBodyWithoutInput(body: RequestBody): RequestBody {
-	const { input: _input, previous_response_id: _previousResponseId, ...rest } = body;
+	const { input: _input, previous_response_id: _previousResponseId, client_metadata: _metadata, ...rest } = body;
 	return rest;
 }
 
@@ -1503,13 +1606,15 @@ async function processWebSocketStream(
 	cacheSessionId: string | undefined,
 	accountId: string,
 	grammarToolInputProperties: ReadonlyMap<string, string>,
+	turnState: CodexTurnState | undefined,
 	options?: OpenAICodexResponsesOptions,
 ): Promise<void> {
+	const socketCacheKey = JSON.stringify([accountId, url, model.id]);
 	const { socket, entry, reused, release } = await acquireWebSocket(
 		url,
 		headers,
 		cacheSessionId,
-		accountId,
+		socketCacheKey,
 		options?.signal,
 		websocketConnectTimeoutMs,
 		options?.env,
@@ -1539,7 +1644,16 @@ async function processWebSocketStream(
 		}
 	}
 	try {
-		socket.send(JSON.stringify({ type: "response.create", ...requestBody }));
+		const routingState = headers.get(TURN_STATE_HEADER) ?? turnState?.value;
+		socket.send(
+			JSON.stringify({
+				type: "response.create",
+				...requestBody,
+				...(routingState
+					? { client_metadata: { ...requestBody.client_metadata, [TURN_STATE_HEADER]: routingState } }
+					: {}),
+			}),
+		);
 		await processResponsesStream(
 			startWebSocketOutputOnFirstEvent(
 				mapCodexEvents(
@@ -1547,6 +1661,7 @@ async function processWebSocketStream(
 					output,
 					model,
 					options?.onProviderStreamEvent,
+					turnState,
 				),
 				onStart,
 			),
@@ -1642,9 +1757,13 @@ function buildBaseCodexHeaders(
 	additionalHeaders: ProviderHeaders | undefined,
 	accountId: string,
 	token: string,
+	requestIdentity?: AgentRequestIdentity,
 ): Headers {
 	// Defaults first so model and caller headers can override them, matching the other providers.
 	const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
+	for (const [key, value] of Object.entries(buildCodexRequestMetadata(requestIdentity)?.headers ?? {})) {
+		headers.set(key, value);
+	}
 	for (const [key, value] of Object.entries(initHeaders || {})) {
 		headers.set(key, value);
 	}
@@ -1666,13 +1785,14 @@ function buildSSEHeaders(
 	accountId: string,
 	token: string,
 	sessionId?: string,
+	requestIdentity?: AgentRequestIdentity,
 ): Headers {
-	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token);
+	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token, requestIdentity);
 	headers.set("OpenAI-Beta", "responses=experimental");
 	headers.set("accept", "text/event-stream");
 	headers.set("content-type", "application/json");
 
-	if (sessionId) {
+	if (sessionId && !requestIdentity) {
 		headers.set("session-id", sessionId);
 		headers.set("x-client-request-id", sessionId);
 	}
@@ -1686,14 +1806,17 @@ function buildWebSocketHeaders(
 	accountId: string,
 	token: string,
 	requestId: string,
+	requestIdentity?: AgentRequestIdentity,
 ): Headers {
-	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token);
+	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token, requestIdentity);
 	headers.delete("accept");
 	headers.delete("content-type");
 	headers.delete("OpenAI-Beta");
 	headers.delete("openai-beta");
 	headers.set("OpenAI-Beta", OPENAI_BETA_RESPONSES_WEBSOCKETS);
-	headers.set("x-client-request-id", requestId);
-	headers.set("session-id", requestId);
+	if (!requestIdentity) {
+		headers.set("x-client-request-id", requestId);
+		headers.set("session-id", requestId);
+	}
 	return headers;
 }
