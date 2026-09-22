@@ -1,8 +1,8 @@
 import { zstdDecompressSync } from "node:zlib";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { streamSimple } from "../src/api/openai-codex-responses.ts";
+import { type OpenAICodexRequestIdentity, streamSimple } from "../src/api/openai-codex-responses.ts";
 import { cleanupSessionResources } from "../src/session-resources.ts";
-import type { AgentRequestIdentity, Model } from "../src/types.ts";
+import type { Model } from "../src/types.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
 
 const model: Model<"openai-codex-responses"> = {
@@ -18,7 +18,7 @@ const model: Model<"openai-codex-responses"> = {
 	maxTokens: 128000,
 };
 
-const identity: AgentRequestIdentity = {
+const identity: OpenAICodexRequestIdentity = {
 	sessionId: "session-1",
 	threadId: "thread-1",
 	turnId: "turn-1",
@@ -64,7 +64,7 @@ describe("Codex request attribution", () => {
 		);
 		const context = normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] });
 		const request = async (
-			requestIdentity: AgentRequestIdentity,
+			requestIdentity: OpenAICodexRequestIdentity,
 			requestModel: Model<"openai-codex-responses"> = model,
 		) =>
 			streamSimple(requestModel, context, {
@@ -132,7 +132,7 @@ describe("Codex request attribution", () => {
 			apiKey: token(),
 			transport: "sse",
 			cacheRetention: "none",
-			requestIdentity: identity,
+			metadata: { "pi.requestIdentity": identity },
 			headers: {
 				originator: "spoofed",
 				"session-id": "spoofed",
@@ -175,7 +175,7 @@ describe("Codex request attribution", () => {
 			}),
 		);
 		const context = normalizeContext({ messages: [] });
-		const request = async (requestIdentity: AgentRequestIdentity) =>
+		const request = async (requestIdentity: OpenAICodexRequestIdentity) =>
 			streamSimple(model, context, {
 				apiKey: token(),
 				transport: "sse",
@@ -244,7 +244,7 @@ describe("Codex request attribution", () => {
 		vi.stubGlobal("WebSocket", MockWebSocket);
 		const context = normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] });
 		const request = async (
-			requestIdentity: AgentRequestIdentity,
+			requestIdentity: OpenAICodexRequestIdentity,
 			requestModel: Model<"openai-codex-responses"> = model,
 		) =>
 			streamSimple(requestModel, context, {

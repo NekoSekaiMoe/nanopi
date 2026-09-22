@@ -1,5 +1,5 @@
 import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
-import type { AgentRequestIdentity, AssistantMessage, Usage } from "@earendil-works/pi-ai/compat";
+import type { AssistantMessage, Usage } from "@earendil-works/pi-ai/compat";
 import { createAssistantMessageEventStream, fauxAssistantMessage, getModel } from "@earendil-works/pi-ai/compat";
 import { readFileSync } from "fs";
 import { join } from "path";
@@ -15,6 +15,7 @@ import {
 	prepareCompaction,
 	shouldCompact,
 } from "../src/core/compaction/index.ts";
+import { getRequestIdentityMetadata, type InternalRequestIdentity } from "../src/core/compaction/request-metadata.ts";
 import {
 	buildSessionContext,
 	type CompactionEntry,
@@ -533,9 +534,9 @@ describe("prepareCompaction", () => {
 		expect(preparation?.messagesToSummarize.length).toBeGreaterThan(0);
 		expect(preparation?.turnPrefixMessages.length).toBeGreaterThan(0);
 
-		const identities: Array<AgentRequestIdentity | undefined> = [];
+		const identities: Array<InternalRequestIdentity | undefined> = [];
 		const streamFn: StreamFn = (requestModel, _context, options) => {
-			identities.push(options?.requestIdentity);
+			identities.push(getRequestIdentityMetadata(options?.metadata));
 			const stream = createAssistantMessageEventStream();
 			queueMicrotask(() => {
 				const message = {
@@ -547,13 +548,6 @@ describe("prepareCompaction", () => {
 				stream.push({ type: "done", reason: "stop", message });
 			});
 			return stream;
-		};
-		const requestIdentity: AgentRequestIdentity = {
-			sessionId: "session",
-			threadId: "thread",
-			turnId: "compaction",
-			requestKind: "compaction",
-			startedAt: 123,
 		};
 		await compact(
 			preparation!,
@@ -568,10 +562,11 @@ describe("prepareCompaction", () => {
 			undefined,
 			undefined,
 			undefined,
-			requestIdentity,
 		);
 
-		expect(identities).toEqual([requestIdentity, requestIdentity]);
+		expect(identities[0]).toBeDefined();
+		expect(identities[0]?.requestKind).toBe("compaction");
+		expect(identities[1]).toBe(identities[0]);
 	});
 });
 

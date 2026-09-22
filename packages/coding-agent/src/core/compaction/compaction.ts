@@ -16,7 +16,6 @@ import {
 	uuidv7,
 } from "@earendil-works/pi-ai";
 import type {
-	AgentRequestIdentity,
 	Api,
 	AssistantMessage,
 	Message,
@@ -38,6 +37,7 @@ import {
 	sessionEntryToContextMessages,
 } from "../session-manager.ts";
 import { combineUsage } from "../usage-totals.ts";
+import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {
 	computeFileLists,
 	createFileOps,
@@ -628,9 +628,8 @@ function createSummarizationOptions(
 	signal: AbortSignal | undefined,
 	thinkingLevel: ThinkingLevel | undefined,
 	sessionId: string | undefined,
-	requestIdentity: AgentRequestIdentity | undefined,
 ): SimpleStreamOptions {
-	const options: SimpleStreamOptions = { maxTokens, signal, apiKey, headers, env, sessionId, requestIdentity };
+	const options: SimpleStreamOptions = { maxTokens, signal, apiKey, headers, env, sessionId };
 	if (model.reasoning && thinkingLevel && thinkingLevel !== "off") {
 		options.reasoning = thinkingLevel;
 	}
@@ -685,7 +684,6 @@ export async function generateSummary(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-	requestIdentity?: AgentRequestIdentity,
 ): Promise<string> {
 	return (
 		await generateSummaryWithUsage(
@@ -703,7 +701,6 @@ export async function generateSummary(
 			retry,
 			callbacks,
 			sessionId,
-			requestIdentity,
 		)
 	).text;
 }
@@ -738,7 +735,6 @@ export async function generateSummaryWithUsage(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-	requestIdentity?: AgentRequestIdentity,
 ): Promise<{ text: string; usage: Usage }> {
 	const maxTokens = Math.min(
 		Math.floor(0.8 * reserveTokens),
@@ -772,7 +768,6 @@ export async function generateSummaryWithUsage(
 		signal,
 		thinkingLevel,
 		sessionId,
-		requestIdentity,
 	);
 
 	const response = await completeSummarization(
@@ -993,7 +988,6 @@ Only summarize information explicitly present above. Do not infer or recreate la
  * @param preparation - Pre-calculated preparation from prepareCompaction()
  * @param customInstructions - Optional custom focus for the summary
  * @param sessionId - Optional routing session ID forwarded without enabling prompt caching
- * @param requestIdentity - Logical identity shared by every summary call and retry in this compaction
  */
 export async function compact(
 	preparation: CompactionPreparation,
@@ -1008,8 +1002,8 @@ export async function compact(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-	requestIdentity?: AgentRequestIdentity,
 ): Promise<CompactionResult> {
+	const attributedStreamFn = withCompactionRequestMetadata(streamFn);
 	const {
 		firstKeptEntryId,
 		messagesToSummarize,
@@ -1039,12 +1033,11 @@ export async function compact(
 				customInstructions,
 				previousSummary,
 				thinkingLevel,
-				streamFn,
+				attributedStreamFn,
 				env,
 				retry,
 				callbacks,
 				sessionId,
-				requestIdentity,
 			);
 			historyText = historyResult.text;
 			historyUsage = historyResult.usage;
@@ -1058,11 +1051,10 @@ export async function compact(
 			env,
 			signal,
 			thinkingLevel,
-			streamFn,
+			attributedStreamFn,
 			retry,
 			callbacks,
 			sessionId,
-			requestIdentity,
 		);
 		// Merge into single summary
 		summary = `${historyText}\n\n---\n\n**Turn Context (split turn):**\n\n${turnPrefixResult.text}`;
@@ -1079,12 +1071,11 @@ export async function compact(
 			customInstructions,
 			previousSummary,
 			thinkingLevel,
-			streamFn,
+			attributedStreamFn,
 			env,
 			retry,
 			callbacks,
 			sessionId,
-			requestIdentity,
 		);
 		summary = result.text;
 		summaryUsage = result.usage;
@@ -1123,7 +1114,6 @@ async function generateTurnPrefixSummary(
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
-	requestIdentity?: AgentRequestIdentity,
 ): Promise<{ text: string; usage: Usage }> {
 	const maxTokens = Math.min(
 		Math.floor(0.5 * reserveTokens),
@@ -1136,17 +1126,7 @@ async function generateTurnPrefixSummary(
 	const response = await completeSummarization(
 		model,
 		buildSummarizationContext(promptText),
-		createSummarizationOptions(
-			model,
-			maxTokens,
-			apiKey,
-			headers,
-			env,
-			signal,
-			thinkingLevel,
-			sessionId,
-			requestIdentity,
-		),
+		createSummarizationOptions(model, maxTokens, apiKey, headers, env, signal, thinkingLevel, sessionId),
 		streamFn,
 		retry,
 		callbacks,

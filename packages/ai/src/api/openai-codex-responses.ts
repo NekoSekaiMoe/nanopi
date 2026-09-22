@@ -9,7 +9,6 @@ import type {
 import { clampThinkingLevel } from "../models.ts";
 import { registerSessionResourceCleanup } from "../session-resources.ts";
 import type {
-	AgentRequestIdentity,
 	Api,
 	AssistantMessage,
 	Model,
@@ -64,6 +63,7 @@ const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
 const TURN_STATE_HEADER = "x-codex-turn-state";
+const REQUEST_IDENTITY_METADATA_KEY = "pi.requestIdentity";
 const WEBSOCKET_REQUEST_SCOPED_HEADERS = new Set([
 	"session-id",
 	"thread-id",
@@ -85,7 +85,7 @@ interface CodexTurnState {
 const codexTurnStates = new Map<string, CodexTurnState>();
 
 function getCodexTurnState(
-	identity: AgentRequestIdentity | undefined,
+	identity: OpenAICodexRequestIdentity | undefined,
 	accountId: string,
 	url: string,
 ): CodexTurnState | undefined {
@@ -124,12 +124,30 @@ const CODEX_RESPONSE_STATUSES = new Set<CodexResponseStatus>([
 // Types
 // ============================================================================
 
+export interface OpenAICodexRequestIdentity {
+	sessionId: string;
+	threadId: string;
+	turnId: string;
+	requestKind: "turn" | "compaction";
+	startedAt: number;
+	windowId?: string;
+	windowNumber?: number;
+	contextWindowId?: string;
+}
+
 export interface OpenAICodexResponsesOptions extends StreamOptions {
+	/** Stable identity shared by all Codex calls belonging to one logical agent request. */
+	requestIdentity?: OpenAICodexRequestIdentity;
 	reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	reasoningSummary?: "auto" | "concise" | "detailed" | "off" | "on" | null;
 	serviceTier?: ResponseCreateParamsStreaming["service_tier"];
 	textVerbosity?: "low" | "medium" | "high";
 	toolChoice?: "auto" | "none" | "required";
+}
+
+export interface OpenAICodexSimpleStreamOptions extends SimpleStreamOptions {
+	/** Stable identity shared by all Codex calls belonging to one logical agent request. */
+	requestIdentity?: OpenAICodexRequestIdentity;
 }
 
 type CodexResponseStatus = "completed" | "incomplete" | "failed" | "cancelled" | "queued" | "in_progress";
@@ -156,7 +174,29 @@ interface RequestBody {
 
 type SuccessfulAssistantMessage = AssistantMessage & { stopReason: "stop" | "length" | "toolUse" };
 
-function buildCodexRequestMetadata(identity: AgentRequestIdentity | undefined):
+function getMetadataRequestIdentity(
+	metadata: Record<string, unknown> | undefined,
+): OpenAICodexRequestIdentity | undefined {
+	const value = metadata?.[REQUEST_IDENTITY_METADATA_KEY];
+	if (!value || typeof value !== "object") return undefined;
+	const identity = value as Partial<OpenAICodexRequestIdentity>;
+	if (
+		typeof identity.sessionId !== "string" ||
+		typeof identity.threadId !== "string" ||
+		typeof identity.turnId !== "string" ||
+		(identity.requestKind !== "turn" && identity.requestKind !== "compaction") ||
+		typeof identity.startedAt !== "number" ||
+		!Number.isFinite(identity.startedAt) ||
+		(identity.windowId !== undefined && typeof identity.windowId !== "string") ||
+		(identity.windowNumber !== undefined && typeof identity.windowNumber !== "number") ||
+		(identity.contextWindowId !== undefined && typeof identity.contextWindowId !== "string")
+	) {
+		return undefined;
+	}
+	return identity as OpenAICodexRequestIdentity;
+}
+
+function buildCodexRequestMetadata(identity: OpenAICodexRequestIdentity | undefined):
 	| {
 			clientMetadata: Record<string, string>;
 			headers: Record<string, string>;
@@ -355,7 +395,8 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			const accountId = extractAccountId(apiKey);
 			const codexUrl = resolveCodexUrl(model.baseUrl);
 			const websocketUrl = resolveCodexWebSocketUrl(model.baseUrl);
-			const turnState = getCodexTurnState(options?.requestIdentity, accountId, codexUrl);
+			const requestIdentity = options?.requestIdentity ?? getMetadataRequestIdentity(options?.metadata);
+			const turnState = getCodexTurnState(requestIdentity, accountId, codexUrl);
 			const grammarToolInputProperties = createGrammarToolInputProperties(
 				getDeclaredTools(normalizedContext.messages),
 				model.compat?.supportsOpenAIGrammarTools ?? false,
@@ -366,8 +407,8 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				? {
 						key: JSON.stringify([
 							cacheSessionId,
-							options?.requestIdentity?.sessionId ?? cacheSessionId,
-							options?.requestIdentity?.threadId ?? cacheSessionId,
+							requestIdentity?.sessionId ?? cacheSessionId,
+							requestIdentity?.threadId ?? cacheSessionId,
 						]),
 						resourceSessionId: cacheSessionId,
 					}
@@ -375,7 +416,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			const transport = options?.transport || "auto";
 			const websocketDisabledForSession = transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
 			let body = buildRequestBody(model, normalizedContext, options, codexSessionId, grammarToolInputProperties);
-			const requestMetadata = buildCodexRequestMetadata(options?.requestIdentity);
+			const requestMetadata = buildCodexRequestMetadata(requestIdentity);
 			if (requestMetadata) {
 				body.client_metadata = { ...body.client_metadata, ...requestMetadata.clientMetadata };
 			}
@@ -390,14 +431,14 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 					client_metadata: { ...body.client_metadata, ...requestMetadata.clientMetadata },
 				};
 			}
-			const websocketRequestId = options?.requestIdentity?.threadId ?? codexSessionId ?? uuidv7();
+			const websocketRequestId = requestIdentity?.threadId ?? codexSessionId ?? uuidv7();
 			const sseHeaders = buildSSEHeaders(
 				model.headers,
 				options?.headers,
 				accountId,
 				apiKey,
 				codexSessionId,
-				options?.requestIdentity,
+				requestIdentity,
 			);
 			const websocketHeaders = buildWebSocketHeaders(
 				model.headers,
@@ -405,7 +446,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				accountId,
 				apiKey,
 				websocketRequestId,
-				options?.requestIdentity,
+				requestIdentity,
 			);
 			const websocketOwnerKey = getWebSocketOwnerKey(websocketUrl, websocketHeaders);
 			const bodyJson = JSON.stringify(body);
@@ -621,10 +662,10 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 	return stream;
 };
 
-export const streamSimple: StreamFunction<"openai-codex-responses", SimpleStreamOptions> = (
+export const streamSimple: StreamFunction<"openai-codex-responses", OpenAICodexSimpleStreamOptions> = (
 	model: Model<"openai-codex-responses">,
 	context: TranscriptContext,
-	options?: SimpleStreamOptions,
+	options?: OpenAICodexSimpleStreamOptions,
 ): AssistantMessageEventStream => {
 	const apiKey = options?.apiKey;
 	if (!apiKey) {
@@ -633,6 +674,7 @@ export const streamSimple: StreamFunction<"openai-codex-responses", SimpleStream
 
 	const base = {
 		...buildBaseOptions(model, context, options, apiKey),
+		requestIdentity: options?.requestIdentity,
 		toolChoice: options?.toolChoice,
 	} satisfies OpenAICodexResponsesOptions;
 	const clampedReasoning = options?.reasoning ? clampThinkingLevel(model, options.reasoning) : undefined;
@@ -1820,7 +1862,7 @@ function buildBaseCodexHeaders(
 	additionalHeaders: ProviderHeaders | undefined,
 	accountId: string,
 	token: string,
-	requestIdentity?: AgentRequestIdentity,
+	requestIdentity?: OpenAICodexRequestIdentity,
 ): Headers {
 	// Defaults first so model and caller headers can override them, matching the other providers.
 	const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
@@ -1851,7 +1893,7 @@ function buildSSEHeaders(
 	accountId: string,
 	token: string,
 	sessionId?: string,
-	requestIdentity?: AgentRequestIdentity,
+	requestIdentity?: OpenAICodexRequestIdentity,
 ): Headers {
 	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token, requestIdentity);
 	headers.set("OpenAI-Beta", "responses=experimental");
@@ -1879,7 +1921,7 @@ function buildWebSocketHeaders(
 	accountId: string,
 	token: string,
 	requestId: string,
-	requestIdentity?: AgentRequestIdentity,
+	requestIdentity?: OpenAICodexRequestIdentity,
 ): Headers {
 	const headers = buildBaseCodexHeaders(initHeaders, additionalHeaders, accountId, token, requestIdentity);
 	headers.delete("accept");

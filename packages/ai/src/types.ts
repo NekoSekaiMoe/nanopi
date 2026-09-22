@@ -209,18 +209,6 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	maxRetryDelayMs?: number;
 }
 
-/** Stable identity shared by all provider calls belonging to one agent turn. */
-export interface AgentRequestIdentity {
-	sessionId: string;
-	threadId: string;
-	turnId: string;
-	requestKind: "turn" | "compaction";
-	startedAt: number;
-	windowId?: string;
-	windowNumber?: number;
-	contextWindowId?: string;
-}
-
 export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
 	/**
 	 * Optional callback invoked after an HTTP response is received and before
@@ -259,8 +247,6 @@ export interface StreamOptions extends ProviderRequestOptions<Model<Api>> {
 	 * session-aware features. Ignored by providers that don't support it.
 	 */
 	sessionId?: string;
-	/** Logical agent-turn identity, independent of provider cache identity. */
-	requestIdentity?: AgentRequestIdentity;
 	/**
 	 * WebSocket connect timeout in milliseconds for providers that support
 	 * WebSocket transports. This covers the connection/open handshake only;

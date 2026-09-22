@@ -15,6 +15,7 @@ import {
 	toToolDeclaration,
 	validateToolArguments,
 } from "@earendil-works/pi-ai";
+import { rotateAgentRequestIdentity } from "./request-metadata.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
 import type {
 	AgentContext,
@@ -302,8 +303,7 @@ async function runLoop(
 		const followUpMessages = (await config.getFollowUpMessages?.()) || [];
 		if (followUpMessages.length > 0) {
 			// A follow-up is a new top-level turn, unlike tool and steering continuations.
-			const requestIdentity = config.createRequestIdentity?.();
-			if (requestIdentity) config = { ...config, requestIdentity };
+			rotateAgentRequestIdentity(config.metadata);
 			explicitContinuation = false;
 			pendingMessages = followUpMessages;
 			continue;

@@ -8,7 +8,7 @@
 import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
 import type { RetryCallbacks, RetryPolicy } from "@earendil-works/pi-ai";
 import { contentText, normalizeContext } from "@earendil-works/pi-ai";
-import type { AgentRequestIdentity, Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai/compat";
+import type { Model, SimpleStreamOptions, Usage } from "@earendil-works/pi-ai/compat";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,
@@ -17,6 +17,7 @@ import {
 } from "../messages.ts";
 import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
 import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction.ts";
+import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {
 	computeFileLists,
 	createFileOps,
@@ -87,8 +88,6 @@ export interface GenerateBranchSummaryOptions {
 	retry?: RetryPolicy;
 	/** Optional callbacks for retry reporting (e.g. TUI retry indicators). */
 	callbacks?: RetryCallbacks;
-	/** Logical identity shared by the summary request and all of its retries. */
-	requestIdentity?: AgentRequestIdentity;
 }
 
 // ============================================================================
@@ -308,7 +307,6 @@ export async function generateBranchSummary(
 		streamFn,
 		retry,
 		callbacks,
-		requestIdentity,
 	} = options;
 
 	// Token budget = context window minus reserved space for prompt + response
@@ -352,8 +350,15 @@ export async function generateBranchSummary(
 	// without running through agent state/events. Retried via completeSummarization
 	// so transient stream drops reuse the configured retry policy.
 	const context = normalizeContext({ systemPrompt: SUMMARIZATION_SYSTEM_PROMPT, messages: summarizationMessages });
-	const requestOptions: SimpleStreamOptions = { apiKey, headers, env, signal, maxTokens, requestIdentity };
-	const response = await completeSummarization(model, context, requestOptions, streamFn, retry, callbacks);
+	const requestOptions: SimpleStreamOptions = { apiKey, headers, env, signal, maxTokens };
+	const response = await completeSummarization(
+		model,
+		context,
+		requestOptions,
+		withCompactionRequestMetadata(streamFn),
+		retry,
+		callbacks,
+	);
 
 	// Check if aborted or errored
 	if (response.stopReason === "aborted") {

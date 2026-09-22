@@ -30,34 +30,6 @@ afterEach(() => {
 });
 
 describe("streamProxy", () => {
-	it("serializes request identity for the proxy server", async () => {
-		let requestBody: { options?: { requestIdentity?: unknown } } | undefined;
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-				requestBody = JSON.parse(String(init?.body));
-				return new Response(`data: ${JSON.stringify({ type: "done", reason: "stop", usage })}\n\n`, {
-					status: 200,
-				});
-			}),
-		);
-		const requestIdentity = {
-			sessionId: "session",
-			threadId: "thread",
-			turnId: "turn",
-			requestKind: "turn" as const,
-			startedAt: 123,
-		};
-
-		await streamProxy(model, normalizeContext({ systemPrompt: "", messages: [] }), {
-			authToken: "test-token",
-			proxyUrl: "https://proxy.example.com",
-			requestIdentity,
-		}).result();
-
-		expect(requestBody?.options?.requestIdentity).toEqual(requestIdentity);
-	});
-
 	it("preserves tool-call metadata received only on toolcall_end", async () => {
 		const proxyEvents: ProxyAssistantMessageEvent[] = [
 			{ type: "start" },
