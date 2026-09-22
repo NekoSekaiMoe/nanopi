@@ -345,18 +345,15 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
 		const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
 		const headerRunner = extensionRunnerRef.current;
-		const identity =
-			options.requestIdentity ??
-			(requestModel.api === "openai-codex-responses"
-				? agent.createRequestIdentity("compaction", agent.state.isStreaming)
-				: undefined);
-		const compactions = identity ? sessionManager.getBranch().filter((entry) => entry.type === "compaction") : [];
-		const requestIdentity = identity
+		const compactions = options.requestIdentity
+			? sessionManager.getBranch().filter((entry) => entry.type === "compaction")
+			: [];
+		const requestIdentity = options.requestIdentity
 			? {
-					...identity,
-					windowId: `${identity.threadId}:${compactions.length}`,
+					...options.requestIdentity,
+					windowId: `${options.requestIdentity.threadId}:${compactions.length}`,
 					windowNumber: compactions.length,
-					contextWindowId: compactions.at(-1)?.id ?? identity.threadId,
+					contextWindowId: compactions.at(-1)?.id ?? options.requestIdentity.threadId,
 				}
 			: undefined;
 		return {

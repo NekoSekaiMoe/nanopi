@@ -51,7 +51,48 @@ describe("Agent request identity", () => {
 			threadId: "session",
 			requestKind: "turn",
 		});
-		expect(identities[0].sessionId).not.toBe(identities[0].threadId);
+		expect(identities[0].sessionId).toBe(identities[0].threadId);
+	});
+
+	// #9481
+	it("keeps steering within the active turn identity", async () => {
+		const faux = registerFauxProvider();
+		registrations.push(faux);
+		const identities: AgentRequestIdentity[] = [];
+		let agent: Agent;
+		faux.setResponses([
+			(_context, options) => {
+				identities.push(options?.requestIdentity as AgentRequestIdentity);
+				agent.steer({ role: "user", content: "redirect", timestamp: Date.now() });
+				return fauxAssistantMessage("first");
+			},
+			(_context, options) => {
+				identities.push(options?.requestIdentity as AgentRequestIdentity);
+				return fauxAssistantMessage("redirected");
+			},
+		]);
+		agent = new Agent({
+			sessionId: "session",
+			streamFn: streamSimple,
+			initialState: { model: faux.getModel() },
+		});
+
+		await agent.prompt("start");
+
+		expect(identities[1]).toEqual(identities[0]);
+	});
+
+	// #9481
+	it("preserves session and thread identity when recreating an agent", () => {
+		const first = new Agent({ sessionId: "session", streamFn: streamSimple });
+		const second = new Agent({ sessionId: "session", streamFn: streamSimple });
+
+		const firstIdentity = first.createRequestIdentity();
+		const secondIdentity = second.createRequestIdentity();
+
+		expect(firstIdentity).toMatchObject({ sessionId: "session", threadId: "session" });
+		expect(secondIdentity).toMatchObject({ sessionId: "session", threadId: "session" });
+		expect(secondIdentity.turnId).not.toBe(firstIdentity.turnId);
 	});
 
 	// #9481

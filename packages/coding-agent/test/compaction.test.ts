@@ -1,6 +1,6 @@
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Usage } from "@earendil-works/pi-ai/compat";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import type { AgentMessage, StreamFn } from "@earendil-works/pi-agent-core";
+import type { AgentRequestIdentity, AssistantMessage, Usage } from "@earendil-works/pi-ai/compat";
+import { createAssistantMessageEventStream, fauxAssistantMessage, getModel } from "@earendil-works/pi-ai/compat";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -517,6 +517,61 @@ describe("prepareCompaction", () => {
 		expect(preparation?.isSplitTurn).toBe(true);
 		expect(preparation?.messagesToSummarize).toEqual([]);
 		expect(preparation?.turnPrefixMessages).toEqual([user.message]);
+	});
+
+	it("reuses one request identity across split summaries", async () => {
+		const entries = [
+			createMessageEntry(createUserMessage("old request")),
+			createMessageEntry(createAssistantMessage("old response")),
+			createMessageEntry(createUserMessage("current request")),
+			createMessageEntry(createAssistantMessage("current response")),
+		];
+		const preparation = prepareCompaction(entries, {
+			...DEFAULT_COMPACTION_SETTINGS,
+			keepRecentTokens: 1,
+		});
+		expect(preparation?.messagesToSummarize.length).toBeGreaterThan(0);
+		expect(preparation?.turnPrefixMessages.length).toBeGreaterThan(0);
+
+		const identities: Array<AgentRequestIdentity | undefined> = [];
+		const streamFn: StreamFn = (requestModel, _context, options) => {
+			identities.push(options?.requestIdentity);
+			const stream = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message = {
+					...fauxAssistantMessage(`summary-${identities.length}`),
+					api: requestModel.api,
+					provider: requestModel.provider,
+					model: requestModel.id,
+				};
+				stream.push({ type: "done", reason: "stop", message });
+			});
+			return stream;
+		};
+		const requestIdentity: AgentRequestIdentity = {
+			sessionId: "session",
+			threadId: "thread",
+			turnId: "compaction",
+			requestKind: "compaction",
+			startedAt: 123,
+		};
+		await compact(
+			preparation!,
+			getModel("anthropic", "claude-sonnet-4-5")!,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			requestIdentity,
+		);
+
+		expect(identities).toEqual([requestIdentity, requestIdentity]);
 	});
 });
 

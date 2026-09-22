@@ -55,14 +55,23 @@ describe("branch summarization", () => {
 			return stream;
 		};
 
+		const requestIdentity = {
+			sessionId: "session",
+			threadId: "thread",
+			turnId: "summary",
+			requestKind: "compaction" as const,
+			startedAt: 123,
+		};
 		await generateBranchSummary(entries, {
 			model,
 			signal: new AbortController().signal,
 			streamFn,
+			requestIdentity,
 		});
 
 		expect(requestOptions?.maxTokens).toBe(4096);
 		expect(requestOptions?.toolChoice).toBeUndefined();
+		expect(requestOptions?.requestIdentity).toBe(requestIdentity);
 	});
 
 	it("clamps the branch summary output cap to the model limit", async () => {

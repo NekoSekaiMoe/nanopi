@@ -64,26 +64,37 @@ const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
 const TURN_STATE_HEADER = "x-codex-turn-state";
+const WEBSOCKET_REQUEST_SCOPED_HEADERS = new Set([
+	"session-id",
+	"thread-id",
+	"x-client-request-id",
+	"x-codex-window-id",
+	"x-codex-turn-metadata",
+	TURN_STATE_HEADER,
+]);
 
 interface CodexTurnState {
 	resourceSessionId: string;
+	ownerKey: string;
 	turnId: string;
 	value?: string;
 }
 
+// Foreground and compaction requests have independent routing state. Replacing
+// an owner detaches stale in-flight responses so they cannot restore old state.
 const codexTurnStates = new Map<string, CodexTurnState>();
 
 function getCodexTurnState(
 	identity: AgentRequestIdentity | undefined,
 	accountId: string,
 	url: string,
-	modelId: string,
 ): CodexTurnState | undefined {
 	if (!identity) return undefined;
-	const key = JSON.stringify([identity.sessionId, identity.threadId, accountId, url, modelId]);
+	const key = JSON.stringify([identity.sessionId, identity.threadId, identity.requestKind]);
+	const ownerKey = JSON.stringify([accountId, url]);
 	const previous = codexTurnStates.get(key);
-	if (previous?.turnId === identity.turnId) return previous;
-	const state = { resourceSessionId: identity.threadId, turnId: identity.turnId };
+	if (previous?.ownerKey === ownerKey && previous.turnId === identity.turnId) return previous;
+	const state = { resourceSessionId: identity.sessionId, ownerKey, turnId: identity.turnId };
 	codexTurnStates.set(key, state);
 	return state;
 }
@@ -342,24 +353,42 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 			}
 
 			const accountId = extractAccountId(apiKey);
-			const turnState = getCodexTurnState(
-				options?.requestIdentity,
-				accountId,
-				resolveCodexUrl(model.baseUrl),
-				model.id,
-			);
+			const codexUrl = resolveCodexUrl(model.baseUrl);
+			const websocketUrl = resolveCodexWebSocketUrl(model.baseUrl);
+			const turnState = getCodexTurnState(options?.requestIdentity, accountId, codexUrl);
 			const grammarToolInputProperties = createGrammarToolInputProperties(
 				getDeclaredTools(normalizedContext.messages),
 				model.compat?.supportsOpenAIGrammarTools ?? false,
 			);
 			const cacheSessionId = options?.cacheRetention === "none" ? undefined : options?.sessionId;
 			const codexSessionId = clampOpenAIPromptCacheKey(cacheSessionId);
+			const websocketScope = cacheSessionId
+				? {
+						key: JSON.stringify([
+							cacheSessionId,
+							options?.requestIdentity?.sessionId ?? cacheSessionId,
+							options?.requestIdentity?.threadId ?? cacheSessionId,
+						]),
+						resourceSessionId: cacheSessionId,
+					}
+				: undefined;
+			const transport = options?.transport || "auto";
+			const websocketDisabledForSession = transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
 			let body = buildRequestBody(model, normalizedContext, options, codexSessionId, grammarToolInputProperties);
 			const requestMetadata = buildCodexRequestMetadata(options?.requestIdentity);
-			if (requestMetadata) body.client_metadata = requestMetadata.clientMetadata;
+			if (requestMetadata) {
+				body.client_metadata = { ...body.client_metadata, ...requestMetadata.clientMetadata };
+			}
 			const nextBody = await options?.onPayload?.(body, model);
 			if (nextBody !== undefined) {
 				body = nextBody as RequestBody;
+			}
+			// Reapply canonical keys without mutating a replacement returned by the hook.
+			if (requestMetadata) {
+				body = {
+					...body,
+					client_metadata: { ...body.client_metadata, ...requestMetadata.clientMetadata },
+				};
 			}
 			const websocketRequestId = options?.requestIdentity?.threadId ?? codexSessionId ?? uuidv7();
 			const sseHeaders = buildSSEHeaders(
@@ -378,12 +407,11 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 				websocketRequestId,
 				options?.requestIdentity,
 			);
+			const websocketOwnerKey = getWebSocketOwnerKey(websocketUrl, websocketHeaders);
 			const bodyJson = JSON.stringify(body);
 			const httpTimeoutMs = normalizeTimeoutMs(options?.timeoutMs);
 			const websocketConnectTimeoutMs = normalizeTimeoutMs(options?.websocketConnectTimeoutMs);
-			const transport = options?.transport || "auto";
 			let startEmitted = false;
-			const websocketDisabledForSession = transport !== "sse" && isWebSocketSseFallbackActive(cacheSessionId);
 			if (websocketDisabledForSession) {
 				recordWebSocketSseFallback(cacheSessionId);
 			}
@@ -396,7 +424,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 					websocketStarted = false;
 					try {
 						await processWebSocketStream(
-							resolveCodexWebSocketUrl(model.baseUrl),
+							websocketUrl,
 							body,
 							websocketHeaders,
 							output,
@@ -411,8 +439,9 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 							},
 							httpTimeoutMs,
 							websocketConnectTimeoutMs,
+							websocketScope,
 							cacheSessionId,
-							accountId,
+							websocketOwnerKey,
 							grammarToolInputProperties,
 							turnState,
 							options,
@@ -491,7 +520,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						httpTimeoutMs !== undefined && httpTimeoutMs > 0 ? AbortSignal.timeout(httpTimeoutMs) : undefined;
 					const combinedSignal = combineAbortSignals([options?.signal, headerTimeoutSignal]);
 					try {
-						response = await (options?.fetch ?? globalThis.fetch)(resolveCodexUrl(model.baseUrl), {
+						response = await (options?.fetch ?? globalThis.fetch)(codexUrl, {
 							method: "POST",
 							headers: sseHeaders,
 							body: sseBody,
@@ -1010,7 +1039,19 @@ export interface OpenAICodexWebSocketDebugStats {
 	lastWebSocketError?: string;
 }
 
-const websocketSessionCache = new Map<string, Map<string, CachedWebSocketConnection>>();
+interface WebSocketCacheScope {
+	key: string;
+	resourceSessionId: string;
+}
+
+interface WebSocketSessionState {
+	resourceSessionId: string;
+	ownerKey: string;
+	generation: number;
+	connection?: CachedWebSocketConnection;
+}
+
+const websocketSessions = new Map<string, WebSocketSessionState>();
 const websocketDebugStats = new Map<string, OpenAICodexWebSocketDebugStats>();
 const websocketSseFallbackSessions = new Set<string>();
 
@@ -1049,23 +1090,46 @@ export function resetOpenAICodexWebSocketDebugStats(sessionId?: string): void {
 	websocketSseFallbackSessions.clear();
 }
 
+function closeCachedWebSocketSession(session: WebSocketSessionState, reason: string): void {
+	const entry = session.connection;
+	if (!entry) return;
+	if (entry.idleTimer) clearTimeout(entry.idleTimer);
+	closeWebSocketSilently(entry.socket, 1000, reason);
+}
+
 export function closeOpenAICodexWebSocketSessions(sessionId?: string): void {
-	const closeEntry = (entry: CachedWebSocketConnection) => {
-		if (entry.idleTimer) clearTimeout(entry.idleTimer);
-		closeWebSocketSilently(entry.socket, 1000, "debug_close");
-	};
-	if (sessionId) {
-		for (const entry of websocketSessionCache.get(sessionId)?.values() ?? []) closeEntry(entry);
-		websocketSessionCache.delete(sessionId);
-		return;
+	for (const [scopeKey, session] of websocketSessions) {
+		if (sessionId !== undefined && session.resourceSessionId !== sessionId) continue;
+		closeCachedWebSocketSession(session, "debug_close");
+		websocketSessions.delete(scopeKey);
 	}
-	for (const accountEntries of websocketSessionCache.values()) {
-		for (const entry of accountEntries.values()) closeEntry(entry);
+	if (sessionId !== undefined) {
+		websocketSseFallbackSessions.delete(sessionId);
+	} else {
+		websocketSseFallbackSessions.clear();
 	}
-	websocketSessionCache.clear();
 }
 
 registerSessionResourceCleanup(closeOpenAICodexWebSocketSessions);
+
+function claimWebSocketSession(scope: WebSocketCacheScope, ownerKey: string): WebSocketSessionState {
+	const previous = websocketSessions.get(scope.key);
+	if (previous?.ownerKey === ownerKey) return previous;
+
+	const previousConnection = previous?.connection;
+	if (previousConnection) {
+		if (previousConnection.idleTimer) clearTimeout(previousConnection.idleTimer);
+		if (!previousConnection.busy) closeWebSocketSilently(previousConnection.socket, 1000, "owner_changed");
+	}
+
+	const session = {
+		resourceSessionId: scope.resourceSessionId,
+		ownerKey,
+		generation: (previous?.generation ?? 0) + 1,
+	};
+	websocketSessions.set(scope.key, session);
+	return session;
+}
 
 function isWebSocketSseFallbackActive(sessionId: string | undefined): boolean {
 	return sessionId ? websocketSseFallbackSessions.has(sessionId) : false;
@@ -1162,17 +1226,38 @@ function closeWebSocketSilently(socket: WebSocketLike, code = 1000, reason = "do
 	} catch {}
 }
 
-function scheduleSessionWebSocketExpiry(sessionId: string, accountId: string, entry: CachedWebSocketConnection): void {
+function scheduleSessionWebSocketExpiry(
+	scopeKey: string,
+	session: WebSocketSessionState,
+	entry: CachedWebSocketConnection,
+): void {
 	if (entry.idleTimer) {
 		clearTimeout(entry.idleTimer);
 	}
 	entry.idleTimer = setTimeout(() => {
 		if (entry.busy) return;
 		closeWebSocketSilently(entry.socket, 1000, "idle_timeout");
-		const accountEntries = websocketSessionCache.get(sessionId);
-		if (accountEntries?.get(accountId) === entry) accountEntries.delete(accountId);
-		if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
+		if (websocketSessions.get(scopeKey) === session && session.connection === entry) {
+			session.connection = undefined;
+		}
 	}, SESSION_WEBSOCKET_CACHE_TTL_MS);
+}
+
+function releaseSessionWebSocket(
+	scopeKey: string,
+	session: WebSocketSessionState,
+	entry: CachedWebSocketConnection,
+	keep: boolean | undefined,
+): void {
+	const stillOwned = websocketSessions.get(scopeKey) === session && session.connection === entry;
+	if (!keep || !stillOwned || !isWebSocketReusable(entry.socket)) {
+		closeWebSocketSilently(entry.socket);
+		if (entry.idleTimer) clearTimeout(entry.idleTimer);
+		if (session.connection === entry) session.connection = undefined;
+		return;
+	}
+	entry.busy = false;
+	scheduleSessionWebSocketExpiry(scopeKey, session, entry);
 }
 
 async function connectWebSocket(
@@ -1256,8 +1341,8 @@ async function connectWebSocket(
 async function acquireWebSocket(
 	url: string,
 	headers: Headers,
-	sessionId: string | undefined,
-	accountId: string,
+	scope: WebSocketCacheScope | undefined,
+	ownerKey: string,
 	signal?: AbortSignal,
 	connectTimeoutMs?: number,
 	env?: ProviderEnv,
@@ -1267,7 +1352,7 @@ async function acquireWebSocket(
 	reused: boolean;
 	release: (options?: { keep?: boolean }) => void;
 }> {
-	if (!sessionId) {
+	if (!scope) {
 		const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
 		return {
 			socket,
@@ -1276,77 +1361,55 @@ async function acquireWebSocket(
 		};
 	}
 
-	let accountEntries = websocketSessionCache.get(sessionId);
-	const cached = accountEntries?.get(accountId);
+	const session = claimWebSocketSession(scope, ownerKey);
+	const cached = session.connection;
 	if (cached) {
 		if (cached.idleTimer) {
 			clearTimeout(cached.idleTimer);
 			cached.idleTimer = undefined;
-		}
-		if (!cached.busy && isWebSocketSessionExpired(cached)) {
-			closeWebSocketSilently(cached.socket, 1000, "connection_age_limit");
-			accountEntries?.delete(accountId);
-			if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
-		} else if (!cached.busy && isWebSocketReusable(cached.socket)) {
-			cached.busy = true;
-			return {
-				socket: cached.socket,
-				entry: cached,
-				reused: true,
-				release: ({ keep } = {}) => {
-					if (!keep || !isWebSocketReusable(cached.socket)) {
-						closeWebSocketSilently(cached.socket);
-						const currentEntries = websocketSessionCache.get(sessionId);
-						if (currentEntries?.get(accountId) === cached) currentEntries.delete(accountId);
-						if (currentEntries?.size === 0) websocketSessionCache.delete(sessionId);
-						return;
-					}
-					cached.busy = false;
-					scheduleSessionWebSocketExpiry(sessionId, accountId, cached);
-				},
-			};
 		}
 		if (cached.busy) {
 			const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
 			return {
 				socket,
 				reused: false,
-				release: () => {
-					closeWebSocketSilently(socket);
-				},
+				release: () => closeWebSocketSilently(socket),
 			};
 		}
-		if (!isWebSocketReusable(cached.socket)) {
+		if (isWebSocketSessionExpired(cached)) {
+			closeWebSocketSilently(cached.socket, 1000, "connection_age_limit");
+			session.connection = undefined;
+		} else if (isWebSocketReusable(cached.socket)) {
+			cached.busy = true;
+			return {
+				socket: cached.socket,
+				entry: cached,
+				reused: true,
+				release: ({ keep } = {}) => releaseSessionWebSocket(scope.key, session, cached, keep),
+			};
+		} else {
 			closeWebSocketSilently(cached.socket);
-			accountEntries?.delete(accountId);
-			if (accountEntries?.size === 0) websocketSessionCache.delete(sessionId);
+			session.connection = undefined;
 		}
 	}
 
+	const connectionGeneration = ++session.generation;
 	const socket = await connectWebSocket(url, headers, signal, connectTimeoutMs, env);
-	const entry: CachedWebSocketConnection = { socket, busy: true, createdAt: Date.now() };
-	accountEntries = websocketSessionCache.get(sessionId);
-	if (!accountEntries) {
-		accountEntries = new Map();
-		websocketSessionCache.set(sessionId, accountEntries);
+	if (websocketSessions.get(scope.key) !== session || session.generation !== connectionGeneration) {
+		return {
+			socket,
+			reused: false,
+			release: () => closeWebSocketSilently(socket),
+		};
 	}
-	accountEntries.set(accountId, entry);
+
+	const entry: CachedWebSocketConnection = { socket, busy: true, createdAt: Date.now() };
+	session.connection = entry;
 	return {
 		socket,
 		entry,
 		reused: false,
-		release: ({ keep } = {}) => {
-			if (!keep || !isWebSocketReusable(entry.socket)) {
-				closeWebSocketSilently(entry.socket);
-				if (entry.idleTimer) clearTimeout(entry.idleTimer);
-				const currentEntries = websocketSessionCache.get(sessionId);
-				if (currentEntries?.get(accountId) === entry) currentEntries.delete(accountId);
-				if (currentEntries?.size === 0) websocketSessionCache.delete(sessionId);
-				return;
-			}
-			entry.busy = false;
-			scheduleSessionWebSocketExpiry(sessionId, accountId, entry);
-		},
+		release: ({ keep } = {}) => releaseSessionWebSocket(scope.key, session, entry, keep),
 	};
 }
 
@@ -1603,18 +1666,18 @@ async function processWebSocketStream(
 	onStart: () => void,
 	idleTimeoutMs: number | undefined,
 	websocketConnectTimeoutMs: number | undefined,
+	websocketScope: WebSocketCacheScope | undefined,
 	cacheSessionId: string | undefined,
-	accountId: string,
+	websocketOwnerKey: string,
 	grammarToolInputProperties: ReadonlyMap<string, string>,
 	turnState: CodexTurnState | undefined,
 	options?: OpenAICodexResponsesOptions,
 ): Promise<void> {
-	const socketCacheKey = JSON.stringify([accountId, url, model.id]);
 	const { socket, entry, reused, release } = await acquireWebSocket(
 		url,
 		headers,
-		cacheSessionId,
-		socketCacheKey,
+		websocketScope,
+		websocketOwnerKey,
 		options?.signal,
 		websocketConnectTimeoutMs,
 		options?.env,
@@ -1761,9 +1824,6 @@ function buildBaseCodexHeaders(
 ): Headers {
 	// Defaults first so model and caller headers can override them, matching the other providers.
 	const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
-	for (const [key, value] of Object.entries(buildCodexRequestMetadata(requestIdentity)?.headers ?? {})) {
-		headers.set(key, value);
-	}
 	for (const [key, value] of Object.entries(initHeaders || {})) {
 		headers.set(key, value);
 	}
@@ -1773,6 +1833,12 @@ function buildBaseCodexHeaders(
 		} else {
 			headers.set(key, value);
 		}
+	}
+	// Provider-owned attribution, authentication, and client headers are
+	// canonical. Model and caller headers may add other values but cannot spoof
+	// the logical request identity or Codex client origin.
+	for (const [key, value] of Object.entries(buildCodexRequestMetadata(requestIdentity)?.headers ?? {})) {
+		headers.set(key, value);
 	}
 	headers.set("Authorization", `Bearer ${token}`);
 	headers.set("chatgpt-account-id", accountId);
@@ -1798,6 +1864,13 @@ function buildSSEHeaders(
 	}
 
 	return headers;
+}
+
+function getWebSocketOwnerKey(url: string, headers: Headers): string {
+	const connectionHeaders = Array.from(headers.entries())
+		.filter(([name]) => !WEBSOCKET_REQUEST_SCOPED_HEADERS.has(name))
+		.sort(([left], [right]) => left.localeCompare(right));
+	return JSON.stringify([url, connectionHeaders]);
 }
 
 function buildWebSocketHeaders(

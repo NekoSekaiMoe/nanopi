@@ -221,6 +221,12 @@ describe("createAgentSession stream options", () => {
 		}
 	});
 
+	it("does not synthesize a Codex identity for side requests", async () => {
+		const options = await captureStreamOptions("openai-codex-responses", {});
+
+		expect(options?.requestIdentity).toBeUndefined();
+	});
+
 	it("forwards httpIdleTimeoutMs as timeoutMs for OpenAI Codex", async () => {
 		const options = await captureStreamOptions("openai-codex-responses", { httpIdleTimeoutMs: 1234 });
 

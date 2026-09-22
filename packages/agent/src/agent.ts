@@ -219,7 +219,6 @@ export class Agent {
 	) => Promise<AgentLoopTurnUpdate | undefined> | AgentLoopTurnUpdate | undefined;
 	private activeRun?: ActiveRun;
 	private readonly attributionSessionId: string;
-	private readonly attributionThreadId: string;
 	private activeRequestIdentity?: AgentRequestIdentity;
 	/** Session identifier forwarded to providers for cache-aware backends. */
 	public sessionId?: string;
@@ -252,8 +251,7 @@ export class Agent {
 		this.steeringQueue = new PendingMessageQueue(runtimeOptions.steeringMode ?? "one-at-a-time");
 		this.followUpQueue = new PendingMessageQueue(runtimeOptions.followUpMode ?? "one-at-a-time");
 		this.sessionId = runtimeOptions.sessionId;
-		this.attributionSessionId = uuidv7();
-		this.attributionThreadId = runtimeOptions.sessionId ?? this.attributionSessionId;
+		this.attributionSessionId = runtimeOptions.sessionId ?? uuidv7();
 		this.thinkingBudgets = runtimeOptions.thinkingBudgets;
 		this.transport = runtimeOptions.transport ?? "auto";
 		this.maxRetryDelayMs = runtimeOptions.maxRetryDelayMs;
@@ -520,17 +518,13 @@ export class Agent {
 	}
 
 	/** Create an identity for a foreground turn or a provider-side compaction. */
-	createRequestIdentity(
-		requestKind: AgentRequestIdentity["requestKind"] = "turn",
-		continueActiveTurn = false,
-	): AgentRequestIdentity {
-		const active = continueActiveTurn ? this.activeRequestIdentity : undefined;
+	createRequestIdentity(requestKind: AgentRequestIdentity["requestKind"] = "turn"): AgentRequestIdentity {
 		return {
-			sessionId: active?.sessionId ?? this.attributionSessionId,
-			threadId: active?.threadId ?? this.attributionThreadId,
-			turnId: active?.turnId ?? uuidv7(),
+			sessionId: this.attributionSessionId,
+			threadId: this.attributionSessionId,
+			turnId: uuidv7(),
 			requestKind,
-			startedAt: active?.startedAt ?? Date.now(),
+			startedAt: Date.now(),
 		};
 	}
 
