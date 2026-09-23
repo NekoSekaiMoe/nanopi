@@ -1208,6 +1208,7 @@ export class AgentSession {
 			}
 			if (runtimeInvalidated) {
 				const terminalError = error instanceof RuntimeReloadError ? error : new RuntimeReloadError(error);
+				this._cacheWarmer?.cancel();
 				if (!this._isShuttingDown()) {
 					this._runtimeAvailability = "failed";
 					this._runtimeReloadError = terminalError;
@@ -2196,6 +2197,7 @@ export class AgentSession {
 		}
 		const expandPromptTemplates = options?.expandPromptTemplates ?? true;
 		const preflightResult = options?.preflightResult;
+		this.assertRuntimeAvailable();
 		// Handle extension commands first (execute immediately, even during streaming)
 		// Extension commands manage their own LLM interaction via pi.sendMessage()
 		if (expandPromptTemplates && text.startsWith("/")) {
@@ -2289,18 +2291,18 @@ export class AgentSession {
 		// Get command context from extension runner (includes session control methods)
 		const ctx = this._extensionRunner.createCommandContext();
 
-		try {
-			await this._extensionRunner.runExtensionOperation(() => Promise.resolve(command.handler(args, ctx)));
-			return true;
-		} catch (err) {
-			// Emit error via extension runner
-			this._extensionRunner.emitError({
-				extensionPath: `command:${commandName}`,
-				event: "command",
-				error: err instanceof Error ? err.message : String(err),
-			});
-			return true;
-		}
+		await this._extensionRunner.runExtensionOperation(async () => {
+			try {
+				await command.handler(args, ctx);
+			} catch (err) {
+				this._extensionRunner.emitError({
+					extensionPath: `command:${commandName}`,
+					event: "command",
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		});
+		return true;
 	}
 
 	/**
@@ -2340,6 +2342,7 @@ export class AgentSession {
 		behavior: "steer" | "followUp",
 		source: InputSource,
 	): Promise<QueuedInputDisposition> {
+		this.assertRuntimeAvailable();
 		if (text.startsWith("/")) {
 			this._throwIfExtensionCommand(text);
 		}

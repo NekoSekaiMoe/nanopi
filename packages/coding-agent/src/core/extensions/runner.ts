@@ -638,15 +638,31 @@ export class ExtensionRunner {
 	}
 
 	async runExtensionOperation<T>(callback: () => Promise<T>): Promise<T> {
+		let operationResult: { value: T } | { error: unknown };
 		this.operationDepth++;
 		try {
-			return await callback();
-		} finally {
-			this.operationDepth--;
-			if (this.operationDepth === 0) {
+			operationResult = { value: await callback() };
+		} catch (error) {
+			operationResult = { error };
+		}
+
+		this.operationDepth--;
+		if (this.operationDepth === 0) {
+			try {
 				await this.operationCompleteHandler();
+			} catch (completionError) {
+				if ("error" in operationResult) {
+					throw new AggregateError(
+						[operationResult.error, completionError],
+						"Extension operation and completion failed",
+					);
+				}
+				throw completionError;
 			}
 		}
+
+		if ("error" in operationResult) throw operationResult.error;
+		return operationResult.value;
 	}
 
 	/** Get all registered tools from all extensions (first registration per name wins). */
@@ -1146,6 +1162,10 @@ export class ExtensionRunner {
 
 	/** Returns the event's own action unless a handler overrides it; the last override wins. */
 	async emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
+		return this.runExtensionOperation(() => this._emitCacheWarmingDecision(event));
+	}
+
+	private async _emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
 		const ctx = this.createContext();
 		let action = event.action;
 

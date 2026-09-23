@@ -1,6 +1,6 @@
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { type RuntimeReloadCallbacks, RuntimeReloadError } from "../../../src/core/agent-session.ts";
 import { createEventBus } from "../../../src/core/event-bus.ts";
 import { createExtensionRuntime, loadExtensionFromFactory } from "../../../src/core/extensions/loader.ts";
@@ -108,6 +108,51 @@ describe("issue #6552 deferred extension reload", () => {
 		expect(getReloadCount()).toBe(1);
 	});
 
+	it("continues reporting command handler failures as extension errors", async () => {
+		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
+			pi.registerCommand("fail", {
+				description: "Fail",
+				handler: async () => {
+					throw new Error("command failed");
+				},
+			});
+		});
+		const extensionErrors: Array<{ event: string; error: string }> = [];
+		const harness = await createHarness({ resourceLoader, withConfiguredAuth: false });
+		harnesses.push(harness);
+		await harness.session.bindExtensions({
+			reloadHooks: reloadHooks(),
+			onError: ({ event, error }) => extensionErrors.push({ event, error }),
+		});
+
+		await expect(harness.session.prompt("/fail")).resolves.toBeUndefined();
+		expect(extensionErrors).toEqual([{ event: "command", error: "command failed" }]);
+	});
+
+	it("propagates reload failures after command handlers complete", async () => {
+		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
+			pi.registerCommand("reload-runtime", {
+				description: "Reload runtime",
+				handler: async (_args, ctx) => {
+					ctx.requestReload();
+				},
+			});
+		});
+		resourceLoader.reload = async () => {
+			throw new Error("resource reload failed");
+		};
+		const extensionErrorEvents: string[] = [];
+		const harness = await createHarness({ resourceLoader, withConfiguredAuth: false });
+		harnesses.push(harness);
+		await harness.session.bindExtensions({
+			reloadHooks: reloadHooks(),
+			onError: (error) => extensionErrorEvents.push(error.event),
+		});
+
+		await expect(harness.session.prompt("/reload-runtime")).rejects.toBeInstanceOf(RuntimeReloadError);
+		expect(extensionErrorEvents).toEqual(["request_reload"]);
+	});
+
 	it("ignores requests from reload lifecycle handlers", async () => {
 		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
 			pi.on("session_start", (_event, ctx) => ctx.requestReload());
@@ -190,8 +235,10 @@ describe("issue #6552 deferred extension reload", () => {
 
 	it("makes post-invalidation failures terminal for reload admission", async () => {
 		let oldContext: ExtensionContext | undefined;
+		let inputCalls = 0;
 		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
 			pi.on("input", (_event, ctx) => {
+				inputCalls++;
 				oldContext = ctx;
 				ctx.requestReload();
 				return { action: "handled" };
@@ -200,13 +247,27 @@ describe("issue #6552 deferred extension reload", () => {
 		resourceLoader.reload = async () => {
 			throw new Error("resource reload failed");
 		};
-		const harness = await createHarness({ resourceLoader });
+		const cancelCacheWarming = vi.fn();
+		const harness = await createHarness({
+			resourceLoader,
+			cacheWarmer: {
+				cancel: cancelCacheWarming,
+				status: { state: "inactive" },
+				onAgentSettled: vi.fn(),
+				onModeChanged: vi.fn(),
+			},
+		});
 		harnesses.push(harness);
 		await harness.session.bindExtensions({ reloadHooks: reloadHooks() });
 
 		await expect(harness.session.prompt("reload")).rejects.toBeInstanceOf(RuntimeReloadError);
 		expect(() => oldContext?.isIdle()).toThrow("stale after session replacement or reload");
+		await expect(harness.session.prompt("second prompt")).rejects.toBeInstanceOf(RuntimeReloadError);
+		await expect(harness.session.steer("steer")).rejects.toBeInstanceOf(RuntimeReloadError);
+		await expect(harness.session.followUp("follow up")).rejects.toBeInstanceOf(RuntimeReloadError);
 		await expect(harness.session.reload()).rejects.toBeInstanceOf(RuntimeReloadError);
+		expect(inputCalls).toBe(1);
+		expect(cancelCacheWarming).toHaveBeenCalledOnce();
 	});
 
 	it("ignores requests when the host does not support reload", async () => {
