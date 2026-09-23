@@ -109,19 +109,22 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("continues reporting command handler failures as extension errors", async () => {
-		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
-			pi.registerCommand("fail", {
-				description: "Fail",
-				handler: async () => {
-					throw new Error("command failed");
-				},
-			});
-		});
 		const extensionErrors: Array<{ event: string; error: string }> = [];
-		const harness = await createHarness({ resourceLoader, withConfiguredAuth: false });
+		const harness = await createHarness({
+			extensionFactories: [
+				(pi) => {
+					pi.registerCommand("fail", {
+						description: "Fail",
+						handler: async () => {
+							throw new Error("command failed");
+						},
+					});
+				},
+			],
+			withConfiguredAuth: false,
+		});
 		harnesses.push(harness);
 		await harness.session.bindExtensions({
-			reloadHooks: reloadHooks(),
 			onError: ({ event, error }) => extensionErrors.push({ event, error }),
 		});
 

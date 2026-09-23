@@ -173,22 +173,14 @@ describe("issue #6552 RPC reload admission", () => {
 			expect(secondPromptCalls).toBe(0);
 
 			releaseShutdown();
-			let retryResponse: Record<string, unknown> | undefined;
-			for (let attempt = 1; attempt <= 10; attempt++) {
-				const retryId = `second-retry-${attempt}`;
-				rpcIo.lineHandler?.(JSON.stringify({ id: retryId, type: "prompt", message: "second" }));
-				await vi.waitFor(() => expect(getResponse(retryId)).toBeDefined());
-				retryResponse = getResponse(retryId);
-				if (retryResponse?.success === true) {
-					break;
-				}
-				expect(retryResponse).toMatchObject({
-					success: false,
-					error: "Runtime reload in progress",
-				});
-				await new Promise<void>((resolve) => setImmediate(resolve));
-			}
-			expect(retryResponse).toMatchObject({ success: true, command: "prompt" });
+			await vi.waitFor(() => {
+				expect(getResponse("first")).toMatchObject({ success: true, command: "prompt" });
+			});
+
+			rpcIo.lineHandler?.(JSON.stringify({ id: "second-retry", type: "prompt", message: "second" }));
+			await vi.waitFor(() => {
+				expect(getResponse("second-retry")).toMatchObject({ success: true, command: "prompt" });
+			});
 			expect(secondPromptCalls).toBe(1);
 		} finally {
 			releaseShutdown();

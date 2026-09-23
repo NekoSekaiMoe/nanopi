@@ -113,19 +113,6 @@ describe("ExtensionRunner", () => {
 		getScopedModels: () => [],
 	};
 
-	describe("requestReload", () => {
-		it("routes ctx.requestReload through the bound context action", async () => {
-			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
-			const runner = new ExtensionRunner(result.extensions, result.runtime, tempDir, sessionManager, modelRegistry);
-			const requestReload = vi.fn();
-			runner.bindCore(extensionActions, { ...extensionContextActions, requestReload });
-
-			runner.createContext().requestReload();
-
-			expect(requestReload).toHaveBeenCalledOnce();
-		});
-	});
-
 	describe("extension operations", () => {
 		it("completes cache warming decisions after their handlers settle", async () => {
 			const runtime = createExtensionRuntime();

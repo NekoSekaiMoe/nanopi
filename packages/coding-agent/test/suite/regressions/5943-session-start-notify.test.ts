@@ -54,9 +54,6 @@ type RebindContext = {
 type ReloadCommandContext = {
 	hideThinkingBlock: boolean;
 	session: {
-		isStreaming: boolean;
-		isCompacting: boolean;
-		reload: () => Promise<void>;
 		resourceLoader: { getThemes: () => { themes: [] } };
 		extensionRunner: unknown;
 		modelRuntime: { getError: () => string | undefined };
@@ -91,7 +88,6 @@ type ReloadCommandContext = {
 	showLoadedResources: (options: unknown) => void;
 	maybeSaveImplicitProjectTrustAfterReload: () => boolean;
 	showStatus: (message: string) => void;
-	showWarning: (message: string) => void;
 	showError: (message: string) => void;
 };
 
@@ -101,7 +97,6 @@ type InteractiveModePrototype = {
 		options?: { extensions?: Array<{ path: string }>; force?: boolean; showDiagnosticsWhenQuiet?: boolean },
 	): void;
 	rebindCurrentSession(this: RebindContext, options?: { renderBeforeBind?: boolean }): Promise<void>;
-	handleReloadCommand(this: ReloadCommandContext): Promise<void>;
 	createReloadHooks(this: ReloadCommandContext): RuntimeReloadCallbacks;
 };
 
@@ -125,9 +120,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 	return {
 		hideThinkingBlock: overrides.hideThinkingBlock ?? false,
 		session: {
-			isStreaming: false,
-			isCompacting: false,
-			reload: async () => {},
 			resourceLoader: { getThemes: () => ({ themes: [] }) },
 			extensionRunner: {},
 			modelRuntime: { getError: () => undefined },
@@ -165,7 +157,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		showLoadedResources: overrides.showLoadedResources ?? (() => {}),
 		maybeSaveImplicitProjectTrustAfterReload: overrides.maybeSaveImplicitProjectTrustAfterReload ?? (() => false),
 		showStatus: overrides.showStatus ?? (() => {}),
-		showWarning: overrides.showWarning ?? (() => {}),
 		showError: overrides.showError ?? (() => {}),
 	};
 }
@@ -421,24 +412,20 @@ describe("regression #5943: session_start transient UI", () => {
 
 	it("refreshes hideThinkingBlock before rebuilding chat during reload", async () => {
 		initTheme("dark", false);
-		const events: string[] = [];
+		let hideThinkingBlockAtRebuild = false;
 		let context: ReloadCommandContext;
 		context = createReloadCommandContext({
 			settingsManager: { getHideThinkingBlock: () => true },
 			rebuildChatFromMessages: () => {
-				events.push(`rebuild:${context.hideThinkingBlock}`);
+				hideThinkingBlockAtRebuild = context.hideThinkingBlock;
 			},
 		});
 
 		const hooks = interactiveModePrototype.createReloadHooks.call(context);
-		await hooks.beforeReload?.();
-		events.push("reload");
 		await hooks.beforeSessionStart?.();
-		events.push(`start:${context.hideThinkingBlock}`);
-		await hooks.afterReload?.();
 
 		expect(context.hideThinkingBlock).toBe(true);
-		expect(events).toEqual(["reload", "rebuild:true", "start:true"]);
+		expect(hideThinkingBlockAtRebuild).toBe(true);
 	});
 
 	it("restores the editor when reload fails", async () => {
@@ -455,24 +442,16 @@ describe("regression #5943: session_start transient UI", () => {
 		});
 		const hooks = interactiveModePrototype.createReloadHooks.call(context);
 		await hooks.beforeReload?.();
+		expect(focused).not.toBe(editor);
 		await hooks.reloadFailed?.(new Error("resource reload failed"));
 		expect(focused).toBe(editor);
 	});
 
-	it("keeps the reload blocker focused until async reload completes", async () => {
+	it("keeps the reload blocker focused until afterReload", async () => {
 		initTheme("dark", false);
 		const editor = {};
 		let focused: unknown;
 		let chatRestored = false;
-		let markReloadWaiting!: () => void;
-		let finishReload!: () => void;
-		const reloadWaiting = new Promise<void>((resolve) => {
-			markReloadWaiting = resolve;
-		});
-		const reloadFinished = new Promise<void>((resolve) => {
-			finishReload = resolve;
-		});
-
 		const context = createReloadCommandContext({
 			editor,
 			ui: {
@@ -487,20 +466,13 @@ describe("regression #5943: session_start transient UI", () => {
 
 		const hooks = interactiveModePrototype.createReloadHooks.call(context);
 		await hooks.beforeReload?.();
-		const reloadPromise = (async () => {
-			await hooks.beforeSessionStart?.();
-			markReloadWaiting();
-			await reloadFinished;
-			await hooks.afterReload?.();
-		})();
-		await reloadWaiting;
+		expect(focused).not.toBe(editor);
 
+		await hooks.beforeSessionStart?.();
 		expect(chatRestored).toBe(true);
 		expect(focused).not.toBe(editor);
 
-		finishReload();
-		await reloadPromise;
-
+		await hooks.afterReload?.();
 		expect(focused).toBe(editor);
 	});
 });
