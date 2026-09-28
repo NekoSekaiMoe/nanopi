@@ -4,7 +4,7 @@ import { sep } from "node:path";
 import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
 import { formatBytes, LlamaClient, type LlamaModelInfo, normalizeLlamaServerUrl } from "./client.ts";
 import { findHuggingFaceToken, HuggingFaceClient } from "./huggingface.ts";
-import { createManagedLlama, type ManagedLlamaServerInfo } from "./managed.ts";
+import { createManagedLlama, huggingFaceCacheDir, type ManagedLlamaServerInfo } from "./managed.ts";
 import { createLlamaProvider, LLAMA_MANAGED_MODE, LLAMA_MODE_ENV, LLAMA_PROVIDER_ID } from "./provider.ts";
 import { type LlamaUi, runWithProgress, showLlamaUi } from "./ui.ts";
 
@@ -73,7 +73,7 @@ function sessionHeader(session: LlamaSession): string[] {
 	return [
 		`Managed llama-server · ${session.managed.url}`,
 		`Models:    ${displayPath(session.managed.modelsDir)}`,
-		`Downloads: ${displayPath(session.managed.cacheDir)}`,
+		`Downloads: ${displayPath(huggingFaceCacheDir())}`,
 	];
 }
 

@@ -1,22 +1,23 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { type AuthContext, type AuthPrompt, type Model, normalizeContext } from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { LlamaClient } from "../src/extensions/llama/client.ts";
-import { loadManagedLlamaSettings, type ManagedLlama, ManagedLlamaClient } from "../src/extensions/llama/managed.ts";
-import { createLlamaProvider, LLAMA_MODE_ENV, MANAGED_LLAMA_SERVER_URL } from "../src/extensions/llama/provider.ts";
 import {
 	huggingFaceCacheDir,
 	LlamaSupervisor,
 	type LlamaSupervisorConfig,
+	loadManagedLlamaSettings,
+	type ManagedLlama,
+	ManagedLlamaClient,
 	type ManagedLlamaServerInfo,
-} from "../src/extensions/llama/supervisor.ts";
+} from "../src/extensions/llama/managed.ts";
+import { createLlamaProvider, LLAMA_MODE_ENV, MANAGED_LLAMA_SERVER_URL } from "../src/extensions/llama/provider.ts";
 
-// Stands in for llama-server: binds the port pi passes (0), prints the address, and requires the API key.
+// Stands in for llama-server: binds the host and port pi passes and requires the API key.
 const FAKE_SERVER = `
 import { createServer } from "node:http";
 const args = process.argv.slice(2);
@@ -25,7 +26,7 @@ if (args.includes("--fail")) {
 	console.error("fake failure");
 	process.exit(3);
 }
-if (value("--port") !== "0" || value("--host") !== "127.0.0.1") {
+if (value("--host") !== "127.0.0.1" || !(Number(value("--port")) > 0)) {
 	console.error("unexpected arguments: " + args.join(" "));
 	process.exit(2);
 }
@@ -45,10 +46,7 @@ const server = createServer((request, response) => {
 	}
 	response.writeHead(404).end();
 });
-server.listen(0, "127.0.0.1", () => {
-	console.error("[ 4242] srv  main: listening on http://127.0.0.1:1");
-	console.error("srv  main: listening on http://127.0.0.1:" + server.address().port);
-});
+server.listen(Number(value("--port")), "127.0.0.1");
 process.on("SIGTERM", () => process.exit(0));
 `;
 
@@ -61,8 +59,9 @@ afterEach(async () => {
 interface Fixture {
 	stateDir: string;
 	supervisors: LlamaSupervisor[];
-	launch: (config: LlamaSupervisorConfig) => void;
-	config: (args?: string[], command?: string) => () => Promise<LlamaSupervisorConfig>;
+	/** Client that runs its supervisor in-process with `config` instead of spawning `pi --internal-llama-supervisor`. */
+	/** `Error` makes loading the configuration fail, like invalid settings do. */
+	client: (config?: Partial<LlamaSupervisorConfig> | Error) => ManagedLlamaClient;
 }
 
 async function fixture(): Promise<Fixture> {
@@ -80,22 +79,25 @@ async function fixture(): Promise<Fixture> {
 	return {
 		stateDir,
 		supervisors,
-		// Run the supervisor in-process instead of spawning `pi --internal-llama-supervisor`.
-		launch: (config) => {
-			void LlamaSupervisor.start(config).then((supervisor) => {
-				if (supervisor) supervisors.push(supervisor);
+		client: (config = {}) => {
+			const client = new ManagedLlamaClient(stateDir, () => {
+				const load = async (): Promise<LlamaSupervisorConfig> => {
+					if (config instanceof Error) throw config;
+					return {
+						command: process.execPath,
+						args: [script],
+						modelsDir: join(stateDir, "models"),
+						idleShutdownMs: 50,
+						...config,
+					};
+				};
+				void LlamaSupervisor.start(stateDir, load, 500).then((supervisor) => {
+					if (supervisor) supervisors.push(supervisor);
+				});
 			});
+			clients.push(client);
+			return client;
 		},
-		config:
-			(args = [script], command = process.execPath) =>
-			async () => ({
-				command,
-				args,
-				modelsDir: join(stateDir, "models"),
-				stateDir,
-				idleShutdownMs: 50,
-				startupGraceMs: 500,
-			}),
 	};
 }
 
@@ -110,21 +112,18 @@ async function isReachable(url: string): Promise<boolean> {
 
 describe.skipIf(process.platform === "win32")("managed llama.cpp supervisor", () => {
 	it("shares one server across clients and stops it after the last one disconnects", async () => {
-		const { stateDir, supervisors, launch, config } = await fixture();
-		const first = new ManagedLlamaClient(stateDir, launch);
-		const second = new ManagedLlamaClient(stateDir, launch);
+		const { stateDir, supervisors, client } = await fixture();
+		const first = client();
+		const second = client();
 
-		const [a, b] = await Promise.all([first.acquire(config()), second.acquire(config())]);
+		const [a, b] = await Promise.all([first.acquire(), second.acquire()]);
 		expect(a).toEqual(b);
 		expect(supervisors).toHaveLength(1);
-		// The router's forwarded "[port]" log line must not be mistaken for its own address.
 		expect(a.url).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/u);
-		expect(a.url).not.toBe("http://127.0.0.1:1");
 		expect(a.modelsDir).toBe(join(stateDir, "models"));
 		expect(existsSync(a.modelsDir)).toBe(true);
-		expect(existsSync(join(stateDir, "server.json"))).toBe(true);
 		expect((await new LlamaClient(a.url, a.apiKey).list()).map((model) => model.id)).toEqual(["local"]);
-		expect(await new ManagedLlamaClient(stateDir, launch).probe()).toEqual(a);
+		expect(await client().probe()).toEqual(a);
 
 		first.release();
 		await new Promise((resolve) => setTimeout(resolve, 200));
@@ -133,54 +132,37 @@ describe.skipIf(process.platform === "win32")("managed llama.cpp supervisor", ()
 		second.release();
 		await supervisors[0]!.done;
 		expect(await isReachable(a.url)).toBe(false);
-		expect(existsSync(join(stateDir, "server.json"))).toBe(false);
-		expect(await new ManagedLlamaClient(stateDir, launch).probe()).toBeUndefined();
+		expect(await client().probe()).toBeUndefined();
+		expect(await readFile(a.logPath, "utf8")).toContain("stopping: no pi processes connected");
 	});
 
 	it("restarts the server on request", async () => {
-		const { stateDir, supervisors, launch, config } = await fixture();
-		const client = new ManagedLlamaClient(stateDir, launch);
-		const before = await client.acquire(config());
+		const { supervisors, client } = await fixture();
+		const managed = client();
+		const before = await managed.acquire();
 
-		await client.stop();
+		await managed.stop();
 		await supervisors[0]!.done;
 		expect(await isReachable(before.url)).toBe(false);
 
-		const after = await client.acquire(config());
+		const after = await managed.acquire();
 		expect(supervisors).toHaveLength(2);
 		expect(after.apiKey).not.toBe(before.apiKey);
 		expect(await isReachable(after.url)).toBe(true);
 	});
 
 	it("reports servers that fail to start", async () => {
-		const { stateDir, launch, config } = await fixture();
-		await expect(
-			new ManagedLlamaClient(stateDir, launch).acquire(config([], join(stateDir, "missing-llama-server"))),
-		).rejects.toThrow("Could not start");
-		const script = join(stateDir, "fake-llama-server.mjs");
-		await expect(new ManagedLlamaClient(stateDir, launch).acquire(config([script, "--fail"]))).rejects.toThrow(
-			"llama-server exited during startup (code 3: fake failure)",
+		const { stateDir, client } = await fixture();
+		await expect(client({ command: join(stateDir, "missing-llama-server"), args: [] }).acquire()).rejects.toThrow(
+			"Could not start",
 		);
-	});
-
-	it("stops a server orphaned by a killed supervisor", async () => {
-		const { stateDir, launch, config } = await fixture();
 		const script = join(stateDir, "fake-llama-server.mjs");
-		const orphan = spawn(
-			process.execPath,
-			[script, "--models-dir", join(stateDir, "models"), "--host", "127.0.0.1", "--port", "0"],
-			{ stdio: "ignore" },
+		await expect(client({ args: [script, "--fail"] }).acquire()).rejects.toThrow(
+			"llama-server exited during startup (code 3): fake failure",
 		);
-		const exited = new Promise((resolve) => orphan.once("exit", resolve));
-		cleanups.push(async () => {
-			orphan.kill("SIGKILL");
-		});
-		await writeFile(join(stateDir, "server.json"), JSON.stringify({ pid: orphan.pid }));
-
-		await new ManagedLlamaClient(stateDir, launch).acquire(config());
-		await exited;
-		// SIGTERM may arrive before the fake server installs its handler.
-		expect(orphan.exitCode === 0 || orphan.signalCode === "SIGTERM").toBe(true);
+		await expect(client(new Error("llamaCpp.args must be an array of strings")).acquire()).rejects.toThrow(
+			"llamaCpp.args must be an array of strings",
+		);
 	});
 });
 
@@ -300,7 +282,6 @@ describe("managed llama.cpp provider", () => {
 			url,
 			apiKey: "secret",
 			modelsDir: "/models",
-			cacheDir: "/cache",
 			logPath: "/log",
 		};
 

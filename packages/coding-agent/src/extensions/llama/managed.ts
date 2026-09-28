@@ -1,26 +1,37 @@
-import { execFile, spawn } from "node:child_process";
-import { mkdir } from "node:fs/promises";
-import { createConnection, type Socket } from "node:net";
+import { type ChildProcess, execFile, spawn } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
+import { closeSync, openSync, readFileSync, writeSync } from "node:fs";
+import { mkdir, rm } from "node:fs/promises";
+import { type AddressInfo, createConnection, createServer, type Server, type Socket } from "node:net";
+import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
 import { expandTildePath, getAgentDir, isBunBinary } from "../../config.ts";
 import { SettingsManager } from "../../core/settings-manager.ts";
 import { findHuggingFaceToken } from "./huggingface.ts";
-import {
-	encodeMessage,
-	LLAMA_SUPERVISOR_CONFIG_ENV,
-	LLAMA_SUPERVISOR_FLAG,
-	type LlamaSupervisorConfig,
-	llamaLogPath,
-	llamaSocketPath,
-	type ManagedLlamaServerInfo,
-	type SupervisorMessage,
-} from "./supervisor.ts";
 
-export type { ManagedLlamaServerInfo } from "./supervisor.ts";
+/**
+ * Managed llama.cpp: pi starts one shared llama-server router and stops it when no pi process uses it.
+ *
+ * A detached supervisor process (`pi --internal-llama-supervisor`) owns the router. It listens on a local
+ * socket; every pi process that uses the server keeps one connection open, and the operating system closes it
+ * when pi exits or crashes, so the number of connections is the reference count. The supervisor stops the
+ * router `idleShutdownSeconds` after the last connection closes.
+ *
+ * Protocol: the supervisor writes one JSON line to each connection, `ready` with the server address or `error`
+ * when startup failed. A connection that closes without a line means the supervisor is stopping; the client
+ * waits for the socket to disappear and starts a new supervisor. Clients send only `stop`.
+ */
+
+/** Hidden CLI flag that turns a pi process into the llama.cpp supervisor. */
+export const LLAMA_SUPERVISOR_FLAG = "--internal-llama-supervisor";
 
 const CONNECT_TIMEOUT_MS = 30_000;
+const READY_TIMEOUT_MS = 120_000;
+const SHUTDOWN_GRACE_MS = 10_000;
+// The pi process that launched the supervisor connects shortly after. Never idle out before that.
+const STARTUP_GRACE_MS = 10_000;
 const DEFAULT_IDLE_SHUTDOWN_SECONDS = 30;
 
 const RESERVED_ARGS = new Map<string, string>([
@@ -44,6 +55,23 @@ export interface ManagedLlamaSettings {
 	modelsDir: string;
 	idleShutdownSeconds: number;
 }
+
+export interface LlamaSupervisorConfig {
+	command: string;
+	args: string[];
+	modelsDir: string;
+	idleShutdownMs: number;
+	hfToken?: string;
+}
+
+export interface ManagedLlamaServerInfo {
+	url: string;
+	apiKey: string;
+	modelsDir: string;
+	logPath: string;
+}
+
+type SupervisorMessage = { type: "ready"; server: ManagedLlamaServerInfo } | { type: "error"; message: string };
 
 /** Read `llamaCpp` from global settings and apply defaults. Throws on invalid values. */
 export function loadManagedLlamaSettings(agentDir: string = getAgentDir()): ManagedLlamaSettings {
@@ -74,34 +102,73 @@ export function loadManagedLlamaSettings(agentDir: string = getAgentDir()): Mana
 	};
 }
 
-/** Start `pi --internal-llama-supervisor` detached, so it outlives the pi process that started it. */
-export function launchSupervisorProcess(config: LlamaSupervisorConfig): void {
-	let args: string[];
-	if (isBunBinary) {
-		args = [LLAMA_SUPERVISOR_FLAG];
-	} else {
-		const entrypoint = process.argv[1];
-		if (!entrypoint) throw new Error("Cannot locate the pi entrypoint to start the llama.cpp supervisor");
-		// Keep loader flags (e.g. TypeScript support in source checkouts) but not debugger ports.
-		const execArgv = process.execArgv.filter((arg) => !arg.startsWith("--inspect"));
-		args = [...execArgv, entrypoint, LLAMA_SUPERVISOR_FLAG];
+async function loadSupervisorConfig(agentDir: string): Promise<LlamaSupervisorConfig> {
+	const settings = loadManagedLlamaSettings(agentDir);
+	const hfToken = await findHuggingFaceToken();
+	return {
+		command: settings.command,
+		args: settings.args,
+		modelsDir: settings.modelsDir,
+		idleShutdownMs: settings.idleShutdownSeconds * 1000,
+		...(hfToken ? { hfToken } : {}),
+	};
+}
+
+function managedStateDir(agentDir: string): string {
+	return join(agentDir, "llama");
+}
+
+export function llamaSocketPath(stateDir: string): string {
+	if (process.platform === "win32") {
+		const hash = createHash("sha256").update(stateDir).digest("hex").slice(0, 16);
+		return `\\\\.\\pipe\\pi-llama-${hash}-v1`;
 	}
-	const child = spawn(process.execPath, args, {
-		cwd: config.stateDir,
-		detached: true,
-		stdio: "ignore",
-		windowsHide: true,
-		env: { ...process.env, [LLAMA_SUPERVISOR_CONFIG_ENV]: JSON.stringify(config) },
-	});
-	// Launch failures surface as a connection timeout.
-	child.on("error", () => {});
-	child.unref();
+	const path = join(stateDir, "supervisor-v1.sock");
+	// sun_path is limited to 104 bytes on macOS and 108 bytes on Linux.
+	if (Buffer.byteLength(path) > 100) throw new Error(`llama.cpp supervisor socket path is too long: ${path}`);
+	return path;
+}
+
+export function llamaLogPath(stateDir: string): string {
+	return join(stateDir, "server.log");
+}
+
+/** Mirrors llama.cpp's Hugging Face cache lookup (common/hf-cache.cpp), where router downloads are stored. */
+export function huggingFaceCacheDir(env: NodeJS.ProcessEnv = process.env): string {
+	const entries: [string, string[]][] = [
+		["LLAMA_CACHE", []],
+		["HF_HUB_CACHE", []],
+		["HUGGINGFACE_HUB_CACHE", []],
+		["HF_HOME", ["hub"]],
+		["XDG_CACHE_HOME", ["huggingface", "hub"]],
+		[process.platform === "win32" ? "USERPROFILE" : "HOME", [".cache", "huggingface", "hub"]],
+	];
+	for (const [name, suffix] of entries) {
+		const value = env[name];
+		if (value) return join(value, ...suffix);
+	}
+	return join(homedir(), ".cache", "huggingface", "hub");
 }
 
 function errorCode(error: unknown): string | undefined {
 	return typeof error === "object" && error !== null && "code" in error
 		? String((error as { code?: unknown }).code)
 		: undefined;
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+function listenOn(path: string): Promise<Server> {
+	return new Promise((resolve, reject) => {
+		const server = createServer();
+		server.once("error", reject);
+		server.listen(path, () => {
+			server.off("error", reject);
+			resolve(server);
+		});
+	});
 }
 
 function openSocket(path: string): Promise<Socket> {
@@ -116,34 +183,268 @@ function openSocket(path: string): Promise<Socket> {
 	});
 }
 
-/** Deliver supervisor messages from `socket`; `onClose` runs once when the connection ends. */
-function readMessages(socket: Socket, onMessage: (message: SupervisorMessage) => void, onClose: () => void): void {
-	createInterface({ input: socket }).on("line", (line) => {
-		try {
-			onMessage(JSON.parse(line) as SupervisorMessage);
-		} catch {
-			// Ignore malformed messages.
-		}
-	});
-	socket.once("close", onClose);
+/** Listen on the supervisor socket, or return undefined when another live supervisor owns it. */
+async function listenExclusive(path: string): Promise<Server | undefined> {
+	try {
+		return await listenOn(path);
+	} catch (error) {
+		if (errorCode(error) !== "EADDRINUSE" || process.platform === "win32") return undefined;
+	}
+	try {
+		(await openSocket(path)).destroy();
+		return undefined;
+	} catch {
+		// A socket file nobody accepts on belongs to a crashed supervisor.
+	}
+	await rm(path, { force: true });
+	return listenOn(path).catch(() => undefined);
 }
 
-type WaitResult = Exclude<SupervisorMessage, { type: "starting" }> | { type: "closed" };
+function freePort(): Promise<number> {
+	return new Promise((resolve, reject) => {
+		const server = createServer();
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", () => {
+			const { port } = server.address() as AddressInfo;
+			server.close(() => resolve(port));
+		});
+	});
+}
 
-function waitForState(socket: Socket, timeoutMs: number): Promise<WaitResult> {
-	return new Promise((resolve) => {
-		const timeout = setTimeout(() => resolve({ type: "closed" }), timeoutMs);
-		const finish = (result: WaitResult) => {
-			clearTimeout(timeout);
-			resolve(result);
-		};
-		readMessages(
-			socket,
-			(message) => {
-				if (message.type !== "starting") finish(message);
+async function isHealthy(url: string, apiKey: string): Promise<boolean> {
+	try {
+		const response = await fetch(`${url}/health`, {
+			headers: { Authorization: `Bearer ${apiKey}` },
+			signal: AbortSignal.timeout(2_000),
+		});
+		return response.ok;
+	} catch {
+		return false;
+	}
+}
+
+/** Owns one llama-server router and stops it when no pi process has been connected for the idle delay. */
+export class LlamaSupervisor {
+	readonly done: Promise<void>;
+	private readonly stateDir: string;
+	private readonly server: Server;
+	private readonly startupGraceMs: number;
+	private readonly startedAt = Date.now();
+	private readonly apiKey = randomBytes(24).toString("hex");
+	private readonly clients = new Set<Socket>();
+	private readonly logFd: number;
+	private idleShutdownMs = 0;
+	private result: SupervisorMessage | undefined;
+	private child: ChildProcess | undefined;
+	private idleTimer: ReturnType<typeof setTimeout> | undefined;
+	private stopping: Promise<void> | undefined;
+	private resolveDone!: () => void;
+
+	private constructor(stateDir: string, server: Server, startupGraceMs: number) {
+		this.stateDir = stateDir;
+		this.server = server;
+		this.startupGraceMs = startupGraceMs;
+		this.logFd = openSync(llamaLogPath(stateDir), "w");
+		this.done = new Promise((resolve) => {
+			this.resolveDone = resolve;
+		});
+	}
+
+	/** Start supervising, or return undefined when another supervisor already owns the socket. */
+	static async start(
+		stateDir: string,
+		loadConfig: () => Promise<LlamaSupervisorConfig>,
+		startupGraceMs = STARTUP_GRACE_MS,
+	): Promise<LlamaSupervisor | undefined> {
+		await mkdir(stateDir, { recursive: true, mode: 0o700 });
+		const server = await listenExclusive(llamaSocketPath(stateDir));
+		if (!server) return undefined;
+		const supervisor = new LlamaSupervisor(stateDir, server, startupGraceMs);
+		server.on("connection", (socket) => supervisor.accept(socket));
+		supervisor.armIdleTimer();
+		void supervisor.run(loadConfig);
+		return supervisor;
+	}
+
+	shutdown(reason: string): Promise<void> {
+		this.stopping ??= this.stop(reason);
+		return this.stopping;
+	}
+
+	private note(message: string): void {
+		writeSync(this.logFd, `[pi ${new Date().toISOString()}] ${message}\n`);
+	}
+
+	private armIdleTimer(): void {
+		clearTimeout(this.idleTimer);
+		const delayMs = Math.max(this.idleShutdownMs, this.startupGraceMs - (Date.now() - this.startedAt));
+		this.idleTimer = setTimeout(() => void this.shutdown("no pi processes connected"), delayMs);
+	}
+
+	private accept(socket: Socket): void {
+		socket.on("error", () => {});
+		// Closing without a message tells the client to retry once this supervisor is gone.
+		if (this.stopping) {
+			socket.destroy();
+			return;
+		}
+		this.clients.add(socket);
+		clearTimeout(this.idleTimer);
+		socket.on("close", () => {
+			this.clients.delete(socket);
+			if (this.clients.size === 0 && !this.stopping) this.armIdleTimer();
+		});
+		createInterface({ input: socket }).on("line", (line) => {
+			if (line.trim() === "stop") void this.shutdown("stop requested");
+		});
+		if (this.result) this.send(socket, this.result);
+		// A failed supervisor exits once a client received the error, so a retry starts over with fresh settings.
+		if (this.result?.type === "error") void this.shutdown("startup failed");
+	}
+
+	private send(socket: Socket, message: SupervisorMessage): void {
+		socket.write(`${JSON.stringify(message)}\n`);
+	}
+
+	private publish(message: SupervisorMessage): void {
+		this.result = message;
+		for (const socket of this.clients) this.send(socket, message);
+	}
+
+	private async run(loadConfig: () => Promise<LlamaSupervisorConfig>): Promise<void> {
+		const logPath = llamaLogPath(this.stateDir);
+		try {
+			const config = await loadConfig();
+			this.idleShutdownMs = config.idleShutdownMs;
+			await mkdir(config.modelsDir, { recursive: true });
+			const url = `http://127.0.0.1:${await freePort()}`;
+			await this.startServer(config, url);
+			if (this.stopping) return;
+			this.note(`llama-server ready at ${url}`);
+			this.publish({ type: "ready", server: { url, apiKey: this.apiKey, modelsDir: config.modelsDir, logPath } });
+		} catch (error) {
+			if (this.stopping) return;
+			const message = `${errorMessage(error)}; see ${logPath}`;
+			this.note(message);
+			this.publish({ type: "error", message });
+			await this.stopChild();
+			// Without clients, stay up until the idle timer fires so the launching client still receives the error.
+			if (this.clients.size > 0) void this.shutdown("startup failed");
+		}
+	}
+
+	private async startServer(config: LlamaSupervisorConfig, url: string): Promise<void> {
+		const port = new URL(url).port;
+		const args = [...config.args, "--models-dir", config.modelsDir, "--host", "127.0.0.1", "--port", port];
+		this.note(`starting ${[config.command, ...args].join(" ")}`);
+		const child = spawn(config.command, args, {
+			cwd: this.stateDir,
+			env: {
+				...process.env,
+				...(config.hfToken && !process.env.HF_TOKEN ? { HF_TOKEN: config.hfToken } : {}),
+				LLAMA_API_KEY: this.apiKey,
 			},
-			() => finish({ type: "closed" }),
-		);
+			stdio: ["ignore", this.logFd, this.logFd],
+			windowsHide: true,
+		});
+		this.child = child;
+		let failure: string | undefined;
+		child.once("error", (error) => {
+			failure ??= `Could not start ${config.command}: ${error.message}`;
+		});
+		child.once("exit", (code, signal) => {
+			const lastLine = readFileSync(llamaLogPath(this.stateDir), "utf8").trimEnd().split("\n").at(-1);
+			failure ??= `llama-server exited during startup (${signal ?? `code ${code}`}): ${lastLine}`;
+			if (this.result?.type !== "ready" || this.stopping) return;
+			this.note(`llama-server exited unexpectedly (${signal ?? `code ${code}`})`);
+			void this.shutdown("llama-server exited");
+		});
+
+		const deadline = Date.now() + READY_TIMEOUT_MS;
+		while (!this.stopping && !(await isHealthy(url, this.apiKey))) {
+			if (failure) throw new Error(failure);
+			if (Date.now() > deadline) throw new Error(`llama-server did not start within ${READY_TIMEOUT_MS / 1000}s`);
+			await sleep(100);
+		}
+	}
+
+	private async stopChild(): Promise<void> {
+		const child = this.child;
+		if (!child || child.pid === undefined || child.exitCode !== null || child.signalCode !== null) return;
+		const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
+		child.kill("SIGTERM");
+		const timer = setTimeout(() => {
+			this.note(`llama-server pid=${child.pid} did not exit; sending SIGKILL`);
+			child.kill("SIGKILL");
+		}, SHUTDOWN_GRACE_MS);
+		await exited;
+		clearTimeout(timer);
+	}
+
+	private async stop(reason: string): Promise<void> {
+		clearTimeout(this.idleTimer);
+		this.note(`stopping: ${reason}`);
+		await this.stopChild();
+		for (const socket of this.clients) {
+			// end() flushes a pending error message before closing; destroy() would drop it.
+			socket.end();
+			setTimeout(() => socket.destroy(), 1_000).unref();
+		}
+		// Close the socket last, so a new supervisor cannot start while the old server still runs.
+		await new Promise<void>((resolve) => this.server.close(() => resolve()));
+		this.note("stopped");
+		closeSync(this.logFd);
+		this.resolveDone();
+	}
+}
+
+/** Entry point for `pi --internal-llama-supervisor`, started detached by managed llama.cpp clients. */
+export async function runLlamaSupervisorProcess(): Promise<void> {
+	process.title = "pi-llama-supervisor";
+	const agentDir = getAgentDir();
+	const supervisor = await LlamaSupervisor.start(managedStateDir(agentDir), () => loadSupervisorConfig(agentDir));
+	if (!supervisor) process.exit(0);
+	for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+		process.on(signal, () => void supervisor.shutdown(`received ${signal}`));
+	}
+	await supervisor.done;
+	process.exit(0);
+}
+
+/** Start `pi --internal-llama-supervisor` detached, so it outlives the pi process that started it. */
+function launchSupervisorProcess(): void {
+	let args: string[];
+	if (isBunBinary) {
+		args = [LLAMA_SUPERVISOR_FLAG];
+	} else {
+		const entrypoint = process.argv[1];
+		if (!entrypoint) throw new Error("Cannot locate the pi entrypoint to start the llama.cpp supervisor");
+		// Keep loader flags (e.g. TypeScript support in source checkouts) but not debugger ports.
+		const execArgv = process.execArgv.filter((arg) => !arg.startsWith("--inspect"));
+		args = [...execArgv, entrypoint, LLAMA_SUPERVISOR_FLAG];
+	}
+	const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true });
+	// Launch failures surface as a connection timeout.
+	child.on("error", () => {});
+	child.unref();
+}
+
+/** Resolve with the first supervisor message, or undefined when the connection closes or the timeout expires. */
+function readMessage(socket: Socket, timeoutMs: number): Promise<SupervisorMessage | undefined> {
+	return new Promise((resolve) => {
+		const timeout = setTimeout(() => resolve(undefined), timeoutMs);
+		createInterface({ input: socket }).once("line", (line) => {
+			clearTimeout(timeout);
+			try {
+				resolve(JSON.parse(line) as SupervisorMessage);
+			} catch {
+				resolve(undefined);
+			}
+		});
+		socket.once("close", () => {
+			clearTimeout(timeout);
+			resolve(undefined);
+		});
 	});
 }
 
@@ -163,19 +464,19 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
  */
 export class ManagedLlamaClient {
 	private readonly socketPath: string;
-	private readonly launch: (config: LlamaSupervisorConfig) => void;
+	private readonly launch: () => void;
 	private connection: { socket: Socket; server: ManagedLlamaServerInfo } | undefined;
 	private pending: Promise<ManagedLlamaServerInfo> | undefined;
 
-	constructor(stateDir: string, launch: (config: LlamaSupervisorConfig) => void = launchSupervisorProcess) {
+	constructor(stateDir: string, launch: () => void = launchSupervisorProcess) {
 		this.socketPath = llamaSocketPath(stateDir);
 		this.launch = launch;
 	}
 
-	/** Connect to the running supervisor, starting one with `config` when none is running. */
-	acquire(config: () => Promise<LlamaSupervisorConfig>, signal?: AbortSignal): Promise<ManagedLlamaServerInfo> {
+	/** Connect to the running supervisor, starting one when none is running. */
+	acquire(signal?: AbortSignal): Promise<ManagedLlamaServerInfo> {
 		if (this.connection) return Promise.resolve(this.connection.server);
-		this.pending ??= this.connect(config).finally(() => {
+		this.pending ??= this.connect().finally(() => {
 			this.pending = undefined;
 		});
 		return raceAbort(this.pending, signal);
@@ -184,34 +485,20 @@ export class ManagedLlamaClient {
 	/** Return the running server without starting one or taking a reference. */
 	async probe(): Promise<ManagedLlamaServerInfo | undefined> {
 		if (this.connection) return this.connection.server;
-		let socket: Socket;
-		try {
-			socket = await openSocket(this.socketPath);
-		} catch {
-			return undefined;
-		}
-		try {
-			const result = await waitForState(socket, 2_000);
-			return result.type === "ready" ? result.server : undefined;
-		} finally {
-			socket.destroy();
-		}
+		const socket = await openSocket(this.socketPath).catch(() => undefined);
+		if (!socket) return undefined;
+		const message = await readMessage(socket, 2_000);
+		socket.destroy();
+		return message?.type === "ready" ? message.server : undefined;
 	}
 
 	/** Ask the supervisor to stop its server and exit. Other pi processes lose their connection too. */
 	async stop(): Promise<void> {
-		let socket = this.connection?.socket;
+		const socket = this.connection?.socket ?? (await openSocket(this.socketPath).catch(() => undefined));
 		this.connection = undefined;
-		if (!socket) {
-			try {
-				socket = await openSocket(this.socketPath);
-			} catch {
-				return;
-			}
-		}
-		if (socket.destroyed) return;
+		if (!socket || socket.destroyed) return;
 		const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
-		socket.write(encodeMessage({ type: "stop" }));
+		socket.write("stop\n");
 		await closed;
 	}
 
@@ -220,10 +507,9 @@ export class ManagedLlamaClient {
 		this.connection = undefined;
 	}
 
-	private async connect(loadConfig: () => Promise<LlamaSupervisorConfig>): Promise<ManagedLlamaServerInfo> {
+	private async connect(): Promise<ManagedLlamaServerInfo> {
 		const deadline = Date.now() + CONNECT_TIMEOUT_MS;
 		let launched = false;
-		let config: LlamaSupervisorConfig | undefined;
 		while (true) {
 			let socket: Socket | undefined;
 			try {
@@ -231,28 +517,21 @@ export class ManagedLlamaClient {
 			} catch (error) {
 				const code = errorCode(error);
 				if (code !== "ENOENT" && code !== "ECONNREFUSED") throw error;
-				if (!launched) {
-					config ??= await loadConfig();
-					await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
-					this.launch(config);
-					launched = true;
-				}
+				if (!launched) this.launch();
+				launched = true;
 			}
 			if (socket) {
-				const result = await waitForState(socket, Math.max(0, deadline - Date.now()));
-				if (result.type === "ready") {
-					this.adopt(socket, result.server);
-					return result.server;
+				const message = await readMessage(socket, Math.max(0, deadline - Date.now()));
+				if (message?.type === "ready") {
+					this.adopt(socket, message.server);
+					return message.server;
 				}
 				socket.destroy();
-				if (result.type === "error") throw new Error(result.message);
-				// The supervisor is shutting down. Start a new one once its socket is gone.
+				if (message?.type === "error") throw new Error(message.message);
+				// The supervisor is stopping. Start a new one once its socket is gone.
 				launched = false;
 			}
-			if (Date.now() > deadline) {
-				const logPath = config ? `; see ${llamaLogPath(config.stateDir)}` : "";
-				throw new Error(`Timed out waiting for the managed llama-server${logPath}`);
-			}
+			if (Date.now() > deadline) throw new Error("Timed out waiting for the managed llama-server");
 			await sleep(socket ? 250 : 100);
 		}
 	}
@@ -261,17 +540,9 @@ export class ManagedLlamaClient {
 		const connection = { socket, server };
 		this.connection = connection;
 		socket.unref();
-		const drop = () => {
+		socket.once("close", () => {
 			if (this.connection === connection) this.connection = undefined;
-			socket.destroy();
-		};
-		readMessages(
-			socket,
-			(message) => {
-				if (message.type === "stopping" || message.type === "error") drop();
-			},
-			drop,
-		);
+		});
 	}
 }
 
@@ -286,34 +557,18 @@ export interface ManagedLlama {
 	verify(signal?: AbortSignal): Promise<string>;
 }
 
-export function createManagedLlama(
-	agentDir: string = getAgentDir(),
-	launch?: (config: LlamaSupervisorConfig) => void,
-): ManagedLlama {
-	const stateDir = join(agentDir, "llama");
+export function createManagedLlama(agentDir: string = getAgentDir(), launch?: () => void): ManagedLlama {
 	let client: ManagedLlamaClient | undefined;
 	const getClient = () => {
-		client ??= new ManagedLlamaClient(stateDir, launch);
+		client ??= new ManagedLlamaClient(managedStateDir(agentDir), launch);
 		return client;
 	};
-	const loadConfig = async (): Promise<LlamaSupervisorConfig> => {
-		const settings = loadManagedLlamaSettings(agentDir);
-		const hfToken = await findHuggingFaceToken();
-		return {
-			command: settings.command,
-			args: settings.args,
-			modelsDir: settings.modelsDir,
-			stateDir,
-			idleShutdownMs: settings.idleShutdownSeconds * 1000,
-			...(hfToken ? { hfToken } : {}),
-		};
-	};
 	return {
-		acquire: (signal) => getClient().acquire(loadConfig, signal),
+		acquire: (signal) => getClient().acquire(signal),
 		probe: () => getClient().probe(),
 		restart: async (signal) => {
 			await getClient().stop();
-			return getClient().acquire(loadConfig, signal);
+			return getClient().acquire(signal);
 		},
 		verify: (signal) => {
 			const { command } = loadManagedLlamaSettings(agentDir);
