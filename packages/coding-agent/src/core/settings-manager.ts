@@ -34,6 +34,7 @@ export type {
 	CompactionSettings,
 	DefaultProjectTrust,
 	FullscreenExitOutput,
+	LlamaCppSettings,
 	ImageSettings,
 	MarkdownSettings,
 	MermaidRenderingMode,
@@ -802,6 +803,11 @@ export class SettingsManager {
 		this.save();
 	}
 
+	/** Read from global settings only because project settings must not choose a command to execute. */
+	getLlamaCppSettings(): LlamaCppSettings {
+		return structuredClone(this.globalSettings.llamaCpp ?? {});
+	}
+
 	getCompactionEnabled(): boolean {
 		return this.settings.compaction?.enabled ?? SETTINGS_DEFAULTS.compaction.enabled;
 	}
@@ -913,6 +919,11 @@ export class SettingsManager {
 		this.globalSettings.httpIdleTimeoutMs = Math.floor(timeoutMs);
 		this.markModified("httpIdleTimeoutMs");
 		this.save();
+	}
+
+	/** Read from global settings only because project settings must not choose a command to execute. */
+	getLlamaCppSettings(): LlamaCppSettings {
+		return structuredClone(this.globalSettings.llamaCpp ?? {});
 	}
 
 	/** Read from global settings only because warming costs money. */
