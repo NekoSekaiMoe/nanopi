@@ -412,7 +412,6 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 			}
 			return classifier.classify({ ...model, baseUrl: server.url }, context, { ...options, apiKey: server.apiKey });
 		},
-			),
 	};
 
 	return { provider, setCatalog };
