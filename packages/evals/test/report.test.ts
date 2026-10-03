@@ -120,7 +120,7 @@ describe("readTaskObservation", () => {
 	it("preserves metrics from a failed eval with a partial harness run", async () => {
 		const { directory, observation } = await readObservation({
 			status: "failed",
-			meta: scoredMeta({ errors: [{ message: "Prompt verification failed" }] }),
+			meta: scoredMeta(),
 		});
 		expect(observation).toEqual({
 			evalSet: task.evalSet,

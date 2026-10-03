@@ -31,7 +31,7 @@ const submitAudit = defineTool({
 
 const repositoryRoot = resolve(import.meta.dirname, "../../..");
 const docsRoot = resolve(repositoryRoot, "packages/coding-agent/docs");
-const implementationRoot = resolve(repositoryRoot, "packages/coding-agent/src");
+const sourceRoot = resolve(repositoryRoot, "packages/coding-agent/src");
 const pages = globSync("**/*.md", { cwd: docsRoot })
 	.map((path) => ({ path: path.replaceAll("\\", "/") }))
 	.sort((left, right) => left.path.localeCompare(right.path));
@@ -65,7 +65,7 @@ Call ${TOOL_NAME} exactly once as your final action. Do not return prose.`);
 		expect(readPaths).toContain(documentationPath);
 		expect(
 			readPaths.some((readPath) => {
-				const sourceRelative = relative(implementationRoot, readPath);
+				const sourceRelative = relative(sourceRoot, readPath);
 				return sourceRelative !== "" && !sourceRelative.startsWith("..") && !isAbsolute(sourceRelative);
 			}),
 		).toBe(true);

@@ -6,16 +6,17 @@ import { createPiDocumentationEvalHarness } from "../src/harness.ts";
 
 const TEMPLATE_NAME = "current-time";
 const COMMAND = `/${TEMPLATE_NAME}`;
+const TEMPLATE_PROMPT = "Tell me the current time and timezone.";
 
 const SCENARIOS = [
 	{
 		title: "Create a project prompt template",
-		request: `This project is already trusted. Add a ${COMMAND} prompt template for this project. It should ask for the current time and timezone.`,
+		request: `This project is already trusted. Add a ${COMMAND} prompt template for this project containing exactly: ${TEMPLATE_PROMPT}`,
 		scope: "project",
 	},
 	{
 		title: "Create a user prompt template",
-		request: `Make a ${COMMAND} prompt template available in all my Pi sessions. It should ask for the current time and timezone.`,
+		request: `Make a ${COMMAND} prompt template available in all my Pi sessions containing exactly: ${TEMPLATE_PROMPT}`,
 		scope: "user",
 	},
 ] as const;
@@ -35,7 +36,7 @@ function registerScenario(scenario: (typeof SCENARIOS)[number]): void {
 			const expandedPrompt = [...session.messages]
 				.reverse()
 				.find((message) => message.role === "user");
-			const expandedText = expandedPrompt?.role === "user" ? contentText(expandedPrompt.content).toLowerCase() : "";
+			const expandedText = expandedPrompt?.role === "user" ? contentText(expandedPrompt.content).trim() : "";
 
 			return {
 				template: template
@@ -46,10 +47,7 @@ function registerScenario(scenario: (typeof SCENARIOS)[number]): void {
 				extensionErrors: extensions.errors.map(({ error }) => error),
 				skills: session.resourceLoader.getSkills().skills.map(({ name }) => name),
 				otherScopeTemplateExists: existsSync(otherPath),
-				expandedToTimeRequest:
-					expandedText !== COMMAND &&
-					/\b(?:current\s+)?time\b/.test(expandedText) &&
-					/(?:\btime\s*zone\b|\butc\s+offset\b)/.test(expandedText),
+				expandedToTimeRequest: expandedText === TEMPLATE_PROMPT,
 			};
 		},
 	});
