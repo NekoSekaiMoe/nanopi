@@ -255,6 +255,20 @@ function withoutDeletedHeaders(headers: ProviderHeaders | undefined): Record<str
 		: undefined;
 }
 
+export class RuntimeReloadError extends Error {
+	constructor(cause: unknown) {
+		super("Runtime reload failed after invalidating the previous runtime", { cause });
+		this.name = "RuntimeReloadError";
+	}
+}
+
+export interface RuntimeReloadCallbacks {
+	beforeReload?(): void | Promise<void>;
+	beforeSessionStart?(): void | Promise<void>;
+	afterReload?(): void | Promise<void>;
+	reloadFailed?(error: unknown): void | Promise<void>;
+}
+
 export interface AgentSessionConfig {
 	agent: Agent;
 	sessionManager: SessionManager;
@@ -311,6 +325,7 @@ export interface ExtensionBindings {
 	abortHandler?: () => void;
 	shutdownHandler?: ShutdownHandler;
 	onError?: ExtensionErrorListener;
+	reloadHooks?: RuntimeReloadCallbacks;
 }
 
 export type QueuedInputDisposition = "handled" | "queued";
@@ -364,6 +379,7 @@ export interface SessionStats {
 	contextUsage?: ContextUsage;
 }
 
+type RuntimeAvailability = "available" | "reloadRequested" | "reloading" | "failed" | "shuttingDown";
 interface ToolDefinitionEntry {
 	definition: ToolDefinition;
 	sourceInfo: SourceInfo;
@@ -482,6 +498,10 @@ export class AgentSession {
 	private _extensionShutdownHandler?: ShutdownHandler;
 	private _extensionErrorListener?: ExtensionErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
+	private _runtimeReloadHooks?: RuntimeReloadCallbacks;
+	private _extensionsBound = false;
+	private _runtimeAvailability: RuntimeAvailability = "available";
+	private _runtimeReloadError?: RuntimeReloadError;
 
 	private _modelRuntime: ModelRuntime;
 	private _cacheWarmer?: Pick<CacheWarmer, "cancel" | "status" | "onAgentSettled" | "onModeChanged" | "onWarmed">;
@@ -538,7 +558,7 @@ export class AgentSession {
 		this._installHiddenDeclarationsProjection();
 		this._installAgentForcedPromptProjection();
 
-		this._buildRuntime({
+		this._loadRuntime({
 			activeToolNames: this._initialActiveToolNames,
 			includeAllExtensionTools: true,
 		});
@@ -1095,6 +1115,113 @@ export class AgentSession {
 		resolve();
 	}
 
+	assertRuntimeAvailable(): void {
+		if (this._runtimeAvailability === "failed") {
+			throw this._runtimeReloadError;
+		}
+		if (this._runtimeAvailability === "shuttingDown") {
+			throw new Error("Runtime is shutting down");
+		}
+		if (this._runtimeAvailability !== "available") {
+			throw new Error("Runtime reload in progress");
+		}
+	}
+
+	/** Prevent pending or future extension reloads while this session is being torn down. */
+	beginTeardown(): void {
+		this._runtimeAvailability = "shuttingDown";
+	}
+
+	private _isShuttingDown(): boolean {
+		return this._runtimeAvailability === "shuttingDown";
+	}
+
+	private _requestReload(): void {
+		if (this._runtimeReloadHooks && this._runtimeAvailability === "available") {
+			this._runtimeAvailability = "reloadRequested";
+		}
+	}
+
+	private _cancelRequestedReload(): void {
+		if (this._runtimeAvailability === "reloadRequested") {
+			this._runtimeAvailability = "available";
+		}
+	}
+
+	private async _flushRequestedReload(): Promise<void> {
+		if (
+			this._runtimeAvailability !== "reloadRequested" ||
+			!this._extensionsBound ||
+			!this.isIdle ||
+			this.isCompacting
+		) {
+			return;
+		}
+
+		try {
+			await this._performReload(this._runtimeReloadHooks);
+		} catch (error) {
+			this._extensionRunner.emitError({
+				extensionPath: "<runtime>",
+				event: "request_reload",
+				error: error instanceof Error ? error.message : String(error),
+				stack: error instanceof Error ? error.stack : undefined,
+			});
+			throw error;
+		}
+	}
+
+	/**
+	 * Flush after a long-lived operation clears its busy state. If both the
+	 * operation and reload fail, preserve both failures instead of masking one.
+	 */
+	private async _flushRequestedReloadAfterOperation(operationError?: unknown): Promise<void> {
+		try {
+			await this._flushRequestedReload();
+		} catch (reloadError) {
+			if (operationError !== undefined) {
+				throw new AggregateError([operationError, reloadError], "Operation and deferred runtime reload failed");
+			}
+			throw reloadError;
+		}
+	}
+
+	private async _performReload(hooks: RuntimeReloadCallbacks | undefined): Promise<void> {
+		let runtimeInvalidated = false;
+		this._runtimeAvailability = "reloading";
+		try {
+			await hooks?.beforeReload?.();
+			await this._reloadRuntime(hooks?.beforeSessionStart, () => {
+				runtimeInvalidated = true;
+			});
+			await hooks?.afterReload?.();
+			if (!this._isShuttingDown()) {
+				this._runtimeAvailability = "available";
+				this._runtimeReloadError = undefined;
+			}
+		} catch (cause) {
+			let error: unknown = cause;
+			try {
+				await hooks?.reloadFailed?.(cause);
+			} catch (hookCause) {
+				error = new AggregateError([cause, hookCause], "Runtime reload failed and reload failure hook also failed");
+			}
+			if (runtimeInvalidated) {
+				const terminalError = error instanceof RuntimeReloadError ? error : new RuntimeReloadError(error);
+				this._cacheWarmer?.cancel();
+				if (!this._isShuttingDown()) {
+					this._runtimeAvailability = "failed";
+					this._runtimeReloadError = terminalError;
+				}
+				throw terminalError;
+			}
+			if (!this._isShuttingDown()) {
+				this._runtimeAvailability = "available";
+			}
+			throw error;
+		}
+	}
+
 	private async _emitAgentSettled(): Promise<void> {
 		this._cacheWarmer?.onAgentSettled();
 		this._isAgentRunActive = false;
@@ -1414,6 +1541,7 @@ export class AgentSession {
 	 * Call this when completely done with the session.
 	 */
 	dispose(): void {
+		this.beginTeardown();
 		try {
 			this.abortRetry();
 			this.abortCompaction();
@@ -1425,7 +1553,7 @@ export class AgentSession {
 		}
 
 		this._extensionRunner.invalidate(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
+			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or ctx after the runtime that created it has been replaced. For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession.",
 		);
 		this._disconnectFromAgent();
 		this._eventListeners = [];
@@ -2069,6 +2197,7 @@ export class AgentSession {
 		}
 		const expandPromptTemplates = options?.expandPromptTemplates ?? true;
 		const preflightResult = options?.preflightResult;
+		this.assertRuntimeAvailable();
 		// Handle extension commands first (execute immediately, even during streaming)
 		// Extension commands manage their own LLM interaction via pi.sendMessage()
 		if (expandPromptTemplates && text.startsWith("/")) {
@@ -2162,18 +2291,18 @@ export class AgentSession {
 		// Get command context from extension runner (includes session control methods)
 		const ctx = this._extensionRunner.createCommandContext();
 
-		try {
-			await command.handler(args, ctx);
-			return true;
-		} catch (err) {
-			// Emit error via extension runner
-			this._extensionRunner.emitError({
-				extensionPath: `command:${commandName}`,
-				event: "command",
-				error: err instanceof Error ? err.message : String(err),
-			});
-			return true;
-		}
+		await this._extensionRunner.runExtensionOperation(async () => {
+			try {
+				await command.handler(args, ctx);
+			} catch (err) {
+				this._extensionRunner.emitError({
+					extensionPath: `command:${commandName}`,
+					event: "command",
+					error: err instanceof Error ? err.message : String(err),
+				});
+			}
+		});
+		return true;
 	}
 
 	/**
@@ -2213,6 +2342,7 @@ export class AgentSession {
 		behavior: "steer" | "followUp",
 		source: InputSource,
 	): Promise<QueuedInputDisposition> {
+		this.assertRuntimeAvailable();
 		if (text.startsWith("/")) {
 			this._throwIfExtensionCommand(text);
 		}
@@ -2663,11 +2793,15 @@ export class AgentSession {
 		if (isChanging) {
 			this.sessionManager.appendThinkingLevelChange(effectiveLevel);
 			this._emit({ type: "thinking_level_changed", level: effectiveLevel });
-			void this._extensionRunner.emit({
-				type: "thinking_level_select",
-				level: effectiveLevel,
-				previousLevel,
-			});
+			void this._extensionRunner
+				.emit({
+					type: "thinking_level_select",
+					level: effectiveLevel,
+					previousLevel,
+				})
+				.catch(() => {
+					// Deferred reload failures are reported by _flushRequestedReload().
+				});
 		}
 	}
 
@@ -2896,6 +3030,7 @@ export class AgentSession {
 		this._emit({ type: "compaction_start", reason: "manual" });
 		let fromExtension = false;
 		let cancelledByExtension = false;
+		let compactionError: unknown;
 
 		try {
 			const model = this.model;
@@ -3012,6 +3147,7 @@ export class AgentSession {
 			});
 			return compactionResult;
 		} catch (error) {
+			compactionError = error;
 			const message = error instanceof Error ? error.message : String(error);
 			const aborted = this._compactionAbortController.signal.aborted || cancelledByExtension;
 			const errorMessage = aborted ? undefined : `Compaction failed: ${message}`;
@@ -3034,6 +3170,7 @@ export class AgentSession {
 			throw error;
 		} finally {
 			this._clearManualCompactionState();
+			await this._flushRequestedReloadAfterOperation(compactionError);
 		}
 	}
 
@@ -3369,6 +3506,7 @@ export class AgentSession {
 				this._autoCompactionAbortController = undefined;
 			}
 			this._resolveIdleWaitIfIdle();
+			await this._flushRequestedReloadAfterOperation();
 		}
 	}
 
@@ -3403,11 +3541,25 @@ export class AgentSession {
 		if (bindings.onError !== undefined) {
 			this._extensionErrorListener = bindings.onError;
 		}
+		if (bindings.reloadHooks !== undefined) {
+			this._runtimeReloadHooks = bindings.reloadHooks;
+		}
 
+		this._extensionsBound = false;
 		this._applyExtensionBindings(this._extensionRunner);
-		await this._extensionRunner.emit(this._sessionStartEvent);
+		await this._startRuntime(this._sessionStartEvent);
+		this._extensionsBound = true;
+		await this._flushRequestedReload();
+	}
+
+	private async _startRuntime(
+		event: SessionStartEvent,
+		beforeSessionStart?: () => void | Promise<void>,
+	): Promise<void> {
+		await beforeSessionStart?.();
+		await this._extensionRunner.emit(event);
 		this._extensionRunner.reportUnhandledMcpServers();
-		await this.extendResourcesFromExtensions(this._sessionStartEvent.reason === "reload" ? "reload" : "startup");
+		await this.extendResourcesFromExtensions(event.reason === "reload" ? "reload" : "startup");
 	}
 
 	private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {
@@ -3576,8 +3728,15 @@ export class AgentSession {
 					void this.abort();
 				},
 				hasPendingMessages: () => this.pendingMessageCount > 0,
+				requestReload: () => this._requestReload(),
+				onOperationComplete: () => this._flushRequestedReload(),
 				shutdown: () => {
-					this._extensionShutdownHandler?.();
+					if (this._extensionShutdownHandler) {
+						this.beginTeardown();
+						this._extensionShutdownHandler();
+						return;
+					}
+					this._cancelRequestedReload();
 				},
 				getContextUsage: () => this.getContextUsage(),
 				compact: (options) => {
@@ -3732,7 +3891,8 @@ export class AgentSession {
 		return this._isDeclarable(name) && this._toolDefinitions.get(name)?.definition.defaultActive !== false;
 	}
 
-	private _buildRuntime(options: {
+	/** Install a runtime from the ResourceLoader's current snapshot. Used by startup and reload. */
+	private _loadRuntime(options: {
 		activeToolNames?: string[];
 		flagValues?: Map<string, boolean | string>;
 		includeAllExtensionTools?: boolean;
@@ -3786,9 +3946,22 @@ export class AgentSession {
 		});
 	}
 
-	async reload(options?: { beforeSessionStart?: () => void | Promise<void> }): Promise<void> {
+	async reload(): Promise<void> {
+		this.assertRuntimeAvailable();
+		if (!this.isIdle || this.isCompacting || this._extensionRunner.hasActiveOperation()) {
+			throw new Error("Cannot reload while a runtime operation is active");
+		}
+		await this._performReload(this._runtimeReloadHooks);
+	}
+
+	/** Tear down the old runtime, then enter the same load and start path used during startup. */
+	private async _reloadRuntime(
+		beforeSessionStart: RuntimeReloadCallbacks["beforeSessionStart"],
+		onInvalidated: () => void,
+	): Promise<void> {
 		const oldRunner = this._extensionRunner;
 		const previousFlagValues = oldRunner.getFlagValues();
+		const activeToolNames = this.getActiveToolNames();
 		await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
 		oldRunner.invalidate();
 		const getDefaultTools = () =>
@@ -3799,6 +3972,7 @@ export class AgentSession {
 					)
 				: [];
 		const previousDefaultTools = new Set(getDefaultTools());
+		onInvalidated();
 		await this.settingsManager.reload();
 		this.syncQueueModesFromSettings();
 		resetApiProviders();
@@ -3808,22 +3982,13 @@ export class AgentSession {
 		const addedDefaultTools = getDefaultTools().filter((name) => !previousDefaultTools.has(name));
 		// Tools the new extensions register later, such as MCP tools, are pending until then.
 		for (const name of this.getActiveToolNames()) this._pendingToolNames.add(name);
-		this._buildRuntime({
+		this._loadRuntime({
 			activeToolNames: [...this.getActiveToolNames(), ...addedDefaultTools],
 			flagValues: previousFlagValues,
 			includeAllExtensionTools: true,
 		});
-
-		const hasBindings =
-			this._extensionUIContext ||
-			this._extensionCommandContextActions ||
-			this._extensionShutdownHandler ||
-			this._extensionErrorListener;
-		if (hasBindings) {
-			await options?.beforeSessionStart?.();
-			await this._extensionRunner.emit({ type: "session_start", reason: "reload" });
-			this._extensionRunner.reportUnhandledMcpServers();
-			await this.extendResourcesFromExtensions("reload");
+		if (this._extensionsBound) {
+			await this._startRuntime({ type: "session_start", reason: "reload" }, beforeSessionStart);
 		}
 	}
 
@@ -4072,7 +4237,9 @@ export class AgentSession {
 		this.sessionManager.appendSessionInfo(name);
 		const event = { type: "session_info_changed", name: this.sessionManager.getSessionName() } as const;
 		this._emit(event);
-		void this._extensionRunner.emit(event);
+		void this._extensionRunner.emit(event).catch(() => {
+			// Deferred reload failures are reported by _flushRequestedReload().
+		});
 	}
 
 	// =========================================================================
@@ -4145,6 +4312,7 @@ export class AgentSession {
 
 		// Set up abort controller for summarization
 		this._branchSummaryAbortController = new AbortController();
+		let navigationError: unknown;
 
 		try {
 			let extensionSummary: { summary: string; details?: unknown; usage?: Usage } | undefined;
@@ -4278,9 +4446,14 @@ export class AgentSession {
 			// Emit to custom tools
 
 			return { editorText, cancelled: false, summaryEntry };
+		} catch (error) {
+			// Preserve the navigation failure so the finally block can report both it and a reload failure.
+			navigationError = error;
+			throw error;
 		} finally {
 			this._branchSummaryAbortController = undefined;
 			this._resolveIdleWaitIfIdle();
+			await this._flushRequestedReloadAfterOperation(navigationError);
 		}
 	}
 
