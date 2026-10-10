@@ -9,6 +9,7 @@ export interface SourceInfo {
 	scope: SourceScope;
 	origin: SourceOrigin;
 	baseDir?: string;
+	changelogPath?: string;
 }
 
 /** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:mcp`. */
@@ -26,6 +27,17 @@ export function getSyntheticPathSource(path: string): string | undefined {
 
 export function isSyntheticPath(path: string): boolean {
 	return path.startsWith(BUILTIN_PATH_PREFIX) || path.startsWith("<");
+
+export interface SourcePackageIdentity {
+	source: string;
+	scope: SourceScope;
+}
+
+export function getSourcePackageKey(identity: SourcePackageIdentity): string {
+	return JSON.stringify({
+		source: identity.source,
+		scope: identity.scope,
+	});
 }
 
 export function createSourceInfo(path: string, metadata: PathMetadata): SourceInfo {
@@ -35,6 +47,7 @@ export function createSourceInfo(path: string, metadata: PathMetadata): SourceIn
 		scope: metadata.scope,
 		origin: metadata.origin,
 		baseDir: metadata.baseDir,
+		...(metadata.changelogPath ? { changelogPath: metadata.changelogPath } : {}),
 	};
 }
 
@@ -45,6 +58,7 @@ export function createSyntheticSourceInfo(
 		scope?: SourceScope;
 		origin?: SourceOrigin;
 		baseDir?: string;
+		changelogPath?: string;
 	},
 ): SourceInfo {
 	return {
@@ -53,5 +67,6 @@ export function createSyntheticSourceInfo(
 		scope: options.scope ?? "temporary",
 		origin: options.origin ?? "top-level",
 		baseDir: options.baseDir,
+		...(options.changelogPath ? { changelogPath: options.changelogPath } : {}),
 	};
 }
