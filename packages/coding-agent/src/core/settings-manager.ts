@@ -15,6 +15,7 @@ import type {
 	CompactionModelOverride,
 	DefaultProjectTrust,
 	FullscreenExitOutput,
+	LlamaCppSettings,
 	MermaidRenderingMode,
 	PackageSource,
 	QuietStartup,
@@ -34,8 +35,8 @@ export type {
 	CompactionSettings,
 	DefaultProjectTrust,
 	FullscreenExitOutput,
-	LlamaCppSettings,
 	ImageSettings,
+	LlamaCppSettings,
 	MarkdownSettings,
 	MermaidRenderingMode,
 	PackageSource,
@@ -919,11 +920,6 @@ export class SettingsManager {
 		this.globalSettings.httpIdleTimeoutMs = Math.floor(timeoutMs);
 		this.markModified("httpIdleTimeoutMs");
 		this.save();
-	}
-
-	/** Read from global settings only because project settings must not choose a command to execute. */
-	getLlamaCppSettings(): LlamaCppSettings {
-		return structuredClone(this.globalSettings.llamaCpp ?? {});
 	}
 
 	/** Read from global settings only because warming costs money. */

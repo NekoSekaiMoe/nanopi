@@ -156,7 +156,8 @@ describe("Codex request attribution", () => {
 			turn_id: identity.turnId,
 			trace_id: "extension-trace",
 		});
-		expect(headers?.get("originator")).toBe("pi");
+		// Caller headers may override originator and User-Agent (#10429); identity headers stay canonical.
+		expect(headers?.get("originator")).toBe("spoofed");
 		expect(headers?.get("session-id")).toBe(identity.sessionId);
 		expect(headers?.get("thread-id")).toBe(identity.threadId);
 	});

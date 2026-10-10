@@ -207,9 +207,15 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 		options: LlamaCatalogOptions = {},
 	): void => {
 		const isManaged = options.managed === true;
-		const selectable = catalog.filter((model) => modelIsSelectable(model, options.routerAutoload === true, isManaged));
-		models = selectable.filter(isChatModel).map((model) => toPiModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl));
-		classifiers = selectable.map((model) => toPiClassifierModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl));
+		const selectable = catalog.filter((model) =>
+			modelIsSelectable(model, options.routerAutoload === true, isManaged),
+		);
+		models = selectable
+			.filter(isChatModel)
+			.map((model) => toPiModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl));
+		classifiers = selectable.map((model) =>
+			toPiClassifierModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl),
+		);
 	};
 
 	// Managed models carry the placeholder URL; start or join the server and send the request to its real URL.
@@ -364,7 +370,8 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 					// Only loaded models expose their template without side effects. Unloaded autoload models
 					// would need to be loaded, while querying sleeping models may wake them. Those models remain
 					// unclassified until they are loaded or woken and a later catalog refresh discovers them.
-					if (model.status.value !== "loaded") return toPiModel(model, modelServerUrl, undefined, cachedContextWindow);
+					if (model.status.value !== "loaded")
+						return toPiModel(model, modelServerUrl, undefined, cachedContextWindow);
 					const props = await client.props({ model: model.id, signal: context.signal });
 					return toPiModel(model, modelServerUrl, props, cachedContextWindow);
 				}),

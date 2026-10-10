@@ -3,7 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { type AuthContext, type AuthPrompt, type Model, normalizeContext } from "@earendil-works/pi-ai";
+import {
+	type AuthContext,
+	type AuthPrompt,
+	type ClassifierModel,
+	type Model,
+	normalizeContext,
+} from "@earendil-works/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { LlamaClient } from "../src/extensions/llama/client.ts";
 import {
