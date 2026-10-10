@@ -1496,12 +1496,11 @@ export class ExtensionRunner {
 		trigger: BeforeAgentStartTrigger,
 		systemPromptOptions: BuildSystemPromptOptions,
 	): Promise<BeforeAgentStartCombinedResult> {
-		return this.runExtensionOperation(() => this._emitBeforeAgentStart(prompt, images, systemPromptOptions));
+		return this.runExtensionOperation(() => this._emitBeforeAgentStart(trigger, systemPromptOptions));
 	}
 
 	private async _emitBeforeAgentStart(
-		prompt: string,
-		images: ImageContent[] | undefined,
+		trigger: BeforeAgentStartTrigger,
 		systemPromptOptions: BuildSystemPromptOptions,
 	): Promise<BeforeAgentStartCombinedResult> {
 		const currentOptions = normalizeBuildSystemPromptOptions(systemPromptOptions);

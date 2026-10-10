@@ -3961,7 +3961,6 @@ export class AgentSession {
 	): Promise<void> {
 		const oldRunner = this._extensionRunner;
 		const previousFlagValues = oldRunner.getFlagValues();
-		const activeToolNames = this.getActiveToolNames();
 		await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
 		oldRunner.invalidate();
 		const getDefaultTools = () =>
