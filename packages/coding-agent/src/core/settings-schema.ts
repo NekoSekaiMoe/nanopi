@@ -210,6 +210,22 @@ const SkillsInputSchema = Type.Union(
 	{ description: "Local skill file paths or directories." },
 );
 
+/** Settings for the llama-server that pi starts and stops in managed llama.cpp mode. */
+const LlamaCppSettingsSchema = Type.Object({
+	command: Type.Optional(Type.String({ default: "llama-server" })),
+	modelsDir: Type.Optional(
+		Type.String({
+			description: "Directory with GGUF models. Default: <agentDir>/llama/models; supports leading ~ expansion.",
+		}),
+	),
+	args: Type.Optional(
+		Type.Array(Type.String(), {
+			description: "Extra llama-server arguments; host, port, API key, and models dir are managed by pi.",
+		}),
+	),
+	idleShutdownSeconds: Type.Optional(nonNegativeSafeInteger({ default: 30 })),
+});
+
 export const SettingsSchema = Type.Object(
 	{
 		$schema: Type.Optional(Type.String({ description: "JSON Schema reference." })),
@@ -241,6 +257,7 @@ export const SettingsSchema = Type.Object(
 		theme: Type.Optional(Type.String()),
 		compaction: Type.Optional(CompactionSettingsSchema),
 		branchSummary: Type.Optional(BranchSummarySettingsSchema),
+		llamaCpp: Type.Optional(LlamaCppSettingsSchema),
 		retry: Type.Optional(RetrySettingsSchema),
 		hideThinkingBlock: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.hideThinkingBlock })),
 		showCacheMissNotices: Type.Optional(
@@ -468,6 +485,7 @@ export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> 
 export interface WarningSettings extends Static<typeof WarningSettingsSchema> {}
 export type CodemodeMode = Static<typeof CodemodeModeSchema>;
 export interface CodemodeSettings extends Static<typeof CodemodeSettingsSchema> {}
+export interface LlamaCppSettings extends Static<typeof LlamaCppSettingsSchema> {}
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;
