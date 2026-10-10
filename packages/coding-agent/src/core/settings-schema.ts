@@ -232,7 +232,7 @@ export const SettingsSchema = Type.Object(
 		lastChangelogVersion: Type.Optional(Type.String()),
 		extensionChangelogVersions: Type.Optional(
 			Type.Record(Type.String(), Type.String(), {
-				description: 'Last-seen changelog version per extension package, keyed by source and scope.',
+				description: "Last-seen changelog version per extension package, keyed by source and scope.",
 			}),
 		),
 		defaultProvider: Type.Optional(Type.String()),
