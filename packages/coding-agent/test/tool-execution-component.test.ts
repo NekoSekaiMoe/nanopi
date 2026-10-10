@@ -290,7 +290,6 @@ describe("ToolExecutionComponent parity", () => {
 	});
 
 	test("bash renderer highlights heredoc bodies and collapses long ones", () => {
-	test("bash renderer highlights heredoc bodies and collapses long ones", () => {
 		const body = Array.from({ length: 15 }, (_, i) => `import mod${i + 1}`).join("\n");
 		const command = `cd repo && python3 - <<'EOF'\n${body}\nEOF\ncargo test`;
 		const component = new ToolExecutionComponent(
