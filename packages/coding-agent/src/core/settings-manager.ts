@@ -806,6 +806,11 @@ export class SettingsManager {
 		return this.settings.compaction?.enabled ?? SETTINGS_DEFAULTS.compaction.enabled;
 	}
 
+	/** Whether compaction may summarize inside the live conversation on models verified to keep their prompt cache. */
+	getCompactionInContext(): boolean {
+		return this.settings.compaction?.inContext ?? false;
+	}
+
 	setCompactionEnabled(enabled: boolean): void {
 		if (!this.globalSettings.compaction) {
 			this.globalSettings.compaction = {};
@@ -813,6 +818,11 @@ export class SettingsManager {
 		this.globalSettings.compaction.enabled = enabled;
 		this.markModified("compaction", "enabled");
 		this.save();
+	}
+
+	/** Whether compaction may summarize inside the live conversation on models verified to keep their prompt cache. */
+	getCompactionInContext(): boolean {
+		return this.settings.compaction?.inContext ?? false;
 	}
 
 	private getCompactionTokenSetting(

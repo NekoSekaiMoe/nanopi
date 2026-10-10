@@ -305,6 +305,11 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 				"Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
 			default: false,
 		}),
+		supportsInContextCompaction: optionalCompatBoolean({
+			description:
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+			default: false,
+		}),
 		supportsMidConvoToolAdditions: Type.Optional(
 			Type.Boolean({
 				description:
@@ -358,6 +363,11 @@ export const OpenAIResponsesCompatSchema = Type.Object(
 		supportsMidConvoSystemMessages: optionalCompatBoolean({
 			description:
 				"Whether the exact model accepts developer or system messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
+			default: false,
+		}),
+		supportsInContextCompaction: optionalCompatBoolean({
+			description:
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
 			default: false,
 		}),
 		sessionAffinityFormat: optionalSessionAffinityFormat({
@@ -475,6 +485,11 @@ export const AnthropicMessagesCompatSchema = Type.Object(
 				"Whether the exact model accepts system-role messages inside the conversation. When false, later system messages are folded into the top-level system prompt.",
 			default: false,
 		}),
+		supportsInContextCompaction: optionalCompatBoolean({
+			description:
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+			default: false,
+		}),
 		supportsMidConvoToolChanges: Type.Optional(
 			Type.Boolean({
 				description:
@@ -521,6 +536,11 @@ const ProviderCompatPropertyOverrides = {
 	supportsMidConvoSystemMessages: optionalCompatBoolean({
 		description:
 			"Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message.",
+		default: false,
+	}),
+	supportsInContextCompaction: optionalCompatBoolean({
+		description:
+			"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
 		default: false,
 	}),
 	sessionAffinityFormat: optionalSessionAffinityFormat({

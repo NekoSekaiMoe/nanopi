@@ -17,6 +17,12 @@ const CompactionModelOverrideSchema = Type.Object({
 
 const CompactionSettingsSchema = Type.Object({
 	enabled: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.compaction.enabled })),
+	inContext: Type.Optional(
+		Type.Boolean({
+			description: "Whether compaction may summarize inside the live conversation on models verified to keep their prompt cache.",
+			default: false,
+		}),
+	),
 	reserveTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.reserveTokens })),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.keepRecentTokens })),
 	modelOverrides: Type.Optional(
