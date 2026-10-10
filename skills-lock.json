@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "write-notes-like-deepseek": {
+      "source": "czm15053/write-notes-like-deepseek",
+      "sourceType": "github",
+      "skillPath": "skills/write-notes-like-deepseek/SKILL.md",
+      "computedHash": "53c9ed23c5e39286a3e2ef69f934f48b57574a895f61ce792741563d3f3e3b28"
+    }
+  }
+}

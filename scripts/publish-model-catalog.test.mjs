@@ -48,6 +48,8 @@ test("publishes explicit per-type and total model counts", (t) => {
 	const result = spawnSync(
 		process.execPath,
 		[
+			"--import",
+			"./ts-import.mjs",
 			"scripts/publish-model-catalog.mjs",
 			"--input",
 			input,

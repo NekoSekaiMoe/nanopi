@@ -43,6 +43,9 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.3.1
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -50,7 +53,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
 
       - name: Hydrate release model data
-        run: npm run hydrate:model-data
+        run: pnpm run hydrate:model-data
 
       - name: Create source archive
         run: |
@@ -326,12 +329,15 @@ jobs:
           ref: ${{ env.SOURCE_REF }}
           persist-credentials: false
 
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.3.1
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
-          cache: npm
+          cache: pnpm
 
       - name: Install system dependencies
         run: |
@@ -340,7 +346,7 @@ jobs:
           sudo ln -s $(which fdfind) /usr/local/bin/fd
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Download pi-env daemons
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
@@ -361,19 +367,19 @@ jobs:
           ls -lR packages/env/bin
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Check
-        run: npm run check
+        run: pnpm run check
 
       - name: Build the pi-env daemon for tests
-        run: npm run build:daemon --workspace packages/env
+        run: pnpm --filter ./packages/env run build:daemon
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
       - name: Smoke-test packed npm consumer
-        run: npm run check:package-install
+        run: pnpm run check:package-install
 
       - name: Upgrade npm for trusted publishing
         run: |

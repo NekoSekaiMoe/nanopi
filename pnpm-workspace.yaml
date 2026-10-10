@@ -1,0 +1,27 @@
+packages:
+  - packages/*
+  - packages/coding-agent/examples/extensions/with-deps
+  - packages/coding-agent/examples/extensions/custom-provider-anthropic
+  - packages/coding-agent/examples/extensions/custom-provider-gitlab-duo
+  - packages/coding-agent/examples/extensions/sandbox
+  - packages/coding-agent/examples/extensions/gondolin
+
+# Link same-repo packages when the requested version range is satisfied by the
+# local package, mirroring npm workspaces behavior. Inter-package dependencies
+# use plain semver ranges, not the workspace: protocol.
+linkWorkspacePackages: true
+
+overrides:
+  protobufjs: 7.6.6
+
+minimumReleaseAge: 2
+
+allowBuilds:
+  '@google/genai': true
+  autoevals: true
+  canvas: true
+  cpu-features: true
+  esbuild: true
+  pnpm: false
+  protobufjs: true
+  ssh2: true

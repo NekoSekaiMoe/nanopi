@@ -17,11 +17,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.3.1
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install system dependencies
         run: |
@@ -30,19 +33,19 @@ jobs:
           sudo ln -s $(which fdfind) /usr/local/bin/fd
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Check
-        run: npm run check
+        run: pnpm run check
 
       - name: Build the pi-env daemon
-        run: npm run build:daemon --workspace packages/env
+        run: pnpm --filter ./packages/env run build:daemon
 
       - name: Test
-        run: npm test
+        run: pnpm test
 
   mcp-conformance:
     runs-on: ubuntu-latest
@@ -50,16 +53,19 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.3.1
+
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci --ignore-scripts
+        run: pnpm install --frozen-lockfile --ignore-scripts
 
       # Runs pi's MCP client from source against the pinned official conformance suite and fails on
       # regressions against packages/coding-agent/test/mcp-conformance/baseline.json.
       - name: MCP client conformance
-        run: npm run test:mcp-conformance
+        run: pnpm run test:mcp-conformance
