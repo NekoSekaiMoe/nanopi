@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { isBuiltin } from "node:module";
+import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
@@ -59,22 +59,29 @@ export function createJiti(...args) {
 const httpsProxyAgentNamedExportPlugin = {
 	name: "https-proxy-agent-named-export",
 	setup(build) {
+		const resolveFromImporter = createRequire(import.meta.url).resolve;
 		build.onResolve({ filter: /^https-proxy-agent$/ }, (args) => {
 			if (args.kind !== "dynamic-import") return undefined;
+			// Resolve from the importing module so pnpm's isolated layout serves the
+			// version the importer depends on. A bare specifier resolved from the
+			// repository root cannot find the package because no root package
+			// declares it, so the bundle build fails on a clean install.
+			const fromDir = args.importer && args.importer !== "<stdin>" ? dirname(args.importer) : repoRoot;
+			const resolved = resolveFromImporter("https-proxy-agent", { paths: [fromDir] });
 			return {
 				namespace: "https-proxy-agent-named-export",
-				path: args.path,
+				path: resolved,
 			};
 		});
 		build.onLoad(
 			{
-				filter: /^https-proxy-agent$/,
+				filter: /.*/,
 				namespace: "https-proxy-agent-named-export",
 			},
-			() => ({
-				contents: 'export { HttpsProxyAgent } from "https-proxy-agent";',
+			(args) => ({
+				contents: `export { HttpsProxyAgent } from ${JSON.stringify(args.path)};`,
 				loader: "js",
-				resolveDir: repoRoot,
+				resolveDir: dirname(args.path),
 			}),
 		);
 	},
