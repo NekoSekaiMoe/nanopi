@@ -225,6 +225,7 @@ describe("InteractiveMode compaction events", () => {
 			tokensBefore: 123,
 		};
 		const fakeThis = {
+			programStatus: { handleEvent: vi.fn() },
 			isInitialized: true,
 			footer: { invalidate: vi.fn() },
 			autoCompactionEscapeHandler: undefined as (() => void) | undefined,
