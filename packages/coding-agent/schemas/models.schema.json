@@ -945,6 +945,11 @@
           "description": "Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message.",
           "default": false
         },
+        "supportsInContextCompaction": {
+          "type": "boolean",
+          "description": "Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+          "default": false
+        },
         "supportsMidConvoToolAdditions": {
           "type": "boolean",
           "description": "Whether system messages can introduce additional tools mid-conversation. Requires supportsMidConvoSystemMessages. The generated catalog enables this for capable models.",

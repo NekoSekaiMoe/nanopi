@@ -1003,7 +1003,9 @@ export async function compact(
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
 ): Promise<CompactionResult> {
-	const attributedStreamFn = withCompactionRequestMetadata(streamFn);
+	// Attach compaction request identity only when a caller stream function exists; the
+	// default completeSimple path keeps its own routing options and stays mockable.
+	const attributedStreamFn = streamFn ? withCompactionRequestMetadata(streamFn) : undefined;
 	const {
 		firstKeptEntryId,
 		messagesToSummarize,
