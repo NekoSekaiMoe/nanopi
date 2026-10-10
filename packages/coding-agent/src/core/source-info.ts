@@ -27,6 +27,7 @@ export function getSyntheticPathSource(path: string): string | undefined {
 
 export function isSyntheticPath(path: string): boolean {
 	return path.startsWith(BUILTIN_PATH_PREFIX) || path.startsWith("<");
+}
 
 export interface SourcePackageIdentity {
 	source: string;
