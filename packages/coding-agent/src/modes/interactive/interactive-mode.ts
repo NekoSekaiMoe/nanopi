@@ -27,9 +27,7 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	SlashCommand,
-	TuiMainScreenRenderState,
 } from "@nanopi/pi-tui";
-import * as TuiLayouts from "@nanopi/pi-tui";
 import {
 	CombinedAutocompleteProvider,
 	type Component,
@@ -44,8 +42,7 @@ import {
 	Text,
 	TruncatedText,
 	type TUI,
-	TuiAltScreen,
-	TuiMainScreen,
+	type TuiMainScreen,
 	visibleWidth,
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
@@ -104,6 +101,7 @@ import {
 	resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
+import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../core/resource-listing.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import {
@@ -112,7 +110,6 @@ import {
 	sessionEntryToContextMessages,
 	type UsageEntry,
 } from "../../core/session-manager.ts";
-import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import { getSourcePackageKey, type SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
@@ -131,13 +128,11 @@ import { copyToClipboard, readClipboardFilePaths, readClipboardText } from "../.
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
-import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { stripBom } from "../../utils/text.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
 import { reportBug } from "./bug-report.ts";
-import { createChatViewport } from "./chat-viewport.ts";
 import { ArminComponent } from "./components/armin.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
 import { BashExecutionComponent } from "./components/bash-execution.ts";
@@ -147,7 +142,6 @@ import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
-import { playArmin3d } from "./components/easter-egg-3d.lazy.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
@@ -197,7 +191,6 @@ import {
 	setRegisteredThemes,
 	stopThemeWatcher,
 	Theme,
-	type ThemeColor,
 	theme,
 } from "./theme/theme.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
@@ -230,27 +223,6 @@ function isWorkingStatusEditor(editor: EditorComponent): editor is WorkingStatus
 
 function isExpandable(obj: unknown): obj is Expandable {
 	return typeof obj === "object" && obj !== null && "setExpanded" in obj && typeof obj.setExpanded === "function";
-}
-
-class ExpandableText extends ThemedText implements Expandable {
-	private readonly state: { expanded: boolean };
-
-	constructor(
-		getCollapsedText: () => string,
-		getExpandedText: () => string,
-		expanded = false,
-		paddingX = 0,
-		paddingY = 0,
-	) {
-		const state = { expanded };
-		super(() => (state.expanded ? getExpandedText() : getCollapsedText()), paddingX, paddingY);
-		this.state = state;
-	}
-
-	setExpanded(expanded: boolean): void {
-		this.state.expanded = expanded;
-		this.invalidate();
-	}
 }
 
 type CompactionQueuedMessage = {
@@ -438,8 +410,6 @@ export interface InteractiveModeOptions {
 	initialMessages?: string[];
 	/** Force verbose startup (overrides quietStartup setting) */
 	verbose?: boolean;
-	/** TUI layout mode. */
-	tuiMode?: TuiMode;
 	/** Initial interactive theme setting for this invocation. */
 	initialThemeSetting?: string;
 	/** Terminal implementation. Defaults to the current process terminal. */
@@ -448,14 +418,11 @@ export interface InteractiveModeOptions {
 
 export class InteractiveMode {
 	private runtimeHost: AgentSessionRuntime;
-	private renderer: TuiMainScreen | TuiAltScreen;
+	private renderer: TuiMainScreen;
 	private ui: TUI;
-	private mainScreenRenderState: TuiMainScreenRenderState | undefined;
 	private loadedResourcesContainer: Container;
 	private chatContainer: Container;
 	private documentContainer: Container;
-	private transcriptScrollView: TuiLayouts.ScrollView | undefined;
-	private fullscreenLayoutRoot: Component | undefined;
 	private pendingMessagesContainer: Container;
 	private statusContainer: Container;
 	private defaultEditor: CustomEditor;
@@ -607,8 +574,7 @@ export class InteractiveMode {
 	constructor(runtimeHost: AgentSessionRuntime, options: InteractiveModeOptions = {}) {
 		this.runtimeHost = runtimeHost;
 		setCapabilityOverrides(this.settingsManager.getTerminalCapabilityOverrides());
-		const tuiMode = options.tuiMode ?? this.settingsManager.getTuiMode();
-		this.options = { ...options, tuiMode };
+		this.options = options;
 		this.autoTrustOnReloadCwd = options.autoTrustOnReloadCwd;
 		this.runtimeHost.setBeforeSessionInvalidate(() => {
 			this.resetExtensionUI();
@@ -619,13 +585,10 @@ export class InteractiveMode {
 		});
 		this.version = VERSION;
 		this.renderer = createInteractiveTui({
-			tuiMode,
 			showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
 			logDirectory: getAgentDir(),
 			terminal: options.terminal,
 			onRightClickPaste: this.onRightClickPaste,
-			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
-			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
 		});
 		this.ui = createInteractiveTuiReference(() => this.renderer);
 		this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
@@ -648,6 +611,7 @@ export class InteractiveMode {
 			paddingX: editorPaddingX,
 			autocompleteMaxVisible,
 			embedWorkingStatus: true,
+			style: "composer",
 		});
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
@@ -708,17 +672,21 @@ export class InteractiveMode {
 
 	private getBuiltInCommandConflictDiagnostics(extensionRunner: ExtensionRunner): ResourceDiagnostic[] {
 		const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
-		return extensionRunner
-			.getRegisteredCommands()
-			.filter((command) => builtinNames.has(command.name))
-			.map((command) => ({
-				type: "warning" as const,
-				message:
-					command.invocationName === command.name
-						? `Extension command '/${command.name}' conflicts with built-in interactive command. Skipping in autocomplete.`
-						: `Extension command '/${command.name}' conflicts with built-in interactive command. Available as '/${command.invocationName}'.`,
-				path: command.sourceInfo.path,
-			}));
+		return (
+			extensionRunner
+				.getRegisteredCommands()
+				// Built-in extension commands (e.g. /status from builtin-commands) are listed in
+				// BUILTIN_SLASH_COMMANDS on purpose; only third-party commands with a matching name conflict.
+				.filter((command) => builtinNames.has(command.name) && command.sourceInfo.source !== "builtin")
+				.map((command) => ({
+					type: "warning" as const,
+					message:
+						command.invocationName === command.name
+							? `Extension command '/${command.name}' conflicts with built-in interactive command. Skipping in autocomplete.`
+							: `Extension command '/${command.name}' conflicts with built-in interactive command. Available as '/${command.invocationName}'.`,
+					path: command.sourceInfo.path,
+				}))
+		);
 	}
 
 	private createBaseAutocompleteProvider(): AutocompleteProvider {
@@ -882,74 +850,12 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new DynamicBorder());
 	}
 
-	private mountInteractiveTui(tui: TuiMainScreen | TuiAltScreen, components: readonly Component[]): void {
+	private mountInteractiveTui(tui: TuiMainScreen, components: readonly Component[]): void {
 		for (const component of components) tui.addChild(component);
-		if (TuiLayouts.isViewportTUI(tui)) {
-			if (!this.fullscreenLayoutRoot) throw new Error("Fullscreen layout is not initialized");
-			tui.setLayoutRoot(this.fullscreenLayoutRoot);
-		}
 	}
 
-	private stopInteractiveTui(fullscreenExitOutput: FullscreenExitOutput): void {
-		if (this.renderer.mode === "fullscreen" && fullscreenExitOutput === "transcript") {
-			while (this.renderer.hasOverlayEntries) this.renderer.hideOverlay();
-			this.switchTuiMode("regular", false, false);
-			this.renderer.renderNow();
-		}
-		this.ui.stop({ preserveScreen: this.renderer.mode === "fullscreen" });
-	}
-
-	private switchTuiMode(mode: TuiMode, restoreProgress = true, startRenderer = true): boolean {
-		const previousUi = this.renderer;
-		if (mode === previousUi.mode) return true;
-		if (previousUi.hasOverlayEntries) return false;
-
-		const components = [...previousUi.children];
-		const focus = previousUi.getFocusedComponent();
-		const terminal = previousUi.terminal;
-		const showHardwareCursor = previousUi.getShowHardwareCursor();
-		const clearOnShrink = previousUi.getClearOnShrink();
-		const onDebug = previousUi.onDebug;
-		if (previousUi instanceof TuiMainScreen) {
-			this.mainScreenRenderState = previousUi.captureRenderState();
-		}
-
-		previousUi.stop({ preserveScreen: true });
-		previousUi.setFocus(null);
-		previousUi.clear();
-		if (TuiLayouts.isViewportTUI(previousUi)) previousUi.setLayoutRoot(undefined);
-
-		const nextUi = createInteractiveTui({
-			tuiMode: mode,
-			showHardwareCursor,
-			logDirectory: getAgentDir(),
-			terminal,
-			onRightClickPaste: this.onRightClickPaste,
-			fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
-			fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
-		});
-		nextUi.setClearOnShrink(clearOnShrink);
-		nextUi.onDebug = onDebug;
-		if (nextUi instanceof TuiMainScreen && this.mainScreenRenderState) {
-			nextUi.restoreRenderState(this.mainScreenRenderState);
-		}
-		this.renderer = nextUi;
-		this.options.tuiMode = mode;
-		this.mountInteractiveTui(nextUi, components);
-		nextUi.invalidate();
-		nextUi.setFocus(focus);
-		if (!startRenderer) return true;
-		nextUi.start();
-		this.themeController.rebindTui();
-		this.rebindExtensionTerminalInputListeners();
-		if (
-			restoreProgress &&
-			this.settingsManager.getShowTerminalProgress() &&
-			(this.session.isStreaming || this.session.isCompacting)
-		) {
-			terminal.setProgress(true);
-		}
-		return true;
+	private stopInteractiveTui(): void {
+		this.ui.stop();
 	}
 
 	async init(): Promise<void> {
@@ -976,22 +882,7 @@ export class InteractiveMode {
 			console.log(theme.fg("dim", `Model scope: ${modelList}${cycleHint}`));
 		}
 
-		// Keep one component tree and remount it when changing renderers.
 		this.renderWidgets(); // Initialize with default spacer
-		const viewport = createChatViewport({
-			document: this.documentContainer,
-			pendingMessages: this.pendingMessagesContainer,
-			status: this.statusContainer,
-			widgetsAbove: this.widgetContainerAbove,
-			editor: this.editorContainer,
-			widgetsBelow: this.widgetContainerBelow,
-			footer: this.footerContainer,
-			scrollbar: this.settingsManager.getFullscreenScrollbar(),
-			scrollbarTrackStyle: (text) => theme.fg("scrollbarTrack", text),
-			scrollbarThumbStyle: (text) => theme.fg("scrollbarThumb", text),
-		});
-		this.transcriptScrollView = viewport.transcript;
-		this.fullscreenLayoutRoot = viewport.root;
 		this.mountInteractiveTui(this.renderer, [
 			this.documentContainer,
 			this.pendingMessagesContainer,
@@ -1385,310 +1276,14 @@ export class InteractiveMode {
 	// Extension System
 	// =========================================================================
 
-	private formatDisplayPath(p: string): string {
-		const home = os.homedir();
-		let result = p;
-
-		// Replace home directory with ~
-		if (result.startsWith(home)) {
-			result = `~${result.slice(home.length)}`;
-		}
-
-		return result;
-	}
-
-	private formatExtensionDisplayPath(path: string): string {
-		let result = this.formatDisplayPath(path);
-		result = result.replace(/\/index\.ts$/, "").replace(/\/index\.js$/, "");
-		return result;
-	}
-
-	private formatContextPath(p: string): string {
-		const cwd = path.resolve(this.sessionManager.getCwd());
-		const absolutePath = path.isAbsolute(p) ? path.resolve(p) : path.resolve(cwd, p);
-		const relativePath = getCwdRelativePath(absolutePath, cwd);
-		if (relativePath !== undefined) {
-			return relativePath;
-		}
-
-		return this.formatDisplayPath(absolutePath);
-	}
-
-	private getStartupExpansionState(): boolean {
-		return this.options.verbose || this.toolOutputExpanded;
-	}
-
 	/** Startup header (logo, version, key hints). Hidden only by quietStartup: true. */
 	private shouldShowStartupHeader(): boolean {
 		return this.options.verbose === true || this.settingsManager.getQuietStartup() !== true;
 	}
 
-	/** Startup details (model scope, loaded resources). Hidden by quietStartup: true or "header". */
+	/** Startup details (model scope log). Hidden by quietStartup: true or "header". */
 	private shouldShowStartupDetails(): boolean {
 		return this.options.verbose === true || this.settingsManager.getQuietStartup() === false;
-	}
-
-	/**
-	 * Get a short path relative to the package root for display.
-	 */
-	private getShortPath(fullPath: string, sourceInfo?: SourceInfo): string {
-		const normalizedFullPath = fullPath.replace(/\\/g, "/");
-		const baseDir = sourceInfo?.baseDir;
-		if (baseDir && this.isPackageSource(sourceInfo)) {
-			const normalizedBaseDir = baseDir.replace(/\\/g, "/");
-			const npmRootMatch = normalizedBaseDir.match(/^(.*\/node_modules)\/(@?[^/]+(?:\/[^/]+)?)$/);
-			// If fullPath is under the same node_modules root as baseDir, preserve that relative topology.
-			if (npmRootMatch?.[1] && normalizedFullPath.startsWith(`${npmRootMatch[1]}/`)) {
-				return path.posix.relative(normalizedBaseDir, normalizedFullPath);
-			}
-
-			const relativePath = path.relative(path.resolve(baseDir), path.resolve(fullPath));
-			if (
-				relativePath &&
-				relativePath !== "." &&
-				!relativePath.startsWith("..") &&
-				!relativePath.startsWith(`..${path.sep}`) &&
-				!path.isAbsolute(relativePath)
-			) {
-				return relativePath.replace(/\\/g, "/");
-			}
-		}
-
-		const source = sourceInfo?.source ?? "";
-		const npmMatch = normalizedFullPath.match(/node_modules\/(@?[^/]+(?:\/[^/]+)?)\/(.*)/);
-		if (npmMatch && source.startsWith("npm:")) {
-			return npmMatch[2];
-		}
-
-		const gitMatch = normalizedFullPath.match(/git\/[^/]+\/[^/]+\/(.*)/);
-		if (gitMatch && source.startsWith("git:")) {
-			return gitMatch[1];
-		}
-
-		return this.formatDisplayPath(fullPath);
-	}
-
-	private getCompactPathLabel(resourcePath: string, sourceInfo?: SourceInfo): string {
-		const shortPath = this.getShortPath(resourcePath, sourceInfo);
-		const normalizedPath = shortPath.replace(/\\/g, "/");
-		const segments = normalizedPath.split("/").filter((segment) => segment.length > 0 && segment !== "~");
-		if (segments.length > 0) {
-			return segments[segments.length - 1]!;
-		}
-		return shortPath;
-	}
-
-	private getCompactPackageSourceLabel(sourceInfo?: SourceInfo): string {
-		const source = sourceInfo?.source ?? "";
-		if (source.startsWith("npm:")) {
-			return source.slice("npm:".length) || source;
-		}
-
-		const gitSource = parseGitUrl(source);
-		if (gitSource) {
-			return gitSource.path || source;
-		}
-
-		return source;
-	}
-
-	private getCompactExtensionLabel(resourcePath: string, sourceInfo?: SourceInfo): string {
-		if (!this.isPackageSource(sourceInfo)) {
-			return this.getCompactPathLabel(resourcePath, sourceInfo);
-		}
-
-		const sourceLabel = this.getCompactPackageSourceLabel(sourceInfo);
-		if (!sourceLabel) {
-			return this.getCompactPathLabel(resourcePath, sourceInfo);
-		}
-
-		const shortPath = this.getShortPath(resourcePath, sourceInfo).replace(/\\/g, "/");
-		const packagePath = shortPath.startsWith("extensions/") ? shortPath.slice("extensions/".length) : shortPath;
-		const parsedPath = path.posix.parse(packagePath);
-
-		if (parsedPath.name === "index") {
-			return !parsedPath.dir || parsedPath.dir === "." ? sourceLabel : `${sourceLabel}:${parsedPath.dir}`;
-		}
-
-		return `${sourceLabel}:${packagePath}`;
-	}
-
-	private getCompactDisplayPathSegments(resourcePath: string): string[] {
-		return this.formatDisplayPath(resourcePath)
-			.replace(/\\/g, "/")
-			.split("/")
-			.filter((segment) => segment.length > 0 && segment !== "~");
-	}
-
-	private getCompactNonPackageExtensionLabel(
-		resourcePath: string,
-		index: number,
-		allPaths: Array<{ path: string; segments: string[] }>,
-	): string {
-		const segments = allPaths[index]?.segments;
-		if (!segments || segments.length === 0) {
-			return this.getCompactPathLabel(resourcePath);
-		}
-
-		for (let segmentCount = 1; segmentCount <= segments.length; segmentCount += 1) {
-			const candidate = segments.slice(-segmentCount).join("/");
-			const isUnique = allPaths.every((item, itemIndex) => {
-				if (itemIndex === index) {
-					return true;
-				}
-				return item.segments.slice(-segmentCount).join("/") !== candidate;
-			});
-
-			if (isUnique) {
-				return candidate;
-			}
-		}
-
-		return segments.join("/");
-	}
-
-	private getCompactExtensionLabels(extensions: Array<{ path: string; sourceInfo?: SourceInfo }>): string[] {
-		const nonPackageExtensions = extensions
-			.map((extension) => {
-				const segments = this.getCompactDisplayPathSegments(extension.path);
-				const lastSegment = segments[segments.length - 1];
-				if (segments.length > 1 && (lastSegment === "index.ts" || lastSegment === "index.js")) {
-					segments.pop();
-				}
-				return {
-					path: extension.path,
-					sourceInfo: extension.sourceInfo,
-					segments,
-				};
-			})
-			.filter((extension) => !this.isPackageSource(extension.sourceInfo));
-
-		return extensions.map((extension) => {
-			if (this.isPackageSource(extension.sourceInfo)) {
-				return this.getCompactExtensionLabel(extension.path, extension.sourceInfo);
-			}
-
-			const nonPackageIndex = nonPackageExtensions.findIndex((item) => item.path === extension.path);
-			if (nonPackageIndex === -1) {
-				return this.getCompactPathLabel(extension.path, extension.sourceInfo);
-			}
-
-			return this.getCompactNonPackageExtensionLabel(extension.path, nonPackageIndex, nonPackageExtensions);
-		});
-	}
-
-	private getDisplaySourceInfo(sourceInfo?: SourceInfo): {
-		label: string;
-		scopeLabel?: string;
-		color: "accent" | "muted";
-	} {
-		const source = sourceInfo?.source ?? "local";
-		const scope = sourceInfo?.scope ?? "project";
-		if (source === "local") {
-			if (scope === "user") {
-				return { label: "user", color: "muted" };
-			}
-			if (scope === "project") {
-				return { label: "project", color: "muted" };
-			}
-			if (scope === "temporary") {
-				return { label: "path", scopeLabel: "temp", color: "muted" };
-			}
-			return { label: "path", color: "muted" };
-		}
-
-		if (source === "cli") {
-			return { label: "path", scopeLabel: scope === "temporary" ? "temp" : undefined, color: "muted" };
-		}
-
-		const scopeLabel =
-			scope === "user" ? "user" : scope === "project" ? "project" : scope === "temporary" ? "temp" : undefined;
-		return { label: source, scopeLabel, color: "accent" };
-	}
-
-	private getScopeGroup(sourceInfo?: SourceInfo): "user" | "project" | "path" {
-		const source = sourceInfo?.source ?? "local";
-		const scope = sourceInfo?.scope ?? "project";
-		if (source === "cli" || scope === "temporary") return "path";
-		if (scope === "user") return "user";
-		if (scope === "project") return "project";
-		return "path";
-	}
-
-	private isPackageSource(sourceInfo?: SourceInfo): boolean {
-		const source = sourceInfo?.source ?? "";
-		return source.startsWith("npm:") || source.startsWith("git:");
-	}
-
-	private buildScopeGroups(items: Array<{ path: string; sourceInfo?: SourceInfo }>): Array<{
-		scope: "user" | "project" | "path";
-		paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-		packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-	}> {
-		const groups: Record<
-			"user" | "project" | "path",
-			{
-				scope: "user" | "project" | "path";
-				paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-				packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-			}
-		> = {
-			user: { scope: "user", paths: [], packages: new Map() },
-			project: { scope: "project", paths: [], packages: new Map() },
-			path: { scope: "path", paths: [], packages: new Map() },
-		};
-
-		for (const item of items) {
-			const groupKey = this.getScopeGroup(item.sourceInfo);
-			const group = groups[groupKey];
-			const source = item.sourceInfo?.source ?? "local";
-
-			if (this.isPackageSource(item.sourceInfo)) {
-				const list = group.packages.get(source) ?? [];
-				list.push(item);
-				group.packages.set(source, list);
-			} else {
-				group.paths.push(item);
-			}
-		}
-
-		return [groups.project, groups.user, groups.path].filter(
-			(group) => group.paths.length > 0 || group.packages.size > 0,
-		);
-	}
-
-	private formatScopeGroups(
-		groups: Array<{
-			scope: "user" | "project" | "path";
-			paths: Array<{ path: string; sourceInfo?: SourceInfo }>;
-			packages: Map<string, Array<{ path: string; sourceInfo?: SourceInfo }>>;
-		}>,
-		options: {
-			formatPath: (item: { path: string; sourceInfo?: SourceInfo }) => string;
-			formatPackagePath: (item: { path: string; sourceInfo?: SourceInfo }, source: string) => string;
-		},
-	): string {
-		const lines: string[] = [];
-
-		for (const group of groups) {
-			lines.push(`  ${theme.fg("accent", group.scope)}`);
-
-			const sortedPaths = [...group.paths].sort((a, b) => a.path.localeCompare(b.path));
-			for (const item of sortedPaths) {
-				lines.push(theme.fg("dim", `    ${options.formatPath(item)}`));
-			}
-
-			const sortedPackages = Array.from(group.packages.entries()).sort(([a], [b]) => a.localeCompare(b));
-			for (const [source, items] of sortedPackages) {
-				lines.push(`    ${theme.fg("mdLink", source)}`);
-				const sortedPackagePaths = [...items].sort((a, b) => a.path.localeCompare(b.path));
-				for (const item of sortedPackagePaths) {
-					lines.push(theme.fg("dim", `      ${options.formatPackagePath(item, source)}`));
-				}
-			}
-		}
-
-		return lines.join("\n");
 	}
 
 	private findSourceInfoForPath(p: string, sourceInfos: Map<string, SourceInfo>): SourceInfo | undefined {
@@ -1707,12 +1302,12 @@ export class InteractiveMode {
 
 	private formatPathWithSource(p: string, sourceInfo?: SourceInfo): string {
 		if (sourceInfo) {
-			const shortPath = this.getShortPath(p, sourceInfo);
-			const { label, scopeLabel } = this.getDisplaySourceInfo(sourceInfo);
+			const shortPath = getShortPath(p, sourceInfo, os.homedir());
+			const { label, scopeLabel } = getDisplaySourceInfo(sourceInfo);
 			const labelText = scopeLabel ? `${label} (${scopeLabel})` : label;
 			return `${labelText} ${shortPath}`;
 		}
-		return this.formatDisplayPath(p);
+		return formatDisplayPath(p, os.homedir());
 	}
 
 	private formatDiagnostics(diagnostics: readonly ResourceDiagnostic[], sourceInfos: Map<string, SourceInfo>): string {
@@ -1768,58 +1363,22 @@ export class InteractiveMode {
 		return lines.join("\n");
 	}
 
-	private showLoadedResources(options?: {
-		extensions?: Array<{ path: string; sourceInfo?: SourceInfo }>;
-		force?: boolean;
-		showDiagnosticsWhenQuiet?: boolean;
-	}): void {
+	private showLoadedResources(): void {
 		// Resource rendering is idempotent; chat clears no longer clear this separate container.
+		// The informational listing (context files, skills, prompts, extensions) moved to /status;
+		// only actionable conflict/error diagnostics render here.
 		this.loadedResourcesContainer.clear();
-
-		const showListing = options?.force || this.shouldShowStartupDetails();
-		const showDiagnostics = showListing || options?.showDiagnosticsWhenQuiet === true;
-		if (!showListing && !showDiagnostics) {
-			return;
-		}
-
-		const sectionHeader = (name: string, color: ThemeColor = "mdHeading") => theme.fg(color, `[${name}]`);
-		const formatCompactList = (items: string[], options?: { sort?: boolean }): string => {
-			const labels = items.map((item) => item.trim()).filter((item) => item.length > 0);
-			if (options?.sort !== false) {
-				labels.sort((a, b) => a.localeCompare(b));
-			}
-			return theme.fg("dim", `  ${labels.join(", ")}`);
-		};
-		// Bodies are built on demand so the listing follows theme changes.
-		const addLoadedSection = (
-			name: string,
-			collapsedBody: () => string,
-			expandedBody = collapsedBody,
-			color: ThemeColor = "mdHeading",
-		): void => {
-			const section = new ExpandableText(
-				() => `${sectionHeader(name, color)}\n${collapsedBody()}`,
-				() => `${sectionHeader(name, color)}\n${expandedBody()}`,
-				this.getStartupExpansionState(),
-				0,
-				0,
-			);
-			this.loadedResourcesContainer.addChild(section);
-			this.loadedResourcesContainer.addChild(new Spacer(1));
-		};
 
 		const skillsResult = this.session.resourceLoader.getSkills();
 		const promptsResult = this.session.resourceLoader.getPrompts();
 		const themesResult = this.session.resourceLoader.getThemes();
-		const extensions =
-			options?.extensions ??
-			this.session.resourceLoader
-				.getExtensions()
-				.extensions.filter((extension) => !extension.hidden)
-				.map((extension) => ({
-					path: extension.path,
-					sourceInfo: extension.sourceInfo,
-				}));
+		const extensions = this.session.resourceLoader
+			.getExtensions()
+			.extensions.filter((extension) => !extension.hidden)
+			.map((extension) => ({
+				path: extension.path,
+				sourceInfo: extension.sourceInfo,
+			}));
 		const sourceInfos = new Map<string, SourceInfo>();
 		for (const extension of extensions) {
 			if (extension.sourceInfo) {
@@ -1842,125 +1401,55 @@ export class InteractiveMode {
 			}
 		}
 
-		if (showListing) {
-			const systemPromptSource = this.session.resourceLoader.getSystemPromptSource();
-			const contextFiles = [
-				...(systemPromptSource ? [systemPromptSource] : []),
-				...this.session.resourceLoader.getAppendSystemPromptSources(),
-				...this.session.resourceLoader.getAgentsFiles().agentsFiles,
-			];
-			if (contextFiles.length > 0) {
-				this.loadedResourcesContainer.addChild(new Spacer(1));
-				const contextList = () =>
-					contextFiles.map((f) => theme.fg("dim", `  ${this.formatDisplayPath(f.path)}`)).join("\n");
-				const contextCompactList = () =>
-					formatCompactList(
-						contextFiles.map((contextFile) => this.formatContextPath(contextFile.path)),
-						{ sort: false },
-					);
-				addLoadedSection("Context", contextCompactList, contextList);
-			}
-
-			const skills = skillsResult.skills;
-			if (skills.length > 0) {
-				const groups = this.buildScopeGroups(
-					skills.map((skill) => ({ path: skill.filePath, sourceInfo: skill.sourceInfo })),
-				);
-				const skillList = () =>
-					this.formatScopeGroups(groups, {
-						formatPath: (item) => this.formatDisplayPath(item.path),
-						formatPackagePath: (item) => this.getShortPath(item.path, item.sourceInfo),
-					});
-				const skillCompactList = () => formatCompactList(skills.map((skill) => skill.name));
-				addLoadedSection("Skills", skillCompactList, skillList);
-			}
-
-			const templates = this.session.promptTemplates;
-			if (templates.length > 0) {
-				const groups = this.buildScopeGroups(
-					templates.map((template) => ({ path: template.filePath, sourceInfo: template.sourceInfo })),
-				);
-				const templateByPath = new Map(templates.map((t) => [t.filePath, t]));
-				const templateList = () =>
-					this.formatScopeGroups(groups, {
-						formatPath: (item) => {
-							const template = templateByPath.get(item.path);
-							return template ? `/${template.name}` : this.formatDisplayPath(item.path);
-						},
-						formatPackagePath: (item) => {
-							const template = templateByPath.get(item.path);
-							return template ? `/${template.name}` : this.formatDisplayPath(item.path);
-						},
-					});
-				const promptCompactList = () => formatCompactList(templates.map((template) => `/${template.name}`));
-				addLoadedSection("Prompts", promptCompactList, templateList);
-			}
-
-			if (extensions.length > 0) {
-				const groups = this.buildScopeGroups(extensions);
-				const extList = () =>
-					this.formatScopeGroups(groups, {
-						formatPath: (item) => this.formatExtensionDisplayPath(item.path),
-						formatPackagePath: (item) =>
-							this.formatExtensionDisplayPath(this.getShortPath(item.path, item.sourceInfo)),
-					});
-				const extensionLabels = this.getCompactExtensionLabels(extensions);
-				const extensionCompactList = () => formatCompactList(extensionLabels);
-				addLoadedSection("Extensions", extensionCompactList, extList, "mdHeading");
-			}
+		const skillDiagnostics = skillsResult.diagnostics;
+		if (skillDiagnostics.length > 0) {
+			const warningLines = () => this.formatDiagnostics(skillDiagnostics, sourceInfos);
+			this.loadedResourcesContainer.addChild(
+				new ThemedText(() => `${theme.fg("warning", "[Skill conflicts]")}\n${warningLines()}`, 0, 0),
+			);
+			this.loadedResourcesContainer.addChild(new Spacer(1));
 		}
 
-		if (showDiagnostics) {
-			const skillDiagnostics = skillsResult.diagnostics;
-			if (skillDiagnostics.length > 0) {
-				const warningLines = () => this.formatDiagnostics(skillDiagnostics, sourceInfos);
-				this.loadedResourcesContainer.addChild(
-					new ThemedText(() => `${theme.fg("warning", "[Skill conflicts]")}\n${warningLines()}`, 0, 0),
-				);
-				this.loadedResourcesContainer.addChild(new Spacer(1));
-			}
+		const promptDiagnostics = promptsResult.diagnostics;
+		if (promptDiagnostics.length > 0) {
+			const warningLines = () => this.formatDiagnostics(promptDiagnostics, sourceInfos);
+			this.loadedResourcesContainer.addChild(
+				new ThemedText(() => `${theme.fg("warning", "[Prompt conflicts]")}\n${warningLines()}`, 0, 0),
+			);
+			this.loadedResourcesContainer.addChild(new Spacer(1));
+		}
 
-			const promptDiagnostics = promptsResult.diagnostics;
-			if (promptDiagnostics.length > 0) {
-				const warningLines = () => this.formatDiagnostics(promptDiagnostics, sourceInfos);
-				this.loadedResourcesContainer.addChild(
-					new ThemedText(() => `${theme.fg("warning", "[Prompt conflicts]")}\n${warningLines()}`, 0, 0),
-				);
-				this.loadedResourcesContainer.addChild(new Spacer(1));
-			}
+		const extensionDiagnostics: ResourceDiagnostic[] = [];
+		const extensionsResult = this.session.resourceLoader.getExtensions();
+		for (const error of extensionsResult.errors) {
+			extensionDiagnostics.push({ type: "error", message: error.error, path: error.path });
+		}
+		for (const warning of extensionsResult.warnings ?? []) {
+			extensionDiagnostics.push({ type: "warning", message: warning.warning, path: warning.path });
+		}
 
-			const extensionDiagnostics: ResourceDiagnostic[] = [];
-			const extensionsResult = this.session.resourceLoader.getExtensions();
-			for (const error of extensionsResult.errors) {
-				extensionDiagnostics.push({ type: "error", message: error.error, path: error.path });
-			}
-			for (const warning of extensionsResult.warnings ?? []) {
-				extensionDiagnostics.push({ type: "warning", message: warning.warning, path: warning.path });
-			}
+		const commandDiagnostics = this.session.extensionRunner.getCommandDiagnostics();
+		extensionDiagnostics.push(...commandDiagnostics);
+		extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(this.session.extensionRunner));
 
-			const commandDiagnostics = this.session.extensionRunner.getCommandDiagnostics();
-			extensionDiagnostics.push(...commandDiagnostics);
-			extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(this.session.extensionRunner));
+		const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
+		extensionDiagnostics.push(...shortcutDiagnostics);
 
-			const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
-			extensionDiagnostics.push(...shortcutDiagnostics);
+		if (extensionDiagnostics.length > 0) {
+			const warningLines = () => this.formatDiagnostics(extensionDiagnostics, sourceInfos);
+			this.loadedResourcesContainer.addChild(
+				new ThemedText(() => `${theme.fg("warning", "[Extension issues]")}\n${warningLines()}`, 0, 0),
+			);
+			this.loadedResourcesContainer.addChild(new Spacer(1));
+		}
 
-			if (extensionDiagnostics.length > 0) {
-				const warningLines = () => this.formatDiagnostics(extensionDiagnostics, sourceInfos);
-				this.loadedResourcesContainer.addChild(
-					new ThemedText(() => `${theme.fg("warning", "[Extension issues]")}\n${warningLines()}`, 0, 0),
-				);
-				this.loadedResourcesContainer.addChild(new Spacer(1));
-			}
-
-			const themeDiagnostics = themesResult.diagnostics;
-			if (themeDiagnostics.length > 0) {
-				const warningLines = () => this.formatDiagnostics(themeDiagnostics, sourceInfos);
-				this.loadedResourcesContainer.addChild(
-					new ThemedText(() => `${theme.fg("warning", "[Theme conflicts]")}\n${warningLines()}`, 0, 0),
-				);
-				this.loadedResourcesContainer.addChild(new Spacer(1));
-			}
+		const themeDiagnostics = themesResult.diagnostics;
+		if (themeDiagnostics.length > 0) {
+			const warningLines = () => this.formatDiagnostics(themeDiagnostics, sourceInfos);
+			this.loadedResourcesContainer.addChild(
+				new ThemedText(() => `${theme.fg("warning", "[Theme conflicts]")}\n${warningLines()}`, 0, 0),
+			);
+			this.loadedResourcesContainer.addChild(new Spacer(1));
 		}
 	}
 
@@ -2038,12 +1527,8 @@ export class InteractiveMode {
 
 		const extensionRunner = this.session.extensionRunner;
 		this.setupExtensionShortcuts(extensionRunner);
-		this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
+		this.showLoadedResources();
 		this.showStartupNoticesIfNeeded();
-	}
-
-	private applyFullscreenScrollbarSetting(): void {
-		this.transcriptScrollView?.setScrollbar(this.settingsManager.getFullscreenScrollbar());
 	}
 
 	/** Lets extension images use the PNG transcoder; tool results register it themselves. */
@@ -2058,11 +1543,6 @@ export class InteractiveMode {
 		setCapabilityOverrides(this.settingsManager.getTerminalCapabilityOverrides());
 		this.ensurePngTranscoder();
 		configureHttpDispatcher(this.settingsManager.getHttpIdleTimeoutMs());
-		this.applyFullscreenScrollbarSetting();
-		if (this.renderer instanceof TuiAltScreen) {
-			this.renderer.setCopyOnSelect(this.settingsManager.getFullscreenCopyOnSelect());
-			this.renderer.setWheelScrollLines(this.settingsManager.getFullscreenWheelScrollLines());
-		}
 		this.footer.setSession(this.session);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerDataProvider.setCwd(this.sessionManager.getCwd());
@@ -2124,7 +1604,7 @@ export class InteractiveMode {
 			this.chatContainer.addChild(new ThemedText(() => theme.fg("muted", instructions), this.outputPad, 0));
 		}
 		stopThemeWatcher();
-		this.stop("transcript");
+		this.stop();
 		process.exit(1);
 	}
 
@@ -2298,12 +1778,7 @@ export class InteractiveMode {
 		this.activeWorkingIndicatorEmbedded = false;
 		this.statusContainer.clear();
 		this.setEditorWorkingStatusIndicator(undefined);
-		if (
-			clearedIndicator &&
-			!clearedIndicatorWasEmbedded &&
-			this.options.tuiMode === "regular" &&
-			this.ui.getClearOnShrink()
-		) {
+		if (clearedIndicator && !clearedIndicatorWasEmbedded && this.ui.getClearOnShrink()) {
 			this.statusContainer.addChild(this.idleStatus);
 		}
 	}
@@ -2563,13 +2038,6 @@ export class InteractiveMode {
 			subscription.unsubscribe();
 			this.extensionTerminalInputSubscriptions.delete(subscription);
 		};
-	}
-
-	private rebindExtensionTerminalInputListeners(): void {
-		for (const subscription of this.extensionTerminalInputSubscriptions) {
-			subscription.unsubscribe();
-			subscription.unsubscribe = this.ui.addInputListener(subscription.handler);
-		}
 	}
 
 	private clearExtensionTerminalInputListeners(): void {
@@ -3074,10 +2542,7 @@ export class InteractiveMode {
 		this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
 		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
-		this.defaultEditor.onAction(
-			"app.message.copy",
-			() => void this.handleCopyCommand({ flashConfirmation: true, preferSelection: true }),
-		);
+		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
 		this.defaultEditor.onAction("app.session.new", () => this.handleClearCommand());
@@ -4060,8 +3525,6 @@ export class InteractiveMode {
 		entries: SessionEntry[],
 		options: { updateFooter?: boolean; populateHistory?: boolean } = {},
 	): void {
-		// Selection coordinates point into the transcript being replaced (#9311).
-		if (this.renderer instanceof TuiAltScreen) this.renderer.resetTextSelection();
 		const items = entries.flatMap((entry): RenderSessionItem[] => {
 			if (entry.type === "custom" || (entry.type === "usage" && entry.kind === "cache_warm")) {
 				return [entry];
@@ -4237,12 +3700,35 @@ export class InteractiveMode {
 
 	private handleCtrlC(): void {
 		const now = Date.now();
-		if (now - this.lastSigintTime < 500) {
+		if (now - this.lastSigintTime < InteractiveMode.QUIT_REMINDER_MS) {
+			this.clearQuitReminder();
 			void this.shutdown();
 		} else {
 			this.clearEditor();
+			this.showQuitReminder();
 			this.lastSigintTime = now;
 		}
+	}
+
+	/** How long the "press again to quit" footer reminder stays armed (matches Codex). */
+	private static readonly QUIT_REMINDER_MS = 1000;
+	private quitReminderTimer: ReturnType<typeof setTimeout> | undefined;
+
+	/** Replace the footer with a dim "Ctrl+C again to quit" reminder, armed for {@link QUIT_REMINDER_MS}. */
+	private showQuitReminder(): void {
+		this.clearQuitReminder();
+		this.footer.setTransientLine(`${formatKeyText(keyText("app.clear"), { capitalize: true })} again to quit`);
+		this.quitReminderTimer = setTimeout(() => this.clearQuitReminder(), InteractiveMode.QUIT_REMINDER_MS);
+		this.ui.requestRender();
+	}
+
+	private clearQuitReminder(): void {
+		if (this.quitReminderTimer) {
+			clearTimeout(this.quitReminderTimer);
+			this.quitReminderTimer = undefined;
+		}
+		this.footer.setTransientLine(undefined);
+		this.ui.requestRender();
 	}
 
 	private handleCtrlD(): void {
@@ -4483,12 +3969,14 @@ export class InteractiveMode {
 	}
 
 	private updateEditorBorderColor(): void {
-		if (this.isBashMode) {
-			this.editor.borderColor = theme.getBashModeBorderColor();
-		} else {
-			const level = this.session.thinkingLevel || "off";
-			this.editor.borderColor = theme.getThinkingBorderColor(level);
-		}
+		// The composer chrome (prompt glyph, scroll indicators) always follows the thinking
+		// level; shell mode swaps the glyph to "$" and hides the typed "!" instead of
+		// recoloring anything — the yellow "shell" label in the footer marks the mode.
+		const level = this.session.thinkingLevel || "off";
+		this.editor.borderColor = theme.getThinkingBorderColor(level);
+		this.editor.setPrompt?.(this.isBashMode ? "$ " : "› ");
+		this.editor.setShellMode?.(this.isBashMode);
+		this.footer.setShellMode(this.isBashMode);
 		this.activeStatusIndicator?.invalidate();
 		this.ui.requestRender();
 	}
@@ -4825,11 +4313,10 @@ export class InteractiveMode {
 
 	private showSettingsSelector(): void {
 		this.showSelector((done) => {
-			let selector: SettingsSelectorComponent | undefined;
 			const defaultProvider = this.settingsManager.getDefaultProvider();
 			const defaultModelId = this.settingsManager.getDefaultModel();
 			const defaultModel = defaultProvider && defaultModelId ? `${defaultProvider}/${defaultModelId}` : "not set";
-			selector = new SettingsSelectorComponent(
+			const selector = new SettingsSelectorComponent(
 				{
 					autoCompact: this.session.autoCompactionEnabled,
 					defaultModel,
@@ -4866,11 +4353,6 @@ export class InteractiveMode {
 					quietStartup: this.settingsManager.getQuietStartup(),
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
-					tuiMode: this.ui.mode,
-					fullscreenExitOutput: this.settingsManager.getFullscreenExitOutput(),
-					fullscreenScrollbar: this.settingsManager.getFullscreenScrollbar(),
-					fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
-					fullscreenWheelScrollLines: this.settingsManager.getFullscreenWheelScrollLines(),
 					warnings: this.settingsManager.getWarnings(),
 				},
 				{
@@ -5020,31 +4502,6 @@ export class InteractiveMode {
 					},
 					onShowTerminalProgressChange: (enabled) => {
 						this.settingsManager.setShowTerminalProgress(enabled);
-					},
-					onTuiModeChange: (mode) => {
-						if (!this.switchTuiMode(mode)) {
-							selector?.getSettingsList().updateValue("tui-mode", this.ui.mode);
-							this.showStatus("Close active overlays before changing TUI mode");
-							return;
-						}
-						this.settingsManager.setTuiMode(mode);
-						if (!this.activeStatusIndicator) this.statusContainer.clear();
-						this.showStatus(`TUI mode: ${mode}`);
-					},
-					onFullscreenExitOutputChange: (output) => {
-						this.settingsManager.setFullscreenExitOutput(output);
-					},
-					onFullscreenScrollbarChange: (mode) => {
-						this.settingsManager.setFullscreenScrollbar(mode);
-						this.applyFullscreenScrollbarSetting();
-					},
-					onFullscreenCopyOnSelectChange: (enabled) => {
-						this.settingsManager.setFullscreenCopyOnSelect(enabled);
-						if (this.renderer instanceof TuiAltScreen) this.renderer.setCopyOnSelect(enabled);
-					},
-					onFullscreenWheelScrollLinesChange: (lines) => {
-						this.settingsManager.setFullscreenWheelScrollLines(lines);
-						if (this.renderer instanceof TuiAltScreen) this.renderer.setWheelScrollLines(lines);
 					},
 					onWarningsChange: (warnings) => {
 						this.settingsManager.setWarnings(warnings);
@@ -6339,7 +5796,7 @@ export class InteractiveMode {
 				await this.themeController.applyFromSettings();
 				this.setupAutocompleteProvider();
 				this.setupExtensionShortcuts(this.session.extensionRunner);
-				this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
+				this.showLoadedResources();
 				const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
 				const modelsJsonError = this.session.modelRuntime.getError();
 				if (modelsJsonError) this.showError(`models.json error: ${modelsJsonError}`);
@@ -6474,19 +5931,7 @@ export class InteractiveMode {
 		);
 	}
 
-	private async handleCopyCommand(
-		options: { flashConfirmation?: boolean; preferSelection?: boolean } = {},
-	): Promise<void> {
-		if (
-			options.preferSelection &&
-			this.ui instanceof TuiAltScreen &&
-			!this.ui.getCopyOnSelect() &&
-			this.ui.hasActiveSelection()
-		) {
-			await this.ui.copyActiveSelectionToClipboard();
-			return;
-		}
-
+	private async handleCopyCommand(): Promise<void> {
 		const text = this.session.getLastAssistantText();
 		if (!text) {
 			this.showError("No agent messages to copy yet.");
@@ -6495,11 +5940,7 @@ export class InteractiveMode {
 
 		try {
 			await copyToClipboard(text);
-			if (options.flashConfirmation && this.ui instanceof TuiAltScreen) {
-				this.ui.flash("Copied!");
-			} else {
-				this.showStatus("Copied last agent message to clipboard");
-			}
+			this.showStatus("Copied last agent message to clipboard");
 		} catch (error) {
 			this.showError(error instanceof Error ? error.message : String(error));
 		}
@@ -6812,7 +6253,6 @@ export class InteractiveMode {
 	}
 
 	private handleArminSaysHi(): void {
-		if (playArmin3d(this.renderer)) return;
 		this.chatContainer.addChild(new Spacer(1));
 		this.chatContainer.addChild(new ArminComponent(this.ui));
 		this.ui.requestRender();
@@ -6921,8 +6361,9 @@ export class InteractiveMode {
 		}
 	}
 
-	stop(fullscreenExitOutput = this.settingsManager.getFullscreenExitOutput()): void {
+	stop(): void {
 		this.disposeActiveSelector();
+		this.clearQuitReminder();
 		if (this.settingsManager.getShowTerminalProgress()) {
 			this.ui.terminal.setProgress(false);
 		}
@@ -6935,7 +6376,7 @@ export class InteractiveMode {
 			this.unsubscribe();
 		}
 		if (this.isInitialized) {
-			this.stopInteractiveTui(fullscreenExitOutput);
+			this.stopInteractiveTui();
 			this.isInitialized = false;
 		}
 		this.unregisterSignalHandlers();

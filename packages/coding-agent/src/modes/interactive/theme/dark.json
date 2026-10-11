@@ -25,10 +25,6 @@
 		"text": "text",
 		"thinkingText": "okhsl(226 7% 65%)",
 		"selectedBg": "blueBg",
-		"scrollbarTrack": "okhsl(237 7% 33%)",
-		"scrollbarThumb": "okhsl(232 7% 65%)",
-		"searchMatchBg": "okhsl(53 51% 24%)",
-		"searchMatchText": "muted",
 		"userMessageBg": "blueBg",
 		"userMessageText": "text",
 		"customMessageBg": "okhsl(295 42% 24%)",
@@ -68,7 +64,7 @@
 		"thinkingHigh": "okhsl(295 73% 59%)",
 		"thinkingXhigh": "okhsl(337 81% 61%)",
 		"thinkingMax": "okhsl(20 99% 63%)",
-		"bashMode": "okhsl(159 64% 65%)"
+		"bashMode": "yellow"
 	},
 	"export": {
 		"pageBg": "okhsl(262 14% 16%)",

@@ -9,6 +9,7 @@
 ### Added
 
 - Added `renderFakeCursor()`. Components wrap their drawn cursor with it, and the TUI renders it in reverse video, or omits it after `CURSOR_MARKER` when `showHardwareCursor` is enabled
+- Added `style: "composer"` and `prompt` options to `Editor` plus `EditorComponent.setPrompt()` and `EditorComponent.setShellMode()`: a borderless composer look where the first visible line carries the prompt prefix, continuation lines align under it, and blank padding rows replace the horizontal rules (right-aligned scroll indicators included); `setShellMode(true)` hides a leading `!` from the rendered text without changing the editor content
 - Added the `NANOPI_TUI_NATIVE_ROOT` environment variable as a native-module lookup root for single-file distributions; while it is set, failed native lookups stay retryable so a sidecar download landing mid-session is picked up
 
 ### Changed

@@ -10,6 +10,8 @@
 - Changed the session to count as busy while a run starts, including during `before_agent_start` handlers: `ctx.isIdle()` is false, `pi.sendMessage()` queues into the starting run instead of starting a second run that failed with "Agent is already processing", `pi.sendUserMessage()` requires `deliverAs`, and an abort requested meanwhile aborts the run once it starts
 - Removed the Bun runtime and compiled-binary distribution: the `src/bun/` entrypoints, `isBunBinary`/`isBunRuntime`, the Bun sandbox-env restore, the Bun websocket proxy wrapper, `build:binary`/`copy-binary-assets`, `scripts/build-binaries.sh`, the six per-platform release archives, and the Bun install consumer in `scripts/local-release.mjs`. Node >= 22.19 is the only supported runtime.
 - Renamed the built-in `/quit` command to `/exit`.
+- Removed the full screen TUI mode: the `tuiMode`, `fullscreenExitOutput`, `fullscreenScrollbar`, `fullscreenCopyOnSelect`, and `fullscreenWheelScrollLines` settings, the `--tui-mode` flag, the fullscreen transcript layout with its search/selection, the fullscreen-only 3D easter egg, and the now-unused `scrollbar*`/`searchMatch*` theme tokens are gone. The interactive TUI always renders inline with the terminal scrollback.
+- Removed the startup loaded-resource listing (`[Context]`/`[Skills]`/`[Prompts]`/`[Extensions]`); conflict and error diagnostics still render at startup and the listing moved into `/status`.
 
 ### Added
 
@@ -18,8 +20,10 @@
 - Added build flavors controlled by the root `buildconfig.json`: `--flavor <name>` / `NANOPI_BUILD_FLAVOR` selects a flavor for `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, and the coding-agent `copy-assets` step (now `packages/coding-agent/scripts/copy-assets.mjs`). Flavors toggle peripheral components (`webui`, `export-html`, `docs`, `examples`, the `goal` placeholder, `oauth/*` flows) in bundle and single-file builds; the npm packages always publish the `full` flavor, and disabled components fail at runtime with "not included in this build" errors instead of module-not-found.
 - Added `nanopi webui [-p <port>]` (default port 5335): a loopback HTTP server that serves the new `@nanopi/webui` browser UI (ported from AtomCode, MIT) and bridges its `/chat` SSE transport, models, projects, sessions, skills, and filesystem browsing onto a headless `AgentSession`. nanopi runs tools without per-call approval, so the webui approval mode is always `bypass`.
 - Added the single-file distribution: `pnpm run build:single-file` produces a zero-dependency `nanopi.js` (all JS bundled by esbuild, package assets gzip-embedded and extracted to the user cache directory, lazy OAuth/Bedrock modules statically registered by `src/standalone/`). GitHub releases ship `nanopi.js` plus a `nanopi-sidecars-<version>.tgz` asset.
+- Added `ctx.getLoadedResources()` to the extension context: a snapshot of the loaded context files, skills, prompts, and extensions (hidden built-in inline extensions excluded) that backs the `/status` resource sections.
+- Added a `Ctrl+C again to quit` footer reminder after the first Ctrl+C press; the second press within one second (matching Codex's timeout) quits, and the reminder replaces the footer line for its window only.
 - Added sidecar downloads into the agent bin directory (`.nanopi/agent/bin`): the photon wasm is fetched from the npm registry and the TUI native prebuilds from the release sidecar tarball, each sha256-verified against hashes embedded at build time; failures degrade to raw images and no native clipboard instead of crashing.
-- Added built-in `/status` command showing the current model, provider, directory, session, thinking level, token usage, and context in a `/context`-style bottom-docked dialog (plain text via notify outside TUI).
+- Added built-in `/status` command showing the current model, provider, directory, session, thinking level, token usage, and context in a `/context`-style bottom-docked dialog (plain text via notify outside TUI), plus the loaded-resource listing (`[Context]`/`[Skills]`/`[Prompts]`/`[Extensions]` sections) that the startup page used to render (plain text via notify outside TUI).
 
 ### Changed
 
@@ -27,7 +31,9 @@
 - Changed `photon.ts` wasm resolution to prefer the agent bin sidecar path over the executable directory, and made image resizing wait for the photon sidecar download on first use in single-file distributions
 - Changed the release workflow to build and smoke-test `nanopi.js` on Linux/macOS/Windows runners instead of extracting and running per-platform binaries
 - Changed the interactive welcome header to a Codex-style box (`π nanopi vx.x.x`, `model … /model to change`, `provider … thinking …`, `directory …`) with a `Tip: Use /status …` line, and the footer to a single `used xk/yk · / for more details` line; the pi-ui extra matches with a thin-box editor and the same single-line footer
+- Changed single-file sidecars to buildconfig-gated builtins: flavors enabling `sidecar/tui-native` / `sidecar/photon-wasm` (both on in `full`) embed the files in `nanopi.js` and install the platform-matching ones to the agent bin directory offline with sha256 verification; disabled components keep the on-demand download fallback
 
+- Changed the interactive editor to a Codex-style borderless composer: a `› ` prompt prefix on the first line (colored by thinking level), continuation lines aligned under the prefix, and blank padding rows instead of horizontal rules; the embedded working status and scroll indicators share those blank rows. Shell mode swaps the prompt glyph to `$`, hides the typed `!` (submission still receives `!command`), keeps the composer gray, and marks the mode with a yellow right-aligned `shell` label on the footer line; the `bashMode` theme color is now that yellow shell accent instead of the old editor border green
 ### Fixed
 
 - Fixed pi-ecosystem extension packages failing to load: package manifests now accept the upstream `"pi"` field as a fallback to `"nanopi"`, and extensions importing `@earendil-works/pi-*` (the fork's upstream module names) resolve in source checkouts, unbundled dist, and bundles via loader aliases, bundle virtual modules, and tsconfig paths.
@@ -36,6 +42,7 @@
 - Fixed runs started by `pi.sendMessage(..., { triggerTurn: true })` removing system prompt sections added in `before_agent_start` after their first tool call, which changed the prompt mid-run and broke the provider prompt cache twice per run ([#10267](https://github.com/earendil-works/pi/issues/10267))
 - Fixed the build failing after the clankolas.png and Radius removals: leftover `assets/*.png` copy steps in `copy-assets`/`copy-binary-assets` and a leftover Radius OAuth lazy bundle entry in the bundle script
 
+- Fixed the startup `[Extension issues]` diagnostics warning that the built-in `/status` command "conflicts with built-in interactive command": commands from built-in inline extensions (`source: "builtin"`) are intentionally listed in `BUILTIN_SLASH_COMMANDS` and no longer count as conflicts
 ### Removed
 
 - Removed the `extra/pi-extra-cmd` and `extra/pi-codex-compact` build flavor components and their vendored sources; their functionality is built in (bundled extras drop from eleven to nine).
@@ -44,6 +51,7 @@
 - Removed the Radius provider and the `"oauth": "radius"` custom-provider configuration; `/share` now publishes a private GitHub gist and `/bug` exports a zip archive instead of uploading to a Radius gateway.
 - Remote model catalog overlays and OpenRouter per-key personalization now run only when a catalog base URL is explicitly configured; bundled model data is used otherwise.
 - Removed the unused `getInteractiveAssetsDir()` and `getBundledInteractiveAssetPath()` helpers from `src/config.ts`, left over from the clankolas.png removal.
+- Removed the `chat-viewport.ts` fullscreen layout module and the fullscreen-only 3D easter-egg components (`/arminsayshi` keeps the 2D component).
 
 ## [1.1.0] - 2026-10-07
 

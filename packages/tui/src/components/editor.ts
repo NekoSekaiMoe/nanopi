@@ -243,6 +243,15 @@ export interface EditorTheme {
 export interface EditorOptions {
 	paddingX?: number;
 	autocompleteMaxVisible?: number;
+	/**
+	 * "bordered": horizontal rules above and below the text (default).
+	 * "composer": bare Codex-style composer - blank padding rows instead of rules,
+	 * the first line prefixed with the prompt glyph, continuation lines indented
+	 * to align under it.
+	 */
+	style?: "bordered" | "composer";
+	/** Prompt drawn before the first visible line in composer style. */
+	prompt?: string;
 }
 
 const SLASH_COMMAND_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
@@ -307,6 +316,12 @@ export class Editor implements Component, Focusable {
 	protected tui: TUI;
 	private theme: EditorTheme;
 	private paddingX: number = 0;
+	/** Whether the composer (borderless, prefixed) style is active. */
+	protected readonly composerStyle: boolean;
+	/** Prompt prefix drawn before the first visible line (composer style only). */
+	protected promptPrefix: string;
+	/** When true, a leading shell "!" in the text is not drawn in composer style. */
+	private shellMode = false;
 
 	// Store last render geometry for cursor navigation and mouse hit-testing.
 	private lastWidth: number = 80;
@@ -379,6 +394,31 @@ export class Editor implements Component, Focusable {
 		this.paddingX = Number.isFinite(paddingX) ? Math.max(0, Math.floor(paddingX)) : 0;
 		const maxVisible = options.autocompleteMaxVisible ?? 5;
 		this.autocompleteMaxVisible = Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
+		this.composerStyle = options.style === "composer";
+		this.promptPrefix = options.prompt ?? "› ";
+	}
+
+	/** Visible width of the composer prompt prefix (0 in bordered style). */
+	protected promptPrefixWidth(): number {
+		return this.composerStyle ? visibleWidth(this.promptPrefix) : 0;
+	}
+
+	/** Update the composer prompt prefix (e.g. mode-dependent glyph). */
+	setPrompt(prompt: string): void {
+		if (this.promptPrefix === prompt) return;
+		this.promptPrefix = prompt;
+		this.tui.requestRender();
+	}
+
+	/**
+	 * Hide the leading shell "!" from the rendered text (composer style only).
+	 * The editor text itself is unchanged: submission, history, and autocomplete
+	 * still see the "!". The prompt glyph carries the shell-mode affordance.
+	 */
+	setShellMode(active: boolean): void {
+		if (this.shellMode === active) return;
+		this.shellMode = active;
+		this.tui.requestRender();
 	}
 
 	/** Set of currently valid paste IDs, for marker-aware segmentation. */
@@ -509,19 +549,35 @@ export class Editor implements Component, Focusable {
 	}
 
 	protected renderTopBorder(width: number, hiddenLineCount: number): string {
+		if (this.composerStyle) {
+			return this.composerPaddingRow(width, hiddenLineCount, "↑");
+		}
 		const border = hiddenLineCount > 0 ? createScrollBorder("↑", hiddenLineCount, width) : "─".repeat(width);
 		return this.borderColor(border);
 	}
 
 	protected renderBottomBorder(width: number, hiddenLineCount: number): string {
+		if (this.composerStyle) {
+			return this.composerPaddingRow(width, hiddenLineCount, "↓");
+		}
 		const border = hiddenLineCount > 0 ? createScrollBorder("↓", hiddenLineCount, width) : "─".repeat(width);
 		return this.borderColor(border);
+	}
+
+	/** Blank padding row for composer style; right-aligns the scroll indicator when set. */
+	private composerPaddingRow(width: number, hiddenLineCount: number, direction: "↑" | "↓"): string {
+		if (hiddenLineCount <= 0 || width <= 0) return " ".repeat(Math.max(0, width));
+		const label = `${direction} ${hiddenLineCount} more`;
+		const labelWidth = visibleWidth(label);
+		if (labelWidth + 1 > width) return " ".repeat(Math.max(0, width));
+		return `${" ".repeat(width - labelWidth - 1)}${this.borderColor(label)} `;
 	}
 
 	render(width: number): string[] {
 		const maxPadding = Math.max(0, Math.floor((width - 1) / 2));
 		const paddingX = Math.min(this.paddingX, maxPadding);
-		const contentWidth = Math.max(1, width - paddingX * 2);
+		const prefixWidth = this.promptPrefixWidth();
+		const contentWidth = Math.max(1, width - paddingX * 2 - prefixWidth);
 
 		// Layout width: with padding the cursor can overflow into it,
 		// without padding we reserve 1 column for the cursor.
@@ -532,6 +588,20 @@ export class Editor implements Component, Focusable {
 
 		// Layout the text
 		const layoutLines = this.layoutText(layoutWidth);
+
+		// Shell mode hides the typed "!" sigil from the first line (the prompt glyph
+		// carries the mode). Strip it after layout so wrapping stays untouched and
+		// only the cursor position shifts to match the shorter displayed line.
+		if (this.composerStyle && this.shellMode) {
+			const firstLine = layoutLines[0];
+			const bangIndex = firstLine?.text.indexOf("!") ?? -1;
+			if (firstLine && bangIndex >= 0 && firstLine.text.slice(0, bangIndex).trim() === "") {
+				firstLine.text = firstLine.text.slice(0, bangIndex) + firstLine.text.slice(bangIndex + 1);
+				if (firstLine.cursorPos !== undefined && firstLine.cursorPos > bangIndex) {
+					firstLine.cursorPos = Math.max(bangIndex, firstLine.cursorPos - 1);
+				}
+			}
+		}
 
 		// Calculate max visible lines: 30% of terminal height, minimum 5 lines
 		const terminalRows = this.tui.terminal.rows;
@@ -559,6 +629,7 @@ export class Editor implements Component, Focusable {
 		const result: string[] = [];
 		const leftPadding = " ".repeat(paddingX);
 		const rightPadding = leftPadding;
+		const continuationIndent = " ".repeat(prefixWidth);
 
 		// Render top border (with scroll indicator if scrolled down)
 		result.push(this.renderTopBorder(width, this.scrollOffset));
@@ -569,7 +640,7 @@ export class Editor implements Component, Focusable {
 		// autocomplete (e.g. slash-command menu) is visible.
 		const emitCursorMarker = this.focused;
 
-		for (const layoutLine of visibleLines) {
+		for (const [visibleIndex, layoutLine] of visibleLines.entries()) {
 			let displayText = layoutLine.text;
 			let lineVisibleWidth = visibleWidth(layoutLine.text);
 			let cursorInPadding = false;
@@ -603,12 +674,16 @@ export class Editor implements Component, Focusable {
 				}
 			}
 
+			// Prompt prefix on the first visible line; continuation lines align under it.
+			const linePrefix =
+				this.composerStyle && visibleIndex === 0 ? this.borderColor(this.promptPrefix) : continuationIndent;
+
 			// Calculate padding based on actual visible width
 			const padding = " ".repeat(Math.max(0, contentWidth - lineVisibleWidth));
 			const lineRightPadding = cursorInPadding ? rightPadding.slice(1) : rightPadding;
 
 			// Render the line (no side borders, just horizontal lines above and below)
-			result.push(`${leftPadding}${displayText}${padding}${lineRightPadding}`);
+			result.push(`${leftPadding}${linePrefix}${displayText}${padding}${lineRightPadding}`);
 		}
 
 		// Render bottom border (with scroll indicator if more content below)
@@ -667,7 +742,7 @@ export class Editor implements Component, Focusable {
 		const chunk = logicalLine.slice(visualLine.startCol, chunkEnd);
 		const maxPadding = Math.max(0, Math.floor((event.width - 1) / 2));
 		const paddingX = Math.min(this.paddingX, maxPadding);
-		const targetColumn = Math.max(0, event.x - paddingX);
+		const targetColumn = Math.max(0, event.x - paddingX - this.promptPrefixWidth());
 		let visibleColumn = 0;
 		let targetIndex = chunk.length;
 		let lastGraphemeIndex = 0;

@@ -7,7 +7,7 @@ import {
 	formatCwdForFooter,
 	resolveFooterUsedTokens,
 } from "../src/modes/interactive/components/footer.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 type AssistantUsage = {
@@ -156,5 +156,32 @@ describe("FooterComponent single-line layout", () => {
 
 		session.sessionManager.getEntries().push({ type: "message", message: { role: "assistant", usage } } as never);
 		expect(stripAnsi(footer.render(120)[0]!)).toContain("used 20k/200k");
+	});
+
+	it("right-aligns the yellow shell label in shell mode", () => {
+		const footer = new FooterComponent(createSession({}), createFooterData());
+		footer.setShellMode(true);
+
+		const line = footer.render(60)[0]!;
+
+		expect(stripAnsi(line).endsWith("shell")).toBe(true);
+		expect(visibleWidth(line)).toBe(60);
+		// The label keeps its own bashMode (yellow) color instead of the dim footer gray.
+		expect(line).not.toBe(theme.fg("dim", stripAnsi(line)));
+	});
+
+	it("keeps the shell label within narrow widths", () => {
+		const footer = new FooterComponent(createSession({}), createFooterData());
+		footer.setShellMode(true);
+		for (const width of [10, 20, 40]) {
+			for (const line of footer.render(width)) {
+				expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+			}
+		}
+	});
+
+	it("hides the shell label when shell mode is off", () => {
+		const footer = new FooterComponent(createSession({}), createFooterData());
+		expect(stripAnsi(footer.render(120)[0]!)).not.toContain("shell");
 	});
 });

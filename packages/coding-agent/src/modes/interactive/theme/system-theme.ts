@@ -67,7 +67,6 @@ type FamilyName = keyof typeof FAMILIES;
 
 const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 	selectedBg: "blue",
-	searchMatchBg: "orange",
 	userMessageBg: "blue",
 	customMessageBg: "violet",
 	toolPendingBg: "neutral",
@@ -91,9 +90,6 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 	mdCodeBlockBorder: "neutral",
 	toolDiffContext: "neutral",
 	syntaxComment: "neutral",
-	scrollbarTrack: "neutral",
-	scrollbarThumb: "neutral",
-	searchMatchText: "neutral",
 	borderMuted: "neutral",
 
 	accent: "violet",
@@ -109,7 +105,7 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 	success: "green",
 	mdCodeBlock: "green",
 	toolDiffAdded: "green",
-	bashMode: "green",
+	bashMode: "yellow",
 	syntaxNumber: "green",
 	error: "red",
 	toolDiffRemoved: "red",
@@ -128,7 +124,7 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 };
 
 /** Palette slots for tokens that would otherwise share a hue with a similar token. */
-const TOKEN_SLOTS: Partial<Record<ThemeToken, number>> = { syntaxString: 2, syntaxNumber: 5, searchMatchBg: 3 };
+const TOKEN_SLOTS: Partial<Record<ThemeToken, number>> = { syntaxString: 2, syntaxNumber: 5 };
 
 // ============================================================================
 // Contrast levels and rules
@@ -148,10 +144,6 @@ const LEVELS = {
 	panel: {
 		dark: { coefficients: [0.29131, -0.39746, 2.33185, -0.85524, -1.2076, 0.86276], reachable: [0, 0.979] },
 		light: { coefficients: [-3.74073, 27.94549, -78.44258, 112.6798, -79.60015, 22.11277], reachable: [0.348, 1] },
-	},
-	track: {
-		dark: { coefficients: [0.39028, -0.23015, 0.83573, 2.43829, -4.38292, 2.01582], reachable: [0, 0.946] },
-		light: { coefficients: [-5.24921, 38.37322, -107.28833, 152.10005, -106.17127, 29.18061], reachable: [0.368, 1] },
 	},
 	thinking0: {
 		dark: { coefficients: [0.52988, -0.05809, -0.30924, 4.63567, -6.52933, 2.89108], reachable: [0, 0.873] },
@@ -209,13 +201,6 @@ const LEVELS = {
 			reachable: [0.657, 1],
 		},
 	},
-	thumb: {
-		dark: { coefficients: [0.60323, 0.00278, -0.73328, 5.57157, -7.68067, 3.46933], reachable: [0, 0.823] },
-		light: {
-			coefficients: [-82.89897, 511.01355, -1255.98095, 1540.76821, -940.68087, 228.58523],
-			reachable: [0.586, 1],
-		},
-	},
 	readable: {
 		dark: { coefficients: [0.66937, 0.04704, -1.06871, 6.43941, -8.9332, 4.17229], reachable: [0, 0.77] },
 		light: {
@@ -248,7 +233,7 @@ const LEVELS = {
 
 type Level = keyof typeof LEVELS;
 
-type Surface = ThemeBg | "background" | "scrollbarTrack";
+type Surface = ThemeBg | "background";
 
 interface Rule {
 	token: ThemeToken;
@@ -264,7 +249,6 @@ const PANELS: ThemeBg[] = [
 	"toolSuccessBg",
 	"toolErrorBg",
 	"selectedBg",
-	"searchMatchBg",
 	"customMessageBg",
 ];
 const THINKING: ThemeColor[] = [
@@ -328,12 +312,9 @@ const RULES: Rule[] = [
 		["background", ...MESSAGE_PANELS, ...TOOL_PANELS],
 		"readable",
 	),
-	{ token: "searchMatchText", on: ["searchMatchBg"], level: "readable" },
 	...each(["bashMode", "border", "borderAccent"], ["background"], "readable"),
 	{ token: "borderMuted", on: ["background"], level: "subtle" },
 	...each(["mdQuoteBorder", "mdHr"], ["background", ...MESSAGE_PANELS, ...TOOL_PANELS], "readable"),
-	{ token: "scrollbarTrack", on: ["background"], level: "track" },
-	{ token: "scrollbarThumb", on: ["scrollbarTrack"], level: "thumb" },
 	...THINKING.map((token, index): Rule => ({ token, on: ["background"], level: THINKING_LEVELS[index] })),
 ];
 

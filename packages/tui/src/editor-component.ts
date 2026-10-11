@@ -69,6 +69,12 @@ export interface EditorComponent extends Component {
 	/** Set horizontal padding */
 	setPaddingX?(padding: number): void;
 
+	/** Set the composer prompt prefix (editors in composer style only). */
+	setPrompt?(prompt: string): void;
+
+	/** Hide the leading shell "!" from the rendered text (composer style only). */
+	setShellMode?(active: boolean): void;
+
 	/** Set max visible items in autocomplete dropdown */
 	setAutocompleteMaxVisible?(maxVisible: number): void;
 }

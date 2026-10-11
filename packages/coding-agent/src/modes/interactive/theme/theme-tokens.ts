@@ -33,27 +33,7 @@ export const THEME_TOKENS = defineThemeTokens({
 	dim: { slot: "foreground", description: "Very dimmed text (more subtle than muted)" },
 	text: { slot: "foreground", description: "Default text color (usually empty string)" },
 	thinkingText: { slot: "foreground", description: "Thinking block text color" },
-	scrollbarTrack: {
-		slot: "foreground",
-		description: "Fullscreen scrollbar track foreground (falls back to muted when omitted)",
-		fallback: "muted",
-	},
-	scrollbarThumb: {
-		slot: "foreground",
-		description: "Fullscreen scrollbar thumb foreground (falls back to text when omitted)",
-		fallback: "text",
-	},
 	selectedBg: { slot: "background", description: "Selected item background" },
-	searchMatchBg: {
-		slot: "background",
-		description: "Transcript search match background and current-match text (falls back to selectedBg when omitted)",
-		fallback: "selectedBg",
-	},
-	searchMatchText: {
-		slot: "foreground",
-		description: "Transcript search match text and current-match background (falls back to text when omitted)",
-		fallback: "text",
-	},
 	userMessageBg: { slot: "background", description: "User message background" },
 	userMessageText: { slot: "foreground", description: "User message text color" },
 	customMessageBg: { slot: "background", description: "Custom message background (hook-injected messages)" },
@@ -97,7 +77,7 @@ export const THEME_TOKENS = defineThemeTokens({
 		description: "Thinking level border: max (falls back to thinkingXhigh when omitted)",
 		fallback: "thinkingXhigh",
 	},
-	bashMode: { slot: "foreground", description: "Editor border color in bash mode" },
+	bashMode: { slot: "foreground", description: "Shell mode accent (footer shell label, bash tool rows)" },
 });
 
 export type ThemeToken = keyof typeof THEME_TOKENS;

@@ -1,5 +1,5 @@
 import { isAbsolute, relative, resolve, sep } from "node:path";
-import { type Component, truncateToWidth } from "@nanopi/pi-tui";
+import { type Component, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { AgentSession } from "../../../core/agent-session.ts";
 import type { ContextUsage } from "../../../core/extensions/types.ts";
 import type { ReadonlyFooterDataProvider } from "../../../core/footer-data-provider.ts";
@@ -63,6 +63,10 @@ export function resolveFooterUsedTokens(
 export class FooterComponent implements Component {
 	private session: AgentSession;
 	private sessionStats?: SessionStats;
+	/** Transient replacement for the footer line, e.g. the "press again to quit" reminder. */
+	private transientLine: string | undefined;
+	/** Shell mode: right-align a yellow "shell" label on the footer line (Codex-style). */
+	private shellMode = false;
 
 	constructor(session: AgentSession, _footerData: ReadonlyFooterDataProvider) {
 		this.session = session;
@@ -70,6 +74,16 @@ export class FooterComponent implements Component {
 
 	setSession(session: AgentSession): void {
 		this.session = session;
+	}
+
+	/** Show the shell-mode label on the right of the footer line. */
+	setShellMode(active: boolean): void {
+		this.shellMode = active;
+	}
+
+	/** Temporarily replace the footer line; pass undefined to restore it. */
+	setTransientLine(line: string | undefined): void {
+		this.transientLine = line;
 	}
 
 	setAutoCompactEnabled(_enabled: boolean): void {
@@ -146,13 +160,23 @@ export class FooterComponent implements Component {
 	}
 
 	render(width: number): string[] {
+		if (width <= 0) return [];
+		if (this.transientLine !== undefined) {
+			return [truncateToWidth(theme.fg("dim", this.transientLine), width, theme.fg("dim", "…"))];
+		}
 		const state = this.session.state;
 		const { usageTotals, contextUsage } = this.getSessionStats();
 		const contextWindow = contextUsage?.contextWindow ?? state.model?.contextWindow ?? 0;
 		const used = resolveFooterUsedTokens(contextUsage, usageTotals, contextWindow);
 		const usedText = used === null ? "?" : formatTokens(used);
 		const line = `used ${usedText}/${formatTokens(contextWindow)} · / for more details`;
-		if (width <= 0) return [];
-		return [truncateToWidth(theme.fg("dim", line), width, theme.fg("dim", "…"))];
+		const dimLine = theme.fg("dim", line);
+		if (!this.shellMode) return [truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
+		// Right-align the shell label; drop it when the usage line would not fit alongside.
+		const label = theme.fg("bashMode", "shell");
+		const budget = width - 1 - 5;
+		if (budget <= 0) return [truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
+		const left = truncateToWidth(dimLine, budget, theme.fg("dim", "…"));
+		return [left + " ".repeat(width - visibleWidth(left) - 5) + label];
 	}
 }

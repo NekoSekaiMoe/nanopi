@@ -4378,3 +4378,82 @@ describe("Editor component", () => {
 		});
 	});
 });
+
+describe("Editor composer style", () => {
+	it("renders the prompt prefix, aligned continuation lines, and blank padding rows", () => {
+		const editor = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		editor.setText("hello world again");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.strictEqual(lines[0], " ".repeat(20));
+		assert.ok(lines[1]!.startsWith("› hello"));
+		assert.strictEqual(lines[2]!.slice(0, 2), "  ");
+		assert.strictEqual(lines[lines.length - 1], " ".repeat(20));
+		assert.ok(!lines.some((line) => line.includes("─")));
+	});
+
+	it("keeps the prompt off continuation-only scrolled rows aligned via indent", () => {
+		const editor = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		editor.setText("one\ntwo\nthree");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.ok(lines[1]!.startsWith("› one"));
+		assert.ok(lines[2]!.startsWith("  two"));
+		assert.ok(lines[3]!.startsWith("  three"));
+	});
+
+	it("updates the prompt glyph via setPrompt", () => {
+		const editor = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		editor.setPrompt("! ");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.ok(lines[1]!.startsWith("! "));
+	});
+
+	it("hides the leading shell bang in shell mode and keeps the text intact", () => {
+		const editor = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		editor.setPrompt("$ ");
+		editor.setShellMode(true);
+		editor.setText("!ls -la");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.ok(lines[1]!.startsWith("$ ls -la"));
+		assert.strictEqual(editor.getText(), "!ls -la");
+	});
+
+	it("hides an indented shell bang but keeps the leading spaces", () => {
+		const editor = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		editor.setPrompt("$ ");
+		editor.setShellMode(true);
+		editor.setText("  !ls");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.ok(lines[1]!.startsWith("$   ls"));
+	});
+
+	it("draws the bang when shell mode is off or the style is bordered", () => {
+		const composer = new Editor(createTestTUI(20, 10), defaultEditorTheme, { style: "composer" });
+		composer.setText("!ls");
+		assert.ok(composer.render(20).map(stripVTControlCharacters)[1]!.startsWith("› !ls"));
+
+		const bordered = new Editor(createTestTUI(20, 10), defaultEditorTheme);
+		bordered.setShellMode(true);
+		bordered.setText("!ls");
+		assert.ok(bordered.render(20).map(stripVTControlCharacters)[1]!.startsWith("!ls"));
+	});
+
+	it("right-aligns the scroll indicator on the blank padding rows", () => {
+		const editor = new Editor(createTestTUI(20, 6), defaultEditorTheme, { style: "composer" });
+		editor.setText("one\ntwo\nthree\nfour\nfive\nsix\nseven");
+
+		const lines = editor.render(20).map(stripVTControlCharacters);
+
+		assert.strictEqual(lines[0], `${" ".repeat(11)}↑ 2 more `);
+		assert.strictEqual(lines[lines.length - 1], " ".repeat(20));
+	});
+});

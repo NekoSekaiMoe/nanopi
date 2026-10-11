@@ -139,25 +139,9 @@
           "$ref": "#/$defs/ColorValue",
           "description": "Thinking block text color"
         },
-        "scrollbarTrack": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Fullscreen scrollbar track foreground (falls back to muted when omitted)"
-        },
-        "scrollbarThumb": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Fullscreen scrollbar thumb foreground (falls back to text when omitted)"
-        },
         "selectedBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Selected item background"
-        },
-        "searchMatchBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Transcript search match background and current-match text (falls back to selectedBg when omitted)"
-        },
-        "searchMatchText": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Transcript search match text and current-match background (falls back to text when omitted)"
         },
         "userMessageBg": {
           "$ref": "#/$defs/ColorValue",
@@ -317,10 +301,10 @@
         },
         "bashMode": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Editor border color in bash mode"
+          "description": "Shell mode accent (footer shell label, bash tool rows)"
         }
       },
-      "description": "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
+      "description": "Theme color definitions (optional colors such as thinkingMax use compatible fallbacks)",
       "additionalProperties": false
     },
     "export": {

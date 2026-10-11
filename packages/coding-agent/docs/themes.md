@@ -106,25 +106,21 @@ Theme colors describe interface roles rather than individual components. Use the
 | Area | Color names |
 |---|---|
 | General interface | `accent`, `border*`, `text`, `muted`, `dim`, `success`, `error`, `warning` |
-| Selection and fullscreen | `selectedBg`, `searchMatch*`, `scrollbar*` |
+| Selection | `selectedBg` |
 | Messages | `userMessage*`, `customMessage*`, `thinkingText` |
 | Tool execution | `toolPendingBg`, `toolSuccessBg`, `toolErrorBg`, `toolTitle`, `toolOutput` |
 | Markdown | `md*` |
 | Tool diffs | `toolDiff*` |
 | Syntax highlighting | `syntax*` |
-| Editor modes | `thinking*`, `bashMode` |
+| Editor modes | `thinking*` (prompt glyph and chrome), `bashMode` (shell label and bash tool rows) |
 | HTML export | `export.pageBg`, `export.cardBg`, `export.infoBg` |
 
 The schema is the format reference. The built-in themes provide complete values that you can copy and adjust.
 
-Five colors are optional and inherit another color when omitted:
+One color is optional and inherits another color when omitted:
 
 | Optional color | Fallback |
 |---|---|
-| `scrollbarTrack` | `muted` |
-| `scrollbarThumb` | `text` |
-| `searchMatchBg` | `selectedBg` |
-| `searchMatchText` | `text` |
 | `thinkingMax` | `thinkingXhigh` |
 
 If `export` colors are omitted, nanopi derives HTML page and panel backgrounds from `userMessageBg`.
