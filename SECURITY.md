@@ -24,10 +24,8 @@ coding agent trivially and this cannot be protected against.
 ## Reporting a Vulnerability
 
 If you believe you found a security vulnerability in nanopi or another package in
-this repository, please report it privately by either:
-
-- Emailing `security@earendil.com`, or
-- Opening a private report through GitHub Security Advisories for this repository
+this repository, please report it privately by opening a private report through
+GitHub Security Advisories for this repository.
 
 Please include:
 
@@ -42,8 +40,7 @@ reports and coordinate disclosure as appropriate.
 ## Scope
 
 Security issues in the distributed packages, command-line tools, APIs, and
-repository code are in scope as well as earendil operated infrastructure
-on `pi.dev`.
+repository code are in scope.
 
 ## Out Of Scope
 
@@ -82,6 +79,4 @@ is out of scope.
 When possible, include the exact affected path, package version or commit SHA,
 configuration, and a proof of concept against the latest release or latest
 `main`.  For dependency reports, include evidence that the shipped dependency is
-affected and that the issue is reachable through nanopi.  For exposed-secret reports,
-include evidence that the credential is owned by Earendil or grants access to
-Earendil-operated infrastructure or services.
+affected and that the issue is reachable through nanopi.

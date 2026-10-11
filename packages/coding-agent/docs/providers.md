@@ -103,11 +103,11 @@ A stored API-key credential can include an `env` object. Its values take priorit
 
 ### Radius
 
-Radius is a service crafted for nanopi by the builders of nanopi, Earendil Works. It provides a customizable AI gateway with organization-level controls and analytics built in, and artifacts for sharing what you create with nanopi.
+Radius provides a customizable AI gateway with organization-level controls and analytics built in, and artifacts for sharing what you create with nanopi.
 
 To get started, run `/login radius` in nanopi. This adds Radius as a provider, and its models appear in `/model` like any other provider's.
 
-Radius is currently in early alpha and evolving quickly. See [radius.earendil.com](https://radius.earendil.com) for more.
+Radius is currently in early alpha and evolving quickly.
 
 Radius authentication uses its gateway catalog and caches refreshed model metadata for later offline startup. A custom Radius gateway configured in `models.json` uses its own catalog rather than inheriting the public `radius.pi.dev` catalog.
 

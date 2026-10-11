@@ -19,6 +19,10 @@
 - Fixed a symlinked `AGENTS.md` in a git worktree nested inside its main repo causing no project context file to load ([#10681](https://github.com/earendil-works/pi/issues/10681))
 - Fixed runs started by `pi.sendMessage(..., { triggerTurn: true })` removing system prompt sections added in `before_agent_start` after their first tool call, which changed the prompt mid-run and broke the provider prompt cache twice per run ([#10267](https://github.com/earendil-works/pi/issues/10267))
 
+### Removed
+
+- Removed the Earendil announcement component, the hidden `/dementedelves` command, and the Earendil attribution from the Radius login intro and docs.
+
 ## [1.1.0] - 2026-10-07
 
 ### New Features

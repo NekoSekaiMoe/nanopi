@@ -42,7 +42,7 @@ interface BugReportOptions {
 type Overlay = Container & { dispose?: () => void };
 
 const DISCLAIMER =
-	"This report goes to the nanopi developers (Earendil) and is not shared publicly. It includes your nanopi version, operating system, the current model and provider configuration (without API keys), loaded extensions, settings, and provider error diagnostics from this session.";
+	"This report goes to the nanopi developers and is not shared publicly. It includes your nanopi version, operating system, the current model and provider configuration (without API keys), loaded extensions, settings, and provider error diagnostics from this session.";
 const TRANSCRIPT_NOTE =
 	"The transcript contains your messages, model output, tool calls and their results, including file contents and command output read during this session.";
 
