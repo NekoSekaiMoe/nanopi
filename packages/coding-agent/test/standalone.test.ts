@@ -5,7 +5,12 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { ASSETS_COMPLETE_MARKER, extractAssetsPayload } from "../src/standalone/assets.ts";
+import {
+	ASSETS_COMPLETE_MARKER,
+	ASSETS_HASH_MARKER,
+	extractAssetsPayload,
+	syncAssetsPayload,
+} from "../src/standalone/assets.ts";
 import {
 	type BuiltinSidecarFile,
 	installBuiltinSidecarFiles,
@@ -49,6 +54,27 @@ describe("extractAssetsPayload", () => {
 		extractAssetsPayload(makeAssetsPayload({ "a.txt": Buffer.from("a").toString("base64") }), target);
 		expect(existsSync(join(target, "leftover", "stale.txt"))).toBe(false);
 		expect(readFileSync(join(target, "a.txt"), "utf8")).toBe("a");
+	});
+});
+
+describe("syncAssetsPayload", () => {
+	it("re-extracts a same-version tree whose payload content changed and keeps a current tree", () => {
+		const target = join(testRoot, "assets-sync");
+		const first = makeAssetsPayload({ "a.txt": Buffer.from("a").toString("base64") });
+		expect(syncAssetsPayload(first, target)).toBe(true);
+		expect(readFileSync(join(target, "a.txt"), "utf8")).toBe("a");
+
+		// Tree already current: nothing is rewritten, stray files survive.
+		writeFileSync(join(target, "stray.txt"), "keep");
+		expect(syncAssetsPayload(first, target)).toBe(true);
+		expect(existsSync(join(target, "stray.txt"))).toBe(true);
+
+		// Same version directory, rebuilt payload: the stale tree is replaced.
+		const second = makeAssetsPayload({ "a.txt": Buffer.from("b").toString("base64") });
+		expect(syncAssetsPayload(second, target)).toBe(true);
+		expect(readFileSync(join(target, "a.txt"), "utf8")).toBe("b");
+		expect(existsSync(join(target, "stray.txt"))).toBe(false);
+		expect(existsSync(join(target, ASSETS_HASH_MARKER))).toBe(true);
 	});
 });
 

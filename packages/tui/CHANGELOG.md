@@ -14,6 +14,7 @@
 
 ### Changed
 
+- Changed `Editor.renderedVisibleLineCount` from `private` to `protected` so subclasses that relayout rows (for example an extension editor drawing the autocomplete menu above the input frame) can remap mouse coordinates
 - Changed `showHardwareCursor` to show only the terminal cursor: focused `Editor` and `Input` components no longer draw a reverse-video cursor when it is enabled. This avoids terminals that extend edge cell colors into the window padding stretching the drawn cursor at the first or last column
 
 ### Fixed

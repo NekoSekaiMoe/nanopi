@@ -31,8 +31,10 @@ depends on the distribution:
 
 - npm installs and source checkouts register `dist/extras/<name>` in place;
 - single-file runs copy each extra from the extracted payload cache to
-  `~/.nanopi/packages/<name>`. The copy is versioned by a
-  `.nanopi-extra-version` marker and replaced atomically on version change;
+  `~/.nanopi/packages/<name>`. The copy is marked by a
+  `.nanopi-extra-version` marker (version + content hash) and replaced
+  atomically when either changes — see
+  [content-hash refresh](../bug-fix/2026-10-11-content-hash-refresh-single-file-caches.md);
   a directory there without the marker is user-owned and never touched.
 
 `NANOPI_BUNDLED_EXTRAS=0` disables registration globally (vitest runs with

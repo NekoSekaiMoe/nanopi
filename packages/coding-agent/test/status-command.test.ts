@@ -31,7 +31,7 @@ function createStatusCtx(): ExtensionCommandContext {
 }
 
 describe("welcome box", () => {
-	it("renders π title, model/provider/thinking/directory rows, and keeps the tip", () => {
+	it("renders π title, model/provider/thinking/directory rows without the /model hint", () => {
 		const lines = renderWelcomeBox(
 			{
 				version: "0.99.0",
@@ -44,15 +44,32 @@ describe("welcome box", () => {
 			80,
 		).map(stripAnsi);
 		const text = lines.join("\n");
-		expect(text).toContain("π nanopi v0.99.0");
+		expect(text).toContain("π NanoPi v0.99.0");
 		expect(text).toContain("model:");
 		expect(text).toContain("gpt-test");
-		expect(text).toContain("/model to change");
+		expect(text).not.toContain("/model to change");
 		expect(text).toContain("provider:");
 		expect(text).toContain("thinking: high");
 		expect(text).toContain("directory: ~");
-		expect(stripAnsi(renderWelcomeTip())).toContain("/status");
-		expect(stripAnsi(renderWelcomeTip())).toContain("loaded extensions and skills");
+		expect(stripAnsi(renderWelcomeTip(200))).toContain("/status");
+		expect(stripAnsi(renderWelcomeTip(200))).toContain("loaded extensions and skills");
+
+		const prefixed = renderWelcomeBox(
+			{
+				version: "0.99.0",
+				modelId: "openai/gpt-5.2",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: "~",
+			},
+			80,
+		)
+			.map(stripAnsi)
+			.join("\n");
+		expect(prefixed).toContain("model:     gpt-5.2");
+		expect(prefixed).not.toContain("openai/gpt-5.2");
+		expect(prefixed).toContain("provider:  openai");
 
 		const header = new WelcomeHeader(() => ({
 			version: "0.99.0",
@@ -62,7 +79,13 @@ describe("welcome box", () => {
 			showThinking: true,
 			cwd: "~",
 		}));
-		expect(header.render(80).map(stripAnsi).join("\n")).toContain("π nanopi v0.99.0");
+		expect(header.render(80).map(stripAnsi).join("\n")).toContain("π NanoPi v0.99.0");
+	});
+
+	it("truncates the tip to the terminal width", () => {
+		const tip = stripAnsi(renderWelcomeTip(40));
+		expect(tip.length).toBeLessThanOrEqual(40);
+		expect(tip.endsWith("…")).toBe(true);
 	});
 });
 

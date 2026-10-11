@@ -16,10 +16,11 @@ frame and a metrics-rich footer.
 The default TUI and the pi-ui extra share one Codex-style layout:
 
 - Welcome is a static dim box (`src/modes/interactive/components/welcome-box.ts`,
-  `WelcomeHeader`): `π nanopi vx.x.x` title, `model: <id>  /model to change`,
+  `WelcomeHeader`): `π NanoPi vx.x.x` title, `model: <id>`,
   `provider: <p>  thinking: <level>`, `directory: <~>`, plus a
-  `Tip: Use /status …` line. The old logo/hints header and its easter-egg
-  click target are gone; quiet-startup gating is unchanged.
+  `Tip: Use /status …` line truncated to the terminal width. The old
+  logo/hints header and its easter-egg click target are gone; quiet-startup
+  gating is unchanged.
 - Footer is a single dim line everywhere:
   `used xk/yk · / for more details`, where used prefers
   `getContextUsage().tokens`, then percent-derived tokens, then session
@@ -35,9 +36,9 @@ The default TUI and the pi-ui extra share one Codex-style layout:
   see [getLoadedResources](../architecture/2026-10-11-get-loaded-resources-api.md)).
   Chrome and exit match `/context` (bottom-docked overlay, accent rules,
   `↑/↓` scroll, `Esc` to close); non-TUI modes get plain-text notify.
-- pi-ui matches: thin dim ┌─┐/└─┘ box editor with │ gutters and the existing
-  model toolbar inside, and the same single-line footer (extension statuses
-  hidden). Its README is updated to match.
+- pi-ui matches: its open gradient editor frame (restored over the thin box — see
+  [pi-ui-gradient-editor](./2026-10-11-pi-ui-gradient-editor-menu-above.md)) and the
+  same single-line footer (extension statuses hidden). Its README is updated to match.
 
 Related: [built-in /init, /context](./2026-10-11-builtin-commands-and-codex-compaction.md)
 established the builtin-commands home this command extends.

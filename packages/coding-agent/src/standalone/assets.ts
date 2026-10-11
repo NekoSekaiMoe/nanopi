@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { gunzipSync } from "node:zlib";
@@ -28,6 +29,9 @@ declare const NANOPI_SINGLE_FILE_VERSION: string | undefined;
 /** Marker file proving an extraction completed. */
 export const ASSETS_COMPLETE_MARKER = ".complete";
 
+/** Marker recording the payload hash of the last extraction. Same-version rebuilds change the payload without changing the version directory, so the hash is what detects stale trees. */
+export const ASSETS_HASH_MARKER = ".assets-sha256";
+
 export function isSingleNodeFileRuntime(): boolean {
 	return typeof NANOPI_SINGLE_FILE !== "undefined" && NANOPI_SINGLE_FILE;
 }
@@ -41,9 +45,11 @@ function getCacheRoot(): string {
 /**
  * Extracts a {relativePath: base64Content} gzip payload into targetDir.
  * Stages into a sibling temp directory and renames atomically so a crash
- * never leaves a half-written tree that later looks installed.
+ * never leaves a half-written tree that later looks installed. When
+ * payloadHash is given it is recorded inside the staged tree so the finished
+ * directory proves which payload produced it.
  */
-export function extractAssetsPayload(payloadBase64: string, targetDir: string): void {
+export function extractAssetsPayload(payloadBase64: string, targetDir: string, payloadHash?: string): void {
 	const archive = JSON.parse(gunzipSync(Buffer.from(payloadBase64, "base64")).toString("utf8")) as Record<
 		string,
 		string
@@ -58,6 +64,9 @@ export function extractAssetsPayload(payloadBase64: string, targetDir: string): 
 			writeFileSync(destination, Buffer.from(contentBase64, "base64"));
 		}
 		writeFileSync(join(stagingDir, ASSETS_COMPLETE_MARKER), "");
+		if (payloadHash !== undefined) {
+			writeFileSync(join(stagingDir, ASSETS_HASH_MARKER), `${payloadHash}\n`);
+		}
 		rmSync(targetDir, { recursive: true, force: true });
 		try {
 			renameSync(stagingDir, targetDir);
@@ -68,6 +77,33 @@ export function extractAssetsPayload(payloadBase64: string, targetDir: string): 
 	} catch (error) {
 		rmSync(stagingDir, { recursive: true, force: true });
 		throw error;
+	}
+}
+
+function readMarkerLine(path: string): string | undefined {
+	try {
+		return readFileSync(path, "utf8").trim();
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Brings targetDir in sync with the payload: extracts when the tree is
+ * missing, incomplete, or was extracted from a different payload (same
+ * version, rebuilt content). Returns whether a complete tree is present.
+ */
+export function syncAssetsPayload(payloadBase64: string, targetDir: string): boolean {
+	const payloadHash = createHash("sha256").update(payloadBase64).digest("hex");
+	try {
+		const complete = existsSync(join(targetDir, ASSETS_COMPLETE_MARKER));
+		const extractedHash = complete ? readMarkerLine(join(targetDir, ASSETS_HASH_MARKER)) : undefined;
+		if (!complete || extractedHash !== payloadHash) {
+			extractAssetsPayload(payloadBase64, targetDir, payloadHash);
+		}
+		return existsSync(join(targetDir, ASSETS_COMPLETE_MARKER));
+	} catch {
+		return false;
 	}
 }
 
@@ -93,10 +129,7 @@ function bootstrapEmbeddedAssets(): void {
 
 	const targetDir = join(getCacheRoot(), "nanopi", "standalone", version);
 	try {
-		if (!existsSync(join(targetDir, ASSETS_COMPLETE_MARKER))) {
-			extractAssetsPayload(payload, targetDir);
-		}
-		if (existsSync(join(targetDir, ASSETS_COMPLETE_MARKER))) {
+		if (syncAssetsPayload(payload, targetDir)) {
 			// Respect a user-provided package dir; it wins over the cache.
 			process.env.NANOPI_PACKAGE_DIR ??= targetDir;
 			removeStaleVersionDirs(version);

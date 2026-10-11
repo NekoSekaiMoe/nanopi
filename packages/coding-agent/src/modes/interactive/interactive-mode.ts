@@ -544,7 +544,7 @@ export class InteractiveMode {
 	// Header container that holds the built-in or custom header
 	private headerContainer: Container;
 
-	// Built-in header (logo + keybinding hints + changelog)
+	// Built-in header (welcome box), swappable by extensions via ctx.ui.setHeader().
 	private builtInHeader: Component | undefined = undefined;
 
 	// Custom header from extension (undefined = use built-in header)
@@ -909,7 +909,7 @@ export class InteractiveMode {
 		// reported its colors. This ends at the terminal's DA1 reply, or after 100 ms if it answers nothing.
 		await this.themeController.waitForTerminalColors();
 
-		// Codex-style welcome header (unless silenced): boxed π nanopi version +
+		// Codex-style welcome header (unless silenced): boxed π NanoPi version +
 		// model/provider/thinking/directory rows, with a /status tip below.
 		if (this.shouldShowStartupHeader()) {
 			const header = new WelcomeHeader(() => {
@@ -1276,7 +1276,7 @@ export class InteractiveMode {
 	// Extension System
 	// =========================================================================
 
-	/** Startup header (logo, version, key hints). Hidden only by quietStartup: true. */
+	/** Startup header (welcome box). Hidden only by quietStartup: true. */
 	private shouldShowStartupHeader(): boolean {
 		return this.options.verbose === true || this.settingsManager.getQuietStartup() !== true;
 	}

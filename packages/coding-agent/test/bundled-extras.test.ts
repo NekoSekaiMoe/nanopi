@@ -37,7 +37,9 @@ describe("installBundledExtras", () => {
 		tempDirs.push(repoRoot);
 		const installed = installBundledExtras(distDir, installRoot, "1.2.3");
 		deepStrictEqual(installed, [join(installRoot, "ask-lite")]);
-		strictEqual(readFileSync(join(installRoot, "ask-lite", BUNDLED_EXTRA_MARKER), "utf8").trim(), "1.2.3");
+		const marker = readFileSync(join(installRoot, "ask-lite", BUNDLED_EXTRA_MARKER), "utf8").trim();
+		strictEqual(marker.startsWith("1.2.3\n"), true);
+		strictEqual(marker.split("\n")[1]?.length, 64);
 		strictEqual(existsSync(join(installRoot, "ask-lite", "index.ts")), true);
 	});
 
@@ -45,10 +47,25 @@ describe("installBundledExtras", () => {
 		const { repoRoot, distDir, installRoot } = writeDistExtras(["ask-lite"]);
 		tempDirs.push(repoRoot);
 		installBundledExtras(distDir, installRoot, "1.2.3");
-		// User edits their installed copy; a same-version run must not clobber it.
+		// User edits their installed copy; a same-content run must not clobber it.
 		writeFileSync(join(installRoot, "ask-lite", "user-edit.txt"), "keep me");
 		installBundledExtras(distDir, installRoot, "1.2.3");
 		strictEqual(existsSync(join(installRoot, "ask-lite", "user-edit.txt")), true);
+	});
+
+	it("refreshes a same-version install when the extra content changes", () => {
+		const { repoRoot, distDir, installRoot } = writeDistExtras(["ask-lite"]);
+		tempDirs.push(repoRoot);
+		installBundledExtras(distDir, installRoot, "1.2.3");
+		writeFileSync(join(installRoot, "ask-lite", "user-edit.txt"), "stale");
+		// Same version, changed files: the rebuild must win over the stale install.
+		writeFileSync(join(distDir, "ask-lite", "index.ts"), 'export const name = "ask-lite-v2";\n');
+		installBundledExtras(distDir, installRoot, "1.2.3");
+		strictEqual(
+			readFileSync(join(installRoot, "ask-lite", "index.ts"), "utf8"),
+			'export const name = "ask-lite-v2";\n',
+		);
+		strictEqual(existsSync(join(installRoot, "ask-lite", "user-edit.txt")), false);
 	});
 
 	it("replaces marker-carrying extras on version change", () => {
@@ -58,7 +75,12 @@ describe("installBundledExtras", () => {
 		writeFileSync(join(installRoot, "ask-lite", "user-edit.txt"), "replace me");
 		installBundledExtras(distDir, installRoot, "1.3.0");
 		strictEqual(existsSync(join(installRoot, "ask-lite", "user-edit.txt")), false);
-		strictEqual(readFileSync(join(installRoot, "ask-lite", BUNDLED_EXTRA_MARKER), "utf8").trim(), "1.3.0");
+		strictEqual(
+			readFileSync(join(installRoot, "ask-lite", BUNDLED_EXTRA_MARKER), "utf8")
+				.trim()
+				.startsWith("1.3.0\n"),
+			true,
+		);
 	});
 
 	it("never touches user-owned directories without a marker", () => {

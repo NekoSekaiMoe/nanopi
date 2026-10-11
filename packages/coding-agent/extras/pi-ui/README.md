@@ -3,8 +3,9 @@
 A UI reskin for the [Pi coding agent](https://github.com/badlogic/pi-mono) that
 gives the interactive TUI a Codex-style look:
 
-- **Boxed Codex-style input** — thin dim ┌─┐/└─┘ borders with │ gutters,
-  and an embedded `model  provider  thinking` row like the reference UI.
+- **Open gradient input** — pink-to-cyan top/bottom rules, a pink left accent,
+  and an embedded `model  provider  thinking` row like the reference UI. The
+  slash-command menu opens above the input frame.
 - **Single-line status toolbar** — `used xk/yk · / for more details`
   (used/context-window from real Pi context usage). Extension statuses are
   hidden so the bottom line stays exactly like the reference layout.
@@ -50,7 +51,7 @@ built on documented `ExtensionAPI` / `ExtensionUIContext` methods:
 
 | Module        | Pi API                                              | What it does                                    |
 | ------------- | --------------------------------------------------- | ----------------------------------------------- |
-| `editor.ts`   | `ctx.ui.setEditorComponent()`                       | Thin box + embedded model toolbar               |
+| `editor.ts`   | `ctx.ui.setEditorComponent()`                       | Open gradient frame + embedded model toolbar   |
 | `footer.ts`   | `ctx.ui.setFooter()`                                | `used xk/yk` single-line toolbar                |
 | `working.ts`  | Working UI methods + guarded TUI `Loader` hook       | Status shimmer + elapsed transcript row         |
 | `tools.ts`    | `pi.registerTool()` + `ToolExecutionComponent`      | Flat tool rows and edit/write diffs             |

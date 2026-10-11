@@ -20,9 +20,9 @@ function fitRow(text: string, innerWidth: number): string {
  * Codex-style welcome box:
  *
  * ┌──────────────────────────────────┐
- * │ π nanopi vx.x.x                  │
+ * │ π NanoPi vx.x.x                  │
  * │                                  │
- * │ model: xxx    /model to change   │
+ * │ model: xxx                       │
  * │ provider: xxx  thinking: high    │
  * │ directory: ~                     │
  * └──────────────────────────────────┘
@@ -35,16 +35,15 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 		theme.fg("dim", `${left}${fill.repeat(inner + 2)}${right}`);
 	const row = (text: string): string => theme.fg("dim", "│ ") + fitRow(text, inner) + theme.fg("dim", " │");
 
-	const title = theme.bold(`π nanopi v${data.version}`);
-	const modelHint = theme.fg("dim", "/model to change");
-	// Build model row with real colors: prefix plain, hint dim. Re-fit to keep width exact.
-	const modelPrefix = `model:     ${data.modelId}   `;
-	const modelLine =
-		theme.fg("dim", "│ ") +
-		modelPrefix +
-		truncateToWidth(modelHint, Math.max(0, inner - visibleWidth(modelPrefix)), "…") +
-		" ".repeat(Math.max(0, inner - visibleWidth(modelPrefix) - visibleWidth(modelHint))) +
-		theme.fg("dim", " │");
+	const title = theme.bold(`π NanoPi v${data.version}`);
+	// The provider row already names the provider, so strip a matching "provider/" prefix
+	// from the model id (catalogs like OpenRouter use "vendor/model" ids).
+	const providerPrefix = data.provider ? `${data.provider}/` : undefined;
+	const modelId =
+		providerPrefix && data.modelId.startsWith(providerPrefix)
+			? data.modelId.slice(providerPrefix.length)
+			: data.modelId;
+	const modelLine = row(`model:     ${modelId}`);
 
 	const providerText = data.provider ?? "n/a";
 	const thinkingText = data.showThinking ? (data.thinkingLevel ?? "off") : "off";
@@ -65,8 +64,10 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 	];
 }
 
-export function renderWelcomeTip(): string {
-	return theme.fg("dim", "Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.");
+/** Startup tip, truncated to the terminal width so narrow terminals do not crash the renderer. */
+export function renderWelcomeTip(width: number): string {
+	const tip = "Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.";
+	return theme.fg("dim", truncateToWidth(tip, Math.max(0, width), "…"));
 }
 
 /** Static Codex-style welcome header: box + tip line. Rebuilds colors on theme change. */
@@ -81,6 +82,6 @@ export class WelcomeHeader implements Component {
 
 	render(width: number): string[] {
 		if (width <= 0) return [];
-		return [...renderWelcomeBox(this.getData(), width), "", renderWelcomeTip()];
+		return [...renderWelcomeBox(this.getData(), width), "", renderWelcomeTip(width)];
 	}
 }
