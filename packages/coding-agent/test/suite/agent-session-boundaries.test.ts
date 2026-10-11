@@ -161,7 +161,14 @@ describe("AgentSession actionable boundaries", () => {
 			],
 		});
 		harnesses.push(harness);
-		harness.sessionManager.appendMessage({ role: "user", content: "older input", timestamp: Date.now() - 2 });
+		harness.sessionManager.appendMessage({
+			role: "user",
+			// Sized like the sibling test's prompt so the projection crosses the
+			// 2,000-token window on its own; the threshold must not depend on the
+			// default system prompt's size (which shrinks when trimmed).
+			content: "older input ".repeat(200),
+			timestamp: Date.now() - 2,
+		});
 		harness.sessionManager.appendMessage(fauxAssistantMessage("older answer", { timestamp: Date.now() - 1 }));
 		harness.session.refreshContext();
 		harness.setResponses([

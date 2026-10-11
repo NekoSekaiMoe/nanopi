@@ -57,6 +57,7 @@ import {
 } from '../lib/atMention';
 import { toolResultStatus, updateToolProgress, upsertToolPart, type ToolRow, type MsgPart } from '../lib/toolRows';
 import { randomPoem } from '../lib/greeting';
+import { useTypewriter } from '../lib/typewriter';
 import { commitTodoCall, todoToolDetail, type TodoTitles } from '../lib/todoToolDetail';
 import {
   applyTodoCall,
@@ -446,6 +447,16 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
   // otherwise. Picked once per mount so re-renders do not reshuffle it.
   const lang = useSettings().lang;
   const [landingPoem] = useState(() => (lang === 'zh' ? randomPoem() : null));
+  // Reduced motion: show the poem instantly instead of typing it out. Read once
+  // per mount; mid-session OS changes apply on the next landing visit.
+  const [reduceMotion] = useState(
+    () =>
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches,
+  );
+  const { typed: typedPoem, done: poemDone } = useTypewriter(landingPoem?.text ?? null, {
+    disabled: reduceMotion,
+  });
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   // 组合期标记：仅用于 handleKeyDown 的守卫（菜单导航 / Enter 发送不得窃取
@@ -1941,7 +1952,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
           ta.focus();
           ta.setSelectionRange(1, 1);
           ta.style.height = 'auto';
-          ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+          ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
         });
       },
       notice: (text) => pushCommandNotice(text),
@@ -2823,7 +2834,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
       const newPos = slashIdx + name.length + 2;
       ta.setSelectionRange(newPos, newPos);
       ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+      ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
     });
   }
 
@@ -2844,7 +2855,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
       ta.focus();
       ta.setSelectionRange(next.cursor, next.cursor);
       ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+      ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
     });
   }
 
@@ -2884,7 +2895,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
     const val = ta.value;
     setInput(val);
     ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+    ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
 
     const pos = ta.selectionStart ?? val.length;
     const before = val.slice(0, pos);
@@ -2932,7 +2943,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
   function handleInput(e: Event) {
     const ta = e.target as HTMLTextAreaElement;
     ta.style.height = 'auto';
-    ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+    ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
     // 始终把 DOM 值镜像进 state（包括组合期的中间草稿）。textarea 保持受控
     // (value={input})，而 Preact 只在 state 与 DOM 值不同时才写回，因此：
     //   - 组合期 state 永远等于 DOM，写回不会发生，IME 预编辑缓冲不受干扰；
@@ -3124,7 +3135,17 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
 
   // 输入框只渲染一份，按落地/常规两处择一挂载（避免两个 textarea 抢同一 ref）。
   const inputBox = (
-    <div class="input-box">
+    <div
+      class="input-box"
+      // Click anywhere in the chrome (not on a control) focuses the textarea —
+      // Arkloop chat-input-box behavior; the tag guard mirrors theirs.
+      onClick={(e) => {
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag !== 'BUTTON' && tag !== 'TEXTAREA' && tag !== 'INPUT' && tag !== 'SVG' && tag !== 'PATH') {
+          textareaRef.current?.focus();
+        }
+      }}
+    >
       {attachError && (
         <div class="input-attach-error" role="alert">
           <span>{attachError}</span>
@@ -3203,7 +3224,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
       <textarea
         ref={textareaRef}
         class="message-input"
-        rows={2}
+        rows={1}
         placeholder={t('chat.inputPlaceholder')}
         value={input}
         enterkeyhint={coarsePointer ? 'enter' : 'send'}
@@ -3413,7 +3434,7 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
       const pos = text.length;
       ta.setSelectionRange(pos, pos);
       ta.style.height = 'auto';
-      ta.style.height = Math.min(ta.scrollHeight, 160) + 'px';
+      ta.style.height = Math.min(ta.scrollHeight, 300) + 'px';
     });
   }
 
@@ -3432,8 +3453,13 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
             </div>
             {landingPoem ? (
               <div class="landing-tagline-group">
-                <div class="landing-tagline">{landingPoem.text}</div>
-                <div class="landing-tagline-source">—— {landingPoem.source}</div>
+                <div class="landing-tagline" aria-label={landingPoem.text}>
+                  {typedPoem}
+                  {!poemDone && <span class="type-caret" aria-hidden="true" />}
+                </div>
+                <div class={'landing-tagline-source' + (poemDone ? ' show' : '')}>
+                  —— {landingPoem.source}
+                </div>
               </div>
             ) : (
               <div class="landing-tagline">{t('chat.greeting')}</div>
@@ -4255,35 +4281,9 @@ function ToolTypeIcon({ name }: { name: string }) {
   );
 }
 
-// Status glyph: a check when done, a cross on error, otherwise a spinner that
-// animates while the call is pending / awaiting approval.
-function ToolStatusIcon({ cls }: { cls: string }) {
-  const spin = cls === 'pending' || cls === 'waiting';
-  return (
-    <svg
-      class={'tool-status-icon' + (spin ? ' spin' : '')}
-      width="12"
-      height="12"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      {cls === 'success' ? (
-        <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
-      ) : cls === 'error' ? (
-        <path d="M4 4l8 8M12 4l-8 8" />
-      ) : cls === 'warning' ? (
-        <path d="M8 2.5 14 13H2L8 2.5ZM8 6v3.5M8 11.5h.01" />
-      ) : (
-        <path d="M8 2.5a5.5 5.5 0 1 1-5.18 3.65" />
-      )}
-    </svg>
-  );
-}
+// Status glyph: removed with the Arkloop ExecutionCard port — the trigger row
+// now leads with a colored status word (shimmering while running) instead of an
+// icon + word pair.
 
 function shouldShowToolRow(tool: ToolRow): boolean {
   return !isTodoTool(tool.name) || tool.status === 'error' || tool.status === 'incomplete';
@@ -4311,42 +4311,73 @@ function ToolRowView({ tool }: { tool: ToolRow }) {
   }
 
   const hasDetail = !!(tool.args || tool.output);
+  // A running call expands to show streamed output, so it counts as expandable
+  // even before any output arrived (Arkloop ExecutionCard behavior).
+  const expandable = hasDetail || tool.status === 'pending';
 
   return (
-    <div class="tool-body">
-      <div class="tool-header" onClick={() => setExpanded((e) => !e)}>
-        <ToolTypeIcon name={tool.name} />
-        <span class="tool-name">{displayToolName(tool.name)}</span>
-        <span class="tool-name-secondary">{abbreviateArgs(tool.detail ?? formatToolDetail(tool.name, tool.args))}</span>
+    <div class={'tool-body' + (expanded ? ' open' : '')}>
+      {/* Trigger: inline fit-content log row — status word, name, arg preview,
+          chevron. Hover lifts the preview's color instead of painting a row. */}
+      <div
+        class="tool-header"
+        role="button"
+        tabIndex={expandable ? 0 : -1}
+        aria-expanded={expandable ? expanded : undefined}
+        onClick={() => expandable && setExpanded((e) => !e)}
+        onKeyDown={(e) => {
+          if (expandable && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            setExpanded((e) => !e);
+          }
+        }}
+      >
         {annotation && (
-          <span class={'tool-annotation ' + annotation.cls}>
-            <ToolStatusIcon cls={annotation.cls} />
+          <span
+            class={'tool-status-word ' + annotation.cls + (tool.status === 'pending' ? ' running' : '')}
+          >
             {annotation.label}
           </span>
         )}
-        {hasDetail && (
-          <span class={'tool-chevron' + (expanded ? ' expanded' : '')}>▾</span>
+        <ToolTypeIcon name={tool.name} />
+        <span class="tool-name">{displayToolName(tool.name)}</span>
+        <span class="tool-name-secondary">{abbreviateArgs(tool.detail ?? formatToolDetail(tool.name, tool.args))}</span>
+        {expandable && (
+          <svg
+            class={'tool-chevron' + (expanded ? ' expanded' : '')}
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         )}
       </div>
       {tool.status === 'pending' && tool.progress && (
         <div class="tool-progress" title={tool.progress}>{tool.progress}</div>
       )}
-      {expanded && hasDetail && (
-        <div class="tool-body-grid">
+      {/* Expanded body: always mounted so the 0fr→1fr grid transition animates
+          both directions; the collapsed panel is visibility-hidden (no tab
+          stops) and its content is plain text held in ToolRow state anyway. */}
+      <div class="tool-panel-wrap">
+        <div class="tool-panel">
+          <div class="tool-panel-title">{tool.name}</div>
           {tool.args && (
-            <div class="tool-body-row">
-              <div class="tool-body-row-label">{t('tool.args')}</div>
-              <div class="tool-body-row-content">{tool.args}</div>
+            <div class="tool-panel-section">
+              <div class="tool-panel-label">{t('tool.args')}</div>
+              <pre class="tool-panel-pre">{tool.args}</pre>
             </div>
           )}
           {tool.output && (
-            <div class="tool-body-row">
-              <div class="tool-body-row-label">{t('tool.output')}</div>
-              <div class="tool-body-row-content">{tool.output}</div>
+            <div class="tool-panel-section">
+              <div class="tool-panel-label">{t('tool.output')}</div>
+              <pre class="tool-panel-pre">{tool.output}</pre>
             </div>
           )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

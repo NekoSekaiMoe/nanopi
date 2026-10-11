@@ -818,9 +818,10 @@ body {
   width: 100%;
 }
 
-/* Each tool renders as a borderless, compact inline row (log-style): a
-   leading type icon, the name, a flex-fill arg preview, and a plain-text
-   status with its own icon. No card chrome — only a subtle hover background. */
+/* Each tool renders as an Arkloop-ExecutionCard-style inline log row: a
+   leading colored status word (shimmering while running), the type icon,
+   the name, a flex-fill arg preview, and a chevron. No card chrome on the
+   row — hover lifts the preview's color instead of painting a background. */
 .tool-body {
   margin: 0;
   max-width: 100%;
@@ -828,21 +829,26 @@ body {
 }
 
 .tool-header {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  padding: 5px 6px;
-  gap: 8px;
+  gap: 5px;
+  max-width: 100%;
+  padding: 3px 6px;
+  margin-left: -6px;
   border-radius: var(--corner-radius-small);
   cursor: pointer;
   user-select: none;
   min-width: 0;
+  background: transparent;
 }
 
-.tool-header:hover { background: var(--app-list-hover-background); }
-.tool-header:active { opacity: 0.65; }
+.tool-header:focus-visible {
+  outline: 2px solid var(--app-input-active-border);
+  outline-offset: -1px;
+}
 
 .tool-progress {
-  margin: -1px 8px 4px 28px;
+  margin: -1px 8px 4px 24px;
   color: var(--app-caption-foreground);
   font-family: var(--app-monospace-font-family);
   font-size: 0.75rem;
@@ -868,9 +874,10 @@ body {
 }
 
 .tool-name-secondary {
-  /* Grow to fill the row between the tool name and the status so the command
+  /* Grow to fill the row between the tool name and the chevron so the command
      preview uses the available width (no big blank gap) and shows as much as
-     fits; CSS ellipsis trims the rest. Full args are available on expand. */
+     fits; CSS ellipsis trims the rest. Full args are available on expand.
+     Hover lifts the color (Arkloop trigger behavior). */
   flex: 1 1 auto;
   color: var(--app-tertiary-foreground);
   font-size: 0.8125rem;
@@ -879,28 +886,114 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  transition: color 150ms ease;
 }
+.tool-header:hover .tool-name-secondary { color: var(--app-secondary-foreground); }
 
-/* Status → plain colored text + leading icon (no filled pill). */
-.tool-annotation {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.75rem;
+/* Status → leading colored word (no icon, no pill). */
+.tool-status-word {
   flex-shrink: 0;
+  font-size: 0.75rem;
   white-space: nowrap;
 }
 
-.tool-status-icon { flex-shrink: 0; display: inline-flex; }
-.tool-status-icon.spin { animation: tool-spin 0.8s linear infinite; transform-origin: center; }
-@keyframes tool-spin { to { transform: rotate(360deg); } }
+.tool-status-word.success { color: var(--app-success-foreground); }
+.tool-status-word.error { color: var(--app-error-foreground); }
+.tool-status-word.warning { color: var(--app-warning-accent); }
+.tool-status-word.pending { color: var(--app-tertiary-foreground); }
+.tool-status-word.waiting { color: var(--app-warning-accent); }
 
-.tool-annotation.success { color: var(--app-success-foreground); }
-.tool-annotation.error { color: var(--app-error-foreground); }
-.tool-annotation.warning { color: var(--app-warning-accent); }
-.tool-annotation.pending { color: var(--app-tertiary-foreground); }
-.tool-annotation.waiting { color: var(--app-warning-accent); }
+/* Running calls shimmer their status word (Arkloop thinking-shimmer). */
+.tool-status-word.running {
+  background: linear-gradient(
+    90deg,
+    var(--app-caption-foreground) 0%,
+    var(--app-secondary-foreground) 40%,
+    var(--app-primary-foreground) 50%,
+    var(--app-secondary-foreground) 60%,
+    var(--app-caption-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: tool-shimmer 2.2s linear infinite;
+}
+@keyframes tool-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tool-status-word.running { animation: none; }
+}
+
+/* Chevron: right-pointing when collapsed, rotates down when expanded. */
+.tool-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: var(--app-secondary-foreground);
+  transition: transform 160ms ease;
+}
+.tool-chevron.expanded { transform: rotate(90deg); }
+
+/* Expanded body: a rounded panel under the row, animated open/closed via the
+   0fr→1fr grid-rows trick (Arkloop uses framer-motion; this is the CSS
+   equivalent, also used by their attachments grid). The panel stays mounted
+   so closing animates too; collapsed content is visibility-hidden (no tab
+   stops). */
+.tool-panel-wrap {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.tool-body.open .tool-panel-wrap { grid-template-rows: 1fr; }
+
+.tool-panel {
+  min-height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  transition: visibility 0s 250ms;
+  margin-top: 4px;
+  border-radius: 8px;
+  background: var(--app-tool-background);
+}
+.tool-body.open .tool-panel {
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+/* Kind label inside the panel: mono, uppercase, muted (Arkloop kindLabel). */
+.tool-panel-title {
+  padding: 6px 10px 2px;
+  font-family: var(--app-monospace-font-family);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--app-caption-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tool-panel-section { padding: 2px 10px 8px; min-width: 0; }
+
+.tool-panel-label {
+  font-size: 0.6875rem;
+  color: var(--app-caption-foreground);
+  margin-bottom: 2px;
+}
+
+.tool-panel-pre {
+  margin: 0;
+  font-family: var(--app-monospace-font-family);
+  font-size: var(--app-monospace-font-size-small);
+  color: var(--app-primary-foreground);
+  white-space: pre;
+  overflow: auto;
+  max-height: 320px;
+  width: 100%;
+  min-width: 0;
+}
 
 /* === Code Block (markdown / mono) === */
 .code-block-wrapper { position: relative; margin: 10px 0; }
@@ -1041,7 +1134,7 @@ body {
   display: flex;
   flex-direction: column;
   padding: 12px 24px 18px;
-  background: var(--app-primary-background);
+  background: var(--app-canvas-background);
 }
 
 /* Persistent TodoWrite projection. It sits with the composer rather than in
@@ -1250,20 +1343,22 @@ body {
 .input-box {
   background: var(--app-input-background);
   border: 1px solid var(--app-input-border);
-  border-radius: var(--corner-radius-large);
-  box-shadow: 0 2px 12px #0000001f, 0 1px 3px #00000008;
+  /* Arkloop chat-input-box: large radius, hairline border, and a soft shadow
+     that lifts (not rings) on focus. */
+  border-radius: 20px;
+  box-shadow: 0 2px 3px -1px rgba(0, 0, 0, 0.08);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 12px 14px;
   position: relative;
   color: var(--app-input-foreground);
 }
 
 .input-box:focus-within {
-  --focus-ring-color: var(--app-brand);
-  border-color: var(--focus-ring-color);
-  box-shadow: 0 0 0 3px rgba(128, 128, 128, 0.07), 0 1px 2px rgba(128, 128, 128, 0.12); box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-ring-color) 12%, transparent), 0 1px 2px color-mix(in srgb, var(--focus-ring-color), transparent 80%);
+  border-color: var(--app-input-active-border);
+  box-shadow: 0 4px 10px -2px rgba(0, 0, 0, 0.1);
 }
 
 .message-input {
@@ -1273,14 +1368,16 @@ body {
   resize: none;
   color: var(--app-input-foreground);
   font-family: inherit;
-  font-size: 1rem;
-  line-height: 1.5;
-  min-height: 3em;
-  max-height: 200px;
+  /* Arkloop composer type: 16px absolute (not a rem step), so the root 14px
+     base does not shrink the field; the user font-scale still applies. */
+  font-size: calc(16px * var(--app-font-scale, 1));
+  line-height: 1.45;
+  min-height: 1.45em;
+  max-height: 300px;
   overflow-y: auto;
-  /* Box now owns the outer inset (padding 10/12); keep the field's own padding tiny
-     so the typed text aligns with the controls row below it. */
-  padding: 4px 2px 0;
+  /* Box owns the outer inset; keep the field's own padding tiny so the typed
+     text aligns with the controls row below it. */
+  padding: 2px 2px 0;
   width: 100%;
 }
 .message-input::placeholder { color: var(--app-input-placeholder-foreground); }
@@ -1319,40 +1416,45 @@ body {
 .footer-spacer { flex: 1; }
 .footer-tokens { opacity: 0.7; font-size: 0.75rem; white-space: nowrap; }
 
+/* Send: Arkloop's 34px rounded-lg monochrome chip — near-black on dark,
+   ivory on light. Press feedback is scale + opacity, not brightness. */
 .btn-send {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 10px;
   border: none;
-  background: var(--app-brand-button);
-  color: var(--app-brand-ivory);
+  background: var(--app-button-background);
+  color: var(--app-button-foreground);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
-  font-size: 1.25rem;
+  font-size: 1.125rem;
+  transition: background-color 80ms ease, opacity 80ms ease, transform 80ms ease;
 }
-.btn-send:disabled { opacity: 0.4; cursor: default; }
-.btn-send:not(:disabled):hover { filter: brightness(1.1); }
+.btn-send:disabled { opacity: 0.55; cursor: default; }
+.btn-send:not(:disabled):hover { background: var(--app-button-hover-background); }
+.btn-send:not(:disabled):active { transform: scale(0.93); opacity: 0.75; }
 
-/* Stop shares the send slot (shown while busy) — a solid filled circle with a
-   contrasting square (claude.ai-style), so it reads as the same affordance as
-   the send circle instead of a sparse thin-outline ring. */
+/* Stop shares the send slot (shown while busy) — Arkloop's secondary action:
+   outlined chip over the input background, so it reads calmer than send. */
 .btn-stop {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
-  border: none;
-  background: var(--app-primary-foreground);
-  color: var(--app-primary-background);
+  border-radius: 10px;
+  border: 1px solid var(--app-border-strong);
+  background: var(--app-input-background);
+  color: var(--app-secondary-foreground);
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
+  transition: background-color 80ms ease, transform 80ms ease;
 }
-.btn-stop:hover { filter: brightness(1.1); }
+.btn-stop:hover { background: var(--app-input-secondary-background); }
+.btn-stop:active { transform: scale(0.97); opacity: 0.82; }
 .btn-stop .stop-square { width: 11px; height: 11px; border-radius: 2px; background: currentColor; }
 
 /* === Sidebar / session list === */
@@ -2403,54 +2505,11 @@ body {
   margin: 0;
 }
 
-/* === Tool detail (expanded args + output) === */
-.tool-chevron {
-  font-size: 0.75rem;
-  color: var(--app-secondary-foreground);
-  flex-shrink: 0;
-  transition: transform 0.15s;
-}
+/* === Tool detail (expanded args + output) — superseded by the Arkloop-style
+   tool-panel rules in the Tool Call section above. === */
 
-.tool-chevron.expanded { transform: rotate(180deg); }
-
-.tool-body-grid {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  /* No card around the row anymore, so the expanded output is its own
-     contained block, indented to align under the row's name. */
-  margin: 2px 0 4px 26px;
-  border: 1px solid var(--app-primary-border-color);
-  border-radius: var(--corner-radius-small);
-  background: var(--app-tool-background);
-  overflow: hidden;
-}
-
-.tool-body-row {
-  grid-column: 1 / -1;
-  display: grid;
-  /* The parent's own columns, for a browser without subgrid (Chromium < 117):
-     the rows no longer share one label width, but stay two columns. */
-  grid-template-columns: max-content minmax(0, 1fr);
-  grid-template-columns: subgrid;
-  border-top: 0.5px solid var(--app-input-border);
-  padding: 0;
-}
-
-.tool-body-row:first-child { border-top: none; }
-
-.tool-body-row-label {
-  grid-column: 1;
-  color: var(--app-secondary-foreground);
-  opacity: 0.7;
-  font-family: var(--app-monospace-font-family);
-  font-size: 0.85em;
-  padding: 8px 10px;
-  user-select: none;
-  background: var(--app-tool-background); background: color-mix(in srgb, var(--app-tool-background), var(--app-primary-background) 35%);
-}
-
+/* Standalone args/output code block (PermissionCard reuses the class). */
 .tool-body-row-content {
-  grid-column: 2;
   padding: 8px 10px;
   font-family: var(--app-monospace-font-family);
   font-size: var(--app-monospace-font-size-small);
@@ -3514,6 +3573,34 @@ body {
   font-size: 0.8125rem;
   letter-spacing: 0.02em;
   color: var(--app-caption-foreground);
+  /* Fades in when the typewriter finishes; opacity (not display) keeps the
+     line's space reserved so the landing does not shift when it appears. */
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 240ms ease, transform 240ms ease;
+}
+.landing-tagline-source.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* Typewriter caret: a thin serif-height bar while the poem is being typed. */
+.type-caret {
+  display: inline-block;
+  width: 1px;
+  height: 0.95em;
+  margin-left: 3px;
+  vertical-align: -0.12em;
+  background: var(--app-secondary-foreground);
+  animation: caret-blink 900ms steps(2, start) infinite;
+}
+@keyframes caret-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .type-caret { animation: none; }
+  .landing-tagline-source { transition: none; }
 }
 
 .landing-tagline {

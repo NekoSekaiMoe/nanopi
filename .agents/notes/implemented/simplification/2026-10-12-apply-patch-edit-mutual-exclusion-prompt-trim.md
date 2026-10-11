@@ -76,6 +76,11 @@ Codex APIs; total Codex-API saving ≈ 2.9 KB (~720 tokens) per request.
   description carrying the contract; if edit quality regresses (non-unique or
   overlapping `oldText`), the first place to look is the declaration/`<rules>`
   split, not the edit engine.
+- The smaller prompt lowered the projected-context estimate below a
+  threshold-compaction test's 2,000-token window (it was riding on the old
+  docs section for ~130 tokens). The test's older history is now sized like
+  its sibling's prompt so the threshold is crossed independently of the
+  system prompt's size.
 - The alias's two guideline bullets are hand-mirrored strings
   (`editToolSystemPromptContribution` is not exported from the package root;
   an export was not added just for this). The unit test pins the declaration

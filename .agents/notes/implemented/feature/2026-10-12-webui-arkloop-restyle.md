@@ -42,7 +42,21 @@ app.css re-skins by palette swap.
   capped at 4 MB.
 - Landing poetry: the pool is structured (`POEMS: {text, source}`, 28 entries)
   and the landing shows the source on its own muted serif line; flat-string
-  `GREETINGS`/`randomGreeting` stay for compatibility.
+  `GREETINGS`/`randomGreeting` stay for compatibility. The poem types itself
+  out (`lib/typewriter.ts`): punctuation-aware pacing, blinking caret, source
+  line fading in on completion; `prefers-reduced-motion` shows it instantly.
+- Composer ported to the Arkloop chat-input-box design: 20px-radius box,
+  hairline border, focus lifts a soft shadow (no ring), textarea starts at one
+  row and auto-grows to 300px at 16px absolute type, clicking the chrome
+  focuses the field, send is a 34px rounded-lg monochrome chip (press = scale
+  + opacity), stop is the outlined secondary chip.
+- Tool calls ported to the Arkloop ExecutionCard design: an inline fit-content
+  trigger row (colored status word leading, shimmer while running, hover lifts
+  the preview color, chevron rotating right→down, keyboard operable) and an
+  always-mounted collapsible panel (0fr→1fr grid transition both directions,
+  visibility-hidden when collapsed) with a mono uppercase tool label and
+  args/output sections. The status icon pair was removed with the port; the
+  trigger keeps the tool-type icon.
 - Token hardening (the Arkloop-inspired part that was missing): the page moves
   `?token=` into `sessionStorage` on first load and rewrites the URL
   immediately (refresh keeps working; history/screen-share no longer carry the
@@ -89,9 +103,12 @@ app.css re-skins by palette swap.
   webui `pnpm run test` (244 pass, incl. the CSS fallback and contrast guard
   tests that caught two regressions during development), webui
   `pnpm run build`, and `test/webui-auth.test.ts` for the constant-time
-  bearer check. Rendering was not eyeballed in a browser in this environment;
-  the user should run `nanopi webui` and review dark/light + wallpaper before
-  release.
+  bearer check. The composer/typography guard tests
+  (`composerStyles.test.ts`, `typographyStyles.test.ts`) were updated to the
+  ported contracts (one-row composer at 16px absolute type, 300px cap) — they
+  previously encoded the old two-row shared-rung design. Rendering was not
+  eyeballed in a browser in this environment; the user should run
+  `nanopi webui` and review dark/light + wallpaper before release.
 
 Related: [apply_patch/edit mutual exclusion](../simplification/2026-10-12-apply-patch-edit-mutual-exclusion-prompt-trim.md)
 (same session's prompt-surface work).

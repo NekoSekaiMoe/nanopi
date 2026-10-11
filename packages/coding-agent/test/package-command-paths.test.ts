@@ -61,6 +61,11 @@ describe("package commands", () => {
 		mkdirSync(projectDir, { recursive: true });
 		mkdirSync(packageDir, { recursive: true });
 
+		// Isolate HOME like test.sh does: the package manager always resolves
+		// ~/.agents/skills as a user skill source, so a developer's real home
+		// would leak rows into these lists and shift the selected item.
+		vi.stubEnv("HOME", tempDir);
+
 		originalCwd = process.cwd();
 		originalAgentDir = process.env[ENV_AGENT_DIR];
 		originalNanoPiPackageDir = process.env.NANOPI_PACKAGE_DIR;

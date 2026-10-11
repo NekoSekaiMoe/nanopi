@@ -13,6 +13,9 @@
 - Changed the landing greeting to a random classical Chinese poetry line (zh only; English keeps the fixed greeting) and the user-visible branding from `nanopi` to `NanoPi` (page title, manifest, offline page, sidebar and landing brand; command examples stay lowercase)
 - Changed the theme to a warm monochrome palette (Arkloop-style: warm charcoal/paper neutrals, ivory/near-black accent pair instead of the clay-orange buttons) with a 14px base type scale and a MiSans-first font stack; the landing poem now shows its source on a second muted line and the pool grew from 12 to 28 lines
 - Changed the webui session token to move from the page URL into `sessionStorage` on first load (the URL is rewritten immediately), and the server's bearer check is now constant-time
+- Changed the landing poem to a typewriter reveal: punctuation-aware pacing, a blinking serif caret, and the source line fading in on completion; `prefers-reduced-motion` shows it instantly
+- Changed the composer to the Arkloop chat-input-box design: a 20px-radius box with a hairline border and a soft lifting focus shadow (no focus ring), single-row start with auto-growth to 300px, 16px absolute field type, click-anywhere-to-focus, and 34px rounded-lg monochrome send and outlined stop chips
+- Changed tool calls to the Arkloop ExecutionCard style: an inline log row led by a colored status word (shimmering while running) with a hover color lift instead of a painted row, and a collapsible rounded panel (mono uppercase tool label, args/output sections) that animates open and closed via a 0fr→1fr grid transition; the trigger is keyboard-operable (Enter/Space)
 
 ### Removed
 

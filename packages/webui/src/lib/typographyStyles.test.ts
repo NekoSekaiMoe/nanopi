@@ -16,10 +16,12 @@ test('mixed CJK code text uses explicit fallbacks before a portable monospace fa
   assert.match(stack, /'Microsoft YaHei',monospace\s*$/);
 });
 
-test('conversation text and composer share the compact 16px type rung', () => {
+test('transcript keeps the 1rem rung while the composer sits on its own 16px rung', () => {
   assert.match(appCss, /\.assistant-message-content\s*\{[^}]*font-size:\s*1rem;[^}]*line-height:\s*1\.75;/s);
   assert.match(appCss, /\.user-message-bubble\s*\{[^}]*font-size:\s*1rem;[^}]*line-height:\s*1\.5;/s);
-  assert.match(appCss, /\.message-input\s*\{[^}]*font-size:\s*1rem;[^}]*line-height:\s*1\.5;/s);
+  // Arkloop composer contract: 16px absolute (scaled by the user font-scale),
+  // not the transcript's rem rung, so the root 14px base cannot shrink it.
+  assert.match(appCss, /\.message-input\s*\{[^}]*font-size:\s*calc\(16px \* var\(--app-font-scale, 1\)\);[^}]*line-height:\s*1\.45;/s);
 });
 
 test('display serif stays on branding while approval decisions use sans', () => {
