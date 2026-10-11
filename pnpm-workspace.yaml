@@ -4,7 +4,6 @@ packages:
   - packages/coding-agent/examples/extensions/custom-provider-anthropic
   - packages/coding-agent/examples/extensions/custom-provider-gitlab-duo
   - packages/coding-agent/examples/extensions/sandbox
-  - packages/coding-agent/examples/extensions/gondolin
 
 # Link same-repo packages when the requested version range is satisfied by the
 # local package, mirroring npm workspaces behavior. Inter-package dependencies

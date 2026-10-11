@@ -235,7 +235,6 @@ export class ModelRuntime implements Models {
 				: new InMemoryCodingAgentModelsStore());
 		const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
 		const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
-			if (provider.id === "radius") return provider;
 			// OpenRouter narrows the catalog to the models, limits and prices of the user's key.
 			if (provider.id === "openrouter") {
 				return withPersonalizedCatalog(
@@ -255,7 +254,6 @@ export class ModelRuntime implements Models {
 			providers,
 			process.env.NANOPI_OFFLINE === undefined,
 		);
-		runtime.configureRadiusProviders();
 		runtime.rebuildProviders();
 		const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;
 		const controller =
@@ -274,23 +272,6 @@ export class ModelRuntime implements Models {
 			if (timeout) clearTimeout(timeout);
 		}
 		return runtime;
-	}
-
-	private configureRadiusProviders(): void {
-		this.builtins.clear();
-		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
-		for (const providerId of this.config.getProviderIds()) {
-			const config = this.config.getProvider(providerId);
-			if (config?.oauth !== "radius" || !config.baseUrl) continue;
-			this.builtins.set(
-				providerId,
-				builtinProviderCatalog.radiusProvider({
-					id: providerId,
-					name: config.name ?? providerId,
-					gateway: config.baseUrl.replace(/\/v1\/?$/u, ""),
-				}),
-			);
-		}
 	}
 
 	private providerIds(): Set<string> {
@@ -842,7 +823,6 @@ export class ModelRuntime implements Models {
 
 	async refresh(options: ModelsRefreshOptions = {}): Promise<ModelsRefreshResult> {
 		this.config = await ModelConfig.load(this.modelsPath);
-		this.configureRadiusProviders();
 		if (options.providers) {
 			for (const providerId of new Set(options.providers)) this.recomposeProvider(providerId);
 			this.updateModelSnapshot();

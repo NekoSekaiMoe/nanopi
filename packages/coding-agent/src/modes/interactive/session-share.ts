@@ -3,12 +3,8 @@ import * as crypto from "node:crypto";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { DEFAULT_RADIUS_GATEWAY } from "@nanopi/pi-ai/providers/radius-config";
 import { type Container, type EditorComponent, hyperlink, type TUI } from "@nanopi/pi-tui";
-import { getAuthCredential } from "../../cli/auth-command.ts";
-import { getShareViewerUrl } from "../../config.ts";
 import type { AgentSession } from "../../core/agent-session.ts";
-import { exportSessionToJsonl } from "../../core/session-export.ts";
 import { BorderedLoader } from "./components/bordered-loader.ts";
 import { theme } from "./theme/theme.ts";
 
@@ -46,28 +42,12 @@ export function createShareTrailingEntries(
 	];
 }
 
-/** Export the current branch with presentation metadata for Radius. */
-export function exportSessionForShare(filePath: string, session: AgentSession): void {
-	exportSessionToJsonl(session.sessionManager, filePath, (parentId, timestamp) =>
-		createShareTrailingEntries(session, parentId, timestamp),
-	);
-}
-
-/** Share the current session through Radius, falling back to a private gist. */
+/** Share the current session through a private GitHub gist. */
 export async function shareSession(context: SessionShareContext): Promise<void> {
 	const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "nanopi-share-"));
-	const jsonlFile = path.join(tempDir, "session.jsonl");
 	const htmlFile = path.join(tempDir, "session.html");
 
 	try {
-		try {
-			exportSessionForShare(jsonlFile, context.session);
-		} catch (error: unknown) {
-			context.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
-			return;
-		}
-		if (await tryShareViaRadius(jsonlFile, context)) return;
-
 		try {
 			const authResult = spawnSync("gh", ["auth", "status"], { encoding: "utf-8" });
 			if (authResult.status !== 0) {
@@ -92,67 +72,6 @@ export async function shareSession(context: SessionShareContext): Promise<void> 
 		} catch {
 			// Ignore cleanup errors
 		}
-	}
-}
-
-async function tryShareViaRadius(tmpFile: string, context: SessionShareContext): Promise<boolean> {
-	const provider = context.session.modelRuntime.getProvider("radius");
-	if (!provider) return false;
-
-	const token = getAuthCredential(
-		await context.session.modelRuntime.getAuth("radius", { minOAuthValidityMs: 5 * 60_000 }),
-	);
-	if (!token) return false;
-
-	const loader = new BorderedLoader(context.ui, theme, "Uploading to Radius...");
-	context.editorContainer.clear();
-	context.editorContainer.addChild(loader);
-	context.ui.setFocus(loader);
-	context.ui.requestRender();
-	loader.onAbort = () => {
-		restoreEditor(loader, context);
-		context.showStatus("Share cancelled");
-	};
-
-	try {
-		const body = fs.readFileSync(tmpFile);
-		const url = new URL("/v1/artifacts", DEFAULT_RADIUS_GATEWAY);
-		url.searchParams.set("visibility", "organization");
-		url.searchParams.set("title", "nanopi session");
-		const response = await fetch(url, {
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/x-ndjson",
-				"Content-Length": String(body.byteLength),
-			},
-			body,
-			signal: loader.signal,
-		});
-		if (loader.signal.aborted) return true;
-		const json = (await response.json().catch(() => null)) as {
-			artifact?: { canonical_url: string };
-			error?: string;
-		} | null;
-		if (loader.signal.aborted) return true;
-		restoreEditor(loader, context);
-		if (!response.ok || !json?.artifact) {
-			context.showError(
-				`Failed to upload Radius artifact: ${json?.error || response.statusText || response.status}`,
-			);
-			return true;
-		}
-		const shareUrl = json.artifact.canonical_url;
-		context.showStatus(`Share URL: ${hyperlink(shareUrl, shareUrl)}`);
-		return true;
-	} catch (error: unknown) {
-		if (!loader.signal.aborted) {
-			restoreEditor(loader, context);
-			context.showError(
-				`Failed to upload Radius artifact: ${error instanceof Error ? error.message : "Unknown error"}`,
-			);
-		}
-		return true;
 	}
 }
 
@@ -193,14 +112,12 @@ async function shareViaGist(tmpFile: string, context: SessionShareContext): Prom
 		}
 
 		const gistUrl = result.stdout?.trim();
-		const gistId = gistUrl?.split("/").pop();
-		if (!gistId) {
-			context.showError("Failed to parse gist ID from gh output");
+		if (!gistUrl) {
+			context.showError("Failed to parse gist URL from gh output");
 			return;
 		}
 
-		const previewUrl = getShareViewerUrl(gistId);
-		context.showStatus(`Share URL: ${hyperlink(previewUrl, previewUrl)}\nGist: ${hyperlink(gistUrl, gistUrl)}`);
+		context.showStatus(`Share URL: ${hyperlink(gistUrl, gistUrl)}`);
 	} catch (error: unknown) {
 		if (!loader.signal.aborted) {
 			restoreEditor(loader, context);

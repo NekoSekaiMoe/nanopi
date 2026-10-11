@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { getNanoPiUserAgent } from "../src/utils/nanopi-user-agent.ts";
 
 describe("getNanoPiUserAgent", () => {
-	it("formats the user agent expected by pi.dev", () => {
+	it("formats the nanopi user agent", () => {
 		const runtime = process.versions.bun ? `bun/${process.versions.bun}` : `node/${process.version}`;
 		const userAgent = getNanoPiUserAgent("1.2.3");
 

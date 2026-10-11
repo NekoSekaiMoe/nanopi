@@ -51,7 +51,7 @@ function builtinProvider(): Provider {
 }
 
 function testProvider(localGeneratedAt?: number) {
-	return withRemoteCatalog(builtinProvider(), "https://pi.dev", localGeneratedAt);
+	return withRemoteCatalog(builtinProvider(), "https://catalog.example.test", localGeneratedAt);
 }
 
 async function refreshProvider(
@@ -285,7 +285,7 @@ describe("remote catalog provider", () => {
 		expect((await store.read(provider.id))?.models.map((entry) => entry.id)).toEqual(["newer"]);
 	});
 
-	it("treats unimplemented pi.dev catalog routes as an unavailable overlay", async () => {
+	it("treats unimplemented catalog routes as an unavailable overlay", async () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("not implemented", { status: 501 }));
 		const provider = testProvider();
 		const store = new InMemoryModelsStore();
@@ -318,7 +318,7 @@ describe("personalized catalog provider", () => {
 		const personalize: PersonalizeCatalog = async () => {
 			throw new Error("user models request failed");
 		};
-		const provider = withPersonalizedCatalog(builtinProvider(), personalize);
+		const provider = withPersonalizedCatalog(builtinProvider(), personalize, "https://catalog.example.test");
 
 		await expect(refreshProvider(provider, store)).rejects.toThrow("user models request failed");
 		expect(provider.getModels().map((entry) => entry.id)).toEqual(["allowed"]);
@@ -330,10 +330,10 @@ describe("personalized catalog provider", () => {
 			throw new Error("not used offline");
 		};
 		const store = new InMemoryModelsStore();
-		const provider = withPersonalizedCatalog(builtinProvider(), personalize);
+		const provider = withPersonalizedCatalog(builtinProvider(), personalize, "https://catalog.example.test");
 
-		// nanopi versions before per-key lists stored the plain pi.dev catalog here, and saved an empty list
-		// after a missing pi.dev catalog or a failed first request. Only such an entry can be empty.
+		// nanopi versions before per-key lists stored the plain catalog here, and saved an empty list
+		// after a missing catalog or a failed first request. Only such an entry can be empty.
 		await store.write(provider.id, { models: [], checkedAt: 1 });
 		await refreshProvider(provider, store, { allowNetwork: false });
 		expect(provider.getModels().map((entry) => entry.id)).toEqual(["static"]);

@@ -14,7 +14,7 @@ nanopi install git:github.com/example/nanopi-tools@v1
 nanopi install ./local-package
 ```
 
-`nanopi list` shows configured packages. Use `nanopi remove <source>` to remove one and `nanopi update --extensions` to reconcile package installations. See [Command Line](cli.md#package-commands) for every package command and option.
+`nanopi list` shows configured packages. Use `nanopi remove <source>` to remove one. See [Command Line](cli.md#package-commands) for every package command and option.
 
 Personal installs are written to `~/.nanopi/agent/settings.json`. Add `--local` or `-l` to write the package declaration to `.nanopi/settings.json`. nanopi reads declarations from that file only after project trust is granted.
 
@@ -71,7 +71,7 @@ Use an explicit manifest when resources live elsewhere or need filtering:
 
 Paths are relative to the package root. Arrays accept glob patterns and exclusions. List dot-prefixed or symlinked resource roots directly when traversal through a glob would not discover them.
 
-The `nanopi-package` keyword makes an npm package eligible for discovery in the [nanopi package gallery](https://pi.dev/packages). Optional `nanopi.image` and `nanopi.video` fields add gallery previews.
+The `nanopi-package` keyword marks an npm package as a nanopi package.
 
 ## Declare dependencies
 

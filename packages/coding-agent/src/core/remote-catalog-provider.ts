@@ -11,7 +11,6 @@ import { VERSION } from "../config.ts";
 import { fetchWithRetry } from "../utils/management-http.ts";
 import { getNanoPiUserAgent } from "../utils/nanopi-user-agent.ts";
 
-const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
 export const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
 /**
@@ -50,7 +49,7 @@ function parseCatalog(providerId: string, value: unknown): AnyModel[] {
 		.map((model) => ({ ...model, provider: providerId }) as AnyModel);
 }
 
-/** Read a successful pi.dev catalog response. A missing or invalid Last-Modified header is 0. */
+/** Read a successful remote catalog response. A missing or invalid Last-Modified header is 0. */
 async function readCatalog(
 	providerId: string,
 	response: Response,
@@ -63,7 +62,7 @@ async function readCatalog(
 	};
 }
 
-/** Whether a pi.dev catalog is newer than the model data shipped with nanopi. */
+/** Whether a remote catalog is newer than the model data shipped with nanopi. */
 function isNewer(lastModified: number | undefined, localGeneratedAt: number | undefined): boolean {
 	return localGeneratedAt === undefined || (lastModified !== undefined && lastModified > localGeneratedAt);
 }
@@ -100,10 +99,10 @@ export type PersonalizeCatalog = (
 	context: RefreshModelsContext,
 ) => Promise<readonly AnyModel[]>;
 
-/** Add a persisted pi.dev catalog overlay to a static built-in provider. */
+/** Add a persisted remote-catalog overlay to a static built-in provider. */
 export function withRemoteCatalog(
 	provider: Provider,
-	catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
+	catalogBaseUrl: string | undefined = undefined,
 	localGeneratedAt?: number,
 ): Provider {
 	let dynamicModels: readonly AnyModel[] = [];
@@ -129,7 +128,10 @@ export function withRemoteCatalog(
 				return;
 			}
 			if (!context.allowNetwork || context.signal.aborted) return;
-			// Skip the request if pi.dev was checked less than REMOTE_CATALOG_REFRESH_INTERVAL_MS ago.
+			// Without a configured catalog base URL there is nothing to refresh; the
+			// built-in models ship with the package.
+			if (!catalogBaseUrl) return;
+			// Skip the request if the catalog was checked less than REMOTE_CATALOG_REFRESH_INTERVAL_MS ago.
 			// An entry without lastModified (saved by an older nanopi, or after a failed first request) is
 			// always refetched: remoteModels() ignores it, so waiting would leave the overlay empty.
 			if (
@@ -186,16 +188,16 @@ export function withRemoteCatalog(
 
 /**
  * Like `withRemoteCatalog`, but on each network refresh the catalog (built-in models plus a newer
- * pi.dev catalog) is passed through `personalize` and the result is saved. The saved entry holds
- * the personalized list, not the pi.dev catalog, and replaces the catalog, including offline.
+ * remote catalog) is passed through `personalize` and the result is saved. The saved entry holds
+ * the personalized list, not the remote catalog, and replaces the catalog, including offline.
  * The refresh interval and etag revalidation are skipped. An empty list (nothing saved yet, or an
- * empty catalog saved by an older nanopi after a failed or missing pi.dev catalog) falls back to the
+ * empty catalog saved by an older nanopi after a failed or missing remote catalog) falls back to the
  * built-in models.
  */
 export function withPersonalizedCatalog(
 	provider: Provider,
 	personalize: PersonalizeCatalog,
-	catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
+	catalogBaseUrl: string | undefined = undefined,
 	localGeneratedAt?: number,
 ): Provider {
 	let personalModels: readonly AnyModel[] = [];
@@ -218,6 +220,7 @@ export function withPersonalizedCatalog(
 				return;
 			}
 			if (!context.allowNetwork || context.signal.aborted) return;
+			if (!catalogBaseUrl) return;
 
 			const response = await requestCatalog(provider.id, catalogBaseUrl, context.signal);
 			if (context.signal.aborted) return;

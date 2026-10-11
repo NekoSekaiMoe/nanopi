@@ -46,7 +46,6 @@ This table covers providers with a single primary API-key variable. Providers th
 | ZAI Coding Plan (Global) | `ZAI_API_KEY` |
 | ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
 | OpenCode Zen and Go | `OPENCODE_API_KEY` |
-| Radius | `RADIUS_API_KEY` |
 | TypeSafe ([classifier models](models.md#use-classifier-models)) | `TYPESAFE_API_KEY` |
 | Hugging Face | `HF_TOKEN` |
 | Fireworks | `FIREWORKS_API_KEY` |
@@ -101,23 +100,13 @@ A stored API-key credential can include an `env` object. Its values take priorit
 }
 ```
 
-### Radius
-
-Radius provides a customizable AI gateway with organization-level controls and analytics built in, and artifacts for sharing what you create with nanopi.
-
-To get started, run `/login radius` in nanopi. This adds Radius as a provider, and its models appear in `/model` like any other provider's.
-
-Radius is currently in early alpha and evolving quickly.
-
-Radius authentication uses its gateway catalog and caches refreshed model metadata for later offline startup. A custom Radius gateway configured in `models.json` uses its own catalog rather than inheriting the public `radius.pi.dev` catalog.
-
 ### OpenRouter
 
 Authenticate with `/login openrouter` or `OPENROUTER_API_KEY`.
 
 With a key, nanopi lists only the OpenRouter chat models that key may use, with the key's context size, max output, and prices. These come from OpenRouter's `/models/user` endpoint and reflect guardrails and provider restrictions set in OpenRouter. Image and classifier models are not filtered.
 
-nanopi refreshes the list in the background at startup in interactive mode, when `/model` opens, after `/login`, and on `nanopi update --models`. The last list is saved and used offline and in `nanopi -p` and RPC mode. After switching keys outside `/login`, the previous key's list stays until the next refresh.
+nanopi refreshes the list in the background at startup in interactive mode, when `/model` opens, and after `/login`. The last list is saved and used offline and in `nanopi -p` and RPC mode. After switching keys outside `/login`, the previous key's list stays until the next refresh.
 
 Regional endpoints filter models to their region. To use one, set the base URL in [`models.json`](models.md#configure-a-compatible-endpoint):
 

@@ -2,14 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { delimiter, join } from "path";
 import { afterEach, describe, expect, test } from "vitest";
-import {
-	detectInstallChange,
-	detectInstallMethod,
-	findNodePackageDir,
-	getSelfUpdateCommand,
-	getSelfUpdateUnavailableInstruction,
-	getUpdateInstruction,
-} from "../src/config.ts";
+import { detectInstallChange, findNodePackageDir } from "../src/config.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = process.env.PATH;
@@ -50,7 +43,7 @@ afterEach(() => {
 	}
 });
 
-function createNpmPrefixInstall(template = "nanopi-prefix-"): { prefix: string; packageDir: string } {
+function _createNpmPrefixInstall(template = "nanopi-prefix-"): { prefix: string; packageDir: string } {
 	const prefix = mkdtempSync(join(tmpdir(), template));
 	const root = join(prefix, "lib", "node_modules");
 	const scopeDir = join(root, "@nanopi");
@@ -62,7 +55,7 @@ function createNpmPrefixInstall(template = "nanopi-prefix-"): { prefix: string; 
 	return { prefix, packageDir };
 }
 
-function createPnpmGlobalInstall(): { root: string; packageDir: string } {
+function _createPnpmGlobalInstall(): { root: string; packageDir: string } {
 	const temp = mkdtempSync(join(tmpdir(), "nanopi-pnpm-"));
 	const binDir = join(temp, "bin");
 	const root = join(temp, "pnpm", "global", "5", "node_modules");
@@ -89,7 +82,7 @@ function createPnpmGlobalInstall(): { root: string; packageDir: string } {
 	return { root, packageDir };
 }
 
-function createYarnGlobalInstall(): { globalDir: string; packageDir: string } {
+function _createYarnGlobalInstall(): { globalDir: string; packageDir: string } {
 	const temp = mkdtempSync(join(tmpdir(), "nanopi-yarn-"));
 	const binDir = join(temp, "bin");
 	const globalDir = join(temp, "yarn", "global");
@@ -105,7 +98,7 @@ function createYarnGlobalInstall(): { globalDir: string; packageDir: string } {
 	return { globalDir, packageDir };
 }
 
-function createBunGlobalInstall(): { packageDir: string } {
+function _createBunGlobalInstall(): { packageDir: string } {
 	const temp = mkdtempSync(join(tmpdir(), "nanopi-bun-"));
 	const prefix = join(temp, ".bun");
 	const bunBin = join(prefix, "bin");
@@ -157,306 +150,6 @@ describe("findNodePackageDir", () => {
 		writeFileSync(join(distDir, "package.json"), "{}");
 
 		expect(findNodePackageDir(bundleDir)).toBe(tempDir);
-	});
-});
-
-describe("detectInstallMethod", () => {
-	test("detects pnpm from Windows .pnpm install paths", () => {
-		setExecPath(
-			"C:\\Users\\Admin\\Documents\\pnpm-repository\\global\\5\\.pnpm\\@nanopi+pi-coding-agent@0.67.68\\node_modules\\@nanopi\\pi-coding-agent\\dist\\cli.js",
-		);
-
-		expect(detectInstallMethod()).toBe("pnpm");
-		expect(getUpdateInstruction("@nanopi/pi-coding-agent")).toBe(
-			"Run: pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @nanopi/pi-coding-agent",
-		);
-	});
-
-	test("does not self-update unknown wrapper installs", () => {
-		setExecPath("/usr/local/bin/node");
-
-		expect(detectInstallMethod()).toBe("unknown");
-		expect(getSelfUpdateCommand("@nanopi/pi-coding-agent")).toBeUndefined();
-		expect(getUpdateInstruction("@nanopi/pi-coding-agent")).toBe(
-			"Update @nanopi/pi-coding-agent using the package manager, wrapper, or source checkout that provides this installation.",
-		);
-	});
-
-	test("self-updates npm installs from custom prefixes", () => {
-		const { prefix } = createNpmPrefixInstall();
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent");
-
-		expect(detectInstallMethod()).toBe("npm");
-		expect(command).toEqual({
-			command: "npm",
-			args: [
-				"--prefix",
-				prefix,
-				"install",
-				"-g",
-				"--ignore-scripts",
-				"--min-release-age=0",
-				"@nanopi/pi-coding-agent",
-			],
-			display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @nanopi/pi-coding-agent`,
-		});
-	});
-
-	test("self-updates exact npm versions without uninstalling the current package", () => {
-		const { prefix } = createNpmPrefixInstall();
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent", undefined, {
-			packageName: "@nanopi/pi-coding-agent",
-			installSpec: "@nanopi/pi-coding-agent@1.2.3",
-		});
-
-		expect(command).toEqual({
-			command: "npm",
-			args: [
-				"--prefix",
-				prefix,
-				"install",
-				"-g",
-				"--ignore-scripts",
-				"--min-release-age=0",
-				"@nanopi/pi-coding-agent@1.2.3",
-			],
-			display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @nanopi/pi-coding-agent@1.2.3`,
-		});
-	});
-
-	test("self-updates renamed packages from the current install prefix", () => {
-		const { prefix } = createNpmPrefixInstall();
-
-		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/nanopi");
-
-		expect(command).toEqual({
-			command: "npm",
-			args: ["--prefix", prefix, "install", "-g", "--ignore-scripts", "--min-release-age=0", "@new-scope/nanopi"],
-			display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent && npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/nanopi`,
-			steps: [
-				{
-					command: "npm",
-					args: ["--prefix", prefix, "uninstall", "-g", "@mariozechner/pi-coding-agent"],
-					display: `npm --prefix ${prefix} uninstall -g @mariozechner/pi-coding-agent`,
-				},
-				{
-					command: "npm",
-					args: [
-						"--prefix",
-						prefix,
-						"install",
-						"-g",
-						"--ignore-scripts",
-						"--min-release-age=0",
-						"@new-scope/nanopi",
-					],
-					display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @new-scope/nanopi`,
-				},
-			],
-		});
-	});
-
-	test("self-update respects configured npmCommand", () => {
-		const { prefix } = createNpmPrefixInstall();
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent", ["npm", "--prefix", prefix]);
-
-		expect(command).toEqual({
-			command: "npm",
-			args: [
-				"--prefix",
-				prefix,
-				"install",
-				"-g",
-				"--ignore-scripts",
-				"--min-release-age=0",
-				"@nanopi/pi-coding-agent",
-			],
-			display: `npm --prefix ${prefix} install -g --ignore-scripts --min-release-age=0 @nanopi/pi-coding-agent`,
-		});
-	});
-
-	test("self-update treats empty npmCommand as unset", () => {
-		const { prefix } = createNpmPrefixInstall();
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent", []);
-
-		expect(command?.args).toEqual([
-			"--prefix",
-			prefix,
-			"install",
-			"-g",
-			"--ignore-scripts",
-			"--min-release-age=0",
-			"@nanopi/pi-coding-agent",
-		]);
-	});
-
-	test("quotes npm self-update display paths", () => {
-		const { prefix } = createNpmPrefixInstall("nanopi prefix ");
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent");
-
-		expect(command?.display).toBe(
-			`npm --prefix "${prefix}" install -g --ignore-scripts --min-release-age=0 @nanopi/pi-coding-agent`,
-		);
-	});
-
-	test("does not infer Windows npm custom prefixes from package paths", () => {
-		const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@nanopi\\pi-coding-agent";
-		process.env.NANOPI_PACKAGE_DIR = packageDir;
-		setExecPath(`${packageDir}\\dist\\cli.js`);
-
-		expect(detectInstallMethod()).toBe("npm");
-		expect(getUpdateInstruction("@nanopi/pi-coding-agent")).toBe(
-			"Run: npm install -g --ignore-scripts --min-release-age=0 @nanopi/pi-coding-agent",
-		);
-	});
-
-	test("self-updates bun global installs from bun pm bin", () => {
-		createBunGlobalInstall();
-
-		const command = getSelfUpdateCommand("@nanopi/pi-coding-agent");
-
-		expect(detectInstallMethod()).toBe("bun");
-		expect(command).toEqual({
-			command: "bun",
-			args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@nanopi/pi-coding-agent"],
-			display: "bun install -g --ignore-scripts --minimum-release-age=0 @nanopi/pi-coding-agent",
-		});
-	});
-
-	test("self-updates renamed pnpm global installs by removing the old package first", () => {
-		createPnpmGlobalInstall();
-
-		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/nanopi");
-
-		expect(detectInstallMethod()).toBe("pnpm");
-		expect(command).toEqual({
-			command: "pnpm",
-			args: ["install", "-g", "--ignore-scripts", "--config.minimumReleaseAge=0", "@new-scope/nanopi"],
-			display:
-				"pnpm remove -g @mariozechner/pi-coding-agent && pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/nanopi",
-			steps: [
-				{
-					command: "pnpm",
-					args: ["remove", "-g", "@mariozechner/pi-coding-agent"],
-					display: "pnpm remove -g @mariozechner/pi-coding-agent",
-				},
-				{
-					command: "pnpm",
-					args: ["install", "-g", "--ignore-scripts", "--config.minimumReleaseAge=0", "@new-scope/nanopi"],
-					display: "pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @new-scope/nanopi",
-				},
-			],
-		});
-	});
-
-	test("self-updates pnpm v11 global installs resolved through the store", () => {
-		const temp = mkdtempSync(join(tmpdir(), "nanopi-pnpm11-"));
-		const binDir = join(temp, "bin");
-		const root = join(temp, "Library", "pnpm", "global", "v11");
-		const packageName = "@nanopi/pi-coding-agent";
-		const globalPackageDir = join(root, "11e9a", "node_modules", "@nanopi", "pi-coding-agent");
-		const storePackageDir = join(
-			temp,
-			"Library",
-			"pnpm",
-			"store",
-			"v11",
-			"links",
-			"@nanopi",
-			"pi-coding-agent",
-			"0.75.0",
-			"hash",
-			"node_modules",
-			"@nanopi",
-			"pi-coding-agent",
-		);
-		mkdirSync(globalPackageDir, { recursive: true });
-		mkdirSync(storePackageDir, { recursive: true });
-		mkdirSync(binDir, { recursive: true });
-		writeFileSync(join(globalPackageDir, "package.json"), "{}");
-		writeFileSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), createFakePnpmScript(root));
-		chmodSync(join(binDir, process.platform === "win32" ? "pnpm.cmd" : "pnpm"), 0o755);
-		tempDir = temp;
-		process.env.PATH = `${binDir}${delimiter}${originalPath ?? ""}`;
-		process.env.NANOPI_PACKAGE_DIR = storePackageDir;
-		process.argv[1] = join(globalPackageDir, "dist", "cli.js");
-		setExecPath(join(storePackageDir, "dist", "cli.js"));
-
-		const command = getSelfUpdateCommand(packageName);
-
-		expect(detectInstallMethod()).toBe("pnpm");
-		expect(command).toEqual({
-			command: "pnpm",
-			args: ["install", "-g", "--ignore-scripts", "--config.minimumReleaseAge=0", packageName],
-			display: `pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 ${packageName}`,
-		});
-	});
-
-	test("self-updates renamed yarn global installs by removing the old package first", () => {
-		createYarnGlobalInstall();
-
-		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/nanopi");
-
-		expect(detectInstallMethod()).toBe("yarn");
-		expect(command).toEqual({
-			command: "yarn",
-			args: ["global", "add", "--ignore-scripts", "@new-scope/nanopi"],
-			display:
-				"yarn global remove @mariozechner/pi-coding-agent && yarn global add --ignore-scripts @new-scope/nanopi",
-			steps: [
-				{
-					command: "yarn",
-					args: ["global", "remove", "@mariozechner/pi-coding-agent"],
-					display: "yarn global remove @mariozechner/pi-coding-agent",
-				},
-				{
-					command: "yarn",
-					args: ["global", "add", "--ignore-scripts", "@new-scope/nanopi"],
-					display: "yarn global add --ignore-scripts @new-scope/nanopi",
-				},
-			],
-		});
-	});
-
-	test("self-updates renamed bun global installs by removing the old package first", () => {
-		createBunGlobalInstall();
-
-		const command = getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/nanopi");
-
-		expect(detectInstallMethod()).toBe("bun");
-		expect(command).toEqual({
-			command: "bun",
-			args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@new-scope/nanopi"],
-			display:
-				"bun uninstall -g @mariozechner/pi-coding-agent && bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/nanopi",
-			steps: [
-				{
-					command: "bun",
-					args: ["uninstall", "-g", "@mariozechner/pi-coding-agent"],
-					display: "bun uninstall -g @mariozechner/pi-coding-agent",
-				},
-				{
-					command: "bun",
-					args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@new-scope/nanopi"],
-					display: "bun install -g --ignore-scripts --minimum-release-age=0 @new-scope/nanopi",
-				},
-			],
-		});
-	});
-
-	test("does not self-update when npm install path is not writable", () => {
-		const { packageDir } = createNpmPrefixInstall();
-		chmodSync(packageDir, 0o500);
-
-		expect(getSelfUpdateCommand("@nanopi/pi-coding-agent")).toBeUndefined();
-		expect(getSelfUpdateUnavailableInstruction("@nanopi/pi-coding-agent")).toContain(
-			"the install path is not writable",
-		);
 	});
 });
 

@@ -1,11 +1,4 @@
-import {
-	Container,
-	Editor,
-	getKeybindings,
-	setKeybindings,
-	stripTerminalSequences,
-	TuiMainScreen,
-} from "@nanopi/pi-tui";
+import { Container, Editor, getKeybindings, setKeybindings, TuiMainScreen } from "@nanopi/pi-tui";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
 import type { AgentSession } from "../src/core/agent-session.ts";
@@ -63,21 +56,9 @@ describe("bug report prompt", () => {
 			const summarySelector = editorContainer.children[0];
 			if (!(summarySelector instanceof ExtensionSelectorComponent)) throw new Error("Missing summary selector");
 			expect(summarySelector.render(120).join("\n")).toContain("Attach a summary written by");
-			summarySelector.handleInput("j");
-			summarySelector.handleInput("\r");
+			summarySelector.handleInput("\x1b");
 			expect(editorContainer.children[0]).toBe(editor);
 
-			await vi.waitFor(() => expect(editorContainer.children[0]).toBeInstanceOf(ExtensionSelectorComponent));
-			const deliverySelector = editorContainer.children[0];
-			if (!(deliverySelector instanceof ExtensionSelectorComponent)) throw new Error("Missing delivery selector");
-			const deliveryLines = deliverySelector.render(120).map(stripTerminalSequences);
-			expect(deliveryLines.some((line) => line.includes("Description: Request failed"))).toBe(true);
-			expect(deliveryLines.some((line) => line.includes("↳ nanopi exiting..."))).toBe(true);
-			expect(deliveryLines.some((line) => line.includes("stack trace"))).toBe(true);
-
-			deliverySelector.handleInput("j");
-			deliverySelector.handleInput("j");
-			deliverySelector.handleInput("\r");
 			await report;
 			expect(showStatus).toHaveBeenCalledWith("Bug report cancelled");
 		} finally {

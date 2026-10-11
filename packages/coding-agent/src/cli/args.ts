@@ -287,11 +287,10 @@ ${chalk.bold("Commands:")}
   ${APP_NAME} install <source> [-l]     Install extension source and add to settings
   ${APP_NAME} remove <source> [-l]      Remove extension source from settings
   ${APP_NAME} uninstall <source> [-l]   Alias for remove
-  ${APP_NAME} update [source|self|nanopi]   Update nanopi, extensions, or model catalogs
   ${APP_NAME} list                      List installed extensions from settings
   ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
-  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth
+  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/list/config/auth
 
 ${chalk.bold("Options:")}
   --provider <name>              Provider to search for --model (requires --model)
@@ -453,8 +452,7 @@ ${chalk.bold("Environment Variables:")}
   ${ENV_SESSION_DIR.padEnd(32)} - Session storage directory (overridden by --session-dir)
   NANOPI_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)
   NANOPI_OFFLINE                       - Disable startup network operations when set to 1/true/yes
-  NANOPI_TELEMETRY                     - Override install telemetry when set to 1/true/yes or 0/false/no
-  NANOPI_SHARE_VIEWER_URL              - Base URL for /share command (default: https://pi.dev/session/)
+  NANOPI_TELEMETRY                     - Override provider attribution headers when set to 1/true/yes or 0/false/no
 
 ${chalk.bold("Built-in Tool Names:")}
   read       - Read file contents

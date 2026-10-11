@@ -490,7 +490,6 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				{ id: "anthropic", name: "Anthropic", authType: "oauth", subscription: true },
 				{ id: "anthropic", name: "Anthropic", authType: "api_key", subscription: true },
 				{ id: "openai", name: "OpenAI", authType: "api_key" },
-				{ id: "radius", name: "Radius", authType: "oauth", subscription: false },
 			],
 		};
 
@@ -507,13 +506,6 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				description: "Anthropic · subscription/API key",
 			},
 		]);
-
-		// OAuth sign-in without a subscription, such as Radius, is an account.
-		const radiusLine = "/login radius";
-		const radiusSuggestions = await provider.getSuggestions([radiusLine], 0, radiusLine.length, {
-			signal: new AbortController().signal,
-		});
-		expect(radiusSuggestions?.items).toEqual([{ value: "radius", label: "radius", description: "Radius · account" }]);
 	});
 });
 describe("InteractiveMode.showLoadedResources", () => {

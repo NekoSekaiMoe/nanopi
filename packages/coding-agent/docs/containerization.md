@@ -11,9 +11,8 @@ You can isolate the complete nanopi process or keep nanopi on the host and route
 | Plain Docker | Container | nanopi, built-in tools, `!` commands, and extensions | Credentials passed into the container | A straightforward local container boundary |
 | Docker Sandboxes | Managed sandbox | nanopi, built-in tools, `!` commands, and extensions | Provider credentials remain on the host and are substituted by the proxy | Managed local isolation without exposing the real provider key |
 | OpenShell | Local or remote sandbox | nanopi, built-in tools, `!` commands, and extensions | Policy-controlled credentials and inference routing | Filesystem, process, network, and credential policies |
-| Gondolin extension | Host | Built-in tools and `!` commands | Stored nanopi credentials remain on the host, but commands inherit host environment variables | A local micro-VM for tool execution while retaining the host interface |
 
-The method changes where extensions run. When the complete nanopi process runs inside an isolated environment, its extensions run there too. When host nanopi delegates built-in tools through Gondolin, other extension tools still run on the host unless they also delegate their work.
+The method changes where extensions run. When the complete nanopi process runs inside an isolated environment, its extensions run there too.
 
 ## Decide what nanopi can access
 
@@ -149,35 +148,3 @@ openshell sandbox download nanopi-sandbox /workspace/working-folder ./working-fo
 ```
 
 OpenShell inference routing can keep raw model credentials outside the sandbox. When configured, point nanopi at the corresponding OpenAI-compatible or Anthropic-compatible endpoint exposed by the gateway.
-
-## Route tools through Gondolin
-
-[Gondolin](https://github.com/earendil-works/gondolin) is a local Linux micro-VM. Its example extension keeps the nanopi process and file-based provider credentials on the host while routing the built-in tools and user `!` commands into the VM.
-
-Commands inside the VM inherit the host process environment. Provider keys supplied through environment variables can therefore be visible inside the VM. Do not use this pattern as a credential boundary unless you remove sensitive variables or change the extension's environment handling.
-
-Gondolin requires Node.js 23.6 or newer and QEMU installed through your operating-system package manager.
-
-### Install the extension
-
-From a nanopi source checkout:
-
-```bash
-mkdir -p ~/.nanopi/agent/extensions
-cp -R packages/coding-agent/examples/extensions/gondolin ~/.nanopi/agent/extensions/gondolin
-cd ~/.nanopi/agent/extensions/gondolin
-npm install --ignore-scripts
-```
-
-### Start nanopi
-
-Run nanopi from the working folder you want mounted:
-
-```bash
-cd /path/to/working-folder
-nanopi -e ~/.nanopi/agent/extensions/gondolin
-```
-
-The extension mounts the host working folder at `/workspace` in the VM and overrides `read`, `write`, `edit`, `bash`, `grep`, `find`, and `ls`. File changes under `/workspace` write through to the host.
-
-Other extension tools still run on the host unless they explicitly delegate their operations. Review the [Gondolin example](../examples/extensions/gondolin/) before adding tools that could bypass the VM boundary.

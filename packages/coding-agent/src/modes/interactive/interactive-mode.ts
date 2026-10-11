@@ -35,8 +35,6 @@ import {
 	type Component,
 	Container,
 	fuzzyFilter,
-	getCapabilities,
-	hyperlink,
 	Markdown,
 	matchesKey,
 	Spacer,
@@ -54,6 +52,7 @@ import {
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
 import { spawn } from "child_process";
+import { compare, valid } from "semver";
 import {
 	APP_NAME,
 	APP_TITLE,
@@ -107,8 +106,6 @@ import {
 	resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
-import { DefaultPackageManager } from "../../core/package-manager.ts";
-import { RADIUS_PROVIDER_ID } from "../../core/radius.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import {
@@ -120,7 +117,6 @@ import {
 import type { FullscreenExitOutput, TuiMode } from "../../core/settings-manager.ts";
 import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
 import { getSourcePackageKey, type SourceInfo } from "../../core/source-info.ts";
-import { isInstallTelemetryEnabled } from "../../core/telemetry.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core/trust-manager.ts";
@@ -137,17 +133,11 @@ import { copyToClipboard, readClipboardFilePaths, readClipboardText } from "../.
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
-import { getNanoPiUserAgent } from "../../utils/nanopi-user-agent.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { stripBom } from "../../utils/text.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
-import {
-	checkForNewNanoPiVersion,
-	comparePackageVersions,
-	type LatestNanoPiRelease,
-} from "../../utils/version-check.ts";
 import { reportBug } from "./bug-report.ts";
 import { createChatViewport } from "./chat-viewport.ts";
 import { ArminComponent } from "./components/armin.ts";
@@ -171,11 +161,9 @@ import { ModelSelectorComponent } from "./components/model-selector.ts";
 import { nanopiLogoLines, nanopiWordmark, supportsNanoPiLogo } from "./components/nanopi-logo.ts";
 import {
 	type AuthSelectorProvider,
-	formatAuthSelectorProviderStatus,
 	formatAuthSelectorProviderType,
 	OAuthSelectorComponent,
 } from "./components/oauth-selector.ts";
-import { createLoginMenuSelector } from "./components/radius-login-selector.ts";
 import { ScopedModelsSelectorComponent } from "./components/scoped-models-selector.ts";
 import { SessionSelectorComponent } from "./components/session-selector.ts";
 import { SettingsSelectorComponent } from "./components/settings-selector.ts";
@@ -1196,28 +1184,6 @@ export class InteractiveMode {
 				.finally(() => clearTimeout(timeout));
 		}
 
-		// Start version check asynchronously
-		checkForNewNanoPiVersion(this.version).then((newRelease) => {
-			if (newRelease) {
-				this.showNewVersionNotification(newRelease);
-			}
-		});
-
-		// Start package update check asynchronously
-		this.checkForPackageUpdates()
-			.then((updates) => {
-				if (updates.length > 0) {
-					this.showPackageUpdateNotification(updates);
-				}
-			})
-			.finally(() => {
-				// On Windows, npm can overwrite the shared console title while checking
-				// extension package versions. Restore nanopi's title after the startup check.
-				if (process.platform === "win32" && this.isInitialized) {
-					this.updateTerminalTitle();
-				}
-			});
-
 		// Check tmux keyboard setup asynchronously
 		this.checkTmuxKeyboardSetup().then((warning) => {
 			if (warning) {
@@ -1301,24 +1267,6 @@ export class InteractiveMode {
 		}
 	}
 
-	private async checkForPackageUpdates(): Promise<string[]> {
-		if (process.env.NANOPI_OFFLINE) {
-			return [];
-		}
-
-		try {
-			const packageManager = new DefaultPackageManager({
-				cwd: this.sessionManager.getCwd(),
-				agentDir: getAgentDir(),
-				settingsManager: this.settingsManager,
-			});
-			const updates = await packageManager.checkForAvailableUpdates();
-			return updates.map((update) => update.displayName);
-		} catch {
-			return [];
-		}
-	}
-
 	private async checkTmuxKeyboardSetup(): Promise<string | undefined> {
 		if (!process.env.TMUX) return undefined;
 
@@ -1381,16 +1329,14 @@ export class InteractiveMode {
 		const entries = parseChangelog(changelogPath);
 
 		if (!lastVersion) {
-			// Fresh install - record the version, send telemetry, don't show changelog
+			// Fresh install - record the version, don't show changelog
 			this.settingsManager.setLastChangelogVersion(VERSION);
-			this.reportInstallTelemetry(VERSION);
 			return undefined;
 		}
 
 		const newEntries = getNewEntries(entries, lastVersion);
 		if (newEntries.length > 0) {
 			this.settingsManager.setLastChangelogVersion(VERSION);
-			this.reportInstallTelemetry(VERSION);
 			return newEntries.map((e) => normalizeChangelogLinks(e.content, e)).join("\n\n");
 		}
 
@@ -1429,7 +1375,9 @@ export class InteractiveMode {
 				continue;
 			}
 
-			const comparison = comparePackageVersions(currentVersion, lastVersion);
+			const leftVersion = valid(currentVersion.trim());
+			const rightVersion = valid(lastVersion.trim());
+			const comparison = leftVersion && rightVersion ? compare(leftVersion, rightVersion) : undefined;
 			const isNewerVersion = comparison === undefined ? currentVersion !== lastVersion : comparison > 0;
 			if (!isNewerVersion) {
 				continue;
@@ -1487,25 +1435,6 @@ export class InteractiveMode {
 			patch: Number.parseInt(match[3], 10),
 			content: "",
 		};
-	}
-
-	private reportInstallTelemetry(version: string): void {
-		if (process.env.NANOPI_OFFLINE) {
-			return;
-		}
-
-		if (!isInstallTelemetryEnabled(this.settingsManager)) {
-			return;
-		}
-
-		void fetch(`https://pi.dev/api/report-install?version=${encodeURIComponent(version)}`, {
-			headers: {
-				"User-Agent": getNanoPiUserAgent(version),
-			},
-			signal: AbortSignal.timeout(5000),
-		})
-			.then(() => undefined)
-			.catch(() => undefined);
 	}
 
 	private getMarkdownThemeWithSettings(): MarkdownTheme {
@@ -4735,58 +4664,6 @@ export class InteractiveMode {
 		this.ui.requestRender();
 	}
 
-	showNewVersionNotification(release: LatestNanoPiRelease): void {
-		const updateInstruction = () =>
-			theme.fg("muted", `New version ${release.version} is available. Run `) +
-			theme.fg("accent", `${APP_NAME} update`);
-		const changelogUrl = "https://pi.dev/changelog";
-		const changelogLine = () => {
-			const changelogLink = getCapabilities().hyperlinks
-				? hyperlink(theme.fg("accent", changelogUrl), changelogUrl)
-				: theme.fg("accent", changelogUrl);
-			return theme.fg("muted", "Changelog: ") + changelogLink;
-		};
-		const note = release.note?.trim();
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.chatContainer.addChild(
-			new ThemedText(() => `${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction()}`, 1, 0),
-		);
-		if (note) {
-			this.chatContainer.addChild(new Spacer(1));
-			this.chatContainer.addChild(
-				new Markdown(note, 1, 0, this.getMarkdownThemeWithSettings(), {
-					color: (text) => theme.fg("muted", text),
-				}),
-			);
-			this.chatContainer.addChild(new Spacer(1));
-		}
-		this.chatContainer.addChild(new ThemedText(changelogLine, 1, 0));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.ui.requestRender();
-	}
-
-	showPackageUpdateNotification(packages: string[]): void {
-		const updateInstruction = () =>
-			theme.fg("muted", "Package updates are available. Run ") +
-			theme.fg("accent", `${APP_NAME} update --extensions`);
-		const packageLines = packages.map((pkg) => `- ${pkg}`).join("\n");
-
-		this.chatContainer.addChild(new Spacer(1));
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.chatContainer.addChild(
-			new ThemedText(
-				() =>
-					`${theme.bold(theme.fg("warning", "Package Updates Available"))}\n${updateInstruction()}\n${theme.fg("muted", "Packages:")}\n${packageLines}`,
-				1,
-				0,
-			),
-		);
-		this.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
-		this.ui.requestRender();
-	}
-
 	/**
 	 * Get all queued messages (read-only).
 	 * Combines session queue and compaction queue.
@@ -5986,12 +5863,6 @@ export class InteractiveMode {
 	}
 
 	private showLoginAuthTypeSelector(providerOptions?: AuthSelectorProvider[]): void {
-		// The top-level selector offers Radius directly, as its last option.
-		const radiusOption = providerOptions
-			? undefined
-			: this.getLoginProviderOptions("oauth").find((provider) => provider.id === RADIUS_PROVIDER_ID);
-		const radiusText = radiusOption ? `Sign in with ${radiusOption.name}` : undefined;
-		const radiusLabel = radiusOption ? `${radiusText}${formatAuthSelectorProviderStatus(radiusOption)}` : undefined;
 		const oauthProvider = providerOptions?.find((provider) => provider.authType === "oauth");
 		const oauthLoginLabel =
 			oauthProvider?.method && "loginLabel" in oauthProvider.method ? oauthProvider.method.loginLabel : undefined;
@@ -6007,7 +5878,6 @@ export class InteractiveMode {
 		if (availableAuthTypes.has("api_key")) {
 			options.push(apiKeyLabel);
 		}
-		if (radiusLabel) options.push(radiusLabel);
 
 		if (options.length === 0) {
 			this.showStatus("No login methods available.");
@@ -6028,10 +5898,6 @@ export class InteractiveMode {
 		this.showSelector((done) => {
 			const onSelect = (option: string) => {
 				done();
-				if (radiusOption && option === radiusLabel) {
-					void this.startProviderLogin(radiusOption, () => this.showLoginAuthTypeSelector());
-					return;
-				}
 				const authType = option === subscriptionLabel ? "oauth" : "api_key";
 				if (providerOptions) {
 					const providerOption = providerOptions.find((provider) => provider.authType === authType);
@@ -6046,17 +5912,7 @@ export class InteractiveMode {
 				done();
 				this.ui.requestRender();
 			};
-			const selector =
-				radiusLabel && radiusText
-					? createLoginMenuSelector(
-							this.ui,
-							title,
-							options,
-							{ label: radiusLabel, text: radiusText },
-							onSelect,
-							onCancel,
-						)
-					: new ExtensionSelectorComponent(title, options, onSelect, onCancel);
+			const selector = new ExtensionSelectorComponent(title, options, onSelect, onCancel);
 			return { component: selector, focus: selector, dispose: () => selector.dispose() };
 		});
 	}
@@ -6197,10 +6053,7 @@ export class InteractiveMode {
 					selectionError = `${actionLabel}, but no models are available for that provider. Use /model to select a model.`;
 				} else {
 					const defaultModelId = defaultModelPerProvider[providerId];
-					// Radius catalogs vary by account; prefer balanced, then use catalog order.
-					selectedModel =
-						providerModels.find((model) => model.id === defaultModelId) ??
-						(providerId === "radius" ? providerModels[0] : undefined);
+					selectedModel = providerModels.find((model) => model.id === defaultModelId);
 					if (!selectedModel) {
 						selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
 					} else {

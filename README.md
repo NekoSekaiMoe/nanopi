@@ -1,10 +1,4 @@
 <p align="center">
-  <a href="https://pi.dev">
-    <img alt="nanopi logo" src="https://pi.dev/logo-auto.svg" width="128">
-  </a>
-</p>
-<p align="center">
-  <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
   <a href="https://www.npmjs.com/package/@nanopi/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@nanopi/pi-coding-agent?style=flat-square" /></a>
 </p>
 
@@ -22,25 +16,13 @@ Use nanopi [interactively](packages/coding-agent/docs/usage.md), automate it in 
 
 ## Getting started
 
-Install the command-line interface:
-
-```bash
-curl -fsSL https://pi.dev/install.sh | sh
-```
-
-On Windows:
-
-```shell
-powershell -c "irm https://pi.dev/install.ps1 | iex"
-```
-
-The installer pins all dependencies and updates nanopi with `nanopi update`. Alternatively, install directly with npm, which does not pin transitive dependencies:
+Install the command-line interface with npm:
 
 ```bash
 npm install -g --ignore-scripts @nanopi/pi-coding-agent
 ```
 
-nanopi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed. nanopi does not require dependency lifecycle scripts for a normal npm installation.
+nanopi requires Node.js 22.19 or newer and does not require dependency lifecycle scripts for a normal npm installation.
 
 Start nanopi in the directory where you want it to work:
 
@@ -51,23 +33,7 @@ nanopi
 
 For a built-in AI provider, run `/login` inside nanopi to connect a subscription or API key. Then give nanopi a task.
 
-See the [documentation](https://pi.dev/docs/latest) for full setup and usage instructions, or [visit pi.dev](https://pi.dev) for demos.
-
-## Run with Nix
-
-```bash
-nix run github:NekoSekaiMoe/nanopi/stable
-```
-
-`stable` points at the latest release. Install it with `nix profile add github:NekoSekaiMoe/nanopi/stable` and update with `nix profile upgrade nanopi`. Use a release tag such as `github:NekoSekaiMoe/nanopi/v1.0.0` to pin a version, or `github:NekoSekaiMoe/nanopi` for unreleased changes on `main`. Nix builds nanopi from source.
-
-Supports ARM64 and x86-64 on Linux and macOS. Use `nix build .` or `nix run .` to build or run your checkout.
-
-Nix builds are offline, so the bundled model data comes from a pi.dev model catalog revision pinned in `nix/model-catalog.json`. At runtime, nanopi still overlays newer catalog data from pi.dev as usual. The Nix workflow replaces the pin on `main` when it no longer matches the checkout, for example after a provider is added or gains a new model type. To refresh it by hand:
-
-```bash
-npm run update:model-catalog-pin
-```
+See the [documentation](packages/coding-agent/docs) for full setup and usage instructions.
 
 ## Packages
 
@@ -87,9 +53,8 @@ This monorepo contains the nanopi CLI and its supporting libraries.
 
 nanopi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it.
 
-If you need stronger boundaries, containerize or sandbox nanopi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for three patterns:
+If you need stronger boundaries, containerize or sandbox nanopi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for two patterns:
 
-- **Gondolin extension**: keep `nanopi` and provider auth on the host while routing built-in tools and `!` commands into a local Linux micro-VM.
 - **Plain Docker**: run the whole `nanopi` process in a local container for simple isolation.
 - **OpenShell**: run the whole `nanopi` process in a policy-controlled sandbox.
 
@@ -170,9 +135,8 @@ We treat npm dependency changes as reviewed code changes.
 - `.npmrc` sets `save-exact=true` and `min-release-age=2` to avoid same-day dependency releases during npm resolution.
 - `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `NANOPI_ALLOW_LOCKFILE_CHANGE=1` is set.
 - `npm run check` verifies pinned direct deps, native TypeScript import compatibility, and the generated coding-agent install lock.
-- The pi.dev installer installs from `packages/coding-agent/install-lock/`, generated from the root lockfile, to pin transitive deps. The npm package does not pin transitive deps.
 - Local release smoke tests and npm publication use the same tarball packer; npm publishes the validated tarballs rather than repacking workspace directories.
-- Local release installs, documented npm installs, and `nanopi update --self` use `--ignore-scripts` where supported.
+- Local release installs, documented npm installs use `--ignore-scripts` where supported.
 - CI installs with `npm ci --ignore-scripts`, and a scheduled GitHub workflow runs `npm audit --omit=dev` plus `npm audit signatures --omit=dev`.
 - Install lock generation has an explicit allowlist for dependency lifecycle scripts; new lifecycle-script deps fail checks until reviewed.
 
@@ -195,9 +159,3 @@ I regularly publish my own `pi-mono` work sessions here:
 ## License
 
 MIT
-
-<p align="center">
-  <a href="https://pi.dev">pi.dev</a> domain graciously donated by
-  <br /><br />
-  <a href="https://exe.dev"><img src="packages/coding-agent/docs/images/exy.png" alt="Exy mascot" width="48" /><br />exe.dev</a>
-</p>

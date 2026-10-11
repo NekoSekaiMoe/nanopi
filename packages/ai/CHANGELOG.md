@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the `radius` provider: `radiusProvider()`, the `radius-config` exports, the Radius OAuth flow, and the bundled `radius` model catalog.
+
 ### Fixed
 
 - Fixed Mistral streams being aborted mid-generation (e.g. during long thinking) after the request timeout; the timeout now applies only to waiting for response headers ([#10609](https://github.com/earendil-works/pi/issues/10609))

@@ -1,11 +1,11 @@
 name: Package Report
-description: Report a problematic nanopi package listed on pi.dev
+description: Report a problematic nanopi package published on npm
 labels: ["package-report"]
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form to report a package listed on pi.dev. For nanopi core bugs, use the bug report template instead.
+        Use this form to report a package published on npm. For nanopi core bugs, use the bug report template instead.
 
         New issues from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. Issues that do not meet the quality bar in [CONTRIBUTING.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/CONTRIBUTING.md) will not be reopened or receive a reply.
 
@@ -15,7 +15,7 @@ body:
     id: package-name
     attributes:
       label: Package name
-      description: The npm package name from pi.dev.
+      description: The npm package name on npm.
       placeholder: "@scope/package"
     validations:
       required: true
@@ -24,7 +24,7 @@ body:
     id: package-version
     attributes:
       label: Version
-      description: The package version shown on pi.dev.
+      description: The package version on npm.
       placeholder: "0.1.0"
     validations:
       required: false

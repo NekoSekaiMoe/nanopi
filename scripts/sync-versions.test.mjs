@@ -45,14 +45,6 @@ test("synchronizes private dependencies without touching registry aliases, gener
 				"@mariozechner/pi-ai": "npm:@nanopi/pi-ai@1.0.0",
 			},
 		});
-		await writeManifest(root, "packages/coding-agent/install-lock", {
-			name: "generated-install-lock",
-			version: "0.0.0",
-			private: true,
-			dependencies: {
-				"@nanopi/pi-coding-agent": "^1.0.0",
-			},
-		});
 
 		const result = runSyncVersions(root);
 		assert.equal(result.status, 0, result.stderr);
@@ -60,8 +52,6 @@ test("synchronizes private dependencies without touching registry aliases, gener
 		const evalsManifest = await readManifest(root, "packages/evals");
 		assert.equal(evalsManifest.dependencies["@nanopi/pi-coding-agent"], "^2.0.0");
 		assert.equal(evalsManifest.dependencies["@mariozechner/pi-ai"], "npm:@nanopi/pi-ai@1.0.0");
-		const generatedManifest = await readManifest(root, "packages/coding-agent/install-lock");
-		assert.equal(generatedManifest.dependencies["@nanopi/pi-coding-agent"], "^1.0.0");
 
 		await writeManifest(root, "packages/ai", {
 			name: "@nanopi/pi-ai",

@@ -3,8 +3,7 @@ set -euo pipefail
 
 # Developer wrapper that runs nanopi from this checkout's latest `npm run build`.
 # Development invocations use NANOPI_EXPERIMENTAL=1 by default. Pass --stable to use
-# the next nanopi executable on PATH; `nanopi update` also uses stable so self-update
-# works.
+# the next nanopi executable on PATH.
 #
 # From the repository root, install with:
 #   mkdir -p "$HOME/.local/bin"

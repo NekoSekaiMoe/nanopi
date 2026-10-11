@@ -9,7 +9,6 @@ nanopi [options] [--] [@files...] [messages...]
 nanopi install <source> [options]
 nanopi remove <source> [options]
 nanopi uninstall <source> [options]
-nanopi update [target] [options]
 nanopi list
 nanopi config [options]
 nanopi auth <check|print-api-key|print-bearer-token> [options]
@@ -220,27 +219,9 @@ See [nanopi Packages](packages.md) for source formats, filtering, installation, 
 
 Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use project settings instead of global settings.
 
-### Update nanopi or packages
-
-Running `nanopi update` without a target updates nanopi itself.
-
-| Task | Command |
-|---|---|
-| Update nanopi | `nanopi update` |
-| Update all installed packages | `nanopi update --extensions` |
-| Update one installed package | `nanopi update <source>` |
-| Refresh model catalogs | `nanopi update --models` |
-| Update nanopi and all installed packages | `nanopi update --all` |
-
-Add `--force` to reinstall nanopi when the selected update includes nanopi.
-
-`nanopi update` cannot update nanopi when another package manager provides it, such as Nix. Update nanopi with that package manager, for example `nix profile upgrade nanopi`. Package and model catalog updates still work.
-
 ### Aliases and command options
 
 - `nanopi uninstall <source>` is an alias for `nanopi remove <source>`.
-- `nanopi update --self`, `nanopi update self`, and `nanopi update nanopi` are aliases for `nanopi update`.
-- `nanopi update --extension <source>` is an alias for `nanopi update <source>`.
 - `-a`, `--approve` trusts project-local files for one command. `-na`, `--no-approve` ignores trust-gated project-local files.
 - Append `-h` or `--help` to a command for its exact usage and option constraints.
 

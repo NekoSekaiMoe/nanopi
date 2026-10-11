@@ -63,4 +63,4 @@ Review exported or shared sessions first. They can contain prompts, model respon
 
 Run `/bug [description]` to prepare a private report for the nanopi developers. You can include the session transcript, omit it, or ask the current model to summarize the problem. Review any transcript or generated summary because it can contain sensitive conversation data.
 
-The report includes environment and provider configuration without credential values, plus recorded error diagnostics. Upload it through `radius.pi.dev` or export the same report as a zip to inspect and share yourself. Uploads do not require a login; Radius authentication attributes the report to your account so the developers can follow up. If an upload fails, nanopi offers to export the zip.
+The report includes environment and provider configuration without credential values, plus recorded error diagnostics. nanopi exports it as a zip archive in the current directory; inspect it before sharing it yourself.

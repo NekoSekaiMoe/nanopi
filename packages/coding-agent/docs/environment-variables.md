@@ -82,11 +82,8 @@ These variables are read by nanopi itself:
 | `NANOPI_CODING_AGENT_SESSION_DIR` | Override session storage; overridden by `--session-dir` |
 | `NANOPI_PACKAGE_DIR` | Override the package directory, useful for Nix/Guix store paths |
 | `NANOPI_OFFLINE` | Disable automatic network activity, including model catalog refreshes |
-| `NANOPI_SKIP_VERSION_CHECK` | Disable the `pi.dev` latest-version request |
-| `NANOPI_TELEMETRY` | Override install/update telemetry and provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
+| `NANOPI_TELEMETRY` | Override provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
 | `NANOPI_CACHE_RETENTION` | Set to `long` for extended provider prompt caching where supported |
-| `NANOPI_SHARE_VIEWER_URL` | Override the base URL used by `/share` |
-| `NANOPI_RADIUS_GATEWAY` | Override the Radius gateway origin used by `/bug` uploads and Radius relay connections |
 | `NANOPI_HARDWARE_CURSOR` | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
 | `NANOPI_HYPERLINKS` | Override OSC 8 hyperlink detection with `1`, `0`, or `auto` |
 | `NANOPI_PROGRAM_STATUS` | Override OSC 7501 program status detection: `1` always reports, `0` never reports; otherwise nanopi reports only after the terminal confirms support. See [Terminal setup](terminal-setup.md#program-status) |

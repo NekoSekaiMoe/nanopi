@@ -77,7 +77,6 @@
 		"packages/agent/examples/**/*"
 	],
 	"exclude": [
-		"**/dist/**",
-		"packages/coding-agent/examples/extensions/gondolin/**"
+		"**/dist/**"
 	]
 }

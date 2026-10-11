@@ -22,6 +22,9 @@
 ### Removed
 
 - Removed the Earendil announcement component, the hidden `/dementedelves` command, and the Earendil attribution from the Radius login intro and docs.
+- Removed the `nanopi update` command, self-update planning, the managed-install updater, install telemetry, the startup version check, and package update notifications; nanopi no longer connects to pi.dev.
+- Removed the Radius provider and the `"oauth": "radius"` custom-provider configuration; `/share` now publishes a private GitHub gist and `/bug` exports a zip archive instead of uploading to a Radius gateway.
+- Remote model catalog overlays and OpenRouter per-key personalization now run only when a catalog base URL is explicitly configured; bundled model data is used otherwise.
 
 ## [1.1.0] - 2026-10-07
 
