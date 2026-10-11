@@ -4,12 +4,12 @@
  * Demonstrates deferred ctx.requestReload() from command and tool contexts.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
 import { Type } from "typebox";
 
-export default function (pi: ExtensionAPI) {
+export default function (nanopi: ExtensionAPI) {
 	// Command entrypoint for reload. Treat the request as terminal for this handler.
-	pi.registerCommand("reload-runtime", {
+	nanopi.registerCommand("reload-runtime", {
 		description: "Reload extensions, skills, prompts, themes, and context files",
 		handler: async (_args, ctx) => {
 			ctx.requestReload();
@@ -18,7 +18,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	// LLM-callable tool. The request is coalesced and runs after this tool result settles.
-	pi.registerTool({
+	nanopi.registerTool({
 		name: "reload_runtime",
 		label: "Reload Runtime",
 		description: "Reload extensions, skills, prompts, themes, and context files",

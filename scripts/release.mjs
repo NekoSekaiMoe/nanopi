@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Release script for pi-mono
+ * Release script for nanopi-mono
  *
  * Usage:
  *   node scripts/release.mjs <major|minor|patch>
@@ -226,10 +226,10 @@ console.log("Building packages for tests...");
 run("pnpm run build:offline");
 console.log();
 
-// PI_RELEASE_SKIP_TESTS=1 skips the test suite, e.g. when it already passed in `npm run release:local`
+// NANOPI_RELEASE_SKIP_TESTS=1 skips the test suite, e.g. when it already passed in `npm run release:local`
 // and an overloaded machine makes timing-sensitive tests fail. Checks and the install check still run.
-if (process.env.PI_RELEASE_SKIP_TESTS === "1") {
-	console.log("Skipping tests (PI_RELEASE_SKIP_TESTS=1)\n");
+if (process.env.NANOPI_RELEASE_SKIP_TESTS === "1") {
+	console.log("Skipping tests (NANOPI_RELEASE_SKIP_TESTS=1)\n");
 } else {
 	console.log("Running tests...");
 	run("./test.sh");

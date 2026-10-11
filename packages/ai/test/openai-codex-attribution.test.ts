@@ -132,7 +132,7 @@ describe("Codex request attribution", () => {
 			apiKey: token(),
 			transport: "sse",
 			cacheRetention: "none",
-			metadata: { "pi.requestIdentity": identity },
+			metadata: { "nanopi.requestIdentity": identity },
 			headers: {
 				originator: "spoofed",
 				"session-id": "spoofed",

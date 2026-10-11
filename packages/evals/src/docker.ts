@@ -66,7 +66,9 @@ function environment(name: string, value: string): string[] {
 
 export function requireEvalAuthFile(provider: string): string {
 	const path = join(
-		process.env.PI_CODING_AGENT_DIR ? resolve(process.env.PI_CODING_AGENT_DIR) : join(homedir(), ".pi", "agent"),
+		process.env.NANOPI_CODING_AGENT_DIR
+			? resolve(process.env.NANOPI_CODING_AGENT_DIR)
+			: join(homedir(), ".nanopi", "agent"),
 		"auth.json",
 	);
 	if (!existsSync(path) || !statSync(path).isFile())
@@ -105,20 +107,20 @@ function dockerArgs(
 		"/repo/node_modules/.vite-temp:rw,exec,mode=1777",
 		"--mount",
 		`type=bind,source=${outputDirectory},target=/artifacts`,
-		...environment("PI_EVAL_ARTIFACT_DIR", "/artifacts"),
-		...environment("PI_EVAL_RUNS_PER_VARIANT", String(context.runsPerVariant)),
-		...environment("PI_EVAL_SANDBOX_UID", "65532"),
-		...environment("PI_EVAL_SANDBOX_GID", "65532"),
-		...environment("PI_PROVIDER", context.provider),
-		...environment("PI_MODEL", context.model),
+		...environment("NANOPI_EVAL_ARTIFACT_DIR", "/artifacts"),
+		...environment("NANOPI_EVAL_RUNS_PER_VARIANT", String(context.runsPerVariant)),
+		...environment("NANOPI_EVAL_SANDBOX_UID", "65532"),
+		...environment("NANOPI_EVAL_SANDBOX_GID", "65532"),
+		...environment("NANOPI_PROVIDER", context.provider),
+		...environment("NANOPI_MODEL", context.model),
 	];
 	if (typeof process.getuid === "function" && typeof process.getgid === "function") {
 		args.push(
-			...environment("PI_EVAL_ARTIFACT_UID", String(process.getuid())),
-			...environment("PI_EVAL_ARTIFACT_GID", String(process.getgid())),
+			...environment("NANOPI_EVAL_ARTIFACT_UID", String(process.getuid())),
+			...environment("NANOPI_EVAL_ARTIFACT_GID", String(process.getgid())),
 		);
 	}
-	args.push("--mount", `type=bind,source=${context.authPath},target=/run/pi-eval-secrets/auth.json,readonly`);
+	args.push("--mount", `type=bind,source=${context.authPath},target=/run/nanopi-eval-secrets/auth.json,readonly`);
 	args.push(context.images[variant].name, ...entrypointArgs);
 	return args;
 }

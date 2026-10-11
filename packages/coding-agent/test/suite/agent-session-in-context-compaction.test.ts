@@ -1,4 +1,4 @@
-import type { AgentTool } from "@earendil-works/pi-agent-core";
+import type { AgentTool } from "@nanopi/pi-agent-core";
 import {
 	fauxAssistantMessage,
 	fauxToolCall,
@@ -6,7 +6,7 @@ import {
 	type SimpleStreamOptions,
 	type TranscriptContext,
 	type Usage,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -115,8 +115,8 @@ describe("AgentSession in-context compaction", () => {
 	it("repeats the forced system prompt of the last run after the run ends", async () => {
 		const forced = "Forced prompt from before_agent_start.";
 		const harness = await createInContextHarness(true, [
-			(pi) => {
-				pi.on("before_agent_start", () => ({ systemPrompt: forced }));
+			(nanopi) => {
+				nanopi.on("before_agent_start", () => ({ systemPrompt: forced }));
 			},
 		]);
 		harnesses.push(harness);

@@ -1,8 +1,8 @@
 import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Provider } from "@earendil-works/pi-ai";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import type { Provider } from "@nanopi/pi-ai";
+import { getModel } from "@nanopi/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
@@ -39,7 +39,7 @@ describe("AgentSession dynamic provider registration", () => {
 	let agentDir: string;
 
 	beforeEach(() => {
-		tempDir = join(tmpdir(), `pi-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		tempDir = join(tmpdir(), `nanopi-dynamic-provider-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		agentDir = join(tempDir, "agent");
 		mkdirSync(agentDir, { recursive: true });
 	});
@@ -94,8 +94,8 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies top-level registerProvider overrides to the active model", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/top-level" });
+			(nanopi) => {
+				nanopi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/top-level" });
 			},
 		]);
 
@@ -107,9 +107,9 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies session_start registerProvider overrides to the active model", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.on("session_start", () => {
-					pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/session-start" });
+			(nanopi) => {
+				nanopi.on("session_start", () => {
+					nanopi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/session-start" });
 				});
 			},
 		]);
@@ -124,8 +124,8 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("registers native pi-ai providers during extension loading", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-top-level"));
+			(nanopi) => {
+				nanopi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-top-level"));
 			},
 		]);
 
@@ -137,11 +137,11 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("applies command-time registerProvider overrides without reload", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerCommand("use-proxy", {
+			(nanopi) => {
+				nanopi.registerCommand("use-proxy", {
 					description: "Use proxy",
 					handler: async () => {
-						pi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/command" });
+						nanopi.registerProvider("anthropic", { baseUrl: "http://localhost:8080/command" });
 					},
 				});
 			},
@@ -158,11 +158,11 @@ describe("AgentSession dynamic provider registration", () => {
 
 	it("registers native pi-ai providers at command time", async () => {
 		const session = await createSession([
-			(pi) => {
-				pi.registerCommand("use-native", {
+			(nanopi) => {
+				nanopi.registerCommand("use-native", {
 					description: "Use native provider",
 					handler: async () => {
-						pi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-command"));
+						nanopi.registerProvider(nativeAnthropicProvider("http://localhost:8080/native-command"));
 					},
 				});
 			},

@@ -19,7 +19,7 @@ function writePackage(directory, manifest, files) {
 }
 
 function createArtifactSet(t) {
-	const temporaryRoot = mkdtempSync(join(tmpdir(), "pi-local-package-install-test-"));
+	const temporaryRoot = mkdtempSync(join(tmpdir(), "nanopi-local-package-install-test-"));
 	t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
 	const root = join(temporaryRoot, "fixture with spaces");
 	const repoRoot = join(root, "repo");
@@ -28,7 +28,7 @@ function createArtifactSet(t) {
 	writePackage(
 		join(repoRoot, "packages", "shared"),
 		{
-			name: "@pi-package-test/shared",
+			name: "@nanopi-package-test/shared",
 			version: "1.0.0",
 			type: "module",
 			main: "./dist/index.js",
@@ -44,7 +44,7 @@ function createArtifactSet(t) {
 	writePackage(
 		join(repoRoot, "packages", "target"),
 		{
-			name: "@pi-package-test/target",
+			name: "@nanopi-package-test/target",
 			version: "1.0.0",
 			type: "module",
 			main: "./dist/index.js",
@@ -55,11 +55,11 @@ function createArtifactSet(t) {
 			},
 			bin: { target: "./dist/cli.js" },
 			files: ["dist"],
-			dependencies: { "@pi-package-test/shared": "1.0.0" },
+			dependencies: { "@nanopi-package-test/shared": "1.0.0" },
 		},
 		{
-			"dist/index.js": 'import { marker } from "@pi-package-test/shared";\nexport { marker };\n',
-			"dist/index.d.ts": 'export { marker } from "@pi-package-test/shared";\n',
+			"dist/index.js": 'import { marker } from "@nanopi-package-test/shared";\nexport { marker };\n',
+			"dist/index.d.ts": 'export { marker } from "@nanopi-package-test/shared";\n',
 			"dist/feature.js": "export const feature = true;\n",
 			"dist/feature.d.ts": "export declare const feature: true;\n",
 			"dist/cli.js": "#!/usr/bin/env node\n",
@@ -68,7 +68,7 @@ function createArtifactSet(t) {
 	writePackage(
 		join(repoRoot, "packages", "second"),
 		{
-			name: "@pi-package-test/second",
+			name: "@nanopi-package-test/second",
 			version: "1.0.0",
 			type: "module",
 			main: "./dist/index.js",
@@ -92,37 +92,37 @@ test("wires multiple direct packages without registry fallbacks", (t) => {
 	mkdirSync(consumerDirectory);
 	writeFileSync(
 		join(consumerDirectory, "package.json"),
-		'{"private":true,"type":"module","dependencies":{"@pi-package-test/target":"1.0.0","@pi-package-test/second":"1.0.0"}}\n',
+		'{"private":true,"type":"module","dependencies":{"@nanopi-package-test/target":"1.0.0","@nanopi-package-test/second":"1.0.0"}}\n',
 	);
 	wireConsumer({
 		artifactSet,
 		consumerDirectory,
-		packageNames: ["@pi-package-test/target", "@pi-package-test/second"],
+		packageNames: ["@nanopi-package-test/target", "@nanopi-package-test/second"],
 	});
 	execFileSync("npm", ["install", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: consumerDirectory, stdio: "pipe" });
 
 	const manifest = JSON.parse(readFileSync(join(consumerDirectory, "package.json"), "utf8"));
-	assert.match(manifest.dependencies["@pi-package-test/target"], /^file:/);
-	assert.match(manifest.dependencies["@pi-package-test/second"], /^file:/);
-	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" });
-	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/second" });
+	assert.match(manifest.dependencies["@nanopi-package-test/target"], /^file:/);
+	assert.match(manifest.dependencies["@nanopi-package-test/second"], /^file:/);
+	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" });
+	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/second" });
 
 	const lockPath = join(consumerDirectory, "package-lock.json");
 	const lockContents = readFileSync(lockPath, "utf8");
 	const lock = JSON.parse(lockContents);
-	const targetLockEntry = Object.values(lock.packages).find((entry) => entry.resolved?.includes("pi-package-test-target"));
+	const targetLockEntry = Object.values(lock.packages).find((entry) => entry.resolved?.includes("nanopi-package-test-target"));
 	assert.ok(targetLockEntry);
-	targetLockEntry.resolved = "https://registry.npmjs.org/@pi-package-test/target/-/target-1.0.0.tgz";
+	targetLockEntry.resolved = "https://registry.npmjs.org/@nanopi-package-test/target/-/target-1.0.0.tgz";
 	writeFileSync(lockPath, JSON.stringify(lock));
 	assert.throws(
-		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" }),
+		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" }),
 		/did not resolve from a local artifact/,
 	);
 	writeFileSync(lockPath, lockContents);
 
-	rmSync(join(consumerDirectory, "node_modules", "@pi-package-test", "target", "dist", "feature.js"));
+	rmSync(join(consumerDirectory, "node_modules", "@nanopi-package-test", "target", "dist", "feature.js"));
 	assert.throws(
-		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" }),
+		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" }),
 		/export \.\/feature does not exist/,
 	);
 });
@@ -131,30 +131,30 @@ test("installs a package as the only direct dependency", (t) => {
 	const { artifactSet, root } = createArtifactSet(t);
 	const unsupportedDirectory = join(root, "unsupported-consumer");
 	assert.throws(
-		() => installConsumer({ artifactSet, directory: unsupportedDirectory, packageManager: "yarn", packageNames: ["@pi-package-test/target"] }),
+		() => installConsumer({ artifactSet, directory: unsupportedDirectory, packageManager: "yarn", packageNames: ["@nanopi-package-test/target"] }),
 		/Unsupported package manager: yarn/,
 	);
 	assert.equal(existsSync(unsupportedDirectory), false);
 	const consumerDirectory = join(root, "isolated-consumer");
-	installConsumer({ artifactSet, directory: consumerDirectory, packageNames: ["@pi-package-test/target"] });
+	installConsumer({ artifactSet, directory: consumerDirectory, packageNames: ["@nanopi-package-test/target"] });
 	const manifest = JSON.parse(readFileSync(join(consumerDirectory, "package.json"), "utf8"));
-	assert.deepEqual(Object.keys(manifest.dependencies), ["@pi-package-test/target"]);
-	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" });
-	const installedManifestPath = join(consumerDirectory, "node_modules", "@pi-package-test", "target", "package.json");
+	assert.deepEqual(Object.keys(manifest.dependencies), ["@nanopi-package-test/target"]);
+	smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" });
+	const installedManifestPath = join(consumerDirectory, "node_modules", "@nanopi-package-test", "target", "package.json");
 	const installedManifestContents = readFileSync(installedManifestPath, "utf8");
 	const installedManifest = JSON.parse(installedManifestContents);
 	delete installedManifest.main;
 	writeFileSync(installedManifestPath, JSON.stringify(installedManifest));
 	assert.throws(
-		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" }),
-		/Public Pi package @pi-package-test\/target must declare a string main field/,
+		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" }),
+		/Public nanopi package @nanopi-package-test\/target must declare a string main field/,
 	);
 	writeFileSync(installedManifestPath, installedManifestContents);
 	const lockPath = join(consumerDirectory, "package-lock.json");
 	const lockContents = readFileSync(lockPath, "utf8");
 	rmSync(lockPath);
 	assert.throws(
-		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" }),
+		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" }),
 		/npm consumer smoke test requires package-lock\.json/,
 	);
 	writeFileSync(lockPath, lockContents);
@@ -162,7 +162,7 @@ test("installs a package as the only direct dependency", (t) => {
 	delete lock.packages;
 	writeFileSync(lockPath, JSON.stringify(lock));
 	assert.throws(
-		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@pi-package-test/target" }),
+		() => smokeTestNpmConsumer({ artifactSet, directory: consumerDirectory, packageName: "@nanopi-package-test/target" }),
 		/Invalid npm lockfile/,
 	);
 });
@@ -177,11 +177,11 @@ test("wires and installs a pnpm consumer without registry fallbacks", (t) => {
 		artifactSet,
 		consumerDirectory,
 		packageManager: "pnpm",
-		packageNames: ["@pi-package-test/target"],
+		packageNames: ["@nanopi-package-test/target"],
 	});
 
 	const manifest = JSON.parse(readFileSync(join(consumerDirectory, "package.json"), "utf8"));
-	assert.deepEqual(Object.keys(manifest.dependencies), ["@pi-package-test/target"]);
+	assert.deepEqual(Object.keys(manifest.dependencies), ["@nanopi-package-test/target"]);
 	assert.equal(manifest.overrides, undefined);
 	const workspaceContents = readFileSync(join(consumerDirectory, "pnpm-workspace.yaml"), "utf8");
 	assert.match(workspaceContents, /^# existing workspace comment/m);
@@ -197,14 +197,14 @@ test("wires and installs a pnpm consumer without registry fallbacks", (t) => {
 		stdio: "pipe",
 		timeout: 300_000,
 	});
-	const marker = execFileSync(process.execPath, ["--input-type=module", "--eval", 'import("@pi-package-test/target").then(({ marker }) => console.log(marker))'], {
+	const marker = execFileSync(process.execPath, ["--input-type=module", "--eval", 'import("@nanopi-package-test/target").then(({ marker }) => console.log(marker))'], {
 		cwd: consumerDirectory,
 		encoding: "utf8",
 	});
 	assert.equal(marker.trim(), "local artifact");
 	const lockContents = readFileSync(join(consumerDirectory, "pnpm-lock.yaml"), "utf8");
 	assert.doesNotMatch(lockContents, /https?:\/\//);
-	for (const packageName of ["@pi-package-test/target", "@pi-package-test/shared"]) {
+	for (const packageName of ["@nanopi-package-test/target", "@nanopi-package-test/shared"]) {
 		assert.ok(lockContents.includes(basename(artifactSet.getPackage(packageName).tarballPath)), `${packageName} lock entry must reference its artifact`);
 	}
 });

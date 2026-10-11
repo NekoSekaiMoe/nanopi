@@ -1,11 +1,11 @@
-import type { StreamFn } from "@earendil-works/pi-agent-core";
+import type { StreamFn } from "@nanopi/pi-agent-core";
 import {
 	type AssistantMessage,
 	createAssistantMessageEventStream,
 	fauxAssistantMessage,
 	type Model,
 	type SimpleStreamOptions,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
 import { generateBranchSummary } from "../src/core/compaction/index.ts";
 import { getRequestIdentityMetadata } from "../src/core/compaction/request-metadata.ts";

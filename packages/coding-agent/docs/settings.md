@@ -20,7 +20,7 @@ Add `"$schema": "https://pi.dev/schemas/settings.schema.json"` to `settings.json
 | `showCacheMissNotices` | boolean | `false` | Show notices for significant cache misses, successful cache warming, compaction usage, and provider recovery. |
 | `cacheWarming` | `"off" \| "streaming" \| "idle"` | `"streaming"` | Keep eligible provider prompt caches warm during active runs or, with `"idle"`, between runs. Global setting only. |
 
-Cache warming runs only when the model declares a cache lifetime and Pi estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/session` shows the next decision; extensions can override it with `cache_warming_decision`. See [Prompt Cache Lifetimes](models.md#prompt-cache-lifetimes).
+Cache warming runs only when the model declares a cache lifetime and nanopi estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/session` shows the next decision; extensions can override it with `cache_warming_decision`. See [Prompt Cache Lifetimes](models.md#prompt-cache-lifetimes).
 
 See [Choose a Model](models.md) for model selection and thinking controls.
 
@@ -55,13 +55,13 @@ This replaces `bash` with `powershell` and enables `grep`: `["-bash", "+powershe
 
 `/reload` enables tools newly added to `defaultTools`. It does not disable tools removed from it or re-enable unchanged tools you turned off. `--tools` with plain names, `--no-tools`, and `--no-builtin-tools` override `defaultTools`, also on reload.
 
-CLI tool options override this setting for one invocation. `--tools` with only `+name` and `-name` entries changes the resolved `defaultTools` selection instead, for example `pi --tools +grep`. On `/reload`, these entries apply to the reloaded setting too, so a tool removed with `-name` stays removed. See [Command Line](cli.md#tools).
+CLI tool options override this setting for one invocation. `--tools` with only `+name` and `-name` entries changes the resolved `defaultTools` selection instead, for example `nanopi --tools +grep`. On `/reload`, these entries apply to the reloaded setting too, so a tool removed with `-name` stays removed. See [Command Line](cli.md#tools).
 
 ## Sessions and context
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `sessionDir` | string | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `PI_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting. |
+| `sessionDir` | string | Agent session directory | Session storage directory. Relative paths resolve from the working directory. `NANOPI_CODING_AGENT_SESSION_DIR` and `--session-dir` override this setting. |
 
 ### Compaction
 
@@ -100,7 +100,7 @@ See [Compaction Reference](compaction.md) for trigger, summarization, and valida
 | `editorPaddingX` | number | `0` | Horizontal editor padding from 0 to 3 cells. |
 | `outputPad` | `0 \| 1` | `1` | Horizontal transcript padding for messages, tool output, `!` command output, and summary blocks. |
 | `autocompleteMaxVisible` | number | `5` | Visible autocomplete entries, from 3 to 20. |
-| `showHardwareCursor` | boolean | `false` | Use the terminal cursor instead of Pi's drawn cursor. Pi still positions it for input methods. |
+| `showHardwareCursor` | boolean | `false` | Use the terminal cursor instead of nanopi's drawn cursor. nanopi still positions it for input methods. |
 | `terminal.showImages` | boolean | `true` | Display inline images when supported. |
 | `terminal.imageWidthCells` | number | `60` | Preferred inline image width in terminal cells. |
 | `terminal.clearOnShrink` | boolean | `false` | Clear empty rows when rendered content shrinks. |
@@ -120,7 +120,7 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `transport` | `"auto" \| "sse" \| "websocket" \| "websocket-cached"` | `"auto"` | Preferred transport for AI providers that support multiple transports. |
-| `httpProxy` | string | None | Proxy URL applied as `HTTP_PROXY` and `HTTPS_PROXY` for Pi-managed HTTP clients. **Can only be set in agent-directory settings.** |
+| `httpProxy` | string | None | Proxy URL applied as `HTTP_PROXY` and `HTTPS_PROXY` for nanopi-managed HTTP clients. **Can only be set in agent-directory settings.** |
 | `httpIdleTimeoutMs` | number | `300000` | HTTP header and body idle timeout in milliseconds. Set to `0` to disable. |
 | `websocketConnectTimeoutMs` | number | `15000` | WebSocket connection timeout in milliseconds. Set to `0` to disable. |
 | `retry.enabled` | boolean | `true` | Enable automatic agent-level retry for transient failures. |
@@ -131,7 +131,7 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 | `retry.provider.maxRetries` | number | `0` | Provider-level retry attempts. |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Maximum server-requested delay in milliseconds. Set to `0` to disable the limit. |
 
-Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay Pi from handling quota and usage-limit errors itself.
+Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay nanopi from handling quota and usage-limit errors itself.
 
 ## Shell
 
@@ -141,35 +141,35 @@ Keep `retry.provider.maxRetries` at `0` unless provider-level retries are requir
 | `shellCommandPrefix` | string | None | Prefix prepended to every shell command. |
 | `npmCommand` | `string[]` | `npm` | Command and arguments used for npm package lookup and installation. |
 
-See [Shell aliases](shell-aliases.md) for shell setup and [Pi Packages](packages.md) for package-manager behavior.
+See [Shell aliases](shell-aliases.md) for shell setup and [nanopi Packages](packages.md) for package-manager behavior.
 
 ## llama.cpp
 
-Settings for the managed `llama-server` that Pi starts itself. **Can only be set in agent-directory settings.** See [llama.cpp](llama-cpp.md#managed-server).
+Settings for the managed `llama-server` that nanopi starts itself. **Can only be set in agent-directory settings.** See [llama.cpp](llama-cpp.md#managed-server).
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `llamaCpp.command` | string | `"llama-server"` | Executable to run. Supports a leading `~`. |
-| `llamaCpp.modelsDir` | string | `~/.pi/agent/llama/models` | Directory with local GGUF files. Supports a leading `~`. |
-| `llamaCpp.args` | `string[]` | `[]` | Extra `llama-server` arguments. Host, port, API key, models directory, and single-model options are controlled by Pi. |
-| `llamaCpp.idleShutdownSeconds` | number | `30` | Seconds the server keeps running after the last Pi process exits. |
+| `llamaCpp.modelsDir` | string | `~/.nanopi/agent/llama/models` | Directory with local GGUF files. Supports a leading `~`. |
+| `llamaCpp.args` | `string[]` | `[]` | Extra `llama-server` arguments. Host, port, API key, models directory, and single-model options are controlled by nanopi. |
+| `llamaCpp.idleShutdownSeconds` | number | `30` | Seconds the server keeps running after the last nanopi process exits. |
 
 ## Resources
 
-Resource paths in user settings resolve from the agent directory. Paths in project settings resolve from the project `.pi` directory. Absolute paths and `~` are supported.
+Resource paths in user settings resolve from the agent directory. Paths in project settings resolve from the project `.nanopi` directory. Absolute paths and `~` are supported.
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `packages` | array | `[]` | npm, git, or local Pi package sources. See [Pi Packages](packages.md). |
+| `packages` | array | `[]` | npm, git, or local nanopi package sources. See [nanopi Packages](packages.md). |
 | `extensions` | `string[]` | `[]` | Extension files or directories. |
 | `skills` | `string[]` | `[]` | Skill files or directories. |
 | `prompts` | `string[]` | `[]` | Prompt-template files or directories. |
 | `themes` | `string[]` | `[]` | Theme files or directories. |
 | `enableSkillCommands` | boolean | `true` | Register skills as `/skill:name` commands. |
 
-Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+path`, and exact exclusion with `-path`. Pi loads resources listed in both user-level and project settings.
+Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+path`, and exact exclusion with `-path`. nanopi loads resources listed in both user-level and project settings.
 
-The built-in extension is named `builtin:llama.cpp` in `extensions`. It loads by default; `-builtin:llama.cpp` disables it. A `+builtin:<name>` or `-builtin:<name>` entry in project settings overrides the user setting. `pi config` lists it under Built-in. `--no-extensions` disables it too, and `-e builtin:<name>` loads it explicitly.
+The built-in extension is named `builtin:llama.cpp` in `extensions`. It loads by default; `-builtin:llama.cpp` disables it. A `+builtin:<name>` or `-builtin:<name>` entry in project settings overrides the user setting. `nanopi config` lists it under Built-in. `--no-extensions` disables it too, and `-e builtin:<name>` loads it explicitly.
 
 ## Updates, telemetry, and warnings
 

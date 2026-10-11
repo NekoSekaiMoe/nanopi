@@ -1,6 +1,6 @@
-import { uuidv7 } from "@earendil-works/pi-ai";
+import { uuidv7 } from "@nanopi/pi-ai";
 
-const REQUEST_IDENTITY_METADATA_KEY = "pi.requestIdentity";
+const REQUEST_IDENTITY_METADATA_KEY = "nanopi.requestIdentity";
 
 interface AgentRequestIdentity {
 	sessionId: string;

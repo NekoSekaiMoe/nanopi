@@ -6,8 +6,8 @@
  * as expandable custom entries.
  */
 
-import { type ExtensionAPI, keyHint } from "@earendil-works/pi-coding-agent";
-import { Box, Text } from "@earendil-works/pi-tui";
+import { type ExtensionAPI, keyHint } from "@nanopi/pi-coding-agent";
+import { Box, Text } from "@nanopi/pi-tui";
 
 const ENTRY_TYPE = "debug-provider-events";
 const STATUS_KEY = "debug-provider";
@@ -19,12 +19,12 @@ interface ProviderDebugEntry {
 	events: unknown[];
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (nanopi: ExtensionAPI) {
 	let enabled = false;
 	let activeEvents: unknown[] | undefined;
 	let completedEntry: ProviderDebugEntry | undefined;
 
-	pi.registerEntryRenderer<ProviderDebugEntry>(ENTRY_TYPE, (entry, { expanded }, theme) => {
+	nanopi.registerEntryRenderer<ProviderDebugEntry>(ENTRY_TYPE, (entry, { expanded }, theme) => {
 		const data = entry.data;
 		if (!data) return new Text(theme.fg("warning", "[provider debug] Missing event data"), 0, 0);
 
@@ -44,7 +44,7 @@ export default function (pi: ExtensionAPI) {
 		return box;
 	});
 
-	pi.registerCommand("debug-provider", {
+	nanopi.registerCommand("debug-provider", {
 		description: "Toggle capture of raw provider stream events",
 		handler: async (args, ctx) => {
 			const requestedState = args.trim().toLowerCase();
@@ -63,15 +63,15 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.on("turn_start", () => {
+	nanopi.on("turn_start", () => {
 		activeEvents = enabled ? [] : undefined;
 	});
 
-	pi.on("provider_stream_event", (event) => {
+	nanopi.on("provider_stream_event", (event) => {
 		activeEvents?.push(structuredClone(event.data));
 	});
 
-	pi.on("message_end", (event) => {
+	nanopi.on("message_end", (event) => {
 		if (event.message.role !== "assistant" || !activeEvents) return;
 		completedEntry = {
 			provider: event.message.provider,
@@ -82,9 +82,9 @@ export default function (pi: ExtensionAPI) {
 		activeEvents = undefined;
 	});
 
-	pi.on("turn_end", () => {
+	nanopi.on("turn_end", () => {
 		if (!completedEntry) return;
-		pi.appendEntry<ProviderDebugEntry>(ENTRY_TYPE, completedEntry);
+		nanopi.appendEntry<ProviderDebugEntry>(ENTRY_TYPE, completedEntry);
 		completedEntry = undefined;
 	});
 }

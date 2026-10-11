@@ -46,7 +46,7 @@ const typed = "types=chat,image,classifier";
 
 let root;
 beforeEach(() => {
-	root = mkdtempSync(join(tmpdir(), "pi-catalog-pin-"));
+	root = mkdtempSync(join(tmpdir(), "nanopi-catalog-pin-"));
 	mkdirSync(join(root, "packages/coding-agent"), { recursive: true });
 	mkdirSync(join(root, "packages/ai/src/providers"), { recursive: true });
 	mkdirSync(join(root, "nix"));
@@ -67,7 +67,7 @@ function readPin() {
 	return readFileSync(join(root, "nix/model-catalog.json"), "utf8");
 }
 
-function mockPiDev({ live = liveRevision, failure } = {}) {
+function mockNanoPiDev({ live = liveRevision, failure } = {}) {
 	const requests = [];
 	mock.method(globalThis, "fetch", async (url) => {
 		requests.push(url);
@@ -85,24 +85,24 @@ function mockPiDev({ live = liveRevision, failure } = {}) {
 }
 
 test("pins the live typed catalog after verifying its immutable URL", async () => {
-	const requests = mockPiDev();
+	const requests = mockNanoPiDev();
 	assert.deepEqual(await updateModelCatalogPin(root), { revision: liveRevision, updated: true });
 	assert.deepEqual(requests, [
-		`https://pi.dev/api/models?pi-version=0.85.1&${typed}`,
+		`https://pi.dev/api/models?nanopi-version=0.85.1&${typed}`,
 		`https://pi.dev/api/models/revisions/${liveRevision}?${typed}`,
 	]);
 	assert.equal(readPin(), pinFile(liveRevision));
 });
 
 test("keeps a pin that still hydrates the checkout and has the live model types", async () => {
-	const requests = mockPiDev();
+	const requests = mockNanoPiDev();
 	assert.deepEqual(await updateModelCatalogPin(root, { ifStale: true }), {
 		revision: currentRevision,
 		updated: false,
 	});
 	assert.deepEqual(requests, [
 		`https://pi.dev/api/models/revisions/${currentRevision}?${typed}`,
-		`https://pi.dev/api/models?pi-version=0.85.1&${typed}`,
+		`https://pi.dev/api/models?nanopi-version=0.85.1&${typed}`,
 		`https://pi.dev/api/models/revisions/${liveRevision}?${typed}`,
 	]);
 	assert.equal(readPin(), pinFile(currentRevision));
@@ -111,7 +111,7 @@ test("keeps a pin that still hydrates the checkout and has the live model types"
 test("replaces a pin that lacks a model type of the live catalog", async (t) => {
 	const errors = [];
 	t.mock.method(console, "error", (message) => errors.push(message));
-	mockPiDev({ live: classifierRevision });
+	mockNanoPiDev({ live: classifierRevision });
 	assert.deepEqual(await updateModelCatalogPin(root, { ifStale: true }), {
 		revision: classifierRevision,
 		updated: true,
@@ -123,27 +123,27 @@ test("replaces a pin that lacks a model type of the live catalog", async (t) => 
 test("replaces a pin that no longer hydrates the checkout", async (t) => {
 	t.mock.method(console, "error", () => {});
 	writeFileSync(join(root, "nix/model-catalog.json"), pinFile(staleRevision));
-	mockPiDev();
+	mockNanoPiDev();
 	assert.deepEqual(await updateModelCatalogPin(root, { ifStale: true }), { revision: liveRevision, updated: true });
 	assert.equal(readPin(), pinFile(liveRevision));
 });
 
 test("refuses to pin a live catalog that cannot hydrate the checkout", async () => {
-	mockPiDev({ live: staleRevision });
+	mockNanoPiDev({ live: staleRevision });
 	await assert.rejects(updateModelCatalogPin(root), /cannot hydrate this checkout/);
 	assert.equal(readPin(), pinFile(currentRevision));
 });
 
 for (const failure of ["discovery-http", "discovery-revision", "discovery-hash", "revision-http", "revision-hash"]) {
 	test(`keeps the old pin on ${failure} failure`, async () => {
-		mockPiDev({ failure });
+		mockNanoPiDev({ failure });
 		await assert.rejects(updateModelCatalogPin(root));
 		assert.equal(readPin(), pinFile(currentRevision));
 	});
 }
 
 test("does not treat an unreachable pinned revision as stale", async () => {
-	mockPiDev({ failure: "revision-http" });
+	mockNanoPiDev({ failure: "revision-http" });
 	await assert.rejects(updateModelCatalogPin(root, { ifStale: true }), /unavailable/);
 	assert.equal(readPin(), pinFile(currentRevision));
 });

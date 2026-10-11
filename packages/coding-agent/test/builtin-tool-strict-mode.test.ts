@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModel } from "@earendil-works/pi-ai/compat";
+import { getModel } from "@nanopi/pi-ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
@@ -48,7 +48,7 @@ describe("strict built-in tools", () => {
 	it.each([{ activeTools: [] }, { activeTools: ["read"] }, { activeTools: [...strictToolNames] }])(
 		"allows extensions to re-register tools without strict sampling: $activeTools",
 		async ({ activeTools }) => {
-			const cwd = mkdtempSync(join(tmpdir(), "pi-non-strict-tools-"));
+			const cwd = mkdtempSync(join(tmpdir(), "nanopi-non-strict-tools-"));
 			const agentDir = join(cwd, "agent");
 			const settingsManager = SettingsManager.inMemory({ defaultTools: activeTools });
 			const resourceLoader = new DefaultResourceLoader({
@@ -60,13 +60,13 @@ describe("strict built-in tools", () => {
 				noPromptTemplates: true,
 				noThemes: true,
 				extensionFactories: [
-					(pi) => {
-						pi.on("session_start", () => {
+					(nanopi) => {
+						nanopi.on("session_start", () => {
 							const definitions = createAllToolDefinitions(cwd);
 							for (const name of strictToolNames) {
-								pi.registerTool({ ...definitions[name], constrainedSampling: false });
+								nanopi.registerTool({ ...definitions[name], constrainedSampling: false });
 							}
-							pi.setActiveTools(activeTools);
+							nanopi.setActiveTools(activeTools);
 						});
 					},
 				],

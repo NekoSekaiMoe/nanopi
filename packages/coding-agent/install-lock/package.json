@@ -1,10 +1,10 @@
 {
-	"name": "@earendil-works/pi-coding-agent-install",
+	"name": "@nanopi/pi-coding-agent-install",
 	"version": "1.1.0",
 	"private": true,
-	"description": "Lockfile root used by the Pi installer and updater.",
+	"description": "Lockfile root used by the nanopi installer and updater.",
 	"dependencies": {
-		"@earendil-works/pi-coding-agent": "1.1.0"
+		"@nanopi/pi-coding-agent": "1.1.0"
 	},
 	"overrides": {
 		"protobufjs": "7.6.6"

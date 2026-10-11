@@ -45,7 +45,7 @@ async function readLogTail(path: string): Promise<string[]> {
 	}
 }
 
-/** The `/llama` target: a fixed server URL, or the managed server that pi starts on demand. */
+/** The `/llama` target: a fixed server URL, or the managed server that nanopi starts on demand. */
 type LlamaTarget = { type: "connect"; client: LlamaClient } | { type: "managed" };
 
 async function configuredTarget(ctx: ExtensionCommandContext): Promise<LlamaTarget | undefined> {
@@ -62,7 +62,7 @@ async function configuredTarget(ctx: ExtensionCommandContext): Promise<LlamaTarg
 	return { type: "connect", client: new LlamaClient(serverUrl, result.auth.apiKey) };
 }
 
-/** The server `/llama` currently manages. `managed` is set when pi started the server. */
+/** The server `/llama` currently manages. `managed` is set when nanopi started the server. */
 interface LlamaSession {
 	client: LlamaClient;
 	managed?: ManagedLlamaServerInfo;
@@ -77,10 +77,10 @@ function sessionHeader(session: LlamaSession): string[] {
 	];
 }
 
-export default function llamaExtension(pi: ExtensionAPI): void {
+export default function llamaExtension(nanopi: ExtensionAPI): void {
 	const managed = createManagedLlama();
 	const provider = createLlamaProvider(managed);
-	pi.registerProvider(provider.provider);
+	nanopi.registerProvider(provider.provider);
 
 	const syncCatalog = async (
 		ctx: ExtensionCommandContext,
@@ -92,7 +92,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 		provider.setCatalog(current, session.client.serverUrl, { managed: session.managed !== undefined });
 		const result = await ctx.modelRegistry.refresh({
 			providers: [LLAMA_PROVIDER_ID],
-			// /llama already contacted the configured llama.cpp server, so keep this refresh live even in PI_OFFLINE.
+			// /llama already contacted the configured llama.cpp server, so keep this refresh live even in NANOPI_OFFLINE.
 			allowNetwork: true,
 			signal,
 		});
@@ -221,7 +221,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 		ctx.ui.notify(`Downloaded ${model}`);
 	};
 
-	pi.registerCommand("llama", {
+	nanopi.registerCommand("llama", {
 		description: "Manage llama.cpp router models",
 		handler: async (_args, ctx) => {
 			if (ctx.mode !== "tui") {
@@ -277,7 +277,7 @@ export default function llamaExtension(pi: ExtensionAPI): void {
 						} else if (action.type === "restart") {
 							restart = await ui.confirm(
 								"Restart llama-server?",
-								"Loaded models are unloaded. Requests from other pi sessions are interrupted.",
+								"Loaded models are unloaded. Requests from other nanopi sessions are interrupted.",
 							);
 						} else if (modelIsLoaded(action.model)) await unloadModel(ctx, ui, current, action.model);
 						else if (action.model.status.value === "unloaded")

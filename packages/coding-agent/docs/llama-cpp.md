@@ -1,13 +1,13 @@
 # Local Models with llama.cpp
 
-Pi supports the [llama.cpp](https://github.com/ggml-org/llama.cpp) router server. The router discovers multiple GGUF models and loads or unloads them on demand.
+nanopi supports the [llama.cpp](https://github.com/ggml-org/llama.cpp) router server. The router discovers multiple GGUF models and loads or unloads them on demand.
 
 Use a current llama.cpp build with router support. Follow the [build instructions](https://github.com/ggml-org/llama.cpp/blob/master/docs/build.md) or install a [prebuilt release](https://github.com/ggml-org/llama.cpp/releases) for your platform.
 
-Pi can reach llama.cpp in two ways:
+nanopi can reach llama.cpp in two ways:
 
-- **Managed:** Pi starts `llama-server` when a llama.cpp model is first used and stops it when no Pi process uses it anymore. Use this unless you already run a server.
-- **Connect:** Pi connects to a router you start and manage yourself, for example on another machine or shared with other clients.
+- **Managed:** nanopi starts `llama-server` when a llama.cpp model is first used and stops it when no nanopi process uses it anymore. Use this unless you already run a server.
+- **Connect:** nanopi connects to a router you start and manage yourself, for example on another machine or shared with other clients.
 
 ## Managed server
 
@@ -17,17 +17,17 @@ Install llama.cpp so that `llama-server` is on your `PATH`, then run:
 /login llama.cpp
 ```
 
-Select **Start llama-server automatically**. Pi checks that `llama-server --version` runs and stores the choice. It does not start the server yet.
+Select **Start llama-server automatically**. nanopi checks that `llama-server --version` runs and stores the choice. It does not start the server yet.
 
-The server starts the first time a llama.cpp model is used or `/llama` is opened. Pi binds it to `127.0.0.1` on a random free port and protects it with a random API key, so it never conflicts with other servers and is not reachable from other machines. All Pi processes share one server. After the last Pi process exits, the server keeps running for `llamaCpp.idleShutdownSeconds` (30 seconds by default) and then stops. A Pi process started in that window reuses the running server and its loaded models.
+The server starts the first time a llama.cpp model is used or `/llama` is opened. nanopi binds it to `127.0.0.1` on a random free port and protects it with a random API key, so it never conflicts with other servers and is not reachable from other machines. All nanopi processes share one server. After the last nanopi process exits, the server keeps running for `llamaCpp.idleShutdownSeconds` (30 seconds by default) and then stops. A nanopi process started in that window reuses the running server and its loaded models.
 
-Models come from `~/.pi/agent/llama/models` and from the llama.cpp download cache. Put GGUF files in the models directory using the layout described in [Connect to a router](#connect-to-a-router), or download models with `/llama`. Downloads go to the llama.cpp Hugging Face cache (`~/.cache/huggingface/hub` by default, or `LLAMA_CACHE`, `HF_HUB_CACHE`, or `HF_HOME` when set). `/llama` shows both directories.
+Models come from `~/.nanopi/agent/llama/models` and from the llama.cpp download cache. Put GGUF files in the models directory using the layout described in [Connect to a router](#connect-to-a-router), or download models with `/llama`. Downloads go to the llama.cpp Hugging Face cache (`~/.cache/huggingface/hub` by default, or `LLAMA_CACHE`, `HF_HUB_CACHE`, or `HF_HOME` when set). `/llama` shows both directories.
 
-All models in the managed server appear in `/model` and load when selected, unless `llamaCpp.args` contains `--no-models-autoload`. The request waits while the model loads. Pi reads the model list only from a running server and remembers it, so starting Pi does not start the server. Right after `/login`, open `/llama` once to populate `/model`.
+All models in the managed server appear in `/model` and load when selected, unless `llamaCpp.args` contains `--no-models-autoload`. The request waits while the model loads. nanopi reads the model list only from a running server and remembers it, so starting nanopi does not start the server. Right after `/login`, open `/llama` once to populate `/model`.
 
 ### Settings
 
-Configure the managed server in `~/.pi/agent/settings.json`. Project settings cannot change it because it selects a command to run.
+Configure the managed server in `~/.nanopi/agent/settings.json`. Project settings cannot change it because it selects a command to run.
 
 ```json
 {
@@ -43,17 +43,17 @@ Configure the managed server in `~/.pi/agent/settings.json`. Project settings ca
 | Setting | Default | Description |
 |---|---|---|
 | `command` | `llama-server` | Executable to run. Supports a leading `~`. |
-| `modelsDir` | `~/.pi/agent/llama/models` | Directory with local GGUF files. Supports a leading `~`. |
-| `args` | `[]` | Extra `llama-server` arguments, such as `-c` or `--models-preset`. `--host`, `--port`, `--api-key`, `--models-dir`, and single-model options (`-m`, `-hf`, ...) are rejected because Pi controls them. |
-| `idleShutdownSeconds` | `30` | How long the server keeps running after the last Pi process exits. `0` stops it right away. |
+| `modelsDir` | `~/.nanopi/agent/llama/models` | Directory with local GGUF files. Supports a leading `~`. |
+| `args` | `[]` | Extra `llama-server` arguments, such as `-c` or `--models-preset`. `--host`, `--port`, `--api-key`, `--models-dir`, and single-model options (`-m`, `-hf`, ...) are rejected because nanopi controls them. |
+| `idleShutdownSeconds` | `30` | How long the server keeps running after the last nanopi process exits. `0` stops it right away. |
 
-Settings apply when the server starts. After changing them, choose **Restart server** in `/llama`. Restarting unloads all models and interrupts requests from other Pi processes.
+Settings apply when the server starts. After changing them, choose **Restart server** in `/llama`. Restarting unloads all models and interrupts requests from other nanopi processes.
 
-The server inherits the environment of the Pi process that started it. If `HF_TOKEN` is not set, Pi passes the Hugging Face token it finds (see [Manage models](#manage-models)) so gated downloads work.
+The server inherits the environment of the nanopi process that started it. If `HF_TOKEN` is not set, nanopi passes the Hugging Face token it finds (see [Manage models](#manage-models)) so gated downloads work.
 
 ### Logs
 
-The server writes to `~/.pi/agent/llama/server.log`, which starts fresh each time a new server starts. Choose **View log** in `/llama` to see the last lines. If the server fails to start, the error in Pi names the log file.
+The server writes to `~/.nanopi/agent/llama/server.log`, which starts fresh each time a new server starts. Choose **View log** in `/llama` to see the last lines. If the server fails to start, the error in nanopi names the log file.
 
 ## Connect to a router
 
@@ -94,7 +94,7 @@ A single-file model can sit directly in the model directory. Put multimodal and 
 
 Restart the router after manually adding files. For per-model context sizes and other options, use [llama.cpp model presets](https://github.com/ggml-org/llama.cpp/blob/master/tools/server/README.md#model-presets).
 
-Start Pi and configure the provider:
+Start nanopi and configure the provider:
 
 ```text
 /login llama.cpp
@@ -109,7 +109,7 @@ Environment variables can configure the same values without `/login`:
 ```bash
 export LLAMA_BASE_URL=http://127.0.0.1:8080
 export LLAMA_API_KEY=optional-secret
-pi
+nanopi
 ```
 
 If the server uses an API key, start `llama-server` with the matching `--api-key` value. Keep `--host 127.0.0.1` for local-only access.
@@ -129,9 +129,9 @@ Run:
 
 With a managed server, `/llama` also shows the models and download directories and offers **Restart server** and **View log**.
 
-Hugging Face search uses `HF_TOKEN` when set, then checks `$HF_TOKEN_PATH`, `$HF_HOME/token`, `$XDG_CACHE_HOME/huggingface/token`, and `~/.cache/huggingface/token`. Search also works without authentication, subject to lower rate limits. Pi warns before downloading gated repositories and links to their access page. The llama.cpp server performs the download, so its process must also have `HF_TOKEN` when the selected repository requires access.
+Hugging Face search uses `HF_TOKEN` when set, then checks `$HF_TOKEN_PATH`, `$HF_HOME/token`, `$XDG_CACHE_HOME/huggingface/token`, and `~/.cache/huggingface/token`. Search also works without authentication, subject to lower rate limits. nanopi warns before downloading gated repositories and links to their access page. The llama.cpp server performs the download, so its process must also have `HF_TOKEN` when the selected repository requires access.
 
-If other models are loaded, Pi asks whether to unload them first or keep them loaded. Pi does not silently unload models and never deletes model files. The router may be shared with other clients, so `/llama` always displays the router's current state.
+If other models are loaded, nanopi asks whether to unload them first or keep them loaded. nanopi does not silently unload models and never deletes model files. The router may be shared with other clients, so `/llama` always displays the router's current state.
 
 Loaded and sleeping models appear in `/model`. Sleeping models wake automatically when selected. With router autoload enabled, unloaded preset models also appear and load when selected; with a managed server, all unloaded models do. With `--no-models-autoload`, load a model through `/llama` before selecting it.
 
@@ -139,16 +139,16 @@ If the router disconnects, `/llama` shows **Retry** and **Close**. Retry reconne
 
 ## Classification
 
-Classifier models answer typed `choice`, `bool`, and `score` questions about JSON state, like TypeSafe's Jev models. Extensions reach them through `ctx.modelRegistry.classify()`; see [Classifier models](models.md#use-classifier-models). Pi lists llama.cpp models as classifiers in two ways:
+Classifier models answer typed `choice`, `bool`, and `score` questions about JSON state, like TypeSafe's Jev models. Extensions reach them through `ctx.modelRegistry.classify()`; see [Classifier models](models.md#use-classifier-models). nanopi lists llama.cpp models as classifiers in two ways:
 
 - **Decision models** such as [Julia-1, Laya, Kev, lev, and OpenJev](https://huggingface.co/collections/ggml-org/decision-models-6abf80cca3c83f127060a769) answer natively through llama.cpp's `/v1/systemone` endpoint. They appear only as classifiers, with the `typesafe-system-one` API, and not in `/model`.
 - **Chat models** are also listed as classifiers with the same ID and the `llama-cpp-classify` API, which reads answers from next-token probabilities as described below.
 
-llama.cpp 0.6.0 and later report decision models in the router's model list: their `architecture.output_modalities` contains `decisions`. The router reads this from the GGUF metadata without loading the model, so Pi recognizes unloaded and sleeping decision models too. Older llama.cpp builds do not report it, and Pi lists their decision models as chat models.
+llama.cpp 0.6.0 and later report decision models in the router's model list: their `architecture.output_modalities` contains `decisions`. The router reads this from the GGUF metadata without loading the model, so nanopi recognizes unloaded and sleeping decision models too. Older llama.cpp builds do not report it, and nanopi lists their decision models as chat models.
 
 ### Chat models as classifiers
 
-The model does not generate an answer. Each question becomes one chat prompt: the state, every question of the request, the state again, and then the question with its answers under single-token labels. Labels are letters for a choice (up to 62 options), `Yes`/`No` for a bool, and digits for a score (up to 10 levels). The second copy of the state is read with the questions in view, which improved accuracy on JevBench with small models. Pi reads the probabilities of the labels as the next token and normalizes them. A choice returns every option's probability and a confidence of `(n * peak - 1) / (n - 1)`; a score returns the expected level.
+The model does not generate an answer. Each question becomes one chat prompt: the state, every question of the request, the state again, and then the question with its answers under single-token labels. Labels are letters for a choice (up to 62 options), `Yes`/`No` for a bool, and digits for a score (up to 10 levels). The second copy of the state is read with the questions in view, which improved accuracy on JevBench with small models. nanopi reads the probabilities of the labels as the next token and normalizes them. A choice returns every option's probability and a confidence of `(n * peak - 1) / (n - 1)`; a score returns the expected level.
 
 - Raw label probabilities are usually overconfident. The per-request `temperature` option divides the label logits before normalizing; values above 1 soften the distribution. It changes no answer.
 - Questions run one after another. Everything before the final question is the same for all questions of a request, so the server's prompt cache evaluates it once. The state appears twice, so it needs twice its size in context.
@@ -160,9 +160,9 @@ The model does not generate an answer. Each question becomes one chat prompt: th
 For a managed server:
 
 - **`/login` cannot find `llama-server`:** Install llama.cpp or set `llamaCpp.command` to the full path.
-- **The server fails to start:** Read `~/.pi/agent/llama/server.log`. Invalid `llamaCpp.args` usually show up there.
+- **The server fails to start:** Read `~/.nanopi/agent/llama/server.log`. Invalid `llamaCpp.args` usually show up there.
 - **Models missing after adding files:** Choose **Restart server** in `/llama`.
-- **Server is still running:** It stops `llamaCpp.idleShutdownSeconds` after the last Pi process exits. If a supervisor process was killed with `SIGKILL`, `llama-server` may keep running; stop it manually.
+- **Server is still running:** It stops `llamaCpp.idleShutdownSeconds` after the last nanopi process exits. If a supervisor process was killed with `SIGKILL`, `llama-server` may keep running; stop it manually.
 
 For a router you started, check that it is reachable:
 
@@ -176,4 +176,4 @@ curl http://127.0.0.1:8080/models
 - **Load fails or uses too much memory:** Lower `-c` or unload another model.
 - **Server is not in router mode:** Start it without `--model`, `-m`, or `-hf`.
 
-To remove the `llama.cpp` provider and `/llama`, disable `llama.cpp` under Built-in in `pi config`, or set `"extensions": ["-builtin:llama.cpp"]` in [settings](settings.md#resources).
+To remove the `llama.cpp` provider and `/llama`, disable `llama.cpp` under Built-in in `nanopi config`, or set `"extensions": ["-builtin:llama.cpp"]` in [settings](settings.md#resources).

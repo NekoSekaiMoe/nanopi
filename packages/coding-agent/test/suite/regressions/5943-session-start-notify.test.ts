@@ -1,5 +1,5 @@
-import { fauxAssistantMessage } from "@earendil-works/pi-ai";
-import { Container, Text } from "@earendil-works/pi-tui";
+import { fauxAssistantMessage } from "@nanopi/pi-ai";
+import { Container, Text } from "@nanopi/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentSessionEvent, RuntimeReloadCallbacks } from "../../../src/core/agent-session.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
@@ -234,8 +234,8 @@ describe("regression #5943: session_start transient UI", () => {
 		const events: string[] = [];
 		const harness = await createHarness({
 			extensionFactories: [
-				(pi) => {
-					pi.on("session_start", (_event, ctx) => {
+				(nanopi) => {
+					nanopi.on("session_start", (_event, ctx) => {
 						ctx.ui.notify("Hello Error", "error");
 					});
 				},
@@ -272,9 +272,9 @@ describe("regression #5943: session_start transient UI", () => {
 		const events: string[] = [];
 		const harness = await createHarness({
 			extensionFactories: [
-				(pi) => {
-					pi.on("session_start", () => {
-						pi.sendMessage({
+				(nanopi) => {
+					nanopi.on("session_start", () => {
+						nanopi.sendMessage({
 							customType: "session-start",
 							content: "custom from start",
 							display: true,
@@ -328,9 +328,9 @@ describe("regression #5943: session_start transient UI", () => {
 		const events: string[] = [];
 		const harness = await createHarness({
 			extensionFactories: [
-				(pi) => {
-					pi.on("session_start", () => {
-						pi.sendUserMessage("user from start");
+				(nanopi) => {
+					nanopi.on("session_start", () => {
+						nanopi.sendUserMessage("user from start");
 					});
 				},
 			],
@@ -382,8 +382,8 @@ describe("regression #5943: session_start transient UI", () => {
 		});
 		const harness = await createHarness({
 			extensionFactories: [
-				(pi) => {
-					pi.on("session_start", (event, ctx) => {
+				(nanopi) => {
+					nanopi.on("session_start", (event, ctx) => {
 						events.push(`start:${event.reason}`);
 						ctx.ui.notify(`notify:${event.reason}`, "error");
 					});

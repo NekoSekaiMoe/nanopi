@@ -29,8 +29,8 @@ import {
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
+import { getNanoPiUserAgent } from "../utils/nanopi-user-agent.ts";
 import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
 	getDeclaredTools,
@@ -63,7 +63,7 @@ const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
 const TURN_STATE_HEADER = "x-codex-turn-state";
-const REQUEST_IDENTITY_METADATA_KEY = "pi.requestIdentity";
+const REQUEST_IDENTITY_METADATA_KEY = "nanopi.requestIdentity";
 const WEBSOCKET_REQUEST_SCOPED_HEADERS = new Set([
 	"session-id",
 	"thread-id",
@@ -1865,7 +1865,7 @@ function buildBaseCodexHeaders(
 	requestIdentity?: OpenAICodexRequestIdentity,
 ): Headers {
 	// Defaults first so model and caller headers can override them, matching the other providers.
-	const headers = new Headers({ originator: "pi", "User-Agent": getPiUserAgent() });
+	const headers = new Headers({ originator: "nanopi", "User-Agent": getNanoPiUserAgent() });
 	for (const [key, value] of Object.entries(initHeaders || {})) {
 		headers.set(key, value);
 	}

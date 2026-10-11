@@ -1,4 +1,4 @@
-import type { TUI } from "@earendil-works/pi-tui";
+import type { TUI } from "@nanopi/pi-tui";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 
 const highlightedLines = vi.hoisted(() => ({ count: 0 }));

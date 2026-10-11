@@ -17,7 +17,7 @@
  * Passing is necessary but not sufficient for `supportsInContextCompaction`: the synthetic history
  * has no native reasoning, so it misses models that drop the last turn's reasoning when a user
  * message follows it (openai-codex/gpt-5.5, moonshotai/kimi-k2.6, GPT-5.4 on opencode and
- * openrouter). Validate candidates in real pi sessions that compact right after a tool turn.
+ * openrouter). Validate candidates in real nanopi sessions that compact right after a tool turn.
  *
  * Run from packages/ai with the source resolver so workspace packages load from source:
  *
@@ -262,7 +262,7 @@ function toolCalls(message: AssistantMessage): string[] {
 async function probeOnce(runtime: ModelRuntime, model: Model<Api>, reasoning: Args["reasoning"]): Promise<ProbeResult> {
 	const id = `${model.provider}/${model.id}`;
 	const options: SimpleStreamOptions = {
-		sessionId: `pi-in-context-compaction-probe-${randomUUID()}`,
+		sessionId: `nanopi-in-context-compaction-probe-${randomUUID()}`,
 		...(model.reasoning && reasoning !== "off" ? { reasoning } : {}),
 	};
 	const request = (messages: Message[], extra: SimpleStreamOptions = {}) =>
@@ -327,7 +327,7 @@ async function probeShapes(
 ): Promise<string> {
 	const id = `${model.provider}/${model.id}`;
 	const options: SimpleStreamOptions = {
-		sessionId: `pi-in-context-compaction-probe-${randomUUID()}`,
+		sessionId: `nanopi-in-context-compaction-probe-${randomUUID()}`,
 		...(model.reasoning && reasoning !== "off" ? { reasoning } : {}),
 	};
 	const request = (messages: Message[], extra: SimpleStreamOptions = {}) =>

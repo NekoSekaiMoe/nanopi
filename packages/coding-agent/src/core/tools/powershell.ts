@@ -17,7 +17,7 @@ const UTF8_OUTPUT_PREFIX = "try { [Console]::OutputEncoding=[System.Text.Encodin
 
 export const powershellToolSystemPromptContribution = {
 	snippet: "Execute PowerShell commands",
-	guidelines: ["You can inspect PI_* environment variables for current model and session details."],
+	guidelines: ["You can inspect NANOPI_* environment variables for current model and session details."],
 } as const;
 
 export type PowerShellOperations = BashOperations;
@@ -44,7 +44,7 @@ const powershellToolConfig: ShellToolConfig = {
 	embeddedCode: false,
 	promptSnippet: powershellToolSystemPromptContribution.snippet,
 	promptGuidelines: powershellToolSystemPromptContribution.guidelines,
-	tempFilePrefix: "pi-powershell",
+	tempFilePrefix: "nanopi-powershell",
 };
 
 export function createPowerShellToolDefinition(

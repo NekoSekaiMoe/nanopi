@@ -14,7 +14,7 @@ import {
 	type ToolStateChanges,
 	toToolDeclaration,
 	validateToolArguments,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { rotateAgentRequestIdentity } from "./request-metadata.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";
 import type {

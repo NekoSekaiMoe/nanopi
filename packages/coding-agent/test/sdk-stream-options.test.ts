@@ -8,7 +8,7 @@ import {
 	type Model,
 	normalizeContext,
 	type SimpleStreamOptions,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "../src/core/compaction/request-metadata.ts";
@@ -25,7 +25,7 @@ describe("createAgentSession stream options", () => {
 	let agentDir: string;
 
 	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "pi-sdk-stream-options-"));
+		tempDir = mkdtempSync(join(tmpdir(), "nanopi-sdk-stream-options-"));
 		cwd = join(tempDir, "project");
 		agentDir = join(tempDir, "agent");
 		mkdirSync(cwd, { recursive: true });
@@ -305,8 +305,8 @@ describe("createAgentSession stream options", () => {
 			"openai-completions",
 			{},
 			{},
-			(pi) => {
-				pi.on("provider_stream_event", (event) => {
+			(nanopi) => {
+				nanopi.on("provider_stream_event", (event) => {
 					extensionEvents.push(event);
 				});
 			},
@@ -330,8 +330,8 @@ describe("createAgentSession stream options", () => {
 			"openai-completions",
 			{},
 			{ headers: { "x-explicit": "explicit" } },
-			(pi) => {
-				pi.on("before_provider_headers", (event) => {
+			(nanopi) => {
+				nanopi.on("before_provider_headers", (event) => {
 					event.headers["x-hook"] = [
 						event.headers["x-provider"],
 						event.headers["x-model"],

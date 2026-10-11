@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { stripBom } from "../utils/text.ts";
 
-export interface PiManifest {
+export interface NanoPiManifest {
 	extensions?: string[];
 	skills?: string[];
 	prompts?: string[];
@@ -15,22 +15,22 @@ function isObject(value: unknown): value is Record<string, unknown> {
 	return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-export function readPiManifest(packageJsonPath: string): PiManifest | null {
+export function readNanoPiManifest(packageJsonPath: string): NanoPiManifest | null {
 	try {
 		const pkg: unknown = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8")));
-		if (!isObject(pkg) || !isObject(pkg.pi)) {
+		if (!isObject(pkg) || !isObject(pkg.nanopi)) {
 			return null;
 		}
 
-		const manifest: PiManifest = {};
+		const manifest: NanoPiManifest = {};
 		for (const field of RESOURCE_FIELDS) {
-			const entries = pkg.pi[field];
+			const entries = pkg.nanopi[field];
 			if (Array.isArray(entries) && entries.every((entry) => typeof entry === "string")) {
 				manifest[field] = entries;
 			}
 		}
 
-		const changelogPath = pkg.pi.changelogPath;
+		const changelogPath = pkg.nanopi.changelogPath;
 		if (typeof changelogPath === "string") {
 			manifest.changelogPath = changelogPath;
 		}

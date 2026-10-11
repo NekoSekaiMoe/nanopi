@@ -1,8 +1,8 @@
 # Extensions
 
-Extensions are TypeScript modules that add executable behavior to Pi. Use one when a workflow needs tools, commands, event handlers, model providers, session state, or terminal UI rather than instructions alone.
+Extensions are TypeScript modules that add executable behavior to nanopi. Use one when a workflow needs tools, commands, event handlers, model providers, session state, or terminal UI rather than instructions alone.
 
-An extension runs inside the Pi process with the same operating-system permissions. It can inspect prompts, tool calls, files, credentials, and session history, so load extensions only from sources you trust.
+An extension runs inside the nanopi process with the same operating-system permissions. It can inspect prompts, tool calls, files, credentials, and session history, so load extensions only from sources you trust.
 
 Typical extensions add an agent tool, protect paths, confirm dangerous commands, react to session events, modify context, expose a command, or display persistent status.
 
@@ -14,13 +14,13 @@ Typical extensions add an agent tool, protect paths, confirm dangerous commands,
 
 An extension exports a default factory that receives `ExtensionAPI`. The factory registers capabilities for the current extension runtime.
 
-Create `~/.pi/agent/extensions/hello.ts`:
+Create `~/.nanopi/agent/extensions/hello.ts`:
 
 ```typescript
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
 
-export default function (pi: ExtensionAPI) {
-  pi.registerCommand("hello", {
+export default function (nanopi: ExtensionAPI) {
+  nanopi.registerCommand("hello", {
     description: "Show a greeting",
     handler: async (name, ctx) => {
       ctx.ui.notify(`Hello, ${name || "world"}!`, "info");
@@ -29,21 +29,21 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-Start Pi and run `/hello`. During development, load a file directly:
+Start nanopi and run `/hello`. During development, load a file directly:
 
 ```bash
-pi --extension ./hello.ts
+nanopi --extension ./hello.ts
 ```
 
-Pi uses `jiti`, so local TypeScript extensions do not need a separate compilation step. Use [Pi packages](packages.md) for distributed extensions and dependencies.
+nanopi uses `jiti`, so local TypeScript extensions do not need a separate compilation step. Use [nanopi packages](packages.md) for distributed extensions and dependencies.
 
 <a id="extension-locations"></a>
 <a id="available-imports"></a>
 <a id="choose-where-it-loads"></a>
 
-## Add it to Pi
+## Add it to nanopi
 
-Place the extension in your user or project extensions directory. Pi loads direct TypeScript or JavaScript files and subdirectories containing an `index.ts` or `index.js` entry point.
+Place the extension in your user or project extensions directory. nanopi loads direct TypeScript or JavaScript files and subdirectories containing an `index.ts` or `index.js` entry point.
 
 Use a single file for a small extension and a directory for a multi-file implementation. Put npm dependencies in a nearby `package.json`. See [Configuration](configuration.md) for conventional locations and [Settings](settings.md#resources) for additional paths.
 
@@ -53,19 +53,19 @@ Reload replaces the extension runtime, so call `ctx.requestReload()` last and re
 
 ## Respect the runtime lifecycle
 
-The factory can be synchronous or asynchronous. Pi waits for an asynchronous factory before startup continues, allowing it to fetch configuration or register providers needed during startup.
+The factory can be synchronous or asynchronous. nanopi waits for an asynchronous factory before startup continues, allowing it to fetch configuration or register providers needed during startup.
 
 Do not start processes, sockets, watchers, or timers in the factory because some invocations load extensions without starting a session.
 Start long-lived resources from `session_start` or from the command or tool that needs them.
 Close session-scoped resources from an idempotent `session_shutdown` handler.
 
 A run proceeds from input and `before_agent_start`, through model, message, and tool events, to `agent_end`.
-Pi counts as busy while a run starts, including the compaction check and `before_agent_start`, so messages sent meanwhile go into the starting run.
+nanopi counts as busy while a run starts, including the compaction check and `before_agent_start`, so messages sent meanwhile go into the starting run.
 Automatic retries, recovery, compaction, or queued work can continue afterward.
 <a id="agent_start--agent_end--agent_before_settle--agent_settled"></a>
 
 `agent_before_settle` is the final actionable boundary: it can append entries and request one continuation.
-`agent_settled` is final and notification-only; use it when an integration needs to know Pi will not continue automatically.
+`agent_settled` is final and notification-only; use it when an integration needs to know nanopi will not continue automatically.
 
 <a id="extensionapi-methods"></a>
 
@@ -73,17 +73,17 @@ Automatic retries, recovery, compaction, or queued work can continue afterward.
 
 | Capability | Main API |
 |---|---|
-| Observe or modify lifecycle behavior | `pi.on()` |
-| Add a model-callable operation | `pi.registerTool()` |
-| Add a `/` command | `pi.registerCommand()` |
-| Add a shortcut or CLI flag | `pi.registerShortcut()` or `pi.registerFlag()` |
-| Send user or custom messages | `pi.sendUserMessage()` or `pi.sendMessage()` |
-| Persist non-context session data | `pi.appendEntry()` |
-| Change active tools, model, or thinking level | Session control methods on `pi` |
-| Add a model provider | `pi.registerProvider()` |
-| Route each request to a model | [`pi.registerVirtualModel()`](virtual-models.md) |
+| Observe or modify lifecycle behavior | `nanopi.on()` |
+| Add a model-callable operation | `nanopi.registerTool()` |
+| Add a `/` command | `nanopi.registerCommand()` |
+| Add a shortcut or CLI flag | `nanopi.registerShortcut()` or `nanopi.registerFlag()` |
+| Send user or custom messages | `nanopi.sendUserMessage()` or `nanopi.sendMessage()` |
+| Persist non-context session data | `nanopi.appendEntry()` |
+| Change active tools, model, or thinking level | Session control methods on `nanopi` |
+| Add a model provider | `nanopi.registerProvider()` |
+| Route each request to a model | [`nanopi.registerVirtualModel()`](virtual-models.md) |
 | Add terminal rendering | Renderer registration and `ctx.ui` |
-| Communicate with another extension | `pi.events` |
+| Communicate with another extension | `nanopi.events` |
 
 Use the exported declarations in [`extensions/types.ts`](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/src/core/extensions/types.ts) for exact event, context, tool, and result types.
 
@@ -94,25 +94,25 @@ Use the exported declarations in [`extensions/types.ts`](https://github.com/eare
 
 ### Events and concurrency
 
-Handlers run in extension load and registration order. `pi.on()` returns a function that unsubscribes that registration; changes do not affect a dispatch already in progress.
+Handlers run in extension load and registration order. `nanopi.on()` returns a function that unsubscribes that registration; changes do not affect a dispatch already in progress.
 Some events notify; others transform data, replace results, or cancel an operation.
 Use each event’s declared result type rather than assuming every return value has an effect.
 
 Events cover resource discovery, sessions, agent and message lifecycle, providers, tools, and raw input.
 
-`before_agent_start` exposes both the current prompt and its structured `systemPromptOptions`. `event.messageType` says what started the run: `"user"` for a prompt or `pi.sendUserMessage()`, with `prompt` and `images`; `"custom"` for `pi.sendMessage(..., { triggerTurn: true })`, with the starting `message` and no `prompt`. A returned `message` is added to either kind of run; check `messageType` to skip runs started by custom messages. Prefer changing prompt sections, selected tools, or guidelines so Pi can append a transcript delta. Returning `systemPrompt`, or setting `forceSystemPrompt`, replaces the whole prompt for that run while the transcript continues recording the structured sections. Providers receive the forced text as their leading system prompt.
+`before_agent_start` exposes both the current prompt and its structured `systemPromptOptions`. `event.messageType` says what started the run: `"user"` for a prompt or `nanopi.sendUserMessage()`, with `prompt` and `images`; `"custom"` for `nanopi.sendMessage(..., { triggerTurn: true })`, with the starting `message` and no `prompt`. A returned `message` is added to either kind of run; check `messageType` to skip runs started by custom messages. Prefer changing prompt sections, selected tools, or guidelines so nanopi can append a transcript delta. Returning `systemPrompt`, or setting `forceSystemPrompt`, replaces the whole prompt for that run while the transcript continues recording the structured sections. Providers receive the forced text as their leading system prompt.
 
 `message_end` can replace a finalized message while preserving its role. `tool_call` can mutate input or block execution. `tool_result` handlers compose, with each handler seeing prior changes.
 
 <a id="provider_stream_event"></a>
 
-`provider_stream_event` fires for each parsed provider stream event before Pi normalizes it. The event identifies the provider, API, and model; `event.data` is the earliest structured value available to Pi, not necessarily the original HTTP bytes or SSE frame. Treat it as read-only because mutation can affect normalization. The event is notification-only and is not persisted.
+`provider_stream_event` fires for each parsed provider stream event before nanopi normalizes it. The event identifies the provider, API, and model; `event.data` is the earliest structured value available to nanopi, not necessarily the original HTTP bytes or SSE frame. Treat it as read-only because mutation can affect normalization. The event is notification-only and is not persisted.
 
 Handlers are awaited in stream order, so slow handlers delay stream consumption. Handler errors are reported without changing the provider response. See [`debug-provider.ts`](../examples/extensions/debug-provider.ts) for an opt-in viewer that groups raw events by assistant message.
 
 <a id="context_with_system"></a>
 
-`context` transforms conversation messages without prompt and tool system messages; Pi restores that state afterward. Use `context_with_system` only when a request-local transformation must own the complete transcript, and keep a system message at index zero.
+`context` transforms conversation messages without prompt and tool system messages; nanopi restores that state afterward. Use `context_with_system` only when a request-local transformation must own the complete transcript, and keep a system message at index zero.
 
 `turn_end` and `agent_before_settle` are actionable boundaries. Their handlers can chain proposed `custom`, `custom_message`, `context_edit`, or `compaction` entries and return `continue: true` for one next model request. Guard continuation conditions because an unconditional continuation can loop. Use the exported event declarations for the complete validation and ordering contract.
 
@@ -145,7 +145,7 @@ Truncate large model-facing results and tell the model where to read the complet
 
 Declare `outputSchema` and return a matching `structuredContent` when the result is data. The model still receives `content`; programmatic callers receive `structuredContent` instead of the text. To report a failure that still carries data, return the result with `isError: true` instead of throwing: the model sees an error, and programmatic callers still receive `structuredContent`.
 
-A tool can run other tools with `ctx.executeTool(name, args, { signal, onUpdate })`. Nested calls go through argument validation and the `tool_call` and `tool_result` handlers like model-issued calls, and emit `tool_execution_start`, `tool_execution_update`, and `tool_execution_end`; all of these events carry `parentToolCallId`, and their `toolCallId` is assigned by pi as `<parent id>/<n>`. These ids do not appear as tool calls or tool results in the transcript. Nested calls do not add transcript entries: their results only reach the calling tool, which reports them itself, for example through `onUpdate` and `details`. The session keeps a bounded record of them (name, arguments, status, duration, error; never results) as `nestedCalls` on the calling tool's result message. It is used for compaction file lists and shown in HTML exports. Arguments over 8 KiB per call or 32 KiB per tool result are omitted, at most 256 calls are kept, and `complete: false` marks a record that lost anything. The `usage` of nested results, at every depth, is added to the calling tool's result `usage`, so a tool reports only its own usage, not that of the tools it called. `ctx.tools` lists the tools `ctx.executeTool()` can call. `tool_result` handlers that redact `content` should also replace `structuredContent`; replacing only `content` drops it.
+A tool can run other tools with `ctx.executeTool(name, args, { signal, onUpdate })`. Nested calls go through argument validation and the `tool_call` and `tool_result` handlers like model-issued calls, and emit `tool_execution_start`, `tool_execution_update`, and `tool_execution_end`; all of these events carry `parentToolCallId`, and their `toolCallId` is assigned by nanopi as `<parent id>/<n>`. These ids do not appear as tool calls or tool results in the transcript. Nested calls do not add transcript entries: their results only reach the calling tool, which reports them itself, for example through `onUpdate` and `details`. The session keeps a bounded record of them (name, arguments, status, duration, error; never results) as `nestedCalls` on the calling tool's result message. It is used for compaction file lists and shown in HTML exports. Arguments over 8 KiB per call or 32 KiB per tool result are omitted, at most 256 calls are kept, and `complete: false` marks a record that lost anything. The `usage` of nested results, at every depth, is added to the calling tool's result `usage`, so a tool reports only its own usage, not that of the tools it called. `ctx.tools` lists the tools `ctx.executeTool()` can call. `tool_result` handlers that redact `content` should also replace `structuredContent`; replacing only `content` drops it.
 
 See [`hello.ts`](../examples/extensions/hello.ts), [`todo.ts`](../examples/extensions/todo.ts), [`dynamic-tools.ts`](../examples/extensions/dynamic-tools.ts), and [`truncated-tool.ts`](../examples/extensions/truncated-tool.ts).
 
@@ -159,13 +159,13 @@ See [`hello.ts`](../examples/extensions/hello.ts), [`todo.ts`](../examples/exten
 
 `namespace: { name, description, instructions }` groups related tools. The model sees a namespace's `description` with the group in tool listings; `instructions` holds longer usage guidance and is not listed, so tools that describe a namespace return it on request.
 
-Registering a `direct` or `model-only` tool activates it; a `hidden` tool is not activated on registration. The active set (`pi.getActiveTools()`, `pi.setActiveTools()`) is the set of tools declared to the model. `pi.getAllTools()` reports each tool's `exposure`, `namespace`, and `annotations`.
+Registering a `direct` or `model-only` tool activates it; a `hidden` tool is not activated on registration. The active set (`nanopi.getActiveTools()`, `nanopi.setActiveTools()`) is the set of tools declared to the model. `nanopi.getAllTools()` reports each tool's `exposure`, `namespace`, and `annotations`.
 
 `annotations` are hints about what a tool does: `readOnlyHint`, `destructiveHint`, `idempotentHint`, and `openWorldHint`. Missing hints take these defaults: a tool is not read-only, and may be destructive and reach an open world. The hints are not verified, but a permission extension can use them to decide which calls to confirm. This confirms the calls Codex asks approval for:
 
 ```typescript
-pi.on("tool_call", async (event, ctx) => {
-  const hints = pi.getAllTools().find((tool) => tool.name === event.toolName)?.annotations;
+nanopi.on("tool_call", async (event, ctx) => {
+  const hints = nanopi.getAllTools().find((tool) => tool.name === event.toolName)?.annotations;
   const needsApproval =
     hints?.destructiveHint === true ||
     (!hints?.readOnlyHint && ((hints?.destructiveHint ?? true) || (hints?.openWorldHint ?? true)));
@@ -179,13 +179,13 @@ A tool that orchestrates other tools can adjust what the model sees while it is 
 
 ### Activate tools dynamically
 
-Register every tool first, keep optional tools inactive, and use `pi.setActiveTools()` from a loader tool to select the desired active tools. Names must already be registered; unknown names are ignored.
+Register every tool first, keep optional tools inactive, and use `nanopi.setActiveTools()` from a loader tool to select the desired active tools. Names must already be registered; unknown names are ignored.
 
-Pi records the initial prompt and tool set in the transcript's first system message, then appends tool and prompt changes before the next model request. Providers that cannot represent the transition receive a complete transcript checkpoint, which can invalidate the cached prefix.
+nanopi records the initial prompt and tool set in the transcript's first system message, then appends tool and prompt changes before the next model request. Providers that cannot represent the transition receive a complete transcript checkpoint, which can invalidate the cached prefix.
 
 ### Tool rendering
 
-A tool's `renderCall` and `renderResult` draw its calls in the interactive transcript and in HTML exports. `pi.registerToolRenderer((toolName, next) => renderers)` chooses renderers for calls to any tool, including tools that are not registered yet. `next()` returns what the remaining resolvers (in extension load order), then the registered tool, would use, so `next() ?? mine` only fills in.
+A tool's `renderCall` and `renderResult` draw its calls in the interactive transcript and in HTML exports. `nanopi.registerToolRenderer((toolName, next) => renderers)` chooses renderers for calls to any tool, including tools that are not registered yet. `next()` returns what the remaining resolvers (in extension load order), then the registered tool, would use, so `next() ?? mine` only fills in.
 
 <a id="extensioncontext"></a>
 <a id="extensioncommandcontext"></a>
@@ -213,8 +213,8 @@ Choose storage based on how state participates in the conversation:
 | State | Storage |
 |---|---|
 | Tool state that follows the active branch | Tool-result `details` |
-| Durable data excluded from model context | `pi.appendEntry()` |
-| Custom content stored and sent to the model | `pi.sendMessage()` |
+| Durable data excluded from model context | `nanopi.appendEntry()` |
+| Custom content stored and sent to the model | `nanopi.sendMessage()` |
 | Data outside one session | External storage |
 
 Reconstruct branch-sensitive state from `ctx.sessionManager.getBranch()` during `session_start`.
@@ -244,7 +244,7 @@ Keep tool and event behavior independent from rendering so non-interactive modes
 
 ### Errors and cleanup
 
-Pi reports handler errors and continues where possible. A `tool_call` handler failure blocks the tool as a fail-safe; a tool execution failure becomes an error result for the model.
+nanopi reports handler errors and continues where possible. A `tool_call` handler failure blocks the tool as a fail-safe; a tool execution failure becomes an error result for the model.
 
 Release resources in `session_shutdown` even when normal operation attempted cleanup.
 Keep cleanup idempotent because cancellation, reload, session replacement, and process exit can converge on the same path.
@@ -258,4 +258,4 @@ Use `ctx.shutdown()` to request an orderly process shutdown.
 The checked [extension examples](../examples/extensions/) cover tools, lifecycle events, commands, flags, shortcuts, state, rendering, providers, OAuth, remote execution, and terminal components.
 Start with the smallest example matching your integration point.
 
-Use [Custom Providers](custom-provider.md) for model-service integrations, [Terminal UI](tui.md) for custom components, and [Pi Packages](packages.md) to install or distribute extensions with other resources.
+Use [Custom Providers](custom-provider.md) for model-service integrations, [Terminal UI](tui.md) for custom components, and [nanopi Packages](packages.md) to install or distribute extensions with other resources.

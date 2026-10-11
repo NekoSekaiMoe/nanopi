@@ -211,7 +211,7 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 		supportsFinishReason: Type.Optional(
 			Type.Boolean({
 				description:
-					"Whether streamed responses include finish_reason. When false, pi infers stop or toolUse when the stream ends.",
+					"Whether streamed responses include finish_reason. When false, nanopi infers stop or toolUse when the stream ends.",
 				default: true,
 			}),
 		),
@@ -258,20 +258,20 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 				],
 				{
 					description:
-						'Format for reasoning or thinking parameters. When omitted, Pi auto-detects the format from the provider URL. "openai" uses reasoning_effort, "openrouter" uses reasoning.effort, "deepseek" uses thinking.type plus reasoning_effort when supported, "together" uses reasoning.enabled plus reasoning_effort when supported, "baseten" uses configurable chat_template_args plus reasoning_effort when supported, "zai" uses thinking.type, "qwen" uses top-level enable_thinking, "qwen-chat-template" uses chat_template_kwargs.enable_thinking and preserve_thinking, "chat-template" uses configurable chat_template_kwargs, "string-thinking" uses top-level thinking, and "ant-ling" uses reasoning.effort only when the mapped effort is non-null.',
+						'Format for reasoning or thinking parameters. When omitted, nanopi auto-detects the format from the provider URL. "openai" uses reasoning_effort, "openrouter" uses reasoning.effort, "deepseek" uses thinking.type plus reasoning_effort when supported, "together" uses reasoning.enabled plus reasoning_effort when supported, "baseten" uses configurable chat_template_args plus reasoning_effort when supported, "zai" uses thinking.type, "qwen" uses top-level enable_thinking, "qwen-chat-template" uses chat_template_kwargs.enable_thinking and preserve_thinking, "chat-template" uses configurable chat_template_kwargs, "string-thinking" uses top-level thinking, and "ant-ling" uses reasoning.effort only when the mapped effort is non-null.',
 				},
 			),
 		),
 		chatTemplateKwargs: Type.Optional(
 			Type.Record(Type.String(), ChatTemplateKwargValueSchema, {
 				description:
-					'Kwargs sent as chat_template_kwargs when thinkingFormat is "chat-template". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for pi-controlled values.',
+					'Kwargs sent as chat_template_kwargs when thinkingFormat is "chat-template". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for nanopi-controlled values.',
 			}),
 		),
 		chatTemplateArgs: Type.Optional(
 			Type.Record(Type.String(), ChatTemplateKwargValueSchema, {
 				description:
-					'Arguments sent as chat_template_args when thinkingFormat is "baseten". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for pi-controlled values.',
+					'Arguments sent as chat_template_args when thinkingFormat is "baseten". Use $var with "thinking.enabled", "thinking.effort", or "thinking.budget" for nanopi-controlled values.',
 			}),
 		),
 		openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
@@ -307,7 +307,7 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 		}),
 		supportsInContextCompaction: optionalCompatBoolean({
 			description:
-				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real nanopi sessions.",
 			default: false,
 		}),
 		supportsMidConvoToolAdditions: Type.Optional(
@@ -367,7 +367,7 @@ export const OpenAIResponsesCompatSchema = Type.Object(
 		}),
 		supportsInContextCompaction: optionalCompatBoolean({
 			description:
-				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real nanopi sessions.",
 			default: false,
 		}),
 		sessionAffinityFormat: optionalSessionAffinityFormat({
@@ -487,7 +487,7 @@ export const AnthropicMessagesCompatSchema = Type.Object(
 		}),
 		supportsInContextCompaction: optionalCompatBoolean({
 			description:
-				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real nanopi sessions.",
 			default: false,
 		}),
 		supportsMidConvoToolChanges: Type.Optional(
@@ -540,7 +540,7 @@ const ProviderCompatPropertyOverrides = {
 	}),
 	supportsInContextCompaction: optionalCompatBoolean({
 		description:
-			"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real pi sessions.",
+			"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real nanopi sessions.",
 		default: false,
 	}),
 	sessionAffinityFormat: optionalSessionAffinityFormat({

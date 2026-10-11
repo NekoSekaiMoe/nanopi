@@ -5,8 +5,8 @@ import { chmod, chown, lstat, mkdir, mkdtemp, readdir, readFile, rm, writeFile }
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { performance } from "node:perf_hooks";
-import { contentText, InMemoryCredentialStore } from "@earendil-works/pi-ai";
-import { getCurrentSystemPrompt } from "@earendil-works/pi-ai/utils/transcript";
+import { contentText, InMemoryCredentialStore } from "@nanopi/pi-ai";
+import { getCurrentSystemPrompt } from "@nanopi/pi-ai/utils/transcript";
 import {
 	type AgentSession,
 	type CreateAgentSessionOptions,
@@ -17,7 +17,7 @@ import {
 	ModelRuntime,
 	readStoredCredential,
 	SessionManager,
-} from "@earendil-works/pi-coding-agent";
+} from "@nanopi/pi-coding-agent";
 import {
 	attachHarnessRunToError,
 	createHarness,
@@ -32,33 +32,33 @@ import {
 	type UsageSummary,
 } from "vitest-evals/harness";
 import type { DocumentationVariant } from "./plan.ts";
-import { PI_SESSION_SNAPSHOT_ARTIFACT } from "./report.ts";
+import { NANOPI_SESSION_SNAPSHOT_ARTIFACT } from "./report.ts";
 
-type PiRunDiagnostics = {
+type NanoPiRunDiagnostics = {
 	events: TranscriptEvent[];
 	metadata: Record<string, unknown>;
 	usage: UsageSummary;
 };
 
-export type PiCodingAgentInput = string | Array<{ type: "prompt"; content: string } | { type: "reload" }>;
+export type NanoPiCodingAgentInput = string | Array<{ type: "prompt"; content: string } | { type: "reload" }>;
 
-export type PiCodingAgentModelSelection = {
+export type NanoPiCodingAgentModelSelection = {
 	provider: string;
 	id: string;
 };
 
-export type PiCodingAgentHarnessOptions = {
+export type NanoPiCodingAgentHarnessOptions = {
 	name?: string;
-	model?: PiCodingAgentModelSelection;
+	model?: NanoPiCodingAgentModelSelection;
 	noTools?: CreateAgentSessionOptions["noTools"];
 	tools?: CreateAgentSessionOptions["tools"];
 	customTools?: CreateAgentSessionOptions["customTools"];
 	workspaceFiles?: Readonly<Record<string, string>>;
 	transformSystemPrompt?: (defaultPrompt: string) => string;
-	expectedPiDocumentation?: boolean;
+	expectedNanoPiDocumentation?: boolean;
 };
 
-export type PiCodingAgentHarnessWithOutput<TOutput extends JsonValue> = PiCodingAgentHarnessOptions & {
+export type NanoPiCodingAgentHarnessWithOutput<TOutput extends JsonValue> = NanoPiCodingAgentHarnessOptions & {
 	output: (args: {
 		response: string;
 		session: AgentSession;
@@ -68,22 +68,22 @@ export type PiCodingAgentHarnessWithOutput<TOutput extends JsonValue> = PiCoding
 };
 
 export function resolveModelSelection(
-	explicitModel: PiCodingAgentModelSelection | undefined,
-	environment: { PI_PROVIDER?: string; PI_MODEL?: string } = process.env,
-): PiCodingAgentModelSelection {
-	const provider = (explicitModel?.provider ?? environment.PI_PROVIDER)?.trim();
-	const id = (explicitModel?.id ?? environment.PI_MODEL)?.trim();
+	explicitModel: NanoPiCodingAgentModelSelection | undefined,
+	environment: { NANOPI_PROVIDER?: string; NANOPI_MODEL?: string } = process.env,
+): NanoPiCodingAgentModelSelection {
+	const provider = (explicitModel?.provider ?? environment.NANOPI_PROVIDER)?.trim();
+	const id = (explicitModel?.id ?? environment.NANOPI_MODEL)?.trim();
 	if (!provider || !id) {
-		throw new Error("Select a harness model explicitly or set both PI_PROVIDER and PI_MODEL as defaults.");
+		throw new Error("Select a harness model explicitly or set both NANOPI_PROVIDER and NANOPI_MODEL as defaults.");
 	}
 	return { provider, id };
 }
 
 export function applyIsolatedEnvironment(home: string, agentDir: string): () => void {
-	const overrides = { HOME: home, USERPROFILE: home, PI_CODING_AGENT_DIR: agentDir };
+	const overrides = { HOME: home, USERPROFILE: home, NANOPI_CODING_AGENT_DIR: agentDir };
 	const previous = new Map<string, string | undefined>();
 	for (const name of Object.keys(process.env)) {
-		if (!name.startsWith("PI_EVAL_")) continue;
+		if (!name.startsWith("NANOPI_EVAL_")) continue;
 		previous.set(name, process.env[name]);
 		delete process.env[name];
 	}
@@ -101,7 +101,7 @@ export function applyIsolatedEnvironment(home: string, agentDir: string): () => 
 
 type SandboxIdentity = { uid: number; gid: number };
 
-function parseSandboxId(name: "PI_EVAL_SANDBOX_UID" | "PI_EVAL_SANDBOX_GID"): number | undefined {
+function parseSandboxId(name: "NANOPI_EVAL_SANDBOX_UID" | "NANOPI_EVAL_SANDBOX_GID"): number | undefined {
 	const value = process.env[name];
 	if (value === undefined) return undefined;
 	const id = Number(value);
@@ -110,11 +110,11 @@ function parseSandboxId(name: "PI_EVAL_SANDBOX_UID" | "PI_EVAL_SANDBOX_GID"): nu
 }
 
 function resolveSandboxIdentity(): SandboxIdentity | undefined {
-	const uid = parseSandboxId("PI_EVAL_SANDBOX_UID");
-	const gid = parseSandboxId("PI_EVAL_SANDBOX_GID");
+	const uid = parseSandboxId("NANOPI_EVAL_SANDBOX_UID");
+	const gid = parseSandboxId("NANOPI_EVAL_SANDBOX_GID");
 	if (uid === undefined && gid === undefined) return undefined;
 	if (uid === undefined || gid === undefined) {
-		throw new Error("Set both PI_EVAL_SANDBOX_UID and PI_EVAL_SANDBOX_GID, or neither.");
+		throw new Error("Set both NANOPI_EVAL_SANDBOX_UID and NANOPI_EVAL_SANDBOX_GID, or neither.");
 	}
 	return { uid, gid };
 }
@@ -256,34 +256,34 @@ async function promptAgent(session: AgentSession, input: string, signal: AbortSi
 
 export function verifySystemPrompt(
 	systemPrompt: string,
-	options: Pick<PiCodingAgentHarnessOptions, "name" | "expectedPiDocumentation">,
+	options: Pick<NanoPiCodingAgentHarnessOptions, "name" | "expectedNanoPiDocumentation">,
 ): string {
-	if (options.expectedPiDocumentation === undefined) return systemPrompt;
+	if (options.expectedNanoPiDocumentation === undefined) return systemPrompt;
 	if (!systemPrompt.includes("\n<rules>\n")) {
-		throw new Error(`Pi system prompt lost its rules in the ${options.name} eval variant.`);
+		throw new Error(`nanopi system prompt lost its rules in the ${options.name} eval variant.`);
 	}
-	const hasDocumentation = systemPrompt.includes("\n<docs>\nPi documentation (read only");
-	if (hasDocumentation !== options.expectedPiDocumentation) {
-		throw new Error(`Pi system prompt does not match the ${options.name} eval variant.`);
+	const hasDocumentation = systemPrompt.includes("\n<docs>\nnanopi documentation (read only");
+	if (hasDocumentation !== options.expectedNanoPiDocumentation) {
+		throw new Error(`nanopi system prompt does not match the ${options.name} eval variant.`);
 	}
 	return systemPrompt;
 }
 
-async function runPiCodingAgent<TOutput extends JsonValue>(
-	input: PiCodingAgentInput,
+async function runNanoPiCodingAgent<TOutput extends JsonValue>(
+	input: NanoPiCodingAgentInput,
 	signal: AbortSignal | undefined,
 	setArtifact: HarnessContext["setArtifact"],
-	options: PiCodingAgentHarnessOptions | PiCodingAgentHarnessWithOutput<TOutput>,
+	options: NanoPiCodingAgentHarnessOptions | NanoPiCodingAgentHarnessWithOutput<TOutput>,
 ): Promise<SimpleHarnessResult<string | TOutput>> {
 	const startedAt = performance.now();
 	signal?.throwIfAborted();
 	const selection = resolveModelSelection(options.model);
 	const hostAgentDir = getAgentDir();
 	const sandboxIdentity = resolveSandboxIdentity();
-	const root = await mkdtemp(join(tmpdir(), "pi-eval-"));
+	const root = await mkdtemp(join(tmpdir(), "nanopi-eval-"));
 	const workspace = join(root, "workspace");
 	const isolatedHome = join(root, "home");
-	const agentDir = join(isolatedHome, ".pi", "agent");
+	const agentDir = join(isolatedHome, ".nanopi", "agent");
 	const extensionFactories: InlineExtension[] = [];
 	let forcedSystemPrompt: string | undefined;
 	if (options.transformSystemPrompt) {
@@ -291,8 +291,8 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 		extensionFactories.push({
 			name: "eval-system-prompt-transform",
 			hidden: true,
-			factory: (pi) => {
-				pi.on("before_agent_start", ({ systemPrompt }) => {
+			factory: (nanopi) => {
+				nanopi.on("before_agent_start", ({ systemPrompt }) => {
 					forcedSystemPrompt = transform(systemPrompt);
 					return { systemPrompt: forcedSystemPrompt };
 				});
@@ -303,7 +303,7 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 	let sessionManager: SessionManager | undefined;
 	let session: AgentSession | undefined;
 	let result: SimpleHarnessResult<string | TOutput> | undefined;
-	let runDiagnostics: PiRunDiagnostics | undefined;
+	let runDiagnostics: NanoPiRunDiagnostics | undefined;
 	let runError: unknown;
 	const cleanupErrors: unknown[] = [];
 	let hiddenCredentialEnvironment: { name: string; value: string } | undefined;
@@ -383,7 +383,7 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 			if (abortPromise) await abortPromise;
 		}
 		if (response === undefined) {
-			throw new Error("Pi eval input must include at least one prompt step.");
+			throw new Error("nanopi eval input must include at least one prompt step.");
 		}
 		// A forced prompt is not recorded in the transcript, so use the one the transform
 		// extension sent; otherwise the replayed transcript prompt is what the provider received.
@@ -420,10 +420,10 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 		if (sessionManager) {
 			const sessionPath = sessionManager.getSessionFile();
 			if (!sessionPath || !existsSync(sessionPath)) {
-				cleanupErrors.push(new Error("Pi eval produced no session file."));
+				cleanupErrors.push(new Error("nanopi eval produced no session file."));
 			} else {
 				try {
-					setArtifact(PI_SESSION_SNAPSHOT_ARTIFACT, await readFile(sessionPath, "utf8"));
+					setArtifact(NANOPI_SESSION_SNAPSHOT_ARTIFACT, await readFile(sessionPath, "utf8"));
 				} catch (error) {
 					cleanupErrors.push(error);
 				}
@@ -464,20 +464,22 @@ async function runPiCodingAgent<TOutput extends JsonValue>(
 		}
 		throw failure;
 	}
-	if (!result) throw new Error("Pi eval completed without a result.");
+	if (!result) throw new Error("nanopi eval completed without a result.");
 	return { ...result, timings: { totalMs: performance.now() - startedAt } };
 }
 
-export function createPiCodingAgentHarness<TOutput extends JsonValue>(
-	options: PiCodingAgentHarnessWithOutput<TOutput>,
-): Harness<PiCodingAgentInput, TOutput>;
-export function createPiCodingAgentHarness(options?: PiCodingAgentHarnessOptions): Harness<PiCodingAgentInput, string>;
-export function createPiCodingAgentHarness<TOutput extends JsonValue>(
-	options: PiCodingAgentHarnessOptions | PiCodingAgentHarnessWithOutput<TOutput> = {},
-): Harness<PiCodingAgentInput, string | TOutput> {
-	return createHarness<PiCodingAgentInput, string | TOutput>({
+export function createNanoPiCodingAgentHarness<TOutput extends JsonValue>(
+	options: NanoPiCodingAgentHarnessWithOutput<TOutput>,
+): Harness<NanoPiCodingAgentInput, TOutput>;
+export function createNanoPiCodingAgentHarness(
+	options?: NanoPiCodingAgentHarnessOptions,
+): Harness<NanoPiCodingAgentInput, string>;
+export function createNanoPiCodingAgentHarness<TOutput extends JsonValue>(
+	options: NanoPiCodingAgentHarnessOptions | NanoPiCodingAgentHarnessWithOutput<TOutput> = {},
+): Harness<NanoPiCodingAgentInput, string | TOutput> {
+	return createHarness<NanoPiCodingAgentInput, string | TOutput>({
 		name: options.name ?? "pi-coding-agent",
-		run: ({ input, signal, setArtifact }) => runPiCodingAgent(input, signal, setArtifact, options),
+		run: ({ input, signal, setArtifact }) => runNanoPiCodingAgent(input, signal, setArtifact, options),
 	});
 }
 
@@ -485,53 +487,54 @@ export function createPiCodingAgentHarness<TOutput extends JsonValue>(
 export const DOCUMENTATION_EVAL_TOOLS = ["read", "write", "edit", "grep", "find", "ls"] as const;
 
 export function resolveDocumentationVariant(
-	value: string | undefined = process.env.PI_EVAL_VARIANT,
+	value: string | undefined = process.env.NANOPI_EVAL_VARIANT,
 ): DocumentationVariant {
 	if (value === "without_docs" || value === "with_docs") return value;
-	throw new TypeError('PI_EVAL_VARIANT must be "without_docs" or "with_docs".');
+	throw new TypeError('NANOPI_EVAL_VARIANT must be "without_docs" or "with_docs".');
 }
 
-export function excludePiDocumentation(defaultPrompt: string): string {
+export function excludeNanoPiDocumentation(defaultPrompt: string): string {
 	const documentationStartMarker = "\n<docs>\n";
 	const documentationEndMarker = "\n</docs>";
 	const documentationStart = defaultPrompt.indexOf(documentationStartMarker);
-	if (documentationStart === -1) throw new Error("Default Pi system prompt has no Pi documentation section.");
+	if (documentationStart === -1) throw new Error("Default nanopi system prompt has no nanopi documentation section.");
 	const documentationEnd = defaultPrompt.indexOf(documentationEndMarker, documentationStart);
-	if (documentationEnd === -1) throw new Error("Default Pi system prompt has no complete Pi documentation section.");
+	if (documentationEnd === -1)
+		throw new Error("Default nanopi system prompt has no complete nanopi documentation section.");
 	const cwdStart = defaultPrompt.lastIndexOf("\n<cwd>\n");
-	if (cwdStart < documentationEnd) throw new Error("Default Pi system prompt has no working-directory section.");
+	if (cwdStart < documentationEnd) throw new Error("Default nanopi system prompt has no working-directory section.");
 	return (
 		defaultPrompt.slice(0, documentationStart) + defaultPrompt.slice(documentationEnd + documentationEndMarker.length)
 	);
 }
 
 type DocumentationHarnessOptions = Omit<
-	PiCodingAgentHarnessOptions,
-	"name" | "transformSystemPrompt" | "expectedPiDocumentation"
+	NanoPiCodingAgentHarnessOptions,
+	"name" | "transformSystemPrompt" | "expectedNanoPiDocumentation"
 >;
 type DocumentationHarnessWithOutput<TOutput extends JsonValue> = Omit<
-	PiCodingAgentHarnessWithOutput<TOutput>,
-	"name" | "transformSystemPrompt" | "expectedPiDocumentation"
+	NanoPiCodingAgentHarnessWithOutput<TOutput>,
+	"name" | "transformSystemPrompt" | "expectedNanoPiDocumentation"
 >;
 
-export function createPiDocumentationEvalHarness<TOutput extends JsonValue>(
+export function createNanoPiDocumentationEvalHarness<TOutput extends JsonValue>(
 	options: DocumentationHarnessWithOutput<TOutput>,
-): Harness<PiCodingAgentInput, TOutput>;
-export function createPiDocumentationEvalHarness(
+): Harness<NanoPiCodingAgentInput, TOutput>;
+export function createNanoPiDocumentationEvalHarness(
 	options?: DocumentationHarnessOptions,
-): Harness<PiCodingAgentInput, string>;
-export function createPiDocumentationEvalHarness<TOutput extends JsonValue>(
+): Harness<NanoPiCodingAgentInput, string>;
+export function createNanoPiDocumentationEvalHarness<TOutput extends JsonValue>(
 	options: DocumentationHarnessOptions | DocumentationHarnessWithOutput<TOutput> = {},
 ) {
-	if (process.env.PI_EVAL_CONTAINER !== "1" || !resolveSandboxIdentity()) {
+	if (process.env.NANOPI_EVAL_CONTAINER !== "1" || !resolveSandboxIdentity()) {
 		throw new Error("Documentation evals must run in the isolated container sandbox.");
 	}
 	const variant = resolveDocumentationVariant();
-	return createPiCodingAgentHarness({
+	return createNanoPiCodingAgentHarness({
 		...options,
 		name: variant,
 		tools: options.tools ?? [...DOCUMENTATION_EVAL_TOOLS],
-		...(variant === "without_docs" ? { transformSystemPrompt: excludePiDocumentation } : {}),
-		expectedPiDocumentation: variant === "with_docs",
+		...(variant === "without_docs" ? { transformSystemPrompt: excludeNanoPiDocumentation } : {}),
+		expectedNanoPiDocumentation: variant === "with_docs",
 	});
 }

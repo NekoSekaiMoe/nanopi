@@ -10,10 +10,10 @@ import {
 	type Provider,
 	type ProviderStreamOptions,
 	type RefreshModelsContext,
-} from "@earendil-works/pi-ai";
-import { llamaCppClassifyApi } from "@earendil-works/pi-ai/api/llama-cpp-classify.lazy";
-import { typesafeSystemOneApi } from "@earendil-works/pi-ai/api/typesafe-system-one.lazy";
-import { stream, streamSimple } from "@earendil-works/pi-ai/compat";
+} from "@nanopi/pi-ai";
+import { llamaCppClassifyApi } from "@nanopi/pi-ai/api/llama-cpp-classify.lazy";
+import { typesafeSystemOneApi } from "@nanopi/pi-ai/api/typesafe-system-one.lazy";
+import { stream, streamSimple } from "@nanopi/pi-ai/compat";
 import {
 	LlamaClient,
 	type LlamaModelInfo,
@@ -25,7 +25,7 @@ import { createManagedLlama, type ManagedLlama, type ManagedLlamaServerInfo } fr
 
 export const LLAMA_PROVIDER_ID = "llama.cpp";
 export const DEFAULT_LLAMA_SERVER_URL = "http://127.0.0.1:8080";
-/** Credential env key that selects managed mode, where pi starts llama-server itself. */
+/** Credential env key that selects managed mode, where nanopi starts llama-server itself. */
 export const LLAMA_MODE_ENV = "LLAMA_MODE";
 export const LLAMA_MANAGED_MODE = "managed";
 /**
@@ -60,7 +60,7 @@ function modelIsSelectable(model: LlamaModelInfo, routerAutoload: boolean, manag
 	// Unloaded models are routable only when llama.cpp router autoload can load them on first use.
 	if (!routerAutoload || model.status.value !== "unloaded" || model.status.failed) return false;
 	// A connected router may be shared and list every cached model, so only its deliberate presets are exposed.
-	// pi owns the managed router, so all of its local and downloaded models are selectable.
+	// nanopi owns the managed router, so all of its local and downloaded models are selectable.
 	return managed || model.source === "preset";
 }
 
@@ -75,7 +75,7 @@ async function routerAutoloadEnabled(
 	}
 	try {
 		const autoload = (await client.props({ signal })).models_autoload;
-		// Older routers do not report the flag. Autoload is llama.cpp's default, and pi starts the managed router
+		// Older routers do not report the flag. Autoload is llama.cpp's default, and nanopi starts the managed router
 		// without --no-models-autoload unless llamaCpp.args adds it.
 		return managed ? autoload !== false : autoload === true;
 	} catch {
@@ -125,7 +125,7 @@ function isChatModel(model: LlamaModelInfo): boolean {
  * System One endpoint (`/v1/systemone`). Chat models fall back to `llama-cpp-classify`, which reads
  * answers from next-token label probabilities.
  */
-function toPiClassifierModel(
+function toNanoPiClassifierModel(
 	model: LlamaModelInfo,
 	serverUrl: string,
 	cachedContextWindow?: number,
@@ -150,7 +150,7 @@ function isLlamaClassifierModel(model: AnyModel): model is ClassifierModel<Llama
 	);
 }
 
-function toPiModel(
+function toNanoPiModel(
 	model: LlamaModelInfo,
 	serverUrl: string,
 	props?: LlamaServerProps,
@@ -212,9 +212,9 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 		);
 		models = selectable
 			.filter(isChatModel)
-			.map((model) => toPiModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl));
+			.map((model) => toNanoPiModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl));
 		classifiers = selectable.map((model) =>
-			toPiClassifierModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl),
+			toNanoPiClassifierModel(model, isManaged ? MANAGED_LLAMA_SERVER_URL : serverUrl),
 		);
 	};
 
@@ -241,12 +241,12 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 				login: async (interaction): Promise<ApiKeyCredential> => {
 					const mode = await interaction.prompt({
 						type: "select",
-						message: "How should pi reach llama.cpp?",
+						message: "How should nanopi reach llama.cpp?",
 						options: [
 							{
 								id: LLAMA_MANAGED_MODE,
 								label: "Start llama-server automatically",
-								description: "pi runs llama-server on a random local port and stops it when unused",
+								description: "nanopi runs llama-server on a random local port and stops it when unused",
 							},
 							{
 								id: "connect",
@@ -343,7 +343,7 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 			let client: LlamaClient;
 			let modelServerUrl: string;
 			if (isManaged) {
-				// Refresh only from an already running server; starting one here would launch it on every pi start.
+				// Refresh only from an already running server; starting one here would launch it on every nanopi start.
 				const server = await managed.probe();
 				if (!server) return;
 				client = new LlamaClient(server.url, server.apiKey);
@@ -371,13 +371,13 @@ export function createLlamaProvider(managed: ManagedLlama = createManagedLlama()
 					// would need to be loaded, while querying sleeping models may wake them. Those models remain
 					// unclassified until they are loaded or woken and a later catalog refresh discovers them.
 					if (model.status.value !== "loaded")
-						return toPiModel(model, modelServerUrl, undefined, cachedContextWindow);
+						return toNanoPiModel(model, modelServerUrl, undefined, cachedContextWindow);
 					const props = await client.props({ model: model.id, signal: context.signal });
-					return toPiModel(model, modelServerUrl, props, cachedContextWindow);
+					return toNanoPiModel(model, modelServerUrl, props, cachedContextWindow);
 				}),
 			);
 			const refreshedClassifiers = selectable.map((model) =>
-				toPiClassifierModel(model, modelServerUrl, cachedContextWindows.get(model.id)),
+				toNanoPiClassifierModel(model, modelServerUrl, cachedContextWindows.get(model.id)),
 			);
 			if (context.signal.aborted) return;
 			await context.publish({

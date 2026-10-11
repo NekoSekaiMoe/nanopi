@@ -18,7 +18,7 @@ export const ModelPromptCacheSchema = Type.Partial(
 	Type.Record(Type.Enum(MODEL_PROMPT_CACHE_RETENTIONS), Type.Number({ exclusiveMinimum: 0 })),
 	{
 		description:
-			"Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so Pi does not warm it.",
+			"Best-effort prompt cache lifetime in seconds for each retention tier. A missing tier means the lifetime is unknown, so nanopi does not warm it.",
 	},
 );
 

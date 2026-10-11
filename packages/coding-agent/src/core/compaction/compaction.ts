@@ -5,7 +5,7 @@
  * and after compaction the session is reloaded.
  */
 
-import type { AgentMessage, StreamFn, ThinkingLevel } from "@earendil-works/pi-agent-core";
+import type { AgentMessage, StreamFn, ThinkingLevel } from "@nanopi/pi-agent-core";
 import {
 	contentText,
 	getCurrentSystemMessage,
@@ -14,7 +14,7 @@ import {
 	type RetryPolicy,
 	retryAssistantCall,
 	uuidv7,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import type {
 	Api,
 	AssistantMessage,
@@ -24,8 +24,8 @@ import type {
 	SystemMessage,
 	TranscriptContext,
 	Usage,
-} from "@earendil-works/pi-ai/compat";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
+} from "@nanopi/pi-ai/compat";
+import { completeSimple } from "@nanopi/pi-ai/compat";
 import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
 import { convertToLlm } from "../messages.ts";
 import {
@@ -62,7 +62,7 @@ export interface CompactionDetails {
 
 /**
  * What happened to the in-context attempt of one compaction. `skipped` carries the reason the
- * decision chose a standalone summary; `failed` means an attempt was made and Pi fell back.
+ * decision chose a standalone summary; `failed` means an attempt was made and nanopi fell back.
  * `rebuild` failures happen while reproducing the next-turn request, before anything is sent.
  */
 export type InContextCompactionOutcome =
@@ -91,7 +91,7 @@ function extractFileOperations(
 ): FileOperations {
 	const fileOps = createFileOps();
 
-	// Collect from previous compaction's details (if pi-generated)
+	// Collect from previous compaction's details (if nanopi-generated)
 	if (prevCompactionIndex >= 0) {
 		const prevCompaction = entries[prevCompactionIndex] as CompactionEntry;
 		if (!prevCompaction.fromHook && prevCompaction.details) {

@@ -41,7 +41,7 @@ importers:
 
   packages/agent:
     dependencies:
-      '@earendil-works/pi-ai':
+      '@nanopi/pi-ai':
         specifier: ^1.1.0
         version: link:../ai
       typebox:
@@ -66,12 +66,12 @@ importers:
       '@aws/bedrock-token-generator':
         specifier: 1.1.0
         version: 1.1.0
-      '@earendil-works/pi-telemetry':
-        specifier: ^1.1.0
-        version: link:../telemetry
       '@google/genai':
         specifier: 2.21.0
         version: 2.21.0
+      '@nanopi/pi-telemetry':
+        specifier: ^1.1.0
+        version: link:../telemetry
       '@smithy/node-http-handler':
         specifier: 4.12.1
         version: 4.12.1
@@ -122,13 +122,13 @@ importers:
       '@aws/bedrock-token-generator':
         specifier: 1.1.0
         version: 1.1.0
-      '@earendil-works/pi-agent-core':
+      '@nanopi/pi-agent-core':
         specifier: ^1.1.0
         version: link:../agent
-      '@earendil-works/pi-ai':
+      '@nanopi/pi-ai':
         specifier: ^1.1.0
         version: link:../ai
-      '@earendil-works/pi-tui':
+      '@nanopi/pi-tui':
         specifier: ^1.1.0
         version: link:../tui
       '@silvia-odwyer/photon-node':
@@ -237,10 +237,10 @@ importers:
 
   packages/evals:
     devDependencies:
-      '@earendil-works/pi-ai':
+      '@nanopi/pi-ai':
         specifier: ^1.1.0
         version: link:../ai
-      '@earendil-works/pi-coding-agent':
+      '@nanopi/pi-coding-agent':
         specifier: ^1.1.0
         version: link:../coding-agent
       '@types/node':

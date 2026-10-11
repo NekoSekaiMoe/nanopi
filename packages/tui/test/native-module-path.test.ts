@@ -14,7 +14,7 @@ describe("getNativeModuleCandidates", () => {
 			moduleUrl: pathToFileURL(bundledModule).href,
 			execPath: resolve("virtual", "node", "node.exe"),
 			resolvePackage: (specifier) => {
-				assert.equal(specifier, "@earendil-works/pi-tui");
+				assert.equal(specifier, "@nanopi/pi-tui");
 				return join(packageRoot, "dist", "index.js");
 			},
 		});
@@ -24,8 +24,8 @@ describe("getNativeModuleCandidates", () => {
 	});
 
 	it("keeps standalone binary fallbacks when the TUI package is unavailable", () => {
-		const bundledModule = resolve("virtual", "pi", "bundle", "chunks", "chunk.js");
-		const execPath = resolve("virtual", "pi", "pi.exe");
+		const bundledModule = resolve("virtual", "nanopi", "bundle", "chunks", "chunk.js");
+		const execPath = resolve("virtual", "nanopi", "nanopi.exe");
 		const nativePath = join("native", "darwin", "prebuilds", "darwin-arm64", "darwin-platform.node");
 
 		const candidates = getNativeModuleCandidates(nativePath, {

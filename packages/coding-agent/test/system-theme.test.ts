@@ -1,4 +1,4 @@
-import { colorToOklch, colorToRgb, parseColor, type RgbColor, rgbColor } from "@earendil-works/pi-tui";
+import { colorToOklch, colorToRgb, parseColor, type RgbColor, rgbColor } from "@nanopi/pi-tui";
 import { afterEach, describe, expect, it } from "vitest";
 import {
 	generateSystemThemeColors,

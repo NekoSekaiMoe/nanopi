@@ -11,7 +11,7 @@ import {
 	type Transport,
 	toToolDeclaration,
 	uuidv7,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { runAgentLoop, runAgentLoopContinue } from "./agent-loop.ts";
 import { createAgentRequestMetadata } from "./request-metadata.ts";
 import { getDefaultStreamFn } from "./stream-fn.ts";

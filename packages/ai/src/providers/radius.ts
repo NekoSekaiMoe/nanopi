@@ -1,4 +1,4 @@
-import { piMessagesApi } from "../api/pi-messages.lazy.ts";
+import { nanopiMessagesApi } from "../api/nanopi-messages.lazy.ts";
 import { envApiKeyAuth, lazyOAuth } from "../auth/helpers.ts";
 import { loadRadiusOAuth } from "../auth/oauth/load.ts";
 import type { Provider } from "../models.ts";
@@ -19,18 +19,18 @@ export interface RadiusProviderOptions {
 }
 
 /** Radius gateway provider with a persisted, dynamically refreshed catalog. */
-export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"pi-messages"> {
+export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"nanopi-messages"> {
 	const id = options.id ?? "radius";
 	const name = options.name ?? "Radius";
 	const gateway = normalizeRadiusGatewayUrl(options.gateway ?? DEFAULT_RADIUS_GATEWAY);
-	const baselineModels: Model<"pi-messages">[] =
+	const baselineModels: Model<"nanopi-messages">[] =
 		gateway === normalizeRadiusGatewayUrl(DEFAULT_RADIUS_GATEWAY)
 			? Object.values(RADIUS_MODELS).map((model) => ({ ...model, provider: id }))
 			: [];
 	// Gateway catalog for this account. Radius org owners can disable models, so once known it replaces
 	// the shipped baseline instead of overlaying it. The baseline only covers the time before any catalog exists.
-	let dynamicModels: Model<"pi-messages">[] | undefined;
-	const streams = piMessagesApi();
+	let dynamicModels: Model<"nanopi-messages">[] | undefined;
+	const streams = nanopiMessagesApi();
 
 	return {
 		id,
@@ -43,7 +43,7 @@ export function radiusProvider(options: RadiusProviderOptions = {}): Provider<"p
 		refreshModels: async (context) => {
 			const stored = context.stored;
 			if (stored) {
-				const restored = stored.models.filter((model) => model.provider === id) as Model<"pi-messages">[];
+				const restored = stored.models.filter((model) => model.provider === id) as Model<"nanopi-messages">[];
 				if (
 					!(await context.publish({
 						update: () => {

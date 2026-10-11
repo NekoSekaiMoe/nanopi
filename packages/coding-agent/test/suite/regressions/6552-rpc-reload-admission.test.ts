@@ -128,8 +128,8 @@ describe("issue #6552 RPC reload admission", () => {
 		});
 		let secondPromptCalls = 0;
 		let uiResponseReceived = false;
-		const resourceLoader = await createReloadingResourceLoader((pi) => {
-			pi.on("input", (event, ctx) => {
+		const resourceLoader = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("input", (event, ctx) => {
 				if (event.text === "first") {
 					ctx.requestReload();
 				} else if (event.text === "second") {
@@ -137,7 +137,7 @@ describe("issue #6552 RPC reload admission", () => {
 				}
 				return { action: "handled" };
 			});
-			pi.on("session_shutdown", async (_event, ctx) => {
+			nanopi.on("session_shutdown", async (_event, ctx) => {
 				markShutdownStarted();
 				uiResponseReceived = await ctx.ui.confirm("Reload", "Continue reload?");
 				await shutdownReleased;

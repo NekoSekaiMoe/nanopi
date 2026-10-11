@@ -3,9 +3,9 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 	type KeybindingsManager,
-} from "@earendil-works/pi-coding-agent";
-import type { Component, EditorTheme, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+} from "@nanopi/pi-coding-agent";
+import type { Component, EditorTheme, TUI } from "@nanopi/pi-tui";
+import { truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 
 function fitBorder(
 	left: string,
@@ -68,7 +68,7 @@ class EmptyFooter implements Component {
 	invalidate(): void {}
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (nanopi: ExtensionAPI) {
 	let isWorking = false;
 	let spinnerIndex = 0;
 	let spinnerTimer: ReturnType<typeof setInterval> | undefined;
@@ -82,7 +82,7 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
-	pi.on("agent_start", () => {
+	nanopi.on("agent_start", () => {
 		isWorking = true;
 		stopSpinner();
 		spinnerTimer = setInterval(() => {
@@ -92,25 +92,25 @@ export default function (pi: ExtensionAPI) {
 		activeTui?.requestRender();
 	});
 
-	pi.on("agent_settled", () => {
+	nanopi.on("agent_settled", () => {
 		isWorking = false;
 		stopSpinner();
 		activeTui?.requestRender();
 	});
 
-	pi.on("session_shutdown", () => {
+	nanopi.on("session_shutdown", () => {
 		stopSpinner();
 		activeTui = undefined;
 	});
 
-	pi.on("session_start", (_event, ctx) => {
+	nanopi.on("session_start", (_event, ctx) => {
 		ctx.ui.setWorkingVisible(false);
 		ctx.ui.setFooter(() => new EmptyFooter());
 
 		let branch: string | undefined;
 
 		const refreshBranch = async () => {
-			const result = await pi.exec("git", ["branch", "--show-current"], { cwd: ctx.cwd }).catch(() => undefined);
+			const result = await nanopi.exec("git", ["branch", "--show-current"], { cwd: ctx.cwd }).catch(() => undefined);
 			const stdout = result?.stdout.trim();
 			branch = stdout && stdout.length > 0 ? stdout : undefined;
 			activeTui?.requestRender();
@@ -129,7 +129,7 @@ export default function (pi: ExtensionAPI) {
 
 				const thm = ctx.ui.theme;
 				const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no model";
-				const thinking = pi.getThinkingLevel();
+				const thinking = nanopi.getThinkingLevel();
 				const topLeft = isWorking ? thm.fg("accent", ` ${spinnerFrames[spinnerIndex]} `) : "";
 				const topRight = "";
 				const bottomLeft = thm.fg("muted", ` ${model} · ${formatThinking(thinking)} `);

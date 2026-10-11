@@ -6,10 +6,10 @@ import {
 	type ModelType,
 	type Provider,
 	type RefreshModelsContext,
-} from "@earendil-works/pi-ai";
+} from "@nanopi/pi-ai";
 import { VERSION } from "../config.ts";
 import { fetchWithRetry } from "../utils/management-http.ts";
-import { getPiUserAgent } from "../utils/pi-user-agent.ts";
+import { getNanoPiUserAgent } from "../utils/nanopi-user-agent.ts";
 
 const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
@@ -63,7 +63,7 @@ async function readCatalog(
 	};
 }
 
-/** Whether a pi.dev catalog is newer than the model data shipped with pi. */
+/** Whether a pi.dev catalog is newer than the model data shipped with nanopi. */
 function isNewer(lastModified: number | undefined, localGeneratedAt: number | undefined): boolean {
 	return localGeneratedAt === undefined || (lastModified !== undefined && lastModified > localGeneratedAt);
 }
@@ -85,7 +85,7 @@ function requestCatalog(
 		{
 			headers: {
 				accept: "application/json",
-				"User-Agent": getPiUserAgent(VERSION),
+				"User-Agent": getNanoPiUserAgent(VERSION),
 				...(validator ? { "if-none-match": validator } : {}),
 			},
 			signal,
@@ -130,7 +130,7 @@ export function withRemoteCatalog(
 			}
 			if (!context.allowNetwork || context.signal.aborted) return;
 			// Skip the request if pi.dev was checked less than REMOTE_CATALOG_REFRESH_INTERVAL_MS ago.
-			// An entry without lastModified (saved by an older pi, or after a failed first request) is
+			// An entry without lastModified (saved by an older nanopi, or after a failed first request) is
 			// always refetched: remoteModels() ignores it, so waiting would leave the overlay empty.
 			if (
 				!context.force &&
@@ -189,7 +189,7 @@ export function withRemoteCatalog(
  * pi.dev catalog) is passed through `personalize` and the result is saved. The saved entry holds
  * the personalized list, not the pi.dev catalog, and replaces the catalog, including offline.
  * The refresh interval and etag revalidation are skipped. An empty list (nothing saved yet, or an
- * empty catalog saved by an older pi after a failed or missing pi.dev catalog) falls back to the
+ * empty catalog saved by an older nanopi after a failed or missing pi.dev catalog) falls back to the
  * built-in models.
  */
 export function withPersonalizedCatalog(

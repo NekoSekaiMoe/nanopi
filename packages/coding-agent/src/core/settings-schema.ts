@@ -1,4 +1,4 @@
-import { ModelThinkingLevelSchema } from "@earendil-works/pi-ai/providers/model-schema";
+import { ModelThinkingLevelSchema } from "@nanopi/pi-ai/providers/model-schema";
 import { type Static, type TSchemaOptions, Type } from "typebox";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 
@@ -187,7 +187,7 @@ const SkillsInputSchema = Type.Union(
 	{ description: "Local skill file paths or directories." },
 );
 
-/** Settings for the llama-server that pi starts and stops in managed llama.cpp mode. */
+/** Settings for the llama-server that nanopi starts and stops in managed llama.cpp mode. */
 const LlamaCppSettingsSchema = Type.Object({
 	command: Type.Optional(Type.String({ default: "llama-server" })),
 	modelsDir: Type.Optional(
@@ -197,7 +197,7 @@ const LlamaCppSettingsSchema = Type.Object({
 	),
 	args: Type.Optional(
 		Type.Array(Type.String(), {
-			description: "Extra llama-server arguments; host, port, API key, and models dir are managed by pi.",
+			description: "Extra llama-server arguments; host, port, API key, and models dir are managed by nanopi.",
 		}),
 	),
 	idleShutdownSeconds: Type.Optional(nonNegativeSafeInteger({ default: 30 })),
@@ -390,7 +390,9 @@ export const SettingsSchema = Type.Object(
 			}),
 		),
 		httpProxy: Type.Optional(
-			Type.String({ description: "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for Pi-managed HTTP clients." }),
+			Type.String({
+				description: "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for nanopi-managed HTTP clients.",
+			}),
 		),
 		httpIdleTimeoutMs: Type.Optional(
 			timeoutSetting({

@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai";
+import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type RuntimeReloadCallbacks, RuntimeReloadError } from "../../../src/core/agent-session.ts";
@@ -52,14 +52,14 @@ describe("issue #6552 deferred extension reload", () => {
 
 	it("defers and coalesces tool requests until the agent settles", async () => {
 		const events: string[] = [];
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.on("agent_settled", () => {
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("agent_settled", () => {
 				events.push("settled");
 			});
-			pi.on("session_shutdown", () => {
+			nanopi.on("session_shutdown", () => {
 				events.push("shutdown");
 			});
-			pi.registerTool({
+			nanopi.registerTool({
 				name: "reload_runtime",
 				label: "Reload runtime",
 				description: "Request a runtime reload",
@@ -92,8 +92,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("reloads after a command handler without model authentication", async () => {
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.registerCommand("reload-runtime", {
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.registerCommand("reload-runtime", {
 				description: "Reload runtime",
 				handler: async (_args, ctx) => {
 					ctx.requestReload();
@@ -112,8 +112,8 @@ describe("issue #6552 deferred extension reload", () => {
 		const extensionErrors: Array<{ event: string; error: string }> = [];
 		const harness = await createHarness({
 			extensionFactories: [
-				(pi) => {
-					pi.registerCommand("fail", {
+				(nanopi) => {
+					nanopi.registerCommand("fail", {
 						description: "Fail",
 						handler: async () => {
 							throw new Error("command failed");
@@ -133,8 +133,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("propagates reload failures after command handlers complete", async () => {
-		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
-			pi.registerCommand("reload-runtime", {
+		const { resourceLoader } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.registerCommand("reload-runtime", {
 				description: "Reload runtime",
 				handler: async (_args, ctx) => {
 					ctx.requestReload();
@@ -157,8 +157,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("ignores requests from reload lifecycle handlers", async () => {
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.on("session_start", (_event, ctx) => ctx.requestReload());
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("session_start", (_event, ctx) => ctx.requestReload());
 		});
 		const harness = await createHarness({ resourceLoader });
 		harnesses.push(harness);
@@ -175,8 +175,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("flushes a request after manual compaction clears its controller", async () => {
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.on("session_before_compact", (event, ctx) => {
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("session_before_compact", (event, ctx) => {
 				ctx.requestReload();
 				return {
 					compaction: {
@@ -201,8 +201,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("flushes a request after branch summarization clears its controller", async () => {
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.on("session_before_tree", (_event, ctx) => {
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("session_before_tree", (_event, ctx) => {
 				ctx.requestReload();
 				return { summary: { summary: "summary from extension" } };
 			});
@@ -239,8 +239,8 @@ describe("issue #6552 deferred extension reload", () => {
 	it("makes post-invalidation failures terminal for reload admission", async () => {
 		let oldContext: ExtensionContext | undefined;
 		let inputCalls = 0;
-		const { resourceLoader } = await createReloadingResourceLoader((pi) => {
-			pi.on("input", (_event, ctx) => {
+		const { resourceLoader } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("input", (_event, ctx) => {
 				inputCalls++;
 				oldContext = ctx;
 				ctx.requestReload();
@@ -274,8 +274,8 @@ describe("issue #6552 deferred extension reload", () => {
 	});
 
 	it("ignores requests when the host does not support reload", async () => {
-		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((pi) => {
-			pi.on("input", (_event, ctx) => {
+		const { resourceLoader, getReloadCount } = await createReloadingResourceLoader((nanopi) => {
+			nanopi.on("input", (_event, ctx) => {
 				ctx.requestReload();
 				return { action: "handled" };
 			});

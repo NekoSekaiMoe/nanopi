@@ -1,10 +1,10 @@
 # Environment Variables
 
-Pi uses environment variables in three ways:
+nanopi uses environment variables in three ways:
 
-- Variables such as `PI_OFFLINE` configure the Pi process.
-- Pi sets process markers so child processes can identify Pi as the launching agent.
-- Commands run by the LLM-callable shell tools receive `PI_*` variables describing the current session.
+- Variables such as `NANOPI_OFFLINE` configure the nanopi process.
+- nanopi sets process markers so child processes can identify nanopi as the launching agent.
+- Commands run by the LLM-callable shell tools receive `NANOPI_*` variables describing the current session.
 
 Provider API-key variables are documented separately in [Providers](providers.md#use-an-api-key-from-the-environment).
 
@@ -12,37 +12,37 @@ Provider API-key variables are documented separately in [Providers](providers.md
 
 The CLI and RPC entry points set two process markers:
 
-- `AI_AGENT=pi` is a generic marker that lets tooling identify Pi as the agent that launched the process.
-- `PI_CODING_AGENT=true` is Pi-specific and lets child processes detect that they run inside Pi.
+- `AI_AGENT=nanopi` is a generic marker that lets tooling identify nanopi as the agent that launched the process.
+- `NANOPI_CODING_AGENT=true` is nanopi-specific and lets child processes detect that they run inside nanopi.
 
-Child processes inherit both markers. They are not session-specific and are not set automatically when Pi is embedded through the SDK.
+Child processes inherit both markers. They are not session-specific and are not set automatically when nanopi is embedded through the SDK.
 
 ## Shell Tool Session Environment
 
-Commands run by the `bash` and `powershell` tools receive the current Pi session state:
+Commands run by the `bash` and `powershell` tools receive the current nanopi session state:
 
 | Variable | Description |
 |----------|-------------|
-| `PI_SESSION_ID` | Current session ID |
-| `PI_SESSION_FILE` | Absolute path to the current session JSONL file; unset for ephemeral sessions |
-| `PI_PROVIDER` | Currently selected model provider |
-| `PI_MODEL` | Currently selected model ID |
-| `PI_REASONING_LEVEL` | Current effective reasoning level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
+| `NANOPI_SESSION_ID` | Current session ID |
+| `NANOPI_SESSION_FILE` | Absolute path to the current session JSONL file; unset for ephemeral sessions |
+| `NANOPI_PROVIDER` | Currently selected model provider |
+| `NANOPI_MODEL` | Currently selected model ID |
+| `NANOPI_REASONING_LEVEL` | Current effective reasoning level: `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, or `max` |
 
-The values are resolved when each command starts. Switching models or changing the reasoning level therefore affects the next shell command without restarting Pi. `PI_PROVIDER` and `PI_MODEL` identify the selected Pi model, not a different upstream model that a router may choose internally.
+The values are resolved when each command starts. Switching models or changing the reasoning level therefore affects the next shell command without restarting nanopi. `NANOPI_PROVIDER` and `NANOPI_MODEL` identify the selected nanopi model, not a different upstream model that a router may choose internally.
 
 When asked which model or provider is running, inspect these variables instead of inferring the answer from the system prompt:
 
 ```bash
-printf '%s/%s\n' "$PI_PROVIDER" "$PI_MODEL"
-printf 'reasoning=%s session=%s\n' "$PI_REASONING_LEVEL" "$PI_SESSION_ID"
+printf '%s/%s\n' "$NANOPI_PROVIDER" "$NANOPI_MODEL"
+printf 'reasoning=%s session=%s\n' "$NANOPI_REASONING_LEVEL" "$NANOPI_SESSION_ID"
 ```
 
 The session file can be inspected directly when the session is persistent:
 
 ```bash
-if [ -n "$PI_SESSION_FILE" ]; then
-  tail -n 1 "$PI_SESSION_FILE"
+if [ -n "$NANOPI_SESSION_FILE" ]; then
+  tail -n 1 "$NANOPI_SESSION_FILE"
 fi
 ```
 
@@ -50,7 +50,7 @@ These variables are injected into the LLM-callable `bash` and `powershell` tools
 
 ### Custom Shell Tools
 
-Tools created with `createBashTool()` or `createPowerShellTool()` expose the session environment by default when registered with Pi. Injection happens before `spawnHook`, so a hook receives the variables in `ctx.env`:
+Tools created with `createBashTool()` or `createPowerShellTool()` expose the session environment by default when registered with nanopi. Injection happens before `spawnHook`, so a hook receives the variables in `ctx.env`:
 
 ```typescript
 const bashTool = createBashTool(cwd, {
@@ -70,29 +70,29 @@ const powershellTool = createPowerShellTool(cwd, {
 });
 ```
 
-When disabled, Pi removes inherited values for these variables so nested Pi processes do not expose stale parent-session metadata.
+When disabled, nanopi removes inherited values for these variables so nested nanopi processes do not expose stale parent-session metadata.
 
-## Pi Process Configuration
+## nanopi Process Configuration
 
-These variables are read by Pi itself:
+These variables are read by nanopi itself:
 
 | Variable | Description |
 |----------|-------------|
-| `PI_CODING_AGENT_DIR` | Override the config directory; default is `~/.pi/agent` |
-| `PI_CODING_AGENT_SESSION_DIR` | Override session storage; overridden by `--session-dir` |
-| `PI_PACKAGE_DIR` | Override the package directory, useful for Nix/Guix store paths |
-| `PI_OFFLINE` | Disable automatic network activity, including model catalog refreshes |
-| `PI_SKIP_VERSION_CHECK` | Disable the `pi.dev` latest-version request |
-| `PI_TELEMETRY` | Override install/update telemetry and provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
-| `PI_CACHE_RETENTION` | Set to `long` for extended provider prompt caching where supported |
-| `PI_SHARE_VIEWER_URL` | Override the base URL used by `/share` |
-| `PI_RADIUS_GATEWAY` | Override the Radius gateway origin used by `/bug` uploads and Radius relay connections |
-| `PI_HARDWARE_CURSOR` | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
-| `PI_HYPERLINKS` | Override OSC 8 hyperlink detection with `1`, `0`, or `auto` |
-| `PI_PROGRAM_STATUS` | Override OSC 7501 program status detection: `1` always reports, `0` never reports; otherwise Pi reports only after the terminal confirms support. See [Terminal setup](terminal-setup.md#program-status) |
-| `PI_IMAGE_PROTOCOL` | Override inline image detection with `kitty`, `iterm2`, `none`, or `auto` |
-| `PI_TRUE_COLOR` | Override truecolor detection with `1`, `0`, or `auto` |
-| `PI_TUI_ESC_TIMEOUT` | How long to wait after a lone ESC before treating it as Escape, in milliseconds; defaults to `100` over SSH and `10` otherwise. Increase if Alt-key input is misread as Escape |
+| `NANOPI_CODING_AGENT_DIR` | Override the config directory; default is `~/.nanopi/agent` |
+| `NANOPI_CODING_AGENT_SESSION_DIR` | Override session storage; overridden by `--session-dir` |
+| `NANOPI_PACKAGE_DIR` | Override the package directory, useful for Nix/Guix store paths |
+| `NANOPI_OFFLINE` | Disable automatic network activity, including model catalog refreshes |
+| `NANOPI_SKIP_VERSION_CHECK` | Disable the `pi.dev` latest-version request |
+| `NANOPI_TELEMETRY` | Override install/update telemetry and provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
+| `NANOPI_CACHE_RETENTION` | Set to `long` for extended provider prompt caching where supported |
+| `NANOPI_SHARE_VIEWER_URL` | Override the base URL used by `/share` |
+| `NANOPI_RADIUS_GATEWAY` | Override the Radius gateway origin used by `/bug` uploads and Radius relay connections |
+| `NANOPI_HARDWARE_CURSOR` | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
+| `NANOPI_HYPERLINKS` | Override OSC 8 hyperlink detection with `1`, `0`, or `auto` |
+| `NANOPI_PROGRAM_STATUS` | Override OSC 7501 program status detection: `1` always reports, `0` never reports; otherwise nanopi reports only after the terminal confirms support. See [Terminal setup](terminal-setup.md#program-status) |
+| `NANOPI_IMAGE_PROTOCOL` | Override inline image detection with `kitty`, `iterm2`, `none`, or `auto` |
+| `NANOPI_TRUE_COLOR` | Override truecolor detection with `1`, `0`, or `auto` |
+| `NANOPI_TUI_ESC_TIMEOUT` | How long to wait after a lone ESC before treating it as Escape, in milliseconds; defaults to `100` over SSH and `10` otherwise. Increase if Alt-key input is misread as Escape |
 | `VISUAL`, `EDITOR` | External editor fallback when `externalEditor` is unset |
 | `HTTP_PROXY`, `HTTPS_PROXY` | Proxy outbound HTTP requests |
 

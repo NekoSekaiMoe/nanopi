@@ -1,4 +1,4 @@
-import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, streamSimple } from "@earendil-works/pi-ai/compat";
+import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, streamSimple } from "@nanopi/pi-ai/compat";
 import { afterEach, describe, expect, it } from "vitest";
 import { Agent } from "../src/agent.ts";
 import { getAgentRequestIdentity } from "../src/request-metadata.ts";

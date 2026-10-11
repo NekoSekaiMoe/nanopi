@@ -1,7 +1,7 @@
-import type { StreamFn } from "@earendil-works/pi-agent-core";
-import { streamSimple, uuidv7 } from "@earendil-works/pi-ai/compat";
+import type { StreamFn } from "@nanopi/pi-agent-core";
+import { streamSimple, uuidv7 } from "@nanopi/pi-ai/compat";
 
-export const REQUEST_IDENTITY_METADATA_KEY = "pi.requestIdentity";
+export const REQUEST_IDENTITY_METADATA_KEY = "nanopi.requestIdentity";
 
 export interface InternalRequestIdentity {
 	sessionId: string;

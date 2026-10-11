@@ -1,12 +1,12 @@
 /**
- * pi-messages API implementation.
+ * nanopi-messages API implementation.
  *
- * Streams pi's own message protocol directly to a backend: the request is a
+ * Streams nanopi's own message protocol directly to a backend: the request is a
  * single POST of `{ model, context, options }` to `<baseUrl>/messages`, the
  * response is an SSE stream of serialized assistant-message events plus a
  * terminal `done`/`error` event. This is the wire protocol spoken by the
  * Radius gateway, but any backend implementing it can be used, e.g. via a
- * models.json custom provider with `"api": "pi-messages"`.
+ * models.json custom provider with `"api": "nanopi-messages"`.
  */
 
 import type {
@@ -30,18 +30,18 @@ import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { parseStreamingJson } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
-export interface PiMessagesOptions extends StreamOptions {
+export interface NanoPiMessagesOptions extends StreamOptions {
 	reasoning?: ThinkingLevel;
 	toolChoice?: "auto" | "none" | "required" | { type: "function"; function: { name: string } };
 	/** Ask the backend for debug metadata (e.g. routing response headers). */
 	debug?: boolean;
 }
 
-type PiMessagesUsage = AssistantMessage["usage"];
-type PiMessagesStopReason = AssistantMessage["stopReason"];
+type NanoPiMessagesUsage = AssistantMessage["usage"];
+type NanoPiMessagesStopReason = AssistantMessage["stopReason"];
 
 /** Impact summary of a server-side message rewrite (e.g. a gateway policy). */
-export type PiMessagesRewriteImpact = {
+export type NanoPiMessagesRewriteImpact = {
 	policyId: string;
 	policyVersion: number;
 	changed: boolean;
@@ -50,8 +50,8 @@ export type PiMessagesRewriteImpact = {
 	systemPromptChanged: boolean;
 };
 
-/** Serialized assistant-message event as sent by a pi-messages backend. */
-export type PiMessagesEvent =
+/** Serialized assistant-message event as sent by a nanopi-messages backend. */
+export type NanoPiMessagesEvent =
 	| { type: "start" }
 	| { type: "text_start"; contentIndex: number }
 	| { type: "text_delta"; contentIndex: number; delta: string }
@@ -70,23 +70,23 @@ export type PiMessagesEvent =
 	| { type: "toolcall_end"; contentIndex: number; toolCall: ToolCall }
 	| {
 			type: "done";
-			reason: Extract<PiMessagesStopReason, "stop" | "length" | "toolUse">;
-			usage: PiMessagesUsage;
+			reason: Extract<NanoPiMessagesStopReason, "stop" | "length" | "toolUse">;
+			usage: NanoPiMessagesUsage;
 			responseId?: string;
 			providerThinkingLevel?: string;
-			rewrite?: PiMessagesRewriteImpact;
+			rewrite?: NanoPiMessagesRewriteImpact;
 	  }
 	| {
 			type: "error";
-			reason: Extract<PiMessagesStopReason, "aborted" | "error">;
-			usage: PiMessagesUsage;
+			reason: Extract<NanoPiMessagesStopReason, "aborted" | "error">;
+			usage: NanoPiMessagesUsage;
 			errorMessage?: string;
 			responseId?: string;
 			providerThinkingLevel?: string;
-			rewrite?: PiMessagesRewriteImpact;
+			rewrite?: NanoPiMessagesRewriteImpact;
 	  };
 
-type PiMessagesErrorBody = {
+type NanoPiMessagesErrorBody = {
 	error?: {
 		message?: unknown;
 		code?: unknown;
@@ -95,21 +95,21 @@ type PiMessagesErrorBody = {
 	};
 };
 
-export class PiMessagesResponseError extends Error {
+export class NanoPiMessagesResponseError extends Error {
 	code?: string;
 	readonly diagnosticDetails: JsonObject;
 
 	constructor(message: string, code: string | undefined, diagnosticDetails: JsonObject) {
 		super(message);
-		this.name = "PiMessagesResponseError";
+		this.name = "NanoPiMessagesResponseError";
 		this.code = code;
 		this.diagnosticDetails = diagnosticDetails;
 	}
 }
 
-function parsePiMessagesErrorBody(body: string): PiMessagesErrorBody | undefined {
+function parseNanoPiMessagesErrorBody(body: string): NanoPiMessagesErrorBody | undefined {
 	try {
-		const parsed = JSON.parse(body) as PiMessagesErrorBody | null;
+		const parsed = JSON.parse(body) as NanoPiMessagesErrorBody | null;
 		const error = parsed?.error;
 		return parsed && typeof error === "object" && error !== null && !Array.isArray(error) ? parsed : undefined;
 	} catch {
@@ -122,10 +122,10 @@ function truncateDiagnosticString(value: string): string {
 	return value.length > maxLength ? `${value.slice(0, maxLength)}…` : value;
 }
 
-function formatPiMessagesResponseError(
+function formatNanoPiMessagesResponseError(
 	response: Response,
 	body: string,
-	errorBody: PiMessagesErrorBody | undefined,
+	errorBody: NanoPiMessagesErrorBody | undefined,
 ): string {
 	const message = typeof errorBody?.error?.message === "string" ? errorBody.error.message : undefined;
 	const code = typeof errorBody?.error?.code === "string" ? errorBody.error.code : undefined;
@@ -134,15 +134,15 @@ function formatPiMessagesResponseError(
 	return `${response.status} ${response.statusText}: ${suffix}${codeSuffix}`;
 }
 
-function createPiMessagesResponseError(
-	model: Model<"pi-messages">,
+function createNanoPiMessagesResponseError(
+	model: Model<"nanopi-messages">,
 	url: URL,
 	response: Response,
 	body: string,
-): PiMessagesResponseError {
-	const errorBody = parsePiMessagesErrorBody(body);
+): NanoPiMessagesResponseError {
+	const errorBody = parseNanoPiMessagesErrorBody(body);
 	const code = typeof errorBody?.error?.code === "string" ? errorBody.error.code : undefined;
-	return new PiMessagesResponseError(formatPiMessagesResponseError(response, body, errorBody), code, {
+	return new NanoPiMessagesResponseError(formatNanoPiMessagesResponseError(response, body, errorBody), code, {
 		version: 1,
 		provider: model.provider,
 		model: model.id,
@@ -155,7 +155,7 @@ function createPiMessagesResponseError(
 	});
 }
 
-function createEmptyUsage(): PiMessagesUsage {
+function createEmptyUsage(): NanoPiMessagesUsage {
 	return {
 		input: 0,
 		output: 0,
@@ -166,7 +166,7 @@ function createEmptyUsage(): PiMessagesUsage {
 	};
 }
 
-function appendRewriteDiagnostic(message: AssistantMessage, rewrite: PiMessagesRewriteImpact | undefined): void {
+function appendRewriteDiagnostic(message: AssistantMessage, rewrite: NanoPiMessagesRewriteImpact | undefined): void {
 	if (!rewrite) {
 		return;
 	}
@@ -177,7 +177,7 @@ function appendRewriteDiagnostic(message: AssistantMessage, rewrite: PiMessagesR
 	});
 }
 
-function createEventConverter(model: Model<"pi-messages">) {
+function createEventConverter(model: Model<"nanopi-messages">) {
 	const partial: AssistantMessage = {
 		role: "assistant",
 		content: [],
@@ -190,7 +190,7 @@ function createEventConverter(model: Model<"pi-messages">) {
 	};
 	const toolJson = new Map<number, string>();
 
-	return (event: PiMessagesEvent): AssistantMessageEvent => {
+	return (event: NanoPiMessagesEvent): AssistantMessageEvent => {
 		switch (event.type) {
 			case "done":
 				Object.assign(partial, {
@@ -273,7 +273,7 @@ function createEventConverter(model: Model<"pi-messages">) {
 	};
 }
 
-async function* readPiMessagesEvents(stream: ReadableStream<Uint8Array>): AsyncGenerator<PiMessagesEvent> {
+async function* readNanoPiMessagesEvents(stream: ReadableStream<Uint8Array>): AsyncGenerator<NanoPiMessagesEvent> {
 	const decoder = new TextDecoder();
 	const reader = stream.getReader();
 	let buffer = "";
@@ -286,7 +286,7 @@ async function* readPiMessagesEvents(stream: ReadableStream<Uint8Array>): AsyncG
 
 			let split = buffer.indexOf("\n\n");
 			while (split !== -1) {
-				const event = parsePiMessagesEvent(buffer.slice(0, split));
+				const event = parseNanoPiMessagesEvent(buffer.slice(0, split));
 				if (event) {
 					yield event;
 				}
@@ -300,7 +300,7 @@ async function* readPiMessagesEvents(stream: ReadableStream<Uint8Array>): AsyncG
 		}
 
 		if (buffer.trim()) {
-			const event = parsePiMessagesEvent(buffer);
+			const event = parseNanoPiMessagesEvent(buffer);
 			if (event) {
 				yield event;
 			}
@@ -310,17 +310,17 @@ async function* readPiMessagesEvents(stream: ReadableStream<Uint8Array>): AsyncG
 	}
 }
 
-function parsePiMessagesEvent(raw: string): PiMessagesEvent | undefined {
+function parseNanoPiMessagesEvent(raw: string): NanoPiMessagesEvent | undefined {
 	const data = raw
 		.split("\n")
 		.find((line) => line.startsWith("data:"))
 		?.slice(5)
 		.trim();
 
-	return data && data !== "[DONE]" ? (JSON.parse(data) as PiMessagesEvent) : undefined;
+	return data && data !== "[DONE]" ? (JSON.parse(data) as NanoPiMessagesEvent) : undefined;
 }
 
-function createErrorEvent(model: Model<"pi-messages">, error: unknown, aborted: boolean): AssistantMessageEvent {
+function createErrorEvent(model: Model<"nanopi-messages">, error: unknown, aborted: boolean): AssistantMessageEvent {
 	const reason = aborted ? "aborted" : "error";
 	const assistantMessage: AssistantMessage = {
 		role: "assistant",
@@ -334,7 +334,7 @@ function createErrorEvent(model: Model<"pi-messages">, error: unknown, aborted: 
 		timestamp: Date.now(),
 	};
 
-	if (!aborted && error instanceof PiMessagesResponseError) {
+	if (!aborted && error instanceof NanoPiMessagesResponseError) {
 		appendAssistantMessageDiagnostic(
 			assistantMessage,
 			createAssistantMessageDiagnostic("pi_messages_response_failure", error, error.diagnosticDetails),
@@ -349,13 +349,13 @@ function resolveCacheRetention(cacheRetention?: CacheRetention, env?: ProviderEn
 		return cacheRetention;
 	}
 	// Backend defaults apply when unset; only the legacy env opt-in is mapped.
-	return getProviderEnvValue("PI_CACHE_RETENTION", env) === "long" ? "long" : undefined;
+	return getProviderEnvValue("NANOPI_CACHE_RETENTION", env) === "long" ? "long" : undefined;
 }
 
-export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
-	model: Model<"pi-messages">,
+export const stream: StreamFunction<"nanopi-messages", NanoPiMessagesOptions> = (
+	model: Model<"nanopi-messages">,
 	context: TranscriptContext,
-	options?: PiMessagesOptions,
+	options?: NanoPiMessagesOptions,
 ): AssistantMessageEventStream => {
 	const eventStream = new AssistantMessageEventStream();
 	const convertEvent = createEventConverter(model);
@@ -405,15 +405,15 @@ export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
 
 			if (!response.ok) {
 				const body = await response.text();
-				throw createPiMessagesResponseError(model, url, response, body);
+				throw createNanoPiMessagesResponseError(model, url, response, body);
 			}
 			if (!response.body) {
 				throw new Error(`${model.provider} response has no body`);
 			}
 
-			for await (const piEvent of readPiMessagesEvents(response.body)) {
-				await options?.onProviderStreamEvent?.(piEvent, model);
-				const event = convertEvent(piEvent);
+			for await (const nanopiEvent of readNanoPiMessagesEvents(response.body)) {
+				await options?.onProviderStreamEvent?.(nanopiEvent, model);
+				const event = convertEvent(nanopiEvent);
 				eventStream.push(event);
 				if (event.type === "done" || event.type === "error") {
 					return;
@@ -429,12 +429,12 @@ export const stream: StreamFunction<"pi-messages", PiMessagesOptions> = (
 	return eventStream;
 };
 
-export const streamSimple: StreamFunction<"pi-messages", SimpleStreamOptions> = (
-	model: Model<"pi-messages">,
+export const streamSimple: StreamFunction<"nanopi-messages", SimpleStreamOptions> = (
+	model: Model<"nanopi-messages">,
 	context: TranscriptContext,
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
-	const extra = options as PiMessagesOptions | undefined;
+	const extra = options as NanoPiMessagesOptions | undefined;
 	return stream(model, context, {
 		...options,
 		reasoning: options?.reasoning,

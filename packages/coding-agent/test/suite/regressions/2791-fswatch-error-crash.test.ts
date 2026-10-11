@@ -23,7 +23,7 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 	let tempRoot: string;
 
 	beforeEach(() => {
-		tempRoot = mkdtempSync(join(tmpdir(), "pi-2791-"));
+		tempRoot = mkdtempSync(join(tmpdir(), "nanopi-2791-"));
 		const agentDir = join(tempRoot, "agent");
 		const themesDir = join(agentDir, "themes");
 		mkdirSync(themesDir, { recursive: true });
@@ -52,7 +52,7 @@ describe("issue #2791 fs.watch error event crashes process", () => {
 			`
 import { setTheme, stopThemeWatcher } from "${themeModulePath}";
 
-process.env.PI_CODING_AGENT_DIR = "${agentDir}";
+process.env.NANOPI_CODING_AGENT_DIR = "${agentDir}";
 
 setTheme("custom-test", true);
 
@@ -95,7 +95,7 @@ process.exit(0);
 				{
 					timeout: 10000,
 					encoding: "utf-8",
-					env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+					env: { ...process.env, NANOPI_CODING_AGENT_DIR: agentDir },
 					stdio: ["pipe", "pipe", "pipe"],
 				},
 			);

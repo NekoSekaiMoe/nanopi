@@ -22,7 +22,7 @@
 		"generate:model-catalog": "pnpm --filter ./packages/ai run generate-model-catalog",
 		"diff:model-catalog": "node scripts/diff-model-catalog.mjs",
 		"update:model-catalog-pin": "node scripts/update-model-catalog-pin.mjs",
-		"eval": "pnpm --filter @earendil-works/pi-evals run eval --",
+		"eval": "pnpm --filter @nanopi/pi-evals run eval --",
 		"check:model-catalog": "node --import ./ts-import.mjs scripts/publish-model-catalog.mjs --input .artifacts/model-catalog --dry-run",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",

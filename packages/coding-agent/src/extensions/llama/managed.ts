@@ -12,11 +12,11 @@ import { SettingsManager } from "../../core/settings-manager.ts";
 import { findHuggingFaceToken } from "./huggingface.ts";
 
 /**
- * Managed llama.cpp: pi starts one shared llama-server router and stops it when no pi process uses it.
+ * Managed llama.cpp: nanopi starts one shared llama-server router and stops it when no nanopi process uses it.
  *
- * A detached supervisor process (`pi --internal-llama-supervisor`) owns the router. It listens on a local
- * socket; every pi process that uses the server keeps one connection open, and the operating system closes it
- * when pi exits or crashes, so the number of connections is the reference count. The supervisor stops the
+ * A detached supervisor process (`nanopi --internal-llama-supervisor`) owns the router. It listens on a local
+ * socket; every nanopi process that uses the server keeps one connection open, and the operating system closes it
+ * when nanopi exits or crashes, so the number of connections is the reference count. The supervisor stops the
  * router `idleShutdownSeconds` after the last connection closes.
  *
  * Protocol: the supervisor writes one JSON line to each connection, `ready` with the server address or `error`
@@ -24,21 +24,21 @@ import { findHuggingFaceToken } from "./huggingface.ts";
  * waits for the socket to disappear and starts a new supervisor. Clients send only `stop`.
  */
 
-/** Hidden CLI flag that turns a pi process into the llama.cpp supervisor. */
+/** Hidden CLI flag that turns a nanopi process into the llama.cpp supervisor. */
 export const LLAMA_SUPERVISOR_FLAG = "--internal-llama-supervisor";
 
 const CONNECT_TIMEOUT_MS = 30_000;
 const READY_TIMEOUT_MS = 120_000;
 const SHUTDOWN_GRACE_MS = 10_000;
-// The pi process that launched the supervisor connects shortly after. Never idle out before that.
+// The nanopi process that launched the supervisor connects shortly after. Never idle out before that.
 const STARTUP_GRACE_MS = 10_000;
 const DEFAULT_IDLE_SHUTDOWN_SECONDS = 30;
 
 const RESERVED_ARGS = new Map<string, string>([
-	["--host", "pi binds llama-server to 127.0.0.1"],
-	["--port", "pi picks a random free port"],
-	["--api-key", "pi generates a random API key"],
-	["--api-key-file", "pi generates a random API key"],
+	["--host", "nanopi binds llama-server to 127.0.0.1"],
+	["--port", "nanopi picks a random free port"],
+	["--api-key", "nanopi generates a random API key"],
+	["--api-key-file", "nanopi generates a random API key"],
 	["--models-dir", "use llamaCpp.modelsDir"],
 	["-m", "managed llama-server runs in router mode"],
 	["--model", "managed llama-server runs in router mode"],
@@ -121,7 +121,7 @@ function managedStateDir(agentDir: string): string {
 export function llamaSocketPath(stateDir: string): string {
 	if (process.platform === "win32") {
 		const hash = createHash("sha256").update(stateDir).digest("hex").slice(0, 16);
-		return `\\\\.\\pipe\\pi-llama-${hash}-v1`;
+		return `\\\\.\\pipe\\nanopi-llama-${hash}-v1`;
 	}
 	const path = join(stateDir, "supervisor-v1.sock");
 	// sun_path is limited to 104 bytes on macOS and 108 bytes on Linux.
@@ -223,7 +223,7 @@ async function isHealthy(url: string, apiKey: string): Promise<boolean> {
 	}
 }
 
-/** Owns one llama-server router and stops it when no pi process has been connected for the idle delay. */
+/** Owns one llama-server router and stops it when no nanopi process has been connected for the idle delay. */
 export class LlamaSupervisor {
 	readonly done: Promise<void>;
 	private readonly stateDir: string;
@@ -272,13 +272,13 @@ export class LlamaSupervisor {
 	}
 
 	private note(message: string): void {
-		writeSync(this.logFd, `[pi ${new Date().toISOString()}] ${message}\n`);
+		writeSync(this.logFd, `[nanopi ${new Date().toISOString()}] ${message}\n`);
 	}
 
 	private armIdleTimer(): void {
 		clearTimeout(this.idleTimer);
 		const delayMs = Math.max(this.idleShutdownMs, this.startupGraceMs - (Date.now() - this.startedAt));
-		this.idleTimer = setTimeout(() => void this.shutdown("no pi processes connected"), delayMs);
+		this.idleTimer = setTimeout(() => void this.shutdown("no nanopi processes connected"), delayMs);
 	}
 
 	private accept(socket: Socket): void {
@@ -398,9 +398,9 @@ export class LlamaSupervisor {
 	}
 }
 
-/** Entry point for `pi --internal-llama-supervisor`, started detached by managed llama.cpp clients. */
+/** Entry point for `nanopi --internal-llama-supervisor`, started detached by managed llama.cpp clients. */
 export async function runLlamaSupervisorProcess(): Promise<void> {
-	process.title = "pi-llama-supervisor";
+	process.title = "nanopi-llama-supervisor";
 	const agentDir = getAgentDir();
 	const supervisor = await LlamaSupervisor.start(managedStateDir(agentDir), () => loadSupervisorConfig(agentDir));
 	if (!supervisor) process.exit(0);
@@ -411,14 +411,14 @@ export async function runLlamaSupervisorProcess(): Promise<void> {
 	process.exit(0);
 }
 
-/** Start `pi --internal-llama-supervisor` detached, so it outlives the pi process that started it. */
+/** Start `nanopi --internal-llama-supervisor` detached, so it outlives the nanopi process that started it. */
 function launchSupervisorProcess(): void {
 	let args: string[];
 	if (isBunBinary) {
 		args = [LLAMA_SUPERVISOR_FLAG];
 	} else {
 		const entrypoint = process.argv[1];
-		if (!entrypoint) throw new Error("Cannot locate the pi entrypoint to start the llama.cpp supervisor");
+		if (!entrypoint) throw new Error("Cannot locate the nanopi entrypoint to start the llama.cpp supervisor");
 		// Keep loader flags (e.g. TypeScript support in source checkouts) but not debugger ports.
 		const execArgv = process.execArgv.filter((arg) => !arg.startsWith("--inspect"));
 		args = [...execArgv, entrypoint, LLAMA_SUPERVISOR_FLAG];
@@ -460,7 +460,7 @@ function raceAbort<T>(promise: Promise<T>, signal: AbortSignal | undefined): Pro
 
 /**
  * Holds this process's reference on the shared supervisor. The connection stays open until the process exits
- * or `release()` runs; it is unref'd so it never keeps pi alive.
+ * or `release()` runs; it is unref'd so it never keeps nanopi alive.
  */
 export class ManagedLlamaClient {
 	private readonly socketPath: string;
@@ -492,7 +492,7 @@ export class ManagedLlamaClient {
 		return message?.type === "ready" ? message.server : undefined;
 	}
 
-	/** Ask the supervisor to stop its server and exit. Other pi processes lose their connection too. */
+	/** Ask the supervisor to stop its server and exit. Other nanopi processes lose their connection too. */
 	async stop(): Promise<void> {
 		const socket = this.connection?.socket ?? (await openSocket(this.socketPath).catch(() => undefined));
 		this.connection = undefined;

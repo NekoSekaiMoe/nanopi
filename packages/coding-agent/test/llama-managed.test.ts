@@ -3,13 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import {
-	type AuthContext,
-	type AuthPrompt,
-	type ClassifierModel,
-	type Model,
-	normalizeContext,
-} from "@earendil-works/pi-ai";
+import { type AuthContext, type AuthPrompt, type ClassifierModel, type Model, normalizeContext } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import { LlamaClient } from "../src/extensions/llama/client.ts";
 import {
@@ -23,7 +17,7 @@ import {
 } from "../src/extensions/llama/managed.ts";
 import { createLlamaProvider, LLAMA_MODE_ENV, MANAGED_LLAMA_SERVER_URL } from "../src/extensions/llama/provider.ts";
 
-// Stands in for llama-server: binds the host and port pi passes and requires the API key.
+// Stands in for llama-server: binds the host and port nanopi passes and requires the API key.
 const FAKE_SERVER = `
 import { createServer } from "node:http";
 const args = process.argv.slice(2);
@@ -65,14 +59,14 @@ afterEach(async () => {
 interface Fixture {
 	stateDir: string;
 	supervisors: LlamaSupervisor[];
-	/** Client that runs its supervisor in-process with `config` instead of spawning `pi --internal-llama-supervisor`. */
+	/** Client that runs its supervisor in-process with `config` instead of spawning `nanopi --internal-llama-supervisor`. */
 	/** `Error` makes loading the configuration fail, like invalid settings do. */
 	client: (config?: Partial<LlamaSupervisorConfig> | Error) => ManagedLlamaClient;
 }
 
 async function fixture(): Promise<Fixture> {
 	// Unix socket paths are limited to about 100 bytes, so keep the state directory short.
-	const stateDir = await mkdtemp("/tmp/pi-llama-");
+	const stateDir = await mkdtemp("/tmp/nanopi-llama-");
 	const script = join(stateDir, "fake-llama-server.mjs");
 	await writeFile(script, FAKE_SERVER);
 	const supervisors: LlamaSupervisor[] = [];
@@ -139,7 +133,7 @@ describe.skipIf(process.platform === "win32")("managed llama.cpp supervisor", ()
 		await supervisors[0]!.done;
 		expect(await isReachable(a.url)).toBe(false);
 		expect(await client().probe()).toBeUndefined();
-		expect(await readFile(a.logPath, "utf8")).toContain("stopping: no pi processes connected");
+		expect(await readFile(a.logPath, "utf8")).toContain("stopping: no nanopi processes connected");
 	});
 
 	it("restarts the server on request", async () => {
@@ -173,8 +167,8 @@ describe.skipIf(process.platform === "win32")("managed llama.cpp supervisor", ()
 });
 
 describe("managed llama.cpp settings", () => {
-	it("applies defaults and rejects arguments pi controls", async () => {
-		const agentDir = await mkdtemp("/tmp/pi-llama-settings-");
+	it("applies defaults and rejects arguments nanopi controls", async () => {
+		const agentDir = await mkdtemp("/tmp/nanopi-llama-settings-");
 		cleanups.push(() => rm(agentDir, { recursive: true, force: true }));
 
 		expect(loadManagedLlamaSettings(agentDir)).toEqual({

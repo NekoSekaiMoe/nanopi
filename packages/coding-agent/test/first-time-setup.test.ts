@@ -12,7 +12,7 @@ describe("shouldRunFirstTimeSetup", () => {
 	let settingsPath: string;
 
 	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "pi-first-time-setup-"));
+		tempDir = mkdtempSync(join(tmpdir(), "nanopi-first-time-setup-"));
 		settingsPath = join(tempDir, "settings.json");
 		delete process.env[ENV_AGENT_DIR];
 	});

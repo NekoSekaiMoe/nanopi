@@ -12,10 +12,10 @@
  * - Progress tracking widget during execution
  */
 
-import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, TextContent } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { Key } from "@earendil-works/pi-tui";
+import type { AgentMessage } from "@nanopi/pi-agent-core";
+import type { AssistantMessage, TextContent } from "@nanopi/pi-ai";
+import type { ExtensionAPI, ExtensionContext } from "@nanopi/pi-coding-agent";
+import { Key } from "@nanopi/pi-tui";
 import { extractTodoItems, isSafeCommand, markCompletedSteps, type TodoItem } from "./utils.ts";
 
 // Tools
@@ -44,13 +44,13 @@ function getTextContent(message: AssistantMessage): string {
 		.join("\n");
 }
 
-export default function planModeExtension(pi: ExtensionAPI): void {
+export default function planModeExtension(nanopi: ExtensionAPI): void {
 	let planModeEnabled = false;
 	let executionMode = false;
 	let todoItems: TodoItem[] = [];
 	let toolsBeforePlanMode: string[] | undefined;
 
-	pi.registerFlag("plan", {
+	nanopi.registerFlag("plan", {
 		description: "Start in plan mode (read-only exploration)",
 		type: "boolean",
 		default: false,
@@ -103,18 +103,18 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 
 	function enablePlanModeTools(): void {
 		if (toolsBeforePlanMode === undefined) {
-			toolsBeforePlanMode = pi.getActiveTools();
+			toolsBeforePlanMode = nanopi.getActiveTools();
 		}
-		pi.setActiveTools(getPlanModeTools(toolsBeforePlanMode));
+		nanopi.setActiveTools(getPlanModeTools(toolsBeforePlanMode));
 	}
 
 	function restoreNormalModeTools(): void {
-		pi.setActiveTools(toolsBeforePlanMode ?? getNormalModeTools(pi.getActiveTools()));
+		nanopi.setActiveTools(toolsBeforePlanMode ?? getNormalModeTools(nanopi.getActiveTools()));
 		toolsBeforePlanMode = undefined;
 	}
 
 	function persistState(): void {
-		pi.appendEntry("plan-mode", {
+		nanopi.appendEntry("plan-mode", {
 			enabled: planModeEnabled,
 			todos: todoItems,
 			executing: executionMode,
@@ -138,12 +138,12 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		persistState();
 	}
 
-	pi.registerCommand("plan", {
+	nanopi.registerCommand("plan", {
 		description: "Toggle plan mode (read-only exploration)",
 		handler: async (_args, ctx) => togglePlanMode(ctx),
 	});
 
-	pi.registerCommand("todos", {
+	nanopi.registerCommand("todos", {
 		description: "Show current plan todo list",
 		handler: async (_args, ctx) => {
 			if (todoItems.length === 0) {
@@ -155,13 +155,13 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 		},
 	});
 
-	pi.registerShortcut(Key.ctrlAlt("p"), {
+	nanopi.registerShortcut(Key.ctrlAlt("p"), {
 		description: "Toggle plan mode",
 		handler: async (ctx) => togglePlanMode(ctx),
 	});
 
 	// Block destructive bash commands in plan mode
-	pi.on("tool_call", async (event) => {
+	nanopi.on("tool_call", async (event) => {
 		if (!planModeEnabled || event.toolName !== "bash") return;
 
 		const command = event.input.command as string;
@@ -174,7 +174,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	});
 
 	// Filter out stale plan mode context when not in plan mode
-	pi.on("context", async (event) => {
+	nanopi.on("context", async (event) => {
 		if (planModeEnabled) return;
 
 		return {
@@ -200,7 +200,7 @@ export default function planModeExtension(pi: ExtensionAPI): void {
 	// Inject plan/execution context before a user prompt. Runs started by custom messages, such as
 	// background task notifications, skip it: the context from the last prompt is still in the
 	// conversation, and adding it again on every notification would only repeat it.
-	pi.on("before_agent_start", async (event) => {
+	nanopi.on("before_agent_start", async (event) => {
 		if (event.messageType !== "user") return;
 
 		if (planModeEnabled) {
@@ -251,7 +251,7 @@ After completing a step, include a [DONE:n] tag in your response.`,
 	});
 
 	// Track progress after each turn
-	pi.on("turn_end", async (event, ctx) => {
+	nanopi.on("turn_end", async (event, ctx) => {
 		if (!executionMode || todoItems.length === 0) return;
 		if (!isAssistantMessage(event.message)) return;
 
@@ -263,12 +263,12 @@ After completing a step, include a [DONE:n] tag in your response.`,
 	});
 
 	// Handle plan completion and plan mode UI
-	pi.on("agent_end", async (event, ctx) => {
+	nanopi.on("agent_end", async (event, ctx) => {
 		// Check if execution is complete
 		if (executionMode && todoItems.length > 0) {
 			if (todoItems.every((t) => t.completed)) {
 				const completedList = todoItems.map((t) => `~~${t.text}~~`).join("\n");
-				pi.sendMessage(
+				nanopi.sendMessage(
 					{ customType: "plan-complete", content: `**Plan Complete!** ✓\n\n${completedList}`, display: true },
 					{ triggerTurn: false },
 				);
@@ -326,23 +326,23 @@ ${remainingList}
 
 Start with: ${firstTodoItem.text}
 After completing a step, include a [DONE:n] tag in your response.`;
-			pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-			pi.sendMessage(
+			nanopi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
+			nanopi.sendMessage(
 				{ customType: "plan-mode-execute", content: execMessage, display: true },
 				{ triggerTurn: true, deliverAs: "followUp" },
 			);
 		} else if (choice === "Refine the plan") {
 			const refinement = await ctx.ui.editor("Refine the plan:", "");
 			if (refinement?.trim()) {
-				pi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
-				pi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
+				nanopi.sendMessage(planTodoListMessage, { deliverAs: "followUp" });
+				nanopi.sendUserMessage(refinement.trim(), { deliverAs: "followUp" });
 			}
 		}
 	});
 
 	// Restore state on session start/resume
-	pi.on("session_start", async (_event, ctx) => {
-		if (pi.getFlag("plan") === true) {
+	nanopi.on("session_start", async (_event, ctx) => {
+		if (nanopi.getFlag("plan") === true) {
 			planModeEnabled = true;
 		}
 

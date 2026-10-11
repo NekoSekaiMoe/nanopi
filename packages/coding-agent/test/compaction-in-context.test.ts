@@ -1,4 +1,4 @@
-import type { AssistantMessage, Model, Usage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Model, Usage } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
 import {
 	appendInContextCompactionRequest,

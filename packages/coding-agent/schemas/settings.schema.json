@@ -166,7 +166,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Extra llama-server arguments; host, port, API key, and models dir are managed by pi."
+          "description": "Extra llama-server arguments; host, port, API key, and models dir are managed by nanopi."
         },
         "idleShutdownSeconds": {
           "type": "integer",
@@ -634,7 +634,7 @@
     },
     "httpProxy": {
       "type": "string",
-      "description": "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for Pi-managed HTTP clients."
+      "description": "Proxy URL applied as HTTP_PROXY and HTTPS_PROXY for nanopi-managed HTTP clients."
     },
     "httpIdleTimeoutMs": {
       "anyOf": [

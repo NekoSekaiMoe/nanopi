@@ -2,13 +2,13 @@ import {
 	bedrockMantleAnthropicMessagesProviderModule,
 	bedrockMantleOpenAIResponsesProviderModule,
 	bedrockProviderModule,
-} from "@earendil-works/pi-ai/bedrock-provider";
-import { registerBunOAuthFlows } from "@earendil-works/pi-ai/bun-oauth";
+} from "@nanopi/pi-ai/bedrock-provider";
+import { registerBunOAuthFlows } from "@nanopi/pi-ai/bun-oauth";
 import {
 	setBedrockMantleAnthropicMessagesProviderModule,
 	setBedrockMantleOpenAIResponsesProviderModule,
 	setBedrockProviderModule,
-} from "@earendil-works/pi-ai/compat";
+} from "@nanopi/pi-ai/compat";
 import { APP_NAME } from "../config.ts";
 
 process.title = APP_NAME;

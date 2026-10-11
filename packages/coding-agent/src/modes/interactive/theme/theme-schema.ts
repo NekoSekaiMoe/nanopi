@@ -83,8 +83,8 @@ export const ThemeJsonSchema = Type.Object(
 		),
 	},
 	{
-		title: "Pi Coding Agent Theme",
-		description: "Theme schema for Pi coding agent",
+		title: "nanopi Coding Agent Theme",
+		description: "Theme schema for nanopi coding agent",
 		additionalProperties: false,
 	},
 );
