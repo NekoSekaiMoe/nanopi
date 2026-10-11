@@ -12,6 +12,14 @@
  * accepts `path` + one-or-more `edits[].oldText` / `edits[].newText` pairs
  * rather than unified-diff text.
  *
+ * The alias is mutually exclusive with `edit`: while `apply_patch` is declared,
+ * a `prepareLoadout` hook hides `edit`'s declaration, so requests and the
+ * system prompt's tool list and rules carry exactly one editing tool. `edit`
+ * stays registered, active, and callable (a stray `edit` call still executes),
+ * and its declaration returns automatically whenever `apply_patch` is not
+ * declared — on non-Codex protocols the API-scoped sync below removes
+ * `apply_patch` from the active set, so the hook no longer runs.
+ *
  * The alias is only declared to models whose API we impersonate as Codex
  * (`openai-responses`, `openai-codex-responses`). On every session start and
  * model switch we remove it from the active tool set when the current model
@@ -39,11 +47,16 @@ export function registerApplyPatchTool(pi: ExtensionAPI): void {
     promptSnippet:
       "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
     promptGuidelines: [
-      "Use apply_patch for precise changes (edits[].oldText must match exactly)",
-      "When changing multiple separate locations in one file, use one apply_patch call with multiple entries in edits[] instead of multiple calls",
-      "Each apply_patch edits[].oldText is matched against the original file, not after earlier edits are applied. Do not emit overlapping or nested edits. Merge nearby changes into one edit.",
-      "Keep apply_patch edits[].oldText as small as possible while still being unique in the file. Do not pad with large unchanged regions.",
+      "Use apply_patch for precise changes; every edits[].oldText must match the original file exactly and uniquely",
+      "Batch separate locations in one file into one apply_patch call instead of multiple apply_patch calls",
     ],
+    // Exactly one editing tool per request: hide `edit`'s declaration (and its
+    // prompt contributions) while this tool is declared. See the header comment.
+    prepareLoadout(loadout) {
+      return loadout.declared.some((tool) => tool.name === "edit")
+        ? { hiddenDeclarations: ["edit"] }
+        : undefined;
+    },
   });
 
   // `removedByUs` distinguishes "inactive because we hid it for this model"

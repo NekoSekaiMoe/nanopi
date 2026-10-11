@@ -55,6 +55,7 @@ export default defineConfig({
 			{ find: /^@nanopi\/pi-server$/, replacement: workspaceSourcePaths.serverIndex },
 			{ find: /^@nanopi\/pi-server\/unix$/, replacement: workspaceSourcePaths.serverUnix },
 			{ find: /^@nanopi\/pi-tui$/, replacement: workspaceSourcePaths.tuiIndex },
+			{ find: /^@earendil-works\/pi-coding-agent$/, replacement: workspaceSourcePaths.codingAgentIndex },
 		],
 	},
 });

@@ -130,6 +130,10 @@ The alias is declared only to models whose `model.api` is `openai-responses` or 
 
 The tool remains registered and callable while hidden; only the model-facing declaration is gated. Re-activation only happens when this extension was the one that removed it, so explicitly disabling `apply_patch` (via `/tools`, `--tools`, or settings) stays disabled across model switches.
 
+### Mutual exclusion with `edit`
+
+While `apply_patch` is declared, a `prepareLoadout` hook hides the built-in `edit` tool's declaration, so requests and the system prompt's tool list and rules carry exactly one editing tool: `apply_patch`. `edit` stays registered, active, and callable (a stray `edit` call still executes), and its declaration returns automatically whenever `apply_patch` is undeclared — on other protocols via the API-scoped removal above, or after an explicit user deactivation. No bookkeeping distinguishes who removed `edit`, because the hook only runs while `apply_patch` itself is in the declared set.
+
 The alias is useful for Codex-oriented prompts that expect an `apply_patch` tool name. Its declaration is scoped to the impersonated APIs described above.
 
 ## Feature 4: Codex-compatible command hooks

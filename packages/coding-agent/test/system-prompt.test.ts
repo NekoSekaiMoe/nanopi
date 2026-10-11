@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest";
+import { getDocsPath, getReadmePath } from "../src/config.ts";
 import type { Skill } from "../src/core/skills.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
 import { buildSystemPrompt } from "../src/core/system-prompt.ts";
@@ -116,11 +117,12 @@ describe("buildSystemPrompt", () => {
 			});
 
 			expect(prompt).toContain(
-				"- When reading nanopi docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
+				`- Main documentation: ${getReadmePath()} (overview) and ${getDocsPath()}/index.md (topic index)`,
 			);
-			expect(prompt).toContain(
-				"nanopi packages (docs/packages.md), environment variables (docs/environment-variables.md)",
-			);
+			expect(prompt).toContain("Resolve docs/... and examples/... against");
+			expect(prompt).toContain("not the current working directory");
+			// The topic-to-file map is not inlined; the docs index carries it.
+			expect(prompt).not.toContain("When asked about:");
 		});
 	});
 
