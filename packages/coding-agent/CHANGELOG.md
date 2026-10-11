@@ -19,12 +19,14 @@
 - Added `nanopi webui [-p <port>]` (default port 5335): a loopback HTTP server that serves the new `@nanopi/webui` browser UI (ported from AtomCode, MIT) and bridges its `/chat` SSE transport, models, projects, sessions, skills, and filesystem browsing onto a headless `AgentSession`. nanopi runs tools without per-call approval, so the webui approval mode is always `bypass`.
 - Added the single-file distribution: `pnpm run build:single-file` produces a zero-dependency `nanopi.js` (all JS bundled by esbuild, package assets gzip-embedded and extracted to the user cache directory, lazy OAuth/Bedrock modules statically registered by `src/standalone/`). GitHub releases ship `nanopi.js` plus a `nanopi-sidecars-<version>.tgz` asset.
 - Added sidecar downloads into the agent bin directory (`.nanopi/agent/bin`): the photon wasm is fetched from the npm registry and the TUI native prebuilds from the release sidecar tarball, each sha256-verified against hashes embedded at build time; failures degrade to raw images and no native clipboard instead of crashing.
+- Added built-in `/status` command showing the current model, provider, directory, session, thinking level, token usage, and context in a `/context`-style bottom-docked dialog (plain text via notify outside TUI).
 
 ### Changed
 
 - Changed the `showHardwareCursor` setting to use only the terminal cursor instead of also drawing Pi's reverse-video cursor
 - Changed `photon.ts` wasm resolution to prefer the agent bin sidecar path over the executable directory, and made image resizing wait for the photon sidecar download on first use in single-file distributions
 - Changed the release workflow to build and smoke-test `nanopi.js` on Linux/macOS/Windows runners instead of extracting and running per-platform binaries
+- Changed the interactive welcome header to a Codex-style box (`π nanopi vx.x.x`, `model … /model to change`, `provider … thinking …`, `directory …`) with a `Tip: Use /status …` line, and the footer to a single `used xk/yk · / for more details` line; the pi-ui extra matches with a thin-box editor and the same single-line footer
 
 ### Fixed
 

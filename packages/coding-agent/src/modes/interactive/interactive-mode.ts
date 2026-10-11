@@ -46,8 +46,6 @@ import {
 	type TUI,
 	TuiAltScreen,
 	TuiMainScreen,
-	type TuiMouseEvent,
-	type TuiMouseEventResult,
 	visibleWidth,
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
@@ -149,16 +147,15 @@ import { CustomEditor } from "./components/custom-editor.ts";
 import { CustomEntryComponent } from "./components/custom-entry.ts";
 import { CustomMessageComponent } from "./components/custom-message.ts";
 import { DynamicBorder } from "./components/dynamic-border.ts";
-import { playArmin3d, playNanoPiLogo3d } from "./components/easter-egg-3d.lazy.ts";
+import { playArmin3d } from "./components/easter-egg-3d.lazy.ts";
 import { ExtensionEditorComponent } from "./components/extension-editor.ts";
 import { ExtensionInputComponent } from "./components/extension-input.ts";
 import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
-import { FooterComponent, formatTokens } from "./components/footer.ts";
-import { formatKeyText, keyDisplayText, keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.ts";
+import { FooterComponent, formatCwdForFooter, formatTokens } from "./components/footer.ts";
+import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
-import { nanopiLogoLines, nanopiWordmark, supportsNanoPiLogo } from "./components/nanopi-logo.ts";
 import {
 	type AuthSelectorProvider,
 	formatAuthSelectorProviderType,
@@ -183,6 +180,7 @@ import { TreeSelectorComponent } from "./components/tree-selector.ts";
 import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
+import { WelcomeHeader } from "./components/welcome-box.ts";
 import { editInExternalEditor } from "./external-editor.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
@@ -252,17 +250,6 @@ class ExpandableText extends ThemedText implements Expandable {
 	setExpanded(expanded: boolean): void {
 		this.state.expanded = expanded;
 		this.invalidate();
-	}
-}
-
-/** The built-in header. Clicking its logo (the first two lines, after one column of padding) plays an easter egg. */
-class BuiltInHeader extends ExpandableText {
-	onLogoClick: ((column: number, row: number) => void) | undefined;
-
-	handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
-		if (event.type !== "click" || event.y > 1 || event.x < 1 || event.x > 4 || !this.onLogoClick) return undefined;
-		this.onLogoClick(event.screenX - event.x + 1, event.screenY - event.y);
-		return { handled: true };
 	}
 }
 
@@ -1031,73 +1018,23 @@ export class InteractiveMode {
 		// reported its colors. This ends at the terminal's DA1 reply, or after 100 ms if it answers nothing.
 		await this.themeController.waitForTerminalColors();
 
-		// Add header with keybindings from config (unless silenced)
+		// Codex-style welcome header (unless silenced): boxed π nanopi version +
+		// model/provider/thinking/directory rows, with a /status tip below.
 		if (this.shouldShowStartupHeader()) {
-			const showDetails = this.shouldShowStartupDetails();
-			// Built on demand so the header follows theme changes. The logo's first line carries the version,
-			// its second line the first line of key hints. Terminals that cannot render the logo get a
-			// "nanopi vX" line instead, with the key hints below it.
-			const showLogo = supportsNanoPiLogo();
-			const withLogo = (hints: string) => {
-				if (!showLogo) return `${nanopiWordmark()} ${theme.fg("dim", `v${this.version}`)}\n${hints}`;
-				const [top, bottom] = nanopiLogoLines();
-				return `${top} ${theme.fg("dim", `v${this.version}`)}\n${bottom} ${hints}`;
-			};
-
-			// Build startup instructions using keybinding hint helpers
-			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
-
-			const expandedInstructions = () =>
-				[
-					hint("app.interrupt", "to interrupt"),
-					hint("app.clear", "to clear"),
-					rawKeyHint(`${keyText("app.clear")} twice`, "to exit"),
-					hint("app.exit", "to exit (empty)"),
-					hint("app.suspend", "to suspend"),
-					keyHint("tui.editor.deleteToLineEnd", "to delete to end"),
-					hint("app.thinking.cycle", "to cycle thinking level"),
-					rawKeyHint(
-						`${keyText("app.model.cycleForward")}/${keyText("app.model.cycleBackward")}`,
-						"to cycle models",
+			const header = new WelcomeHeader(() => {
+				const model = this.session.state.model;
+				return {
+					version: this.version,
+					modelId: model?.id ?? "no-model",
+					provider: model?.provider,
+					thinkingLevel: this.session.state.thinkingLevel,
+					showThinking: Boolean(model?.reasoning),
+					cwd: formatCwdForFooter(
+						this.session.sessionManager.getCwd(),
+						process.env.HOME || process.env.USERPROFILE,
 					),
-					hint("app.model.select", "to select model"),
-					hint("app.tools.expand", "to expand tools"),
-					hint("app.thinking.toggle", "to expand thinking"),
-					hint("app.editor.external", "for external editor"),
-					rawKeyHint("/", "for commands"),
-					rawKeyHint("!", "to run bash"),
-					rawKeyHint("!!", "to run bash (no context)"),
-					hint("app.message.followUp", "to queue follow-up"),
-					hint("app.message.dequeue", "to edit all queued messages"),
-					hint("app.clipboard.pasteImage", "to paste files on macOS, images, or text"),
-					rawKeyHint("drop files", "to attach"),
-				].join("\n");
-			const compactInstructions = () =>
-				[
-					hint("app.interrupt", "interrupt"),
-					rawKeyHint(`${keyText("app.clear")}/${keyText("app.exit")}`, "clear/exit"),
-					rawKeyHint("/", "commands"),
-					rawKeyHint("!", "bash"),
-					hint("app.tools.expand", "more"),
-				].join(theme.fg("muted", " · "));
-			const compactOnboarding = () =>
-				theme.fg(
-					"dim",
-					`Press ${keyText("app.tools.expand")} to show full startup help${showDetails ? " and loaded resources" : ""}.`,
-				);
-			const onboarding = () =>
-				theme.fg(
-					"dim",
-					`nanopi can explain its own features and look up its docs. Ask it how to use or extend nanopi.`,
-				);
-			const header = new BuiltInHeader(
-				() => `${withLogo(compactInstructions())}\n${compactOnboarding()}\n\n${onboarding()}`,
-				() => `${withLogo(expandedInstructions())}\n\n${onboarding()}`,
-				this.getStartupExpansionState(),
-				1,
-				0,
-			);
-			if (showLogo) header.onLogoClick = (column, row) => playNanoPiLogo3d(this.renderer, column, row);
+				};
+			});
 			this.builtInHeader = header;
 
 			// Setup UI layout
