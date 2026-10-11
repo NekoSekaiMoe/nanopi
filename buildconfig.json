@@ -16,6 +16,12 @@
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
+		"sidecar/tui-native": {
+			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand)"
+		},
+		"sidecar/photon-wasm": {
+			"description": "photon wasm builtin in single-file builds (installed to the agent bin directory, otherwise downloaded on demand)"
+		},
 		"extra/ask-lite": {
 			"description": "Bundled extra: structured questionnaire tool (ask-lite)"
 		},

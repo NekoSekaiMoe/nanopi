@@ -6,7 +6,12 @@ import { dirname, join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ASSETS_COMPLETE_MARKER, extractAssetsPayload } from "../src/standalone/assets.ts";
-import { installSidecarFiles, type SidecarFile } from "../src/utils/sidecars.ts";
+import {
+	type BuiltinSidecarFile,
+	installBuiltinSidecarFiles,
+	installSidecarFiles,
+	type SidecarFile,
+} from "../src/utils/sidecars.ts";
 
 let testRoot: string;
 
@@ -95,5 +100,59 @@ describe("installSidecarFiles", () => {
 		expect(() =>
 			installSidecarFiles(extractDir, [sidecarFor(Buffer.from("x"), { tarPath: "package/absent.wasm" })], binDir),
 		).toThrow(/missing from tarball/);
+	});
+});
+
+describe("installBuiltinSidecarFiles", () => {
+	function builtinFor(content: Buffer, overrides: Partial<BuiltinSidecarFile> = {}): BuiltinSidecarFile {
+		return {
+			kind: "tui-native",
+			destPath: "native/tui/test.node",
+			sha256: createHash("sha256").update(content).digest("hex"),
+			bytes: content.byteLength,
+			content: content.toString("base64"),
+			...overrides,
+		};
+	}
+
+	it("installs embedded files with matching checksums", () => {
+		const content = Buffer.from("node-bytes");
+		const binDir = join(testRoot, "builtin-ok");
+		installBuiltinSidecarFiles([builtinFor(content)], binDir);
+		expect(readFileSync(join(binDir, "native", "tui", "test.node"))).toEqual(content);
+	});
+
+	it("skips files that are already installed", () => {
+		const content = Buffer.from("node-bytes");
+		const binDir = join(testRoot, "builtin-skip");
+		installBuiltinSidecarFiles([builtinFor(content)], binDir);
+		const target = join(binDir, "native", "tui", "test.node");
+		writeFileSync(target, content);
+		installBuiltinSidecarFiles([builtinFor(content)], binDir);
+		expect(readFileSync(target)).toEqual(content);
+	});
+
+	it("overwrites files whose installed checksum differs", () => {
+		const content = Buffer.from("node-bytes");
+		const binDir = join(testRoot, "builtin-repair");
+		mkdirSync(join(binDir, "native", "tui"), { recursive: true });
+		writeFileSync(join(binDir, "native", "tui", "test.node"), Buffer.from("stale-bytes!"));
+		installBuiltinSidecarFiles([builtinFor(content)], binDir);
+		expect(readFileSync(join(binDir, "native", "tui", "test.node"))).toEqual(content);
+	});
+
+	it("skips files for other platforms", () => {
+		const otherOs = process.platform === "linux" ? "darwin" : "linux";
+		const binDir = join(testRoot, "builtin-platform");
+		installBuiltinSidecarFiles([builtinFor(Buffer.from("x"), { os: otherOs })], binDir);
+		expect(existsSync(join(binDir, "native", "tui", "test.node"))).toBe(false);
+	});
+
+	it("rejects embedded files whose checksum does not match", () => {
+		const binDir = join(testRoot, "builtin-mismatch");
+		const file = builtinFor(Buffer.from("node-bytes"));
+		file.content = Buffer.from("node-bytez").toString("base64");
+		expect(() => installBuiltinSidecarFiles([file], binDir)).toThrow(/checksum mismatch/);
+		expect(existsSync(join(binDir, "native", "tui", "test.node"))).toBe(false);
 	});
 });

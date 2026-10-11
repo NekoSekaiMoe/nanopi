@@ -54,9 +54,4 @@ export const SETTINGS_DEFAULTS = {
 		anthropicExtraUsage: true,
 	},
 	cacheWarming: "streaming",
-	tuiMode: "fullscreen",
-	fullscreenExitOutput: "transcript",
-	fullscreenScrollbar: "auto",
-	fullscreenCopyOnSelect: true,
-	fullscreenWheelScrollLines: "auto",
 } as const;

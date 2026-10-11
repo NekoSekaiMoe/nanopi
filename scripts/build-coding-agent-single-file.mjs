@@ -8,9 +8,11 @@
  * - package assets (themes, export-html templates, webui, docs, examples,
  *   package.json) embedded as gzip+base64 and extracted to a versioned cache
  *   directory at startup by src/standalone/assets.ts
- * - a sidecar manifest pinning npm-registry tarball URLs plus per-file
- *   sha256 hashes for the photon wasm and the TUI native prebuilds, installed
- *   on demand by src/utils/sidecars.ts
+ * - builtin sidecars for flavors enabling `sidecar/*` (file contents embedded
+ *   as gzip+base64 and installed to the agent bin directory with the same
+ *   sha256 verification), plus a sidecar manifest pinning npm-registry
+ *   tarball URLs plus per-file sha256 hashes for on-demand download fallback,
+ *   both installed by src/utils/sidecars.ts
  *
  * Requires the workspace packages to be built first (pnpm run build).
  */
@@ -165,8 +167,85 @@ function buildAssetsPayload() {
 	return { payload, rawBytes };
 }
 
+/**
+ * Sidecar file collection, shared by the builtin payload and the download manifest.
+ * Each entry carries the file content so flavors enabling `sidecar/*` can embed
+ * it, while the manifest path only needs hashes and URLs for on-demand download.
+ */
+function collectSidecarFiles() {
+	// Photon wasm: universal, one file.
+	const photonEntry = requireFromCodingAgent.resolve("@silvia-odwyer/photon-node");
+	const photonDir = dirname(photonEntry);
+	const photonWasmPath = join(photonDir, "photon_rs_bg.wasm");
+	if (!existsSync(photonWasmPath)) fail(`photon wasm not found next to ${photonEntry}`);
+	const photonVersion = JSON.parse(readFileSync(join(photonDir, "package.json"), "utf8")).version;
+	const photonContent = readFileSync(photonWasmPath);
+	const photon = {
+		info: {
+			kind: "photon-wasm",
+			tarPath: "package/photon_rs_bg.wasm",
+			destPath: "photon/photon_rs_bg.wasm",
+			sha256: sha256OfPath(photonWasmPath),
+			bytes: photonContent.byteLength,
+		},
+		version: photonVersion,
+		content: photonContent,
+	};
+
+	// TUI native prebuilds: one .node file per platform/arch.
+	const tuiVersion = JSON.parse(readFileSync(join(repoRoot, "packages", "tui", "package.json"), "utf8")).version;
+	const tuiFiles = [];
+	for (const os of readdirSync(tuiNativeDir)) {
+		const prebuildsRoot = join(tuiNativeDir, os, "prebuilds");
+		if (!existsSync(prebuildsRoot)) continue;
+		for (const platformArch of readdirSync(prebuildsRoot)) {
+			const [platform, arch] = platformArch.split("-");
+			const prebuildDir = join(prebuildsRoot, platformArch);
+			for (const fileName of readdirSync(prebuildDir)) {
+				if (!fileName.endsWith(".node")) continue;
+				const filePath = join(prebuildDir, fileName);
+				const content = readFileSync(filePath);
+				tuiFiles.push({
+					info: {
+						kind: "tui-native",
+						tarPath: `package/native/${os}/prebuilds/${platformArch}/${fileName}`,
+						destPath: `native/tui/native/${os}/prebuilds/${platformArch}/${fileName}`,
+						sha256: sha256OfPath(filePath),
+						bytes: content.byteLength,
+						os: platform,
+						arch,
+					},
+					content,
+				});
+			}
+		}
+	}
+	if (tuiFiles.length === 0) fail(`no TUI native prebuilds under ${relative(repoRoot, tuiNativeDir)}`);
+	return { photon, photonVersion, tuiFiles, tuiVersion };
+}
+
+/**
+ * Builtin sidecar payload: file contents for flavors enabling `sidecar/*`.
+ * Packed as gzip+base64 like the package assets; the runtime installs the
+ * platform-matching entries into the agent bin directory with the same
+ * sha256 verification as downloads. Disabled components resolve to an empty
+ * list and keep the download fallback.
+ */
+function buildBuiltinSidecars(collected) {
+	const files = [];
+	if (isComponentEnabled("sidecar/photon-wasm")) {
+		files.push({ ...collected.photon.info, content: collected.photon.content.toString("base64") });
+	}
+	if (isComponentEnabled("sidecar/tui-native")) {
+		for (const file of collected.tuiFiles) {
+			files.push({ ...file.info, content: file.content.toString("base64") });
+		}
+	}
+	return { payload: gzipSync(Buffer.from(JSON.stringify({ files }))).toString("base64"), count: files.length };
+}
+
 /** Sidecar manifest sources, pinned by per-file sha256. */
-function buildSidecarManifest() {
+function buildSidecarManifest(collected) {
 	const registry = "https://registry.npmjs.org";
 	const npmTarballUrl = (name, version) => {
 		const unscoped = name.startsWith("@") ? name.split("/")[1] : name;
@@ -181,62 +260,21 @@ function buildSidecarManifest() {
 	const githubTarballUrl = (version, name) =>
 		`https://github.com/${repository}/releases/download/v${version}/${name}`;
 
-	// Photon wasm: universal, one file.
-	const photonEntry = requireFromCodingAgent.resolve("@silvia-odwyer/photon-node");
-	const photonDir = dirname(photonEntry);
-	const photonWasmPath = join(photonDir, "photon_rs_bg.wasm");
-	if (!existsSync(photonWasmPath)) fail(`photon wasm not found next to ${photonEntry}`);
-	const photonVersion = JSON.parse(readFileSync(join(photonDir, "package.json"), "utf8")).version;
-
-	// TUI native prebuilds: one .node file per platform/arch.
-	const tuiVersion = JSON.parse(readFileSync(join(repoRoot, "packages", "tui", "package.json"), "utf8")).version;
-	const tuiFiles = [];
-	for (const os of readdirSync(tuiNativeDir)) {
-		const prebuildsRoot = join(tuiNativeDir, os, "prebuilds");
-		if (!existsSync(prebuildsRoot)) continue;
-		for (const platformArch of readdirSync(prebuildsRoot)) {
-			const [platform, arch] = platformArch.split("-");
-			const prebuildDir = join(prebuildsRoot, platformArch);
-			for (const fileName of readdirSync(prebuildDir)) {
-				if (!fileName.endsWith(".node")) continue;
-				const filePath = join(prebuildDir, fileName);
-				const tarPath = `package/native/${os}/prebuilds/${platformArch}/${fileName}`;
-				tuiFiles.push({
-					kind: "tui-native",
-					tarPath,
-					destPath: `native/tui/native/${os}/prebuilds/${platformArch}/${fileName}`,
-					sha256: sha256OfPath(filePath),
-					bytes: statSync(filePath).size,
-					os: platform,
-					arch,
-				});
-			}
-		}
-	}
-	if (tuiFiles.length === 0) fail(`no TUI native prebuilds under ${relative(repoRoot, tuiNativeDir)}`);
-
+	const { photon, photonVersion, tuiFiles, tuiVersion } = collected;
 	return {
 		sources: [
 			{
 				packageName: "@silvia-odwyer/photon-node",
 				version: photonVersion,
 				url: npmTarballUrl("@silvia-odwyer/photon-node", photonVersion),
-				files: [
-					{
-						kind: "photon-wasm",
-						tarPath: "package/photon_rs_bg.wasm",
-						destPath: "photon/photon_rs_bg.wasm",
-						sha256: sha256OfPath(photonWasmPath),
-						bytes: statSync(photonWasmPath).size,
-					},
-				],
+				files: [photon.info],
 			},
 			{
 				packageName: "@nanopi/pi-tui",
 				version: tuiVersion,
 				url: githubTarballUrl(tuiVersion, `nanopi-sidecars-${tuiVersion}.tgz`),
 				// The tarball mirrors the agent bin directory layout.
-				files: tuiFiles.map((file) => ({ ...file, tarPath: file.destPath })),
+				files: tuiFiles.map((file) => ({ ...file.info, tarPath: file.info.destPath })),
 			},
 		],
 	};
@@ -252,7 +290,9 @@ for (const required of requiredInputs) {
 }
 
 const { payload: assetsPayload, rawBytes: assetCount } = buildAssetsPayload();
-const sidecarManifest = buildSidecarManifest();
+const collectedSidecars = collectSidecarFiles();
+const sidecarManifest = buildSidecarManifest(collectedSidecars);
+const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
 const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
 
 // OAuth flows disabled by the flavor must not be statically imported either:
@@ -297,6 +337,7 @@ try {
 			NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
 			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
 			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
+			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 		},
@@ -352,7 +393,7 @@ const outputBytes = statSync(outputFilePath).size;
 const sidecarCount = sidecarManifest.sources.reduce((total, source) => total + source.files.length, 0);
 console.log(`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor})`);
 console.log(
-	`  embedded assets: ${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed; sidecar manifest: ${sidecarCount} files`,
+	`  embedded assets: ${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed; sidecar manifest: ${sidecarCount} files; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
 );
 
 // Emit the TUI sidecar tarball referenced by the manifest as a release asset.

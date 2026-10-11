@@ -42,13 +42,33 @@ export class CustomEditor extends Editor {
 		let statusWidth = visibleWidth(status);
 		if (statusWidth === 0) return super.renderTopBorder(width, hiddenLineCount);
 
-		const overflowLabel = hiddenLineCount > 0 ? ` ↑ ${hiddenLineCount} more ` : undefined;
-		const overflowLabelWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
+		const overflowLabel = hiddenLineCount > 0 ? `↑ ${hiddenLineCount} more` : undefined;
+
+		// Composer style has no rule to embed into: the status shares the blank
+		// padding row, left-aligned, with the scroll indicator right-aligned.
+		if (this.composerStyle) {
+			const overflowWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
+			if (overflowLabel && overflowWidth + statusWidth + 3 <= width) {
+				return (
+					" " +
+					status +
+					" ".repeat(width - 2 - statusWidth - overflowWidth) +
+					this.borderColor(overflowLabel) +
+					" "
+				);
+			}
+			return ` ${status} `.padEnd(width);
+		}
+
+		const borderedOverflowLabel = overflowLabel ? ` ${overflowLabel} ` : undefined;
+		const overflowLabelWidth = borderedOverflowLabel ? visibleWidth(borderedOverflowLabel) : 0;
 		const overflowStart = Math.floor((width - overflowLabelWidth) / 2);
 		const canFitOverflow = () =>
-			overflowLabel !== undefined && overflowLabelWidth + 2 <= width && overflowStart - (3 + statusWidth + 1) >= 1;
+			borderedOverflowLabel !== undefined &&
+			overflowLabelWidth + 2 <= width &&
+			overflowStart - (3 + statusWidth + 1) >= 1;
 
-		if (overflowLabel && !canFitOverflow()) {
+		if (borderedOverflowLabel && !canFitOverflow()) {
 			status = this.workingStatusIndicator.renderSpinnerInBorder(width);
 			statusWidth = visibleWidth(status);
 		}
@@ -59,7 +79,7 @@ export class CustomEditor extends Editor {
 				this.borderColor("── ") +
 				status +
 				this.borderColor(
-					` ${"─".repeat(overflowStart - leftBlockWidth)}${overflowLabel}${"─".repeat(width - overflowStart - overflowLabelWidth)}`,
+					` ${"─".repeat(overflowStart - leftBlockWidth)}${borderedOverflowLabel}${"─".repeat(width - overflowStart - overflowLabelWidth)}`,
 				)
 			);
 		}

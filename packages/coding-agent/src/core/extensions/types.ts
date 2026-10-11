@@ -310,6 +310,26 @@ export interface ContextUsage {
 	percent: number | null;
 }
 
+/** A loaded resource with its origin, as reported by {@link ExtensionContext.getLoadedResources}. */
+export interface LoadedResource {
+	/** File path, or synthetic `builtin:` / `<inline:...>` path. */
+	path: string;
+	/** Origin and scope metadata, when known. */
+	sourceInfo?: SourceInfo;
+}
+
+/** Snapshot of the context-file, skill, prompt, and extension resources loaded for the session. */
+export interface LoadedResources {
+	/** Context files merged into the system prompt (SYSTEM.md, AGENTS.md files, appended prompts). */
+	contextFiles: LoadedResource[];
+	/** Loaded skills. */
+	skills: Array<LoadedResource & { name: string }>;
+	/** Loaded prompt templates; `name` is the `/command` without the slash. */
+	prompts: Array<LoadedResource & { name: string }>;
+	/** Loaded extensions; hidden built-in inline extensions are excluded. */
+	extensions: LoadedResource[];
+}
+
 export interface CompactOptions {
 	customInstructions?: string;
 	onComplete?: (result: CompactionResult) => void;
@@ -363,6 +383,8 @@ export interface ExtensionContext {
 	compact(options?: CompactOptions): void;
 	/** Get the current effective system prompt. */
 	getSystemPrompt(): string;
+	/** Get the resources (context files, skills, prompts, extensions) loaded for the session. */
+	getLoadedResources(): LoadedResources;
 }
 
 /** Options for {@link ExtensionToolContext.executeTool}. */
@@ -2157,6 +2179,7 @@ export interface ExtensionContextActions {
 	compact: (options?: CompactOptions) => void;
 	getSystemPrompt: () => string;
 	getSystemPromptOptions?: () => BuildSystemPromptOptions;
+	getLoadedResources?: () => LoadedResources;
 	/** Backs `ExtensionToolContext.executeTool()`. Without it, nested calls fail. */
 	executeTool?: (
 		callerId: string,

@@ -43,8 +43,7 @@ function themeTokenProperties(tokens: ThemeTokenDescriptors): TProperties {
 
 const ThemeColorsSchema = Type.Unsafe<ThemeColorValues<ThemeColorValue>>(
 	Type.Object(themeTokenProperties(THEME_TOKENS), {
-		description:
-			"Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
+		description: "Theme color definitions (optional colors such as thinkingMax use compatible fallbacks)",
 		additionalProperties: false,
 	}),
 );

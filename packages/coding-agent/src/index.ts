@@ -121,6 +121,8 @@ export type {
 	InputSource,
 	KeybindingsManager,
 	LoadExtensionsResult,
+	LoadedResource,
+	LoadedResources,
 	LsToolCallEvent,
 	MarkdownTransformContext,
 	MarkdownTransformer,
@@ -310,14 +312,12 @@ export {
 	type CompactionModelOverride,
 	type CompactionSettings,
 	type DefaultProjectTrust,
-	type FullscreenExitOutput,
 	type ImageSettings,
 	type PackageSource,
 	type QuietStartup,
 	type RetrySettings,
 	SettingsManager,
 	type SettingsManagerCreateOptions,
-	type TuiMode,
 } from "./core/settings-manager.ts";
 // Skills
 export {

@@ -14,8 +14,9 @@
 
 import type { ExtensionAPI, ExtensionCommandContext, ToolInfo } from "@nanopi/pi-coding-agent";
 import { VERSION } from "../../config.ts";
+import { formatContextPath, getCompactExtensionLabels, type ResourceItem } from "../../core/resource-listing.ts";
 import { formatTokens } from "./context.ts";
-import { type StatusRow, showStatusDialog } from "./status-dialog.ts";
+import { type StatusRow, type StatusSection, showStatusDialog } from "./status-dialog.ts";
 
 function formatCwd(cwd: string): string {
 	const home = process.env.HOME ?? process.env.USERPROFILE;
@@ -24,7 +25,6 @@ function formatCwd(cwd: string): string {
 	}
 	return cwd;
 }
-
 type TokenTotals = { input: number; output: number };
 
 function collectTokenTotals(ctx: ExtensionCommandContext): TokenTotals {
@@ -89,17 +89,64 @@ export function collectStatusRows(ctx: ExtensionCommandContext, _allTools: ToolI
 	];
 }
 
+/**
+ * Loaded-resource sections moved from the startup page: compact names, sorted
+ * like the old collapsed startup lists (context files keep load order).
+ */
+export function collectStatusSections(ctx: ExtensionCommandContext): StatusSection[] {
+	const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
+	const resources = ctx.getLoadedResources();
+	const sections: StatusSection[] = [];
+
+	if (resources.contextFiles.length > 0) {
+		sections.push({
+			title: "Context",
+			items: resources.contextFiles.map((file) => formatContextPath(file.path, ctx.cwd, home)),
+		});
+	}
+	if (resources.skills.length > 0) {
+		sections.push({
+			title: "Skills",
+			items: resources.skills.map((skill) => skill.name).sort((a, b) => a.localeCompare(b)),
+		});
+	}
+	if (resources.prompts.length > 0) {
+		sections.push({
+			title: "Prompts",
+			items: resources.prompts.map((prompt) => `/${prompt.name}`).sort((a, b) => a.localeCompare(b)),
+		});
+	}
+	if (resources.extensions.length > 0) {
+		const extensions: ResourceItem[] = resources.extensions.map((extension) => ({
+			path: extension.path,
+			sourceInfo: extension.sourceInfo,
+		}));
+		sections.push({
+			title: "Extensions",
+			items: [...getCompactExtensionLabels(extensions, home)].sort((a, b) => a.localeCompare(b)),
+		});
+	}
+	return sections;
+}
+
 export function registerStatus(pi: ExtensionAPI) {
 	pi.registerCommand("status", {
-		description: "Show the current model, session, and usage",
+		description: "Show the current model, session, usage, and loaded resources",
 		handler: async (_args, ctx) => {
 			const rows = collectStatusRows(ctx, pi.getAllTools());
+			const sections = collectStatusSections(ctx);
 			const title = `π nanopi (v${VERSION})`;
 			if (ctx.mode !== "tui" || !ctx.hasUI) {
-				ctx.ui.notify([title, ...rows.map((row) => `${row.label} ${row.value}`)].join("\n"), "info");
+				const sectionLines = sections
+					.filter((section) => section.items.length > 0)
+					.map((section) => `[${section.title}]\n  ${section.items.join(", ")}`);
+				ctx.ui.notify(
+					[title, ...rows.map((row) => `${row.label} ${row.value}`), ...sectionLines].join("\n"),
+					"info",
+				);
 				return;
 			}
-			await showStatusDialog(ctx, { title, rows });
+			await showStatusDialog(ctx, { title, rows, sections });
 		},
 	});
 }

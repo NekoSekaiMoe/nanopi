@@ -57,7 +57,6 @@ describe("generated configuration schemas", () => {
 				colors: {
 					description: expect.stringContaining("use compatible fallbacks"),
 					properties: {
-						scrollbarTrack: { description: expect.stringContaining("falls back to muted") },
 						accent: { description: "Primary accent color (logo, selected items, cursor)" },
 					},
 				},
@@ -83,7 +82,6 @@ describe("generated configuration schemas", () => {
 		expect(settings.properties).toMatchObject({
 			quietStartup: { description: expect.stringContaining("hide all startup output") },
 			defaultTools: { description: expect.stringContaining("+name and -name") },
-			fullscreenWheelScrollLines: { description: expect.stringContaining("1 to 100") },
 		});
 	});
 

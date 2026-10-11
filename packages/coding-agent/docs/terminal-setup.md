@@ -24,19 +24,7 @@ Kitty supports the required keyboard protocol without additional configuration.
 
 ## iTerm2
 
-Regular terminal mode works without additional configuration.
-
-### Fix slow fullscreen scrolling
-
-In fullscreen mode, nanopi owns the viewport, so iTerm2 sends mouse-wheel reports instead of scrolling native terminal history. Fast trackpad gestures can then move only about one line at a time.
-
-To change this behavior:
-
-1. Open **iTerm2 > Settings > Advanced**.
-2. Search for **Trackpad scrolls fast?**.
-3. Set it to **No**.
-
-This is an iTerm2-wide setting and can also change native trackpad scrolling. The underlying behavior is tracked in [iTerm2 issue 9619](https://gitlab.com/gnachman/iterm2/-/work_items/9619).
+nanopi works without additional configuration.
 
 ## Apple Terminal
 
@@ -61,10 +49,6 @@ keybind = shift+enter=text:\n
 ```
 
 This sends a raw linefeed, which nanopi cannot distinguish from `Ctrl+J`. Remove the mapping if an older Claude Code installation is the only reason you added it. nanopi already binds `Ctrl+J` as a newline alternative, so the mapping may appear to work while still preventing nanopi and tmux from receiving a real `Shift+Enter` event.
-
-### Open links in fullscreen mode
-
-Links remain clickable in fullscreen mode, but Ghostty does not show its normal hover underline or URL preview while nanopi captures mouse input. Hold `Shift+Command` on macOS or `Shift+Ctrl` on Linux to use Ghostty's native link handling.
 
 ## WezTerm
 

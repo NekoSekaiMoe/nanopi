@@ -1,6 +1,6 @@
 import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import type { Model } from "@nanopi/pi-ai";
-import type { ScrollViewScrollbar, TerminalCapabilities, WheelScrollLines } from "@nanopi/pi-tui";
+import type { TerminalCapabilities } from "@nanopi/pi-tui";
 import { randomUUID } from "crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
@@ -14,7 +14,6 @@ import type {
 	CacheWarmingMode,
 	CompactionModelOverride,
 	DefaultProjectTrust,
-	FullscreenExitOutput,
 	LlamaCppSettings,
 	MermaidRenderingMode,
 	PackageSource,
@@ -22,7 +21,6 @@ import type {
 	Settings,
 	ThinkingBudgetsSettings,
 	TransportSetting,
-	TuiMode,
 	WarningSettings,
 } from "./settings-schema.ts";
 
@@ -32,7 +30,6 @@ export type {
 	CompactionModelOverride,
 	CompactionSettings,
 	DefaultProjectTrust,
-	FullscreenExitOutput,
 	ImageSettings,
 	LlamaCppSettings,
 	MarkdownSettings,
@@ -45,7 +42,6 @@ export type {
 	TerminalSettings,
 	ThinkingBudgetsSettings,
 	TransportSetting,
-	TuiMode,
 	WarningSettings,
 } from "./settings-schema.ts";
 /** Cache-warming profile. "idle" also warms between agent runs. */
@@ -1258,63 +1254,6 @@ export class SettingsManager {
 		}
 		this.globalSettings.terminal.showTerminalProgress = enabled;
 		this.markModified("terminal", "showTerminalProgress");
-		this.save();
-	}
-
-	getTuiMode(): TuiMode {
-		return this.settings.tuiMode === "regular" ? "regular" : SETTINGS_DEFAULTS.tuiMode;
-	}
-
-	setTuiMode(mode: TuiMode): void {
-		this.globalSettings.tuiMode = mode;
-		this.markModified("tuiMode");
-		this.save();
-	}
-
-	getFullscreenExitOutput(): FullscreenExitOutput {
-		return this.settings.fullscreenExitOutput === "resume-hint"
-			? "resume-hint"
-			: SETTINGS_DEFAULTS.fullscreenExitOutput;
-	}
-
-	setFullscreenExitOutput(output: FullscreenExitOutput): void {
-		this.globalSettings.fullscreenExitOutput = output;
-		this.markModified("fullscreenExitOutput");
-		this.save();
-	}
-
-	getFullscreenScrollbar(): ScrollViewScrollbar {
-		const mode = this.settings.fullscreenScrollbar;
-		return mode === "always" || mode === "hidden" ? mode : SETTINGS_DEFAULTS.fullscreenScrollbar;
-	}
-
-	setFullscreenScrollbar(mode: ScrollViewScrollbar): void {
-		this.globalSettings.fullscreenScrollbar = mode;
-		this.markModified("fullscreenScrollbar");
-		this.save();
-	}
-
-	getFullscreenCopyOnSelect(): boolean {
-		return this.settings.fullscreenCopyOnSelect ?? SETTINGS_DEFAULTS.fullscreenCopyOnSelect;
-	}
-
-	setFullscreenCopyOnSelect(enabled: boolean): void {
-		this.globalSettings.fullscreenCopyOnSelect = enabled;
-		this.markModified("fullscreenCopyOnSelect");
-		this.save();
-	}
-
-	getFullscreenWheelScrollLines(): WheelScrollLines {
-		const lines = this.settings.fullscreenWheelScrollLines;
-		return typeof lines === "number" && Number.isFinite(lines)
-			? Math.max(1, Math.min(100, Math.floor(lines)))
-			: SETTINGS_DEFAULTS.fullscreenWheelScrollLines;
-	}
-
-	setFullscreenWheelScrollLines(lines: WheelScrollLines): void {
-		this.globalSettings.fullscreenWheelScrollLines =
-			lines === "auto" ? lines : Math.max(1, Math.min(100, Math.floor(lines)));
-		this.markModified("fullscreenWheelScrollLines");
 		this.save();
 	}
 

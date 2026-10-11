@@ -96,33 +96,12 @@ The dedicated history actions browse prompt history regardless of cursor positio
 | `tui.select.confirm` | `enter` | Confirm selection |
 | `tui.select.cancel` | `escape`, `ctrl+c` | Cancel selection |
 
-#### Fullscreen
-
-In fullscreen mode, these actions control the transcript and take precedence over editor actions using the same key.
-
-| Keybinding id | Default | Description |
-|---|---|---|
-| `tui.altScreen.pageUp` | `pageUp` | Scroll the transcript up by one page |
-| `tui.altScreen.pageDown` | `pageDown` | Scroll the transcript down by one page |
-| `tui.altScreen.halfPageUp` | None | Scroll the transcript up by half a page |
-| `tui.altScreen.halfPageDown` | None | Scroll the transcript down by half a page |
-| `tui.altScreen.lineUp` | None | Scroll the transcript up by one line |
-| `tui.altScreen.lineDown` | None | Scroll the transcript down by one line |
-| `tui.altScreen.previousPrompt` | `ctrl+shift+up`, `ctrl+up` (`ctrl+up` only on Windows and WSL) | Jump to the previous marked message |
-| `tui.altScreen.nextPrompt` | `ctrl+shift+down`, `ctrl+down` (`ctrl+down` only on Windows and WSL) | Jump to the next marked message |
-| `tui.altScreen.search` | `ctrl+shift+f` (`ctrl+f` on Windows and WSL) | Search the rendered transcript |
-| `tui.altScreen.searchNext` | `enter`, `ctrl+g` | Select the next search match while searching |
-| `tui.altScreen.searchPrevious` | `shift+enter`, `ctrl+shift+g` | Select the previous search match while searching |
-| `tui.altScreen.searchClose` | `escape` | Close transcript search |
-| `tui.altScreen.top` | `ctrl+home` | Scroll to the beginning of the transcript |
-| `tui.altScreen.bottom` | `ctrl+end` | Scroll to the transcript end and follow new output |
-
 ### Application
 
 | Keybinding id | Default | Description |
 |--------|---------|-------------|
 | `app.interrupt` | `escape` | Cancel / abort |
-| `app.clear` | `ctrl+c` | Clear editor (first) / exit (second) |
+| `app.clear` | `ctrl+c` | Clear editor and show the quit reminder (first) / exit (second press within one second) |
 | `app.exit` | `ctrl+d` | Exit (when editor empty) |
 | `app.suspend` | `ctrl+z` (None on Windows) | Suspend to background |
 | `app.editor.external` | `ctrl+g` | Open in external editor (`externalEditor`, `$VISUAL`, `$EDITOR`, Notepad on Windows, or `nano` elsewhere) |
@@ -162,7 +141,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | Keybinding id | Default | Description |
 |--------|---------|-------------|
 | `app.tools.expand` | `ctrl+o` | Collapse or expand tool output |
-| `app.message.copy` | `ctrl+x` | Copy the selected message in `/tree`; in fullscreen mode, copy the active selection when `fullscreenCopyOnSelect` is `false`; otherwise copy the last assistant message. On OAuth sign-in screens, copy the sign-in URL |
+| `app.message.copy` | `ctrl+x` | Copy the selected message in `/tree`, or the last assistant message. On OAuth sign-in screens, copy the sign-in URL |
 | `app.message.followUp` | `alt+enter` (`ctrl+q` on Windows and WSL) | Queue follow-up message |
 | `app.message.dequeue` | `alt+up` (`alt+q` on Windows and WSL) | Restore queued messages to editor |
 

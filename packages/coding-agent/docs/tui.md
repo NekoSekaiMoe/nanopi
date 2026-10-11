@@ -55,11 +55,9 @@ Forward keys your editor does not own to the base implementation, and restore th
 
 ## Handle mouse input
 
-Fullscreen mode routes normalized mouse events to components. A handler can mark an event handled, capture a drag sequence, request focus, or request a render.
+nanopi routes normalized mouse events to components. A handler can mark an event handled, capture a drag sequence, request focus, or request a render.
 
-Unhandled wheel events scroll the nearest `ScrollView`. Unhandled primary-button drags remain available for transcript selection. OSC 8 links take precedence over enclosing click regions.
-
-Regular mode leaves mouse input to the terminal because the terminal owns scrollback. Design every interaction with a keyboard path even when fullscreen mouse input is available.
+Unhandled wheel events scroll the nearest `ScrollView`. OSC 8 links take precedence over enclosing click regions. The terminal owns scrollback, so design every interaction with a keyboard path.
 
 ## Use custom screens and overlays
 
@@ -109,7 +107,7 @@ Rendering runs on the interactive path. Cache expensive layout and highlighting 
 
 Keep the default view compact and reveal detail through expansion or a dedicated screen. For custom tool rendering, handle partial results and reuse the previous component when it can be updated safely.
 
-Use `NANOPI_TUI_WRITE_LOG` to capture the raw ANSI stream when diagnosing rendering problems. Test narrow widths, wide characters, resize events, theme changes, focus transitions, and both regular and fullscreen modes.
+Use `NANOPI_TUI_WRITE_LOG` to capture the raw ANSI stream when diagnosing rendering problems. Test narrow widths, wide characters, resize events, theme changes, and focus transitions.
 
 ## Examples and source
 

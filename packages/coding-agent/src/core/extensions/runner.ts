@@ -62,6 +62,7 @@ import type {
 	InputEventResult,
 	InputSource,
 	LoadExtensionsResult,
+	LoadedResources,
 	MarkdownTransformer,
 	MessageEndEvent,
 	MessageEndEventResult,
@@ -359,6 +360,14 @@ const noOpUIContext: ExtensionUIContext = {
 	setToolsExpanded: () => {},
 };
 
+/** Resource snapshot used before the session binds its real loader (e.g. in SDK embedders). */
+const EMPTY_LOADED_RESOURCES: LoadedResources = {
+	contextFiles: [],
+	skills: [],
+	prompts: [],
+	extensions: [],
+};
+
 export class ExtensionRunner {
 	private extensions: Extension[];
 	private runtime: ExtensionRuntime;
@@ -381,6 +390,7 @@ export class ExtensionRunner {
 	private getSystemPromptFn: () => string = () => "";
 	private getSystemPromptOptionsFn: () => BuildSystemPromptOptions = () =>
 		normalizeBuildSystemPromptOptions({ cwd: this.cwd });
+	private getLoadedResourcesFn: () => LoadedResources = () => EMPTY_LOADED_RESOURCES;
 	private executeToolFn: ExtensionContextActions["executeTool"];
 	private getCallableToolsFn: () => readonly AgentTool[] = () => [];
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
@@ -457,6 +467,7 @@ export class ExtensionRunner {
 		this.getSystemPromptFn = contextActions.getSystemPrompt;
 		this.getSystemPromptOptionsFn =
 			contextActions.getSystemPromptOptions ?? (() => normalizeBuildSystemPromptOptions({ cwd: this.cwd }));
+		this.getLoadedResourcesFn = contextActions.getLoadedResources ?? this.getLoadedResourcesFn;
 		this.executeToolFn = contextActions.executeTool;
 		this.getCallableToolsFn = contextActions.getCallableTools ?? (() => []);
 
@@ -967,6 +978,10 @@ export class ExtensionRunner {
 			getSystemPrompt: () => {
 				runner.assertActive();
 				return runner.getSystemPromptFn();
+			},
+			getLoadedResources: () => {
+				runner.assertActive();
+				return runner.getLoadedResourcesFn();
 			},
 		};
 	}

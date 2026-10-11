@@ -97,6 +97,7 @@ import {
 	ExtensionRunner,
 	type ExtensionUIContext,
 	type InputSource,
+	type LoadedResources,
 	type MessageEndEvent,
 	type MessageStartEvent,
 	type MessageUpdateEvent,
@@ -3623,6 +3624,28 @@ export class AgentSession {
 	}
 
 	private _bindExtensionCore(runner: ExtensionRunner): void {
+		const getLoadedResources = (): LoadedResources => {
+			const loader = this._resourceLoader;
+			const systemPromptSource = loader.getSystemPromptSource();
+			const contextFiles = [
+				...(systemPromptSource ? [systemPromptSource] : []),
+				...loader.getAppendSystemPromptSources(),
+				...loader.getAgentsFiles().agentsFiles,
+			].map((file) => ({ path: file.path }));
+			return {
+				contextFiles,
+				skills: loader
+					.getSkills()
+					.skills.map((skill) => ({ name: skill.name, path: skill.filePath, sourceInfo: skill.sourceInfo })),
+				prompts: loader
+					.getPrompts()
+					.prompts.map((prompt) => ({ name: prompt.name, path: prompt.filePath, sourceInfo: prompt.sourceInfo })),
+				extensions: loader
+					.getExtensions()
+					.extensions.filter((extension) => !extension.hidden)
+					.map((extension) => ({ path: extension.path, sourceInfo: extension.sourceInfo })),
+			};
+		};
 		const getCommands = (): SlashCommandInfo[] => {
 			const extensionCommands: SlashCommandInfo[] = runner.getRegisteredCommands().map((command) => ({
 				name: command.invocationName,
@@ -3736,6 +3759,7 @@ export class AgentSession {
 				},
 				getSystemPrompt: () => this.systemPrompt,
 				getSystemPromptOptions: () => this._baseSystemPromptOptions,
+				getLoadedResources,
 				executeTool: (callerId, name, args, options) => this._executeNestedToolCall(callerId, name, args, options),
 				getCallableTools: () => this._getCallableTools(),
 			},

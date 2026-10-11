@@ -30,9 +30,11 @@ The default TUI and the pi-ui extra share one Codex-style layout:
   dialog in `status-dialog.ts`, registered in `builtin-commands/index.ts` and
   listed in `BUILTIN_SLASH_COMMANDS`): rows are Model / Model provider /
   Directory / Session / Thinking / Token usage / Context — nanopi mappings,
-  no Codex-only Visit/Approval/Sandbox/Account/Limits rows. Chrome and exit
-  match `/context` (bottom-docked overlay, accent rules, `↑/↓` scroll,
-  `Esc` to close); non-TUI modes get plain-text notify.
+  no Codex-only Visit/Approval/Sandbox/Account/Limits rows — followed by the
+  loaded-resource sections (`[Context]`/`[Skills]`/`[Prompts]`/`[Extensions]`,
+  see [getLoadedResources](../architecture/2026-10-11-get-loaded-resources-api.md)).
+  Chrome and exit match `/context` (bottom-docked overlay, accent rules,
+  `↑/↓` scroll, `Esc` to close); non-TUI modes get plain-text notify.
 - pi-ui matches: thin dim ┌─┐/└─┘ box editor with │ gutters and the existing
   model toolbar inside, and the same single-line footer (extension statuses
   hidden). Its README is updated to match.
@@ -60,4 +62,7 @@ established the builtin-commands home this command extends.
   `FooterComponent` tests were rewritten for the single line; `welcome-box`
   and `collectStatusRows` have new coverage in `test/status-command.test.ts`.
 - `BUILTIN_SLASH_COMMANDS` gains `status`; extensions using that name now
-  conflict (builtin wins in autocomplete, same as other builtins).
+  conflict (builtin wins in autocomplete, same as other builtins). The
+  built-in command itself is `source: "builtin"` and is excluded from the
+  built-in-conflict startup diagnostics — listing it there was a false
+  alarm, since `BUILTIN_SLASH_COMMANDS` names it on purpose.

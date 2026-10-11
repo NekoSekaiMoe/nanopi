@@ -680,69 +680,6 @@
       ],
       "description": "WebSocket connect or open handshake timeout in milliseconds; 0 or \"disabled\" disables it."
     },
-    "tuiMode": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "regular"
-        },
-        {
-          "type": "string",
-          "const": "fullscreen"
-        }
-      ],
-      "default": "fullscreen"
-    },
-    "fullscreenExitOutput": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "transcript"
-        },
-        {
-          "type": "string",
-          "const": "resume-hint"
-        }
-      ],
-      "description": "No effect in regular TUI mode.",
-      "default": "transcript"
-    },
-    "fullscreenScrollbar": {
-      "anyOf": [
-        {
-          "type": "string",
-          "const": "auto"
-        },
-        {
-          "type": "string",
-          "const": "always"
-        },
-        {
-          "type": "string",
-          "const": "hidden"
-        }
-      ],
-      "description": "No effect in regular TUI mode.",
-      "default": "auto"
-    },
-    "fullscreenCopyOnSelect": {
-      "type": "boolean",
-      "description": "No effect in regular TUI mode.",
-      "default": true
-    },
-    "fullscreenWheelScrollLines": {
-      "anyOf": [
-        {
-          "type": "number"
-        },
-        {
-          "type": "string",
-          "const": "auto"
-        }
-      ],
-      "description": "Lines scrolled per wheel event in fullscreen mode; numeric values are clamped from 1 to 100.",
-      "default": "auto"
-    },
     "queueMode": {
       "anyOf": [
         {

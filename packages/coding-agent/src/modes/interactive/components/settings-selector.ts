@@ -4,13 +4,11 @@ import {
 	type Component,
 	Container,
 	getCapabilities,
-	type ScrollViewScrollbar,
 	type SelectItem,
 	type SettingItem,
 	SettingsList,
 	Spacer,
 	Text,
-	type WheelScrollLines,
 } from "@nanopi/pi-tui";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
 import { SETTINGS_DEFAULTS } from "../../../core/settings-defaults.ts";
@@ -18,10 +16,8 @@ import {
 	CACHE_WARMING_MODES,
 	type CacheWarmingMode,
 	type DefaultProjectTrust,
-	type FullscreenExitOutput,
 	type MermaidRenderingMode,
 	type QuietStartup,
-	type TuiMode,
 	type WarningSettings,
 } from "../../../core/settings-manager.ts";
 import {
@@ -93,11 +89,6 @@ export interface SettingsConfig {
 	defaultProjectTrust: DefaultProjectTrust;
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
-	tuiMode: TuiMode;
-	fullscreenExitOutput: FullscreenExitOutput;
-	fullscreenScrollbar: ScrollViewScrollbar;
-	fullscreenCopyOnSelect: boolean;
-	fullscreenWheelScrollLines: WheelScrollLines;
 	warnings: WarningSettings;
 }
 
@@ -132,11 +123,6 @@ export interface SettingsCallbacks {
 	onDefaultProjectTrustChange: (defaultProjectTrust: DefaultProjectTrust) => void;
 	onClearOnShrinkChange: (enabled: boolean) => void;
 	onShowTerminalProgressChange: (enabled: boolean) => void;
-	onTuiModeChange: (mode: TuiMode) => void;
-	onFullscreenExitOutputChange: (output: FullscreenExitOutput) => void;
-	onFullscreenScrollbarChange: (mode: ScrollViewScrollbar) => void;
-	onFullscreenCopyOnSelectChange: (enabled: boolean) => void;
-	onFullscreenWheelScrollLinesChange: (lines: WheelScrollLines) => void;
 	onWarningsChange: (warnings: WarningSettings) => void;
 	onCancel: () => void;
 }
@@ -705,48 +691,6 @@ export class SettingsSelectorComponent extends Container {
 				},
 			},
 			{
-				id: "tui-mode",
-				label: "TUI mode",
-				description: "Interface layout; regular mode uses the terminal's normal scrollback",
-				currentValue: config.tuiMode,
-				values: ["regular", "fullscreen"],
-			},
-			{
-				id: "fullscreen-exit-output",
-				label: "Fullscreen exit output",
-				description: "Print the transcript or only a session resume hint when exiting fullscreen mode",
-				currentValue: config.fullscreenExitOutput,
-				values: ["transcript", "resume-hint"],
-			},
-			{
-				id: "fullscreen-scrollbar",
-				label: "Fullscreen scrollbar",
-				description: "Scrollbar behavior in fullscreen mode; has no effect in regular mode",
-				currentValue: config.fullscreenScrollbar,
-				values: ["auto", "always", "hidden"],
-			},
-			{
-				id: "fullscreen-copy-on-select",
-				label: "Fullscreen copy on select",
-				description: "Automatically copy selected text in fullscreen mode; disable to copy selections with Ctrl+X",
-				currentValue: config.fullscreenCopyOnSelect ? "true" : "false",
-				values: ["true", "false"],
-			},
-			{
-				id: "fullscreen-wheel-scroll-lines",
-				label: "Fullscreen wheel scrolling",
-				description:
-					"Lines per mouse-wheel event in fullscreen mode; 'auto' speeds up fast wheel spins where the terminal does not",
-				currentValue: String(config.fullscreenWheelScrollLines),
-				values: [
-					"auto",
-					...[...new Set([1, 2, 3, 5, 10, config.fullscreenWheelScrollLines])]
-						.filter((lines) => lines !== "auto")
-						.sort((a, b) => a - b)
-						.map(String),
-				],
-			},
-			{
 				id: "theme",
 				label: "Theme",
 				description: "Color theme for the interface",
@@ -960,21 +904,6 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "terminal-progress":
 						callbacks.onShowTerminalProgressChange(newValue === "true");
-						break;
-					case "tui-mode":
-						callbacks.onTuiModeChange(newValue as TuiMode);
-						break;
-					case "fullscreen-exit-output":
-						callbacks.onFullscreenExitOutputChange(newValue as FullscreenExitOutput);
-						break;
-					case "fullscreen-scrollbar":
-						callbacks.onFullscreenScrollbarChange(newValue as ScrollViewScrollbar);
-						break;
-					case "fullscreen-copy-on-select":
-						callbacks.onFullscreenCopyOnSelectChange(newValue === "true");
-						break;
-					case "fullscreen-wheel-scroll-lines":
-						callbacks.onFullscreenWheelScrollLinesChange(newValue === "auto" ? "auto" : parseInt(newValue, 10));
 						break;
 					case "theme":
 						callbacks.onThemeChange(newValue);

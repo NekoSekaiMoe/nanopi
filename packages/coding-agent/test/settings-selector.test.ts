@@ -22,47 +22,6 @@ describe("SettingsSelectorComponent", () => {
 		harness = undefined;
 	});
 
-	it("cycles through fullscreen settings", () => {
-		const onExitOutputChange = vi.fn();
-		const onScrollbarChange = vi.fn();
-		const onCopyOnSelectChange = vi.fn();
-		const onWheelScrollLinesChange = vi.fn();
-		const config = {
-			fullscreenExitOutput: "transcript",
-			fullscreenScrollbar: "auto",
-			fullscreenCopyOnSelect: true,
-			fullscreenWheelScrollLines: 7,
-			warnings: {},
-			defaultModel: "not set",
-			availableDefaultModels: [],
-			availableThinkingLevels: [],
-			modelThinkingLevels: {},
-			availableThemes: [],
-		} as unknown as SettingsConfig;
-		const callbacks = {
-			onFullscreenExitOutputChange: onExitOutputChange,
-			onFullscreenScrollbarChange: onScrollbarChange,
-			onFullscreenCopyOnSelectChange: onCopyOnSelectChange,
-			onFullscreenWheelScrollLinesChange: onWheelScrollLinesChange,
-		} as unknown as SettingsCallbacks;
-
-		const cycle = (label: string, count: number) => {
-			const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
-			for (const character of label) list.handleInput(character);
-			for (let i = 0; i < count; i++) list.handleInput("\r");
-		};
-
-		cycle("Fullscreen exit output", 2);
-		expect(onExitOutputChange.mock.calls.flat()).toEqual(["resume-hint", "transcript"]);
-		cycle("Fullscreen scrollbar", 3);
-		expect(onScrollbarChange.mock.calls.flat()).toEqual(["always", "hidden", "auto"]);
-		cycle("Fullscreen copy on select", 2);
-		expect(onCopyOnSelectChange.mock.calls.flat()).toEqual([false, true]);
-		// #9758: custom values from settings.json stay in the cycle.
-		cycle("Fullscreen wheel scrolling", 3);
-		expect(onWheelScrollLinesChange.mock.calls.flat()).toEqual([10, "auto", 1]);
-	});
-
 	it("keeps the configured fixed theme marked while browsing", () => {
 		const config = {
 			defaultModel: "not set",

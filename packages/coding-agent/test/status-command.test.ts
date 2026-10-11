@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { collectStatusRows } from "../src/extensions/builtin-commands/status.ts";
+import { collectStatusRows, collectStatusSections } from "../src/extensions/builtin-commands/status.ts";
+import { wrapStatusText } from "../src/extensions/builtin-commands/status-dialog.ts";
 import type { ExtensionCommandContext } from "../src/index.ts";
 import { initTheme } from "../src/index.ts";
 import { renderWelcomeBox, renderWelcomeTip, WelcomeHeader } from "../src/modes/interactive/components/welcome-box.ts";
@@ -51,6 +52,7 @@ describe("welcome box", () => {
 		expect(text).toContain("thinking: high");
 		expect(text).toContain("directory: ~");
 		expect(stripAnsi(renderWelcomeTip())).toContain("/status");
+		expect(stripAnsi(renderWelcomeTip())).toContain("loaded extensions and skills");
 
 		const header = new WelcomeHeader(() => ({
 			version: "0.99.0",
@@ -84,5 +86,56 @@ describe("collectStatusRows", () => {
 		expect(byLabel.get("Token usage:")).toContain("150 total");
 		expect(byLabel.get("Context:")).toContain("12.3k / 200k");
 		expect(labels.some((label) => label.toLowerCase().includes("visit"))).toBe(false);
+	});
+});
+
+describe("wrapStatusText", () => {
+	it("wraps on spaces and keeps overlong words on their own line", () => {
+		expect(wrapStatusText("alpha beta gamma", 11)).toEqual(["alpha beta", "gamma"]);
+		expect(wrapStatusText("alpha", 3)).toEqual(["alpha"]);
+		expect(wrapStatusText("", 10)).toEqual([""]);
+	});
+});
+
+describe("collectStatusSections", () => {
+	it("lists context files, skills, prompts, and extensions from getLoadedResources", () => {
+		const ctx = {
+			...createStatusCtx(),
+			cwd: "/repo",
+			getLoadedResources: () => ({
+				contextFiles: [{ path: "/repo/.nanopi/SYSTEM.md" }, { path: "/repo/AGENTS.md" }],
+				skills: [{ name: "zeta", path: "/repo/.nanopi/skills/zeta/SKILL.md" }],
+				prompts: [{ name: "review", path: "/repo/.nanopi/prompts/review.md" }],
+				extensions: [
+					{
+						path: "/repo/.nanopi/extensions/plan-mode/index.ts",
+						sourceInfo: {
+							path: "/repo/.nanopi/extensions/plan-mode/index.ts",
+							source: "local",
+							scope: "project",
+							origin: "top-level",
+						},
+					},
+				],
+			}),
+		} as unknown as ExtensionCommandContext;
+
+		const sections = collectStatusSections(ctx);
+		expect(sections).toEqual([
+			{ title: "Context", items: [".nanopi/SYSTEM.md", "AGENTS.md"] },
+			{ title: "Skills", items: ["zeta"] },
+			{ title: "Prompts", items: ["/review"] },
+			{ title: "Extensions", items: ["plan-mode"] },
+		]);
+	});
+
+	it("omits empty sections", () => {
+		const ctx = {
+			...createStatusCtx(),
+			cwd: "/repo",
+			getLoadedResources: () => ({ contextFiles: [], skills: [], prompts: [], extensions: [] }),
+		} as unknown as ExtensionCommandContext;
+
+		expect(collectStatusSections(ctx)).toEqual([]);
 	});
 });

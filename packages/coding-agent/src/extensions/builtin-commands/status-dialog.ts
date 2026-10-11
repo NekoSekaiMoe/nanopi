@@ -4,6 +4,10 @@
  * Same conventions as `/context` (see context-dialog.ts): bottom-docked
  * full-width overlay, accent rules top/bottom, one-line dim hint footer,
  * pure keyboard interaction (Esc/Ctrl-C closes, ↑/↓ scrolls on overflow).
+ *
+ * Below the label/value rows, the loaded-resource sections moved here from the
+ * startup page ([Context] / [Skills] / [Prompts] / [Extensions]) render as
+ * indented comma-separated lists, wrapped to the dialog width.
  */
 
 import type { ExtensionCommandContext } from "@nanopi/pi-coding-agent";
@@ -14,15 +18,42 @@ export type StatusRow = {
 	value: string;
 };
 
+export type StatusSection = {
+	title: string;
+	items: string[];
+};
+
 export type StatusDialogData = {
 	title: string;
 	rows: StatusRow[];
+	sections: StatusSection[];
 };
 
 /** Pad a line to a fixed visible width, truncating with an ellipsis when over. */
 export function padStatusLine(text: string, width: number): string {
 	const truncated = truncateToWidth(text, width, "…");
 	return truncated + " ".repeat(Math.max(0, width - visibleWidth(truncated)));
+}
+
+/** Greedy word wrap by visible width. Long words are kept on their own line, truncated later. */
+export function wrapStatusText(text: string, width: number): string[] {
+	if (width <= 0) return [text];
+	const lines: string[] = [];
+	let current = "";
+	for (const word of text.split(/\s+/).filter((part) => part.length > 0)) {
+		if (current === "") {
+			current = word;
+			continue;
+		}
+		if (visibleWidth(current) + 1 + visibleWidth(word) <= width) {
+			current = `${current} ${word}`;
+		} else {
+			lines.push(current);
+			current = word;
+		}
+	}
+	if (current !== "" || lines.length === 0) lines.push(current);
+	return lines;
 }
 
 /** Overlay placement: full-width, docked to the bottom edge (matches /context). */
@@ -41,7 +72,17 @@ function hintRow(theme: any, text: string, width: number): string {
 	return theme.fg("dim", padStatusLine(` ${text}`, width));
 }
 
-/** Interactive /status dialog: static rows, Esc closes, ↑/↓ scrolls on overflow. */
+/** Render the section block: ` [Title]` header plus dim wrapped item lines. */
+function sectionLines(theme: any, section: StatusSection, contentWidth: number): string[] {
+	const lines = [theme.fg("mdHeading", `[${section.title}]`)];
+	const joined = section.items.join(", ");
+	for (const wrapped of wrapStatusText(joined, Math.max(1, contentWidth - 2))) {
+		lines.push(theme.fg("dim", padStatusLine(`   ${wrapped}`, contentWidth)));
+	}
+	return lines;
+}
+
+/** Interactive /status dialog: static rows + resource sections, Esc closes, ↑/↓ scrolls on overflow. */
 export async function showStatusDialog(
 	ctx: Pick<ExtensionCommandContext, "ui">,
 	data: StatusDialogData,
@@ -72,9 +113,18 @@ export async function showStatusDialog(
 					const contentWidth = Math.max(1, width - 2);
 					const title = theme.bold(data.title);
 					const labelWidth = Math.min(16, Math.max(...data.rows.map((row) => row.label.length), 8));
-					const allRows = data.rows.map((row) =>
+					const rowLines = data.rows.map((row) =>
 						padStatusLine(` ${row.label.padEnd(labelWidth)}  ${row.value}`, contentWidth),
 					);
+
+					const sectionEntries = data.sections.filter((section) => section.items.length > 0);
+					const sectionBlocks = sectionEntries.map((section) => sectionLines(theme, section, contentWidth));
+					const body: string[] = [];
+					for (const [index, block] of sectionBlocks.entries()) {
+						if (index === 0) body.push(padStatusLine("", contentWidth));
+						body.push(...block);
+					}
+					const allRows = [...rowLines, ...body];
 
 					const rows = Math.max(1, tui.terminal.rows);
 					const chrome = 4; // rule + title + rule + hint

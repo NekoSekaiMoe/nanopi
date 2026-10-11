@@ -66,7 +66,7 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 }
 
 export function renderWelcomeTip(): string {
-	return theme.fg("dim", "Tip: Use /status to see the current model, token usage, and context.");
+	return theme.fg("dim", "Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.");
 }
 
 /** Static Codex-style welcome header: box + tip line. Rebuilds colors on theme change. */

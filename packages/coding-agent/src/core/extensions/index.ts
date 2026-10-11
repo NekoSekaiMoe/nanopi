@@ -111,6 +111,8 @@ export type {
 	InputSource,
 	KeybindingsManager,
 	LoadExtensionsResult,
+	LoadedResource,
+	LoadedResources,
 	LsToolCallEvent,
 	LsToolResultEvent,
 	MarkdownTransformContext,

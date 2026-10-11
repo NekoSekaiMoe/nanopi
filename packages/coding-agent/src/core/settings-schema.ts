@@ -411,35 +411,6 @@ export const SettingsSchema = Type.Object(
 				description: 'WebSocket connect or open handshake timeout in milliseconds; 0 or "disabled" disables it.',
 			}),
 		),
-		tuiMode: Type.Optional(
-			Type.Union([Type.Literal("regular"), Type.Literal("fullscreen")], {
-				default: SETTINGS_DEFAULTS.tuiMode,
-			}),
-		),
-		fullscreenExitOutput: Type.Optional(
-			Type.Union([Type.Literal("transcript"), Type.Literal("resume-hint")], {
-				description: "No effect in regular TUI mode.",
-				default: SETTINGS_DEFAULTS.fullscreenExitOutput,
-			}),
-		),
-		fullscreenScrollbar: Type.Optional(
-			Type.Union([Type.Literal("auto"), Type.Literal("always"), Type.Literal("hidden")], {
-				description: "No effect in regular TUI mode.",
-				default: SETTINGS_DEFAULTS.fullscreenScrollbar,
-			}),
-		),
-		fullscreenCopyOnSelect: Type.Optional(
-			Type.Boolean({
-				description: "No effect in regular TUI mode.",
-				default: SETTINGS_DEFAULTS.fullscreenCopyOnSelect,
-			}),
-		),
-		fullscreenWheelScrollLines: Type.Optional(
-			Type.Union([Type.Number(), Type.Literal("auto")], {
-				description: "Lines scrolled per wheel event in fullscreen mode; numeric values are clamped from 1 to 100.",
-				default: SETTINGS_DEFAULTS.fullscreenWheelScrollLines,
-			}),
-		),
 		queueMode: Type.Optional(
 			Type.Union([Type.Literal("all"), Type.Literal("one-at-a-time")], {
 				description: "Legacy setting migrated to steeringMode.",
@@ -471,8 +442,6 @@ export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;
 export type PackageSource = Static<typeof PackageSourceSchema>;
-export type FullscreenExitOutput = NonNullable<SettingsInput["fullscreenExitOutput"]>;
-export type TuiMode = NonNullable<SettingsInput["tuiMode"]>;
 export type CacheWarmingMode = NonNullable<SettingsInput["cacheWarming"]>;
 export interface Settings extends Omit<SettingsInput, "queueMode" | "retry" | "skills" | "websockets"> {
 	retry?: RetrySettings;
