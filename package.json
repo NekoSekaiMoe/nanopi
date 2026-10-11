@@ -4,8 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"clean": "pnpm -r run clean",
-		"build": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../codemode && pnpm run build && cd ../mcp && pnpm run build && cd ../ai && pnpm run build && cd ../durable && pnpm run build && cd ../env && pnpm run build && cd ../agent && pnpm run build && cd ../protocol && pnpm run build && cd ../client && pnpm run build && cd ../server && pnpm run build && cd ../coding-agent && pnpm run build",
-		"build:offline": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../codemode && pnpm run build && cd ../mcp && pnpm run build && cd ../ai && pnpm run build:offline && cd ../durable && pnpm run build && cd ../env && pnpm run build && cd ../agent && pnpm run build && cd ../protocol && pnpm run build && cd ../client && pnpm run build && cd ../server && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../ai && pnpm run build && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build:offline": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../ai && pnpm run build:offline && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
 		"build:native:darwin": "pnpm --filter ./packages/tui run build:native:darwin",
 		"build:native:linux": "pnpm --filter ./packages/tui run build:native:linux",
 		"build:native:win32": "pnpm --filter ./packages/tui run build:native:win32",
@@ -28,7 +28,6 @@
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
 		"test": "pnpm run test:scripts && pnpm -r run test",
 		"test:scripts": "node --import ./ts-import.mjs --test scripts/*.test.mjs scripts/*.test.ts",
-		"test:mcp-conformance": "node --import ./ts-import.mjs packages/coding-agent/test/mcp-conformance/run.ts",
 		"version:patch": "pnpm -r exec npm version patch --no-git-tag-version && node scripts/sync-versions.js && pnpm install --lockfile-only",
 		"version:minor": "pnpm -r exec npm version minor --no-git-tag-version && node scripts/sync-versions.js && pnpm install --lockfile-only",
 		"version:major": "pnpm -r exec npm version major --no-git-tag-version && node scripts/sync-versions.js && pnpm install --lockfile-only",

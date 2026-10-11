@@ -6,8 +6,8 @@ describe("compaction file operations", () => {
 	it("include files touched by nested calls recorded on tool results", () => {
 		const result: ToolResultMessage = {
 			role: "toolResult",
-			toolCallId: "codemode-1",
-			toolName: "codemode",
+			toolCallId: "bash-1",
+			toolName: "bash",
 			content: [],
 			isError: false,
 			timestamp: 0,

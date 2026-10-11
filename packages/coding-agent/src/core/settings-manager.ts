@@ -29,8 +29,6 @@ import type {
 export type {
 	BranchSummarySettings,
 	CacheWarmingMode,
-	CodemodeMode,
-	CodemodeSettings,
 	CompactionModelOverride,
 	CompactionSettings,
 	DefaultProjectTrust,

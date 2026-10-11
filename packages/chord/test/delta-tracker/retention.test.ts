@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+// Route through the repo esbuild preload so Node builds without built-in type stripping can run the worker.
+const typeScriptPreload = fileURLToPath(new URL("../../../../ts-import.mjs", import.meta.url));
+
 describe("delta tracker retention across GC jobs", () => {
 	it.each([
 		"aborted-payload",
@@ -23,7 +26,13 @@ describe("delta tracker retention across GC jobs", () => {
 		(scenario) => {
 			const child = spawnSync(
 				process.execPath,
-				["--expose-gc", fileURLToPath(new URL("./retention.worker.ts", import.meta.url)), scenario],
+				[
+					"--import",
+					typeScriptPreload,
+					"--expose-gc",
+					fileURLToPath(new URL("./retention.worker.ts", import.meta.url)),
+					scenario,
+				],
 				{ encoding: "utf8", timeout: 60_000 },
 			);
 			expect(child.error, child.stderr).toBeUndefined();

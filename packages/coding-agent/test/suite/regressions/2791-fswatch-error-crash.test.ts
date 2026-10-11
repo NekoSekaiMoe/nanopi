@@ -1,7 +1,8 @@
 import { execFileSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 /**
@@ -87,12 +88,17 @@ process.exit(0);
 		let stderr = "";
 		let exitCode: number;
 		try {
-			_stdout = execFileSync(process.execPath, [scriptPath], {
-				timeout: 10000,
-				encoding: "utf-8",
-				env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
-				stdio: ["pipe", "pipe", "pipe"],
-			});
+			// The repo esbuild preload lets Node builds without built-in type stripping run the script.
+			_stdout = execFileSync(
+				process.execPath,
+				["--import", pathToFileURL(resolve(__dirname, "../../../../../ts-import.mjs")).href, scriptPath],
+				{
+					timeout: 10000,
+					encoding: "utf-8",
+					env: { ...process.env, PI_CODING_AGENT_DIR: agentDir },
+					stdio: ["pipe", "pipe", "pipe"],
+				},
+			);
 			exitCode = 0;
 		} catch (err: unknown) {
 			const e = err as { status: number; stdout: string; stderr: string };

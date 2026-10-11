@@ -114,7 +114,9 @@ describe("AuthStorage", () => {
 	});
 
 	test("keeps a coalesced reload alive while another credential reader is waiting", async () => {
-		writeAuthJson({ anthropic: { type: "api_key", key: "old" } });
+		// The initial key is longer than "new": the reload cache keys on file size and timestamps,
+		// and some filesystems report identical nanosecond timestamps for rapid writes.
+		writeAuthJson({ anthropic: { type: "api_key", key: "previous" } });
 		const storage = AuthStorage.create(authJsonPath);
 		writeAuthJson({ anthropic: { type: "api_key", key: "new" } });
 		let grantLock: (() => void) | undefined;

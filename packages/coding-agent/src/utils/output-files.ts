@@ -1,8 +1,7 @@
 /**
  * Output files: files pi writes so the model can use output it was not shown in full, such as the
- * full text of truncated tool output, binary MCP resources, and images shown by codemode scripts.
- * Every output file is created here, so where they are stored can change in one place. Today they
- * go to the OS temp directory.
+ * full text of truncated tool output and images shown by tools. Every output file is created here,
+ * so where they are stored can change in one place. Today they go to the OS temp directory.
  */
 
 import { randomBytes } from "node:crypto";

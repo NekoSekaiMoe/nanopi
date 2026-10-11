@@ -142,13 +142,14 @@ Classifier models do not chat. They answer typed questions about JSON state: pic
 
 Chat models on a [llama.cpp router](llama-cpp.md#classification) are also listed as classifier models.
 
-OpenAI's Decisions API needs an API key. Sign in with ChatGPT credentials do not work with it, so `gpt-6-luna` is not listed as available while `openai` is logged in through `/login`, even when `OPENAI_API_KEY` is set; log out of `openai` to use the key. GPT-6 Luna also judges images passed in `images` (see [Codemode](codemode.md#classify)); other classifier models return an error for them. The API rejects inputs above 922K tokens, but requests that run longer than about five seconds, currently above roughly 600K input tokens, fail with a gateway timeout.
+OpenAI's Decisions API needs an API key. Sign in with ChatGPT credentials do not work with it, so `gpt-6-luna` is not listed as available while `openai` is logged in through `/login`, even when `OPENAI_API_KEY` is set; log out of `openai` to use the key. GPT-6 Luna also judges images passed in `images`; other classifier models return an error for them. The API rejects inputs above 922K tokens, but requests that run longer than about five seconds, currently above roughly 600K input tokens, fail with a gateway timeout.
 
-Classifier models do not appear in `/model`. The model reaches them through the [`codemode`](cli.md#enable-codemode) tool, which is off unless an MCP server turned it on. Enable it with `"defaultTools": ["+codemode"]` in [settings](settings.md#tools). Scripts then list classifier models with `models.getAvailableOfType("classifier")` and call `models.classify(model, { state, questions })`:
+Classifier models do not appear in `/model`; extensions reach them through `ctx.modelRegistry`. Find one with `ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest")` and call `ctx.modelRegistry.classify(model, { state, questions })`:
 
-```js
-const jev = await models.getModelOfType("classifier", "typesafe", "jev-latest");
-const result = await models.classify(jev, {
+```typescript
+const jev = ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest");
+if (!jev) throw new Error("jev-latest is not available");
+const result = await ctx.modelRegistry.classify(jev, {
   state: { message: "The change works, thanks." },
   questions: {
     approved: {
@@ -161,30 +162,26 @@ const result = await models.classify(jev, {
 return result.answers;
 ```
 
-[Codemode](codemode.md#classify) describes the question and answer types.
+When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. The cost uses the model's catalog price; models without one, such as TypeSafe's direct `jev-latest`, report tokens at no cost.
 
-When the service reports token counts, as all System One services do, `result.usage` carries them with their cost. Pi adds the usage of a script's classifier calls to the `codemode` tool result, so it counts toward the session cost in the footer and `/session`. The cost uses the model's catalog price; models without one, such as TypeSafe's direct `jev-latest`, report tokens at no cost.
-
-Extensions call classifiers through `ctx.modelRegistry.classify()`, without codemode. [Virtual models](virtual-models.md#route-requests) can use them to route requests; see the `jev-router.ts` example.
+[Virtual models](virtual-models.md#route-requests) can use classifiers to route requests; see the `jev-router.ts` example.
 
 ## Use image models
 
 Image models generate images from a prompt and optional input images. Pi lists OpenRouter's image models, such as `google/gemini-2.5-flash-image` and `black-forest-labs/flux.2-pro`, under the `openrouter` provider; they use the same `OPENROUTER_API_KEY` or `/login` credential as its chat models.
 
-Like classifier models, image models do not appear in `/model`; the model reaches them through the [`codemode`](cli.md#enable-codemode) tool. Scripts list them with `models.getAvailableOfType("image")` and call `models.generateImages(model, { input })`. The result's `output` holds base64 image blocks, which `image()` attaches to the `codemode` result so the model sees them:
+Like classifier models, image models do not appear in `/model`; extensions generate images through `ctx.modelRegistry.generateImages()` with an image model from `ctx.modelRegistry.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image")`. The result's `output` holds base64 image blocks:
 
-```js
-const painter = await models.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image");
-const result = await models.generateImages(painter, {
+```typescript
+const painter = ctx.modelRegistry.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image");
+if (!painter) throw new Error("the image model is not available");
+const result = await ctx.modelRegistry.generateImages(painter, {
   input: [{ type: "text", text: "A red fox in the snow, watercolor" }],
 });
-if (result.stopReason !== "stop") return result.errorMessage;
-for (const block of result.output) if (block.type === "image") image(block);
+if (result.stopReason !== "stop") throw new Error(result.errorMessage ?? "image generation failed");
 ```
 
-`input` can also contain `{ type: "image", data, mimeType }` blocks to edit or use as references. Pi adds the usage of a script's image calls to the `codemode` tool result, like classifier calls. Generated images are not saved to disk. [Codemode](codemode.md#generate-images) describes the full API.
-
-Extensions generate images through `ctx.modelRegistry.generateImages()`, without codemode.
+`input` can also contain `{ type: "image", data, mimeType }` blocks to edit or use as references. Generated images are not saved to disk.
 
 ## Add a custom provider
 

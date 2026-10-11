@@ -50,6 +50,8 @@ function generateFireworksModels(
 		process.execPath,
 		[
 			"--import",
+			fileURLToPath(new URL("../../../ts-import.mjs", import.meta.url)),
+			"--import",
 			pathToFileURL(preloadPath).href,
 			"scripts/generate-models.ts",
 			"--json-only",

@@ -3,6 +3,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+// Strip TypeScript through the repo esbuild preload on Node builds without built-in type stripping.
+const typeScriptPreload = fileURLToPath(new URL("../../../ts-import.mjs", import.meta.url));
+
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const aiEntryUrl = new URL("../src/index.ts", import.meta.url).href;
 const compatEntryUrl = new URL("../src/compat.ts", import.meta.url).href;
@@ -35,10 +38,14 @@ function runProbe(action: string): ProbeResult {
 		console.log(JSON.stringify({ loadedSpecifiers: [...new Set(loaded)] }));
 	`;
 
-	const result = spawnSync(process.execPath, ["--input-type=module", "--eval", script], {
-		cwd: packageRoot,
-		encoding: "utf8",
-	});
+	const result = spawnSync(
+		process.execPath,
+		["--import", typeScriptPreload, "--input-type=module", "--eval", script],
+		{
+			cwd: packageRoot,
+			encoding: "utf8",
+		},
+	);
 
 	if (result.status !== 0) {
 		throw new Error(`Probe failed (exit ${result.status})\nSTDOUT:\n${result.stdout}\nSTDERR:\n${result.stderr}`);

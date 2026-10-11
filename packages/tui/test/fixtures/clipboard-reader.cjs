@@ -24,8 +24,13 @@ try {
 } finally {
 	clearInterval(timer);
 	if (performance.now() - started > 200) assert.ok(ticks > 5, "Clipboard I/O must not block the JS event loop");
-	// Check before Node exits: process exit must not hide a leaked child or zombie.
-	assert.equal(readFileSync(`/proc/self/task/${process.pid}/children`, "utf8").trim(), "");
+	// Check before Node exits: process exit must not hide a leaked child or zombie. Kernels that
+	// do not expose /proc/<tid>/children (some containers and sandboxed runtimes) cannot verify it.
+	try {
+		assert.equal(readFileSync(`/proc/self/task/${process.pid}/children`, "utf8").trim(), "");
+	} catch (error) {
+		if (error?.code !== "ENOENT") throw error;
+	}
 }
 
 })().catch((error) => { console.error(error); process.exitCode = 1; });

@@ -21,7 +21,9 @@ import { createSessionManager } from "../src/main.ts";
 
 const cliPath = resolve(__dirname, "../src/cli.ts");
 // --import takes a module specifier, not a filesystem path.
-const sourceResolverUrl = pathToFileURL(resolve(__dirname, "../src/experimental/source-resolver.ts")).href;
+// Strip TypeScript through the repo esbuild preload on Node builds without built-in type stripping.
+const typeScriptPreloadUrl = pathToFileURL(resolve(__dirname, "../../../ts-import.mjs")).href;
+const sourceResolverUrl = pathToFileURL(resolve(__dirname, "../scripts/source-resolver.ts")).href;
 const tempDirs: string[] = [];
 
 afterEach(() => {
@@ -66,15 +68,19 @@ async function runCli(args: string[]): Promise<{ code: number | null; agentDir: 
 	mkdirSync(projectDir, { recursive: true });
 
 	const code = await new Promise<number | null>((resolvePromise, reject) => {
-		const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
-			cwd: projectDir,
-			env: {
-				...process.env,
-				[ENV_AGENT_DIR]: agentDir,
-				PI_OFFLINE: "1",
+		const child = spawn(
+			process.execPath,
+			["--import", typeScriptPreloadUrl, "--import", sourceResolverUrl, cliPath, ...args],
+			{
+				cwd: projectDir,
+				env: {
+					...process.env,
+					[ENV_AGENT_DIR]: agentDir,
+					PI_OFFLINE: "1",
+				},
+				stdio: ["ignore", "ignore", "ignore"],
 			},
-			stdio: ["ignore", "ignore", "ignore"],
-		});
+		);
 		child.on("error", reject);
 		child.on("close", resolvePromise);
 	});

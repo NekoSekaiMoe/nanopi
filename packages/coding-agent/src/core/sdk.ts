@@ -10,7 +10,6 @@ import { CacheWarmer } from "./cache-warmer.ts";
 import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "./compaction/request-metadata.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
-import { createToolNameMatcher } from "./mcp-servers.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
@@ -26,6 +25,7 @@ import {
 	SettingsManager,
 } from "./settings-manager.ts";
 import { time } from "./timings.ts";
+import { createToolNameMatcher } from "./tool-patterns.ts";
 import {
 	createBashTool,
 	createCodingTools,
@@ -77,9 +77,7 @@ export interface CreateAgentSessionOptions {
 	 * selection when configured. Otherwise it enables the default built-in tools
 	 * (read, bash, edit, write). Extension/custom tools remain enabled unless
 	 * `noTools` changes that default. When provided, only matching tools are
-	 * enabled. MCP tools stay registered for codemode and tool search unless an
-	 * entry starts with `mcp__`; then only matching MCP tools are kept. An empty
-	 * list, like `noTools: "all"`, disables MCP tools too.
+	 * enabled. An empty list, like `noTools: "all"`, disables every tool.
 	 *
 	 * A list of only `+name` and `-name` entries is not an allowlist: it adds tools
 	 * to or removes them from the default selection, like the `defaultTools` setting.
@@ -88,7 +86,7 @@ export interface CreateAgentSessionOptions {
 	tools?: string[];
 	/**
 	 * Optional denylist of tool names or patterns to disable. Applies after `tools` when both are
-	 * provided, MCP tools included.
+	 * provided.
 	 */
 	excludeTools?: string[];
 	/** Custom tools to register (in addition to built-in tools). */

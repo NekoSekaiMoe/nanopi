@@ -154,7 +154,6 @@ for (const entry of [
 	join(codingAgentDistDir, "index.js"),
 	join(codingAgentDistDir, "rpc-entry.js"),
 	join(codingAgentDistDir, "utils", "image-resize-worker.js"),
-	join(codingAgentDistDir, "extensions", "codemode", "worker.js"),
 	join(aiDistDir, "api", "bedrock-converse-stream.js"),
 	join(aiDistDir, "auth", "oauth", "anthropic.js"),
 ]) {
@@ -221,40 +220,11 @@ const lazyResult = await build({
 	splitting: false,
 });
 
-// getCodemodeWorkerSpecifier() in config.ts spawns the codemode worker from an in-memory data: URL
-// so codemode survives an update that replaces or deletes the install (#10439). A data: URL module
-// has no file location, so the worker must not use the createRequire(import.meta.url) banner,
-// require(), or imports other than Node builtins.
-const codemodeWorkerResult = await build({
-	...commonBuildOptions(),
-	banner: undefined,
-	entryNames: "[name]",
-	entryPoints: { "codemode-worker": join(codingAgentDistDir, "extensions", "codemode", "worker.js") },
-	outdir: dirname(bedrockLoaderOutput),
-	splitting: false,
-});
-for (const [outputPath, output] of Object.entries(codemodeWorkerResult.metafile.outputs)) {
-	const invalid = output.imports.filter((imported) => imported.kind !== "import-statement" || !isBuiltin(imported.path));
-	if (invalid.length > 0) {
-		throw new Error(
-			`Codemode worker must only import Node builtins: ${invalid.map((imported) => imported.path).join(", ")}`,
-		);
-	}
-	if (readFileSync(resolve(repoRoot, outputPath), "utf8").includes("import.meta")) {
-		throw new Error("Codemode worker must not use import.meta");
-	}
-}
-
 const imageResizeWorkerOutput = resolve(dirname(bedrockLoaderOutput), "image-resize-worker.js");
 if (dirname(imageResizeOutput) !== dirname(imageResizeWorkerOutput)) {
 	throw new Error("Image resize implementation and worker were emitted into different directories");
 }
-// getCodemodeWorkerUrl() in config.ts resolves the worker next to its own chunk.
-if (dirname(configOutput) !== dirname(bedrockLoaderOutput)) {
-	throw new Error("config.ts and the codemode worker were emitted into different directories");
-}
-
-const metafiles = [mainResult.metafile, lazyResult.metafile, codemodeWorkerResult.metafile];
+const metafiles = [mainResult.metafile, lazyResult.metafile];
 validateExternalImports(metafiles);
 const cliLauncher = `#!/usr/bin/env node
 import { createRequire, enableCompileCache } from "node:module";

@@ -1007,7 +1007,7 @@ export class DefaultPackageManager implements PackageManager {
 		this.addAutoDiscoveredResources(accumulator, globalSettings, projectSettings, globalBaseDir, projectBaseDir);
 
 		// Built-in extensions are enabled unless the user `extensions` setting excludes them, for example
-		// with `-builtin:mcp`. A matching `+`, `-`, or `!` entry in the project setting overrides that.
+		// with `-builtin:llama`. A matching `+`, `-`, or `!` entry in the project setting overrides that.
 		for (const name of this.builtinExtensions) {
 			const path = `${BUILTIN_PATH_PREFIX}${name}`;
 			const projectEnabled = applyAutoloadDisabledPatterns(

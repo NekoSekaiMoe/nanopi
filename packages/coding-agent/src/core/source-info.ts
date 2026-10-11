@@ -12,7 +12,7 @@ export interface SourceInfo {
 	changelogPath?: string;
 }
 
-/** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:mcp`. */
+/** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:llama`. */
 export const BUILTIN_PATH_PREFIX = "builtin:";
 
 /**

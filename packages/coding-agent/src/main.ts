@@ -26,7 +26,6 @@ import {
 	printAuthCommandHelp,
 	validateAuthCommandArgs,
 } from "./cli/auth-command.ts";
-import { AuthContinueError, runAuthContinueCommand } from "./cli/auth-continue.ts";
 import { resolveCredentialForPrint } from "./cli/credential-print.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
@@ -64,7 +63,6 @@ import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { builtInExtensions } from "./extensions/index.ts";
 import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./extensions/llama/managed.ts";
-import { loadMcpCommand } from "./extensions/mcp/cli.lazy.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
@@ -150,11 +148,6 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 	if (!command) return false;
 
 	try {
-		if (command.kind === "continue") {
-			await runAuthContinueCommand(command.args);
-			return true;
-		}
-
 		const parsed = parseArgs(command.args);
 		if (parsed.unknownFlags.size > 0) {
 			const option = parsed.unknownFlags.keys().next().value;
@@ -209,7 +202,7 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 		process.exitCode = result.status === "ready" ? 0 : result.status === "not_ready" ? 1 : 2;
 	} catch (error) {
 		const message =
-			error instanceof AuthCommandError || error instanceof AuthContinueError || command.kind === "continue"
+			error instanceof AuthCommandError
 				? error instanceof Error
 					? error.message
 					: String(error)
@@ -629,12 +622,6 @@ export async function main(args: string[], options?: MainOptions) {
 		return;
 	}
 
-	if (args[0] === "mcp") {
-		const { runMcpCommand } = await loadMcpCommand();
-		process.exitCode = await runMcpCommand(args.slice(1), { cwd, agentDir });
-		return;
-	}
-
 	const parsed = parseArgs(args);
 	if (parsed.diagnostics.length > 0) {
 		for (const d of parsed.diagnostics) {
@@ -800,7 +787,6 @@ export async function main(args: string[], options?: MainOptions) {
 				additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
 				additionalThemePaths: resolvedThemePaths,
 				noExtensions: parsed.noExtensions,
-				disabledBuiltinExtensions: parsed.noMcp ? ["mcp"] : undefined,
 				noSkills: parsed.noSkills,
 				noPromptTemplates: parsed.noPromptTemplates,
 				noThemes: parsed.noThemes,

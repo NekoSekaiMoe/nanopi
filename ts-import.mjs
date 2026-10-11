@@ -11,17 +11,25 @@ import { registerHooks } from "node:module";
 import { readFileSync } from "node:fs";
 import * as esbuild from "esbuild";
 
+const typeScriptLoaders = {
+	".ts": { loader: "ts", format: "module" },
+	".tsx": { loader: "tsx", format: "module" },
+	".mts": { loader: "ts", format: "module" },
+	".cts": { loader: "ts", format: "commonjs" },
+};
+
 registerHooks({
 	load(url, context, nextLoad) {
-		if (url.endsWith(".ts")) {
+		const entry = Object.entries(typeScriptLoaders).find(([extension]) => url.endsWith(extension));
+		if (entry !== undefined) {
 			const code = readFileSync(new URL(url), "utf8");
 			const result = esbuild.transformSync(code, {
-				loader: "ts",
-				format: "esm",
+				loader: entry[1].loader,
+				format: entry[1].format === "commonjs" ? "cjs" : "esm",
 				target: "node24",
 				sourcemap: "inline",
 			});
-			return { format: "module", shortCircuit: true, source: result.code };
+			return { format: entry[1].format, shortCircuit: true, source: result.code };
 		}
 		return nextLoad(url, context);
 	},

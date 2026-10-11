@@ -1039,7 +1039,7 @@ export default function(pi: ExtensionAPI) {
 		});
 
 		it("should leave out replaceable extensions whose names another extension registers", async () => {
-			// A third-party MCP extension registering /mcp replaces the built-in one instead of both running.
+			// A third-party extension registering a replaceable builtin's name replaces it instead of both running.
 			const globalExtDir = join(agentDir, "extensions");
 			mkdirSync(globalExtDir, { recursive: true });
 			writeFileSync(

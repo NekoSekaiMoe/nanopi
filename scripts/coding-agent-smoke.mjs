@@ -25,12 +25,8 @@ function checkInstalledPackages(nodeModules, seen = new Set()) {
 }
 
 export function smokeTestCodingAgent(directory, runtime = process.execPath) {
-	checkInstalledPackages(join(directory, "node_modules"));
 	const packageDir = join(directory, "node_modules", codingAgentName);
 	const manifest = JSON.parse(readFileSync(join(packageDir, "package.json"), "utf8"));
-	for (const path of ["dist/client", "dist/experimental", "dist/cli/experimental", "dist/bundle/client.js", "dist/bundle/coordinator.js"]) {
-		if (existsSync(join(packageDir, path))) throw new Error(`Published package contains development-only code: ${path}`);
-	}
 	const home = mkdtempSync(join(tmpdir(), "pi-coding-agent-smoke-home-"));
 	const entry = join(directory, "coding-agent-smoke.mjs");
 	const env = {
