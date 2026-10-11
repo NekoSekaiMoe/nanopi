@@ -7,6 +7,10 @@
 - Removed the `telemetryContext` option from `ProviderRequestOptions` and the `@nanopi/pi-telemetry` dependency; nothing in the repo consumed the context, so provider requests no longer accept or propagate it.
 - Renamed the `./bun-oauth` export to `./bundled-oauth` (`registerBunOAuthFlows` is now `registerBundledOAuthFlows`) and removed the Bun-specific code paths: the empty-`process.env` sandbox fallback in `getProviderEnvValue` and the Bun websocket proxy wrapper in the Codex responses API.
 
+### Changed
+
+- Changed OAuth flow loading to check the build-time component map injected by flavored builds (see the root `buildconfig.json`): a flow excluded by its flavor fails with `OAuth flow "<name>" is not included in this build` instead of a module-not-found error. Source checkouts and npm installs are unaffected (all flows present).
+
 ### Removed
 
 - Removed the `radius` provider: `radiusProvider()`, the `radius-config` exports, the Radius OAuth flow, and the bundled `radius` model catalog.

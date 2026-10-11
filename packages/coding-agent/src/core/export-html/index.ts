@@ -1,6 +1,7 @@
 import type { AgentState } from "@nanopi/pi-agent-core";
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, join } from "path";
+import { isBuildComponentEnabled } from "../../build-components.ts";
 import { APP_NAME, getExportTemplateDir } from "../../config.ts";
 import { getResolvedThemeColors, getThemeExportColors } from "../../modes/interactive/theme/theme.ts";
 import { normalizePath, resolvePath } from "../../utils/paths.ts";
@@ -141,6 +142,11 @@ interface SessionData {
  * Core HTML generation logic shared by both export functions.
  */
 function generateHtml(sessionData: SessionData, themeName?: string): string {
+	if (!isBuildComponentEnabled("export-html")) {
+		throw new Error(
+			'HTML export is not included in this build (buildconfig.json component "export-html" is disabled)',
+		);
+	}
 	const templateDir = getExportTemplateDir();
 	const template = readFileSync(join(templateDir, "template.html"), "utf-8");
 	const templateCss = readFileSync(join(templateDir, "template.css"), "utf-8");

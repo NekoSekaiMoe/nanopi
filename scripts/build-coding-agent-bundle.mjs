@@ -1,10 +1,12 @@
 #!/usr/bin/env node
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import { resolveBuildFlavor } from "./buildconfig.mjs";
+import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
@@ -12,6 +14,12 @@ const codingAgentDir = join(repoRoot, "packages", "coding-agent");
 const aiDistDir = join(repoRoot, "packages", "ai", "dist");
 const codingAgentDistDir = join(codingAgentDir, "dist");
 const bundleDir = join(codingAgentDistDir, "bundle");
+
+// Build flavors (buildconfig.json) control peripheral components. The
+// resolved map is injected as a define so the runtime reports disabled
+// components cleanly (see isBuildComponentEnabled in the packages).
+const { flavor, components } = resolveBuildFlavor(repoRoot);
+validateOAuthFlowRegistry({ repoRoot, components });
 const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
@@ -87,7 +95,11 @@ function commonBuildOptions() {
 		absWorkingDir: repoRoot,
 		banner,
 		bundle: true,
-		define: { NANOPI_BUNDLED_NODE: "true" },
+		define: {
+			NANOPI_BUNDLED_NODE: "true",
+			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
+			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
+		},
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",
 		legalComments: "none",
@@ -115,7 +127,14 @@ function validateExternalImports(metafiles) {
 	for (const metafile of metafiles) {
 		for (const input of Object.values(metafile.inputs)) {
 			for (const imported of input.imports) {
-				if (!imported.external || isBuiltin(imported.path) || allowedExternalPackages.has(imported.path)) {
+				if (
+					!imported.external ||
+					// esbuild reports references to object-valued defines as pseudo
+					// imports (<define:name>); they are build-time substitutions.
+					imported.path.startsWith("<define:") ||
+					isBuiltin(imported.path) ||
+					allowedExternalPackages.has(imported.path)
+				) {
 					continue;
 				}
 				unexpected.add(imported.path);
@@ -185,25 +204,21 @@ if (dirname(bedrockLoaderOutput) !== dirname(oauthLoaderOutput)) {
 // worker URL, so the main bundle cannot follow them. Emit one self-contained
 // file per implementation beside the code that resolves it.
 const lazyEntryPoints = {
-	anthropic: join(aiDistDir, "auth", "oauth", "anthropic.js"),
 	"bedrock-converse-stream": join(aiDistDir, "api", "bedrock-converse-stream.js"),
-	"github-copilot": join(aiDistDir, "auth", "oauth", "github-copilot.js"),
 	"image-resize-worker": join(codingAgentDistDir, "utils", "image-resize-worker.js"),
-	"kimi-coding": join(aiDistDir, "auth", "oauth", "kimi-coding.js"),
-	meta: join(aiDistDir, "auth", "oauth", "meta.js"),
-	"openai-chatgpt": join(aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
-	"openai-codex": join(aiDistDir, "auth", "oauth", "openai-codex.js"),
-	openrouter: join(aiDistDir, "auth", "oauth", "openrouter.js"),
-	xai: join(aiDistDir, "auth", "oauth", "xai.js"),
 };
 
-// Every OAuth flow loaded through importOAuthModule() must have a lazy entry,
-// otherwise the flow fails at runtime with a missing module error.
-const oauthLoadSource = readFileSync(join(repoRoot, "packages", "ai", "src", "auth", "oauth", "load.ts"), "utf8");
-for (const match of oauthLoadSource.matchAll(/importOAuthModule\("\.\/([^"]+)\.ts"\)/g)) {
-	if (!(match[1] in lazyEntryPoints)) {
-		throw new Error(`OAuth flow "${match[1]}" is lazily imported but has no lazy bundle entry`);
+// OAuth flows are lazy entries too, but a flavor may exclude them. A missing
+// entry is safe: load.ts checks the injected component map before importing
+// and fails the flow with a clear "not included in this build" error.
+// validateOAuthFlowRegistry keeps this list in sync with load.ts.
+const excludedFlows = [];
+for (const flow of OAUTH_FLOWS) {
+	if (components[oauthComponentName(flow)] === false) {
+		excludedFlows.push(flow.module);
+		continue;
 	}
+	lazyEntryPoints[flow.module] = join(aiDistDir, "auth", "oauth", `${flow.module}.js`);
 }
 
 const lazyResult = await build({
@@ -232,4 +247,8 @@ chmodSync(join(bundleDir, "rpc-entry.js"), 0o755);
 
 const files = new Set(metafiles.flatMap((metafile) => Object.keys(metafile.outputs))).size + 1;
 const mib = (outputBytes(metafiles) + cliLauncher.length) / (1024 * 1024);
-console.log(`Built ${relative(repoRoot, bundleDir)} (${files} files, ${mib.toFixed(1)} MiB)`);
+console.log(
+	`Built ${relative(repoRoot, bundleDir)} (${files} files, ${mib.toFixed(1)} MiB, flavor: ${flavor}` +
+		(excludedFlows.length > 0 ? `, excluded OAuth: ${excludedFlows.join(", ")}` : "") +
+		")",
+);

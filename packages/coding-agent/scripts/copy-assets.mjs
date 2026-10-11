@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+/**
+ * Copies package assets into dist/ (replaces the former shx one-liner).
+ *
+ * Themes are core and always copied. The export-html templates and the webui
+ * build are peripheral components controlled by buildconfig.json flavors
+ * (--flavor / NANOPI_BUILD_FLAVOR); a flavor that disables them ships dist/
+ * without them and the runtime reports them as not included.
+ */
+
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { resolveBuildFlavor } from "../../../scripts/buildconfig.mjs";
+
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const packageDir = join(scriptDir, "..");
+const distDir = join(packageDir, "dist");
+
+const { flavor, components } = resolveBuildFlavor(join(packageDir, "..", ".."), {
+	argv: process.argv,
+	env: process.env,
+});
+
+function copyTree(sourceDir, targetDir) {
+	mkdirSync(targetDir, { recursive: true });
+	cpSync(sourceDir, targetDir, { recursive: true });
+}
+
+// Themes: core, always copied.
+const themeSource = join(packageDir, "src", "modes", "interactive", "theme");
+const themeTarget = join(distDir, "modes", "interactive", "theme");
+mkdirSync(themeTarget, { recursive: true });
+for (const file of readdirSync(themeSource)) {
+	if (file.endsWith(".json")) copyFileSync(join(themeSource, file), join(themeTarget, file));
+}
+
+if (components["export-html"] !== false) {
+	const source = join(packageDir, "src", "core", "export-html");
+	const target = join(distDir, "core", "export-html");
+	mkdirSync(target, { recursive: true });
+	for (const file of ["template.html", "template.css", "template.js"]) {
+		copyFileSync(join(source, file), join(target, file));
+	}
+	copyTree(join(source, "vendor"), join(target, "vendor"));
+} else {
+	console.log("export-html templates skipped (flavor: %s)", flavor);
+}
+
+if (components["webui"] !== false) {
+	const webuiDist = join(packageDir, "..", "webui", "dist");
+	mkdirSync(join(distDir, "webui"), { recursive: true });
+	if (existsSync(webuiDist)) {
+		copyTree(webuiDist, join(distDir, "webui"));
+	} else {
+		// Matched the previous shx behavior: tolerate a missing webui build so
+		// partial checkouts can still build the CLI.
+		console.warn("webui dist missing, skipped");
+	}
+} else {
+	console.log("webui assets skipped (flavor: %s)", flavor);
+}

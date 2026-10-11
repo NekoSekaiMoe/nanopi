@@ -127,6 +127,10 @@ node "$PWD/out/nanopi.js" --version
 
 The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the single-file distribution; pass `--skip-install` if dependencies are already provided. The resulting `nanopi.js` needs only Node >= 22.19 and downloads platform sidecars (image-resize wasm, TUI native prebuilds) into `.nanopi/bin` on first use.
 
+## Build flavors
+
+The root `buildconfig.json` declares peripheral components (webui, export-html, docs, examples, OAuth flows, the planned goal module) and named flavors that enable or disable them. Pass `--flavor <name>` to `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, or `packages/coding-agent/scripts/copy-assets.mjs`, or set `NANOPI_BUILD_FLAVOR` for chained builds; the default flavor is `full`. The npm packages are always published from `full`. A build that excludes a component fails its use at runtime with a "not included in this build" error instead of a module-not-found crash.
+
 ## Supply-chain hardening
 
 We treat npm dependency changes as reviewed code changes.

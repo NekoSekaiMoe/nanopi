@@ -1,0 +1,58 @@
+{
+	"defaultFlavor": "full",
+	"components": {
+		"webui": {
+			"description": "Browser UI served by `nanopi webui` (packages/webui, copied to dist/webui and embedded in single-file builds)"
+		},
+		"export-html": {
+			"description": "HTML export templates and vendored assets (dist/core/export-html)"
+		},
+		"docs": {
+			"description": "In-package documentation (embedded in single-file builds; the npm package always ships it)"
+		},
+		"examples": {
+			"description": "In-package examples (embedded in single-file builds; the npm package always ships them)"
+		},
+		"goal": {
+			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
+		},
+		"oauth/anthropic": {
+			"description": "Anthropic OAuth login flow"
+		},
+		"oauth/github-copilot": {
+			"description": "GitHub Copilot OAuth login flow"
+		},
+		"oauth/kimi-coding": {
+			"description": "Kimi Coding OAuth login flow"
+		},
+		"oauth/meta": {
+			"description": "Meta OAuth login flow"
+		},
+		"oauth/openai-chatgpt": {
+			"description": "OpenAI ChatGPT OAuth login flow"
+		},
+		"oauth/openai-codex": {
+			"description": "OpenAI Codex OAuth login flow"
+		},
+		"oauth/openrouter": {
+			"description": "OpenRouter OAuth login flow"
+		},
+		"oauth/xai": {
+			"description": "xAI OAuth login flow"
+		}
+	},
+	"flavors": {
+		"full": {
+			"description": "Everything included; the only flavor the npm packages are published from",
+			"components": {
+				"*": true
+			}
+		},
+		"minimal": {
+			"description": "Core CLI only: no webui, export templates, docs, examples, or OAuth flows",
+			"components": {
+				"*": false
+			}
+		}
+	}
+}

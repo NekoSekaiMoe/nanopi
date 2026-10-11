@@ -1,5 +1,13 @@
 import type { OAuthAuth } from "../types.ts";
 
+// Injected by the bundle/single-file build scripts from buildconfig.json
+// flavors. Absent in source checkouts and npm installs (every flow present).
+declare const NANOPI_BUILD_COMPONENTS: Record<string, boolean> | undefined;
+
+function isOAuthFlowBundled(flow: string): boolean {
+	return typeof NANOPI_BUILD_COMPONENTS === "undefined" || NANOPI_BUILD_COMPONENTS[`oauth/${flow}`] !== false;
+}
+
 /**
  * Loads an OAuth flow module through a variable specifier so bundlers cannot
  * follow the import into Node-only flow code (`node:http` callback servers,
@@ -7,6 +15,10 @@ import type { OAuthAuth } from "../types.ts";
  * both source and built output.
  */
 const importOAuthModule = (specifier: string): Promise<unknown> => {
+	const flow = specifier.slice(2).replace(/\.ts$/, "");
+	if (!isOAuthFlowBundled(flow)) {
+		throw new Error(`OAuth flow "${flow}" is not included in this build`);
+	}
 	const runtimeSpecifier = import.meta.url.endsWith(".js") ? specifier.replace(/\.ts$/, ".js") : specifier;
 	return import(runtimeSpecifier);
 };

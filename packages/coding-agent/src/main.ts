@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@nanopi/pi-ai";
 import { setCapabilityOverrides } from "@nanopi/pi-tui";
 import chalk from "chalk";
+import { isBuildComponentEnabled } from "./build-components.ts";
 import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
 import {
 	type AuthCheckResult,
@@ -613,6 +614,14 @@ export async function main(args: string[], options?: MainOptions) {
 	let webuiRequested = false;
 	let webuiPort = DEFAULT_WEBUI_PORT;
 	if (args[0] === "webui") {
+		if (!isBuildComponentEnabled("webui")) {
+			console.error(
+				chalk.red(
+					'Error: the webui is not included in this build (buildconfig.json component "webui" is disabled)',
+				),
+			);
+			process.exit(1);
+		}
 		webuiRequested = true;
 		const rest: string[] = [];
 		for (let i = 1; i < args.length; i++) {

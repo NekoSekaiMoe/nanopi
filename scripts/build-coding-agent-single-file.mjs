@@ -16,21 +16,32 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createRequire, isBuiltin } from "node:module";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
+import { resolveBuildFlavor } from "./buildconfig.mjs";
+import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages", "coding-agent");
 const codingAgentDistDir = join(codingAgentDir, "dist");
+const aiDistDir = join(repoRoot, "packages", "ai", "dist");
 const webuiDistDir = join(repoRoot, "packages", "webui", "dist");
 const tuiNativeDir = join(repoRoot, "packages", "tui", "native");
 const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
+
+// Build flavors (buildconfig.json) drop peripheral components from the
+// embedded assets and, for OAuth flows, from the statically registered
+// loaders (see the partial shim below).
+const { flavor, components } = resolveBuildFlavor(repoRoot);
+validateOAuthFlowRegistry({ repoRoot, components });
+const isComponentEnabled = (name) => components[name] !== false;
 
 const outArgs = process.argv.slice(2);
 const outIndex = outArgs.indexOf("--out");
@@ -122,13 +133,16 @@ function buildAssetsPayload() {
 	// [source tree, path inside the extracted package dir]
 	const distTrees = [
 		[join(codingAgentDistDir, "modes", "interactive", "theme"), join("dist", "modes", "interactive", "theme")],
-		[join(codingAgentDistDir, "core", "export-html"), join("dist", "core", "export-html")],
-		[webuiDistDir, join("dist", "webui")],
 	];
-	const repoTrees = [
-		[join(codingAgentDir, "docs"), "docs"],
-		[join(codingAgentDir, "examples"), "examples"],
-	];
+	if (isComponentEnabled("export-html")) {
+		distTrees.push([join(codingAgentDistDir, "core", "export-html"), join("dist", "core", "export-html")]);
+	}
+	if (isComponentEnabled("webui")) {
+		distTrees.push([webuiDistDir, join("dist", "webui")]);
+	}
+	const repoTrees = [];
+	if (isComponentEnabled("docs")) repoTrees.push([join(codingAgentDir, "docs"), "docs"]);
+	if (isComponentEnabled("examples")) repoTrees.push([join(codingAgentDir, "examples"), "examples"]);
 
 	const archive = {};
 	for (const filePath of packageDirFiles) {
@@ -225,7 +239,9 @@ function buildSidecarManifest() {
 }
 
 const entryPoint = join(codingAgentDistDir, "standalone", "cli.js");
-for (const required of [entryPoint, join(codingAgentDistDir, "cli.js"), join(webuiDistDir, "index.html")]) {
+const requiredInputs = [entryPoint, join(codingAgentDistDir, "cli.js")];
+if (isComponentEnabled("webui")) requiredInputs.push(join(webuiDistDir, "index.html"));
+for (const required of requiredInputs) {
 	if (!existsSync(required)) {
 		fail(`Bundle input is missing: ${relative(repoRoot, required)}. Build the workspace packages first.`);
 	}
@@ -235,40 +251,85 @@ const { payload: assetsPayload, rawBytes: assetCount } = buildAssetsPayload();
 const sidecarManifest = buildSidecarManifest();
 const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
 
-const result = await build({
-	absWorkingDir: repoRoot,
-	banner,
-	bundle: true,
-	define: {
-		NANOPI_BUNDLED_NODE: "true",
-		NANOPI_SINGLE_FILE: "true",
-		NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
-		NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
-		NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
-	},
-	entryPoints: [entryPoint],
-	external: Array.from(allowedExternalPackages),
-	format: "esm",
-	legalComments: "none",
-	logLevel: "warning",
-	metafile: true,
-	minifySyntax: true,
-	minifyWhitespace: true,
-	outfile: outputFilePath,
-	platform: "node",
-	plugins: [httpsProxyAgentNamedExportPlugin],
-	sourcemap: false,
-	splitting: false,
-	target: "node22.19",
-	// Do not apply the monorepo's source-oriented path aliases while bundling
-	// compiled output; resolve the same package entries as an installed package.
-	tsconfigRaw: { compilerOptions: {} },
-});
+// OAuth flows disabled by the flavor must not be statically imported either:
+// alias the bundled-oauth registration module to a shim registering only the
+// enabled flows. load.ts's component guard fails disabled flows cleanly.
+const enabledFlows = OAUTH_FLOWS.filter((flow) => isComponentEnabled(oauthComponentName(flow)));
+const plugins = [httpsProxyAgentNamedExportPlugin];
+let shimDir;
+if (enabledFlows.length < OAUTH_FLOWS.length) {
+	shimDir = mkdtempSync(join(tmpdir(), "nanopi-bundled-oauth-"));
+	const shimPath = join(shimDir, "bundled-oauth.mjs");
+	const shimLines = [
+		`import { registerBundledOAuthFlowLoaders } from ${JSON.stringify(join(aiDistDir, "auth", "oauth", "load.js"))};`,
+	];
+	for (const flow of enabledFlows) {
+		shimLines.push(
+			`import { ${flow.exportName} } from ${JSON.stringify(join(aiDistDir, "auth", "oauth", `${flow.module}.js`))};`,
+		);
+	}
+	shimLines.push("registerBundledOAuthFlowLoaders({");
+	for (const flow of enabledFlows) shimLines.push(`\t${flow.loader}: () => ${flow.exportName},`);
+	shimLines.push("});");
+	shimLines.push("export function registerBundledOAuthFlows() {}");
+	writeFileSync(shimPath, `${shimLines.join("\n")}\n`);
+	plugins.unshift({
+		name: "partial-bundled-oauth",
+		setup(build) {
+			build.onResolve({ filter: /^@nanopi\/pi-ai\/bundled-oauth$/ }, () => ({ path: shimPath }));
+		},
+	});
+}
+
+let result;
+try {
+	result = await build({
+		absWorkingDir: repoRoot,
+		banner,
+		bundle: true,
+		define: {
+			NANOPI_BUNDLED_NODE: "true",
+			NANOPI_SINGLE_FILE: "true",
+			NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
+			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
+			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
+			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
+			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
+		},
+		entryPoints: [entryPoint],
+		external: Array.from(allowedExternalPackages),
+		format: "esm",
+		legalComments: "none",
+		logLevel: "warning",
+		metafile: true,
+		minifySyntax: true,
+		minifyWhitespace: true,
+		outfile: outputFilePath,
+		platform: "node",
+		plugins,
+		sourcemap: false,
+		splitting: false,
+		target: "node22.19",
+		// Do not apply the monorepo's source-oriented path aliases while bundling
+		// compiled output; resolve the same package entries as an installed package.
+		tsconfigRaw: { compilerOptions: {} },
+	});
+} finally {
+	if (shimDir) rmSync(shimDir, { recursive: true, force: true });
+}
 
 const unexpected = new Set();
 for (const input of Object.values(result.metafile.inputs)) {
 	for (const imported of input.imports) {
-		if (!imported.external || isBuiltin(imported.path) || allowedExternalPackages.has(imported.path)) continue;
+		// <define:name> entries are esbuild's object-valued defines, not imports.
+		if (
+			!imported.external ||
+			imported.path.startsWith("<define:") ||
+			isBuiltin(imported.path) ||
+			allowedExternalPackages.has(imported.path)
+		) {
+			continue;
+		}
 		unexpected.add(imported.path);
 	}
 }
@@ -285,7 +346,7 @@ chmodSync(outputFilePath, 0o755);
 const mib = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
 const outputBytes = statSync(outputFilePath).size;
 const sidecarCount = sidecarManifest.sources.reduce((total, source) => total + source.files.length, 0);
-console.log(`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB)`);
+console.log(`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor})`);
 console.log(
 	`  embedded assets: ${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed; sidecar manifest: ${sidecarCount} files`,
 );
