@@ -15,6 +15,14 @@ const zh = {
   'header.switchCwd': '切换工作目录',
   'header.noCwd': '（未设置工作目录）',
 
+  // Right panel
+  'panel.toggle': '信息面板',
+  'panel.title': '信息面板',
+  'panel.session': '会话',
+  'panel.newChat': '新建对话',
+  'panel.changeDir': '切换目录…',
+  'panel.project': '项目',
+
   // Sidebar
   'sidebar.expand': '展开侧栏',
   'sidebar.collapse': '收起侧栏',
@@ -215,6 +223,11 @@ const zh = {
   // Settings panel
   'settings.title': '设置',
   'settings.theme': '主题',
+  'settings.wallpaper': '壁纸',
+  'settings.wallpaperPick': '选择图片…',
+  'settings.wallpaperClear': '清除壁纸',
+  'settings.wallpaperHint': '背景图铺在界面下方，自动加暗纱保证可读性；仅存在本浏览器。',
+  'settings.wallpaperTooLarge': '图片超过 4MB，请压缩后再试。',
   'settings.fontScale': '字号',
   'settings.fontScale.small': '紧凑',
   'settings.fontScale.normal': '标准',
@@ -563,6 +576,14 @@ const en: Record<MsgKey, string> = {
   'header.switchCwd': 'Switch working directory',
   'header.noCwd': '(No working directory)',
 
+  // Right panel
+  'panel.toggle': 'Info panel',
+  'panel.title': 'Info panel',
+  'panel.session': 'Session',
+  'panel.newChat': 'New chat',
+  'panel.changeDir': 'Change directory…',
+  'panel.project': 'Project',
+
   'sidebar.expand': 'Expand sidebar',
   'sidebar.collapse': 'Collapse sidebar',
   'sidebar.newChat': 'New chat',
@@ -752,6 +773,11 @@ const en: Record<MsgKey, string> = {
 
   'settings.title': 'Settings',
   'settings.theme': 'Theme',
+  'settings.wallpaper': 'Wallpaper',
+  'settings.wallpaperPick': 'Choose image…',
+  'settings.wallpaperClear': 'Clear wallpaper',
+  'settings.wallpaperHint': 'The image sits behind the UI with an auto scrim for readability; stored only in this browser.',
+  'settings.wallpaperTooLarge': 'Image exceeds 4 MB; please compress it first.',
   'settings.fontScale': 'Text size',
   'settings.fontScale.small': 'Compact',
   'settings.fontScale.normal': 'Default',

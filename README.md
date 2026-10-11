@@ -1,165 +1,31 @@
-<p align="center">
-  <a href="https://www.npmjs.com/package/@nanopi/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@nanopi/pi-coding-agent?style=flat-square" /></a>
-</p>
+# NanoPi
 
-> New issues and PRs from new contributors are auto-closed by default. Maintainers review auto-closed issues daily. See [CONTRIBUTING.md](CONTRIBUTING.md).
+NanoPi is a lightweight agent harness deeply trimmed and tailored from the Pi Coding Agent, featuring both a CLI and a WebUI.
 
-# nanopi
+In an era where coding agent frameworks are blindly bloating into complex microservices and over-engineered platforms, NanoPi retreats back to a pure, controllable core guided by four fundamental philosophies:
 
-nanopi is a minimal, extensible agent harness that you can make your own.
+1. Radical Minimalism: Faithfully inherits Pi's early minimalist ethos. The core runtime provides only the essential execution loop and atomic tools—rejecting black-box orchestration and unnecessary intermediate abstractions in favor of on-demand customization.
+2. Lean Context: While retaining full capability, the system prompt footprint is reduced by nearly two-thirds compared to similar agents. Fewer meta-instructions translate directly to less context drift, stronger instruction adherence, and tangible token savings.
+3. Curated Experience: Bridges terminal efficiency with thoughtful aesthetics, delivering an intuitive, accessible WebUI without compromising on lightweight execution.
+4. Transparent Extensibility: NanoPi does not aspire to be an all-encompassing microkernel OS, but grants you absolute control over the essentials—from the underlying system prompt to custom extensions.
 
-Adapt nanopi to your workflows, not the other way around. Customize nanopi with [extensions](packages/coding-agent/docs/extensions.md), [skills](packages/coding-agent/docs/skills.md), [prompt templates](packages/coding-agent/docs/prompt-templates.md), and [themes](packages/coding-agent/docs/themes.md). Bundle them as [nanopi packages](packages/coding-agent/docs/packages.md) and share via npm or git.
+---
 
-nanopi ships with powerful defaults but skips features like sub-agents and plan mode. Ask nanopi to build what you want, or install a package that does it your way.
+> ![note]
+> 
+> NanoPi is a personal tool built strictly around my own workflow. No feature requests will be accepted.
+>
+> If it happens to fit your workflow, you are welcome to use it. If you spot a defect, bug fix PRs are always welcome.
 
-Use nanopi [interactively](packages/coding-agent/docs/usage.md), automate it in [print or JSON mode](packages/coding-agent/docs/cli.md), control it over [RPC](packages/coding-agent/docs/rpc.md), or build apps with the [nanopi TypeScript SDK](packages/coding-agent/docs/sdk.md). See [OpenClaw](https://github.com/OpenClaw/OpenClaw) for a real-world integration.
+## Installation
 
-## Getting started
-
-Install the command-line interface with npm:
-
-```bash
-npm install -g --ignore-scripts @nanopi/pi-coding-agent
-```
-
-nanopi requires Node.js 22.19 or newer and does not require dependency lifecycle scripts for a normal npm installation.
-
-Start nanopi in the directory where you want it to work:
-
-```bash
-cd /path/to/project
-nanopi
-```
-
-For a built-in AI provider, run `/login` inside nanopi to connect a subscription or API key. Then give nanopi a task.
-
-See the [documentation](packages/coding-agent/docs) for full setup and usage instructions.
-
-## Packages
-
-This monorepo contains the nanopi CLI and its supporting libraries.
-
-| Package | Description |
-|---------|-------------|
-| **[@nanopi/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
-| **[@nanopi/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
-| **[@nanopi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
-| **[@nanopi/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
-| **[@nanopi/webui](packages/webui)** | Browser UI served by `nanopi webui` (ported from AtomCode, MIT) |
-
-
-## Permissions & Containerization
-
-nanopi does not include a built-in permission system for restricting filesystem, process, network, or credential access. By default, it runs with the permissions of the user and process that launched it.
-
-If you need stronger boundaries, containerize or sandbox nanopi. See [packages/coding-agent/docs/containerization.md](packages/coding-agent/docs/containerization.md) for two patterns:
-
-- **Plain Docker**: run the whole `nanopi` process in a local container for simple isolation.
-- **OpenShell**: run the whole `nanopi` process in a policy-controlled sandbox.
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [AGENTS.md](AGENTS.md) for project-specific rules (for both humans and agents).  Longer term plans for nanopi can also be found in [RFCs](https://rfc.earendil.com/keyword/nanopi/).
-
-## Development
-
-```bash
-pnpm install           # Install all dependencies (build scripts gated by allowBuilds in pnpm-workspace.yaml)
-pnpm run build         # Refresh model data, then build all packages
-pnpm run build:offline # Rebuild using existing model data without network access
-pnpm run check         # Lint, format, and type check
-./test.sh            # Run tests (skips LLM-dependent tests without API keys)
-./nanopi-test.sh         # Run nanopi from sources (can be run from any directory)
-```
-
-### Using local packages outside the monorepo
-
-Build every public package into one coherent local artifact set:
-
-```bash
-npm run pack:packages -- --out .artifacts/nanopi-packages
-```
-
-This refreshes model data before building `pi-ai`. To avoid network access when
-model data is already hydrated, pass `--offline-model-data`.
-
-Then configure an external project to consume one package and resolve all of
-its nanopi dependencies from the same artifact set. npm is the default:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/nanopi-packages/manifest.json \
-  --consumer ../my-project \
-  --package @nanopi/pi-agent-core
-cd ../my-project
-npm install --ignore-scripts
-```
-
-For a pnpm project, point `--consumer` at the workspace root:
-
-```bash
-node scripts/use-local-packages.mjs \
-  --manifest .artifacts/nanopi-packages/manifest.json \
-  --consumer ../my-project \
-  --package @nanopi/pi-agent-core \
-  --package-manager pnpm
-cd ../my-project
-pnpm install --ignore-scripts
-```
-
-Repeat `--package` for each direct dependency. The command updates the
-consumer's `package.json` with content-addressed local `file:` references. It
-writes transitive overrides to `package.json` for npm or `pnpm-workspace.yaml`
-for pnpm. Keep the artifact directory available while installing or updating
-the consumer. Re-run both commands after changing nanopi source.
-
-## Building the single-file CLI from release source
-
-GitHub releases include a versioned source archive covered by the release's `SHA256SUMS` file. Extract it and run the same build script used for the official `nanopi.js` artifact:
-
-```bash
-VERSION="<release-version>"
-tar -xzf "nanopi-${VERSION}-source.tar.gz"
-cd "nanopi-${VERSION}"
-./scripts/build-single-file.sh --offline-model-data --out "$PWD/out"
-node "$PWD/out/nanopi.js" --version
-```
-
-The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the single-file distribution; pass `--skip-install` if dependencies are already provided. The resulting `nanopi.js` needs only Node >= 22.19 and downloads platform sidecars (image-resize wasm, TUI native prebuilds) into `.nanopi/bin` on first use.
-
-## Build flavors
-
-The root `buildconfig.json` declares peripheral components (webui, export-html, docs, examples, OAuth flows, the planned goal module, and one `extra/<name>` per bundled extension package vendored under `packages/coding-agent/extras`) and named flavors that enable or disable them. Pass `--flavor <name>` to `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, or `packages/coding-agent/scripts/copy-assets.mjs`, or set `NANOPI_BUILD_FLAVOR` for chained builds; the default flavor is `full`. Enabled extras register as lowest-precedence default packages (single-file runs extract them to `~/.nanopi/packages`, never touching user-owned directories; `NANOPI_BUNDLED_EXTRAS=0` disables them). The npm packages are always published from `full`. A build that excludes a component fails its use at runtime with a "not included in this build" error instead of a module-not-found crash.
-
-## Supply-chain hardening
-
-We treat npm dependency changes as reviewed code changes.
-
-- Direct external dependencies are pinned to exact versions. Internal workspace packages remain version-ranged.
-- `.npmrc` sets `save-exact=true` and `min-release-age=2` to avoid same-day dependency releases during npm resolution.
-- `package-lock.json` is the dependency ground truth. Pre-commit blocks accidental lockfile commits unless `NANOPI_ALLOW_LOCKFILE_CHANGE=1` is set.
-- `npm run check` verifies pinned direct deps, native TypeScript import compatibility, and the generated coding-agent install lock.
-- Local release smoke tests and npm publication use the same tarball packer; npm publishes the validated tarballs rather than repacking workspace directories.
-- Local release installs, documented npm installs use `--ignore-scripts` where supported.
-- CI installs with `npm ci --ignore-scripts`, and a scheduled GitHub workflow runs `npm audit --omit=dev` plus `npm audit signatures --omit=dev`.
-- Install lock generation has an explicit allowlist for dependency lifecycle scripts; new lifecycle-script deps fail checks until reviewed.
-
-## Share your OSS coding agent sessions
-
-If you use nanopi or other coding agents for open source work, please share your sessions.
-
-Public OSS session data helps improve coding agents with real-world tasks, tool use, failures, and fixes instead of toy benchmarks.
-
-For the full explanation, see [this post on X](https://x.com/badlogicgames/status/2037811643774652911).
-
-To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi-share-hf). Read its README.md for setup instructions. All you need is a Hugging Face account, the Hugging Face CLI, and `nanopi-share-hf`.
-
-You can also watch [this video](https://x.com/badlogicgames/status/2041151967695634619), where I show how I publish my `pi-mono` sessions.
-
-I regularly publish my own `pi-mono` work sessions here:
-
-- [badlogicgames/pi-mono on Hugging Face](https://huggingface.co/datasets/badlogicgames/pi-mono)
+WIP
 
 ## License
 
-MIT
+**NanoPi** is distributed under MIT License from Pi Coding Agent.
+
+## Acknowledgements
+
+- **[Pi Coding Agent](https://github.com/...)**: Upstream base runtime and original minimalist philosophy.
+- **Arkloop Agent**: Visual design parameters and layout aesthetics for the WebUI (clean-room reimplementation).

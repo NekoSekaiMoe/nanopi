@@ -5,6 +5,7 @@
 import { createContext, ComponentChildren } from 'preact';
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { messages, Lang, MsgKey } from './i18n';
+import { applyWallpaper, loadWallpaper } from './lib/wallpaper';
 
 export type Theme = 'light' | 'dark' | 'system';
 
@@ -79,6 +80,12 @@ export function SettingsProvider({ children }: { children: ComponentChildren }) 
   const [theme, setThemeState] = useState<Theme>(readTheme);
   const [lang, setLangState] = useState<Lang>(readLang);
   const [fontScale, setFontScaleState] = useState<FontScale>(readFontScale);
+
+  // Paint the stored wallpaper before the first meaningful paint of the app
+  // (with the theme effect below); a late paint would flash the plain canvas.
+  useEffect(() => {
+    applyWallpaper(loadWallpaper());
+  }, []);
 
   // Apply theme to <html data-theme>; theme.css keys light/dark off this.
   useEffect(() => {

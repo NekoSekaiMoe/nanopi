@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Chat } from './components/Chat';
 import { Sidebar } from './components/Sidebar';
+import { RightPanel } from './components/RightPanel';
 import { ThemeDialog, LanguageDialog, NotificationsDialog } from './components/SettingsDialogs';
 import { ModelConfigDialog } from './components/ModelProviders';
 import { RenameDialog, DeleteDialog } from './components/SessionDialogs';
@@ -48,6 +49,21 @@ export function App() {
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Right panel: persisted so a reload keeps the drawer state (desktop column).
+  const [panelOpen, setPanelOpen] = useState(() => {
+    try {
+      return localStorage.getItem('nanopi.rightPanel') === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem('nanopi.rightPanel', panelOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [panelOpen]);
   const [sessionListVersion, setSessionListVersion] = useState(0);
   const [headerMenuOpen, setHeaderMenuOpen] = useState(false);
   // 表头会话菜单改用 fixed 定位，避免被祖先 overflow/层叠裁剪；记录锚点坐标。
@@ -409,8 +425,10 @@ export function App() {
           ☰
         </button>
 
-        {activeSession?.name && !isLanding && (
-          <header class="session-header" ref={headerMenuRef}>
+        {/* ===== Session-title header: always present (session title on history,
+            brand wordmark on landing) with right-aligned actions. ===== */}
+        <header class="session-header" ref={headerMenuRef}>
+          {activeSession?.name && !isLanding ? (
             <button
               class="session-title-btn"
               title={activeSession.name}
@@ -442,6 +460,11 @@ export function App() {
                 />
               </svg>
             </button>
+          ) : (
+            <span class="session-title-text" style="font-weight: 600; font-size: 0.875rem;">
+              NanoPi
+            </span>
+          )}
             {headerMenuOpen && headerMenuPos && (
               <div
                 class="item-menu"
@@ -474,8 +497,22 @@ export function App() {
                 </button>
               </div>
             )}
+          <div class="header-actions">
+            <button
+              class={'header-icon-btn' + (panelOpen ? ' active' : '')}
+              title={t('panel.toggle')}
+              aria-label={t('panel.toggle')}
+              aria-pressed={panelOpen}
+              onClick={() => setPanelOpen((o) => !o)}
+            >
+              {/* Sidebar-right icon (panel outline). */}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="16" rx="3" stroke="currentColor" stroke-width="1.6" />
+                <path d="M15 4v16" stroke="currentColor" stroke-width="1.6" />
+              </svg>
+            </button>
+          </div>
           </header>
-        )}
 
         <div class="session-body app-sidebar">
           <Chat
@@ -500,6 +537,16 @@ export function App() {
           />
         </div>
       </div>
+
+      {/* ===== Right panel: session actions + working dir + skills ===== */}
+      <RightPanel
+        open={panelOpen}
+        onClose={() => setPanelOpen(false)}
+        cwd={cwd}
+        onNew={handleNewSession}
+        onOpenCwd={() => setShowCwd(true)}
+        onPickSkill={(name) => setSkillInsert({ name, seq: Date.now() })}
+      />
 
       {/* ===== Modals ===== */}
       {showCwd && (

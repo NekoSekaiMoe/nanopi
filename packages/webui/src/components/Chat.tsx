@@ -56,7 +56,7 @@ import {
   splitAtToken,
 } from '../lib/atMention';
 import { toolResultStatus, updateToolProgress, upsertToolPart, type ToolRow, type MsgPart } from '../lib/toolRows';
-import { randomGreeting } from '../lib/greeting';
+import { randomPoem } from '../lib/greeting';
 import { commitTodoCall, todoToolDetail, type TodoTitles } from '../lib/todoToolDetail';
 import {
   applyTodoCall,
@@ -441,10 +441,11 @@ function detectSkillContent(text: string): string | null {
 
 export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermission, onPermissionResolved, activeSession, restoring, onLiveTurnDone, onOptimisticSession, onOpenCwd, onCwdChanged, onLanding, skillInsert, onSessionRenamed }: ChatProps) {
   const t = useT();
-  // Landing tagline: a random classical poem line in zh, the i18n greeting
+  // Landing tagline: a random classical poem line (text + source on its own
+  // muted line) in zh, the i18n greeting
   // otherwise. Picked once per mount so re-renders do not reshuffle it.
   const lang = useSettings().lang;
-  const [landingGreeting] = useState(() => (lang === 'zh' ? randomGreeting() : t('chat.greeting')));
+  const [landingPoem] = useState(() => (lang === 'zh' ? randomPoem() : null));
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   // 组合期标记：仅用于 handleKeyDown 的守卫（菜单导航 / Enter 发送不得窃取
@@ -3429,7 +3430,14 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
               </span> */}
               <span class="landing-brand-name">NanoPi</span>
             </div>
-            <div class="landing-tagline">{landingGreeting}</div>
+            {landingPoem ? (
+              <div class="landing-tagline-group">
+                <div class="landing-tagline">{landingPoem.text}</div>
+                <div class="landing-tagline-source">—— {landingPoem.source}</div>
+              </div>
+            ) : (
+              <div class="landing-tagline">{t('chat.greeting')}</div>
+            )}
             <div class="landing-input">
               {blockingInteraction ? (
                 <div class="interaction-dock-seat">{blockingInteraction}</div>

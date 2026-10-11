@@ -1,7 +1,43 @@
 // Task 12 — API client for nanopi webui
 
-// Read the one-time token from URL; never persist to localStorage
-const token = new URLSearchParams(location.search).get('token') ?? '';
+// The one-time token arrives in the page URL and moves straight into
+// sessionStorage: the URL is rewritten immediately so the credential does not
+// live in history entries or screen shares, while a refresh in the same tab
+// keeps working. sessionStorage (not localStorage) so it dies with the tab and
+// never outlives the server that minted it.
+const SESSION_KEY = 'nanopi.webuiToken';
+
+function readToken(): string {
+  try {
+    const params = new URLSearchParams(location.search);
+    const fromUrl = params.get('token');
+    if (fromUrl) {
+      try {
+        sessionStorage.setItem(SESSION_KEY, fromUrl);
+      } catch {
+        /* storage unavailable: keep using the URL copy */
+      }
+      try {
+        params.delete('token');
+        const query = params.toString();
+        window.history.replaceState(null, '', location.pathname + (query ? `?${query}` : '') + location.hash);
+      } catch {
+        /* no history API (tests, non-browser): the URL keeps the token */
+      }
+      return fromUrl;
+    }
+    try {
+      return sessionStorage.getItem(SESSION_KEY) ?? '';
+    } catch {
+      return '';
+    }
+  } catch {
+    // No location at all (non-browser import): unauthenticated.
+    return '';
+  }
+}
+
+const token = readToken();
 
 function authHeaders(): Record<string, string> {
   // X-nanopi-Client lets the daemon tag telemetry as webui-originated
@@ -11,7 +47,7 @@ function authHeaders(): Record<string, string> {
   return h;
 }
 
-/** Current session token (from the page URL). */
+/** Current session token (URL on first load, then sessionStorage). */
 export function getToken(): string {
   return token;
 }

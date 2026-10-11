@@ -7,7 +7,7 @@
  * no per-tool-call permission gate, so the approval mode is always `bypass`.
  */
 
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -98,6 +98,14 @@ type SseEvent = Record<string, unknown> & { type: string };
 /** Stable identifier for a working directory, used as the project bucket hash. */
 function projectHash(cwd: string): string {
 	return createHash("sha1").update(cwd).digest("hex").slice(0, 16);
+}
+
+/** Constant-time `Authorization: Bearer <token>` check; exported for tests. */
+export function bearerTokenMatches(expected: string, authorization: string | undefined): boolean {
+	if (!authorization?.startsWith("Bearer ")) return false;
+	const presented = Buffer.from(authorization.slice("Bearer ".length));
+	const wanted = Buffer.from(expected);
+	return presented.length === wanted.length && timingSafeEqual(presented, wanted);
 }
 
 function modelKey(model: Model<any>): string {
@@ -231,8 +239,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 
 	function authorized(req: IncomingMessage): boolean {
-		const header = req.headers.authorization;
-		return header === `Bearer ${token}`;
+		return bearerTokenMatches(token, req.headers.authorization);
 	}
 
 	async function serveStatic(res: ServerResponse, pathname: string): Promise<void> {

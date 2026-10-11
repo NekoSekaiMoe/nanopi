@@ -13,6 +13,7 @@ import {
   notificationsSupported,
   type NotificationPrefs,
 } from '../lib/notifications';
+import { fileToWallpaperDataUrl, setWallpaper } from '../lib/wallpaper';
 
 /** Shared modal chrome for the settings dialogs. */
 function SettingsModal({
@@ -62,6 +63,7 @@ function SettingsModal({
 
 export function ThemeDialog({ onClose }: { onClose: () => void }) {
   const { theme, setTheme, fontScale, setFontScale, t } = useSettings();
+  const [wallpaperError, setWallpaperError] = useState(false);
   const options: { value: Theme; label: string }[] = [
     { value: 'light', label: t('settings.theme.light') },
     { value: 'dark', label: t('settings.theme.dark') },
@@ -105,6 +107,42 @@ export function ThemeDialog({ onClose }: { onClose: () => void }) {
               {o.label}
             </button>
           ))}
+        </div>
+      </div>
+      <div class="field-group">
+        <span class="modal-label">{t('settings.wallpaper')}</span>
+        <div class="field-row">
+          <button
+            class="btn"
+            type="button"
+            onClick={() =>
+              void (async () => {
+                // Hidden input triggered from the button for consistent styling.
+                const input = document.createElement('input');
+                input.type = 'file';
+                input.accept = 'image/*';
+                input.onchange = () => {
+                  const file = input.files?.[0];
+                  if (!file) return;
+                  fileToWallpaperDataUrl(file)
+                    .then((dataUrl) => {
+                      setWallpaper(dataUrl);
+                      setWallpaperError(false);
+                    })
+                    .catch(() => setWallpaperError(true));
+                };
+                input.click();
+              })()
+            }
+          >
+            {t('settings.wallpaperPick')}
+          </button>
+          <button class="btn" type="button" onClick={() => setWallpaper(null)}>
+            {t('settings.wallpaperClear')}
+          </button>
+        </div>
+        <div class="field-hint">
+          {wallpaperError ? t('settings.wallpaperTooLarge') : t('settings.wallpaperHint')}
         </div>
       </div>
     </SettingsModal>
