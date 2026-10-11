@@ -110,6 +110,15 @@ function getAliases(): Record<string, string> {
 		"@mariozechner/pi-ai/compat": nanopiAiCompatEntry,
 		"@mariozechner/pi-ai/oauth": nanopiAiOauthEntry,
 		"@mariozechner/pi-ai": nanopiAiCompatEntry,
+		// Bundled extras in packages/coding-agent/extras still target the fork's
+		// upstream name; alias it to the same entries as the other legacy names.
+		"@earendil-works/pi-coding-agent": nanopiCodingAgentEntry,
+		"@earendil-works/pi-agent-core": nanopiAgentCoreEntry,
+		"@earendil-works/pi-tui": nanopiTuiEntry,
+		"@earendil-works/pi-ai/providers/all": nanopiAiProvidersEntry,
+		"@earendil-works/pi-ai/compat": nanopiAiCompatEntry,
+		"@earendil-works/pi-ai/oauth": nanopiAiOauthEntry,
+		"@earendil-works/pi-ai": nanopiAiCompatEntry,
 		typebox: typeboxEntry,
 		"typebox/compile": typeboxCompileEntry,
 		"typebox/value": typeboxValueEntry,

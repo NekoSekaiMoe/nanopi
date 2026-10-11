@@ -12,12 +12,14 @@ import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from "node:f
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBuildFlavor } from "../../../scripts/buildconfig.mjs";
+import { resolveBundledExtras } from "../../../scripts/extras.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = join(scriptDir, "..");
+const repoRoot = join(packageDir, "..", "..");
 const distDir = join(packageDir, "dist");
 
-const { flavor, components } = resolveBuildFlavor(join(packageDir, "..", ".."), {
+const { flavor, components } = resolveBuildFlavor(repoRoot, {
 	argv: process.argv,
 	env: process.env,
 });
@@ -59,4 +61,15 @@ if (components["webui"] !== false) {
 	}
 } else {
 	console.log("webui assets skipped (flavor: %s)", flavor);
+}
+
+// Bundled extras: one directory per enabled extra/<name> component. The
+// published tarball does not carry the extras source, so tolerate its absence
+// (nothing to copy) instead of failing partial checkouts.
+const extras = resolveBundledExtras({ repoRoot, components });
+for (const extra of extras) {
+	copyTree(extra.sourceDir, join(distDir, "extras", extra.name));
+}
+if (extras.length > 0) {
+	console.log("extras: %s (flavor: %s)", extras.map((extra) => extra.name).join(", "), flavor);
 }

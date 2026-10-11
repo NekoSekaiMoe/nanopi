@@ -12,6 +12,7 @@
 
 ### Added
 
+- Added bundled extras: eleven extension packages vendored under `extras/` (ask-lite, pi-codex-compact, pi-extra-cmd, pi-fake-codex, pi-fake-opencode, pi-rewind, pi-simplify, pi-smart-flow, pi-subagent-mini, pi-ui, todo-lite), one `extra/<name>` build flavor component each, copied into `dist/extras` and registered at runtime as lowest-precedence default packages (user settings win). Single-file runs install them to `~/.nanopi/packages/<name>` with a version marker, never overwriting user-owned directories; `NANOPI_BUNDLED_EXTRAS=0` disables registration.
 - Added build flavors controlled by the root `buildconfig.json`: `--flavor <name>` / `NANOPI_BUILD_FLAVOR` selects a flavor for `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, and the coding-agent `copy-assets` step (now `packages/coding-agent/scripts/copy-assets.mjs`). Flavors toggle peripheral components (`webui`, `export-html`, `docs`, `examples`, the `goal` placeholder, `oauth/*` flows) in bundle and single-file builds; the npm packages always publish the `full` flavor, and disabled components fail at runtime with "not included in this build" errors instead of module-not-found.
 - Added `nanopi webui [-p <port>]` (default port 5335): a loopback HTTP server that serves the new `@nanopi/webui` browser UI (ported from AtomCode, MIT) and bridges its `/chat` SSE transport, models, projects, sessions, skills, and filesystem browsing onto a headless `AgentSession`. nanopi runs tools without per-call approval, so the webui approval mode is always `bypass`.
 - Added the single-file distribution: `pnpm run build:single-file` produces a zero-dependency `nanopi.js` (all JS bundled by esbuild, package assets gzip-embedded and extracted to the user cache directory, lazy OAuth/Bedrock modules statically registered by `src/standalone/`). GitHub releases ship `nanopi.js` plus a `nanopi-sidecars-<version>.tgz` asset.
@@ -25,6 +26,7 @@
 
 ### Fixed
 
+- Fixed pi-ecosystem extension packages failing to load: package manifests now accept the upstream `"pi"` field as a fallback to `"nanopi"`, and extensions importing `@earendil-works/pi-*` (the fork's upstream module names) resolve in source checkouts, unbundled dist, and bundles via loader aliases, bundle virtual modules, and tsconfig paths.
 - Fixed Mistral streams being aborted mid-generation (e.g. during long thinking) after the request timeout; the timeout now applies only to waiting for response headers ([#10609](https://github.com/earendil-works/pi/issues/10609))
 - Fixed a symlinked `AGENTS.md` in a git worktree nested inside its main repo causing no project context file to load ([#10681](https://github.com/earendil-works/pi/issues/10681))
 - Fixed runs started by `pi.sendMessage(..., { triggerTurn: true })` removing system prompt sections added in `before_agent_start` after their first tool call, which changed the prompt mid-run and broke the provider prompt cache twice per run ([#10267](https://github.com/earendil-works/pi/issues/10267))

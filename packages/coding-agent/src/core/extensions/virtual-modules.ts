@@ -35,4 +35,13 @@ export const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@mariozechner/pi-ai/oauth": bundledNanoPiAiOauth,
 	"@mariozechner/pi-ai/providers/all": bundledNanoPiAiProviders,
 	"@mariozechner/pi-coding-agent": bundledNanoPiCodingAgent,
+	// The fork's upstream name: vendored extras (packages/coding-agent/extras)
+	// still import it, so map it to the same bundled modules.
+	"@earendil-works/pi-agent-core": bundledNanoPiAgentCore,
+	"@earendil-works/pi-tui": bundledNanoPiTui,
+	"@earendil-works/pi-ai": bundledNanoPiAiCompat,
+	"@earendil-works/pi-ai/compat": bundledNanoPiAiCompat,
+	"@earendil-works/pi-ai/oauth": bundledNanoPiAiOauth,
+	"@earendil-works/pi-ai/providers/all": bundledNanoPiAiProviders,
+	"@earendil-works/pi-coding-agent": bundledNanoPiCodingAgent,
 };

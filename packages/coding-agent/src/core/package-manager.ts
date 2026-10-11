@@ -42,6 +42,7 @@ import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
 import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
+import { getBundledExtraPackageSources } from "./bundled-extras.ts";
 import { type NanoPiManifest, readNanoPiManifest } from "./nanopi-manifest.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
@@ -936,6 +937,15 @@ export class DefaultPackageManager implements PackageManager {
 		}
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
+		}
+
+		// Bundled extras (dist/extras, flavor-controlled) register last so project
+		// and user settings win collisions; npm-name overlaps are skipped inside.
+		for (const source of getBundledExtraPackageSources([
+			...(projectSettings.packages ?? []),
+			...(globalSettings.packages ?? []),
+		])) {
+			allPackages.push({ pkg: source, scope: "user" });
 		}
 
 		// Dedupe: project scope wins over global for same package identity

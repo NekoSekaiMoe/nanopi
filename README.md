@@ -129,7 +129,7 @@ The archive includes release model data and native prebuilds. `--offline-model-d
 
 ## Build flavors
 
-The root `buildconfig.json` declares peripheral components (webui, export-html, docs, examples, OAuth flows, the planned goal module) and named flavors that enable or disable them. Pass `--flavor <name>` to `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, or `packages/coding-agent/scripts/copy-assets.mjs`, or set `NANOPI_BUILD_FLAVOR` for chained builds; the default flavor is `full`. The npm packages are always published from `full`. A build that excludes a component fails its use at runtime with a "not included in this build" error instead of a module-not-found crash.
+The root `buildconfig.json` declares peripheral components (webui, export-html, docs, examples, OAuth flows, the planned goal module, and one `extra/<name>` per bundled extension package vendored under `packages/coding-agent/extras`) and named flavors that enable or disable them. Pass `--flavor <name>` to `scripts/build-coding-agent-bundle.mjs`, `scripts/build-coding-agent-single-file.mjs`, or `packages/coding-agent/scripts/copy-assets.mjs`, or set `NANOPI_BUILD_FLAVOR` for chained builds; the default flavor is `full`. Enabled extras register as lowest-precedence default packages (single-file runs extract them to `~/.nanopi/packages`, never touching user-owned directories; `NANOPI_BUNDLED_EXTRAS=0` disables them). The npm packages are always published from `full`. A build that excludes a component fails its use at runtime with a "not included in this build" error instead of a module-not-found crash.
 
 ## Supply-chain hardening
 

@@ -1,0 +1,53 @@
+{
+	"name": "pi-simplify",
+	"version": "0.2.3",
+	"description": "A Pi extension that reviews recently changed code for clarity, consistency, and maintainability.",
+	"type": "module",
+	"license": "MIT",
+	"author": "Matt Devy",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/MattDevy/pi-extensions.git",
+		"directory": "packages/pi-simplify"
+	},
+	"homepage": "https://github.com/MattDevy/pi-extensions/tree/main/packages/pi-simplify#readme",
+	"bugs": {
+		"url": "https://github.com/MattDevy/pi-extensions/issues"
+	},
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"pi-coding-agent",
+		"code-review",
+		"simplify",
+		"refactor",
+		"ai",
+		"llm",
+		"ai-agent",
+		"coding-assistant",
+		"developer-tools"
+	],
+	"engines": {
+		"node": ">=18"
+	},
+	"files": [
+		"dist",
+		"src",
+		"!src/**/*.test.ts",
+		"README.md",
+		"LICENSE"
+	],
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"pi": {
+		"extensions": [
+			"dist/index.js"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": ">=0.74.0",
+		"@earendil-works/pi-ai": ">=0.74.0",
+		"@earendil-works/pi-tui": ">=0.74.0",
+		"@sinclair/typebox": "^0.34.0"
+	}
+}
