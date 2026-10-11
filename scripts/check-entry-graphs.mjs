@@ -19,10 +19,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 /** Workspace package name -> its source root, so cross-package imports are followed. */
 const WORKSPACE = {
-	"@nanopi/chord": "packages/chord/src",
 	"@nanopi/pi-ai": "packages/ai/src",
 	"@nanopi/pi-agent-core": "packages/agent/src",
-	"@nanopi/pi-telemetry": "packages/telemetry/src",
 	"@nanopi/pi-tui": "packages/tui/src",
 };
 

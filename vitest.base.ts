@@ -2,13 +2,6 @@ import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export const workspaceSourcePaths = {
-	chordIndex: fileURLToPath(new URL("./packages/chord/src/index.ts", import.meta.url)),
-	chordContext: fileURLToPath(new URL("./packages/chord/src/context/index.ts", import.meta.url)),
-	chordDelta: fileURLToPath(new URL("./packages/chord/src/delta/index.ts", import.meta.url)),
-	chordBundler: fileURLToPath(new URL("./packages/chord/src/bundler.ts", import.meta.url)),
-	chordNode: fileURLToPath(new URL("./packages/chord/src/node.ts", import.meta.url)),
-	telemetryIndex: fileURLToPath(new URL("./packages/telemetry/src/index.ts", import.meta.url)),
-	telemetryTesting: fileURLToPath(new URL("./packages/telemetry/src/testing/index.ts", import.meta.url)),
 	mcpIndex: fileURLToPath(new URL("./packages/mcp/src/index.ts", import.meta.url)),
 	mcpOAuth: fileURLToPath(new URL("./packages/mcp/src/oauth/index.ts", import.meta.url)),
 	mcpTesting: fileURLToPath(new URL("./packages/mcp/src/testing/index.ts", import.meta.url)),
@@ -34,13 +27,6 @@ export const workspaceSourcePaths = {
 export default defineConfig({
 	resolve: {
 		alias: [
-			{ find: /^@nanopi\/chord$/, replacement: workspaceSourcePaths.chordIndex },
-			{ find: /^@nanopi\/chord\/context$/, replacement: workspaceSourcePaths.chordContext },
-			{ find: /^@nanopi\/chord\/delta$/, replacement: workspaceSourcePaths.chordDelta },
-			{ find: /^@nanopi\/chord\/bundler$/, replacement: workspaceSourcePaths.chordBundler },
-			{ find: /^@nanopi\/chord\/node$/, replacement: workspaceSourcePaths.chordNode },
-			{ find: /^@nanopi\/pi-telemetry$/, replacement: workspaceSourcePaths.telemetryIndex },
-			{ find: /^@nanopi\/pi-telemetry\/testing$/, replacement: workspaceSourcePaths.telemetryTesting },
 			{ find: /^@nanopi\/pi-mcp$/, replacement: workspaceSourcePaths.mcpIndex },
 			{ find: /^@nanopi\/pi-mcp\/oauth$/, replacement: workspaceSourcePaths.mcpOAuth },
 			{ find: /^@nanopi\/pi-mcp\/testing$/, replacement: workspaceSourcePaths.mcpTesting },

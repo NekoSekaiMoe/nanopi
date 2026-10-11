@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- Removed the `telemetryContext` option from `ProviderRequestOptions` and the `@nanopi/pi-telemetry` dependency; nothing in the repo consumed the context, so provider requests no longer accept or propagate it.
+
 ### Removed
 
 - Removed the `radius` provider: `radiusProvider()`, the `radius-config` exports, the Radius OAuth flow, and the bundled `radius` model catalog.

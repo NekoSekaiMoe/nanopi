@@ -4,8 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"clean": "pnpm -r run clean",
-		"build": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../ai && pnpm run build && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
-		"build:offline": "cd packages/chord && pnpm run build && cd ../tui && pnpm run build && cd ../telemetry && pnpm run build && cd ../ai && pnpm run build:offline && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build:offline": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build:offline && cd ../agent && pnpm run build && cd ../coding-agent && pnpm run build",
 		"build:native:darwin": "pnpm --filter ./packages/tui run build:native:darwin",
 		"build:native:linux": "pnpm --filter ./packages/tui run build:native:linux",
 		"build:native:win32": "pnpm --filter ./packages/tui run build:native:win32",
@@ -19,7 +19,6 @@
 		"generate:models": "pnpm --filter ./packages/ai run generate-models",
 		"hydrate:model-data": "pnpm --filter ./packages/ai run hydrate-model-data",
 		"check:model-data": "pnpm --filter ./packages/ai run check:model-data",
-		"eval": "pnpm --filter @nanopi/pi-evals run eval --",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
 		"test": "pnpm run test:scripts && pnpm -r run test",

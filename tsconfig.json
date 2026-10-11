@@ -5,27 +5,6 @@
 		"module": "NodeNext",
 		"moduleResolution": "NodeNext",
 		"paths": {
-			"@nanopi/chord": [
-				"./packages/chord/src/index.ts"
-			],
-			"@nanopi/chord/bundler": [
-				"./packages/chord/src/bundler.ts"
-			],
-			"@nanopi/chord/context": [
-				"./packages/chord/src/context/index.ts"
-			],
-			"@nanopi/chord/delta": [
-				"./packages/chord/src/delta/index.ts"
-			],
-			"@nanopi/chord/node": [
-				"./packages/chord/src/node.ts"
-			],
-			"@nanopi/pi-telemetry": [
-				"./packages/telemetry/src/index.ts"
-			],
-			"@nanopi/pi-telemetry/testing": [
-				"./packages/telemetry/src/testing/index.ts"
-			],
 			"@nanopi/pi-ai": [
 				"./packages/ai/src/index.ts"
 			],

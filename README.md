@@ -41,8 +41,6 @@ This monorepo contains the nanopi CLI and its supporting libraries.
 
 | Package | Description |
 |---------|-------------|
-| **[@nanopi/chord](packages/chord)** | Standalone application-composition runtime for services, replicated state, RPC, and plugins |
-| **[@nanopi/pi-telemetry](packages/telemetry)** | Vendor-neutral telemetry contracts, reference adapter, conformance tests, and typed schemas |
 | **[@nanopi/pi-ai](packages/ai)** | Unified multi-provider LLM API (OpenAI, Anthropic, Google, etc.) |
 | **[@nanopi/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
 | **[@nanopi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
