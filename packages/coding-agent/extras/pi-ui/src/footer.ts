@@ -8,6 +8,7 @@ import type {
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { ReferenceUiState } from "./state.ts";
+import { captureRenderTrigger } from "./thinking.ts";
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();
@@ -43,6 +44,9 @@ function renderToolbarLine(
 
 export function installFooter(ctx: ExtensionContext, uiState: ReferenceUiState): void {
   ctx.ui.setFooter((tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider): Component & { dispose?(): void } => {
+    // Hand the TUI to thinking.ts so landed summaries can repaint at once;
+    // the footer factory is the one place pi-ui still receives it.
+    captureRenderTrigger(tui);
     const unsubscribe = footerData.onBranchChange(() => tui.requestRender());
     return {
       dispose: unsubscribe,

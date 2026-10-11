@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, it } from "node:test";
+import { describe, it, type TestContext } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor, wordWrapLine } from "../src/components/editor.ts";
@@ -4455,5 +4455,80 @@ describe("Editor composer style", () => {
 
 		assert.strictEqual(lines[0], `${" ".repeat(11)}↑ 2 more `);
 		assert.strictEqual(lines[lines.length - 1], " ".repeat(20));
+	});
+});
+
+describe("Autocomplete direction", () => {
+	const provider: AutocompleteProvider = {
+		getSuggestions: async (lines, _cursorLine, cursorCol) => {
+			const text = lines[0] ?? "";
+			if (text.startsWith("@") && cursorCol === text.length) {
+				return {
+					items: [
+						{ value: "@alpha", label: "alpha" },
+						{ value: "@beta", label: "beta" },
+					],
+					prefix: text,
+				};
+			}
+			return null;
+		},
+		applyCompletion,
+	};
+
+	async function openMenu(t: TestContext, editor: Editor): Promise<void> {
+		editor.setAutocompleteProvider(provider);
+		editor.handleInput("@");
+		editor.handleInput("a");
+		t.mock.timers.tick(20);
+		await flushAutocomplete();
+		assert.strictEqual(editor.isShowingAutocomplete(), true);
+	}
+
+	it("renders the menu above the editor with autocompleteDirection: above", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		const editor = new Editor(createTestTUI(), defaultEditorTheme, { autocompleteDirection: "above" });
+		await openMenu(t, editor);
+
+		const lines = editor.render(40).map(stripVTControlCharacters);
+		// Menu rows first, then the top border, content, bottom border.
+		assert.ok(lines[0]!.includes("alpha"), `first row is not a menu row: ${lines[0]}`);
+		assert.ok(lines[1]!.includes("beta"));
+		assert.ok(lines[2]!.startsWith("─"));
+		assert.ok(lines.at(-1)!.startsWith("─"));
+	});
+
+	it("renders the menu below the editor by default", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		const editor = new Editor(createTestTUI(), defaultEditorTheme);
+		await openMenu(t, editor);
+
+		const lines = editor.render(40).map(stripVTControlCharacters);
+		assert.ok(lines[0]!.startsWith("─"));
+		assert.ok(lines.at(-1)!.includes("beta"));
+	});
+
+	it("applies a menu item clicked in the above region", async (t) => {
+		t.mock.timers.enable({ apis: ["setTimeout"] });
+		const editor = new Editor(createTestTUI(), defaultEditorTheme, { autocompleteDirection: "above" });
+		await openMenu(t, editor);
+		editor.render(40);
+
+		const result = editor.handleMouse({
+			type: "click",
+			button: "left",
+			x: 2,
+			y: 0,
+			screenX: 2,
+			screenY: 0,
+			width: 40,
+			height: 8,
+			shift: false,
+			alt: false,
+			ctrl: false,
+		});
+
+		assert.ok(result?.focus);
+		assert.strictEqual(editor.getText(), "@alpha");
 	});
 });

@@ -243,6 +243,8 @@ export interface EditorTheme {
 export interface EditorOptions {
 	paddingX?: number;
 	autocompleteMaxVisible?: number;
+	/** Where the autocomplete list renders: below the editor (default) or above it. */
+	autocompleteDirection?: "below" | "above";
 	/**
 	 * "bordered": horizontal rules above and below the text (default).
 	 * "composer": bare Codex-style composer - blank padding rows instead of rules,
@@ -318,6 +320,8 @@ export class Editor implements Component, Focusable {
 	private paddingX: number = 0;
 	/** Whether the composer (borderless, prefixed) style is active. */
 	protected readonly composerStyle: boolean;
+	/** Whether the autocomplete list renders above the editor instead of below it. */
+	private readonly autocompleteAbove: boolean;
 	/** Prompt prefix drawn before the first visible line (composer style only). */
 	protected promptPrefix: string;
 	/** When true, a leading shell "!" in the text is not drawn in composer style. */
@@ -396,6 +400,7 @@ export class Editor implements Component, Focusable {
 		const maxVisible = options.autocompleteMaxVisible ?? 5;
 		this.autocompleteMaxVisible = Number.isFinite(maxVisible) ? Math.max(3, Math.min(20, Math.floor(maxVisible))) : 5;
 		this.composerStyle = options.style === "composer";
+		this.autocompleteAbove = options.autocompleteDirection === "above";
 		this.promptPrefix = options.prompt ?? "› ";
 	}
 
@@ -632,6 +637,21 @@ export class Editor implements Component, Focusable {
 		const rightPadding = leftPadding;
 		const continuationIndent = " ".repeat(prefixWidth);
 
+		// Autocomplete rows render below the bottom border by default, or above
+		// the top border with autocompleteDirection: "above".
+		this.renderedAutocompleteHeight = 0;
+		let autocompleteRows: string[] = [];
+		if (this.autocompleteState && this.autocompleteList) {
+			const autocompleteResult = this.autocompleteList.render(contentWidth);
+			this.renderedAutocompleteHeight = autocompleteResult.length;
+			autocompleteRows = autocompleteResult.map((line) => {
+				const lineWidth = visibleWidth(line);
+				const linePadding = " ".repeat(Math.max(0, contentWidth - lineWidth));
+				return `${leftPadding}${line}${linePadding}${rightPadding}`;
+			});
+		}
+		if (this.autocompleteAbove) result.push(...autocompleteRows);
+
 		// Render top border (with scroll indicator if scrolled down)
 		result.push(this.renderTopBorder(width, this.scrollOffset));
 
@@ -691,28 +711,24 @@ export class Editor implements Component, Focusable {
 		const linesBelow = layoutLines.length - (this.scrollOffset + visibleLines.length);
 		result.push(this.renderBottomBorder(width, linesBelow));
 
-		// Add autocomplete list if active
-		this.renderedAutocompleteHeight = 0;
-		if (this.autocompleteState && this.autocompleteList) {
-			const autocompleteResult = this.autocompleteList.render(contentWidth);
-			this.renderedAutocompleteHeight = autocompleteResult.length;
-			for (const line of autocompleteResult) {
-				const lineWidth = visibleWidth(line);
-				const linePadding = " ".repeat(Math.max(0, contentWidth - lineWidth));
-				result.push(`${leftPadding}${line}${linePadding}${rightPadding}`);
-			}
-		}
+		if (!this.autocompleteAbove) result.push(...autocompleteRows);
 
 		return result;
 	}
 
 	handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
 		const autocompleteStartRow = this.renderedVisibleLineCount + 2;
+		// "above" menus occupy the rows above the top border; remap them onto the
+		// base geometry ([top][content][bottom][menu]) so hit-testing stays shared.
+		let y = event.y;
+		if (this.autocompleteAbove && this.renderedAutocompleteHeight > 0) {
+			y = y < this.renderedAutocompleteHeight ? autocompleteStartRow + y : y - this.renderedAutocompleteHeight;
+		}
 		if (
 			this.autocompleteState &&
 			this.autocompleteList &&
-			event.y >= autocompleteStartRow &&
-			event.y < autocompleteStartRow + this.renderedAutocompleteHeight
+			y >= autocompleteStartRow &&
+			y < autocompleteStartRow + this.renderedAutocompleteHeight
 		) {
 			const maxPadding = Math.max(0, Math.floor((event.width - 1) / 2));
 			const paddingX = Math.min(this.paddingX, maxPadding);
@@ -720,7 +736,7 @@ export class Editor implements Component, Focusable {
 			const result = this.autocompleteList.handleMouse?.({
 				...event,
 				x: event.x - paddingX,
-				y: event.y - autocompleteStartRow,
+				y: y - autocompleteStartRow,
 				width: contentWidth,
 				height: this.renderedAutocompleteHeight,
 			});
@@ -732,10 +748,10 @@ export class Editor implements Component, Focusable {
 		// The renderer synthesizes a click when press and release land on the same
 		// cell without movement, which is the gesture that positions the cursor.
 		if (event.type !== "click" || event.button !== "left") return undefined;
-		if (event.y <= 0 || event.y > this.renderedVisibleLineCount) return { handled: true, focus: true };
+		if (y <= 0 || y > this.renderedVisibleLineCount) return { handled: true, focus: true };
 
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
-		const visualLineIndex = this.scrollOffset + event.y - 1;
+		const visualLineIndex = this.scrollOffset + y - 1;
 		const visualLine = visualLines[visualLineIndex];
 		if (!visualLine) return { handled: true, focus: true };
 		const logicalLine = this.state.lines[visualLine.logicalLine] ?? "";

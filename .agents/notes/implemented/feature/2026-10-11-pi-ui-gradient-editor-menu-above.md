@@ -2,6 +2,12 @@
 
 Status: implemented
 
+> Superseded the same day by
+> [composer-menu-above-no-piui-editor](./2026-10-11-composer-menu-above-no-piui-editor.md):
+> the user's "loop 中为渐变" meant the Working-line shimmer, and the pi-ui input
+> frame itself was unwanted. The menu-above direction moved into the core
+> composer; this note records the intermediate step.
+
 ## Problem
 
 Commit `0d669b591` ("Ui changes") restyled the vendored pi-ui editor from the

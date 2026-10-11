@@ -36,9 +36,11 @@ The default TUI and the pi-ui extra share one Codex-style layout:
   see [getLoadedResources](../architecture/2026-10-11-get-loaded-resources-api.md)).
   Chrome and exit match `/context` (bottom-docked overlay, accent rules,
   `↑/↓` scroll, `Esc` to close); non-TUI modes get plain-text notify.
-- pi-ui matches: its open gradient editor frame (restored over the thin box — see
-  [pi-ui-gradient-editor](./2026-10-11-pi-ui-gradient-editor-menu-above.md)) and the
-  same single-line footer (extension statuses hidden). Its README is updated to match.
+- pi-ui matches: it ships no custom editor anymore — the default composer stays
+  and the slash menu opens above it (see
+  [composer-menu-above-no-piui-editor](./2026-10-11-composer-menu-above-no-piui-editor.md)) —
+  and the same single-line footer (extension statuses hidden). Its README is
+  updated to match.
 
 Related: [built-in /init, /context](./2026-10-11-builtin-commands-and-codex-compaction.md)
 established the builtin-commands home this command extends.

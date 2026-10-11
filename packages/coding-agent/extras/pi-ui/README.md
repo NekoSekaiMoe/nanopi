@@ -3,10 +3,9 @@
 A UI reskin for the [Pi coding agent](https://github.com/badlogic/pi-mono) that
 gives the interactive TUI a Codex-style look:
 
-- **Open gradient input** — pink-to-cyan top/bottom rules, a pink left accent,
-  and an embedded `model  provider  thinking` row like the reference UI. The
-  slash-command menu opens above the input frame.
-- **Single-line status toolbar** — `used xk/yk · / for more details`
+- **Default composer** — the stock borderless `› ` input stays; pi-ui ships no
+  custom editor frame. The slash-command menu direction belongs to the core
+  editor (`autocompleteDirection`), not the reskin.- **Single-line status toolbar** — `used xk/yk · / for more details`
   (used/context-window from real Pi context usage). Extension statuses are
   hidden so the bottom line stays exactly like the reference layout.
 - **Animated status shimmer** — `· Working (9s · esc to interrupt)` with a
@@ -51,7 +50,6 @@ built on documented `ExtensionAPI` / `ExtensionUIContext` methods:
 
 | Module        | Pi API                                              | What it does                                    |
 | ------------- | --------------------------------------------------- | ----------------------------------------------- |
-| `editor.ts`   | `ctx.ui.setEditorComponent()`                       | Open gradient frame + embedded model toolbar   |
 | `footer.ts`   | `ctx.ui.setFooter()`                                | `used xk/yk` single-line toolbar                |
 | `working.ts`  | Working UI methods + guarded TUI `Loader` hook       | Status shimmer + elapsed transcript row         |
 | `tools.ts`    | `pi.registerTool()` + `ToolExecutionComponent`      | Flat tool rows and edit/write diffs             |
@@ -99,14 +97,14 @@ extension contract:
 Verified against **pi-coding-agent 0.81.0** (the current lockfile version). Each
 internal hook is guarded by shape checks and `try`/`catch`; incompatible shapes
 keep Pi's default rendering. Prototype changes are restored on session shutdown.
-The normal Working indicator, elapsed entry, footer, and bordered editor use
+The normal Working indicator, elapsed entry, and footer use
 stable public APIs.
 
 ## Limitations
 
 - The `›` user-message line and generic assistant-text styling are not
   reskinnable through the public API and are left as-is.
-- Truecolor frame and shimmer colors require a truecolor-capable terminal; elsewhere they
+- Truecolor shimmer and gradient colors require a truecolor-capable terminal; elsewhere they
   degrade to the nearest supported color (text stays intact).
 
 ## License

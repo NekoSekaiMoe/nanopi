@@ -19,7 +19,8 @@
  *
  * Wiring only. Each concern lives in its own module and is installed against
  * documented ExtensionAPI / ExtensionUIContext methods:
- *   - editor.ts   -> ctx.ui.setEditorComponent() + embedded model toolbar
+ *   - editor: none — the default composer stays; input frame and menu
+ *     direction belong to the core TUI, not the reskin
  *   - footer.ts   -> ctx.ui.setFooter() status toolbar
  *   - thinking.ts -> AssistantMessageComponent/InteractiveMode/SettingsList
  *     prototype patches (process-lifetime, like the tool renderer redirect)
@@ -31,8 +32,7 @@
  * because the Working line already tracks the current step.
  *
  * pi.on handlers (tools, working) are registered ONCE at load so they don't
- * stack across session switches/reloads. The per-session setters (editor,
- * footer) are (re)applied on session_start, which is safe because they replace
+ * stack across session switches/reloads. The per-session setter (footer) is
  * rather than accumulate. Everything visual is guarded to ctx.mode === "tui";
  * other modes (rpc/print/json) keep Pi's defaults.
  *
@@ -42,12 +42,11 @@
  */
 
 import type { ExtensionAPI, ExtensionUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
-import { makeReferenceEditorFactory } from "./editor.ts";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
 import { skinSubagentWidget } from "./subagent-widget.ts";
-import { captureRenderTrigger, installThinkingDisplay } from "./thinking.ts";
+import { installThinkingDisplay } from "./thinking.ts";
 import { installWorking } from "./working.ts";
 
 const patchedThemes = new WeakSet<Theme>();
@@ -131,8 +130,10 @@ export default function (pi: ExtensionAPI) {
   // unregister — registering per session_start would stack duplicate timers).
   installWorking(pi);
 
-  // (Re)apply the editor + footer for each session. These are replacing
-  // setters, not accumulating registrations, so calling them per start is safe.
+  // (Re)apply the footer for each session. It is a replacing setter, not an
+  // accumulating registration, so calling it per start is safe. The editor
+  // stays the default composer: pi-ui deliberately ships no custom input
+  // frame (see the pi-ui note in .agents/notes).
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     const uiState = { shellMode: false };
@@ -142,12 +143,6 @@ export default function (pi: ExtensionAPI) {
     skinSubagentWidget(ctx.ui);
     restoreShellRenderer();
     restoreShellRenderer = installShellRenderer(ctx.ui.theme);
-    const editorFactory = makeReferenceEditorFactory(ctx, pi, uiState);
-    ctx.ui.setEditorComponent((tui, editorTheme, keybindings) => {
-      // Hand the TUI to thinking.ts so landed summaries can repaint at once.
-      captureRenderTrigger(tui);
-      return editorFactory(tui, editorTheme, keybindings);
-    });
     installFooter(ctx, uiState);
   });
 
