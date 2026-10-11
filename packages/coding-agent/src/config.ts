@@ -123,26 +123,6 @@ export function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
-/**
- * Get path to built-in interactive assets directory.
- * - For Bun binary: assets/ next to executable
- * - For Node.js (dist/): dist/modes/interactive/assets/
- * - For source (src/): src/modes/interactive/assets/
- */
-export function getInteractiveAssetsDir(): string {
-	if (isBunBinary) {
-		return join(getPackageDir(), "assets");
-	}
-	const packageDir = getPackageDir();
-	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-	return join(packageDir, srcOrDist, "modes", "interactive", "assets");
-}
-
-/** Get path to a bundled interactive asset */
-export function getBundledInteractiveAssetPath(name: string): string {
-	return join(getInteractiveAssetsDir(), name);
-}
-
 export type InstallChange = { kind: "updated"; version: string } | { kind: "removed" };
 
 /**

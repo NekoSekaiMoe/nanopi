@@ -18,6 +18,7 @@
 - Fixed Mistral streams being aborted mid-generation (e.g. during long thinking) after the request timeout; the timeout now applies only to waiting for response headers ([#10609](https://github.com/earendil-works/pi/issues/10609))
 - Fixed a symlinked `AGENTS.md` in a git worktree nested inside its main repo causing no project context file to load ([#10681](https://github.com/earendil-works/pi/issues/10681))
 - Fixed runs started by `pi.sendMessage(..., { triggerTurn: true })` removing system prompt sections added in `before_agent_start` after their first tool call, which changed the prompt mid-run and broke the provider prompt cache twice per run ([#10267](https://github.com/earendil-works/pi/issues/10267))
+- Fixed the build failing after the clankolas.png and Radius removals: leftover `assets/*.png` copy steps in `copy-assets`/`copy-binary-assets` and a leftover Radius OAuth lazy bundle entry in the bundle script
 
 ### Removed
 
@@ -25,6 +26,7 @@
 - Removed the `nanopi update` command, self-update planning, the managed-install updater, install telemetry, the startup version check, and package update notifications; nanopi no longer connects to pi.dev.
 - Removed the Radius provider and the `"oauth": "radius"` custom-provider configuration; `/share` now publishes a private GitHub gist and `/bug` exports a zip archive instead of uploading to a Radius gateway.
 - Remote model catalog overlays and OpenRouter per-key personalization now run only when a catalog base URL is explicitly configured; bundled model data is used otherwise.
+- Removed the unused `getInteractiveAssetsDir()` and `getBundledInteractiveAssetPath()` helpers from `src/config.ts`, left over from the clankolas.png removal.
 
 ## [1.1.0] - 2026-10-07
 
