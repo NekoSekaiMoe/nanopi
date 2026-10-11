@@ -64,7 +64,7 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { builtInExtensions } from "./extensions/index.ts";
 import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./extensions/llama/managed.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
-import { InteractiveMode, runPrintMode, runRpcMode } from "./modes/index.ts";
+import { DEFAULT_WEBUI_PORT, InteractiveMode, runPrintMode, runRpcMode, runWebuiMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
 import { validateThemeJson } from "./modes/interactive/theme/theme-schema.ts";
 import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
@@ -609,6 +609,44 @@ export async function main(args: string[], options?: MainOptions) {
 		return;
 	}
 
+	// WebUI subcommand: `nanopi webui [-p <port>]` serves the browser UI.
+	let webuiRequested = false;
+	let webuiPort = DEFAULT_WEBUI_PORT;
+	if (args[0] === "webui") {
+		webuiRequested = true;
+		const rest: string[] = [];
+		for (let i = 1; i < args.length; i++) {
+			const arg = args[i];
+			if (arg === "--help" || arg === "-h") {
+				console.log(`Start the nanopi browser UI on a loopback port.`);
+				console.log(``);
+				console.log(`Usage: ${APP_NAME} webui [-p <port>]`);
+				console.log(``);
+				console.log(`  -p, --port <port>   Port to listen on (default ${DEFAULT_WEBUI_PORT})`);
+				process.exit(0);
+			}
+			let portValue: string | undefined;
+			if (arg === "-p" || arg === "--port") {
+				portValue = args[++i];
+			} else if (arg.startsWith("--port=")) {
+				portValue = arg.slice("--port=".length);
+			} else if (arg.startsWith("-p=")) {
+				portValue = arg.slice("-p=".length);
+			} else {
+				rest.push(arg);
+			}
+			if (portValue !== undefined) {
+				const port = Number.parseInt(portValue, 10);
+				if (!Number.isInteger(port) || port <= 0 || port > 65535) {
+					console.error(chalk.red(`Invalid webui port: ${portValue}`));
+					process.exit(1);
+				}
+				webuiPort = port;
+			}
+		}
+		args = rest;
+	}
+
 	const parsed = parseArgs(args);
 	if (parsed.diagnostics.length > 0) {
 		for (const d of parsed.diagnostics) {
@@ -641,6 +679,9 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	let appMode = resolveAppMode(parsed, process.stdin.isTTY, process.stdout.isTTY);
+	if (webuiRequested) {
+		appMode = "webui";
+	}
 	const shouldTakeOverStdout = appMode !== "interactive" && !isPlainRuntimeMetadataCommand(parsed);
 	if (shouldTakeOverStdout) {
 		takeOverStdout();
@@ -881,7 +922,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	// Read piped stdin content (if any) - skip for RPC mode which uses stdin for JSON-RPC
 	let stdinContent: string | undefined;
-	if (appMode !== "rpc") {
+	if (appMode !== "rpc" && appMode !== "webui") {
 		stdinContent = await readPipedStdin();
 		if (stdinContent !== undefined && appMode === "interactive") {
 			appMode = "print";
@@ -937,6 +978,9 @@ export async function main(args: string[], options?: MainOptions) {
 	if (appMode === "rpc") {
 		printTimings();
 		await runRpcMode(runtime);
+	} else if (appMode === "webui") {
+		printTimings();
+		await runWebuiMode(runtime, { port: webuiPort });
 	} else if (appMode === "interactive") {
 		const interactiveMode = new InteractiveMode(runtime, {
 			migratedProviders,

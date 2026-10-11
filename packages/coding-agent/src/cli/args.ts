@@ -290,6 +290,7 @@ ${chalk.bold("Commands:")}
   ${APP_NAME} list                      List installed extensions from settings
   ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
+  ${APP_NAME} webui [-p <port>]        Start the browser UI on a loopback port (default ${5335})
   ${APP_NAME} <command> --help          Show help for install/remove/uninstall/list/config/auth
 
 ${chalk.bold("Options:")}

@@ -1,0 +1,127 @@
+// Tool approval card rendered in the shared composer interaction dock.
+
+import { useState } from 'preact/hooks';
+import { respondPermission } from '../api';
+import { useT } from '../settings';
+import { InteractionDock } from './InteractionDock';
+
+interface PermissionRequest {
+  session_id: string;
+  tool_name: string;
+  reason: string;
+  call_id: string;
+  arguments: unknown;
+  /** True only for a non-sensitive bash call: the backend says the session-wide
+   *  "allow all Bash (incl. destructive)" button may be offered. A sensitive
+   *  target leaves it false, so the floor is drawn server-side, not here. */
+  allow_all_bash?: boolean;
+}
+
+interface PermissionCardProps {
+  req: PermissionRequest;
+  onDone: () => void;
+  /** Optional override for the decision action. When provided, replaces the
+   *  default respondPermission call. Used by live-session approval (POST /live/permission)
+   *  so the non-sync /chat path is unchanged. */
+  onDecide?: (decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash', toolName?: string) => Promise<void>;
+}
+
+function formatArgs(args: unknown): string {
+  if (typeof args === 'string') {
+    // Try to pretty-print if it looks like JSON
+    try {
+      const parsed = JSON.parse(args);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return args;
+    }
+  }
+  try {
+    return JSON.stringify(args, null, 2);
+  } catch {
+    return String(args);
+  }
+}
+
+export function PermissionCard({ req, onDone, onDecide }: PermissionCardProps) {
+  const t = useT();
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
+
+  async function decide(decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash') {
+    if (loading) return;
+    setLoading(true);
+    setFailed(null);
+    try {
+      if (onDecide) {
+        await onDecide(decision, req.tool_name);
+      } else {
+        await respondPermission(req.session_id, decision, req.tool_name);
+      }
+    } catch (error) {
+      // The answer never reached the daemon. Closing here used to read as
+      // "approved" while the turn kept waiting with nothing left on screen to
+      // answer it — so the card stays, says why, and can be answered again.
+      setLoading(false);
+      setFailed(String(error instanceof Error ? error.message : error));
+      return;
+    }
+    // Delivered, or the question was already gone (answered elsewhere, timed
+    // out): either way there is nothing left here to answer.
+    setLoading(false);
+    onDone();
+  }
+
+  const argsDisplay = formatArgs(req.arguments);
+
+  return (
+    <InteractionDock
+      title={t('perm.title')}
+      tag={req.tool_name}
+      icon={
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+          <rect
+            x="6.4"
+            y="6.4"
+            width="11.2"
+            height="11.2"
+            rx="2.6"
+            transform="rotate(45 12 12)"
+            stroke="currentColor"
+            stroke-width="1.8"
+          />
+        </svg>
+      }
+      footer={
+        <>
+          <button class="btn" disabled={loading} onClick={() => decide('deny')}>
+            {t('perm.deny')}
+          </button>
+          <button class="btn btn-primary" disabled={loading} onClick={() => decide('allow')}>
+            {t('perm.approve')}
+          </button>
+          <button class="btn" disabled={loading} onClick={() => decide('always_allow')}>
+            {t('perm.alwaysAllow')}
+          </button>
+          {req.allow_all_bash && (
+            <button class="btn btn-danger" disabled={loading} onClick={() => decide('allow_all_bash')}>
+              {t('perm.allowAllBash')}
+            </button>
+          )}
+          {req.tool_name.startsWith('mcp__') && (
+            <button class="btn" disabled={loading} onClick={() => decide('allow_persist')}>
+              {t('perm.allowPersist')}
+            </button>
+          )}
+        </>
+      }
+    >
+      {req.reason && <p class="permission-lead">{req.reason}</p>}
+      {failed && <p class="permission-lead permission-failed">{t('perm.sendFailed', { error: failed })}</p>}
+      <div class="field-group">
+        <span class="modal-label">{t('perm.args')}</span>
+        <pre class="tool-body-row-content">{argsDisplay}</pre>
+      </div>
+    </InteractionDock>
+  );
+}

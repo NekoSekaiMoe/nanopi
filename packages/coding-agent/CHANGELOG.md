@@ -9,6 +9,10 @@
 - Changed `before_agent_start` to also fire for runs started by `pi.sendMessage(..., { triggerTurn: true })` while idle. `BeforeAgentStartEvent` is now a union on `messageType`: `"user"` events carry `prompt` and `images`, and `"custom"` events carry the starting `message` and no `prompt`. Messages returned by handlers are added to both kinds of run, and pending `deliverAs: "nextTurn"` messages are delivered with the custom-message run. Handlers that should act only on user prompts must check `event.messageType === "user"` ([#10267](https://github.com/earendil-works/pi/issues/10267), [#5581](https://github.com/earendil-works/pi/issues/5581))
 - Changed the session to count as busy while a run starts, including during `before_agent_start` handlers: `ctx.isIdle()` is false, `pi.sendMessage()` queues into the starting run instead of starting a second run that failed with "Agent is already processing", `pi.sendUserMessage()` requires `deliverAs`, and an abort requested meanwhile aborts the run once it starts
 
+### Added
+
+- Added `nanopi webui [-p <port>]` (default port 5335): a loopback HTTP server that serves the new `@nanopi/webui` browser UI (ported from AtomCode, MIT) and bridges its `/chat` SSE transport, models, projects, sessions, skills, and filesystem browsing onto a headless `AgentSession`. nanopi runs tools without per-call approval, so the webui approval mode is always `bypass`.
+
 ### Changed
 
 - Changed the `showHardwareCursor` setting to use only the terminal cursor instead of also drawing Pi's reverse-video cursor

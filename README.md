@@ -45,6 +45,7 @@ This monorepo contains the nanopi CLI and its supporting libraries.
 | **[@nanopi/pi-agent-core](packages/agent)** | Agent runtime with tool calling and state management |
 | **[@nanopi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
 | **[@nanopi/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
+| **[@nanopi/webui](packages/webui)** | Browser UI served by `nanopi webui` (ported from AtomCode, MIT) |
 
 
 ## Permissions & Containerization

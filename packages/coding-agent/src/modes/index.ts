@@ -14,3 +14,8 @@ export type {
 	RpcResponse,
 	RpcSessionState,
 } from "./rpc/rpc-types.ts";
+export {
+	DEFAULT_WEBUI_PORT,
+	runWebuiMode,
+	type WebuiModeOptions,
+} from "./webui/webui-server.ts";
