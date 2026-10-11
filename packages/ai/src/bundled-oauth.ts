@@ -8,8 +8,8 @@ import { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
 import { openRouterOAuth } from "./auth/oauth/openrouter.ts";
 import { xaiOAuth } from "./auth/oauth/xai.ts";
 
-/** Register OAuth flows statically embedded in the standalone Bun binary. */
-export function registerBunOAuthFlows(): void {
+/** Register OAuth flows statically embedded in standalone single-file bundles. */
+export function registerBundledOAuthFlows(): void {
 	registerBundledOAuthFlowLoaders({
 		anthropic: () => anthropicOAuth,
 		openaiCodex: () => openaiCodexOAuth,

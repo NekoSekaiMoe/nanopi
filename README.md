@@ -113,18 +113,19 @@ writes transitive overrides to `package.json` for npm or `pnpm-workspace.yaml`
 for pnpm. Keep the artifact directory available while installing or updating
 the consumer. Re-run both commands after changing nanopi source.
 
-## Building standalone binaries from release source
+## Building the single-file CLI from release source
 
-GitHub releases include a versioned source archive covered by the release's `SHA256SUMS` file. Extract it and run the same build script used for the official standalone binaries:
+GitHub releases include a versioned source archive covered by the release's `SHA256SUMS` file. Extract it and run the same build script used for the official `nanopi.js` artifact:
 
 ```bash
 VERSION="<release-version>"
 tar -xzf "nanopi-${VERSION}-source.tar.gz"
 cd "nanopi-${VERSION}"
-./scripts/build-binaries.sh --offline-model-data --platform linux-x64 --out "$PWD/out"
+./scripts/build-single-file.sh --offline-model-data --out "$PWD/out"
+node "$PWD/out/nanopi.js" --version
 ```
 
-The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the executable with its runtime assets; pass `--skip-install` if dependencies are already provided.
+The archive includes release model data and native prebuilds. `--offline-model-data` uses that model data without refreshing provider catalogs. The script installs dependencies and builds the single-file distribution; pass `--skip-install` if dependencies are already provided. The resulting `nanopi.js` needs only Node >= 22.19 and downloads platform sidecars (image-resize wasm, TUI native prebuilds) into `.nanopi/bin` on first use.
 
 ## Supply-chain hardening
 

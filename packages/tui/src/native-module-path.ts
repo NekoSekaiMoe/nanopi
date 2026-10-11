@@ -15,6 +15,13 @@ export function getNativeModuleCandidates(nativePath: string, options: NativeMod
 	const moduleDir = dirname(fileURLToPath(options.moduleUrl ?? import.meta.url));
 	const candidates: string[] = [];
 
+	// Sidecar root for single-file distributions: the coding-agent entrypoint
+	// sets this to the agent bin directory where downloaded prebuilds live.
+	const sidecarRoot = process.env.NANOPI_TUI_NATIVE_ROOT;
+	if (sidecarRoot) {
+		candidates.push(join(sidecarRoot, nativePath));
+	}
+
 	try {
 		const packageEntry = (options.resolvePackage ?? moduleRequire.resolve)(TUI_PACKAGE_NAME);
 		candidates.push(join(dirname(packageEntry), "..", nativePath));

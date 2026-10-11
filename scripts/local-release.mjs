@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from "node:child_process";
 
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
@@ -22,34 +22,18 @@ Options:
   --skip-check         Do not run npm run check before building
   --skip-test          Do not run ./test.sh after building
   --skip-install       Only create the artifact set; do not create isolated installs
-  --skip-bun-install   Do not create the isolated Bun install
   --help               Show this help
 `);
 }
 
-function currentBinaryPlatform() {
-	if (process.platform === "win32") return process.arch === "arm64" ? "windows-arm64" : "windows-x64";
-	if (process.platform === "darwin") return process.arch === "arm64" ? "darwin-arm64" : "darwin-x64";
-	if (process.platform === "linux") return process.arch === "arm64" ? "linux-arm64" : "linux-x64";
-	throw new Error(`Unsupported binary platform: ${process.platform} ${process.arch}`);
-}
-
-function buildBunBinaryRelease(targetDirectory, archiveDirectory) {
-	const platform = currentBinaryPlatform();
-	const binaryBuildDirectory = join(archiveDirectory, "binary-build");
-	execFileSync("bash", ["./scripts/build-binaries.sh",
-		"--skip-install",
-		"--skip-build",
-		"--platform",
-		platform,
-		"--out",
-		binaryBuildDirectory,
-	], { stdio: "inherit" });
-	rmSync(targetDirectory, { force: true, recursive: true });
-	cpSync(join(binaryBuildDirectory, platform), targetDirectory, { recursive: true });
-	const archiveName = platform.startsWith("windows-") ? `nanopi-${platform}.zip` : `nanopi-${platform}.tar.gz`;
-	cpSync(join(binaryBuildDirectory, archiveName), join(archiveDirectory, archiveName));
-	return platform;
+function buildSingleFileRelease(targetDirectory) {
+	execFileSync("bash", ["./scripts/build-single-file.sh", "--skip-install", "--skip-build", "--out", targetDirectory], {
+		stdio: "inherit",
+	});
+	const cliPath = join(targetDirectory, "nanopi.js");
+	execFileSync(process.execPath, [cliPath, "--help"], { stdio: "inherit" });
+	execFileSync(process.execPath, [cliPath, "--version"], { stdio: "inherit" });
+	return cliPath;
 }
 
 function createNanoPiShim(installDirectory) {
@@ -72,7 +56,6 @@ const { values } = parseArgs({
 		force: { type: "boolean", default: false },
 		help: { type: "boolean", default: false },
 		out: { type: "string" },
-		"skip-bun-install": { type: "boolean", default: false },
 		"skip-check": { type: "boolean", default: false },
 		"skip-install": { type: "boolean", default: false },
 		"skip-test": { type: "boolean", default: false },
@@ -85,7 +68,6 @@ if (values.help) {
 const options = {
 	force: values.force,
 	outDir: values.out,
-	skipBunInstall: values["skip-bun-install"],
 	skipCheck: values["skip-check"],
 	skipInstall: values["skip-install"],
 	skipTest: values["skip-test"],
@@ -105,15 +87,14 @@ const artifactSet = produceArtifactSet({
 	repoRoot,
 });
 const outDir = artifactSet.artifactDirectory;
-const binaryDirectory = join(outDir, "bun");
+const singleFileDirectory = join(outDir, "single-file");
 const nodeInstallDirectory = join(outDir, "node");
-const bunInstallDirectory = join(outDir, "bun-install");
 
 if (!options.skipTest) execFileSync("bash", ["./test.sh"], { cwd: repoRoot, stdio: "inherit" });
 
-let binaryPlatform;
+let singleFileCliPath;
 if (!options.skipInstall) {
-	binaryPlatform = buildBunBinaryRelease(binaryDirectory, outDir);
+	singleFileCliPath = buildSingleFileRelease(singleFileDirectory);
 	const validationRoot = mkdtempSync(join(tmpdir(), "nanopi-local-release-consumers-"));
 	try {
 		for (const pkg of artifactSet.packages) {
@@ -125,12 +106,6 @@ if (!options.skipInstall) {
 			if (pkg.name === codingAgentName) smokeTestCodingAgent(directory);
 		}
 		createNanoPiShim(nodeInstallDirectory);
-
-		if (!options.skipBunInstall) {
-			installConsumer({ artifactSet, directory: bunInstallDirectory, packageManager: "bun", packageNames: [codingAgentName] });
-			smokeTestCodingAgent(bunInstallDirectory, "bun");
-			createNanoPiShim(bunInstallDirectory);
-		}
 	} finally {
 		rmSync(validationRoot, { force: true, recursive: true });
 	}
@@ -142,21 +117,13 @@ console.log("\nTarballs:");
 for (const pkg of artifactSet.packages) console.log(`  ${pkg.tarballPath}`);
 
 if (!options.skipInstall) {
-	console.log("\nLocal Bun binary release:");
-	console.log(`  ${binaryDirectory}`);
-	console.log(`  ${join(outDir, `nanopi-${binaryPlatform}.${String(binaryPlatform).startsWith("windows-") ? "zip" : "tar.gz"}`)}`);
-	console.log("\nRun the local Bun binary release from outside the repository:");
-	console.log(`  ${join(binaryDirectory, String(binaryPlatform).startsWith("windows-") ? "nanopi.exe" : "nanopi")} --help`);
+	console.log("\nLocal single-file release:");
+	console.log(`  ${singleFileCliPath}`);
+	console.log("Run it with Node from outside the repository:");
+	console.log(`  node ${singleFileCliPath} --help`);
 
 	console.log("\nIsolated npm install:");
 	console.log(`  ${nodeInstallDirectory}`);
 	console.log("\nRun the locally packed npm CLI from outside the repository:");
 	console.log(`  ${join(nodeInstallDirectory, process.platform === "win32" ? "nanopi.cmd" : "nanopi")} --help`);
-
-	if (!options.skipBunInstall) {
-		console.log("\nIsolated Bun package install:");
-		console.log(`  ${bunInstallDirectory}`);
-		console.log("\nRun the locally packed Bun package CLI from outside the repository:");
-		console.log(`  ${join(bunInstallDirectory, process.platform === "win32" ? "nanopi.cmd" : "nanopi")} --help`);
-	}
 }

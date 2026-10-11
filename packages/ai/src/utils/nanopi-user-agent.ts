@@ -5,7 +5,7 @@ type ProcessWithOsBuiltinModule = typeof process & {
 };
 
 function loadNodeOs(): typeof NodeOs | null {
-	if (typeof process === "undefined" || !(process.versions?.node || process.versions?.bun)) {
+	if (typeof process === "undefined" || !process.versions?.node) {
 		return null;
 	}
 	return (process as ProcessWithOsBuiltinModule).getBuiltinModule?.("node:os") ?? null;

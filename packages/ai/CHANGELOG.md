@@ -5,6 +5,7 @@
 ### Breaking Changes
 
 - Removed the `telemetryContext` option from `ProviderRequestOptions` and the `@nanopi/pi-telemetry` dependency; nothing in the repo consumed the context, so provider requests no longer accept or propagate it.
+- Renamed the `./bun-oauth` export to `./bundled-oauth` (`registerBunOAuthFlows` is now `registerBundledOAuthFlows`) and removed the Bun-specific code paths: the empty-`process.env` sandbox fallback in `getProviderEnvValue` and the Bun websocket proxy wrapper in the Codex responses API.
 
 ### Removed
 

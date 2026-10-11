@@ -15,8 +15,8 @@ let bedrockMantleAnthropicMessagesModuleOverride: ProviderStreams | undefined;
 
 /**
  * Overrides the dynamically imported Bedrock Mantle Anthropic Messages implementation.
- * Used by the Bun binary build, where the variable-specifier import cannot be bundled;
- * the build registers a statically imported module instead.
+ * Used by the single-file build, where the variable-specifier import cannot be
+ * bundled; the build registers a statically imported module instead.
  */
 export function setBedrockMantleAnthropicMessagesProviderModule(module: ProviderStreams): void {
 	bedrockMantleAnthropicMessagesModuleOverride = module;

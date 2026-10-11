@@ -48,7 +48,12 @@ function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatform
 			// Try the next possible packaging location.
 		}
 	}
-	helpers.set(nativePath, undefined);
+	// Single-file distributions may finish downloading the native sidecar
+	// after the first lookup; keep those paths retryable instead of caching
+	// the miss for the whole process.
+	if (!process.env.NANOPI_TUI_NATIVE_ROOT) {
+		helpers.set(nativePath, undefined);
+	}
 	return undefined;
 }
 

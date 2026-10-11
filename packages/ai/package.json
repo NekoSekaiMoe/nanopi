@@ -43,9 +43,9 @@
 			"types": "./dist/bedrock-provider.d.ts",
 			"import": "./dist/bedrock-provider.js"
 		},
-		"./bun-oauth": {
-			"types": "./dist/bun-oauth.d.ts",
-			"import": "./dist/bun-oauth.js"
+		"./bundled-oauth": {
+			"types": "./dist/bundled-oauth.d.ts",
+			"import": "./dist/bundled-oauth.js"
 		}
 	},
 	"bin": {

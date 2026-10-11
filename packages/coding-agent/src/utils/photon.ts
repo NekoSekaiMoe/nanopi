@@ -2,21 +2,23 @@
  * Photon image processing wrapper.
  *
  * This module provides a unified interface to @silvia-odwyer/photon-node that works in:
- * 1. Node.js (development, npm run build)
- * 2. Bun compiled binaries (standalone distribution)
+ * 1. Node.js installs (development and npm packages, wasm next to the package)
+ * 2. Single-file distributions (wasm downloaded as a sidecar into .nanopi/bin)
  *
- * The challenge: photon-node's CJS entry uses fs.readFileSync(__dirname + '/photon_rs_bg.wasm')
- * which bakes the build machine's absolute path into Bun compiled binaries.
+ * The challenge: photon-node's CJS entry reads the wasm via
+ * fs.readFileSync(__dirname + '/photon_rs_bg.wasm'), which only resolves inside
+ * node_modules. Single-file bundles inline the JS but have no wasm on disk.
  *
- * Solution:
- * 1. Patch fs.readFileSync to redirect missing photon_rs_bg.wasm reads
- * 2. Copy photon_rs_bg.wasm next to the executable in build:binary
+ * Solution: patch fs.readFileSync to redirect missing photon_rs_bg.wasm reads
+ * to sidecar locations under the agent bin directory.
  */
 
 import type { PathOrFileDescriptor } from "fs";
 import { createRequire } from "module";
 import * as path from "path";
 import { fileURLToPath } from "url";
+import { getBinDir } from "../config.ts";
+import { ensurePhotonWasmSidecar } from "./sidecars.ts";
 
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
@@ -45,6 +47,7 @@ function pathOrNull(file: PathOrFileDescriptor): string | null {
 function getFallbackWasmPaths(): string[] {
 	const execDir = path.dirname(process.execPath);
 	return [
+		path.join(getBinDir(), "photon", WASM_FILENAME),
 		path.join(execDir, WASM_FILENAME),
 		path.join(execDir, "photon", WASM_FILENAME),
 		path.join(process.cwd(), WASM_FILENAME),
@@ -123,6 +126,9 @@ export async function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon
 	}
 
 	loadPromise = (async () => {
+		// Single-file bundles ship the wasm as a downloadable sidecar; make sure
+		// it exists before the package's own readFileSync resolution runs.
+		await ensurePhotonWasmSidecar();
 		const restoreReadFileSync = patchPhotonWasmRead();
 		try {
 			photonModule = await import("@silvia-odwyer/photon-node");

@@ -24,7 +24,7 @@ type OAuthFlowLoaders = {
 
 let bundledLoaders: OAuthFlowLoaders | undefined;
 
-/** Registers statically bundled OAuth flows for standalone Bun binaries. */
+/** Registers statically bundled OAuth flows for standalone single-file bundles. */
 export function registerBundledOAuthFlowLoaders(loaders: OAuthFlowLoaders): void {
 	bundledLoaders = loaders;
 }

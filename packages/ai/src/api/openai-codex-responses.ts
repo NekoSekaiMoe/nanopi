@@ -30,7 +30,6 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { getNanoPiUserAgent } from "../utils/nanopi-user-agent.ts";
-import { resolveHttpProxyUrlForTarget } from "../utils/node-http-proxy.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
 	getDeclaredTools,
@@ -331,7 +330,7 @@ type ProcessWithBuiltinModule = typeof process & {
 };
 
 function loadNodeZlib(): typeof NodeZlib | null {
-	if (typeof process === "undefined" || !(process.versions?.node || process.versions?.bun)) {
+	if (typeof process === "undefined" || !process.versions?.node) {
 		return null;
 	}
 	return (process as ProcessWithBuiltinModule).getBuiltinModule?.("node:zlib") ?? null;
@@ -1199,34 +1198,9 @@ type WebSocketConstructor = new (
 	protocols?: string | string[] | { headers?: Record<string, string> },
 ) => WebSocketLike;
 
-let _cachedWebsocket: WebSocketConstructor | null = null;
+const _cachedWebsocket: WebSocketConstructor | null = null;
 async function getWebSocketConstructor(env?: ProviderEnv): Promise<WebSocketConstructor | null> {
 	if (!env && _cachedWebsocket) return _cachedWebsocket;
-
-	// bun doesn't respect http proxy envs, ref: https://github.com/oven-sh/bun/issues/15489
-	// TODO: remove this when bun supports proxy envs in websocket.
-	if (typeof process !== "undefined" && process.versions?.bun) {
-		const WebSocketWithProxy = class extends WebSocket {
-			constructor(url: string | URL, options?: string | string[] | Record<string, unknown>) {
-				let _opts: Record<string, unknown> = {};
-				if (Array.isArray(options) || typeof options === "string") {
-					_opts = { protocols: options };
-				} else {
-					_opts = { ...options };
-				}
-
-				const proxyUrl = resolveHttpProxyUrlForTarget(
-					url.toString().replace(/^wss:/, "https:").replace(/^ws:/, "http:"),
-					env,
-				);
-				super(url, { ..._opts, ...(proxyUrl ? { proxy: proxyUrl.toString() } : {}) } as any);
-			}
-		};
-		if (!env) {
-			_cachedWebsocket = WebSocketWithProxy;
-		}
-		return WebSocketWithProxy;
-	}
 
 	const ctor = (globalThis as { WebSocket?: unknown }).WebSocket;
 	if (typeof ctor !== "function") return null;

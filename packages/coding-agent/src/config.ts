@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
-import { basename, dirname, join, resolve } from "path";
+import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
 import { normalizePath } from "./utils/paths.ts";
 import { stripBom } from "./utils/text.ts";
@@ -12,16 +12,6 @@ import { stripBom } from "./utils/text.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/**
- * Detect if we're running as a Bun compiled binary.
- * Bun binaries have import.meta.url containing "$bunfs", "~BUN", or "%7EBUN" (Bun's virtual filesystem path)
- */
-export const isBunBinary =
-	import.meta.url.includes("$bunfs") || import.meta.url.includes("~BUN") || import.meta.url.includes("%7EBUN");
-
-/** Detect if Bun is the runtime (compiled binary or bun run) */
-export const isBunRuntime = !!process.versions.bun;
-
 /** Detect the esbuild-bundled Node.js distribution. */
 declare const NANOPI_BUNDLED_NODE: boolean;
 export const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOPI_BUNDLED_NODE;
@@ -31,21 +21,13 @@ export const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOP
 // =============================================================================
 
 /**
- * Get the base directory for resolving package assets (themes, package.json, README.md, CHANGELOG.md).
- * - For Bun binary: returns the directory containing the executable
- * - For Node.js: returns the package root containing package.json
- * - Ignores Bun binary metadata copied into dist/ when the package root is available
+ * Get the base directory for resolving package assets (themes, package.json, README.md, CHANGELOG.md):
+ * the package root containing package.json.
  */
 export function findNodePackageDir(startDir: string): string {
 	let dir = startDir;
 	while (dir !== dirname(dir)) {
 		if (existsSync(join(dir, "package.json"))) {
-			const parent = dirname(dir);
-			// build:binary places Bun's metadata inside dist/. Node still needs the
-			// package root so its dist-relative asset paths do not become dist/dist/.
-			if (basename(dir) === "dist" && existsSync(join(parent, "package.json"))) {
-				return parent;
-			}
 			return dir;
 		}
 		dir = dirname(dir);
@@ -60,23 +42,15 @@ export function getPackageDir(): string {
 		return normalizePath(envDir);
 	}
 
-	if (isBunBinary) {
-		// Bun binary: process.execPath points to the compiled executable
-		return dirname(process.execPath);
-	}
 	return findNodePackageDir(__dirname);
 }
 
 /**
  * Get path to built-in themes directory (shipped with package)
- * - For Bun binary: theme/ next to executable
  * - For Node.js (dist/): dist/modes/interactive/theme/
  * - For source (src/): src/modes/interactive/theme/
  */
 export function getThemesDir(): string {
-	if (isBunBinary) {
-		return join(getPackageDir(), "theme");
-	}
 	// Theme is in modes/interactive/theme/ relative to src/ or dist/
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
@@ -85,14 +59,10 @@ export function getThemesDir(): string {
 
 /**
  * Get path to HTML export template directory (shipped with package)
- * - For Bun binary: export-html/ next to executable
  * - For Node.js (dist/): dist/core/export-html/
  * - For source (src/): src/core/export-html/
  */
 export function getExportTemplateDir(): string {
-	if (isBunBinary) {
-		return join(getPackageDir(), "export-html");
-	}
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
 	return join(packageDir, srcOrDist, "core", "export-html");
@@ -133,8 +103,7 @@ export type InstallChange = { kind: "updated"; version: string } | { kind: "remo
  * and could find an unrelated package.json, such as one in the home directory.
  */
 export function detectInstallChange(packageJsonPath = startupPackageJsonPath): InstallChange | undefined {
-	// The Bun binary embeds its code, so replacing the executable does not affect this process.
-	if (isBunBinary || !packageJsonPath) return undefined;
+	if (!packageJsonPath) return undefined;
 	let installed: PackageJson;
 	try {
 		installed = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as PackageJson;

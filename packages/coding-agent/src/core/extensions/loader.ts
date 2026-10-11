@@ -11,7 +11,7 @@ import type { Provider } from "@nanopi/pi-ai";
 import type { KeyId } from "@nanopi/pi-tui";
 import type { createJiti } from "jiti";
 import { minimatch } from "minimatch";
-import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../config.ts";
+import { CONFIG_DIR_NAME, getAgentDir, isBundledNode } from "../../config.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -41,8 +41,8 @@ const require = createRequire(import.meta.url);
 const isNodeSeaBinary =
 	("sea" in process.features && process.features.sea === true) ||
 	process.getBuiltinModule("node:sea")?.isSea() === true;
-const isTypeScriptSourceRuntime = !isBunBinary && path.extname(fileURLToPath(import.meta.url)) === ".ts";
-const usesEmbeddedModules = isBunBinary || isNodeSeaBinary || isBundledNode;
+const isTypeScriptSourceRuntime = path.extname(fileURLToPath(import.meta.url)) === ".ts";
+const usesEmbeddedModules = isNodeSeaBinary || isBundledNode;
 
 let createJitiPromise: Promise<typeof createJiti> | undefined;
 

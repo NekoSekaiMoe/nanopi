@@ -2,7 +2,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { delimiter, join } from "path";
 import { afterEach, describe, expect, test } from "vitest";
-import { detectInstallChange, findNodePackageDir } from "../src/config.ts";
+import { detectInstallChange } from "../src/config.ts";
 
 const execPathDescriptor = Object.getOwnPropertyDescriptor(process, "execPath");
 const originalPath = process.env.PATH;
@@ -139,19 +139,6 @@ function createFakeBunScript(bunBin: string): string {
 	const escapedBunBin = bunBin.replaceAll("'", "'\\''");
 	return `#!/bin/sh\nif [ "$1" = "pm" ] && [ "$2" = "bin" ] && [ "$3" = "-g" ]; then\n\tprintf '%s\\n' '${escapedBunBin}'\n\texit 0\nfi\nexit 1\n`;
 }
-
-describe("findNodePackageDir", () => {
-	test("skips binary metadata copied into dist", () => {
-		tempDir = mkdtempSync(join(tmpdir(), "nanopi-package-dir-"));
-		const distDir = join(tempDir, "dist");
-		const bundleDir = join(distDir, "bundle");
-		mkdirSync(bundleDir, { recursive: true });
-		writeFileSync(join(tempDir, "package.json"), "{}");
-		writeFileSync(join(distDir, "package.json"), "{}");
-
-		expect(findNodePackageDir(bundleDir)).toBe(tempDir);
-	});
-});
 
 describe("detectInstallChange", () => {
 	// Regression test for #10439: a deleted pnpm install must not fall back to a package.json further up.

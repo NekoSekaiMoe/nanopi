@@ -9,6 +9,7 @@
 ### Added
 
 - Added `renderFakeCursor()`. Components wrap their drawn cursor with it, and the TUI renders it in reverse video, or omits it after `CURSOR_MARKER` when `showHardwareCursor` is enabled
+- Added the `NANOPI_TUI_NATIVE_ROOT` environment variable as a native-module lookup root for single-file distributions; while it is set, failed native lookups stay retryable so a sidecar download landing mid-session is picked up
 
 ### Changed
 

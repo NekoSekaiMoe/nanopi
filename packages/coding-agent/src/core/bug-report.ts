@@ -68,7 +68,7 @@ function collectEnvironment() {
 	return {
 		version: VERSION,
 		userAgent: getNanoPiUserAgent(VERSION),
-		runtime: process.versions.bun ? `bun/${process.versions.bun}` : `node/${process.version}`,
+		runtime: `node/${process.version}`,
 		platform: process.platform,
 		arch: process.arch,
 		osRelease: os.release(),

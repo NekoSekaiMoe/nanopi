@@ -8,14 +8,19 @@
 - Removed codemode scripting (the `@earendil-works/pi-codemode` package, the QuickJS runtime, `createCodemodeExtension`, `createToolSearchExtension`, and the `codemode` settings section) and the `"codemode"` and `"deferred"` tool exposures; `ToolExposure` is now `"direct" | "model-only" | "hidden"`.
 - Changed `before_agent_start` to also fire for runs started by `pi.sendMessage(..., { triggerTurn: true })` while idle. `BeforeAgentStartEvent` is now a union on `messageType`: `"user"` events carry `prompt` and `images`, and `"custom"` events carry the starting `message` and no `prompt`. Messages returned by handlers are added to both kinds of run, and pending `deliverAs: "nextTurn"` messages are delivered with the custom-message run. Handlers that should act only on user prompts must check `event.messageType === "user"` ([#10267](https://github.com/earendil-works/pi/issues/10267), [#5581](https://github.com/earendil-works/pi/issues/5581))
 - Changed the session to count as busy while a run starts, including during `before_agent_start` handlers: `ctx.isIdle()` is false, `pi.sendMessage()` queues into the starting run instead of starting a second run that failed with "Agent is already processing", `pi.sendUserMessage()` requires `deliverAs`, and an abort requested meanwhile aborts the run once it starts
+- Removed the Bun runtime and compiled-binary distribution: the `src/bun/` entrypoints, `isBunBinary`/`isBunRuntime`, the Bun sandbox-env restore, the Bun websocket proxy wrapper, `build:binary`/`copy-binary-assets`, `scripts/build-binaries.sh`, the six per-platform release archives, and the Bun install consumer in `scripts/local-release.mjs`. Node >= 22.19 is the only supported runtime.
 
 ### Added
 
 - Added `nanopi webui [-p <port>]` (default port 5335): a loopback HTTP server that serves the new `@nanopi/webui` browser UI (ported from AtomCode, MIT) and bridges its `/chat` SSE transport, models, projects, sessions, skills, and filesystem browsing onto a headless `AgentSession`. nanopi runs tools without per-call approval, so the webui approval mode is always `bypass`.
+- Added the single-file distribution: `pnpm run build:single-file` produces a zero-dependency `nanopi.js` (all JS bundled by esbuild, package assets gzip-embedded and extracted to the user cache directory, lazy OAuth/Bedrock modules statically registered by `src/standalone/`). GitHub releases ship `nanopi.js` plus a `nanopi-sidecars-<version>.tgz` asset.
+- Added sidecar downloads into the agent bin directory (`.nanopi/agent/bin`): the photon wasm is fetched from the npm registry and the TUI native prebuilds from the release sidecar tarball, each sha256-verified against hashes embedded at build time; failures degrade to raw images and no native clipboard instead of crashing.
 
 ### Changed
 
 - Changed the `showHardwareCursor` setting to use only the terminal cursor instead of also drawing Pi's reverse-video cursor
+- Changed `photon.ts` wasm resolution to prefer the agent bin sidecar path over the executable directory, and made image resizing wait for the photon sidecar download on first use in single-file distributions
+- Changed the release workflow to build and smoke-test `nanopi.js` on Linux/macOS/Windows runners instead of extracting and running per-platform binaries
 
 ### Fixed
 

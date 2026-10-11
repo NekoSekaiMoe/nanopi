@@ -3,17 +3,22 @@ import {
 	bedrockMantleOpenAIResponsesProviderModule,
 	bedrockProviderModule,
 } from "@nanopi/pi-ai/bedrock-provider";
-import { registerBunOAuthFlows } from "@nanopi/pi-ai/bun-oauth";
+import { registerBundledOAuthFlows } from "@nanopi/pi-ai/bundled-oauth";
 import {
 	setBedrockMantleAnthropicMessagesProviderModule,
 	setBedrockMantleOpenAIResponsesProviderModule,
 	setBedrockProviderModule,
 } from "@nanopi/pi-ai/compat";
-import { APP_NAME } from "../config.ts";
 
-process.title = APP_NAME;
-process.emitWarning = (() => {}) as typeof process.emitWarning;
-registerBunOAuthFlows();
+/**
+ * Registers variable-specifier lazy modules (OAuth flows, Bedrock APIs)
+ * statically. Single-file bundles cannot follow variable imports to on-disk
+ * module files, so the bundle registers the implementations directly.
+ *
+ * Imported for its side effects before the CLI entrypoint so every lazy
+ * loader sees the overrides before the first session starts.
+ */
+registerBundledOAuthFlows();
 setBedrockProviderModule(bedrockProviderModule);
 setBedrockMantleOpenAIResponsesProviderModule(bedrockMantleOpenAIResponsesProviderModule);
 setBedrockMantleAnthropicMessagesProviderModule(bedrockMantleAnthropicMessagesProviderModule);

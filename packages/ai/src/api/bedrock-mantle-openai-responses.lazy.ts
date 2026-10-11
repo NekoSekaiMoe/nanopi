@@ -14,9 +14,9 @@ const importNodeOnlyApi = (specifier: string): Promise<unknown> => {
 let bedrockMantleOpenAIResponsesModuleOverride: ProviderStreams | undefined;
 
 /**
- * Overrides the dynamically imported Bedrock Mantle implementation. Used by the Bun
- * binary build, where the variable-specifier import cannot be bundled; the build
- * registers a statically imported module instead.
+ * Overrides the dynamically imported Bedrock Mantle implementation. Used by the
+ * single-file build, where the variable-specifier import cannot be bundled; the
+ * build registers a statically imported module instead.
  */
 export function setBedrockMantleOpenAIResponsesProviderModule(module: ProviderStreams): void {
 	bedrockMantleOpenAIResponsesModuleOverride = module;

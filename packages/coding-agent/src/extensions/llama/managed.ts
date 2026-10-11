@@ -7,7 +7,7 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { setTimeout as sleep } from "node:timers/promises";
-import { expandTildePath, getAgentDir, isBunBinary } from "../../config.ts";
+import { expandTildePath, getAgentDir } from "../../config.ts";
 import { SettingsManager } from "../../core/settings-manager.ts";
 import { findHuggingFaceToken } from "./huggingface.ts";
 
@@ -413,16 +413,11 @@ export async function runLlamaSupervisorProcess(): Promise<void> {
 
 /** Start `nanopi --internal-llama-supervisor` detached, so it outlives the nanopi process that started it. */
 function launchSupervisorProcess(): void {
-	let args: string[];
-	if (isBunBinary) {
-		args = [LLAMA_SUPERVISOR_FLAG];
-	} else {
-		const entrypoint = process.argv[1];
-		if (!entrypoint) throw new Error("Cannot locate the nanopi entrypoint to start the llama.cpp supervisor");
-		// Keep loader flags (e.g. TypeScript support in source checkouts) but not debugger ports.
-		const execArgv = process.execArgv.filter((arg) => !arg.startsWith("--inspect"));
-		args = [...execArgv, entrypoint, LLAMA_SUPERVISOR_FLAG];
-	}
+	const entrypoint = process.argv[1];
+	if (!entrypoint) throw new Error("Cannot locate the nanopi entrypoint to start the llama.cpp supervisor");
+	// Keep loader flags (e.g. TypeScript support in source checkouts) but not debugger ports.
+	const execArgv = process.execArgv.filter((arg) => !arg.startsWith("--inspect"));
+	const args = [...execArgv, entrypoint, LLAMA_SUPERVISOR_FLAG];
 	const child = spawn(process.execPath, args, { detached: true, stdio: "ignore", windowsHide: true });
 	// Launch failures surface as a connection timeout.
 	child.on("error", () => {});

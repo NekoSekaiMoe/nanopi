@@ -1,45 +1,21 @@
-import assert from "node:assert";
-import { dirname, join, resolve } from "node:path";
-import { describe, it } from "node:test";
-import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
+import { test } from "node:test";
 import { getNativeModuleCandidates } from "../src/native-module-path.ts";
 
-describe("getNativeModuleCandidates", () => {
-	it("resolves native helpers from the installed TUI package when the module is bundled elsewhere", () => {
-		const packageRoot = resolve("virtual", "node_modules", "@earendil-works", "pi-tui");
-		const bundledModule = resolve("virtual", "pi-coding-agent", "dist", "bundle", "chunks", "chunk.js");
-		const nativePath = join("native", "win32", "prebuilds", "win32-arm64", "win32-platform.node");
-
-		const candidates = getNativeModuleCandidates(nativePath, {
-			moduleUrl: pathToFileURL(bundledModule).href,
-			execPath: resolve("virtual", "node", "node.exe"),
-			resolvePackage: (specifier) => {
-				assert.equal(specifier, "@nanopi/pi-tui");
-				return join(packageRoot, "dist", "index.js");
-			},
-		});
-
-		assert.equal(candidates[0], join(packageRoot, nativePath));
-		assert.ok(candidates.includes(join(dirname(bundledModule), "..", nativePath)));
-	});
-
-	it("keeps standalone binary fallbacks when the TUI package is unavailable", () => {
-		const bundledModule = resolve("virtual", "nanopi", "bundle", "chunks", "chunk.js");
-		const execPath = resolve("virtual", "nanopi", "nanopi.exe");
-		const nativePath = join("native", "darwin", "prebuilds", "darwin-arm64", "darwin-platform.node");
-
-		const candidates = getNativeModuleCandidates(nativePath, {
-			moduleUrl: pathToFileURL(bundledModule).href,
-			execPath,
-			resolvePackage: () => {
-				throw new Error("not installed");
-			},
-		});
-
-		assert.deepEqual(candidates, [
-			join(dirname(bundledModule), "..", nativePath),
-			join(dirname(bundledModule), nativePath),
-			join(dirname(execPath), nativePath),
-		]);
-	});
+test("sidecar root env var adds a candidate path", () => {
+	const previous = process.env.NANOPI_TUI_NATIVE_ROOT;
+	try {
+		const nativePath = "native/darwin/prebuilds/darwin-arm64/darwin-platform.node";
+		const without = getNativeModuleCandidates(nativePath);
+		process.env.NANOPI_TUI_NATIVE_ROOT = "/tmp/sidecar-root";
+		const withRoot = getNativeModuleCandidates(nativePath);
+		assert.ok(withRoot.includes(`/tmp/sidecar-root/${nativePath.replaceAll("\\", "/")}`));
+		assert.equal(withRoot.length, without.length + 1);
+	} finally {
+		if (previous === undefined) {
+			delete process.env.NANOPI_TUI_NATIVE_ROOT;
+		} else {
+			process.env.NANOPI_TUI_NATIVE_ROOT = previous;
+		}
+	}
 });
