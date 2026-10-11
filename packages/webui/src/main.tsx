@@ -14,26 +14,17 @@ import { signedIn } from './lib/compat';
 import { getToken } from './api';
 
 import { useEffect, useState } from 'preact/hooks';
-import { UNAUTHORIZED_EVENT } from './components/LoginButton';
 
 /**
  * The app, or — when the daemon does not know this page — where to get the
  * link that it does know.
  *
  * Asked once before the app mounts (opened without the link the terminal
- * printed) and again whenever the app hears a 401 (the webui restarted under
- * an open page, with a new token): from then on every request would be
- * refused, signing in included, and what the app would show is a button that
- * does nothing.
+ * printed). The account login that also listened for mid-session 401s is
+ * gone; a restarted webui is caught on the next full page load.
  */
 function Root({ signedIn: initially }: { signedIn: boolean }) {
-  const [ok, setOk] = useState(initially);
-  useEffect(() => {
-    const lost = () => setOk(false);
-    window.addEventListener(UNAUTHORIZED_EVENT, lost);
-    return () => window.removeEventListener(UNAUTHORIZED_EVENT, lost);
-  }, []);
-  return ok ? <App /> : <AuthRequired />;
+  return initially ? <App /> : <AuthRequired />;
 }
 
 // The installed app's answer for when the webui is not running (`public/sw.js`):

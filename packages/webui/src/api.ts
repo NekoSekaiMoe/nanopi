@@ -649,31 +649,6 @@ export async function getSkills(): Promise<SkillInfo[]> {
   return readJson(resp);
 }
 
-// --- Remote access (蒲公英 / Oray PGY) status ---
-
-export interface PgyInfo {
-  installed: boolean;
-  ipv4: string | null;
-}
-
-export interface TunnelStatus {
-  bind_host: string;
-  port: number;
-  /** server bound to a non-loopback address (reachable by other devices) */
-  reachable: boolean;
-  pgy: PgyInfo;
-  /** ready-to-use remote URL (蒲公英 ip + token); null when not usable */
-  remote_url: string | null;
-  /** SVG string of the QR code for remote_url; null when not usable */
-  qr_svg: string | null;
-}
-
-export async function getTunnelStatus(): Promise<TunnelStatus> {
-  const resp = await fetch('/tunnel/status', { headers: authHeaders() });
-  if (!resp.ok) throw new Error(`tunnel status failed: ${resp.status}`);
-  return resp.json();
-}
-
 // --- Provider CRUD ---
 
 export async function discoverProviderModels(body: {

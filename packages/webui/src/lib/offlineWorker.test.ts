@@ -33,11 +33,11 @@ test('a page load that cannot reach the webui gets a page saying how to start it
   const zh = await load('navigate')!;
   assert.equal(zh.status, 503);
   const zhPage = await zh.text();
-  assert.match(zhPage, /nanopi webui 没在运行/);
+  assert.match(zhPage, /NanoPi webui 没在运行/);
   assert.match(zhPage, /nanopi webui/);
   assert.match(zhPage, /\/webui/);
   const en = await load('navigate', 'en-US,en;q=0.9')!;
-  assert.match(await en.text(), /nanopi webui is not running/);
+  assert.match(await en.text(), /NanoPi webui is not running/);
 });
 
 test('when the webui is running the page comes from it, untouched', async () => {

@@ -47,7 +47,7 @@ import { FilePicker } from './FilePicker';
 import { PermissionCard } from './PermissionCard';
 import { UserInputCard } from './UserInputCard';
 import { PolicyInterventionCard } from './PolicyInterventionCard';
-import { useT } from '../settings';
+import { useT, useSettings } from '../settings';
 import type { MsgKey } from '../i18n';
 import {
   applyAtMentionSelection,
@@ -56,6 +56,7 @@ import {
   splitAtToken,
 } from '../lib/atMention';
 import { toolResultStatus, updateToolProgress, upsertToolPart, type ToolRow, type MsgPart } from '../lib/toolRows';
+import { randomGreeting } from '../lib/greeting';
 import { commitTodoCall, todoToolDetail, type TodoTitles } from '../lib/todoToolDetail';
 import {
   applyTodoCall,
@@ -440,6 +441,10 @@ function detectSkillContent(text: string): string | null {
 
 export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermission, onPermissionResolved, activeSession, restoring, onLiveTurnDone, onOptimisticSession, onOpenCwd, onCwdChanged, onLanding, skillInsert, onSessionRenamed }: ChatProps) {
   const t = useT();
+  // Landing tagline: a random classical poem line in zh, the i18n greeting
+  // otherwise. Picked once per mount so re-renders do not reshuffle it.
+  const lang = useSettings().lang;
+  const [landingGreeting] = useState(() => (lang === 'zh' ? randomGreeting() : t('chat.greeting')));
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   // 组合期标记：仅用于 handleKeyDown 的守卫（菜单导航 / Enter 发送不得窃取
@@ -1751,60 +1756,6 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
         break;
       }
     }
-  }
-
-  // ── Sync toggle: start / stop the live stream ──
-  function toggleSync() {
-    setSync((prev) => {
-      const next = !prev;
-      if (next) {
-        const attach = syncAttachDisposition(
-          busyRef.current,
-          chatRecoveryRef.current,
-        );
-        if (!attach.allowed) {
-          pushCommandNotice(t('sync.stopBeforeAttach'));
-          return prev;
-        }
-      }
-      if (!next) {
-        const detach = liveDetachDisposition(
-          liveLifecycleRef.current.running || busyRef.current,
-        );
-        if (!detach.allowed) {
-          pushNoticeToLastAssistant(t('sync.stopBeforeDetach'));
-          return prev;
-        }
-      }
-      if (next) {
-        // 重新开启同步：先让已绑定的 Coding Runtime 恢复当前会话，再读取 live hub 快照。
-        const sid = activeIdRef.current;
-        if (sid) {
-          postLiveSwitchSession(sid)
-            .then((result) => {
-              if (!result.ok) {
-                throw new Error(result.error ?? 'live runtime rejected the session switch');
-              }
-              // The runtime is on a copy now: follow it, or this page would
-              // keep naming the original while every message lands in the copy.
-              if (result.forkedFrom && result.sessionId) {
-                noticeAfterSwitchRef.current = t('sync.sessionForked');
-                onSessionId(result.sessionId);
-              }
-              startLiveStream();
-            })
-            .catch((error) => {
-              setSync(false);
-              reportFailure(t('sync.switchFailed', { error: String(error) }));
-            });
-        } else {
-          startLiveStream();
-        }
-      } else {
-        stopLiveStream();
-      }
-      return next;
-    });
   }
 
   function appendToLastAssistant(content: string) {
@@ -3268,31 +3219,6 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
             onPickFile={() => setShowFilePicker(true)}
             onAddImages={addImageFiles}
           />
-          <button
-            class={'btn-sync' + (sync ? ' active' : '')}
-            onClick={toggleSync}
-            title={sync ? t('sync.on') : t('sync.off')}
-            aria-label={t('sync.toggle')}
-            aria-pressed={sync}
-          >
-            {/* lucide `arrow-left-right` — matches the pencil design's sync icon. */}
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true"
-            >
-              <path d="M8 3 4 7l4 4" />
-              <path d="M4 7h16" />
-              <path d="m16 21 4-4-4-4" />
-              <path d="M20 17H4" />
-            </svg>
-          </button>
           <span class="footer-spacer" />
           {tokens && (
             <span class="footer-tokens">
@@ -3501,9 +3427,9 @@ export function Chat({ sessionId, onSessionId, cwd, onPermission, pendingPermiss
                   <rect x="6.4" y="6.4" width="11.2" height="11.2" rx="2.6" transform="rotate(45 12 12)" stroke="currentColor" stroke-width="1.8" />
                 </svg>
               </span> */}
-              <span class="landing-brand-name">nanopi</span>
+              <span class="landing-brand-name">NanoPi</span>
             </div>
-            <div class="landing-tagline">{t('chat.greeting')}</div>
+            <div class="landing-tagline">{landingGreeting}</div>
             <div class="landing-input">
               {blockingInteraction ? (
                 <div class="interaction-dock-seat">{blockingInteraction}</div>

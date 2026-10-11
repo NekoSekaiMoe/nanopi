@@ -256,7 +256,6 @@ const zh = {
   'settings.menuTheme': '主题设置',
   'settings.menuLang': '语言设置',
   'settings.menuModel': '模型配置',
-  'settings.menuRemote': '远程访问',
   'settings.menuNotifications': '完成时通知',
   'settings.notifications.title': '浏览器完成通知',
   'settings.notifications.enabled': '任务完成后弹出浏览器通知',
@@ -269,19 +268,6 @@ const zh = {
   'settings.notifications.unsupported': '当前地址不支持浏览器通知（需通过 127.0.0.1/localhost 访问）',
 
   // Remote access (蒲公英 / Oray PGY) dialog
-  'remote.title': '远程访问',
-  'remote.intro': '通过蒲公英私有网络，从手机等设备安全访问本机 webui（虚拟局域网、不暴露公网）。',
-  'remote.loading': '检测中…',
-  'remote.ready': '已就绪，用手机扫码或打开下面的地址（手机需登录同一蒲公英账号、加入同一网络）：',
-  'remote.notReachable': '已检测到蒲公英，但 webui 仅绑定了本机。请在 TUI 运行 /webui --host {ip} 后刷新本页。',
-  'remote.notConnected': '已安装蒲公英，但本机还没分配虚拟 IP。请在蒲公英客户端连接组网后，回到这里重新检测。',
-  'remote.notInstalled': '未检测到蒲公英。请在本机与手机都安装蒲公英并登录同一账号、加入同一网络，然后回到这里。',
-  'remote.installLink': '下载蒲公英',
-  'remote.guide': '使用引导',
-  'remote.copy': '复制链接',
-  'remote.copied': '已复制',
-  'remote.refresh': '重新检测',
-  'remote.warnToken': '该链接包含访问令牌，等同于密码，请勿外传。',
 
   // Provider add/delete
   'settings.addModel': '添加模型',
@@ -375,16 +361,11 @@ const zh = {
   'policyRecovery.endedLocally': '已结束本次安全恢复，未调用模型。',
 
   // Sync toggle
-  'sync.toggle': '同步当前会话',
-  'sync.on': '已同步（多端实时）',
-  'sync.off': '独立会话',
   'sync.switchFailed': '实时同步切换失败：{error}',
   'sync.sessionInUse': '这个会话正被另一个 nanopi 进程打开（例如另一个终端窗口或 VS Code），先关掉那边再切换。',
   'sync.sessionForked': '这个会话正被另一个 nanopi 进程打开（例如另一个终端窗口或 VS Code），已自动 Fork 一份继续，原会话不受影响。',
   'sync.reconnectFailed': '实时连接无法恢复。已停止自动发送并丢弃排队消息，请重新开启同步。',
   'sync.reconnectTerminalUnknown': '实时连接恢复时已无法取得上一回合终态；为避免误执行，已丢弃排队消息。',
-  'sync.stopBeforeDetach': '当前实时回合仍在执行，请先停止回合再关闭同步。',
-  'sync.stopBeforeAttach': '当前独立回合仍在执行或终态未确认，请先停止回合再开启同步。',
 
   // Copy button
   'copy.copy': '复制',
@@ -812,7 +793,6 @@ const en: Record<MsgKey, string> = {
   'settings.menuTheme': 'Theme settings',
   'settings.menuLang': 'Language settings',
   'settings.menuModel': 'Model configuration',
-  'settings.menuRemote': 'Remote access',
   'settings.menuNotifications': 'Notifications',
   'settings.notifications.title': 'Browser notifications',
   'settings.notifications.enabled': 'Show a browser notification when a task completes',
@@ -824,19 +804,6 @@ const en: Record<MsgKey, string> = {
   'settings.notifications.permissionDenied': 'Denied: allow notifications in your browser site settings and retry',
   'settings.notifications.unsupported': 'Browser notifications are unavailable on this address (use 127.0.0.1/localhost)',
 
-  'remote.title': 'Remote access',
-  'remote.intro': 'Reach this webui from your phone or other devices over the 蒲公英 (Oray PGY) private network — a virtual LAN, nothing exposed publicly.',
-  'remote.loading': 'Checking…',
-  'remote.ready': 'Ready — scan the QR or open the URL below on your phone (it must be signed into the same 蒲公英 account and joined to the same network):',
-  'remote.notReachable': '蒲公英 detected, but the webui is bound to localhost only. Run /webui --host {ip} in the TUI, then refresh this page.',
-  'remote.notConnected': '蒲公英 is installed but this machine has no virtual IP yet. Connect it in the 蒲公英 client, then re-check here.',
-  'remote.notInstalled': '蒲公英 not detected. Install 蒲公英 on both this machine and your phone, sign into the same account and join the same network, then come back.',
-  'remote.installLink': 'Download 蒲公英',
-  'remote.guide': 'Usage guide',
-  'remote.copy': 'Copy link',
-  'remote.copied': 'Copied',
-  'remote.refresh': 'Re-check',
-  'remote.warnToken': 'This link contains an access token — treat it like a password and do not share it.',
 
   // Provider add/delete
   'settings.addModel': 'Add model',
@@ -928,16 +895,11 @@ const en: Record<MsgKey, string> = {
   'policyRecovery.endedLocally': 'Security recovery ended without calling the model.',
 
   // Sync toggle
-  'sync.toggle': 'Sync current session',
-  'sync.on': 'Synced (live)',
-  'sync.off': 'Independent',
   'sync.switchFailed': 'Live sync switch failed: {error}',
   'sync.sessionInUse': 'This session is open in another nanopi process (another terminal window or VS Code, say). Close it there, then switch.',
   'sync.sessionForked': 'This session is open in another nanopi (another terminal window, VS Code, …), so it was forked to continue in; the original is untouched.',
   'sync.reconnectFailed': 'Live connection could not be restored. Automatic sending stopped and queued messages were discarded; enable sync again to retry.',
   'sync.reconnectTerminalUnknown': 'The previous turn terminal was unavailable after reconnect; queued messages were discarded to prevent unintended execution.',
-  'sync.stopBeforeDetach': 'The live turn is still running. Stop it before disabling sync.',
-  'sync.stopBeforeAttach': 'The independent turn is still running or unresolved. Stop it before enabling sync.',
 
   // Copy button
   'copy.copy': 'Copy',

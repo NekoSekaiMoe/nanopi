@@ -4,7 +4,7 @@
 import { useEffect, useRef, useState } from 'preact/hooks';
 import { Chat } from './components/Chat';
 import { Sidebar } from './components/Sidebar';
-import { ThemeDialog, LanguageDialog, RemoteAccessDialog, NotificationsDialog } from './components/SettingsDialogs';
+import { ThemeDialog, LanguageDialog, NotificationsDialog } from './components/SettingsDialogs';
 import { ModelConfigDialog } from './components/ModelProviders';
 import { RenameDialog, DeleteDialog } from './components/SessionDialogs';
 import { CwdPicker } from './components/CwdPicker';
@@ -389,7 +389,6 @@ export function App() {
         onSessionRenamed={handleSessionRenamed}
         onSessionDeleted={handleSessionDeleted}
         onPickSkill={(name) => setSkillInsert({ name, seq: Date.now() })}
-        onOpenRemote={() => setSettingsSection('remote')}
         onOpenCwd={() => setShowCwd(true)}
       />
       <div
@@ -518,9 +517,6 @@ export function App() {
       )}
       {settingsSection === 'model' && (
         <ModelConfigDialog onClose={() => setSettingsSection(null)} />
-      )}
-      {settingsSection === 'remote' && (
-        <RemoteAccessDialog onClose={() => setSettingsSection(null)} />
       )}
       {settingsSection === 'notifications' && (
         <NotificationsDialog onClose={() => setSettingsSection(null)} />

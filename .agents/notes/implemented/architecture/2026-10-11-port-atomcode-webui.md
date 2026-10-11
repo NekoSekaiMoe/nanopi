@@ -16,7 +16,8 @@ Two-part split along ownership boundaries:
   - `/models` exposes `getAvailableSnapshot() ∪ getAllAvailable() ∪ session.model` because `getAllAvailable()` alone returned empty without a warm availability pass. Models are identified by the composite key `provider/modelId` — ids may contain slashes, so the `/chat` model switch matches the whole catalog by key instead of splitting the string.
   - Sessions/projects/skills/fs endpoints map onto `SessionManager.list/listAll/parseSessionEntries`, `resourceLoader.getSkills()`, and `fs`. Session switch during `/chat` goes through `runtime.switchSession()`.
   - CLI: `nanopi webui [-p <port>]` subcommand (own arg parsing like `auth`), `AppMode` gains `"webui"`, extensions see mode `"print"` and prompt source `"webui"` (new `InputSource`).
-- Deliberately stubbed (documented in code and webui README): `/live` sync transport (501 — the frontend only uses it with `?sync=1`), per-call permission gating (nanopi has no gate; `/approval_mode` always `bypass`, `permission_request` never fires), `/cd` (cwd-bound services cannot move yet), `/command`, MCP/tunnel/provider-account/model-profile management (empty or 400 responses the frontend tolerates).
+- Deliberately stubbed (documented in code and webui README): `/live` sync transport (501 — the frontend only uses it with `?sync=1`), per-call permission gating (nanopi has no gate; `/approval_mode` always `bypass`, `permission_request` never fires), `/cd` (cwd-bound services cannot move yet), `/command`, MCP/tunnel/model-profile management (empty or 400 responses the frontend tolerates). Provider accounts are implemented against `models.json` and the sync/login/remote controls are removed from the UI — see
+  [webui-provider-accounts](../feature/2026-10-11-webui-provider-accounts-models-json.md).
 
 ## Alternatives considered
 

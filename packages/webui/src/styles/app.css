@@ -1224,28 +1224,6 @@ body {
 .btn-stop:hover { filter: brightness(1.1); }
 .btn-stop .stop-square { width: 11px; height: 11px; border-radius: 2px; background: currentColor; }
 
-.btn-sync {
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border-radius: 8px;
-  border: none;
-  background: transparent;
-  color: var(--app-secondary-foreground);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  font-size: 1.125rem;
-  line-height: 1;
-  white-space: nowrap;
-}
-.btn-sync:hover { background: var(--app-ghost-button-hover-background); color: var(--app-primary-foreground); }
-/* Active = brand-tinted square (matches the design's #d977572e fill + brand icon). */
-.btn-sync.active { background: rgba(128, 128, 128, 0.11); background: color-mix(in srgb, var(--app-brand) 18%, transparent); color: var(--app-brand); }
-.btn-sync.active:hover { background: rgba(128, 128, 128, 0.14); background: color-mix(in srgb, var(--app-brand) 24%, transparent); color: var(--app-brand); }
-
 /* === Sidebar / session list === */
 .session-list {
   /* Desktop ratio follows DeepSeek Harness: roughly 18% of the viewport,
@@ -1901,55 +1879,6 @@ body {
   padding-bottom: 8px;
 }
 
-/* Account entry in the sidebar bottom bar (left of remote/settings): a static
-   avatar+name chip when logged in, or a "sign in" button when not. Logout
-   itself lives in the settings menu. */
-.sidebar-account,
-.sidebar-account-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-  max-width: 150px;
-  height: 32px;
-  padding: 0 8px;
-  border-radius: var(--corner-radius-small);
-  color: var(--app-secondary-foreground);
-  font-size: 0.875rem;
-}
-.sidebar-account-btn {
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-.sidebar-account-btn:hover {
-  background: var(--app-ghost-button-hover-background);
-  color: var(--app-primary-foreground);
-}
-.sidebar-account-btn:disabled { opacity: 0.6; cursor: default; }
-/* Credentials exist but the token is dead — flag it so the user knows the
-   session needs a re-login rather than silently reading as "logged in". */
-.sidebar-account-btn--expired { color: var(--app-warning-accent); }
-.sidebar-account-btn--expired:hover { color: var(--app-warning-accent); }
-.login-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-/* Account avatar — used by the bottom-bar chip (initial letter or avatar img). */
-.login-avatar {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--app-brand-button);
-  color: var(--app-brand-ivory);
-  font-size: 0.75rem;
-  font-weight: 600;
-  flex-shrink: 0;
-  overflow: hidden;
-}
-.login-avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; }
-
 /* Settings popup (3 entries), opens upward from the settings button. */
 .settings-menu { min-width: 180px; }
 
@@ -2499,34 +2428,6 @@ body {
 /* Provider list inside the settings model section. */
 .provider-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 
-/* --- Remote access (Tailscale) dialog --- */
-.remote-access { gap: 12px; }
-.remote-state { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.remote-ready { align-items: center; text-align: center; }
-.remote-qr {
-  background: #ffffff;
-  padding: 8px;
-  border-radius: 8px;
-  width: 200px;
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.remote-qr svg { width: 100%; height: 100%; display: block; }
-.remote-url {
-  font-family: var(--app-monospace-font-family);
-  font-size: 0.8125rem;
-  word-break: break-all;
-  background: var(--app-input-secondary-background);
-  border: 1px solid var(--app-input-border);
-  border-radius: var(--corner-radius-small);
-  padding: 6px 8px;
-  width: 100%;
-  box-sizing: border-box;
-}
-.remote-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.remote-warn { color: var(--app-warning-accent); }
 
 /* Directory browser */
 .dir-browser {
@@ -3966,25 +3867,3 @@ body {
 .auth-required-card p { margin: 0 0 10px; line-height: 1.6; }
 .auth-required-hint { color: var(--app-secondary-foreground); font-size: 0.875rem; }
 
-/* === Sign-in in progress / why it stopped === */
-.login-status {
-  margin: 0 8px 6px;
-  padding: 8px 10px;
-  border: 1px solid var(--app-primary-border-color);
-  border-radius: var(--corner-radius-small);
-  background: var(--app-tool-background);
-  font-size: 0.8125rem;
-  line-height: 1.5;
-}
-.login-status p { margin: 0 0 6px; }
-.login-status--problem { border-color: var(--app-error-foreground); }
-.login-status--problem p { margin: 0; color: var(--app-error-foreground); }
-.login-status-actions { display: flex; align-items: center; gap: 10px; }
-.login-status-actions a { color: var(--app-brand); }
-.login-status-cancel {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--app-secondary-foreground);
-  cursor: pointer;
-}

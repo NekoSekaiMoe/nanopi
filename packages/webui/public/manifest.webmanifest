@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "nanopi",
-  "short_name": "nanopi",
-  "description": "AI coding agent running from your local nanopi workspace.",
+  "name": "NanoPi",
+  "short_name": "NanoPi",
+  "description": "AI coding agent running from your local NanoPi workspace.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

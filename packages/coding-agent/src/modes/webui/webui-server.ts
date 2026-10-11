@@ -18,6 +18,20 @@ import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { parseSessionEntries, type SessionInfo, SessionManager } from "../../core/session-manager.ts";
+import {
+	addAccountModels,
+	createAccount,
+	deleteAccount,
+	deleteAccountModel,
+	discoverModels,
+	editAccount,
+	editAccountModel,
+	listAccounts,
+	PROVIDER_PRESETS,
+	PROVIDER_PROTOCOLS,
+	ProviderAccountError,
+	providerAccountsPath,
+} from "./provider-accounts.ts";
 
 /** Default port for `nanopi webui`. */
 export const DEFAULT_WEBUI_PORT = 5335;
@@ -515,14 +529,38 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 
-		// --- Config ---
-		if (path === "/config" && req.method === "GET") {
+		/** The /config payload: model defaults plus the provider-account catalog. */
+		async function configPayload(): Promise<Record<string, unknown>> {
 			const current = session.model;
-			json(res, 200, {
+			return {
 				path: "",
 				default_provider: current ? modelKey(current) : "",
 				providers: [],
-			});
+				provider_accounts: await listAccounts(providerAccountsPath()),
+				provider_presets: PROVIDER_PRESETS,
+				provider_protocols: PROVIDER_PROTOCOLS,
+			};
+		}
+
+		/** String field from a JSON body. */
+		function str(value: unknown): string | undefined {
+			return typeof value === "string" ? value : undefined;
+		}
+
+		/** Model bodies from a JSON body (NewModelInput[]). */
+		function modelInputs(value: unknown): Array<Record<string, unknown>> {
+			return Array.isArray(value) && value.every((item) => typeof item === "object" && item !== null)
+				? (value as Array<Record<string, unknown>>)
+				: [];
+		}
+
+		async function refreshModels(): Promise<void> {
+			await services.modelRuntime.refresh({ allowNetwork: false });
+		}
+
+		// --- Config ---
+		if (path === "/config" && req.method === "GET") {
+			json(res, 200, await configPayload());
 			return;
 		}
 		if (path === "/config/reload" && req.method === "POST") {
@@ -803,8 +841,127 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (path === "/providers/discover-models" && req.method === "POST") {
-			json(res, 400, { error: "model discovery is not available in the webui" });
+			const body = await readBody(req);
+			try {
+				const models = await discoverModels({
+					type: str(body.type) ?? "openai",
+					base_url: str(body.base_url) ?? "",
+					api_key: str(body.api_key),
+				});
+				json(res, 200, { models });
+			} catch (error) {
+				if (error instanceof ProviderAccountError) {
+					json(res, error.status, { error: error.message });
+					return;
+				}
+				throw error;
+			}
 			return;
+		}
+
+		// --- Provider accounts: one models.json entry each ---
+		const accountsPath = providerAccountsPath();
+		const routeParts = path.split("/").filter(Boolean).map(decodeURIComponent);
+		if (routeParts[0] === "provider-accounts") {
+			try {
+				if (routeParts.length === 1 && req.method === "POST") {
+					const body = await readBody(req);
+					const provider = str(body.provider);
+					if (!provider) {
+						json(res, 400, { error: "provider is required" });
+						return;
+					}
+					const result = await createAccount(accountsPath, {
+						id: str(body.id),
+						provider,
+						display_name: str(body.display_name),
+						base_url: str(body.base_url),
+						api_key: str(body.api_key),
+						models: modelInputs(body.models).map((model) => ({
+							model: String(model.model ?? ""),
+							display_name: str(model.display_name),
+							context_window: typeof model.context_window === "number" ? model.context_window : undefined,
+							max_tokens: typeof model.max_tokens === "number" ? model.max_tokens : undefined,
+							supports_vision: model.supports_vision === true,
+							reasoning_effort: str(model.reasoning_effort),
+						})),
+					});
+					await refreshModels();
+					json(res, 200, {
+						account: result.account,
+						models: result.models,
+						config: await configPayload(),
+					});
+					return;
+				}
+				const accountId = routeParts[1];
+				if (routeParts.length === 2 && req.method === "PATCH") {
+					const body = await readBody(req);
+					await editAccount(accountsPath, accountId, {
+						display_name: str(body.display_name),
+						base_url: str(body.base_url),
+						api_key: str(body.api_key),
+					});
+					await refreshModels();
+					json(res, 200, { config: await configPayload() });
+					return;
+				}
+				if (routeParts.length === 2 && req.method === "DELETE") {
+					await deleteAccount(accountsPath, accountId);
+					await refreshModels();
+					json(res, 200, { config: await configPayload() });
+					return;
+				}
+				if (routeParts.length === 3 && routeParts[2] === "models" && req.method === "POST") {
+					const body = await readBody(req);
+					const created = await addAccountModels(
+						accountsPath,
+						accountId,
+						modelInputs(body.models).map((model) => ({
+							model: String(model.model ?? ""),
+							display_name: str(model.display_name),
+							context_window: typeof model.context_window === "number" ? model.context_window : undefined,
+							max_tokens: typeof model.max_tokens === "number" ? model.max_tokens : undefined,
+							supports_vision: model.supports_vision === true,
+							reasoning_effort: str(model.reasoning_effort),
+						})),
+					);
+					await refreshModels();
+					json(res, 200, { created, config: await configPayload() });
+					return;
+				}
+				if (routeParts.length === 4 && routeParts[2] === "models") {
+					const modelId = routeParts[3];
+					if (req.method === "PATCH") {
+						const body = await readBody(req);
+						await editAccountModel(accountsPath, accountId, modelId, {
+							display_name: str(body.display_name),
+							context_window: typeof body.context_window === "number" ? body.context_window : undefined,
+							max_tokens: typeof body.max_tokens === "number" ? body.max_tokens : undefined,
+							clear_max_tokens: body.clear_max_tokens === true,
+							supports_vision: body.supports_vision === true,
+							clear_supports_vision: body.clear_supports_vision === true,
+							reasoning_effort: str(body.reasoning_effort),
+							clear_reasoning_effort: body.clear_reasoning_effort === true,
+						});
+						await refreshModels();
+						json(res, 200, { config: await configPayload() });
+						return;
+					}
+					if (req.method === "DELETE") {
+						await deleteAccountModel(accountsPath, accountId, modelId);
+						await refreshModels();
+						json(res, 200, { config: await configPayload() });
+						return;
+					}
+				}
+			} catch (error) {
+				if (error instanceof ProviderAccountError) {
+					json(res, error.status, { error: error.message });
+					return;
+				}
+				throw error;
+			}
 		}
 
 		// --- Live (sync) transport: not implemented ---
@@ -816,9 +973,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 
-		// --- Provider account management: mapped onto nanopi settings later ---
-		if (path.startsWith("/provider-accounts") || path.startsWith("/model-profiles")) {
-			json(res, 400, { error: "provider management is not available in the webui yet" });
+		// --- Model profiles: not mapped onto nanopi yet ---
+		if (path.startsWith("/model-profiles")) {
+			json(res, 400, { error: "model profiles are not available in the webui yet" });
 			return;
 		}
 
