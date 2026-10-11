@@ -1,8 +1,7 @@
 /**
- * pi-extra-cmd — /context interactive dialog (ask-lite style)
+ * `/context` interactive dialog.
  *
- * Renders the context-usage breakdown as an ask-lite-style bottom-docked
- * full-width overlay:
+ * Renders the context-usage breakdown as a bottom-docked full-width overlay:
  *
  *   ───────────────────────────────────────────  ← accent rule
  *    Context Usage  12.3k / 272k tokens (4.5%)
@@ -15,22 +14,15 @@
  *   ───────────────────────────────────────────
  *    Enter to preview · ↑/↓ to navigate · Esc to close
  *
- * Mirrors rpiv-ask-user-question's dialog conventions: bottom-center anchor,
- * width 100%, fixed chrome top/bottom, scrollable middle region with ↑/↓
- * overflow markers, one-line hint footer, pure keyboard interaction.
+ * Dialog conventions: bottom-center anchor, width 100%, fixed chrome top/bottom,
+ * scrollable middle region with ↑/↓ overflow markers, one-line hint footer,
+ * pure keyboard interaction.
  */
 
-import { type ExtensionCommandContext, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
-import { Key, Markdown, matchesKey, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import { type ExtensionCommandContext, getMarkdownTheme } from "@nanopi/pi-coding-agent";
+import { Key, Markdown, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 
-export type ContextPartColor =
-	| "accent"
-	| "success"
-	| "warning"
-	| "customMessageLabel"
-	| "muted"
-	| "dim"
-	| "error";
+export type ContextPartColor = "accent" | "success" | "warning" | "customMessageLabel" | "muted" | "dim" | "error";
 
 export type ContextPart = {
 	label: string;
@@ -61,7 +53,7 @@ export function padLine(text: string, width: number): string {
 const OVERFLOW_UP = "↑";
 const OVERFLOW_DOWN = "↓";
 
-/** Overlay placement shared with ask-lite: full-width, docked to the bottom edge. */
+/** Overlay placement: full-width, docked to the bottom edge. */
 const OVERLAY_OPTIONS = {
 	anchor: "bottom-center",
 	width: "100%",
@@ -87,7 +79,7 @@ function formatTokens(tokens: number): string {
 	return `${Math.round(tokens / 1_000)}k`;
 }
 
-/** Shared ask-lite chrome: accent rules top/bottom + one-line dim hint footer. */
+/** Shared chrome: accent rules top/bottom + one-line dim hint footer. */
 function rule(theme: any, width: number): string {
 	return theme.fg("accent", "─".repeat(Math.max(1, width)));
 }
@@ -169,10 +161,7 @@ export async function showContextDialog(
 						const bar = segments;
 
 						// Part rows: › marks the preview-selectable cursor.
-						const labelWidth = Math.min(
-							24,
-							Math.max(...data.parts.map((part) => part.label.length)),
-						);
+						const labelWidth = Math.min(24, Math.max(...data.parts.map((part) => part.label.length)));
 						const selectedLabel = data.previews[selected]?.label;
 						const partRows = data.parts.map((part) => {
 							const pct = data.contextWindow > 0 ? (part.tokens / data.contextWindow) * 100 : 0;
@@ -189,7 +178,12 @@ export async function showContextDialog(
 						const chrome = 6; // rule + title + bar + rule + hint + one blank
 						const maxParts = Math.max(1, rows - chrome - 1);
 						const shownParts =
-							partRows.length > maxParts ? [...partRows.slice(0, maxParts - 1), padLine(` … +${partRows.length - maxParts + 1} more`, contentWidth)] : partRows;
+							partRows.length > maxParts
+								? [
+										...partRows.slice(0, maxParts - 1),
+										padLine(` … +${partRows.length - maxParts + 1} more`, contentWidth),
+									]
+								: partRows;
 
 						return [
 							rule(theme, width),
@@ -275,7 +269,7 @@ export async function showTextPreview(
 					scrollOffset = Math.min(scrollOffset, Math.max(0, totalLines - pageSize));
 
 					const visible = wrapped.slice(scrollOffset, scrollOffset + pageSize);
-					// ask-lite three-region overflow: replace edge rows with dim arrows.
+					// Three-region overflow: replace edge rows with dim arrows.
 					if (scrollOffset > 0 && visible.length > 0) visible[0] = theme.fg("dim", OVERFLOW_UP);
 					if (scrollOffset + pageSize < totalLines && visible.length > 0) {
 						visible[visible.length - 1] = theme.fg("dim", OVERFLOW_DOWN);

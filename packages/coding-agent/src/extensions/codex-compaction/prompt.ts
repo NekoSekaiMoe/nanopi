@@ -1,7 +1,6 @@
 /**
- * pi-codex-compact — Codex compaction prompts
- *
- * Ported verbatim from the official Codex CLI (openai/codex):
+ * Codex compaction prompts, ported verbatim from the official Codex CLI
+ * (openai/codex):
  *
  *   - `codex-rs/prompts/templates/compact/prompt.md`         → SUMMARIZATION_PROMPT
  *   - `codex-rs/prompts/templates/compact/summary_prefix.md` → SUMMARY_PREFIX
@@ -28,16 +27,16 @@ export const SUMMARY_PREFIX = `Another language model started to solve this prob
 
 /** True when `text` is one of our handoff-framed summaries. */
 export function isCodexSummary(text: string | undefined): boolean {
-  return !!text && text.startsWith(`${SUMMARY_PREFIX}\n`);
+	return !!text && text.startsWith(`${SUMMARY_PREFIX}\n`);
 }
 
 /** Remove our handoff prefix so re-summarization starts from the bare summary. */
 export function stripCodexPrefix(text: string | undefined): string | undefined {
-  if (!text) return undefined;
-  return isCodexSummary(text) ? text.slice(SUMMARY_PREFIX.length + 1) : text;
+	if (!text) return undefined;
+	return isCodexSummary(text) ? text.slice(SUMMARY_PREFIX.length + 1) : text;
 }
 
 /** Assemble the stored summary exactly like Codex: `{SUMMARY_PREFIX}\n{suffix}`. */
 export function assembleCodexSummary(suffix: string): string {
-  return `${SUMMARY_PREFIX}\n${suffix}`;
+	return `${SUMMARY_PREFIX}\n${suffix}`;
 }

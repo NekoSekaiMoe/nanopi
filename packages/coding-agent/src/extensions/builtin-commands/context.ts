@@ -1,14 +1,14 @@
 /**
- * pi-extra-cmd — /context command
+ * Built-in `/context` command: interactive context-window inspector.
  *
- * Interactive context-window inspector ported from
- * github.com/minuque/pi-cc-extensions (extensions/feature/context.ts, MIT).
+ * Ported from github.com/minuque/pi-cc-extensions (extensions/feature/context.ts,
+ * MIT) via pi-extra-cmd.
  *
- *   /context   opens a bottom-docked ask-lite-style dialog showing the
- *              distribution of the context window (System prompt, Memory,
- *              Skills, Tools definition, Tool results, Context, Other, Free)
- *              with a usage bar, per-part token/percent rows and Enter-driven
- *              previews of the underlying content.
+ *   /context   opens a bottom-docked dialog showing the distribution of the
+ *              context window (System prompt, Memory, Skills, Tools definition,
+ *              Tool results, Context, Other, Free) with a usage bar, per-part
+ *              token/percent rows and Enter-driven previews of the underlying
+ *              content.
  *
  * The headline number is reconciled from `ctx.getContextUsage()` (the same
  * value the footer shows) and the chars/4 estimate of what the next LLM call
@@ -22,11 +22,11 @@ import {
 	type BuildSystemPromptOptions,
 	type ExtensionAPI,
 	type ExtensionCommandContext,
-	type ToolInfo,
 	estimateTokens,
 	formatSkillsForPrompt,
-} from "@earendil-works/pi-coding-agent";
-import { showContextDialog, type ContextPart, type ContextPreview } from "./context-dialog.ts";
+	type ToolInfo,
+} from "@nanopi/pi-coding-agent";
+import { type ContextPart, type ContextPreview, showContextDialog } from "./context-dialog.ts";
 
 const tokenEstimate = (value: unknown): number => {
 	if (!value) return 0;
@@ -67,9 +67,7 @@ export function capParts(parts: ContextPart[], target: number, fixedPrefix = 0):
 	const capped = variable.map((part, index) => {
 		cumulative += part.tokens;
 		const next =
-			index === variable.length - 1
-				? variableTarget
-				: Math.round((cumulative / estimated) * variableTarget);
+			index === variable.length - 1 ? variableTarget : Math.round((cumulative / estimated) * variableTarget);
 		const tokens = next - previous;
 		previous = next;
 		return { ...part, tokens };
@@ -103,10 +101,7 @@ export function resolveUsedTokens(
 
 type ContextBreakdown = {
 	parts: ContextPart[];
-	previews: Record<
-		"systemPrompt" | "memoryFiles" | "skills" | "tools" | "toolResults" | "contextFiles",
-		string
-	>;
+	previews: Record<"systemPrompt" | "memoryFiles" | "skills" | "tools" | "toolResults" | "contextFiles", string>;
 };
 
 function previewValue(value: unknown): string {
@@ -115,10 +110,7 @@ function previewValue(value: unknown): string {
 }
 
 /** Assemble counts and previews from the real request's systemPrompt/tools/messages. */
-export function collectContextBreakdown(
-	ctx: ExtensionCommandContext,
-	allTools: ToolInfo[],
-): ContextBreakdown {
+export function collectContextBreakdown(ctx: ExtensionCommandContext, allTools: ToolInfo[]): ContextBreakdown {
 	const options = (ctx.getSystemPromptOptions?.() ?? {}) as BuildSystemPromptOptions;
 	const systemPrompt = typeof ctx.getSystemPrompt === "function" ? ctx.getSystemPrompt() : "";
 	const selectedTools = new Set(options.selectedTools ?? ["read", "bash", "edit", "write"]);
@@ -157,9 +149,7 @@ export function collectContextBreakdown(
 				for (const block of message.content) {
 					if (block.type === "toolCall") {
 						contextTokens += tokenEstimate(block.name) + tokenEstimate(block.arguments);
-						contextPreview.push(
-							`## Assistant tool call: ${block.name}\n\n${previewValue(block.arguments)}`,
-						);
+						contextPreview.push(`## Assistant tool call: ${block.name}\n\n${previewValue(block.arguments)}`);
 					} else if (block.type === "text") {
 						contextTokens += tokenEstimate(block.text);
 						contextPreview.push(`## Assistant\n\n${block.text}`);
@@ -170,9 +160,7 @@ export function collectContextBreakdown(
 				}
 			} else if (message.role === "toolResult") {
 				toolResultTokens += estimateTokens(message);
-				toolResultPreview.push(
-					`## Result: ${message.toolName}\n\n${previewValue(message.content)}`,
-				);
+				toolResultPreview.push(`## Result: ${message.toolName}\n\n${previewValue(message.content)}`);
 			} else if (message.role === "bashExecution") {
 				toolResultTokens += estimateTokens(message);
 				toolResultPreview.push(
@@ -187,9 +175,7 @@ export function collectContextBreakdown(
 			}
 		} else if (entry.type === "compaction" || entry.type === "branch_summary") {
 			contextTokens += tokenEstimate(entry.summary);
-			contextPreview.push(
-				`## ${entry.type === "compaction" ? "Compaction" : "Branch summary"}\n\n${entry.summary}`,
-			);
+			contextPreview.push(`## ${entry.type === "compaction" ? "Compaction" : "Branch summary"}\n\n${entry.summary}`);
 		} else if (entry.type === "custom_message") {
 			contextTokens += tokenEstimate(entry.content);
 			contextPreview.push(`## Custom: ${entry.customType}\n\n${previewValue(entry.content)}`);
@@ -255,24 +241,14 @@ export function registerContext(pi: ExtensionAPI) {
 				},
 				{ key: "memoryFiles", label: "Memory", title: "Memory Files", content: breakdown.previews.memoryFiles },
 				{ key: "skills", label: "Skills", title: "Skills", content: breakdown.previews.skills },
-				{
-					key: "tools",
-					label: "Tools definition",
-					title: "Tools definition",
-					content: breakdown.previews.tools,
-				},
+				{ key: "tools", label: "Tools definition", title: "Tools definition", content: breakdown.previews.tools },
 				{
 					key: "toolResults",
 					label: "Tool results",
 					title: "Tool Results",
 					content: breakdown.previews.toolResults,
 				},
-				{
-					key: "contextFiles",
-					label: "Context",
-					title: "Context",
-					content: breakdown.previews.contextFiles,
-				},
+				{ key: "contextFiles", label: "Context", title: "Context", content: breakdown.previews.contextFiles },
 			].filter((preview) => allParts.some((part) => part.label === preview.label));
 
 			await showContextDialog(ctx, { used, contextWindow, parts: allParts, previews });

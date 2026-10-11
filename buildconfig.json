@@ -16,17 +16,33 @@
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
-		"extra/ask-lite": { "description": "Bundled extra: structured questionnaire tool (ask-lite)" },
-		"extra/pi-codex-compact": { "description": "Bundled extra: Codex-style context compaction summaries" },
-		"extra/pi-extra-cmd": { "description": "Bundled extra: /exit, /init, /context slash commands" },
-		"extra/pi-fake-codex": { "description": "Bundled extra: impersonate the official Codex CLI on OpenAI requests" },
-		"extra/pi-fake-opencode": { "description": "Bundled extra: impersonate the official OpenCode client on Zen requests" },
-		"extra/pi-rewind": { "description": "Bundled extra: rewind/branch UI over session history" },
-		"extra/pi-simplify": { "description": "Bundled extra: request simplification command" },
-		"extra/pi-smart-flow": { "description": "Bundled extra: smart flow control" },
-		"extra/pi-subagent-mini": { "description": "Bundled extra: lightweight subagent tool" },
-		"extra/pi-ui": { "description": "Bundled extra: extra TUI components" },
-		"extra/todo-lite": { "description": "Bundled extra: lightweight todo tool" },
+		"extra/ask-lite": {
+			"description": "Bundled extra: structured questionnaire tool (ask-lite)"
+		},
+		"extra/pi-fake-codex": {
+			"description": "Bundled extra: impersonate the official Codex CLI on OpenAI requests"
+		},
+		"extra/pi-fake-opencode": {
+			"description": "Bundled extra: impersonate the official OpenCode client on Zen requests"
+		},
+		"extra/pi-rewind": {
+			"description": "Bundled extra: rewind/branch UI over session history"
+		},
+		"extra/pi-simplify": {
+			"description": "Bundled extra: request simplification command"
+		},
+		"extra/pi-smart-flow": {
+			"description": "Bundled extra: smart flow control"
+		},
+		"extra/pi-subagent-mini": {
+			"description": "Bundled extra: lightweight subagent tool"
+		},
+		"extra/pi-ui": {
+			"description": "Bundled extra: extra TUI components"
+		},
+		"extra/todo-lite": {
+			"description": "Bundled extra: lightweight todo tool"
+		},
 		"oauth/anthropic": {
 			"description": "Anthropic OAuth login flow"
 		},

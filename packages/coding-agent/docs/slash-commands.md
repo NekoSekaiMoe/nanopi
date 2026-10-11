@@ -29,6 +29,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in n
 | `/clone` | Duplicate the current session at its current position |
 | `/compact [instructions]` | Compact the current context, optionally with custom instructions |
 | `/import <path>` | Import and resume a JSONL session |
+| `/context` | Show the current context-window distribution with previews |
 
 ## Export and share
 
@@ -49,7 +50,8 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 | `/reload` | Reload keybindings, extensions, skills, templates, themes, and context files |
 | `/hotkeys` | Show active keyboard shortcuts |
 | `/changelog` | Show changelog entries |
-| `/quit` | Quit nanopi |
+| `/init [instructions]` | Generate an AGENTS.md contributor guide for the repository |
+| `/exit` | Quit nanopi |
 
 ## Commands added by resources
 

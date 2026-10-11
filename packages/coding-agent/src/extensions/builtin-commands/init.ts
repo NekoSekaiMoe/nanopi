@@ -1,23 +1,21 @@
 /**
- * pi-extra-cmd — /init command
+ * Built-in `/init` command: generate an AGENTS.md contributor guide for the
+ * current repository.
  *
- * Registers an `/init` command that generates a high-quality AGENTS.md
- * contributor guide for the current repository.
- *
- * This is a command-driven replacement for the auto-invoked `init` skill
- * (~/.pi/agents/skills/init/SKILL.md). Instead of relying on the model to
- * discover and invoke a skill, `/init` injects the generation instructions as
- * a user message, which always triggers a turn — so the agent gets to work
- * immediately and the user sees exactly what was asked.
+ * Command-driven replacement for an auto-invoked init skill: instead of
+ * relying on the model to discover and invoke a skill, `/init` injects the
+ * generation instructions as a user message, which always triggers a turn —
+ * so the agent gets to work immediately and the user sees exactly what was
+ * asked.
  *
  * Usage:
  *   /init                       generate AGENTS.md with the default outline
  *   /init also document the CI   append extra instructions to the prompt
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
 
-/** The core AGENTS.md generation instructions, ported from the init skill. */
+/** The core AGENTS.md generation instructions. */
 const INIT_PROMPT = `Generate a file named AGENTS.md that serves as a contributor guide for this repository.
 
 Before writing, check whether AGENTS.md already exists in the current working directory. If it does, do not overwrite or modify it — report that it already exists and stop.
@@ -47,7 +45,7 @@ List key commands for building, testing, and running locally (e.g., npm test, ma
 Specify indentation rules, language-specific style preferences, and naming patterns. Include any formatting or linting tools used.
 
 ### Testing Guidelines
-Identify testing frameworks and coverage requirements. State test naming conventions and how to run tests.
+Identify testing frameworks and coverage requirements. State test naming conventions and how to run them.
 
 ### Commit & Pull Request Guidelines
 Summarize commit message conventions found in the project's Git history. Outline pull request requirements (descriptions, linked issues, screenshots, etc.).
@@ -55,15 +53,13 @@ Summarize commit message conventions found in the project's Git history. Outline
 (Optional) Add other sections if relevant, such as Security & Configuration Tips, Architecture Overview, or Agent-Specific Instructions.`;
 
 export function registerInit(pi: ExtensionAPI) {
-  pi.registerCommand("init", {
-    description: "Generate an AGENTS.md contributor guide for this repository",
-    handler: async (args, _ctx) => {
-      const extra = args.trim();
-      const prompt = extra
-        ? `${INIT_PROMPT}\n\n## Additional instructions\n\n${extra}`
-        : INIT_PROMPT;
-      // sendUserMessage always triggers a turn, so the agent starts immediately.
-      pi.sendUserMessage(prompt);
-    },
-  });
+	pi.registerCommand("init", {
+		description: "Generate an AGENTS.md contributor guide for this repository",
+		handler: async (args, _ctx) => {
+			const extra = args.trim();
+			const prompt = extra ? `${INIT_PROMPT}\n\n## Additional instructions\n\n${extra}` : INIT_PROMPT;
+			// sendUserMessage always triggers a turn, so the agent starts immediately.
+			pi.sendUserMessage(prompt);
+		},
+	});
 }

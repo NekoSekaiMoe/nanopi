@@ -82,6 +82,10 @@ fixed rather than patching the packages:
   surface, plus the env kill switch.
 - Upstream sync is manual file replacement under `extras/`; the build fails
   if a new directory lacks a `buildconfig.json` component.
+- Fact update 2026-10-11: pi-extra-cmd and pi-codex-compact were later
+  promoted to built-in inline extensions and removed from the registry
+  ([builtin commands and codex compaction](2026-10-11-builtin-commands-and-codex-compaction.md));
+  the registry now carries nine extras.
 - The `"pi"` manifest fallback also benefits user-installed pi-ecosystem
   packages, restoring behavior the rebrand dropped while the import aliases
   were kept.
