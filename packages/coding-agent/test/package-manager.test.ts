@@ -2801,7 +2801,7 @@ export default function(api) { api.registerTool({ name: "test", description: "te
 			expect(refreshTemporaryGitSourceSpy).not.toHaveBeenCalled();
 		});
 
-		// https://github.com/earendil-works/pi/issues/9982
+		// https://github.com/NekoSekaiMoe/nanopi/issues/9982
 		it("should load a new checkout when a pinned temporary git source changes ref", async () => {
 			const managerWithInternals = packageManager as unknown as PackageManagerInternals;
 			const oldSource = "git:github.com/example/repo@aaaaaaa";

@@ -10,7 +10,7 @@ name: Nix
 #
 # Release tags are built exactly as tagged, with their committed pin. Once all
 # systems build, the stable branch is fast-forwarded to the tag so that
-# `nix run github:earendil-works/pi/stable` runs the latest release.
+# `nix run github:NekoSekaiMoe/nanopi/stable` runs the latest release.
 
 on:
   push:

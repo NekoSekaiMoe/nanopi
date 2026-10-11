@@ -56,10 +56,10 @@ See the [documentation](https://pi.dev/docs/latest) for full setup and usage ins
 ## Run with Nix
 
 ```bash
-nix run github:earendil-works/pi/stable
+nix run github:NekoSekaiMoe/nanopi/stable
 ```
 
-`stable` points at the latest release. Install it with `nix profile add github:earendil-works/pi/stable` and update with `nix profile upgrade nanopi`. Use a release tag such as `github:earendil-works/pi/v1.0.0` to pin a version, or `github:earendil-works/pi` for unreleased changes on `main`. Nix builds nanopi from source.
+`stable` points at the latest release. Install it with `nix profile add github:NekoSekaiMoe/nanopi/stable` and update with `nix profile upgrade nanopi`. Use a release tag such as `github:NekoSekaiMoe/nanopi/v1.0.0` to pin a version, or `github:NekoSekaiMoe/nanopi` for unreleased changes on `main`. Nix builds nanopi from source.
 
 Supports ARM64 and x86-64 on Linux and macOS. Use `nix build .` or `nix run .` to build or run your checkout.
 
@@ -82,7 +82,6 @@ This monorepo contains the nanopi CLI and its supporting libraries.
 | **[@nanopi/pi-coding-agent](packages/coding-agent)** | Interactive coding agent CLI |
 | **[@nanopi/pi-tui](packages/tui)** | Terminal UI library with differential rendering |
 
-For Slack/chat automation and workflows see [earendil-works/pi-chat](https://github.com/earendil-works/pi-chat).
 
 ## Permissions & Containerization
 

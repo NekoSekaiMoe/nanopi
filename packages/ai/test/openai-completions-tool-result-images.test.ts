@@ -70,7 +70,7 @@ function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResult
 }
 
 describe("openai-completions convertMessages", () => {
-	// Regression test for https://github.com/earendil-works/pi/issues/9797
+	// Regression test for https://github.com/NekoSekaiMoe/nanopi/issues/9797
 	it("omits empty text parts from user messages with images", () => {
 		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
 		const model: Model<"openai-completions"> = {

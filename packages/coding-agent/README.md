@@ -8,7 +8,7 @@
   <a href="https://www.npmjs.com/package/@nanopi/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@nanopi/pi-coding-agent?style=flat-square&logo=npm&logoColor=white" /></a>
 </p>
 
-> New issues and PRs from new contributors are closed automatically. Maintainers review closed submissions daily. See [CONTRIBUTING.md](https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md).
+> New issues and PRs from new contributors are closed automatically. Maintainers review closed submissions daily. See [CONTRIBUTING.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/CONTRIBUTING.md).
 
 # nanopi
 
@@ -42,7 +42,7 @@ npm install -g --ignore-scripts @nanopi/pi-coding-agent
 
 nanopi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed. nanopi does not require dependency lifecycle scripts for a normal npm installation.
 
-On macOS and Linux, Nix users can install the latest release with `nix profile add github:earendil-works/pi/stable`. See the [quickstart](docs/quickstart.md#1-install-nanopi) for updating and pinning releases.
+On macOS and Linux, Nix users can install the latest release with `nix profile add github:NekoSekaiMoe/nanopi/stable`. See the [quickstart](docs/quickstart.md#1-install-nanopi) for updating and pinning releases.
 
 Start nanopi in the directory where you want it to work:
 
@@ -73,7 +73,7 @@ To publish sessions, use [`badlogic/pi-share-hf`](https://github.com/badlogic/pi
 Clone the repository, install its dependencies, and run nanopi from source:
 
 ```bash
-git clone https://github.com/earendil-works/pi
+git clone https://github.com/NekoSekaiMoe/nanopi
 cd nanopi
 npm install --ignore-scripts
 ./nanopi-test.sh
@@ -88,7 +88,7 @@ npm run check
 ./test.sh
 ```
 
-Read [CONTRIBUTING.md](https://github.com/earendil-works/pi/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It defines the contribution gate, issue quality bar, and required checks. Read [AGENTS.md](https://github.com/earendil-works/pi/blob/main/AGENTS.md) for repository-specific implementation, testing, dependency, and release rules.
+Read [CONTRIBUTING.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It defines the contribution gate, issue quality bar, and required checks. Read [AGENTS.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/AGENTS.md) for repository-specific implementation, testing, dependency, and release rules.
 
 ## License
 

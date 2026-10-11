@@ -338,7 +338,7 @@ describe("AgentSession bash and persistence characterization", () => {
 		]);
 	});
 
-	// Regression tests for https://github.com/earendil-works/pi/issues/10504
+	// Regression tests for https://github.com/NekoSekaiMoe/nanopi/issues/10504
 	describe("escape sequences split across output chunks", () => {
 		/** Runs a user bash command whose fake shell emits the given chunks; `beforeExit` sees what was streamed by then. */
 		async function runChunks(chunks: Array<string | Buffer>, beforeExit?: (streamed: string) => void) {

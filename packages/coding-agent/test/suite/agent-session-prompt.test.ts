@@ -165,7 +165,7 @@ describe("AgentSession prompt characterization", () => {
 		expect(sawImage).toBe(true);
 	});
 
-	// Regression test for https://github.com/earendil-works/pi/issues/9631
+	// Regression test for https://github.com/NekoSekaiMoe/nanopi/issues/9631
 	it("uses the model selected by before_agent_start for image normalization", async () => {
 		let strictModel: Model<string> | undefined;
 		const harness = await createHarness({

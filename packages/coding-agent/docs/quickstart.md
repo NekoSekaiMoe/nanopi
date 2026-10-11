@@ -23,10 +23,10 @@ nanopi does not require dependency lifecycle scripts for a normal npm installati
 With Nix on macOS or Linux, install the latest release from nanopi's flake. Nix builds nanopi from source:
 
 ```bash
-nix profile add github:earendil-works/pi/stable
+nix profile add github:NekoSekaiMoe/nanopi/stable
 ```
 
-Older Nix versions use `nix profile install` instead. Update with `nix profile upgrade nanopi`; `nanopi update` cannot update a Nix installation. To pin a release, use a tag such as `github:earendil-works/pi/v1.0.0`.
+Older Nix versions use `nix profile install` instead. Update with `nix profile upgrade nanopi`; `nanopi update` cannot update a Nix installation. To pin a release, use a tag such as `github:NekoSekaiMoe/nanopi/v1.0.0`.
 
 Verify the installation:
 

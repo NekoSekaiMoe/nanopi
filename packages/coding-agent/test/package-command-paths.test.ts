@@ -751,7 +751,7 @@ throw new Error("Unexpected npm args: " + args.join(" "));
 	});
 
 	it("removes older managed releases after an update", async () => {
-		// https://github.com/earendil-works/pi/issues/10392
+		// https://github.com/NekoSekaiMoe/nanopi/issues/10392
 		const targetVersion = getNewerPatchVersion();
 		const { managedRoot } = prepareManagedInstall(targetVersion);
 		const releasesRoot = join(managedRoot, "releases");

@@ -112,8 +112,8 @@ Rules:
 
 Attribution:
 
-- Internal (from issues): `Fixed foo bar ([#123](https://github.com/earendil-works/pi/issues/123))`
-- External contributions: `Added feature X ([#456](https://github.com/earendil-works/pi/pull/456) by [@username](https://github.com/username))`
+- Internal (from issues): `Fixed foo bar ([#123](https://github.com/NekoSekaiMoe/nanopi/issues/123))`
+- External contributions: `Added feature X ([#456](https://github.com/NekoSekaiMoe/nanopi/pull/456) by [@username](https://github.com/username))`
 
 ## Releasing
 
