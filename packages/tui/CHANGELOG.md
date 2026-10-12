@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Fixed pasted text being submitted at the first line break on terminals without bracketed paste support: chunks of printable text containing embedded CR/LF/TAB (at least three printable characters, or pure CR/LF chunks continuing an active paste stream) are re-classified as pastes and delivered through the paste path, so embedded newlines insert newlines instead of submitting the editor (mirrors Codex's paste-burst protection; typed Enter and short coalesced typing bursts stay keystrokes)
 - Fixed overlay compositing dropping `CURSOR_MARKER` when an overlay ends directly left of the cursor, which lost the hardware cursor position
 
 ## [1.1.0] - 2026-10-07

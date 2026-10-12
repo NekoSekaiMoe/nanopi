@@ -26,6 +26,41 @@ const BRACKETED_PASTE_START = "\x1b[200~";
 const BRACKETED_PASTE_END = "\x1b[201~";
 
 /**
+ * How long after a paste-like chunk pure CR/LF chunks still count as part of
+ * the same paste stream (terminals may split a paste at line boundaries).
+ */
+const PASTE_STREAM_CONTINUATION_MS = 150;
+
+/**
+ * Classify a chunk as a paste from a terminal without bracketed paste mode.
+ *
+ * Terminals that do not wrap pastes in 200~/201~ markers deliver them as plain
+ * chunks of text with embedded CR/LF/TAB. A chunk carrying at least three
+ * printable characters plus an embedded line break is a paste: typed keys
+ * never batch that way (Enter arrives as its own single-character chunk).
+ * Single control characters are always typed keys. A pure CR/LF chunk only
+ * continues an already active paste stream (Codex accepts the same residual
+ * risk for short typing bursts coalesced by a multiplexer).
+ */
+function isPasteLikeChunk(chunk: string, continuationActive: boolean): boolean {
+	if (chunk.length === 0) return false;
+	let hasControl = false;
+	let printableCount = 0;
+	for (const ch of chunk) {
+		if (ch === "\r" || ch === "\n" || ch === "\t") {
+			hasControl = true;
+			continue;
+		}
+		const code = ch.codePointAt(0)!;
+		if (code < 32 || code === 0x7f) return false; // escape sequences and control keys
+		printableCount++;
+	}
+	if (!hasControl) return false;
+	if (printableCount >= 3) return true;
+	return continuationActive && chunk.length >= 2;
+}
+
+/**
  * Check if a string is a complete escape sequence or needs more data
  */
 function isCompleteSequence(data: string): "complete" | "incomplete" | "not-escape" {
@@ -286,6 +321,8 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 	private pasteMode: boolean = false;
 	private pasteBuffer: string = "";
 	private pendingKittyPrintableCodepoint: number | undefined;
+	/** Timestamp of the last paste-like chunk, for paste stream continuation. */
+	private lastPasteLikeChunkAt = 0;
 
 	constructor(options: StdinBufferOptions = {}) {
 		super();
@@ -316,6 +353,26 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 
 		if (str.length === 0 && this.buffer.length === 0) {
 			this.emitDataSequence("");
+			return;
+		}
+
+		// Chunks of printable text with embedded line breaks are pastes from
+		// terminals without bracketed paste support; emit them through the paste
+		// path so embedded CR/LF insert newlines instead of submitting the editor.
+		if (
+			!this.pasteMode &&
+			isPasteLikeChunk(str, Date.now() - this.lastPasteLikeChunkAt <= PASTE_STREAM_CONTINUATION_MS)
+		) {
+			if (this.buffer.length > 0) {
+				// Flush complete sequences buffered before the paste.
+				const result = extractCompleteSequences(this.buffer);
+				this.buffer = result.remainder;
+				for (const sequence of result.sequences) {
+					this.emitDataSequence(sequence);
+				}
+			}
+			this.lastPasteLikeChunkAt = Date.now();
+			this.emit("paste", str);
 			return;
 		}
 

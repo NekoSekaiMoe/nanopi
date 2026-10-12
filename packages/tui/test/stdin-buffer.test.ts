@@ -524,3 +524,74 @@ describe("StdinBuffer", () => {
 		});
 	});
 });
+
+describe("StdinBuffer paste-like chunks (terminals without bracketed paste)", () => {
+	let buffer: StdinBuffer;
+	let emittedSequences: string[];
+	let emittedPaste: string[];
+
+	beforeEach(() => {
+		buffer = new StdinBuffer({ timeout: 10 });
+		emittedSequences = [];
+		emittedPaste = [];
+		buffer.on("data", (sequence) => {
+			emittedSequences.push(sequence);
+		});
+		buffer.on("paste", (content) => {
+			emittedPaste.push(content);
+		});
+	});
+
+	it("emits chunks with embedded line breaks as paste", () => {
+		buffer.process("# Heading text\r\nbody line two\r\n");
+
+		assert.deepStrictEqual(emittedPaste, ["# Heading text\r\nbody line two\r\n"]);
+		assert.deepStrictEqual(emittedSequences, []);
+	});
+
+	it("emits LF-only pastes as paste", () => {
+		buffer.process("```ts\nconst x = 1;\n```");
+
+		assert.deepStrictEqual(emittedPaste, ["```ts\nconst x = 1;\n```"]);
+		assert.deepStrictEqual(emittedSequences, []);
+	});
+
+	it("continues a paste stream across pure CR/LF chunks", () => {
+		buffer.process("one two three\r\n");
+		buffer.process("\r\n");
+		buffer.process("four five six\r\n");
+
+		assert.deepStrictEqual(emittedPaste, ["one two three\r\n", "\r\n", "four five six\r\n"]);
+		assert.deepStrictEqual(emittedSequences, []);
+	});
+
+	it("keeps plain chunks without control characters as keystrokes", () => {
+		buffer.process("hello 世界");
+
+		assert.deepStrictEqual(emittedSequences, ["h", "e", "l", "l", "o", " ", "世", "界"]);
+		assert.deepStrictEqual(emittedPaste, []);
+	});
+
+	it("keeps a typed Enter as a keystroke", () => {
+		buffer.process("ab");
+		buffer.process("\r");
+
+		assert.deepStrictEqual(emittedSequences, ["a", "b", "\r"]);
+		assert.deepStrictEqual(emittedPaste, []);
+	});
+
+	it("keeps a short coalesced typing burst with Enter as keystrokes", () => {
+		// Two printable chars + Enter batched by a multiplexer must not become a paste
+		buffer.process("ab\r");
+
+		assert.deepStrictEqual(emittedSequences, ["a", "b", "\r"]);
+		assert.deepStrictEqual(emittedPaste, []);
+	});
+
+	it("keeps escape-sequence chunks as keystrokes", () => {
+		buffer.process("a\x1b[A");
+
+		assert.deepStrictEqual(emittedSequences, ["a", "\x1b[A"]);
+		assert.deepStrictEqual(emittedPaste, []);
+	});
+});
