@@ -1,11 +1,12 @@
-// Individual settings dialogs: theme, language, notifications.
+// Individual settings dialogs: theme, language, notifications, extra module.
 // Model settings live in ./ModelProviders.
 // Each is opened on its own from the sidebar settings menu.
 
 import { ComponentChildren } from 'preact';
 import { useEffect, useState } from 'preact/hooks';
 import { useSettings, Theme, FontScale } from '../settings';
-import { Lang } from '../i18n';
+import { Lang, MsgKey } from '../i18n';
+import { getExtraSettings, putExtraSettings, RunMode } from '../api';
 import {
   loadPrefs,
   savePrefs,
@@ -58,6 +59,100 @@ function SettingsModal({
         )}
       </div>
     </div>
+  );
+}
+
+/** Extra module settings: default run mode + subsystem switches. */
+const SUBSYSTEM_LABELS: Record<string, MsgKey> = {
+  lsp: 'extra.subsystem.lsp',
+  mcp: 'extra.subsystem.mcp',
+  subagent: 'extra.subsystem.subagent',
+  askquestion: 'extra.subsystem.askquestion',
+  todo: 'extra.subsystem.todo',
+};
+
+const RUN_MODE_OPTIONS: RunMode[] = ['standard', 'plan', 'minimal'];
+
+export function ExtraSettingsDialog({ onClose }: { onClose: () => void }) {
+  const { t } = useSettings();
+  const [defaultMode, setDefaultMode] = useState<RunMode>('standard');
+  const [subsystems, setSubsystems] = useState<Array<{ key: string; enabled: boolean; available: boolean; detail?: string }>>([]);
+  const [loaded, setLoaded] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    getExtraSettings()
+      .then((info) => {
+        setDefaultMode(info.settings.defaultMode);
+        setSubsystems(info.subsystems);
+        setLoaded(true);
+      })
+      .catch((e: Error) => setError(e.message));
+  }, []);
+
+  async function save(next: { defaultMode?: RunMode; subsystems?: Record<string, boolean> }) {
+    setBusy(true);
+    setError(null);
+    try {
+      const info = await putExtraSettings(next);
+      setDefaultMode(info.settings.defaultMode);
+      setSubsystems(info.subsystems);
+    } catch (e) {
+      setError(String(e instanceof Error ? e.message : e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <SettingsModal title={t('extra.title')} onClose={onClose}>
+      {!loaded && !error && <p class="settings-hint">…</p>}
+      {error && <p class="settings-hint">{error}</p>}
+      {loaded && (
+        <>
+          <div class="field-group">
+            <span class="modal-label">{t('extra.defaultMode')}</span>
+            <div class="extra-mode-options">
+              {RUN_MODE_OPTIONS.map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  class={'btn' + (defaultMode === mode ? ' btn-primary' : '')}
+                  disabled={busy}
+                  onClick={() => {
+                    setDefaultMode(mode);
+                    void save({ defaultMode: mode });
+                  }}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div class="field-group">
+            <span class="modal-label">{t('extra.subsystems')}</span>
+            {subsystems.map((sub) => (
+              <label key={sub.key} class={'extra-subsystem-row' + (sub.available ? '' : ' extra-subsystem-unavailable')}>
+                <input
+                  type="checkbox"
+                  checked={sub.enabled && sub.available}
+                  disabled={busy || !sub.available}
+                  onChange={(e) => {
+                    const enabled = (e.target as HTMLInputElement).checked;
+                    setSubsystems((cur) => cur.map((s) => (s.key === sub.key ? { ...s, enabled } : s)));
+                    void save({ subsystems: { [sub.key]: enabled } });
+                  }}
+                />
+                <span class="extra-subsystem-name">{t(SUBSYSTEM_LABELS[sub.key] ?? ('extra.subsystems' as MsgKey))}</span>
+                {!sub.available && <span class="extra-subsystem-detail">{t('extra.subsystem.unavailable')}</span>}
+              </label>
+            ))}
+          </div>
+          <p class="settings-hint">{t('extra.saved')}</p>
+        </>
+      )}
+    </SettingsModal>
   );
 }
 

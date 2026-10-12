@@ -1,0 +1,33 @@
+{
+	"name": "mcp-lite",
+	"version": "1.1.0",
+	"description": "Lean MCP (Model Context Protocol) client for nanopi: stdio and streamable-http servers, tools bridged as mcp__* tools. Subagent-only by design. Slim port of irahardianto/pi-mcp-extension.",
+	"keywords": [
+		"pi-package",
+		"pi-extension",
+		"nanopi",
+		"mcp",
+		"model-context-protocol"
+	],
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"license": "MIT",
+	"author": "NekoSekaiMoe",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/NekoSekaiMoe/nanopi.git",
+		"directory": "packages/coding-agent/extras/mcp-lite"
+	},
+	"files": [
+		"src/",
+		"README.md"
+	]
+}

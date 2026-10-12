@@ -112,6 +112,9 @@ importers:
       '@nanopi/pi-ai':
         specifier: ^1.1.0
         version: link:../ai
+      '@nanopi/pi-extra':
+        specifier: ^1.1.0
+        version: link:../extra
       '@nanopi/pi-tui':
         specifier: ^1.1.0
         version: link:../tui
@@ -212,6 +215,25 @@ importers:
       '@types/ms':
         specifier: 2.1.0
         version: 2.1.0
+
+  packages/extra:
+    dependencies:
+      '@nanopi/pi-tui':
+        specifier: ^1.1.0
+        version: link:../tui
+    devDependencies:
+      '@types/node':
+        specifier: 22.19.19
+        version: 22.19.19
+      shx:
+        specifier: 0.3.4
+        version: 0.3.4
+      typescript:
+        specifier: 7.0.2
+        version: 7.0.2
+      vitest:
+        specifier: 4.1.11
+        version: 4.1.11(@types/node@22.19.19)(vite@8.3.4(@types/node@22.19.19)(esbuild@0.28.2)(yaml@2.9.0))
 
   packages/tui:
     dependencies:

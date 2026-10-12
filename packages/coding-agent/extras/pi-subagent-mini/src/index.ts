@@ -78,8 +78,46 @@ function ownDir(): string | undefined {
  * Extensions to load in child sessions. Priority:
  *   1. spawn param `extensions` (comma-separated entry files)
  *   2. `PI_SUBAGENT_EXTENSIONS` env var (comma-separated entry files)
- *   3. auto-detected sibling packages (FORWARDED_EXTENSION_PACKAGES)
+ *   3. auto-detected sibling packages (FORWARDED_EXTENSION_PACKAGES), plus
+ *      mcp-lite when the extra module's mcp subsystem switch is on
  */
+function isMcpSubsystemEnabled(): boolean {
+	// Mirrors packages/extra settings (<agentDir>/extra/settings.json with a
+	// .nanopi/extra/settings.json project override); default enabled.
+	const read = (file: string): boolean | undefined => {
+		try {
+			const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
+			const value =
+				parsed && typeof parsed === "object"
+					? (parsed as { subsystems?: { mcp?: unknown } }).subsystems?.mcp
+					: undefined;
+			return typeof value === "boolean" ? value : undefined;
+		} catch {
+			return undefined;
+		}
+	};
+	const agentDir = process.env.NANOPI_CODING_AGENT_DIR ?? path.join(process.env.HOME ?? ".", ".nanopi", "agent");
+	return (
+		read(path.join(process.cwd(), ".nanopi", "extra", "settings.json")) ??
+		read(path.join(agentDir, "extra", "settings.json")) ??
+		true
+	);
+}
+
+/** Candidate entry files for the mcp-lite bundled extra (sibling of install root layouts). */
+function mcpLiteEntry(): string | undefined {
+	const here = ownDir();
+	const candidates = [
+		here && path.resolve(here, "..", "mcp-lite", "src", "index.ts"),
+		process.env.HOME && path.join(process.env.HOME, ".nanopi", "packages", "mcp-lite", "src", "index.ts"),
+		process.env.HOME && path.join(process.env.HOME, ".pi", "agent", "packages", "mcp-lite", "src", "index.ts"),
+	];
+	for (const candidate of candidates) {
+		if (candidate && fs.existsSync(candidate)) return candidate;
+	}
+	return undefined;
+}
+
 function defaultChildExtensions(): string[] {
 	const raw = process.env.PI_SUBAGENT_EXTENSIONS;
 	if (raw !== undefined) return raw.split(",").map((s) => s.trim()).filter(Boolean); // set-but-empty = forward nothing
@@ -91,6 +129,11 @@ function defaultChildExtensions(): string[] {
 		// Prefer the sibling of this package; fall back to the standard agent-dir layout.
 		const candidate = (rel && fs.existsSync(rel) && rel) || (home && fs.existsSync(home) && home);
 		if (candidate) found.push(candidate);
+	}
+	if (isMcpSubsystemEnabled()) {
+		// MCP tools are subagent-only: forward mcp-lite so children can use them.
+		const mcp = mcpLiteEntry();
+		if (mcp) found.push(mcp);
 	}
 	return found;
 }
@@ -157,11 +200,14 @@ export default function subagentMini(pi: ExtensionAPI): void {
 
 	const spawnJob = (params: { task: string; tools?: string; cwd?: string; model?: string; extensions?: string[]; timeoutSec?: number }, ctxCwd: string): Job => {
 		const id = `sa-${++counter}`;
+		// MCP is subagent-only: default tool lists activate mcp__* when the mcp
+		// subsystem switch is on (children load mcp-lite via defaultChildExtensions).
+		const defaultTools = isMcpSubsystemEnabled() ? `${DEFAULT_TOOLS},mcp__*` : DEFAULT_TOOLS;
 		const args = [
 			...piBin.args,
 			"--mode", "json", "-p", "--no-session", "-ne",
 			"--no-skills", "--no-prompt-templates", "--no-context-files",
-			"-t", params.tools || DEFAULT_TOOLS,
+			"-t", params.tools || defaultTools,
 		];
 		if (params.model) args.push("--model", params.model); // no -m short flag exists
 		// -ne disables discovery but explicit -e paths still load — forward only
@@ -284,7 +330,7 @@ export default function subagentMini(pi: ExtensionAPI): void {
 		name: "subagent",
 		label: "Subagent",
 		description:
-			"Run a fresh isolated subagent (own minimal pi session) for a self-contained task and receive its report via a subagent-complete notification (new turn). spawn returns a jobId immediately — keep working meanwhile; wait blocks until done; status shows state + output tail; kill stops it. Re-delegate follow-ups as a new spawn with context from the previous report.",
+			"Run a fresh isolated subagent (own minimal pi session) for a self-contained task and receive its report via a subagent-complete notification (new turn). spawn returns a jobId immediately — keep working meanwhile; wait blocks until done; status shows state + output tail; kill stops it. Re-delegate follow-ups as a new spawn with context from the previous report. MCP tools (mcp__server__tool) are available only inside subagents — delegate MCP work here; the main agent cannot call them.",
 		promptSnippet: "Delegate self-contained tasks to an isolated subagent; result arrives via completion notification",
 		promptGuidelines: [
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) to subagent spawn with read-only tools; keep only the final report in this conversation. Add write/edit to tools only when the subagent should modify files.",
@@ -292,7 +338,7 @@ export default function subagentMini(pi: ExtensionAPI): void {
 		parameters: Type.Object({
 			action: Type.Union([Type.Literal("spawn"), Type.Literal("wait"), Type.Literal("status"), Type.Literal("kill")], { description: "default flow: spawn, then wait for the notification" }),
 			task: Type.Optional(Type.String({ description: "spawn: full task incl. role (e.g. 'You are a reviewer…')" })),
-			tools: Type.Optional(Type.String({ description: `spawn: comma list, default ${DEFAULT_TOOLS}` })),
+			tools: Type.Optional(Type.String({ description: `spawn: comma list, default ${DEFAULT_TOOLS}${" (plus mcp__* when MCP is enabled)"}` })),
 			cwd: Type.Optional(Type.String({ description: "spawn: working directory" })),
 			model: Type.Optional(Type.String({ description: "spawn: model id (provider/model); defaults to the current session model" })),
 			extensions: Type.Optional(Type.String({ description: "spawn: comma-separated extension entry files to load in the child (e.g. pi-fake-opencode for OpenCode Zen free tier); default: auto-detect" })),

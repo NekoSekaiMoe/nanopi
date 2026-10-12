@@ -1034,6 +1034,11 @@ export function Sidebar({
           <BellGlyph />
           <span>{t('settings.menuNotifications')}</span>
         </button>
+        {/* 运行模式与子系统（extra 模块），用弹窗 */}
+        <button class="item-menu-row" onClick={() => chooseSettings('extra')}>
+          <ModelGlyph />
+          <span>{t('extra.title')}</span>
+        </button>
       </div>,
           document.body,
         )

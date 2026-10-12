@@ -1,0 +1,54 @@
+/**
+ * @nanopi/pi-extra: run modes, permission gating, subsystem toggles, ENV
+ * overrides, and the webui bridge for nanopi.
+ *
+ * The coding-agent consumes two things from here: `extraInlineExtension`
+ * (registered as a hidden built-in) and `extraBridge` (read by the webui
+ * server). Build flavors that exclude the `modes` component alias this module
+ * to an inert stub.
+ */
+
+export type { JudgeModelRegistry } from "./ai-judge.ts";
+export { judgeWithModel } from "./ai-judge.ts";
+export type { BridgeCoreAccess, BridgeExtensionHooks, BridgeJudgeContext } from "./bridge.ts";
+export { ExtraBridge, extraBridge, SUBSYSTEM_PACKAGES } from "./bridge.ts";
+export { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
+export { createExtraExtension, extraInlineExtension } from "./extension.ts";
+export { badgeLabels, createBadgeFooter, renderBadges, renderFooterLine } from "./footer.ts";
+export {
+	isMcpToolName,
+	MCP_MAIN_AGENT_BLOCK_REASON,
+	MCP_SUBAGENT_ONLY_GUIDELINE,
+	MCP_TOOL_PREFIX,
+} from "./mcp-policy.ts";
+export type { ModeListener, ModeSnapshot } from "./mode-engine.ts";
+export { ModeEngine, modeEngine } from "./mode-engine.ts";
+export { PairingError, PairingManager } from "./pairing.ts";
+export type { PermissionCallInfo, PermissionOutcome } from "./permission-types.ts";
+export type { PermissionBrokerEvent, PermissionPrompter } from "./permissions.ts";
+export { PermissionBroker, PermissionGate } from "./permissions.ts";
+export { analyzeCommandForPlan, firstShellWord, tokenizeSimpleCommand } from "./plan-shell.ts";
+export type { ExtraSettingsPatch, ResolvedExtraSettings } from "./settings-store.ts";
+export {
+	globalExtraSettingsPath,
+	loadExtraSettings,
+	projectExtraSettingsPath,
+	saveExtraSettings,
+} from "./settings-store.ts";
+export type {
+	ExtraSettings,
+	ExtraStatePayload,
+	PermissionDecision,
+	PermissionPromptPayload,
+	RunMode,
+	SubsystemKey,
+	SubsystemStatus,
+} from "./types.ts";
+export {
+	DEFAULT_EXTRA_SETTINGS,
+	isPermissionDecision,
+	isRunMode,
+	PERMISSION_DECISIONS,
+	RUN_MODES,
+	SUBSYSTEM_KEYS,
+} from "./types.ts";

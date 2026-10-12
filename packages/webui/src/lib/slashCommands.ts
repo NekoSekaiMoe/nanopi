@@ -19,7 +19,7 @@ export function parseSlashCommand(line: string): ParsedCommand | null {
   return { name, arg };
 }
 
-export type ApprovalMode = 'build' | 'plan' | 'bypass' | 'accept_edits';
+export type ApprovalMode = 'plan' | 'minimal' | 'standard';
 
 /** Chat.tsx 注入的既有页面能力；命令 run() 只调用这些，不含自身业务逻辑。 */
 export interface SlashHandlers {
@@ -47,7 +47,8 @@ export interface SlashCommandDef {
 
 export const FRONTEND_COMMANDS: SlashCommandDef[] = [
   { name: 'plan', descKey: 'cmd.plan.desc', run: (_a, h) => h.setMode('plan') },
-  { name: 'build', descKey: 'cmd.build.desc', run: (_a, h) => h.setMode('build') },
+  { name: 'minimal', descKey: 'cmd.minimal.desc', run: (_a, h) => h.setMode('minimal') },
+  { name: 'standard', descKey: 'cmd.standard.desc', run: (_a, h) => h.setMode('standard') },
   {
     name: 'model',
     descKey: 'cmd.model.desc',

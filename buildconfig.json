@@ -16,6 +16,9 @@
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
+		"modes": {
+			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); disabled flavors alias the module to an inert stub"
+		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand)"
 		},
@@ -30,6 +33,9 @@
 		},
 		"extra/pi-fake-opencode": {
 			"description": "Bundled extra: impersonate the official OpenCode client on Zen requests"
+		},
+		"extra/mcp-lite": {
+			"description": "Bundled extra: lean MCP client (subagent-only tools; slim port of irahardianto/pi-mcp-extension)"
 		},
 		"extra/pi-rewind": {
 			"description": "Bundled extra: rewind/branch UI over session history"

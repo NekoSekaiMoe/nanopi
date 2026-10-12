@@ -25,6 +25,10 @@ import {
   probeAccount,
   ProbeResult,
   ApiCallError,
+  getOAuthProviders,
+  startOAuthLogin,
+  getOAuthStatus,
+  OAuthProviderInfo,
 } from '../api';
 import { useSettings } from '../settings';
 import type { MsgKey } from '../i18n';
@@ -127,6 +131,85 @@ function samePanel(a: Panel | null, b: Panel): boolean {
 function modelsOf(config: ConfigInfo, account: ProviderAccountInfo): ProviderInfo[] {
   return config.providers.filter((p) =>
     p.account ? p.account === account.id : account.model_ids.includes(p.name),
+  );
+}
+
+/** OAuth provider sign-in: starts the web login flow on the server, shows the
+ *  authorization link while it waits, and refreshes the config on completion.
+ *  Credentials land in the CLI's auth storage, shared by both frontends. */
+function OAuthSignInSection({ onSignedIn }: { onSignedIn: () => void }) {
+  const { t } = useSettings();
+  const [providers, setProviders] = useState<OAuthProviderInfo[] | null>(null);
+  const [flow, setFlow] = useState<{
+    id: string;
+    provider: string;
+    status: 'pending' | 'done' | 'error';
+    url?: string | null;
+    error?: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    getOAuthProviders().then(setProviders);
+  }, []);
+
+  useEffect(() => {
+    if (!flow || flow.status !== 'pending') return;
+    let stopped = false;
+    const timer = setInterval(() => {
+      getOAuthStatus(flow.id)
+        .then((status) => {
+          if (stopped || status.status === 'pending') return;
+          setFlow({ ...flow, ...status });
+          if (status.status === 'done') onSignedIn();
+        })
+        .catch((e: Error) => {
+          if (!stopped) setFlow({ ...flow, status: 'error', error: e.message });
+        });
+    }, 1500);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flow?.id, flow?.status]);
+
+  if (!providers || providers.length === 0) return null;
+
+  async function signIn(provider: string) {
+    try {
+      const id = await startOAuthLogin(provider);
+      setFlow({ id, provider, status: 'pending' });
+    } catch (e) {
+      setFlow({ id: '', provider, status: 'error', error: String(e instanceof Error ? e.message : e) });
+    }
+  }
+
+  return (
+    <div class="field-group oauth-signin">
+      <span class="modal-label">{t('oauth.title')}</span>
+      <div class="oauth-provider-list">
+        {providers.map((provider) => (
+          <button key={provider.id} class="btn" type="button" onClick={() => void signIn(provider.id)}>
+            {t('oauth.start')} · {provider.name}
+          </button>
+        ))}
+      </div>
+      {flow?.status === 'pending' && (
+        <p class="field-hint">
+          {t('oauth.pending')}
+          {flow.url && (
+            <>
+              {' '}
+              <a href={flow.url} target="_blank" rel="noreferrer">
+                {t('oauth.open')}
+              </a>
+            </>
+          )}
+        </p>
+      )}
+      {flow?.status === 'done' && <p class="field-hint">{t('oauth.done')}</p>}
+      {flow?.status === 'error' && <p class="field-hint">{t('oauth.failed', { error: flow.error ?? '' })}</p>}
+    </div>
   );
 }
 
@@ -245,6 +328,7 @@ export function ModelConfigDialog({ onClose }: { onClose: () => void }) {
                 </div>
               )}
               {!config && !loadError && <div class="modal-loading">{t('settings.loading')}</div>}
+              <OAuthSignInSection onSignedIn={() => void reload()} />
               {config && (
                 <>
                   <div class="provider-list account-list">

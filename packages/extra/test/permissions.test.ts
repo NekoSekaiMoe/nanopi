@@ -1,0 +1,112 @@
+import { describe, expect, test } from "vitest";
+import type { PermissionCallInfo, PermissionOutcome } from "../src/permission-types.ts";
+import { PermissionBroker, PermissionGate } from "../src/permissions.ts";
+import type { PermissionDecision } from "../src/types.ts";
+
+function info(overrides: Partial<PermissionCallInfo> = {}): PermissionCallInfo {
+	return {
+		callId: "call-1",
+		toolName: "bash",
+		summary: "rm -rf build",
+		args: { command: "rm -rf build" },
+		firstCommand: "rm",
+		...overrides,
+	};
+}
+
+describe("PermissionGate", () => {
+	test("allow once permits the call without memory", async () => {
+		const gate = new PermissionGate(
+			async () => "allow" as PermissionDecision,
+			async () => ({ action: "allow" }),
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+	});
+
+	test("allow session remembers the tool for the session", async () => {
+		const answers: PermissionDecision[] = ["allow_session", "deny"];
+		let asked = 0;
+		const gate = new PermissionGate(
+			async () => answers[asked++],
+			async () => ({ action: "allow" }),
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		// Second call does not prompt anymore.
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		expect(asked).toBe(1);
+	});
+
+	test("deny reports the rejection", async () => {
+		const gate = new PermissionGate(
+			async () => "deny",
+			async () => ({ action: "allow" }),
+		);
+		const outcome = await gate.check(info());
+		expect(outcome.action).toBe("deny");
+		if (outcome.action !== "deny") throw new Error("unreachable");
+		expect(outcome.reason).toContain("declined");
+	});
+
+	test("dismissed prompts deny", async () => {
+		const gate = new PermissionGate(
+			async () => undefined,
+			async () => ({ action: "allow" }),
+		);
+		const outcome = await gate.check(info());
+		expect(outcome.action).toBe("deny");
+		if (outcome.action !== "deny") throw new Error("unreachable");
+		expect(outcome.reason).toContain("dismissed");
+	});
+
+	test("ai decide caches the verdict per tool+first command class", async () => {
+		let judged = 0;
+		const verdicts: PermissionOutcome[] = [{ action: "deny", reason: "risky" }, { action: "allow" }];
+		const gate = new PermissionGate(
+			async () => "ai_decide",
+			async () => {
+				judged++;
+				return verdicts[judged - 1] ?? { action: "allow" };
+			},
+		);
+		// First call: judged deny.
+		expect(await gate.check(info())).toEqual({ action: "deny", reason: "risky" });
+		// Same class (bash + rm): cached deny, no new judgment.
+		expect(await gate.check(info({ callId: "call-2" }))).toEqual({ action: "deny", reason: "risky" });
+		// Different first command: a fresh judgment (allow).
+		expect(await gate.check(info({ callId: "call-3", firstCommand: "make", args: { command: "make" } }))).toEqual({
+			action: "allow",
+		});
+		expect(judged).toBe(2);
+	});
+});
+
+describe("PermissionBroker", () => {
+	test("queues prompts and resolves answers in order", async () => {
+		const broker = new PermissionBroker();
+		const events: string[] = [];
+		broker.subscribe((event) => events.push(event.type));
+
+		const first = broker.prompter(info({ callId: "a" }));
+		const second = broker.prompter(info({ callId: "b" }));
+
+		await Promise.resolve();
+		expect(events).toEqual(["prompt"]);
+
+		expect(broker.answer("b", undefined, "allow")).toBe(false); // wrong call id
+		expect(broker.answer("a", undefined, "deny")).toBe(true);
+		await expect(first).resolves.toBe("deny");
+
+		expect(broker.answer(undefined, "bash", "allow_session")).toBe(true);
+		await expect(second).resolves.toBe("allow_session");
+		expect(events).toEqual(["prompt", "resolved", "prompt", "resolved"]);
+	});
+
+	test("cancelAll resolves pending prompts as dismissed", async () => {
+		const broker = new PermissionBroker();
+		const pending = broker.prompter(info());
+		await Promise.resolve();
+		broker.cancelAll();
+		await expect(pending).resolves.toBeUndefined();
+	});
+});

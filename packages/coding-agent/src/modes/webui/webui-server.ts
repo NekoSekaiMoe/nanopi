@@ -3,8 +3,11 @@
  * API onto a headless AgentSession.
  *
  * Frontend contract ported from AtomCode's webui (MIT). The default `/chat`
- * transport is implemented; the `?sync=1` `/live` transport is not. nanopi has
- * no per-tool-call permission gate, so the approval mode is always `bypass`.
+ * transport is implemented; the `?sync=1` `/live` transport is not. The extra
+ * module (packages/extra) supplies run modes and per-call permission gating
+ * through `extraBridge`; when a build flavor excludes it the bridge reports
+ * unavailable, every /extra endpoint 404s, permission requests never surface,
+ * and the webui hides its mode selector.
  */
 
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
@@ -14,10 +17,12 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { basename, extname, join, normalize } from "node:path";
 import type { AgentMessage } from "@nanopi/pi-agent-core";
 import type { AssistantMessageEvent, ImageContent, Message, Model, ToolResultMessage } from "@nanopi/pi-ai";
+import { extraBridge } from "@nanopi/pi-extra";
 import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { parseSessionEntries, type SessionInfo, SessionManager } from "../../core/session-manager.ts";
+import type { SettingsManager } from "../../core/settings-manager.ts";
 import {
 	addAccountModels,
 	createAccount,
@@ -110,6 +115,49 @@ export function bearerTokenMatches(expected: string, authorization: string | und
 
 function modelKey(model: Model<any>): string {
 	return `${model.provider}/${model.id}`;
+}
+
+/** Packages the build registers as bundled extras (auto-registered when unfiltered). */
+const BUNDLED_EXTRA_PACKAGE_NAMES = new Set(["pi-subagent-mini", "ask-lite", "todo-lite", "mcp-lite"]);
+
+function packageSourceName(source: string): string {
+	const spec = source.replace(/^npm:/, "").trim();
+	const versionSeparator = spec.lastIndexOf("@");
+	return versionSeparator > 0 ? spec.slice(0, versionSeparator) : spec;
+}
+
+/**
+ * Toggle a package on the package-enable layer: disabling replaces its entry
+ * (or adds one) with the filtered object form (`autoload: false`, no resource
+ * patterns), enabling drops the filter (bundled extras re-register on their
+ * own; user packages restore the plain string form).
+ */
+function setPackageEnabled(settingsManager: SettingsManager, packageName: string, enabled: boolean): void {
+	const current = settingsManager.getPackages();
+	const matches = (pkg: unknown): boolean =>
+		typeof pkg === "string"
+			? packageSourceName(pkg) === packageName
+			: typeof pkg === "object" &&
+				pkg !== null &&
+				packageSourceName((pkg as { source: string }).source) === packageName;
+	const next = current.filter((pkg) => !(typeof pkg === "object" && pkg !== null && matches(pkg)));
+	if (!enabled) {
+		const existingString = current.find((pkg) => typeof pkg === "string" && matches(pkg));
+		const source = typeof existingString === "string" ? existingString : packageName;
+		next.push({ source, autoload: false });
+	} else if (!BUNDLED_EXTRA_PACKAGE_NAMES.has(packageName) && !next.some(matches)) {
+		next.push(packageName);
+	}
+	settingsManager.setPackages(next);
+}
+
+/** One browser-driven OAuth login flow. */
+interface OAuthFlowState {
+	id: string;
+	provider: string;
+	status: "pending" | "done" | "error";
+	url: string | undefined;
+	error: string | undefined;
 }
 
 /** Locate the built webui assets: source checkout first, then installed dist. */
@@ -223,6 +271,21 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	const distDir = getWebuiDistDir();
 	const distExists = existsSync(join(distDir, "index.html"));
 
+	// Extensions run headless in webui mode: no UI context, but a mode marker so
+	// the extra module routes permission prompts through the bridge below.
+	const rebindSession = async (): Promise<void> => {
+		await runtime.session.bindExtensions({ mode: "webui" });
+	};
+	await rebindSession();
+	runtime.setRebindSession(rebindSession);
+
+	// Give the bridge a core settings writer for subsystem toggles (package
+	// enable layer). Inert when the module is stubbed out of this build.
+	const settingsManager = runtime.services.settingsManager;
+	extraBridge.bindCore({
+		setPackageEnabled: (packageName, enabled) => setPackageEnabled(settingsManager, packageName, enabled),
+	});
+
 	const server = createServer((req, res) => {
 		void handleRequest(req, res).catch((error) => {
 			if (!res.headersSent) res.writeHead(500, { "content-type": "application/json" });
@@ -232,6 +295,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 	// Single in-flight turn; the frontend blocks sending while a turn streams.
 	let turnActive = false;
+	// Browser-driven OAuth login flows (see /extra/oauth/*).
+	const oauthFlows = new Map<string, OAuthFlowState>();
 
 	function json(res: ServerResponse, status: number, body: unknown): void {
 		res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -412,6 +477,21 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		};
 
 		const unsubscribe = session.subscribe(onEvent);
+		// Surface extra-module permission prompts as SSE permission_request events;
+		// POST /chat/permission answers them (see handleApi).
+		const unsubscribeBroker = extraBridge.available
+			? extraBridge.permissions.subscribe((event) => {
+					if (event.type !== "prompt") return;
+					send({
+						type: "permission_request",
+						session_id: session.sessionId,
+						tool_name: event.info.toolName,
+						reason: event.info.summary,
+						call_id: event.info.callId,
+						arguments: event.info.args,
+					});
+				})
+			: undefined;
 		const finish = () => {
 			if (!settled) {
 				settled = true;
@@ -419,6 +499,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				res.end();
 			}
 			unsubscribe();
+			unsubscribeBroker?.();
 			turnActive = false;
 		};
 
@@ -445,6 +526,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			// Client disconnected: abort the turn so tools stop.
 			void session.abort().finally(() => {
 				unsubscribe();
+				unsubscribeBroker?.();
 				turnActive = false;
 			});
 		});
@@ -465,10 +547,25 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 		const path = url.pathname;
 
-		// Health and static assets are unauthenticated; the SPA shows its own
-		// auth notice when API calls get 401.
+		// Health, static assets, and the pairing exchange are unauthenticated; the
+		// SPA shows its own auth notice when API calls get 401.
 		if (path === "/health") {
 			json(res, 200, { ok: true });
+			return;
+		}
+		if (path === "/extra/pair" && req.method === "POST") {
+			if (!extraBridge.available) {
+				json(res, 404, { error: "pairing is not included in this build" });
+				return;
+			}
+			const body = await readBody(req);
+			const code = typeof body.code === "string" ? body.code : "";
+			try {
+				extraBridge.pairing.verify(code);
+				json(res, 200, { token });
+			} catch (error) {
+				json(res, 401, { error: error instanceof Error ? error.message : "pairing failed" });
+			}
 			return;
 		}
 		if (
@@ -522,12 +619,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// --- Models ---
 		if (path === "/models" && req.method === "GET") {
 			const models = await chatModels();
+			const defaultKey = defaultModelKey();
 			const current = session.model;
 			const infos: WebuiModelInfo[] = models.map((model) => ({
 				provider: modelKey(model),
 				model: model.id,
 				provider_type: model.provider,
-				is_default: current ? model.provider === current.provider && model.id === current.id : false,
+				is_default: defaultKey
+					? modelKey(model) === defaultKey
+					: current
+						? model.provider === current.provider && model.id === current.id
+						: false,
 				effort_applicable: false,
 				reasoning_effort: null,
 				effort_levels: [],
@@ -536,12 +638,20 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 
+		/** Settings-configured default model key ("provider/id"), the single source of truth shared with the CLI. */
+		function defaultModelKey(): string {
+			const provider = settingsManager.getDefaultProvider();
+			const modelId = settingsManager.getDefaultModel();
+			if (!provider) return "";
+			return modelId ? `${provider}/${modelId}` : provider;
+		}
+
 		/** The /config payload: model defaults plus the provider-account catalog. */
 		async function configPayload(): Promise<Record<string, unknown>> {
 			const current = session.model;
 			return {
 				path: "",
-				default_provider: current ? modelKey(current) : "",
+				default_provider: defaultModelKey() || (current ? modelKey(current) : ""),
 				providers: [],
 				provider_accounts: await listAccounts(providerAccountsPath()),
 				provider_presets: PROVIDER_PRESETS,
@@ -729,12 +839,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 			// Apply the requested model before the turn. Model ids may contain
 			// slashes, so match the composite key against the catalog instead of
-			// splitting the string.
+			// splitting the string. Switching persists to the shared default so
+			// the CLI and webui agree (single source of truth).
 			if (chatBody.provider) {
 				const models = await chatModels();
 				const model = models.find((candidate) => modelKey(candidate) === chatBody.provider);
 				if (model) {
-					await runtime.session.setModel(model);
+					await runtime.session.setModel(model, { persist: true });
 				}
 			}
 			turnActive = true;
@@ -751,8 +862,20 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (path === "/chat/permission" && req.method === "POST") {
-			// nanopi runs tools without per-call approval; nothing to answer.
-			json(res, 200, { success: false, error: "no permission request is pending" });
+			if (!extraBridge.available) {
+				json(res, 200, { success: false, error: "permissions are not included in this build" });
+				return;
+			}
+			const body = await readBody(req);
+			const decision = typeof body.decision === "string" ? body.decision : "";
+			const callId = typeof body.call_id === "string" ? body.call_id : undefined;
+			const toolName = typeof body.tool_name === "string" ? body.tool_name : undefined;
+			const answered = extraBridge.answerPermission(decision, callId, toolName);
+			json(
+				res,
+				200,
+				answered ? { success: true } : { success: false, error: "no matching permission request is pending" },
+			);
 			return;
 		}
 		if (path === "/chat/user-input" && req.method === "POST") {
@@ -760,9 +883,123 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 
-		// --- Approval mode: nanopi has no per-call gate; always bypass ---
+		// --- Approval mode: bridged onto the extra module's run modes ---
 		if (path === "/approval_mode" && (req.method === "GET" || req.method === "POST")) {
-			json(res, 200, { ok: true, mode: "bypass" });
+			if (!extraBridge.available) {
+				json(res, 404, { error: "run modes are not included in this build" });
+				return;
+			}
+			if (req.method === "POST") {
+				const body = await readBody(req);
+				const result = extraBridge.setMode(body.mode);
+				if (!result.ok) {
+					json(res, 400, { error: result.error });
+					return;
+				}
+			}
+			json(res, 200, { ok: true, mode: extraBridge.state().mode });
+			return;
+		}
+
+		// --- Extra module bridge: modes, settings, subsystems, OAuth ---
+		if (path.startsWith("/extra/") && !extraBridge.available) {
+			json(res, 404, { error: "the extra module is not included in this build" });
+			return;
+		}
+		if (path === "/extra/state" && req.method === "GET") {
+			json(res, 200, extraBridge.state());
+			return;
+		}
+		if (path === "/extra/mode" && req.method === "POST") {
+			const body = await readBody(req);
+			const result = extraBridge.setMode(body.mode);
+			if (!result.ok) {
+				json(res, 400, { error: result.error });
+				return;
+			}
+			json(res, 200, { mode: result.mode });
+			return;
+		}
+		if (path === "/extra/settings" && req.method === "GET") {
+			const resolved = extraBridge.settings();
+			json(res, 200, { settings: resolved.settings, subsystems: extraBridge.subsystemStatus() });
+			return;
+		}
+		if (path === "/extra/settings" && req.method === "PUT") {
+			const body = await readBody(req);
+			if (body.defaultMode !== undefined) {
+				const result = extraBridge.setDefaultMode(body.defaultMode);
+				if (!result.ok) {
+					json(res, 400, { error: result.error });
+					return;
+				}
+			}
+			let subsystems = extraBridge.subsystemStatus();
+			if (body.subsystems && typeof body.subsystems === "object") {
+				for (const [key, value] of Object.entries(body.subsystems)) {
+					if (typeof value === "boolean") {
+						subsystems = extraBridge.setSubsystem(key as never, value);
+					}
+				}
+			}
+			json(res, 200, { settings: extraBridge.settings().settings, subsystems });
+			return;
+		}
+		if (path === "/extra/oauth/providers" && req.method === "GET") {
+			const providers = services.modelRuntime
+				.getProviders()
+				.filter((provider) => provider.auth.oauth)
+				.map((provider) => ({ id: provider.id, name: provider.name ?? provider.id }));
+			json(res, 200, { providers });
+			return;
+		}
+		if (path === "/extra/oauth/login" && req.method === "POST") {
+			const body = await readBody(req);
+			const provider = typeof body.provider === "string" ? body.provider : "";
+			const known = services.modelRuntime.getProviders().find((candidate) => candidate.id === provider);
+			if (!known?.auth.oauth) {
+				json(res, 400, { error: `no OAuth flow for provider "${provider}"` });
+				return;
+			}
+			const flow: OAuthFlowState = {
+				id: randomBytes(8).toString("hex"),
+				provider,
+				status: "pending",
+				url: undefined,
+				error: undefined,
+			};
+			oauthFlows.set(flow.id, flow);
+			void services.modelRuntime
+				.login(provider, "oauth", {
+					prompt: async () => {
+						throw new Error("this login step needs interactive input; run `nanopi /login` in the CLI instead");
+					},
+					notify: (event) => {
+						if (event.type === "auth_url" && !flow.url) flow.url = event.url;
+						if (event.type === "device_code" && !flow.url) {
+							flow.url = `${event.verificationUri} (code: ${event.userCode})`;
+						}
+					},
+				})
+				.then(() => {
+					flow.status = "done";
+				})
+				.catch((error: Error) => {
+					flow.status = "error";
+					flow.error = error.message;
+				});
+			json(res, 200, { flow_id: flow.id });
+			return;
+		}
+		if (path === "/extra/oauth/status" && req.method === "GET") {
+			const flowId = url.searchParams.get("flow") ?? "";
+			const flow = oauthFlows.get(flowId);
+			if (!flow) {
+				json(res, 404, { error: "unknown login flow" });
+				return;
+			}
+			json(res, 200, { status: flow.status, provider: flow.provider, url: flow.url, error: flow.error });
+			if (flow.status !== "pending") oauthFlows.delete(flowId);
 			return;
 		}
 
@@ -995,11 +1232,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			server.removeListener("error", reject);
 			const bound = server.address();
 			const actualPort = typeof bound === "object" && bound ? bound.port : port;
-			console.log(`nanopi webui listening on http://${host}:${actualPort}`);
-			if (distExists) {
-				console.log(`Open: http://${host}:${actualPort}/?token=${token}`);
-			} else {
+			const url = `http://${host}:${actualPort}`;
+			console.log(`nanopi webui listening on ${url}`);
+			if (!distExists) {
 				console.log("webui assets are missing; run `pnpm --filter @nanopi/webui run build` and restart.");
+			} else if (extraBridge.available) {
+				// Pairing handoff: short one-time code exchanged at /extra/pair for the
+				// bearer token, replacing the long token-in-URL.
+				const pairing = extraBridge.pairing.generate();
+				const minutes = Math.max(1, Math.round((pairing.expiresAt - Date.now()) / 60_000));
+				console.log(`Open: ${url}`);
+				console.log(`Pairing code: ${pairing.code} (valid ${minutes} min, one-time)`);
+			} else {
+				console.log(`Open: ${url}/?token=${token}`);
 			}
 			console.log("Press Ctrl+C to stop.");
 		});

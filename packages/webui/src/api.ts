@@ -292,8 +292,9 @@ export async function streamChat(
 
 export async function respondPermission(
   sessionId: string,
-  decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash',
+  decision: 'allow' | 'deny' | 'allow_session' | 'ai_decide',
   toolName?: string,
+  callId?: string,
 ): Promise<{ success: boolean }> {
   const resp = await fetch('/chat/permission', {
     method: 'POST',
@@ -301,7 +302,7 @@ export async function respondPermission(
       'Content-Type': 'application/json',
       ...authHeaders(),
     },
-    body: JSON.stringify({ session_id: sessionId, decision, tool_name: toolName }),
+    body: JSON.stringify({ session_id: sessionId, decision, tool_name: toolName, call_id: callId }),
   });
   // A request that did not land throws: the card must stay up to be answered
   // again, or the person thinks it was approved while the turn waits on an
@@ -955,10 +956,13 @@ export async function getSession(
 
 // --- Live session (multi-tab real-time sync) ---
 
-/** Approval mode: 'build' = interactive approval, 'plan' = read-only exploration,
- *  'bypass' = Auto (auto-approve everything). Mirrors the daemon `ApprovalMode`
- *  while preserving the established wire value. */
-export type ApprovalMode = 'build' | 'plan' | 'bypass' | 'accept_edits';
+/** Run mode of the extra module: 'plan' = read-only exploration (ls/find/pwd
+ *  + read), 'minimal' = shell tools only, 'standard' = unrestricted.
+ *  Session state on the server; switching is immediate. */
+export type ApprovalMode = 'plan' | 'minimal' | 'standard';
+
+/** Run modes from the extra module (same wire values as ApprovalMode). */
+export type RunMode = ApprovalMode;
 
 export interface ApprovalModeResponse {
   ok: boolean;
@@ -1237,6 +1241,117 @@ export async function getApprovalMode(): Promise<ApprovalMode> {
   return body.mode;
 }
 
+// --- Extra module bridge (run modes, settings, subsystems, pairing, OAuth) ---
+
+export interface ExtraState {
+  available: boolean;
+  mode: RunMode;
+  yolo: boolean;
+}
+
+/** Probe the extra module; null when the build excludes it (selector stays hidden). */
+export async function getExtraState(): Promise<ExtraState | null> {
+  try {
+    const resp = await fetch('/extra/state', { headers: authHeaders() });
+    if (resp.status === 404) return null;
+    if (!resp.ok) return null;
+    return (await resp.json()) as ExtraState;
+  } catch {
+    return null;
+  }
+}
+
+export async function postExtraMode(mode: RunMode): Promise<RunMode> {
+  const resp = await fetch('/extra/mode', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ mode }),
+  });
+  if (!resp.ok) throw new Error(`switch mode failed: ${resp.status}`);
+  return ((await resp.json()) as { mode: RunMode }).mode;
+}
+
+export interface ExtraSettingsInfo {
+  settings: { defaultMode: RunMode; subsystems: Record<string, boolean> };
+  subsystems: Array<{ key: string; enabled: boolean; available: boolean; detail?: string }>;
+}
+
+export async function getExtraSettings(): Promise<ExtraSettingsInfo> {
+  const resp = await fetch('/extra/settings', { headers: authHeaders() });
+  if (!resp.ok) throw new Error(`get extra settings failed: ${resp.status}`);
+  return (await resp.json()) as ExtraSettingsInfo;
+}
+
+export async function putExtraSettings(update: {
+  defaultMode?: RunMode;
+  subsystems?: Record<string, boolean>;
+}): Promise<ExtraSettingsInfo> {
+  const resp = await fetch('/extra/settings', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify(update),
+  });
+  if (!resp.ok) throw new Error(`save extra settings failed: ${resp.status}`);
+  return (await resp.json()) as ExtraSettingsInfo;
+}
+
+/** Exchange the one-time pairing code printed by `nanopi webui` for a session
+ *  token; stores it where getToken() reads. */
+export async function pairWithCode(code: string): Promise<void> {
+  const resp = await fetch('/extra/pair', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  const body = (await resp.json().catch(() => ({}))) as { token?: string; error?: string };
+  if (!resp.ok || !body.token) {
+    throw new Error(body.error ?? `pairing failed: ${resp.status}`);
+  }
+  sessionStorage.setItem(SESSION_KEY, body.token);
+}
+
+export interface OAuthProviderInfo {
+  id: string;
+  name: string;
+}
+
+export async function getOAuthProviders(): Promise<OAuthProviderInfo[]> {
+  try {
+    const resp = await fetch('/extra/oauth/providers', { headers: authHeaders() });
+    if (resp.status === 404) return [];
+    if (!resp.ok) return [];
+    return ((await resp.json()) as { providers: OAuthProviderInfo[] }).providers;
+  } catch {
+    return [];
+  }
+}
+
+export interface OAuthFlowStatus {
+  status: 'pending' | 'done' | 'error';
+  provider: string;
+  url?: string | null;
+  error?: string | null;
+}
+
+export async function startOAuthLogin(provider: string): Promise<string> {
+  const resp = await fetch('/extra/oauth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
+    body: JSON.stringify({ provider }),
+  });
+  if (!resp.ok) {
+    const body = (await resp.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `login failed: ${resp.status}`);
+  }
+  return ((await resp.json()) as { flow_id: string }).flow_id;
+}
+
+export async function getOAuthStatus(flowId: string): Promise<OAuthFlowStatus> {
+  const resp = await fetch(`/extra/oauth/status?flow=${encodeURIComponent(flowId)}`, { headers: authHeaders() });
+  if (!resp.ok) throw new Error(`login status failed: ${resp.status}`);
+  return (await resp.json()) as OAuthFlowStatus;
+}
+
 /** Set `reasoning_effort` for a provider endpoint. `effort` is
  *  'low' | 'medium' | 'high' | 'max' | null (clear → model default).
  *  Persists to the provider config so the next turn (live or /chat) picks it up. */
@@ -1258,13 +1373,14 @@ export async function postLiveReasoningEffort(
 }
 
 export async function postLivePermission(
-  decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash',
+  decision: 'allow' | 'deny' | 'allow_session' | 'ai_decide',
   toolName?: string,
+  callId?: string,
 ): Promise<{ accepted: boolean }> {
   const resp = await fetch('/live/permission', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...authHeaders() },
-    body: JSON.stringify({ decision, tool_name: toolName }),
+    body: JSON.stringify({ decision, tool_name: toolName, call_id: callId }),
   });
   if (!resp.ok) throw new Error(`answer live permission failed: ${resp.status}`);
   return resp.json();

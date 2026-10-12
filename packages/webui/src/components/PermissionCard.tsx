@@ -23,7 +23,11 @@ interface PermissionCardProps {
   /** Optional override for the decision action. When provided, replaces the
    *  default respondPermission call. Used by live-session approval (POST /live/permission)
    *  so the non-sync /chat path is unchanged. */
-  onDecide?: (decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash', toolName?: string) => Promise<void>;
+  onDecide?: (
+    decision: 'allow' | 'deny' | 'allow_session' | 'ai_decide',
+    toolName?: string,
+    callId?: string,
+  ) => Promise<void>;
 }
 
 function formatArgs(args: unknown): string {
@@ -48,15 +52,15 @@ export function PermissionCard({ req, onDone, onDecide }: PermissionCardProps) {
   const [loading, setLoading] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
 
-  async function decide(decision: 'allow' | 'deny' | 'always_allow' | 'allow_persist' | 'allow_all_bash') {
+  async function decide(decision: 'allow' | 'deny' | 'allow_session' | 'ai_decide') {
     if (loading) return;
     setLoading(true);
     setFailed(null);
     try {
       if (onDecide) {
-        await onDecide(decision, req.tool_name);
+        await onDecide(decision, req.tool_name, req.call_id);
       } else {
-        await respondPermission(req.session_id, decision, req.tool_name);
+        await respondPermission(req.session_id, decision, req.tool_name, req.call_id);
       }
     } catch (error) {
       // The answer never reached the daemon. Closing here used to read as
@@ -95,24 +99,17 @@ export function PermissionCard({ req, onDone, onDecide }: PermissionCardProps) {
       footer={
         <>
           <button class="btn" disabled={loading} onClick={() => decide('deny')}>
-            {t('perm.deny')}
+            {t('perm.reject')}
           </button>
           <button class="btn btn-primary" disabled={loading} onClick={() => decide('allow')}>
-            {t('perm.approve')}
+            {t('perm.allowOnce')}
           </button>
-          <button class="btn" disabled={loading} onClick={() => decide('always_allow')}>
-            {t('perm.alwaysAllow')}
+          <button class="btn" disabled={loading} onClick={() => decide('allow_session')}>
+            {t('perm.allowSession')}
           </button>
-          {req.allow_all_bash && (
-            <button class="btn btn-danger" disabled={loading} onClick={() => decide('allow_all_bash')}>
-              {t('perm.allowAllBash')}
-            </button>
-          )}
-          {req.tool_name.startsWith('mcp__') && (
-            <button class="btn" disabled={loading} onClick={() => decide('allow_persist')}>
-              {t('perm.allowPersist')}
-            </button>
-          )}
+          <button class="btn" disabled={loading} onClick={() => decide('ai_decide')}>
+            {t('perm.aiDecide')}
+          </button>
         </>
       }
     >

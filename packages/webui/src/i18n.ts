@@ -111,16 +111,14 @@ const zh = {
   // Model selector
   'model.label': '模型',
 
-  // Approval mode selector (Build / Accept Edits / Auto / Plan)
+  // Run mode selector (Standard / Plan / Minimal)
   'mode.label': '模式',
-  'mode.build': 'Build',
-  'mode.build.desc': '改动前逐个审批（默认）',
-  'mode.accept_edits': 'Accept Edits',
-  'mode.accept_edits.desc': '自动批准文件改动，命令需审批',
-  'mode.auto': 'Auto',
-  'mode.auto.desc': '⚠ 自动批准所有操作，含改文件/跑命令',
+  'mode.standard': 'Standard',
+  'mode.standard.desc': '标准模式，无限制',
   'mode.plan': 'Plan',
   'mode.plan.desc': '只读探索，先出方案',
+  'mode.minimal': 'Minimal',
+  'mode.minimal.desc': '仅提供 shell 工具',
 
   // Reasoning effort selector for endpoints that explicitly enable it.
   'effort.label': '强度',
@@ -344,11 +342,30 @@ const zh = {
   'perm.title': '工具请求批准',
   'perm.sendFailed': '没能提交到后台（{error}），请再点一次',
   'perm.args': '参数',
-  'perm.deny': '拒绝',
-  'perm.approve': '批准',
-  'perm.alwaysAllow': '本会话总是允许',
-  'perm.allowAllBash': '本会话允许所有 Bash（含破坏性）',
-  'perm.allowPersist': '永久允许此工具',
+  'perm.reject': '拒绝',
+  'perm.allowOnce': '允许一次',
+  'perm.allowSession': '本会话允许',
+  'perm.aiDecide': '让 AI 决定',
+
+  // Extra module settings (default run mode + subsystem switches)
+  'extra.title': '运行模式与子系统',
+  'extra.defaultMode': '新会话默认运行模式',
+  'extra.subsystems': '子系统开关',
+  'extra.subsystem.unavailable': '未安装',
+  'extra.subsystem.lsp': 'LSP (pi-lsp-mini)',
+  'extra.subsystem.mcp': 'MCP（仅子代理可用）',
+  'extra.subsystem.subagent': 'Subagent',
+  'extra.subsystem.askquestion': '结构化提问 (ask-lite)',
+  'extra.subsystem.todo': 'Todo (todo-lite)',
+  'extra.saved': '已保存',
+
+  // OAuth sign-in (webui)
+  'oauth.title': '服务商登录',
+  'oauth.start': '登录',
+  'oauth.pending': '等待授权…在打开的页面完成登录',
+  'oauth.open': '打开授权页面',
+  'oauth.done': '登录完成',
+  'oauth.failed': '登录失败：{error}',
 
   // User input card
   'userInput.submit': '提交',
@@ -386,7 +403,8 @@ const zh = {
 
   // Slash commands
   'cmd.plan.desc': '切换到 Plan 模式（只读探索）',
-  'cmd.build.desc': '切换到 Build 模式（完整执行）',
+  'cmd.minimal.desc': '切换到 Minimal 模式（仅 shell 工具）',
+  'cmd.standard.desc': '切换到 Standard 模式（无限制）',
   'cmd.model.desc': '切换模型（带名切换 / 不带名打开选择器）',
   'cmd.cd.desc': '切换工作目录',
   'cmd.cd.needArg': '用法：/cd <路径>',
@@ -558,9 +576,13 @@ const zh = {
   'common.cancel': '取消',
   'compat.oldBrowser': '当前浏览器内核较旧，页面部分样式可能显示异常。建议使用 Chrome / Edge {version} 及以上版本。',
   'compat.dismiss': '不再提示',
-  'auth.required.title': '需要从终端打开',
-  'auth.required.body': '这个页面需要终端给出的链接才能访问。请在 nanopi 终端里运行 /webui，复制它打印的那条带 token 的链接，粘贴到这个浏览器的地址栏打开。',
-  'auth.required.hint': '这条链接在本次 webui 运行期间可以在任意浏览器使用；webui 重启后需要重新获取。',
+  'auth.required.title': '配对 nanopi webui',
+  'auth.required.body': '在运行 nanopi webui 的终端里找到打印的配对码，输入后即可连接本会话。',
+  'auth.required.hint': '配对码 10 分钟内一次性有效；webui 重启后需要重新配对。',
+  'auth.pair.input': '配对码',
+  'auth.pair.submit': '配对',
+  'auth.pair.submitting': '配对中…',
+  'auth.pair.failed': '配对失败：{error}',
 } as const;
 
 export type MsgKey = keyof typeof zh;
@@ -568,9 +590,13 @@ export type MsgKey = keyof typeof zh;
 const en: Record<MsgKey, string> = {
   'compat.oldBrowser': 'This browser engine is older than this page was built for, so parts of it may look wrong. Chrome / Edge {version} or newer is recommended.',
   'compat.dismiss': "Don't show again",
-  'auth.required.title': 'Open it from the terminal',
-  'auth.required.body': 'This page needs the link the terminal gives. Run /webui in nanopi, copy the link with the token it prints, and open it in this browser.',
-  'auth.required.hint': 'That link works in any browser for as long as this webui runs; after a restart, get a new one.',
+  'auth.required.title': 'Pair with nanopi webui',
+  'auth.required.body': 'Enter the pairing code printed in the terminal running nanopi webui to connect this browser.',
+  'auth.required.hint': 'The code is one-time and valid for 10 minutes; re-pair after a webui restart.',
+  'auth.pair.input': 'Pairing code',
+  'auth.pair.submit': 'Pair',
+  'auth.pair.submitting': 'Pairing…',
+  'auth.pair.failed': 'Pairing failed: {error}',
   'header.menu': 'Menu',
   'header.sessionList': 'Session list',
   'header.switchCwd': 'Switch working directory',
@@ -666,16 +692,14 @@ const en: Record<MsgKey, string> = {
 
   'model.label': 'Model',
 
-  // Approval mode selector (Build / Accept Edits / Auto / Plan)
+  // Run mode selector (Standard / Plan / Minimal)
   'mode.label': 'Mode',
-  'mode.build': 'Build',
-  'mode.build.desc': 'Approve each change (default)',
-  'mode.accept_edits': 'Accept Edits',
-  'mode.accept_edits.desc': 'Auto-approve file edits, ask for commands',
-  'mode.auto': 'Auto',
-  'mode.auto.desc': '⚠ Auto-approve everything, incl. edits/commands',
+  'mode.standard': 'Standard',
+  'mode.standard.desc': 'Unrestricted (default)',
   'mode.plan': 'Plan',
   'mode.plan.desc': 'Read-only — explore and plan first',
+  'mode.minimal': 'Minimal',
+  'mode.minimal.desc': 'Shell tools only',
 
   // Reasoning effort selector for endpoints that explicitly enable it.
   'effort.label': 'Effort',
@@ -891,11 +915,30 @@ const en: Record<MsgKey, string> = {
   'perm.title': 'Tool approval request',
   'perm.sendFailed': 'Your answer did not reach the daemon ({error}). Try again.',
   'perm.args': 'Arguments',
-  'perm.deny': 'Deny',
-  'perm.approve': 'Approve',
-  'perm.alwaysAllow': 'Always allow this session',
-  'perm.allowAllBash': 'Allow ALL Bash this session (incl. destructive)',
-  'perm.allowPersist': 'Always allow this tool',
+  'perm.reject': 'Reject',
+  'perm.allowOnce': 'Allow once',
+  'perm.allowSession': 'Allow this session',
+  'perm.aiDecide': 'Let the AI decide',
+
+  // Extra module settings (default run mode + subsystem switches)
+  'extra.title': 'Run modes & subsystems',
+  'extra.defaultMode': 'Default run mode for new sessions',
+  'extra.subsystems': 'Subsystem switches',
+  'extra.subsystem.unavailable': 'not installed',
+  'extra.subsystem.lsp': 'LSP (pi-lsp-mini)',
+  'extra.subsystem.mcp': 'MCP (subagents only)',
+  'extra.subsystem.subagent': 'Subagent',
+  'extra.subsystem.askquestion': 'Ask question (ask-lite)',
+  'extra.subsystem.todo': 'Todo (todo-lite)',
+  'extra.saved': 'Saved',
+
+  // OAuth sign-in (webui)
+  'oauth.title': 'Provider sign-in',
+  'oauth.start': 'Sign in',
+  'oauth.pending': 'Waiting for authorization… complete the login in the opened page',
+  'oauth.open': 'Open authorization page',
+  'oauth.done': 'Signed in',
+  'oauth.failed': 'Sign-in failed: {error}',
 
   // User input card
   'userInput.submit': 'Submit',
@@ -933,7 +976,8 @@ const en: Record<MsgKey, string> = {
 
   // Slash commands
   'cmd.plan.desc': 'Switch to Plan mode (read-only exploration)',
-  'cmd.build.desc': 'Switch to Build mode (full execution)',
+  'cmd.minimal.desc': 'Switch to Minimal mode (shell tools only)',
+  'cmd.standard.desc': 'Switch to Standard mode (unrestricted)',
   'cmd.model.desc': 'Switch model (with name / without opens picker)',
   'cmd.cd.desc': 'Change working directory',
   'cmd.cd.needArg': 'Usage: /cd <path>',

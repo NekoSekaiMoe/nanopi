@@ -300,6 +300,18 @@ const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "u
 // enabled flows. load.ts's component guard fails disabled flows cleanly.
 const enabledFlows = OAUTH_FLOWS.filter((flow) => isComponentEnabled(oauthComponentName(flow)));
 const plugins = [httpsProxyAgentNamedExportPlugin];
+if (components["modes"] === false) {
+	// Same inert-stub alias as the bundle build: the modes module stays out of
+	// the single-file artifact entirely.
+	plugins.unshift({
+		name: "pi-extra-disabled-stub",
+		setup(build) {
+			build.onResolve({ filter: /^@nanopi\/pi-extra$/ }, () => ({
+				path: join(repoRoot, "scripts", "pi-extra-disabled-stub.mjs"),
+			}));
+		},
+	});
+}
 let shimDir;
 if (enabledFlows.length < OAUTH_FLOWS.length) {
 	shimDir = mkdtempSync(join(tmpdir(), "nanopi-bundled-oauth-"));

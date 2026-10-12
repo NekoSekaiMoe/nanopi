@@ -1,4 +1,4 @@
-export type ApprovalMode = 'build' | 'plan' | 'bypass' | 'accept_edits';
+export type ApprovalMode = 'plan' | 'minimal' | 'standard';
 
 export interface ApprovalModeState {
   confirmedMode: ApprovalMode;

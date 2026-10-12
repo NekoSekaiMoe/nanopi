@@ -21,6 +21,9 @@
 			"@nanopi/pi-agent-core": [
 				"./packages/agent/src/index.ts"
 			],
+			"@nanopi/pi-extra": [
+				"./packages/extra/src/index.ts"
+			],
 			"@nanopi/pi-coding-agent": [
 				"./packages/coding-agent/src/index.ts"
 			],

@@ -1,0 +1,50 @@
+{
+	"name": "@nanopi/pi-extra",
+	"version": "1.1.0",
+	"description": "Run modes, permission gating, subsystem toggles, ENV overrides, and webui bridge module for nanopi",
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		},
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"clean": "shx rm -rf dist",
+		"build": "tsc -p tsconfig.build.json",
+		"test": "vitest --run",
+		"prepublishOnly": "npm run build"
+	},
+	"dependencies": {
+		"@nanopi/pi-tui": "^1.1.0"
+	},
+	"devDependencies": {
+		"@types/node": "22.19.19",
+		"shx": "0.3.4",
+		"typescript": "7.0.2",
+		"vitest": "4.1.11"
+	},
+	"keywords": [
+		"nanopi",
+		"coding-agent",
+		"run-modes",
+		"permissions"
+	],
+	"author": "NekoSekaiMoe",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/NekoSekaiMoe/nanopi.git",
+		"directory": "packages/extra"
+	},
+	"engines": {
+		"node": ">=22.19.0"
+	}
+}

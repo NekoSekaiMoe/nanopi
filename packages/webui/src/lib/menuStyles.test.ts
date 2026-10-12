@@ -21,19 +21,17 @@ test('/ and @ menus share command menu selection colors', () => {
   assert.match(css, /\.at-row:hover\s*\{\s*background:\s*var\(--app-command-menu-hover-background\)/);
 });
 
-test('approval modes use canonical order and label bypass wire mode as Auto', () => {
+test('run modes use canonical order (standard, plan, minimal)', () => {
   const selector = readFileSync(join(root, 'src/components/ModeSelector.tsx'), 'utf8');
   const messages = readFileSync(join(root, 'src/i18n.ts'), 'utf8');
-  const build = selector.indexOf("val: 'build'");
-  const acceptEdits = selector.indexOf("val: 'accept_edits'");
-  const auto = selector.indexOf("val: 'bypass', label: 'mode.auto'");
+  const standard = selector.indexOf("val: 'standard'");
   const plan = selector.indexOf("val: 'plan'");
+  const minimal = selector.indexOf("val: 'minimal'");
 
-  assert.ok(build >= 0);
-  assert.ok(build < acceptEdits);
-  assert.ok(acceptEdits < auto);
-  assert.ok(auto < plan);
-  assert.doesNotMatch(selector, /label:\s*'mode\.bypass'/);
-  assert.match(messages, /'mode\.auto':\s*'Auto'/);
-  assert.doesNotMatch(messages, /'mode\.bypass':/);
+  assert.ok(standard >= 0);
+  assert.ok(standard < plan);
+  assert.ok(plan < minimal);
+  assert.match(messages, /'mode\.standard':\s*'Standard'/);
+  assert.doesNotMatch(messages, /'mode\.build':/);
+  assert.doesNotMatch(messages, /'mode\.auto':/);
 });

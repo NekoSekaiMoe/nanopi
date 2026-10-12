@@ -20,6 +20,17 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // components cleanly (see isBuildComponentEnabled in the packages).
 const { flavor, components } = resolveBuildFlavor(repoRoot);
 validateOAuthFlowRegistry({ repoRoot, components });
+// A flavor may exclude the modes module (packages/extra): alias @nanopi/pi-extra
+// to an inert stub so the module is physically absent from the bundle while
+// its import sites keep working (see scripts/pi-extra-disabled-stub.mjs).
+const piExtraStubPlugin = {
+	name: "pi-extra-disabled-stub",
+	setup(build) {
+		build.onResolve({ filter: /^@nanopi\/pi-extra$/ }, () => ({
+			path: join(repoRoot, "scripts", "pi-extra-disabled-stub.mjs"),
+		}));
+	},
+};
 const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
@@ -112,7 +123,11 @@ function commonBuildOptions() {
 		// package replaces it with a synchronous lazy require so jiti loads only
 		// when importing an extension; Babel remains deferred until a cache miss
 		// needs transformation.
-		plugins: [lazyJitiPlugin, httpsProxyAgentNamedExportPlugin],
+		plugins: [
+			...(components.modes === false ? [piExtraStubPlugin] : []),
+			lazyJitiPlugin,
+			httpsProxyAgentNamedExportPlugin,
+		],
 		sourcemap: false,
 		target: "node22.19",
 		// Do not apply the monorepo's source-oriented path aliases while bundling

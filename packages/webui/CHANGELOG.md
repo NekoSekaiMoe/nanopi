@@ -5,6 +5,16 @@
 ### Added
 
 - Initial port of the nanopi browser UI from AtomCode's webui (MIT, Copyright (c) 2026 Yubang Xu): Preact + Vite + Tailwind frontend served by `nanopi webui`, rebranded from AtomCode and wired into the pnpm workspace with pinned dependencies.
+- Added the run-mode selector: three modes (`standard` unrestricted, `plan` read-only exploration, `minimal` shell tools only) bridged onto the extra module, touch-friendly via a bottom sheet on small screens, and hidden entirely when the build excludes the module (`/extra/state` 404)
+- Added real permission gating: the tool approval card offers Reject / Allow once / Allow this session / Let the AI decide, driven by `permission_request` SSE events during `/chat` turns and answered through `POST /chat/permission` (the stub always answered "no pending request")
+- Added a pairing page replacing the token-in-URL handoff: enter the short one-time code `nanopi webui` prints to receive the session token
+- Added the "Run modes & subsystems" settings dialog: default run mode for new sessions plus lsp/mcp/subagent/askquestion/todo switches (unavailable subsystems are marked)
+- Added provider OAuth sign-in in the model settings: starts the CLI's web OAuth flow server-side, links the authorization page, and refreshes the config on completion; credentials land in the shared auth storage
+
+### Changed
+
+- Changed the approval-mode wire values to the extra module's run modes (`plan`/`minimal`/`standard`); the `/build` slash command became `/standard` and `/minimal` joined `/plan`
+- Changed the model selector to follow the settings default model (the same source of truth the CLI uses); picks made in the webui persist as the shared default
 - Added a collapsible right info panel (session actions, working directory, skills) toggled from an always-present session header that shows the session title on history views and the brand wordmark on the landing page
 - Added a user wallpaper: an image picked in the theme dialog sits behind the UI with an automatic scrim for readability and translucent blurred panels; stored only in this browser (localStorage, 4 MB cap)
 
