@@ -713,8 +713,8 @@ describe("Editor component", () => {
 			for (let index = 0; index < 10; index++) editor.handleInput("\x1b[A");
 
 			const lines = editor.render(width);
-			assert.strictEqual(stripVTControlCharacters(lines[0]!), `${"─".repeat(15)} ↑ 9 more ${"─".repeat(15)}`);
-			assert.strictEqual(stripVTControlCharacters(lines.at(-1)!), `${"─".repeat(15)} ↓ 4 more ${"─".repeat(15)}`);
+			assert.strictEqual(stripVTControlCharacters(lines[0]!), `${"─".repeat(14)} ↑ 9 · ↓ 6 ${"─".repeat(15)}`);
+			assert.strictEqual(stripVTControlCharacters(lines.at(-1)!), "─".repeat(width));
 		});
 
 		it("keeps truncated scroll indicators within width and preserves their color (issue #6962)", () => {
@@ -732,7 +732,8 @@ describe("Editor component", () => {
 			const bottomBorder = lines.at(-1)!;
 
 			assert.match(stripVTControlCharacters(topBorder), /^─── ↑/);
-			assert.match(stripVTControlCharacters(bottomBorder), /^─── ↓/);
+			assert.strictEqual(stripVTControlCharacters(topBorder), "─── ↑ 9...");
+			assert.strictEqual(stripVTControlCharacters(bottomBorder), "─".repeat(width));
 			assert.strictEqual(topBorder, borderColor(stripVTControlCharacters(topBorder)));
 			assert.strictEqual(bottomBorder, borderColor(stripVTControlCharacters(bottomBorder)));
 			for (const line of lines) {
@@ -3801,21 +3802,21 @@ describe("Editor component", () => {
 	describe("Paste marker atomic behavior", () => {
 		/** Helper: simulate a large paste that creates a marker */
 		function pasteWithMarker(editor: Editor): string {
-			const bigContent = "line\n".repeat(20).trimEnd(); // 20 lines
+			const bigContent = "line\n".repeat(210).trimEnd(); // 1050 chars
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
-			// The editor replaces large pastes with a marker like "[paste #1 +20 lines]"
+			// The editor replaces large pastes with a marker like "[paste #1 1050 chars]"
 			return editor.getText();
 		}
 
-		/** Helper: 12-line paste content with a distinguishing tag */
+		/** Helper: large paste content (>1000 chars) with a distinguishing tag */
 		function bigPaste(tag: string): string {
-			return Array.from({ length: 12 }, (_, i) => `${tag}${i}`).join("\n");
+			return Array.from({ length: 12 }, (_, i) => `${tag}${i} ${"x".repeat(95)}`).join("\n");
 		}
 
 		it("creates a paste marker for large pastes", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			const text = pasteWithMarker(editor);
-			assert.match(text, /\[paste #\d+ \+\d+ lines\]/);
+			assert.match(text, /\[paste #\d+ \d+ chars\]/);
 		});
 
 		it("treats paste marker as single unit for right arrow", () => {
@@ -3823,7 +3824,7 @@ describe("Editor component", () => {
 			editor.handleInput("A");
 			pasteWithMarker(editor);
 			editor.handleInput("B");
-			// Text: "A[paste #1 +20 lines]B", cursor at end
+			// Text: "A[paste #1 1050 chars]B", cursor at end
 
 			// Go to start
 			editor.handleInput("\x01"); // Ctrl+A
@@ -3835,7 +3836,7 @@ describe("Editor component", () => {
 
 			// Right arrow: should skip the entire marker
 			editor.handleInput("\x1b[C");
-			const marker = editor.getText().match(/\[paste #\d+ \+\d+ lines\]/)![0];
+			const marker = editor.getText().match(/\[paste #\d+ \d+ chars\]/)![0];
 			assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
 
 			// Right arrow: should move past "B"
@@ -3853,7 +3854,7 @@ describe("Editor component", () => {
 			// Left arrow: past "B"
 			editor.handleInput("\x1b[D");
 			const text = editor.getText();
-			const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+			const marker = text.match(/\[paste #\d+ \d+ chars\]/)![0];
 			assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
 
 			// Left arrow: skip the entire marker
@@ -3872,7 +3873,7 @@ describe("Editor component", () => {
 			editor.handleInput("B");
 
 			const text = editor.getText();
-			const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+			const marker = text.match(/\[paste #\d+ \d+ chars\]/)![0];
 
 			// Position cursor right after the marker (before "B")
 			editor.handleInput("\x01"); // Ctrl+A
@@ -3910,10 +3911,10 @@ describe("Editor component", () => {
 			pasteWithMarker(editor);
 			editor.handleInput(" ");
 			editor.handleInput("Y");
-			// Text: "X [paste #1 +20 lines] Y"
+			// Text: "X [paste #1 1050 chars] Y"
 
 			const text = editor.getText();
-			const marker = text.match(/\[paste #\d+ \+\d+ lines\]/)![0];
+			const marker = text.match(/\[paste #\d+ \d+ chars\]/)![0];
 
 			// Go to start
 			editor.handleInput("\x01"); // Ctrl+A
@@ -4026,7 +4027,7 @@ describe("Editor component", () => {
 			pasteWithMarker(editor);
 
 			const text = editor.getText();
-			const markers = [...text.matchAll(/\[paste #\d+ \+\d+ lines\]/g)];
+			const markers = [...text.matchAll(/\[paste #\d+ \d+ chars\]/g)];
 			assert.strictEqual(markers.length, 2);
 
 			// Go to start
@@ -4064,14 +4065,14 @@ describe("Editor component", () => {
 		});
 
 		it("does not crash when paste marker is wider than terminal width", () => {
-			// Reproduce: terminal width 8, paste marker "[paste #1 +47 lines]" (21 chars)
+			// Reproduce: terminal width 8, paste marker "[paste #1 1100 chars]" (21 chars)
 			const tui = createTestTUI();
 			const editor = new Editor(tui, defaultEditorTheme);
-			const bigContent = "line\n".repeat(47).trimEnd();
+			const bigContent = "x".repeat(1100);
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 
 			const text = editor.getText();
-			const marker = text.match(/\[paste #\d+ \+\d+ lines\]/);
+			const marker = text.match(/\[paste #\d+ \d+ chars\]/);
 			assert.ok(marker, "paste marker should be created");
 			assert.ok(visibleWidth(marker[0]) > 8, "marker should be wider than render width");
 
@@ -4087,7 +4088,7 @@ describe("Editor component", () => {
 		});
 
 		it("does not crash when text + paste marker exceeds terminal width with cursor on marker", () => {
-			// Reproduce: terminal width 54, text "b".repeat(35) + "[paste #1 +27 lines]" + "bbbb"
+			// Reproduce: terminal width 54, text "b".repeat(35) + "[paste #1 1200 chars]" + "bbbb"
 			// Cursor lands on the paste marker after word-wrap, causing the rendered line
 			// to be 55 visible chars (1 over the width).
 			const tui = createTestTUI();
@@ -4096,8 +4097,8 @@ describe("Editor component", () => {
 			// Type 35 'b' characters
 			for (let i = 0; i < 35; i++) editor.handleInput("b");
 
-			// Paste 27 lines
-			const bigContent = "line\n".repeat(27).trimEnd();
+			// Paste a large single-line blob
+			const bigContent = "x".repeat(1200);
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 
 			// Type a few more characters
@@ -4132,8 +4133,8 @@ describe("Editor component", () => {
 			editor.handleInput(" ");
 			for (let i = 0; i < 35; i++) editor.handleInput("b");
 
-			// Paste 27 lines to create marker
-			const bigContent = "line\n".repeat(27).trimEnd();
+			// Paste a large single-line blob to create a marker
+			const bigContent = "x".repeat(1200);
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 
 			// Type trailing chars
@@ -4152,23 +4153,24 @@ describe("Editor component", () => {
 
 		it("expands large pasted content literally in getExpandedText", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			const filler = "0123456789".repeat(10);
 			const pastedText = [
-				"line 1",
-				"line 2",
-				"line 3",
-				"line 4",
-				"line 5",
-				"line 6",
-				"line 7",
-				"line 8",
-				"line 9",
-				"line 10",
+				`${filler} line 1`,
+				`${filler} line 2`,
+				`${filler} line 3`,
+				`${filler} line 4`,
+				`${filler} line 5`,
+				`${filler} line 6`,
+				`${filler} line 7`,
+				`${filler} line 8`,
+				`${filler} line 9`,
+				`${filler} line 10`,
 				"tokens $1 $2 $& $$ $` $' end",
 			].join("\n");
 
 			editor.handleInput(`\x1b[200~${pastedText}\x1b[201~`);
 
-			assert.match(editor.getText(), /\[paste #\d+ \+\d+ lines\]/);
+			assert.match(editor.getText(), /\[paste #\d+ \d+ chars\]/);
 			assert.strictEqual(editor.getExpandedText(), pastedText);
 		});
 
@@ -4254,21 +4256,21 @@ describe("Editor component", () => {
 			const editor = new Editor(tui, defaultEditorTheme);
 
 			// Build:
-			// Logical line 0: "abcdefgh" + marker(21 chars) + "ijklmnopqr"
+			// Logical line 0: "abcdefgh" + marker(22 chars) + "ijklmnopqr"
 			// Logical line 1: "123456789012345678"
 			//
-			// Marker "[paste #1 +100 lines]" (21 chars) is wider than the
-			// terminal (20). Word-wrap splits at the space before "lines",
+			// Marker "[paste #1 11000 chars]" (22 chars) is wider than the
+			// terminal (20). Word-wrap splits at the space before "chars",
 			// producing:
 			//   VL1: abcdefgh              (startCol 0,  len 8)
-			//   VL2: [paste #1 +100        (startCol 8,  len 15) <- marker head
-			//   VL3: lines]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
+			//   VL2: [paste #1 11000       (startCol 8,  len 15) <- marker head
+			//   VL3: chars]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
 			//   VL4: 123456789012345678    (line 1)
 			//
-			// On VL3 the marker tail "lines]" occupies visual cols 0-5.
-			// Content ("i") starts at visual col 6 = logical col 29.
+			// On VL3 the marker tail "chars]" occupies visual cols 0-5.
+			// Content ("i") starts at visual col 6 = logical col 30.
 			for (const ch of "abcdefgh") editor.handleInput(ch);
-			const bigContent = "line\n".repeat(100).trimEnd();
+			const bigContent = "x".repeat(11000);
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 			for (const ch of "ijklmnopqr") editor.handleInput(ch);
 			editor.handleInput("\n");
@@ -4276,12 +4278,12 @@ describe("Editor component", () => {
 			editor.render(20);
 
 			const text = editor.getText();
-			const markerMatch = text.match(/\[paste #\d+ \+\d+ lines]/);
+			const markerMatch = text.match(/\[paste #\d+ \d+ chars]/);
 			assert.ok(markerMatch, "paste marker should be created");
-			const markerLen = markerMatch[0].length; // 21
+			const markerLen = markerMatch[0].length; // 22
 			assert.ok(markerLen > 20, "marker should be wider than terminal");
 			const markerStart = 8;
-			const markerEnd = markerStart + markerLen; // 29
+			const markerEnd = markerStart + markerLen; // 30
 
 			// Navigate to line 0, col 6 (on "g"). Preferred col 6 is past the
 			// marker tail on VL3, so the cursor should land on content ("i" at
@@ -4315,15 +4317,15 @@ describe("Editor component", () => {
 			const editor = new Editor(tui, defaultEditorTheme);
 
 			// Same layout. Start at col 3 ("d"). Preferred col 3 maps to VL3
-			// visual col 3 which is inside the "lines]" marker tail.
+			// visual col 3 which is inside the "chars]" marker tail.
 			// moveToVisualLine detects the continuation VL and skips to VL4
 			// (line 1).
 			//   VL1: abcdefgh              (startCol 0,  len 8)
-			//   VL2: [paste #1 +100        (startCol 8,  len 15) <- marker head
-			//   VL3: lines]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
+			//   VL2: [paste #1 11000       (startCol 8,  len 15) <- marker head
+			//   VL3: chars]ijklmnopqr      (startCol 23, len 16) <- marker tail + content
 			//   VL4: 123456789012345678    (line 1)
 			for (const ch of "abcdefgh") editor.handleInput(ch);
-			const bigContent = "line\n".repeat(100).trimEnd();
+			const bigContent = "x".repeat(11000);
 			editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
 			for (const ch of "ijklmnopqr") editor.handleInput(ch);
 			editor.handleInput("\n");
@@ -4453,7 +4455,7 @@ describe("Editor composer style", () => {
 
 		const lines = editor.render(20).map(stripVTControlCharacters);
 
-		assert.strictEqual(lines[0], `${" ".repeat(11)}↑ 2 more `);
+		assert.strictEqual(lines[0], `${" ".repeat(10)}↑ 2 · ↓ 0 `);
 		assert.strictEqual(lines[lines.length - 1], " ".repeat(20));
 	});
 });
@@ -4530,5 +4532,100 @@ describe("Autocomplete direction", () => {
 
 		assert.ok(result?.focus);
 		assert.strictEqual(editor.getText(), "@alpha");
+	});
+});
+
+describe("Editor placeholder and ghost suggestion", () => {
+	it("renders the placeholder dim while empty and drops it on input", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme, { placeholder: "Type anything..." });
+		editor.focused = true;
+
+		const lines = editor.render(40);
+		const content = stripTerminalSequences(lines[1]!);
+		assert.ok(content.startsWith("Type anything..."), `placeholder visible: ${JSON.stringify(content)}`);
+		// Styled with ANSI dim by default (the first grapheme sits under the
+		// fake cursor, so only the tail is a contiguous dim run)
+		assert.ok(lines[1]!.includes("\x1b[2mype anything...\x1b[22m"));
+
+		editor.handleInput("h");
+		const after = stripTerminalSequences(editor.render(40)[1]!);
+		assert.ok(!after.includes("Type anything..."));
+	});
+
+	it("renders the ghost suggestion while empty, accepts it on right arrow", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+		editor.setGhostSuggestion("run the tests");
+		editor.focused = true;
+
+		assert.ok(editor.isEmpty());
+		const lines = editor.render(40);
+		assert.ok(stripTerminalSequences(lines[1]!).includes("run the tests"));
+		assert.strictEqual(editor.getText(), "");
+
+		editor.handleInput("\x1b[C"); // Right arrow accepts
+		assert.strictEqual(editor.getText(), "run the tests");
+		assert.strictEqual(editor.getGhostSuggestion(), null);
+		// The accepted text renders as normal text, not a dim ghost copy
+		const acceptedLine = editor.render(40)[1]!;
+		assert.ok(acceptedLine.includes("run the tests"));
+		assert.ok(!acceptedLine.includes("\x1b[2mrun the tests"));
+	});
+
+	it("dismisses the ghost suggestion permanently on any other input", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+		editor.setGhostSuggestion("run the tests");
+
+		editor.handleInput("x");
+		assert.strictEqual(editor.getGhostSuggestion(), null);
+		assert.strictEqual(editor.getText(), "x");
+
+		// Deleting back to empty does not bring the suggestion back
+		editor.handleInput("\x7f");
+		assert.strictEqual(editor.getText(), "");
+		assert.strictEqual(editor.getGhostSuggestion(), null);
+	});
+
+	it("clears the ghost suggestion on programmatic setText", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+		editor.setGhostSuggestion("run the tests");
+		editor.setText("hello");
+		assert.strictEqual(editor.getGhostSuggestion(), null);
+	});
+
+	it("never includes the ghost suggestion in submitted text", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+		let submitted = "";
+		editor.onSubmit = (text) => {
+			submitted = text;
+		};
+		editor.setGhostSuggestion("run the tests");
+		editor.handleInput("\r");
+		assert.strictEqual(submitted, "");
+	});
+});
+
+describe("Editor paste viewport", () => {
+	it("inserts multi-line pastes verbatim and scrolls to the last visible lines", () => {
+		// 12 short lines: below the 1000-char threshold, so no paste marker
+		const pasted = Array.from({ length: 12 }, (_, i) => `row ${i}`).join("\n");
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+
+		editor.handleInput(`\x1b[200~${pasted}\x1b[201~`);
+
+		assert.strictEqual(editor.getText(), pasted);
+		const lines = editor.render(40).map(stripTerminalSequences);
+		// maxVisibleLines = max(5, floor(24 * 0.2)) = 5, cursor at end -> last 5 rows
+		assert.strictEqual(lines.length, 5 + 2);
+		assert.ok(lines[1]!.includes("row 7"), "first visible row is row 7");
+		assert.ok(lines[5]!.includes("row 11"), "last visible row is row 11");
+		// Combined above/below label on the top border only
+		assert.ok(lines[0]!.includes("↑ 7 · ↓ 0"));
+		assert.strictEqual(lines[lines.length - 1], "─".repeat(40));
+	});
+
+	it("still collapses pastes above the character threshold into a marker", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme);
+		editor.handleInput(`\x1b[200~${"x".repeat(1001)}\x1b[201~`);
+		assert.match(editor.getText(), /\[paste #1 1001 chars\]/);
 	});
 });

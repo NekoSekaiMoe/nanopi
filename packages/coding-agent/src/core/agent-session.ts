@@ -31,7 +31,7 @@ import {
 	runToolCall,
 	type ThinkingLevel,
 } from "@nanopi/pi-agent-core";
-import { contentText, getCurrentSystemMessage, retryDelayMs } from "@nanopi/pi-ai";
+import { contentText, getCurrentSystemMessage, normalizeContext, retryDelayMs } from "@nanopi/pi-ai";
 import type {
 	AssistantMessage,
 	AuthResult,
@@ -39,6 +39,7 @@ import type {
 	Message,
 	Model,
 	ProviderHeaders,
+	SimpleStreamOptions,
 	SystemMessage,
 	TextContent,
 	ToolResultMessage,
@@ -73,6 +74,7 @@ import {
 	collectEntriesForBranchSummary,
 	compact,
 	compactInContext,
+	completeSummarization,
 	estimateContextTokens,
 	estimateProjectedContextTokens,
 	estimateTokens,
@@ -81,6 +83,7 @@ import {
 	InContextCompactionError,
 	type InContextCompactionOutcome,
 	prepareCompaction,
+	serializeConversation,
 	shouldCompact,
 } from "./compaction/index.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
@@ -245,6 +248,32 @@ export type AgentSessionEvent =
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
+
+// ============================================================================
+// Next-prompt suggestions (interactive ghost text)
+// ============================================================================
+
+/** Recent LLM messages serialized into the suggestion prompt. */
+const NEXT_PROMPT_SUGGESTION_MAX_MESSAGES = 24;
+
+/** Transcript characters kept (tail) so the request stays cheap. */
+const NEXT_PROMPT_SUGGESTION_MAX_TRANSCRIPT_CHARS = 6000;
+
+const NEXT_PROMPT_SUGGESTION_SYSTEM_PROMPT =
+	"You predict the user's next message in a coding-agent chat. Reply with exactly one line: the prompt the user would most plausibly send next, phrased as the user would type it (imperative, no quotes, no explanation, no markdown). Match the user's language. Keep it under 60 characters. If no useful follow-up exists, reply with an empty line.";
+
+/** Collapse a suggestion to a single sane line, or undefined when empty. */
+function sanitizeNextPromptSuggestion(text: string): string | undefined {
+	const single = text
+		.replace(/\s*\n+\s*/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/^[`"']+/, "")
+		.replace(/[`"']+$/, "")
+		.trim();
+	if (!single) return undefined;
+	return single.length > 120 ? `${single.slice(0, 117).trimEnd()}...` : single;
+}
 
 // ============================================================================
 // Types
@@ -2176,6 +2205,60 @@ export class AgentSession {
 	 * @throws Error if streaming and no streamingBehavior specified
 	 * @throws Error if no model selected or no API key available (when not streaming)
 	 */
+	/**
+	 * Generate a short next-prompt suggestion from the recent conversation.
+	 *
+	 * Used by the interactive input box as ghost text after an assistant reply.
+	 * One-off background completion: never touches agent state, session
+	 * persistence, or the transcript, and does not retry. Returns undefined
+	 * when no model is selected, the last message is not an assistant reply,
+	 * or the request fails or is aborted.
+	 */
+	async generateNextPromptSuggestion(options: { signal?: AbortSignal } = {}): Promise<string | undefined> {
+		const selectedModel = this.model;
+		if (!selectedModel || options.signal?.aborted) return undefined;
+		const lastMessage = this.messages.at(-1);
+		if (!lastMessage || lastMessage.role !== "assistant") return undefined;
+
+		const transcript = serializeConversation(convertToLlm(this.messages).slice(-NEXT_PROMPT_SUGGESTION_MAX_MESSAGES));
+		if (!transcript.trim()) return undefined;
+
+		const { model, apiKey, headers, env } = await this._getSummarizationRequestAuth(selectedModel, options.signal);
+		if (options.signal?.aborted) return undefined;
+
+		const trimmedTranscript =
+			transcript.length > NEXT_PROMPT_SUGGESTION_MAX_TRANSCRIPT_CHARS
+				? transcript.slice(transcript.length - NEXT_PROMPT_SUGGESTION_MAX_TRANSCRIPT_CHARS)
+				: transcript;
+		const context = normalizeContext({
+			systemPrompt: NEXT_PROMPT_SUGGESTION_SYSTEM_PROMPT,
+			messages: [
+				{
+					role: "user",
+					content: [
+						{
+							type: "text",
+							text: `<recent-conversation>\n${trimmedTranscript}\n</recent-conversation>\n\nWhat is the user's next message?`,
+						},
+					],
+					timestamp: Date.now(),
+				},
+			],
+		});
+		// Single attempt: suggestions are opportunistic; failures just skip the ghost text.
+		const requestOptions: SimpleStreamOptions = {
+			apiKey,
+			headers,
+			env,
+			signal: options.signal,
+			maxTokens: 256,
+			cacheRetention: "none",
+		};
+		const response = await completeSummarization(model, context, requestOptions, this.agent.streamFunction);
+		if (response.stopReason === "aborted" || response.stopReason === "error") return undefined;
+		return sanitizeNextPromptSuggestion(contentText(response.content, ""));
+	}
+
 	async prompt(text: string, options?: PromptOptions): Promise<void> {
 		if (this._isEmittingAgentSettled) {
 			this._deferredSettledActions.push(async () => await this.prompt(text, options));

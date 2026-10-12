@@ -225,6 +225,11 @@
       "type": "boolean",
       "default": false
     },
+    "nextPromptSuggestions": {
+      "type": "boolean",
+      "description": "Suggest a next prompt in the input box after each assistant reply.",
+      "default": true
+    },
     "showCacheMissNotices": {
       "type": "boolean",
       "description": "Show cache cost and provider recovery notices.",

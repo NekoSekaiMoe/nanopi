@@ -34,6 +34,18 @@ const PASTE_MARKER_REGEX = /\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]/g;
 /** Non-global version for single-segment testing. */
 const PASTE_MARKER_SINGLE = /^\[paste #(\d+)( (\+\d+ lines|\d+ chars))?\]$/;
 
+/** Pastes above this character count collapse into a paste marker (see handlePaste). */
+const LARGE_PASTE_CHAR_THRESHOLD = 1000;
+
+/** Max visible editor lines: 20% of terminal rows, at least 5. */
+const MIN_VISIBLE_LINES = 5;
+
+/** Combined above/below scroll label, e.g. `↑ 9 · ↓ 6`. Undefined when nothing is hidden. */
+function scrollStatusLabel(hiddenAbove: number, hiddenBelow: number): string | undefined {
+	if (hiddenAbove <= 0 && hiddenBelow <= 0) return undefined;
+	return `↑ ${hiddenAbove} · ↓ ${hiddenBelow}`;
+}
+
 /** Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers). */
 function isPasteMarker(segment: string): boolean {
 	return segment.length >= 10 && PASTE_MARKER_SINGLE.test(segment);
@@ -233,11 +245,15 @@ interface LayoutLine {
 	text: string;
 	hasCursor: boolean;
 	cursorPos?: number;
+	/** Rendered with the placeholder style (empty-editor placeholder or ghost suggestion). */
+	placeholder?: boolean;
 }
 
 export interface EditorTheme {
 	borderColor: (str: string) => string;
 	selectList: SelectListTheme;
+	/** Styles the placeholder / ghost suggestion text. Defaults to ANSI dim. */
+	placeholderStyle?: (str: string) => string;
 }
 
 export interface EditorOptions {
@@ -254,6 +270,8 @@ export interface EditorOptions {
 	style?: "bordered" | "composer";
 	/** Prompt drawn before the first visible line in composer style. */
 	prompt?: string;
+	/** Dim placeholder text rendered while the editor is empty. */
+	placeholder?: string;
 }
 
 const SLASH_COMMAND_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
@@ -287,16 +305,16 @@ function buildDebouncePattern(triggerCharacters: string[]): RegExp {
 	);
 }
 
-function createScrollBorder(direction: "↑" | "↓", hiddenLineCount: number, width: number): string {
+function createScrollBorder(label: string, width: number): string {
 	const availableWidth = Math.max(0, width);
-	const label = ` ${direction} ${hiddenLineCount} more `;
-	const labelWidth = visibleWidth(label);
+	const fullLabel = ` ${label} `;
+	const labelWidth = visibleWidth(fullLabel);
 	if (labelWidth + 2 <= availableWidth) {
 		const leftWidth = Math.floor((availableWidth - labelWidth) / 2);
-		return "─".repeat(leftWidth) + label + "─".repeat(availableWidth - leftWidth - labelWidth);
+		return "─".repeat(leftWidth) + fullLabel + "─".repeat(availableWidth - leftWidth - labelWidth);
 	}
 
-	const indicator = `─── ${direction} ${hiddenLineCount} more `;
+	const indicator = `─── ${label} `;
 	const remaining = availableWidth - visibleWidth(indicator);
 	if (remaining >= 0) return indicator + "─".repeat(remaining);
 
@@ -326,6 +344,13 @@ export class Editor implements Component, Focusable {
 	protected promptPrefix: string;
 	/** When true, a leading shell "!" in the text is not drawn in composer style. */
 	private shellMode = false;
+
+	/** Placeholder text rendered while the editor is empty. */
+	private placeholderText: string;
+	/** Model-suggested next prompt rendered while the editor is empty; dismissed by any input. */
+	private ghostSuggestion: string | null = null;
+	/** Styles placeholder / ghost suggestion text. */
+	private readonly placeholderStyle: (text: string) => string;
 
 	// Store last render geometry for cursor navigation and mouse hit-testing.
 	private lastWidth: number = 80;
@@ -402,6 +427,8 @@ export class Editor implements Component, Focusable {
 		this.composerStyle = options.style === "composer";
 		this.autocompleteAbove = options.autocompleteDirection === "above";
 		this.promptPrefix = options.prompt ?? "› ";
+		this.placeholderText = options.placeholder ?? "";
+		this.placeholderStyle = theme.placeholderStyle ?? ((text) => `\x1b[2m${text}\x1b[22m`);
 	}
 
 	/** Visible width of the composer prompt prefix (0 in bordered style). */
@@ -487,6 +514,40 @@ export class Editor implements Component, Focusable {
 		return this.state.lines.length === 1 && this.state.lines[0] === "";
 	}
 
+	/** True when the editor holds no text. */
+	isEmpty(): boolean {
+		return this.isEditorEmpty();
+	}
+
+	/** Max visible editor lines: 20% of terminal rows, at least 5. */
+	private getMaxVisibleLines(): number {
+		return Math.max(MIN_VISIBLE_LINES, Math.floor(this.tui.terminal.rows * 0.2));
+	}
+
+	/** Update the placeholder shown while the editor is empty. */
+	setPlaceholder(text: string): void {
+		if (this.placeholderText === text) return;
+		this.placeholderText = text;
+		if (this.isEditorEmpty()) this.tui.requestRender();
+	}
+
+	/**
+	 * Set the ghost suggestion rendered while the editor is empty.
+	 * The cursor-right action accepts it into the text; any other input
+	 * dismisses it permanently (it never re-appears for the same turn).
+	 * Render-only: never part of getText()/getExpandedText().
+	 */
+	setGhostSuggestion(text: string | null): void {
+		const normalized = text !== null && text.trim() !== "" ? text.trim() : null;
+		if (this.ghostSuggestion === normalized) return;
+		this.ghostSuggestion = normalized;
+		if (this.isEditorEmpty()) this.tui.requestRender();
+	}
+
+	getGhostSuggestion(): string | null {
+		return this.ghostSuggestion;
+	}
+
 	private isOnFirstVisualLine(): boolean {
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);
@@ -497,6 +558,12 @@ export class Editor implements Component, Focusable {
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);
 		return currentVisualLine === visualLines.length - 1;
+	}
+
+	/** True when the cursor sits at the very end of the text. */
+	private isCursorAtEndOfText(): boolean {
+		const lastLine = this.state.lines[this.state.lines.length - 1] ?? "";
+		return this.state.cursorLine === this.state.lines.length - 1 && this.state.cursorCol === lastLine.length;
 	}
 
 	private navigateHistory(direction: 1 | -1): void {
@@ -554,26 +621,26 @@ export class Editor implements Component, Focusable {
 		// No cached state to invalidate currently
 	}
 
-	protected renderTopBorder(width: number, hiddenLineCount: number): string {
+	protected renderTopBorder(width: number, hiddenAbove: number, hiddenBelow: number): string {
 		if (this.composerStyle) {
-			return this.composerPaddingRow(width, hiddenLineCount, "↑");
+			return this.composerPaddingRow(width, hiddenAbove, hiddenBelow);
 		}
-		const border = hiddenLineCount > 0 ? createScrollBorder("↑", hiddenLineCount, width) : "─".repeat(width);
+		const label = scrollStatusLabel(hiddenAbove, hiddenBelow);
+		const border = label ? createScrollBorder(label, width) : "─".repeat(width);
 		return this.borderColor(border);
 	}
 
-	protected renderBottomBorder(width: number, hiddenLineCount: number): string {
+	protected renderBottomBorder(width: number): string {
 		if (this.composerStyle) {
-			return this.composerPaddingRow(width, hiddenLineCount, "↓");
+			return " ".repeat(Math.max(0, width));
 		}
-		const border = hiddenLineCount > 0 ? createScrollBorder("↓", hiddenLineCount, width) : "─".repeat(width);
-		return this.borderColor(border);
+		return this.borderColor("─".repeat(width));
 	}
 
-	/** Blank padding row for composer style; right-aligns the scroll indicator when set. */
-	private composerPaddingRow(width: number, hiddenLineCount: number, direction: "↑" | "↓"): string {
-		if (hiddenLineCount <= 0 || width <= 0) return " ".repeat(Math.max(0, width));
-		const label = `${direction} ${hiddenLineCount} more`;
+	/** Blank padding row for composer style; right-aligns the scroll label when set. */
+	private composerPaddingRow(width: number, hiddenAbove: number, hiddenBelow: number): string {
+		const label = scrollStatusLabel(hiddenAbove, hiddenBelow);
+		if (!label || width <= 0) return " ".repeat(Math.max(0, width));
 		const labelWidth = visibleWidth(label);
 		if (labelWidth + 1 > width) return " ".repeat(Math.max(0, width));
 		return `${" ".repeat(width - labelWidth - 1)}${this.borderColor(label)} `;
@@ -609,9 +676,8 @@ export class Editor implements Component, Focusable {
 			}
 		}
 
-		// Calculate max visible lines: 30% of terminal height, minimum 5 lines
-		const terminalRows = this.tui.terminal.rows;
-		const maxVisibleLines = Math.max(5, Math.floor(terminalRows * 0.3));
+		// Calculate max visible lines: 20% of terminal height, minimum 5 lines
+		const maxVisibleLines = this.getMaxVisibleLines();
 
 		// Find the cursor line index in layoutLines
 		let cursorLineIndex = layoutLines.findIndex((line) => line.hasCursor);
@@ -652,8 +718,10 @@ export class Editor implements Component, Focusable {
 		}
 		if (this.autocompleteAbove) result.push(...autocompleteRows);
 
-		// Render top border (with scroll indicator if scrolled down)
-		result.push(this.renderTopBorder(width, this.scrollOffset));
+		// Render top border (with combined above/below scroll label when content is hidden)
+		result.push(
+			this.renderTopBorder(width, this.scrollOffset, layoutLines.length - (this.scrollOffset + visibleLines.length)),
+		);
 
 		// Render each visible layout line
 		// Emit hardware cursor marker when focused so TUI can position the
@@ -674,14 +742,17 @@ export class Editor implements Component, Focusable {
 				// Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)
 				const marker = emitCursorMarker ? CURSOR_MARKER : "";
 
+				// Placeholder/ghost lines render in the placeholder style, except under the cursor
+				const style = (text: string): string => (layoutLine.placeholder ? this.placeholderStyle(text) : text);
+
 				if (after.length > 0) {
 					// Cursor is on a character (grapheme) - replace it with highlighted version
 					// Get the first grapheme from 'after'
 					const afterGraphemes = [...this.segment(after, "grapheme")];
 					const firstGrapheme = afterGraphemes[0]?.segment || "";
 					const restAfter = after.slice(firstGrapheme.length);
-					const cursor = renderFakeCursor(firstGrapheme);
-					displayText = before + marker + cursor + restAfter;
+					const cursor = renderFakeCursor(style(firstGrapheme));
+					displayText = before + marker + cursor + style(restAfter);
 					// lineVisibleWidth stays the same - we're replacing, not adding
 				} else {
 					// Cursor is at the end - add highlighted space
@@ -693,6 +764,9 @@ export class Editor implements Component, Focusable {
 						cursorInPadding = true;
 					}
 				}
+			} else if (layoutLine.placeholder) {
+				// Continuation line of a wrapped placeholder/ghost suggestion
+				displayText = this.placeholderStyle(displayText);
 			}
 
 			// Prompt prefix on the first visible line; continuation lines align under it.
@@ -707,9 +781,8 @@ export class Editor implements Component, Focusable {
 			result.push(`${leftPadding}${linePrefix}${displayText}${padding}${lineRightPadding}`);
 		}
 
-		// Render bottom border (with scroll indicator if more content below)
-		const linesBelow = layoutLines.length - (this.scrollOffset + visibleLines.length);
-		result.push(this.renderBottomBorder(width, linesBelow));
+		// Render bottom border
+		result.push(this.renderBottomBorder(width));
 
 		if (!this.autocompleteAbove) result.push(...autocompleteRows);
 
@@ -807,6 +880,18 @@ export class Editor implements Component, Focusable {
 
 			// Control character - cancel and fall through to normal handling
 			this.jumpMode = null;
+		}
+
+		// Ghost suggestion: the cursor-right action accepts it when the cursor
+		// sits at the end of the text; any other input dismisses it permanently.
+		if (this.ghostSuggestion !== null) {
+			if (kb.matches(data, "tui.editor.cursorRight") && this.isCursorAtEndOfText()) {
+				const suggestion = this.ghostSuggestion;
+				this.ghostSuggestion = null;
+				this.insertTextAtCursor(suggestion);
+				return;
+			}
+			this.setGhostSuggestion(null);
 		}
 
 		// Handle bracketed paste mode
@@ -1091,6 +1176,20 @@ export class Editor implements Component, Focusable {
 		const layoutLines: LayoutLine[] = [];
 
 		if (this.state.lines.length === 0 || (this.state.lines.length === 1 && this.state.lines[0] === "")) {
+			// Empty editor: render the ghost suggestion (or placeholder) in place of the text
+			const emptyDisplay = this.ghostSuggestion ?? (this.placeholderText || null);
+			if (emptyDisplay) {
+				const chunks = wordWrapLine(emptyDisplay, contentWidth);
+				for (const [chunkIndex, chunk] of chunks.entries()) {
+					layoutLines.push({
+						text: chunk.text,
+						hasCursor: chunkIndex === 0,
+						cursorPos: 0,
+						placeholder: true,
+					});
+				}
+				return layoutLines;
+			}
 			// Empty editor
 			layoutLines.push({
 				text: "",
@@ -1208,6 +1307,7 @@ export class Editor implements Component, Focusable {
 		this.cancelAutocomplete();
 		this.lastAction = null;
 		this.exitHistoryBrowsing();
+		this.ghostSuggestion = null;
 		const normalized = this.normalizeText(text);
 		// Push undo snapshot if content differs (makes programmatic changes undoable)
 		if (this.getText() !== normalized) {
@@ -1229,6 +1329,7 @@ export class Editor implements Component, Focusable {
 		this.pushUndoSnapshot();
 		this.lastAction = null;
 		this.exitHistoryBrowsing();
+		this.ghostSuggestion = null;
 		this.insertTextAtCursorInternal(text);
 	}
 
@@ -1390,19 +1491,20 @@ export class Editor implements Component, Focusable {
 		// Split into lines to check for large paste
 		const pastedLines = filteredText.split("\n");
 
-		// Check if this is a large paste (> 10 lines or > 1000 characters)
+		// Large pastes collapse into a marker; the full content is stored in
+		// this.pastes and re-expanded on submit, so nothing is lost. Only the
+		// character count triggers collapsing (matching Codex): multi-line
+		// markdown documents under the threshold insert verbatim and stay
+		// scrollable in the editor instead of being replaced by a marker.
 		const totalChars = filteredText.length;
-		if (pastedLines.length > 10 || totalChars > 1000) {
+		if (totalChars > LARGE_PASTE_CHAR_THRESHOLD) {
 			// Store the paste and insert a marker
 			this.pasteCounter++;
 			const pasteId = this.pasteCounter;
 			this.pastes.set(pasteId, filteredText);
 
-			// Insert marker like "[paste #1 +123 lines]" or "[paste #1 1234 chars]"
-			const marker =
-				pastedLines.length > 10
-					? `[paste #${pasteId} +${pastedLines.length} lines]`
-					: `[paste #${pasteId} ${totalChars} chars]`;
+			// Insert marker like "[paste #1 1234 chars]"
+			const marker = `[paste #${pasteId} ${totalChars} chars]`;
 			this.insertTextAtCursorInternal(marker);
 			return;
 		}
@@ -1455,6 +1557,7 @@ export class Editor implements Component, Focusable {
 
 	private submitValue(): void {
 		this.cancelAutocomplete();
+		this.ghostSuggestion = null;
 		const result = this.expandPasteMarkers(this.state.lines.join("\n")).trim();
 
 		this.state = { lines: [""], cursorLine: 0, cursorCol: 0 };
@@ -2052,8 +2155,7 @@ export class Editor implements Component, Focusable {
 	 */
 	private pageScroll(direction: -1 | 1): void {
 		this.lastAction = null;
-		const terminalRows = this.tui.terminal.rows;
-		const pageSize = Math.max(5, Math.floor(terminalRows * 0.3));
+		const pageSize = this.getMaxVisibleLines();
 
 		const visualLines = this.buildVisualLineMap(this.lastWidth);
 		const currentVisualLine = this.findCurrentVisualLine(visualLines);

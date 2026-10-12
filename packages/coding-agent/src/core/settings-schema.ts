@@ -242,6 +242,12 @@ export const SettingsSchema = Type.Object(
 		llamaCpp: Type.Optional(LlamaCppSettingsSchema),
 		retry: Type.Optional(RetrySettingsSchema),
 		hideThinkingBlock: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.hideThinkingBlock })),
+		nextPromptSuggestions: Type.Optional(
+			Type.Boolean({
+				description: "Suggest a next prompt in the input box after each assistant reply.",
+				default: SETTINGS_DEFAULTS.nextPromptSuggestions,
+			}),
+		),
 		showCacheMissNotices: Type.Optional(
 			Type.Boolean({
 				description: "Show cache cost and provider recovery notices.",

@@ -490,6 +490,8 @@ export class InteractiveMode {
 
 	// Agent subscription unsubscribe function
 	private unsubscribe?: () => void;
+	// Abort controller for the in-flight next-prompt suggestion request
+	private nextPromptSuggestionAbort?: AbortController;
 	private signalCleanupHandlers: Array<() => void> = [];
 
 	// Track if editor is in bash mode (text starts with !)
@@ -613,6 +615,7 @@ export class InteractiveMode {
 			autocompleteDirection: "above",
 			embedWorkingStatus: true,
 			style: "composer",
+			placeholder: "Type anything...",
 		});
 		this.editor = this.defaultEditor;
 		this.editorContainer = new Container();
@@ -1570,6 +1573,7 @@ export class InteractiveMode {
 
 		this.unsubscribe?.();
 		this.unsubscribe = undefined;
+		this.clearNextPromptSuggestion();
 		this.programStatus.reset();
 		this.applyRuntimeSettings();
 
@@ -1591,6 +1595,36 @@ export class InteractiveMode {
 		await this.updateAvailableProviderCount();
 		this.updateEditorBorderColor();
 		this.updateTerminalTitle();
+	}
+
+	/** Abort any in-flight suggestion request and clear the input-box ghost text. */
+	private clearNextPromptSuggestion(): void {
+		this.nextPromptSuggestionAbort?.abort();
+		this.nextPromptSuggestionAbort = undefined;
+		this.defaultEditor.setGhostSuggestion(null);
+	}
+
+	/**
+	 * Request a model-generated next-prompt suggestion and show it as ghost
+	 * text in the (empty) input box. Best-effort: skipped while streaming or
+	 * when the editor holds text; failures silently leave the placeholder.
+	 */
+	private async requestNextPromptSuggestion(): Promise<void> {
+		if (!this.settingsManager.getNextPromptSuggestions()) return;
+		if (this.session.isStreaming || this.editor !== this.defaultEditor || !this.defaultEditor.isEmpty()) return;
+
+		this.nextPromptSuggestionAbort?.abort();
+		const controller = new AbortController();
+		this.nextPromptSuggestionAbort = controller;
+		try {
+			const suggestion = await this.session.generateNextPromptSuggestion({ signal: controller.signal });
+			if (controller.signal.aborted || !suggestion) return;
+			if (this.session.isStreaming || this.editor !== this.defaultEditor || !this.defaultEditor.isEmpty()) return;
+			this.defaultEditor.setGhostSuggestion(suggestion);
+			this.ui.requestRender();
+		} catch {
+			// Suggestions are opportunistic; ignore failures.
+		}
 	}
 
 	private async handleFatalRuntimeError(prefix: string, error: unknown): Promise<never> {
@@ -2840,6 +2874,8 @@ export class InteractiveMode {
 		switch (event.type) {
 			case "agent_start":
 				this.pendingTools.clear();
+				// A new turn invalidates any pending input-box suggestion.
+				this.clearNextPromptSuggestion();
 				// Restore main escape handler if retry handler is still active
 				// (retry success event fires later, but we need main handler now)
 				if (this.retryEscapeHandler) {
@@ -3094,6 +3130,9 @@ export class InteractiveMode {
 
 			case "agent_settled":
 				await this.checkShutdownRequested();
+				if (!event.aborted) {
+					void this.requestNextPromptSuggestion();
+				}
 				break;
 
 			case "compaction_start": {
@@ -3774,6 +3813,7 @@ export class InteractiveMode {
 		this.themeController.disableAutoSync();
 		await this.ui.terminal.drainInput(1000);
 
+		this.clearNextPromptSuggestion();
 		this.stop();
 		await this.runtimeHost.dispose();
 
@@ -4340,6 +4380,7 @@ export class InteractiveMode {
 					terminalTheme: this.themeController.getTerminalTheme(),
 					availableThemes: getAvailableThemes(),
 					hideThinkingBlock: this.hideThinkingBlock,
+					nextPromptSuggestions: this.settingsManager.getNextPromptSuggestions(),
 					mermaidRenderingMode: this.settingsManager.getMermaidRenderingMode(),
 					collapseChangelog: this.settingsManager.getCollapseChangelog(),
 					enableInstallTelemetry: this.settingsManager.getEnableInstallTelemetry(),
@@ -4436,6 +4477,10 @@ export class InteractiveMode {
 						this.hideThinkingBlock = hidden;
 						this.settingsManager.setHideThinkingBlock(hidden);
 						this.updateThinkingBlockVisibility();
+					},
+					onNextPromptSuggestionsChange: (enabled) => {
+						this.settingsManager.setNextPromptSuggestions(enabled);
+						if (!enabled) this.clearNextPromptSuggestion();
 					},
 					onMermaidRenderingModeChange: (mode) => {
 						this.settingsManager.setMermaidRenderingMode(mode);

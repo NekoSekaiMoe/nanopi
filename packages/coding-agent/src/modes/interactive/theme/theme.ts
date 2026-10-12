@@ -1078,6 +1078,7 @@ export function getEditorTheme(): EditorTheme {
 	return {
 		borderColor: (text: string) => theme.fg("borderMuted", text),
 		selectList: getSelectListTheme(),
+		placeholderStyle: (text: string) => theme.fg("muted", text),
 	};
 }
 

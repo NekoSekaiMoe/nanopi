@@ -8,6 +8,9 @@
 
 ### Added
 
+- Added `placeholder` option plus `setPlaceholder()` to `Editor`: dim placeholder text rendered while the editor is empty (styled by the new optional `EditorTheme.placeholderStyle`, default ANSI dim), replaced by the ghost suggestion when one is set
+- Added ghost-suggestion support to `Editor`: `setGhostSuggestion()`/`getGhostSuggestion()` render a dim model-suggested next prompt while the editor is empty, the `tui.editor.cursorRight` action accepts it into the text, and any other input dismisses it permanently; it is render-only and never part of `getText()`/`getExpandedText()`
+- Added `Editor.isEmpty()` and optional `EditorComponent.setPlaceholder()`/`setGhostSuggestion()` so extension editors can participate
 - Added `autocompleteDirection: "below" | "above"` to `Editor` options: `"above"` renders the autocomplete list above the top border instead of below the bottom border, with mouse hit-testing remapped so menu clicks and cursor placement keep working
 - Added `renderFakeCursor()`. Components wrap their drawn cursor with it, and the TUI renders it in reverse video, or omits it after `CURSOR_MARKER` when `showHardwareCursor` is enabled
 - Added `style: "composer"` and `prompt` options to `Editor` plus `EditorComponent.setPrompt()` and `EditorComponent.setShellMode()`: a borderless composer look where the first visible line carries the prompt prefix, continuation lines align under it, and blank padding rows replace the horizontal rules (right-aligned scroll indicators included); `setShellMode(true)` hides a leading `!` from the rendered text without changing the editor content
@@ -15,6 +18,9 @@
 
 ### Changed
 
+- Changed the editor scroll indicator to a single combined `↑ N · ↓ M` label on the top border/blank row (both hidden-line counts in one place); the bottom border is now plain. `renderTopBorder()` gained the `hiddenBelow` parameter and `renderBottomBorder()` lost its count parameter
+- Changed the editor max visible lines from 30% to 20% of terminal rows (still at least 5); pastes scroll to the last visible lines because the cursor follows the paste end
+- Changed the large-paste collapse threshold to character-only (>1000 chars, matching Codex): multi-line pastes under the threshold insert verbatim instead of collapsing into a `[paste #N]` marker, and the marker text is now always the `N chars` form (the `+N lines` marker form is still parsed for history)
 - Changed `Editor.renderedVisibleLineCount` from `private` to `protected` so subclasses that relayout rows (for example an extension editor drawing the autocomplete menu above the input frame) can remap mouse coordinates
 - Changed `showHardwareCursor` to show only the terminal cursor: focused `Editor` and `Input` components no longer draw a reverse-video cursor when it is enabled. This avoids terminals that extend edge cell colors into the window padding stretching the drawn cursor at the first or last column
 

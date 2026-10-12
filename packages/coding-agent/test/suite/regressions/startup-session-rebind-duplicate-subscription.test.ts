@@ -4,6 +4,7 @@ import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode
 type RebindContext = {
 	session: object;
 	unsubscribe?: () => void;
+	clearNextPromptSuggestion: () => void;
 	applyRuntimeSettings: () => void;
 	programStatus: { reset(): void };
 	renderCurrentSessionState: () => void;
@@ -40,6 +41,7 @@ describe("overlapping startup and replacement session rebinds", () => {
 
 		const context: RebindContext = {
 			session: startupSession,
+			clearNextPromptSuggestion: () => {},
 			applyRuntimeSettings: () => {},
 			programStatus: { reset: () => {} },
 			renderCurrentSessionState: () => {},

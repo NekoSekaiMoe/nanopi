@@ -33,16 +33,16 @@ export class CustomEditor extends Editor {
 		this.workingStatusIndicator = indicator;
 	}
 
-	protected override renderTopBorder(width: number, hiddenLineCount: number): string {
+	protected override renderTopBorder(width: number, hiddenAbove: number, hiddenBelow: number): string {
 		if (!this.embedWorkingStatus || !this.workingStatusIndicator || width <= 0) {
-			return super.renderTopBorder(width, hiddenLineCount);
+			return super.renderTopBorder(width, hiddenAbove, hiddenBelow);
 		}
 
 		let status = this.workingStatusIndicator.renderInBorder(Math.max(1, width - 5));
 		let statusWidth = visibleWidth(status);
-		if (statusWidth === 0) return super.renderTopBorder(width, hiddenLineCount);
+		if (statusWidth === 0) return super.renderTopBorder(width, hiddenAbove, hiddenBelow);
 
-		const overflowLabel = hiddenLineCount > 0 ? `↑ ${hiddenLineCount} more` : undefined;
+		const overflowLabel = hiddenAbove + hiddenBelow > 0 ? `↑ ${hiddenAbove} · ↓ ${hiddenBelow}` : undefined;
 
 		// Composer style has no rule to embed into: the status shares the blank
 		// padding row, left-aligned, with the scroll indicator right-aligned.

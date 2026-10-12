@@ -958,6 +958,10 @@ export class SettingsManager {
 		return this.settings.hideThinkingBlock ?? SETTINGS_DEFAULTS.hideThinkingBlock;
 	}
 
+	getNextPromptSuggestions(): boolean {
+		return this.settings.nextPromptSuggestions ?? SETTINGS_DEFAULTS.nextPromptSuggestions;
+	}
+
 	getShowCacheMissNotices(): boolean {
 		return this.settings.showCacheMissNotices ?? SETTINGS_DEFAULTS.showCacheMissNotices;
 	}
@@ -977,6 +981,12 @@ export class SettingsManager {
 	setHideThinkingBlock(hide: boolean): void {
 		this.globalSettings.hideThinkingBlock = hide;
 		this.markModified("hideThinkingBlock");
+		this.save();
+	}
+
+	setNextPromptSuggestions(enabled: boolean): void {
+		this.globalSettings.nextPromptSuggestions = enabled;
+		this.markModified("nextPromptSuggestions");
 		this.save();
 	}
 

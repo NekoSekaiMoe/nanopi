@@ -72,6 +72,12 @@ export interface EditorComponent extends Component {
 	/** Set the composer prompt prefix (editors in composer style only). */
 	setPrompt?(prompt: string): void;
 
+	/** Set the placeholder shown while the editor is empty. */
+	setPlaceholder?(text: string): void;
+
+	/** Set the ghost next-prompt suggestion shown while the editor is empty. */
+	setGhostSuggestion?(text: string | null): void;
+
 	/** Hide the leading shell "!" from the rendered text (composer style only). */
 	setShellMode?(active: boolean): void;
 

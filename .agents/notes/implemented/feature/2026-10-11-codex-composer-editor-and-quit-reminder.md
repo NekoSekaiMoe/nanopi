@@ -27,9 +27,8 @@ no hint, so the exit path was undiscoverable; Codex has a
   (`› ` normally; `$ ` in bash mode since
   [shell-mode-composer-affordances](2026-10-11-shell-mode-composer-affordances.md)),
   so the existing thinking-level color (which used to tint the border rules)
-  now colors the prompt glyph. The embedded working status renders left-aligned on the blank top row with the
-  scroll indicator right-aligned (dashes only ever existed in bordered
-  style).
+  now colors the prompt glyph. The embedded working status renders left-aligned on the blank top row; the scroll indicator moved to a single combined `↑ N · ↓ M` label right-aligned on that same top row (see
+  [editor-placeholder-ghost-suggestion-paste-viewport](2026-10-12-editor-placeholder-ghost-suggestion-paste-viewport.md)) — the bottom row is plain.
 - Ctrl+C: the quit window widens from 500 ms to 1 s
   (`InteractiveMode.QUIT_REMINDER_MS`, matching Codex's
   `QUIT_SHORTCUT_TIMEOUT`). The first press clears the editor and replaces
