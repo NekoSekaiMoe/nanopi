@@ -10,7 +10,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in n
 |---|---|
 | `/settings` | Open settings |
 | `/model [provider/model]` | Select a model |
-| `/thinking [level]` | Set the thinking level |
+| `/effort [level]` | Set the thinking effort |
 | `/scoped-models` | Configure the models used by interactive cycling |
 | `/login [provider]` | Add provider authentication |
 | `/logout` | Remove provider authentication |

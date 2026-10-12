@@ -1289,16 +1289,15 @@ function buildAdditionalModelRequestFields(
 			: (() => {
 					const defaultBudgets: Record<ThinkingLevel, number> = {
 						minimal: 1024,
-						low: 2048,
+						low: 4096,
 						medium: 8192,
 						high: 16384,
-						xhigh: 16384, // Budget-based Claude clamps extended levels to high
-						max: 16384,
+						xhigh: 24576,
+						max: 24576, // Budget-based Claude clamps max to the xhigh budget
 					};
 
-					// Custom budgets only cover token-based levels through high.
-					const level = options.reasoning === "xhigh" || options.reasoning === "max" ? "high" : options.reasoning;
-					const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[options.reasoning];
+					const level = clampReasoning(options.reasoning)!;
+					const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[level];
 
 					return {
 						thinking: {

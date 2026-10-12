@@ -9,6 +9,7 @@
 
 ### Changed
 
+- Changed the default thinking budgets for token-based providers: `low` is now 4096 tokens (was 2048), `xhigh` defaults to 24576, `max` clamps to `xhigh` instead of `high` (including Bedrock budget-based Claude), and `ThinkingBudgets` gained an `xhigh` field.
 - Changed OAuth flow loading to check the build-time component map injected by flavored builds (see the root `buildconfig.json`): a flow excluded by its flavor fails with `OAuth flow "<name>" is not included in this build` instead of a module-not-found error. Source checkouts and npm installs are unaffected (all flows present).
 
 ### Removed

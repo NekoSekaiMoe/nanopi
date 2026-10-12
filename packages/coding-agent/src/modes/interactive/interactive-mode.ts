@@ -727,9 +727,9 @@ export class InteractiveMode {
 			};
 		}
 
-		const thinkingCommand = slashCommands.find((command) => command.name === "thinking");
-		if (thinkingCommand) {
-			thinkingCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+		const effortCommand = slashCommands.find((command) => command.name === "effort");
+		if (effortCommand) {
+			effortCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
 				return createFuzzyAutocompleteItems(
 					this.session.getAvailableThinkingLevels(),
 					prefix,
@@ -2683,8 +2683,8 @@ export class InteractiveMode {
 				await this.handleModelCommand(searchTerm);
 				return;
 			}
-			if (text === "/thinking" || text.startsWith("/thinking ")) {
-				const searchTerm = text.startsWith("/thinking ") ? text.slice(10).trim() : undefined;
+			if (text === "/effort" || text.startsWith("/effort ")) {
+				const searchTerm = text.startsWith("/effort ") ? text.slice(8).trim() : undefined;
 				this.editor.setText("");
 				this.handleThinkingCommand(searchTerm);
 				return;

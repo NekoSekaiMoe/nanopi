@@ -68,13 +68,14 @@ export const MIN_ANSWER_TOKENS = 1024;
 
 export const DEFAULT_THINKING_BUDGETS: ThinkingBudgets = {
 	minimal: 1024,
-	low: 2048,
+	low: 4096,
 	medium: 8192,
 	high: 16384,
+	xhigh: 24576,
 };
 
-export function clampReasoning(effort: ThinkingLevel | undefined): Exclude<ThinkingLevel, "xhigh" | "max"> | undefined {
-	return effort === "xhigh" || effort === "max" ? "high" : effort;
+export function clampReasoning(effort: ThinkingLevel | undefined): Exclude<ThinkingLevel, "max"> | undefined {
+	return effort === "max" ? "xhigh" : effort;
 }
 
 export function thinkingBudgetForLevel(reasoningLevel: ThinkingLevel, customBudgets?: ThinkingBudgets): number {

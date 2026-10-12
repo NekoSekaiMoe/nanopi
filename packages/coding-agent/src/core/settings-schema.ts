@@ -132,6 +132,7 @@ function thinkingBudgetsSettings(options?: TSchemaOptions) {
 			low: Type.Optional(Type.Number()),
 			medium: Type.Optional(Type.Number()),
 			high: Type.Optional(Type.Number()),
+			xhigh: Type.Optional(Type.Number()),
 		},
 		options,
 	);
