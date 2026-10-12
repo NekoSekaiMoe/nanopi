@@ -5,11 +5,12 @@
 ### Breaking Changes
 
 - Removed the `telemetryContext` option from `ProviderRequestOptions` and the `@nanopi/pi-telemetry` dependency; nothing in the repo consumed the context, so provider requests no longer accept or propagate it.
+- Removed the now-inert `clampReasoning` export from `api/simple-options.ts`: every thinking level has a budget, so `thinkingBudgetForLevel` accepts all levels directly.
 - Renamed the `./bun-oauth` export to `./bundled-oauth` (`registerBunOAuthFlows` is now `registerBundledOAuthFlows`) and removed the Bun-specific code paths: the empty-`process.env` sandbox fallback in `getProviderEnvValue` and the Bun websocket proxy wrapper in the Codex responses API.
 
 ### Changed
 
-- Changed the default thinking budgets for token-based providers: `low` is now 4096 tokens (was 2048), `xhigh` defaults to 24576, `max` clamps to `xhigh` instead of `high` (including Bedrock budget-based Claude), and `ThinkingBudgets` gained an `xhigh` field.
+- Changed the default thinking budgets for token-based providers: `low` is now 4096 tokens (was 2048), `xhigh` defaults to 24576, and `max` defaults to 32768 instead of clamping to `high` (including Bedrock budget-based Claude); `ThinkingBudgets` gained `xhigh` and `max` fields.
 - Changed OAuth flow loading to check the build-time component map injected by flavored builds (see the root `buildconfig.json`): a flow excluded by its flavor fails with `OAuth flow "<name>" is not included in this build` instead of a module-not-found error. Source checkouts and npm installs are unaffected (all flows present).
 
 ### Removed

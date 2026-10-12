@@ -569,6 +569,9 @@
         },
         "xhigh": {
           "type": "number"
+        },
+        "max": {
+          "type": "number"
         }
       },
       "description": "Custom token budgets for thinking levels."

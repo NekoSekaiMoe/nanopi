@@ -66,12 +66,7 @@ import {
 	withoutInitialSystemMessage,
 } from "../utils/transcript.ts";
 import { getJsonSchemaToolParameters, resolveJsonSchemaStrictSampling } from "./constrained-sampling.ts";
-import {
-	adjustMaxTokensForThinking,
-	buildBaseOptions,
-	clampMaxTokensToContext,
-	clampReasoning,
-} from "./simple-options.ts";
+import { adjustMaxTokensForThinking, buildBaseOptions, clampMaxTokensToContext } from "./simple-options.ts";
 import { transformMessages } from "./transform-messages.ts";
 
 export type BedrockThinkingDisplay = "summarized" | "omitted";
@@ -567,7 +562,7 @@ export const streamSimple: StreamFunction<"bedrock-converse-stream", SimpleStrea
 			reasoning: options.reasoning,
 			thinkingBudgets: {
 				...(options.thinkingBudgets || {}),
-				[clampReasoning(options.reasoning)!]: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
+				[options.reasoning!]: Math.min(adjusted.thinkingBudget, Math.max(0, maxTokens - 1024)),
 			},
 		} satisfies BedrockOptions);
 	}
@@ -1293,11 +1288,10 @@ function buildAdditionalModelRequestFields(
 						medium: 8192,
 						high: 16384,
 						xhigh: 24576,
-						max: 24576, // Budget-based Claude clamps max to the xhigh budget
+						max: 32768,
 					};
 
-					const level = clampReasoning(options.reasoning)!;
-					const budget = options.thinkingBudgets?.[level] ?? defaultBudgets[level];
+					const budget = options.thinkingBudgets?.[options.reasoning] ?? defaultBudgets[options.reasoning];
 
 					return {
 						thinking: {
