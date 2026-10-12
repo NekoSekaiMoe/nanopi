@@ -1,4 +1,4 @@
-import { type TUI, visibleWidth } from "@nanopi/pi-tui";
+import { CURSOR_MARKER, renderFakeCursor, type TUI, visibleWidth } from "@nanopi/pi-tui";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { CustomEditor } from "../src/modes/interactive/components/custom-editor.ts";
@@ -61,6 +61,52 @@ describe("status indicators", () => {
 		expect(visibleWidth(topBorder)).toBe(20);
 		expect(topBorder.split(theme.getFgAnsi("thinkingHigh"))).toHaveLength(5);
 		indicator.dispose();
+	});
+
+	it("keeps a blank row between the embedded status and the composer input", () => {
+		initTheme("dark");
+		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
+		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
+			embedWorkingStatus: true,
+			style: "composer",
+		});
+		editor.focused = true;
+		editor.setText("hi");
+		editor.handleInput("\x1b[D"); // cursor over "i"
+		const indicator = new WorkingStatusIndicator(tui, "Working");
+		editor.setWorkingStatusIndicator(indicator);
+
+		const click = (y: number) =>
+			editor.handleMouse({
+				type: "click",
+				button: "left",
+				x: 4,
+				y,
+				screenX: 4,
+				screenY: y,
+				width: 20,
+				height: 4,
+				shift: false,
+				alt: false,
+				ctrl: false,
+			})!;
+
+		try {
+			const lines = editor.render(20);
+			expect(stripAnsi(lines[0]!)).toMatch(/^ ⠋ Working/);
+			expect(lines[1]).toBe(" ".repeat(20));
+			expect(lines[2]!.includes(`h${CURSOR_MARKER}${renderFakeCursor("i")}`)).toBe(true);
+
+			// Clicks on the pad row do not move the cursor onto the input line.
+			expect(click(1)).toEqual({ handled: true, focus: true });
+			expect(editor.render(20)[2]!.includes(`h${CURSOR_MARKER}${renderFakeCursor("i")}`)).toBe(true);
+
+			// Clicks on the input row (below the pad row) still place the cursor.
+			click(2);
+			expect(editor.render(20)[2]!.includes(`hi${CURSOR_MARKER}${renderFakeCursor(" ")}`)).toBe(true);
+		} finally {
+			indicator.dispose();
+		}
 	});
 
 	it("embeds compaction, summary, and retry labels within the border width", () => {

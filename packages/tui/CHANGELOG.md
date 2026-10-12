@@ -22,6 +22,7 @@
 - Changed the editor max visible lines from 30% to 20% of terminal rows (still at least 5); pastes scroll to the last visible lines because the cursor follows the paste end
 - Changed the large-paste collapse threshold to character-only (>1000 chars, matching Codex): multi-line pastes under the threshold insert verbatim instead of collapsing into a `[paste #N]` marker, and the marker text is now always the `N chars` form (the `+N lines` marker form is still parsed for history)
 - Changed `Editor.renderedVisibleLineCount` from `private` to `protected` so subclasses that relayout rows (for example an extension editor drawing the autocomplete menu above the input frame) can remap mouse coordinates
+- Changed `Editor.autocompleteAbove` and `Editor.renderedAutocompleteHeight` from `private` to `protected` for the same purpose: subclasses that insert extra rows around the frame need the above-menu height to fold their rows back onto the base geometry when hit-testing mouse clicks
 - Changed `showHardwareCursor` to show only the terminal cursor: focused `Editor` and `Input` components no longer draw a reverse-video cursor when it is enabled. This avoids terminals that extend edge cell colors into the window padding stretching the drawn cursor at the first or last column
 
 ### Fixed

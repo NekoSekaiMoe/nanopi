@@ -339,7 +339,7 @@ export class Editor implements Component, Focusable {
 	/** Whether the composer (borderless, prefixed) style is active. */
 	protected readonly composerStyle: boolean;
 	/** Whether the autocomplete list renders above the editor instead of below it. */
-	private readonly autocompleteAbove: boolean;
+	protected readonly autocompleteAbove: boolean;
 	/** Prompt prefix drawn before the first visible line (composer style only). */
 	protected promptPrefix: string;
 	/** When true, a leading shell "!" in the text is not drawn in composer style. */
@@ -356,7 +356,8 @@ export class Editor implements Component, Focusable {
 	private lastWidth: number = 80;
 	/** Visible line count of the last render; protected so subclasses that relayout rows (e.g. menus drawn above the input) can remap mouse coordinates. */
 	protected renderedVisibleLineCount = 1;
-	private renderedAutocompleteHeight = 0;
+	/** Autocomplete height of the last render; protected so subclasses that relayout rows can remap mouse coordinates. */
+	protected renderedAutocompleteHeight = 0;
 
 	// Vertical scrolling support
 	private scrollOffset: number = 0;

@@ -1,4 +1,12 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI, visibleWidth } from "@nanopi/pi-tui";
+import {
+	Editor,
+	type EditorOptions,
+	type EditorTheme,
+	type TUI,
+	type TuiMouseEvent,
+	type TuiMouseEventResult,
+	visibleWidth,
+} from "@nanopi/pi-tui";
 import type { AppKeybinding, KeybindingsManager } from "../../../core/keybindings.ts";
 import type { StatusIndicator } from "./status-indicator.ts";
 
@@ -13,6 +21,8 @@ export type CustomEditorOptions = EditorOptions & {
 export class CustomEditor extends Editor {
 	private keybindings: KeybindingsManager;
 	private workingStatusIndicator: StatusIndicator | undefined;
+	/** Blank rows kept between the embedded status and the input (composer style only). */
+	private statusPadRowCount = 0;
 	public readonly embedWorkingStatus: boolean;
 	public actionHandlers: Map<AppKeybinding, () => void> = new Map();
 
@@ -35,17 +45,23 @@ export class CustomEditor extends Editor {
 
 	protected override renderTopBorder(width: number, hiddenAbove: number, hiddenBelow: number): string {
 		if (!this.embedWorkingStatus || !this.workingStatusIndicator || width <= 0) {
+			this.statusPadRowCount = 0;
 			return super.renderTopBorder(width, hiddenAbove, hiddenBelow);
 		}
 
 		let status = this.workingStatusIndicator.renderInBorder(Math.max(1, width - 5));
 		let statusWidth = visibleWidth(status);
-		if (statusWidth === 0) return super.renderTopBorder(width, hiddenAbove, hiddenBelow);
-
-		const overflowLabel = hiddenAbove + hiddenBelow > 0 ? `↑ ${hiddenAbove} · ↓ ${hiddenBelow}` : undefined;
+		if (statusWidth === 0) {
+			this.statusPadRowCount = 0;
+			return super.renderTopBorder(width, hiddenAbove, hiddenBelow);
+		}
 
 		// Composer style has no rule to embed into: the status shares the blank
 		// padding row, left-aligned, with the scroll indicator right-aligned.
+		// A blank row is kept below the status so it does not touch the input.
+		this.statusPadRowCount = this.composerStyle ? 1 : 0;
+		const overflowLabel = hiddenAbove + hiddenBelow > 0 ? `↑ ${hiddenAbove} · ↓ ${hiddenBelow}` : undefined;
+
 		if (this.composerStyle) {
 			const overflowWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
 			if (overflowLabel && overflowWidth + statusWidth + 3 <= width) {
@@ -96,6 +112,28 @@ export class CustomEditor extends Editor {
 			status +
 			this.borderColor("─".repeat(Math.max(0, width - prefixWidth - statusWidth)))
 		);
+	}
+
+	/** Number of rendered rows above the top border (autocomplete menus opened upwards). */
+	private aboveMenuRowCount(): number {
+		return this.autocompleteAbove ? this.renderedAutocompleteHeight : 0;
+	}
+
+	override render(width: number): string[] {
+		const rows = super.render(width);
+		if (this.statusPadRowCount > 0) {
+			rows.splice(this.aboveMenuRowCount() + 1, 0, " ".repeat(Math.max(0, width)));
+		}
+		return rows;
+	}
+
+	override handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+		// The status pad row sits between the top border and the input; fold it
+		// away so clicks map onto the base geometry the Editor hit-tests with.
+		if (this.statusPadRowCount > 0 && event.y > this.aboveMenuRowCount()) {
+			return super.handleMouse({ ...event, y: event.y - this.statusPadRowCount });
+		}
+		return super.handleMouse(event);
 	}
 
 	/**
