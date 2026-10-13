@@ -195,4 +195,4 @@ Dismiss any dialog method. The extension receives `undefined` (for select/input/
 
 See the checked [RPC module UI client](../examples/rpc-extension-ui.ts) and its [demo extension](../examples/extensions/rpc-demo.ts).
 
-The exported request and response unions are defined in [`rpc-types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/modes/rpc/rpc-types.ts). See [Extensions](extensions.md#ui-and-modes) for mode-independent extension guidance.
+The exported request and response unions are defined in [`rpc-types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/modes/rpc/rpc-types.ts). See [SDK modules](sdk.md) for mode-independent module guidance.

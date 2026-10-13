@@ -2,7 +2,7 @@
 
 `@nanopi/pi-tui` provides the terminal component system used by nanopi. Extensions use it when built-in dialogs, notifications, status text, and widgets are not enough for the interaction they need.
 
-Start with `ctx.ui` methods from an [extension](extensions.md#interact-with-the-user). Build a custom component only when the UI needs its own rendering, keyboard or mouse input, focus, layout, or lifecycle.
+Start with `ctx.ui` methods from the [module UI](rpc-module-ui.md). Build a custom component only when the UI needs its own rendering, keyboard or mouse input, focus, layout, or lifecycle.
 
 ## Choose an integration point
 
@@ -120,4 +120,4 @@ The checked extension examples cover the main patterns:
 - [`widget-placement.ts`](../examples/extensions/widget-placement.ts) places persistent content around the editor.
 - [`doom-overlay/`](../examples/extensions/doom-overlay/) demonstrates a continuously rendered overlay.
 
-The public exports are defined in [`packages/tui/src/index.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/tui/src/index.ts). See [Extensions](extensions.md) for extension lifecycle, state, tools, events, and mode behavior.
+The public exports are defined in [`packages/tui/src/index.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/tui/src/index.ts). See [SDK modules](sdk.md) for module lifecycle, state, tools, events, and mode behavior.

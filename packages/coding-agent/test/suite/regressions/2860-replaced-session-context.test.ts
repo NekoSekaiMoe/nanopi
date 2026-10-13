@@ -13,7 +13,7 @@ import {
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
-import type { ModuleApi, ModuleCommandContext, ModuleFactory } from "../../../src/index.ts";
+import type { ModuleApi, ModuleFactory } from "../../../src/index.ts";
 
 function getText(message: AgentSession["messages"][number]): string {
 	if (!("content" in message)) {
@@ -143,13 +143,9 @@ describe("regression #2860: replaced session callbacks", () => {
 		return { runtime, faux };
 	}
 
-	it("rebinds before withSession, targets the replacement session, and invalidates stale nanopi/ctx", async () => {
+	it("rebinds before withSession and targets the replacement session", async () => {
 		const events: string[] = [];
-		let oldCtx: ModuleCommandContext | undefined;
-		let oldPi: ModuleApi | undefined;
 		let oldSessionFile: string | undefined;
-		let staleCtxThrows = false;
-		let staleNanoPiThrows = false;
 		let replacementSessionFile: string | undefined;
 		let instanceId = 0;
 		const { runtime } = await createRuntimeForTest(
@@ -164,24 +160,12 @@ describe("regression #2860: replaced session callbacks", () => {
 				nanopi.registerCommand("repro", {
 					description: "repro",
 					handler: async (_args, ctx) => {
-						oldCtx = ctx;
-						oldPi = nanopi;
 						oldSessionFile = ctx.sessionManager.getSessionFile();
 						await ctx.newSession({
 							parentSession: oldSessionFile,
 							withSession: async (replacedCtx) => {
 								events.push(`with:${currentInstance}`);
 								replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
-								try {
-									oldCtx?.sessionManager.getSessionFile();
-								} catch {
-									staleCtxThrows = true;
-								}
-								try {
-									oldPi?.sendUserMessage("stale message");
-								} catch {
-									staleNanoPiThrows = true;
-								}
 								await replacedCtx.sendUserMessage("Hello from the new session!");
 							},
 						});
@@ -198,8 +182,6 @@ describe("regression #2860: replaced session callbacks", () => {
 		expect(events).toEqual(["start:1", "shutdown:1", "start:2", "with:1"]);
 		expect(replacementSessionFile).toBeDefined();
 		expect(replacementSessionFile).not.toBe(oldSessionFile);
-		expect(staleCtxThrows).toBe(true);
-		expect(staleNanoPiThrows).toBe(true);
 		expect(
 			runtime.session.messages
 				.filter((message) => message.role !== "system")

@@ -193,7 +193,7 @@ RPC also adds `extension_error` when an extension handler throws:
 {"type":"extension_error","extensionPath":"/path/to/extension.ts","event":"tool_call","error":"Error message"}
 ```
 
-Extension UI records are a separate RPC subprotocol, not `AgentSessionEvent` values. See [RPC Extension UI](rpc-extension-ui.md).
+Extension UI records are a separate RPC subprotocol, not `AgentSessionEvent` values. See [RPC Module UI](rpc-module-ui.md).
 
 ## TypeScript types
 

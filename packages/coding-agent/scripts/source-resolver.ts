@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { registerHooks } from "node:module";
-import { extname, resolve, sep } from "node:path";
+import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 // Node strips TypeScript natively, but it does not apply the workspace source
@@ -57,9 +57,28 @@ registerHooks({
 		if (matchedPattern) {
 			throw new Error(`Source runtime could not resolve ${specifier} through tsconfig path ${matchedPattern}`);
 		}
+		// TypeScript sources import compiled-output `.js` specifiers (the vendored
+		// extras do); map them back to the `.ts` sibling next to the importing file.
+		const typeScriptSibling = resolveTypeScriptSibling(specifier, context.parentURL);
+		if (typeScriptSibling) {
+			return { url: pathToFileURL(typeScriptSibling).href, shortCircuit: true };
+		}
 		return nextResolve(specifier, context);
 	},
 });
+
+function resolveTypeScriptSibling(specifier: string, parentURL: string | undefined): string | undefined {
+	if (!specifier.startsWith(".") || parentURL === undefined) return undefined;
+	const parent = fileURLToPath(parentURL);
+	const parentExtension = extname(parent);
+	if (parentExtension !== ".ts" && parentExtension !== ".mts" && parentExtension !== ".cts") return undefined;
+	const extension = extname(specifier);
+	const sourceExtension =
+		extension === ".js" ? ".ts" : extension === ".mjs" ? ".mts" : extension === ".cjs" ? ".cts" : undefined;
+	if (sourceExtension === undefined) return undefined;
+	const candidate = resolve(dirname(parent), `${specifier.slice(0, -extension.length)}${sourceExtension}`);
+	return existsSync(candidate) && statSync(candidate).isFile() ? candidate : undefined;
+}
 
 function matchAlias(alias: SourceAlias, specifier: string): string | undefined {
 	if (!alias.pattern.includes("*")) return specifier === alias.pattern ? "" : undefined;

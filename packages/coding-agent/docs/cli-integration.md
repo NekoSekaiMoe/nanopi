@@ -102,5 +102,5 @@ Change the top-level `bin` field to set the executable name. These settings affe
 - [JSON Event Stream](json.md): JSON event reference
 - [RPC Protocol](rpc.md): RPC lifecycle, framing, errors, and shutdown
 - [RPC Commands](rpc-commands.md): command and response reference
-- [RPC Extension UI](rpc-extension-ui.md): extension interaction subprotocol
+- [RPC Module UI](rpc-module-ui.md): module interaction subprotocol
 - [SDK examples](../examples/sdk/): in-process TypeScript integrations

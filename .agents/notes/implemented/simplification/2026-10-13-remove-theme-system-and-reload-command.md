@@ -117,8 +117,12 @@ off. Startup TUIs (`startup-ui.ts`) use the same flow via
   stale `extensionChangelogVersions` left behind by the plugin removal).
 - Pre-existing failures from the module-migration WIP (extras `.js`-specifier
   resolution in spawned CLI tests, 2781/2860/7193 module semantics,
-  documentation link rot for removed docs pages) are unrelated to this change
-  and remain open.
+  documentation link rot for removed docs pages) were fixed in the follow-up
+  commit: the source resolver maps relative `.js` specifiers back to their
+  `.ts` siblings, package-manager test fixtures were replaced with local-path
+  ones, stale-invalidation expectations dropped with the removed
+  ExtensionRuntime machinery, the reload-lifecycle test was deleted, and the
+  broken links now target `rpc-module-ui.md`/`sdk.md`.
 
 ## Related
 

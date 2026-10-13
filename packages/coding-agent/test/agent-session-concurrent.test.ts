@@ -18,13 +18,9 @@ import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import type { ModuleApi } from "../src/core/modules/types.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import {
-	type BuildSystemPromptOptions,
-	type NormalizedBuildSystemPromptOptions,
-	normalizeBuildSystemPromptOptions,
-} from "../src/core/system-prompt.ts";
 import { createTestModulesResult, createTestResourceLoader } from "./utilities.ts";
 
 function createAssistantMessage(text: string): AssistantMessage {
@@ -420,56 +416,30 @@ describe("AgentSession concurrent prompt guard", () => {
 		const modelRegistry = await createModelRegistry(authStorage, tempDir);
 		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
 
+		const snapshots: string[][] = [];
+		const modulesResult = await createTestModulesResult([
+			(nanopi: ModuleApi) => {
+				nanopi.on("tool_call", async () => {
+					snapshots.push(
+						sessionManager
+							.getEntries()
+							.filter((entry) => entry.type === "message")
+							.map((entry) => entry.message.role),
+					);
+					return undefined;
+				});
+			},
+		]);
+
 		session = new AgentSession({
 			agent,
 			sessionManager,
 			settingsManager,
 			cwd: tempDir,
 			modelRuntime: getModelRuntime(modelRegistry),
-			resourceLoader: createTestResourceLoader(),
+			resourceLoader: createTestResourceLoader({ modulesResult }),
 			baseToolsOverride: { dummy: tool },
 		});
-
-		const snapshots: string[][] = [];
-		const sessionWithRunner = session as unknown as {
-			_extensionRunner?: {
-				hasHandlers: (eventType: string) => boolean;
-				emit: (event: { type: string; message?: { role?: string } }) => Promise<void>;
-				emitMessageEnd: (event: { type: string; message?: { role?: string } }) => Promise<undefined>;
-				emitToolCall: (event: { type: string; toolCallId: string }) => Promise<undefined>;
-				emitInput: (
-					text: string,
-					images: unknown,
-					source: "interactive" | "rpc" | "extension",
-					streamingBehavior?: "steer" | "followUp",
-				) => Promise<{ action: "continue" }>;
-				emitBeforeAgentStart: (
-					trigger: unknown,
-					systemPromptOptions: BuildSystemPromptOptions,
-				) => Promise<{ messages: []; systemPromptOptions: NormalizedBuildSystemPromptOptions }>;
-				invalidate: (message?: string) => void;
-			};
-		};
-		sessionWithRunner._extensionRunner = {
-			hasHandlers: (eventType) => eventType === "tool_call",
-			emit: async () => {},
-			emitMessageEnd: async () => undefined,
-			emitToolCall: async () => {
-				snapshots.push(
-					sessionManager
-						.getEntries()
-						.filter((entry) => entry.type === "message")
-						.map((entry) => entry.message.role),
-				);
-				return undefined;
-			},
-			emitInput: async () => ({ action: "continue" }),
-			emitBeforeAgentStart: async (_trigger, systemPromptOptions) => ({
-				messages: [],
-				systemPromptOptions: normalizeBuildSystemPromptOptions(systemPromptOptions),
-			}),
-			invalidate: () => {},
-		};
 
 		await session.prompt("hi");
 		await session.agent.waitForIdle();
@@ -568,50 +538,26 @@ describe("AgentSession concurrent prompt guard", () => {
 		const modelRegistry = await createModelRegistry(authStorage, tempDir);
 		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
 
+		const modulesResult = await createTestModulesResult([
+			(nanopi: ModuleApi) => {
+				nanopi.on("message_end", async (event) => {
+					if (event.message.role === "assistant") {
+						await new Promise((resolve) => setTimeout(resolve, 40));
+					}
+					return undefined;
+				});
+			},
+		]);
+
 		session = new AgentSession({
 			agent,
 			sessionManager,
 			settingsManager,
 			cwd: tempDir,
 			modelRuntime: getModelRuntime(modelRegistry),
-			resourceLoader: createTestResourceLoader(),
+			resourceLoader: createTestResourceLoader({ modulesResult }),
 			baseToolsOverride: { dummy: tool },
 		});
-
-		const sessionWithRunner = session as unknown as {
-			_extensionRunner?: {
-				hasHandlers: (eventType: string) => boolean;
-				emit: (event: { type: string; message?: { role?: string } }) => Promise<void>;
-				emitMessageEnd: (event: { type: string; message?: { role?: string } }) => Promise<undefined>;
-				emitInput: (
-					text: string,
-					images: unknown,
-					source: "interactive" | "rpc" | "extension",
-					streamingBehavior?: "steer" | "followUp",
-				) => Promise<{ action: "continue" }>;
-				emitBeforeAgentStart: (
-					trigger: unknown,
-					systemPromptOptions: BuildSystemPromptOptions,
-				) => Promise<{ messages: []; systemPromptOptions: NormalizedBuildSystemPromptOptions }>;
-				invalidate: (message?: string) => void;
-			};
-		};
-		sessionWithRunner._extensionRunner = {
-			hasHandlers: () => false,
-			emit: async () => {},
-			emitMessageEnd: async (event) => {
-				if (event.type === "message_end" && event.message?.role === "assistant") {
-					await new Promise((resolve) => setTimeout(resolve, 40));
-				}
-				return undefined;
-			},
-			emitInput: async () => ({ action: "continue" }),
-			emitBeforeAgentStart: async (_trigger, systemPromptOptions) => ({
-				messages: [],
-				systemPromptOptions: normalizeBuildSystemPromptOptions(systemPromptOptions),
-			}),
-			invalidate: () => {},
-		};
 
 		await session.prompt("hi");
 		await session.agent.waitForIdle();
