@@ -10,6 +10,7 @@ import askLite from "../extras/ask-lite/index.ts";
 import mcpLite from "../extras/mcp-lite/src/index.ts";
 import piFakeCodex from "../extras/pi-fake-codex/src/index.ts";
 import piFakeOpencode from "../extras/pi-fake-opencode/src/index.ts";
+import piLspMini from "../extras/pi-lsp-mini/src/index.ts";
 import piRewind from "../extras/pi-rewind/src/index.ts";
 import piSimplify from "../extras/pi-simplify/src/index.ts";
 import piSmartFlow from "../extras/pi-smart-flow/src/index.ts";
@@ -35,6 +36,7 @@ export const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "mcp-lite", factory: mcpLite, hidden: true },
 	{ name: "pi-fake-codex", factory: piFakeCodex },
 	{ name: "pi-fake-opencode", factory: piFakeOpencode, hidden: true },
+	{ name: "pi-lsp-mini", factory: piLspMini },
 	{ name: "pi-rewind", factory: piRewind },
 	{ name: "pi-simplify", factory: piSimplify },
 	{ name: "pi-smart-flow", factory: piSmartFlow },

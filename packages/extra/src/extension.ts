@@ -211,6 +211,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			const settings = loadExtraSettings(ctx.cwd).settings;
 			engine.setMode(settings.defaultMode, "session default");
 			applyModeToolSet();
+			// Persisted subsystem switches apply to fresh sessions too, not just
+			// when toggled live from the webui settings page.
+			for (const key of SUBSYSTEM_KEYS) {
+				if (settings.subsystems[key] === false) applySubsystem(key, false);
+			}
 		}
 		// Fresh permission memory per session.
 		const prompter: PermissionPrompter | undefined =

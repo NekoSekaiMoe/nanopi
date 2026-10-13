@@ -1,0 +1,16 @@
+{
+  "name": "pi-lsp-mini",
+  "version": "0.2.0",
+  "description": "Lean zero-dependency LSP extension for pi: diagnostics, call-graph, workspace rename & symbol delete.",
+  "type": "module",
+  "license": "MIT",
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@nanopi/pi-coding-agent": "*",
+    "typebox": "*"
+  }
+}

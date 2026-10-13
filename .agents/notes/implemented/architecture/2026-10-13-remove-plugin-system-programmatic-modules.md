@@ -75,7 +75,8 @@ registerVirtualModel (+unregister*).
   src/modules/ registering through ModuleApi.
 - packages/extra keeps its structural-slice approach; ExtraExtensionAPI is
   re-sliced against ModuleApi (names unchanged where possible).
-- extras/* (10 packages) live under `src/extras/<name>` and are imported
+- extras/* (11 packages, pi-lsp-mini joined post-migration on 2026-10-13) live
+  under `src/extras/<name>` and are imported
   directly from src/modules/index.ts (compiled in). Their host imports stay
   bare `@nanopi/pi-coding-agent` specifiers: the root tsconfig already maps
   the self-name to src/, tsconfig.build.json gained the same mapping (a clean
@@ -100,11 +101,9 @@ registerVirtualModel (+unregister*).
   `--no-extensions`, `builtin:<name>`.
 - Build: `extra/<name>` flavor components and dist/extras shipping (all extras
   always compiled in; minimal builds grow slightly). The `modes` component and
-  its inert stub stay. scripts/extras.mjs and the extras payload in
-  copy-assets/single-file are superseded: after the extras moved under src/,
-  resolveBundledExtras() finds no vendored directory and returns [], so the
-  remaining call sites no-op; deleting them outright is pending follow-up
-  cleanup.
+  its inert stub stay. scripts/extras.mjs, its test, the `extra/<name>`
+  buildconfig components, and the extras payloads in copy-assets and the
+  single-file build were deleted outright once the extras moved under src/
 - /reload was later removed entirely with the theme system
   ([remove the theme system and the /reload command](../simplification/2026-10-13-remove-theme-system-and-reload-command.md));
   the runtime reload machinery (module-requested, models.json hot reload)

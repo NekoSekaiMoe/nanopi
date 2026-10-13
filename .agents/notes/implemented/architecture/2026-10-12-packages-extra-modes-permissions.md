@@ -61,11 +61,14 @@ established [bundled-extras](../feature/2026-10-11-bundled-extras.md) ones.
 
 Subsystem toggles (`lsp`, `mcp`, `subagent`, `askquestion`, `todo`) live in the
 extra's own settings file (`~/.nanopi/extra/settings.json` with a
-`.nanopi/extra/settings.json` project override), not the core settings schema.
-Toggling rewrites the corresponding settings package entry to the filtered
-object form (`autoload: false` / empty extension patterns), which is the
-package-enable layer the `nanopi config` TUI already uses; a disabled package
-registers no tools and injects no prompt text.
+`.nanopi/extra/settings.json` project override), not the core settings schema
+(the old package-enable layer died with the plugin-system removal). A switch
+applies through tool activation only: the webui settings page toggles live
+(persist + `applySubsystem`, adding/removing the subsystem's tools from the
+active set), and fresh sessions apply persisted `false` switches at
+`session_start`. The `lsp` switch gates the vendored pi-lsp-mini extra (its
+five `lsp_*` tools plus `/lsp`); language servers themselves spawn lazily on
+first use per language.
 
 ## Alternatives considered
 

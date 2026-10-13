@@ -27,7 +27,6 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
 import { resolveBuildFlavor } from "./buildconfig.mjs";
-import { resolveBundledExtras } from "./extras.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -144,9 +143,6 @@ function buildAssetsPayload() {
 	const repoTrees = [];
 	if (isComponentEnabled("docs")) repoTrees.push([join(codingAgentDir, "docs"), "docs"]);
 	if (isComponentEnabled("examples")) repoTrees.push([join(codingAgentDir, "examples"), "examples"]);
-	for (const extra of resolveBundledExtras({ repoRoot, components })) {
-		distTrees.push([extra.sourceDir, join("dist", "extras", extra.name)]);
-	}
 
 	const archive = {};
 	for (const filePath of packageDirFiles) {
