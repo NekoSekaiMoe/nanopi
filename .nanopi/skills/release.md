@@ -7,46 +7,33 @@ description: Prepare, publish, verify, and recover nanopi releases. Use for rele
 
 Run repository commands from the repo root (two directories above this skill), unless instructed otherwise.
 
-**Lockstep versioning**: all packages share one version; every release updates all together. `patch` = fixes + additions, `minor` = breaking changes. No major releases.
+**Date versioning**: every release is tagged `vYYYYMMDD` (release day, e.g. `v20261013`). All packages share one version section; changelog headings use the bare date (`## [20261013]`) because `scripts/release-notes.mjs extract` matches that form. Multiple releases on one day append `-2`, `-3` (`v20261013-2` → `## [20261013-2]`).
+
+**GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`, and package.json versions are not bumped for releases. The `npm run release:patch|minor` scripts are obsolete; do not use them.
+
+Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-minimal.js` (single-file, `minimal` flavor: no webui, export templates, docs, examples, or OAuth flows), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`.
 
 1. **Update CHANGELOGs**: ask the user whether they ran the `/cl` prompt on the latest commit on `main`. If not, they must run `/cl` first to audit and update each package's `[Unreleased]` section before releasing.
 
-2. **Local smoke test**: build an unpublished release and smoke test from outside the repo (so it can't resolve workspace files):
+2. **Cut the release**: in every `packages/*/CHANGELOG.md` that has one, rename `## [Unreleased]` to `## [<YYYYMMDD>]` (no date suffix), commit as `Release v<YYYYMMDD>`, tag `v<YYYYMMDD>` on that commit, then add a fresh empty `## [Unreleased]` heading at the top of each changelog and commit as `Add [Unreleased] sections for next cycle` (after the tag, so the tagged tree has no empty sections). Push `main` and the tag.
+
+3. **Local smoke test** (optional but recommended before tagging): build both flavors from the repo and smoke test from outside the repo:
+
    ```bash
-   npm run release:local -- --out /tmp/nanopi-local-release --force
+   ./scripts/build-single-file.sh --out /tmp/nanopi-bundles
+   NANOPI_BUILD_FLAVOR=minimal node scripts/build-coding-agent-single-file.mjs --out /tmp/nanopi-bundles/nanopi-minimal.js
+
    cd /tmp
-
-   # Node package install smoke tests
-   /tmp/nanopi-local-release/node/nanopi --help
-   /tmp/nanopi-local-release/node/nanopi --version
-   /tmp/nanopi-local-release/node/nanopi --list-models
-   /tmp/nanopi-local-release/node/nanopi -p "Say exactly: ok"
-   /tmp/nanopi-local-release/node/nanopi
-
-   # Bun binary smoke tests
-   /tmp/nanopi-local-release/bun/nanopi --help
-   /tmp/nanopi-local-release/bun/nanopi --version
-   /tmp/nanopi-local-release/bun/nanopi --list-models
-   /tmp/nanopi-local-release/bun/nanopi -p "Say exactly: ok"
-   /tmp/nanopi-local-release/bun/nanopi
+   /tmp/nanopi-bundles/nanopi.js --help
+   /tmp/nanopi-bundles/nanopi.js --version
+   /tmp/nanopi-bundles/nanopi.js --list-models
+   /tmp/nanopi-bundles/nanopi.js -p "Say exactly: ok"
+   /tmp/nanopi-bundles/nanopi-minimal.js --help
+   /tmp/nanopi-bundles/nanopi-minimal.js --version
    ```
-   Verify both Node and Bun startup, model/account listing, interactive startup, and at least one real prompt with the intended default provider. The bare commands `/tmp/nanopi-local-release/node/nanopi` and `/tmp/nanopi-local-release/bun/nanopi` start interactive mode; run each in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk.
 
-   Load and follow [interactive-testing.md](interactive-testing.md) for the tmux workflow. Start each release binary from `/tmp`, not the repo root.
+   Verify startup, model/account listing, and at least one real prompt with the intended default provider. Start each bundle bare in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk. Load and follow [interactive-testing.md](interactive-testing.md) for the tmux workflow; start each release binary from `/tmp`, not the repo root.
 
-3. **Run the release script**:
-   ```bash
-   NANOPI_ALLOW_LOCKFILE_CHANGE=1 npm_config_min_release_age=0 npm run release:patch    # fixes + additions
-   NANOPI_ALLOW_LOCKFILE_CHANGE=1 npm_config_min_release_age=0 npm run release:minor    # breaking changes
-   ```
-   If the test suite already passed in `npm run release:local` and only fails from machine load, `NANOPI_RELEASE_SKIP_TESTS=1` skips `./test.sh` in the release script; checks and the packed install check still run. Use it only with the user's approval.
+4. **CI builds and publishes**: pushing the `vYYYYMMDD` tag triggers `.github/workflows/build-binaries.yml`. It archives the tagged source, builds both single-file bundles from that archive, smoke tests them on Linux/macOS/Windows, stages a draft GitHub Release with the assets above, then publishes it. No npm step runs. Do not rerun the pipeline after the release published.
 
-   Use `npm_config_min_release_age=0` only for the release command. The repo's normal npm age gate can otherwise block the release lockfile refresh when the current workspace package version was published recently. Review any lockfile or install lock diffs the release creates before push.
-
-   The release script refreshes the Nix model catalog pin (`nix/model-catalog.json`) if stale, bumps all package versions, updates changelogs, regenerates release artifacts, runs `npm run check`, commits `Release vX.Y.Z`, tags `vX.Y.Z`, adds fresh `## [Unreleased]` changelog sections, commits `Add [Unreleased] section for next cycle`, then pushes `main` and the tag. Do not rerun the release script after a tag was pushed.
-
-4. **CI verifies and announces the npm release**: pushing the `vX.Y.Z` tag triggers `.github/workflows/build-binaries.yml`. The `publish-npm` job uses npm trusted publishing through GitHub Actions OIDC with environment `npm-publish`; no local `npm publish`, `npm whoami`, OTP, or WebAuthn flow is required. After publishing, the workflow verifies every public workspace package resolves at the exact release version and that its npm tarball is available.
-
-5. **CI builds the Nix release**: the tag push also triggers `.github/workflows/nix.yml`, which builds the tagged flake on Linux and macOS and then fast-forwards the `stable` branch to the release commit. `nix run github:NekoSekaiMoe/nanopi/stable` runs the latest release. If the Nix build fails, `stable` stays on the previous release; the tag cannot be fixed, so fix `main` and ship the fix in the next release.
-
-6. **If CI publish or announcement fails**: inspect the failed job. The publish helper is idempotent and skips package versions already present on npm; the announcement job rechecks availability before updating the R2 marker. Rerun the failed job or workflow after fixing CI or transient npm issues. Do not rerun `npm run release:patch` or `npm run release:minor` for the same version.
+5. **If a CI step fails**: the cleanup job deletes the staged draft. Inspect the failed job and rerun it, or re-run the whole workflow from the GitHub Actions page (`workflow_dispatch` with `tag` and, for recovery, `source_ref` pointing at a fixed commit). A published release is never mutated; if the tag itself is bad, fix `main` and ship the next date release.
