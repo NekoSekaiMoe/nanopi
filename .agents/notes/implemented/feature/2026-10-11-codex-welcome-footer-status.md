@@ -39,8 +39,10 @@ The default TUI and the pi-ui extra share one Codex-style layout:
 - pi-ui matches: it ships no custom editor anymore — the default composer stays
   and the slash menu opens above it (see
   [composer-menu-above-no-piui-editor](./2026-10-11-composer-menu-above-no-piui-editor.md)) —
-  and the same single-line footer (extension statuses hidden). Its README is
-  updated to match.
+  and the same single-line footer. Its README is
+  updated to match. (pi-ui's toolbar later gained right-aligned extension
+  statuses and the shell label — the built-in footer still hides them; see
+  [footer-badges-status-channel](../bug-fix/2026-10-13-footer-badges-status-channel.md).)
 
 Related: [built-in /init, /context](./2026-10-11-builtin-commands-and-codex-compaction.md)
 established the builtin-commands home this command extends.

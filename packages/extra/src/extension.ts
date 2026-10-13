@@ -10,6 +10,7 @@
 
 import type { JudgeModelRegistry } from "./ai-judge.ts";
 import { judgeWithModel } from "./ai-judge.ts";
+import { modeBadgeText } from "./badges.ts";
 import { extraBridge } from "./bridge.ts";
 import { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
 import type {
@@ -20,7 +21,6 @@ import type {
 	ExtraToolCallEvent,
 	ExtraToolCallResult,
 } from "./extension-api.ts";
-import { createBadgeFooter } from "./footer.ts";
 import { isMcpToolName, MCP_MAIN_AGENT_BLOCK_REASON, MCP_SUBAGENT_ONLY_GUIDELINE } from "./mcp-policy.ts";
 import { modeEngine } from "./mode-engine.ts";
 import type { PermissionCallInfo, PermissionDecision, PermissionPrompter } from "./permissions.ts";
@@ -93,6 +93,13 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let gate: PermissionGate | undefined;
 	/** /plan runs settle into the exit-confirmation flow. */
 	let planIntroActive = false;
+
+	/** Push the current mode badges through the footer status channel. */
+	function applyModeStatus(): void {
+		if (sessionCtx?.mode !== "tui") return;
+		sessionCtx.ui.setStatus("mode", modeBadgeText(engine, sessionCtx.ui.theme));
+	}
+	engine.subscribe(() => applyModeStatus());
 
 	// --- ENV provider (append-only; never changes the default model) ---
 	const envProvider = resolveEnvProvider();
@@ -224,7 +231,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			judgeWithModel(info, ctx.model, ctx.modelRegistry as unknown as JudgeModelRegistry, { cwd: ctx.cwd });
 		gate = new PermissionGate(prompter ?? (async () => undefined), judge);
 		if (ctx.mode === "tui") {
-			ctx.ui.setFooter(createBadgeFooter(ctx, engine));
+			applyModeStatus();
 		}
 		extraBridge.bindSession(
 			{

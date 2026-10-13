@@ -1,6 +1,5 @@
 import { describe, expect, test } from "vitest";
 import { judgeWithModel } from "../src/ai-judge.ts";
-import { badgeLabels, renderFooterLine } from "../src/footer.ts";
 import { ModeEngine } from "../src/mode-engine.ts";
 import type { PermissionCallInfo } from "../src/permission-types.ts";
 
@@ -38,33 +37,6 @@ describe("ModeEngine", () => {
 		engine.setYolo(true);
 		engine.setMode("plan");
 		expect(engine.snapshot()).toMatchObject({ mode: "plan", yolo: true });
-	});
-});
-
-describe("footer badges", () => {
-	test("yolo and plan badges can show together", () => {
-		const engine = new ModeEngine();
-		expect(badgeLabels(engine)).toEqual([]);
-		engine.setYolo(true);
-		expect(badgeLabels(engine)).toEqual(["yolo"]);
-		engine.setMode("plan");
-		expect(badgeLabels(engine)).toEqual(["yolo", "plan"]);
-		engine.setMode("minimal");
-		expect(badgeLabels(engine)).toEqual(["yolo"]);
-	});
-
-	test("usage line matches the built-in footer format", () => {
-		const ctx = {
-			getContextUsage: () => ({ tokens: 12_345, percent: null, contextWindow: 200_000 }),
-			model: undefined,
-		};
-		const theme = { fg: (_c: string, text: string) => text };
-		expect(renderFooterLine(ctx, theme, 120)).toBe("used 12k/200k · / for more details");
-		const small = {
-			getContextUsage: () => ({ tokens: 9_500, percent: null, contextWindow: 20_000 }),
-			model: undefined,
-		};
-		expect(renderFooterLine(small, theme, 120)).toBe("used 9.5k/20k · / for more details");
 	});
 });
 

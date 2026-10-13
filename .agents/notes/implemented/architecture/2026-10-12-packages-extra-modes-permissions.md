@@ -22,7 +22,10 @@ coding-agent core touches it in exactly three places:
 1. `src/extensions/index.ts` adds a hidden inline factory (loads pre-trust, so
    it can answer `project_trust` for `--yolo`). The factory registers
    `--yolo`, `/plan`, the `tool_call` interceptor, prompt injection, and the
-   footer badge component. Disabled subsystems and disabled flavors register
+   mode badges — pushed through the `ctx.ui.setStatus()` channel, not a custom
+   footer (see
+   [footer-badges-status-channel](../bug-fix/2026-10-13-footer-badges-status-channel.md)).
+   Disabled subsystems and disabled flavors register
    nothing at all.
 2. `src/modes/webui/webui-server.ts` imports the module's `extraBridge`
    singleton (same process as the extension) and mounts bridge endpoints:
@@ -88,6 +91,11 @@ first use per language.
 - **Reusing `ctx.ui.setStatus`** for footer badges: no color control; the
   todo explicitly requires red `yolo` / green `plan` badges. A custom footer
   reimplements the single usage line (same approach pi-ui takes).
+  Superseded 2026-10-13: producers embed ANSI colors via `ctx.ui.theme.fg()`
+  (the pi-rewind convention), so the status channel does carry the required
+  colors — and the custom footer was silently replaced by pi-ui's
+  `setFooter()` call on every session start. See
+  [footer-badges-status-channel](../bug-fix/2026-10-13-footer-badges-status-channel.md).
 - **`@nanopi/extra` with exact-pin dependency**: `scripts/check-pinned-deps.mjs`
   only exempts `@nanopi/pi-*` names and `scripts/sync-versions.js` rewrites
   internal deps to `^`, so an exact pin would fight the toolchain. Named

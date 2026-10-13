@@ -6,8 +6,10 @@ gives the interactive TUI a Codex-style look:
 - **Default composer** — the stock borderless `› ` input stays; pi-ui ships no
   custom editor frame. The slash-command menu direction belongs to the core
   editor (`autocompleteDirection`), not the reskin.- **Single-line status toolbar** — `used xk/yk · / for more details`
-  (used/context-window from real Pi context usage). Extension statuses are
-  hidden so the bottom line stays exactly like the reference layout.
+  (used/context-window from real Pi context usage), with right-aligned
+  extension statuses (`ctx.ui.setStatus()` channel) and a yellow `shell`
+  label in shell mode. The usage line truncates first when the width cannot
+  fit both.
 - **Animated status shimmer** — `· Working (9s · esc to interrupt)` with a
   moving rainbow gradient and a live elapsed counter. Retry countdowns
   and context compaction use the same shimmer while preserving their status
@@ -50,7 +52,7 @@ built on documented `ExtensionAPI` / `ExtensionUIContext` methods:
 
 | Module        | Pi API                                              | What it does                                    |
 | ------------- | --------------------------------------------------- | ----------------------------------------------- |
-| `footer.ts`   | `ctx.ui.setFooter()`                                | `used xk/yk` single-line toolbar                |
+| `footer.ts`   | `ctx.ui.setFooter()`                                | `used xk/yk` single-line toolbar + status badges |
 | `working.ts`  | Working UI methods + guarded TUI `Loader` hook       | Status shimmer + elapsed transcript row         |
 | `tools.ts`    | `pi.registerTool()` + `ToolExecutionComponent`      | Flat tool rows and edit/write diffs             |
 | `gradient.ts` | —                                                   | Truecolor gradient helpers                      |

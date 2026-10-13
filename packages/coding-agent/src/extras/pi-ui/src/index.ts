@@ -21,7 +21,8 @@
  * documented ModuleApi / ModuleUIContext methods:
  *   - editor: none — the default composer stays; input frame and menu
  *     direction belong to the core TUI, not the reskin
- *   - footer.ts   -> ctx.ui.setFooter() status toolbar
+ *   - footer.ts   -> ctx.ui.setFooter() status toolbar with right-aligned
+ *     extension statuses (ctx.ui.setStatus channel) and shell-mode label
  *   - thinking.ts -> AssistantMessageComponent/InteractiveMode/SettingsList
  *     prototype patches (process-lifetime, like the tool renderer redirect)
  *   - working.ts  -> pi.on(agent_start/settled) + setWorkingIndicator/Message
@@ -136,14 +137,13 @@ export default function (pi: ModuleApi) {
   // frame (see the pi-ui note in .agents/notes).
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    const uiState = { shellMode: false };
     installResourceHeadingGradient(ctx.ui.theme);
     installThinkingDisplay(pi, ctx.ui.theme);
     suppressTodoWidget(ctx.ui);
     skinSubagentWidget(ctx.ui);
     restoreShellRenderer();
     restoreShellRenderer = installShellRenderer(ctx.ui.theme);
-    installFooter(ctx, uiState);
+    installFooter(ctx);
   });
 
   pi.on("session_shutdown", () => {

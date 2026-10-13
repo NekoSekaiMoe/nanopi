@@ -9,7 +9,7 @@
  * registered in packages/coding-agent/src/extensions/index.ts).
  */
 
-import type { FooterThemeSlice, FooterTuiSlice } from "./footer.ts";
+import type { BadgeThemeSlice } from "./badges.ts";
 
 export interface ExtraUIDialogOptions {
 	signal?: AbortSignal;
@@ -19,11 +19,9 @@ export interface ExtraUIDialogOptions {
 export interface ExtraUIContext {
 	select(title: string, options: string[], opts?: ExtraUIDialogOptions): Promise<string | undefined>;
 	notify(message: string, type?: "info" | "warning" | "error"): void;
-	setFooter(
-		factory:
-			| ((tui: FooterTuiSlice, theme: FooterThemeSlice, footerData: unknown) => { render(width: number): string[] })
-			| undefined,
-	): void;
+	/** Footer status channel: badge text under "mode", rendered by the installed footer. */
+	setStatus(key: string, text: string | undefined): void;
+	readonly theme: BadgeThemeSlice;
 }
 
 export interface ExtraExtensionContext {

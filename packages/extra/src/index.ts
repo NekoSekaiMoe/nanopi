@@ -10,11 +10,11 @@
 
 export type { JudgeModelRegistry } from "./ai-judge.ts";
 export { judgeWithModel } from "./ai-judge.ts";
+export { type BadgeThemeSlice, badgeLabels, modeBadgeText } from "./badges.ts";
 export type { BridgeExtensionHooks, BridgeJudgeContext } from "./bridge.ts";
 export { ExtraBridge, extraBridge } from "./bridge.ts";
 export { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
 export { createExtraExtension, extraInlineExtension } from "./extension.ts";
-export { badgeLabels, createBadgeFooter, renderBadges, renderFooterLine } from "./footer.ts";
 export {
 	isMcpToolName,
 	MCP_MAIN_AGENT_BLOCK_REASON,

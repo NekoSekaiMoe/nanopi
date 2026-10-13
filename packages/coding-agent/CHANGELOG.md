@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The pi-ui footer replaces the built-in footer in every TUI session and silently dropped the extension status channel and the shell-mode label. Its toolbar line now renders right-aligned extension statuses from `ctx.ui.setStatus()` (the extra module's red `yolo` / green `plan` badges, pi-rewind checkpoints) plus the yellow `shell` label while the composer text starts with `!`; the usage line truncates first when the width cannot fit both. `setExtensionStatus()` repaints on change so badge updates appear immediately.
+
 ## [20261013]
 
 ### Breaking Changes
