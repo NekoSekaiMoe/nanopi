@@ -7,15 +7,36 @@
 main:
   push:
     - name: mirror-to-github
+      # 2 cpus = 2c4g（内存 = CPU 核数 × 2 GiB）
       runner:
         tags: cnb:arch:amd64
         cpus: 2
       imports:
         - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
       stages:
+        # CNB 不执行本地 git hooks，也没有修改已推送提交的 API，所以
+        # Change-Id 只能在 CI 里检查，补不了；这里只报告不拦截。
+        - name: check-commit-trailers
+          script: |
+            set -euo pipefail
+            node scripts/check-commit-trailers.mjs "$CNB_BEFORE_SHA" "$CNB_COMMIT"
+
         - name: push main
           script: |
             set -euo pipefail
             git config --global credential.helper store
             printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
-            git push https://github.com/NekoSekaiMoe/nanopi.git HEAD:refs/heads/main
+
+            remote=https://github.com/NekoSekaiMoe/nanopi.git
+            git fetch --quiet "$remote" main
+
+            # 推送不代表成功：非 fast-forward 会被远端拒绝。把本地 HEAD 与
+            # 远端 main 的关系摆到日志里，再推。
+            if git merge-base --is-ancestor HEAD FETCH_HEAD; then
+              echo "fast-forward: $CNB_COMMIT is ahead of $remote main"
+            else
+              echo "not a fast-forward of $remote main; push will be rejected" >&2
+              exit 1
+            fi
+
+            git push "$remote" HEAD:refs/heads/main
