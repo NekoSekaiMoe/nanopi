@@ -21,7 +21,7 @@ export const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOP
 // =============================================================================
 
 /**
- * Get the base directory for resolving package assets (themes, package.json, README.md, CHANGELOG.md):
+ * Get the base directory for resolving package assets (package.json, README.md, CHANGELOG.md):
  * the package root containing package.json.
  */
 export function findNodePackageDir(startDir: string): string {
@@ -43,18 +43,6 @@ export function getPackageDir(): string {
 	}
 
 	return findNodePackageDir(__dirname);
-}
-
-/**
- * Get path to built-in themes directory (shipped with package)
- * - For Node.js (dist/): dist/modes/interactive/theme/
- * - For source (src/): src/modes/interactive/theme/
- */
-export function getThemesDir(): string {
-	// Theme is in modes/interactive/theme/ relative to src/ or dist/
-	const packageDir = getPackageDir();
-	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-	return join(packageDir, srcOrDist, "modes", "interactive", "theme");
 }
 
 /**
@@ -166,11 +154,6 @@ export function getAgentDir(): string {
 		return expandTildePath(envDir);
 	}
 	return join(homedir(), CONFIG_DIR_NAME, "agent");
-}
-
-/** Get path to user's custom themes directory */
-export function getCustomThemesDir(): string {
-	return join(getAgentDir(), "themes");
 }
 
 /** Get path to models.json */

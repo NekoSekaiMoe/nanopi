@@ -86,7 +86,7 @@ Malformed `SKILL.md` files and declared skills without descriptions are not load
 
 ## Validate and share a skill
 
-Run nanopi from a location where the skill is discoverable, then inspect the startup diagnostics and `/skill:name` command. Run `/reload` after editing a skill during an active session.
+Run nanopi from a location where the skill is discoverable, then inspect the startup diagnostics and `/skill:name` command. Restart nanopi after editing a skill.
 
 Distribute skills by placing them in a skills directory; keep environment setup inside the skill body.
 

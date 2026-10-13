@@ -67,7 +67,7 @@ function normalizeRenderedOutput(container: Container, width = 220): string {
 describe("InteractiveMode.showStatus", () => {
 	beforeAll(() => {
 		// showStatus uses the global theme instance
-		initTheme("dark");
+		initTheme();
 	});
 
 	test("coalesces immediately-sequential status messages", () => {
@@ -112,7 +112,7 @@ describe("InteractiveMode.showStatus", () => {
 });
 
 describe("InteractiveMode.showManagedToolStatus", () => {
-	beforeAll(() => initTheme("dark"));
+	beforeAll(() => initTheme());
 
 	test("renders tool updates as one contiguous group", () => {
 		const fakeThis: any = {
@@ -160,70 +160,9 @@ describe("InteractiveMode.setToolsExpanded", () => {
 	});
 });
 
-describe("InteractiveMode.createExtensionUIContext setTheme", () => {
-	test("persists theme changes to settings manager", () => {
-		initTheme("dark");
-
-		let currentTheme = "dark";
-		const settingsManager = {
-			getTheme: vi.fn(() => currentTheme),
-			setTheme: vi.fn((theme: string) => {
-				currentTheme = theme;
-			}),
-		};
-		const fakeThis: any = {
-			session: { settingsManager },
-			settingsManager,
-			themeController: {
-				setThemeInstance: vi.fn(() => ({ success: true })),
-				setThemeName: vi.fn(() => {
-					fakeThis.ui.requestRender();
-					return { success: true };
-				}),
-			},
-			ui: { requestRender: vi.fn() },
-		};
-
-		const uiContext = (InteractiveMode as any).prototype.createExtensionUIContext.call(fakeThis);
-		const result = uiContext.setTheme("light");
-
-		expect(result.success).toBe(true);
-		expect(fakeThis.themeController.setThemeName).toHaveBeenCalledWith("light");
-		expect(settingsManager.setTheme).toHaveBeenCalledWith("light");
-		expect(currentTheme).toBe("light");
-		expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
-	});
-
-	test("does not persist invalid theme names", () => {
-		initTheme("dark");
-
-		const settingsManager = {
-			getTheme: vi.fn(() => "dark"),
-			setTheme: vi.fn(),
-		};
-		const fakeThis: any = {
-			session: { settingsManager },
-			settingsManager,
-			themeController: {
-				setThemeInstance: vi.fn(() => ({ success: true })),
-				setThemeName: vi.fn(() => ({ success: false, error: "Theme not found" })),
-			},
-			ui: { requestRender: vi.fn() },
-		};
-
-		const uiContext = (InteractiveMode as any).prototype.createExtensionUIContext.call(fakeThis);
-		const result = uiContext.setTheme("__missing_theme__");
-
-		expect(result.success).toBe(false);
-		expect(fakeThis.themeController.setThemeName).toHaveBeenCalledWith("__missing_theme__");
-		expect(settingsManager.setTheme).not.toHaveBeenCalled();
-		expect(fakeThis.ui.requestRender).not.toHaveBeenCalled();
-	});
-});
-
 describe("InteractiveMode.showExtensionCustom", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	test("overlay custom UI reclaims input after non-overlay custom UI closes", async () => {
@@ -502,7 +441,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 });
 describe("InteractiveMode.showLoadedResources", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	function createShowLoadedResourcesThis(options: {
@@ -592,7 +531,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 			{
 				type: "warning",
 				message:
-					"SessionModule command '/model' conflicts with built-in interactive command. Available as '/model:2'.",
+					"RegisteredModule command '/model' conflicts with built-in interactive command. Available as '/model:2'.",
 				path: "/tmp/ext/index.ts",
 			},
 		]);

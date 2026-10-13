@@ -22,8 +22,7 @@ type LoadedResourcesContext = {
 			getAppendSystemPromptSources: () => Array<{ path: string }>;
 			getSkills: () => { skills: []; diagnostics: Array<{ type: "warning"; message: string }> };
 			getPrompts: () => LoadedResourcesResult<{ prompts: [] }>;
-			getThemes: () => LoadedResourcesResult<{ themes: [] }>;
-			getModules: () => { extensions: []; errors: [] };
+			getModules: () => { modules: []; errors: [] };
 		};
 		moduleRegistry: {
 			getCommandDiagnostics: () => [];
@@ -53,7 +52,6 @@ type RebindContext = {
 type ReloadCommandContext = {
 	hideThinkingBlock: boolean;
 	session: {
-		resourceLoader: { getThemes: () => { themes: [] } };
 		moduleRegistry: unknown;
 		modelRuntime: { getError: () => string | undefined };
 	};
@@ -78,7 +76,6 @@ type ReloadCommandContext = {
 	};
 	editor: unknown;
 	defaultEditor: { setPaddingX: (padding: number) => void; setAutocompleteMaxVisible: (maxVisible: number) => void };
-	themeController: { applyFromSettings: () => Promise<void> };
 	applyRuntimeSettings: () => void;
 	resetExtensionUI: () => void;
 	rebuildChatFromMessages: () => void;
@@ -100,7 +97,7 @@ const interactiveModePrototype = InteractiveMode.prototype as unknown as Interac
 
 type ReloadCommandContextOverrides = Omit<
 	Partial<ReloadCommandContext>,
-	"session" | "settingsManager" | "keybindings" | "editorContainer" | "ui" | "defaultEditor" | "themeController"
+	"session" | "settingsManager" | "keybindings" | "editorContainer" | "ui" | "defaultEditor"
 > & {
 	session?: Partial<ReloadCommandContext["session"]>;
 	settingsManager?: Partial<ReloadCommandContext["settingsManager"]>;
@@ -108,7 +105,6 @@ type ReloadCommandContextOverrides = Omit<
 	editorContainer?: Partial<ReloadCommandContext["editorContainer"]>;
 	ui?: Partial<ReloadCommandContext["ui"]>;
 	defaultEditor?: Partial<ReloadCommandContext["defaultEditor"]>;
-	themeController?: Partial<ReloadCommandContext["themeController"]>;
 };
 
 function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {}): ReloadCommandContext {
@@ -116,7 +112,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 	return {
 		hideThinkingBlock: overrides.hideThinkingBlock ?? false,
 		session: {
-			resourceLoader: { getThemes: () => ({ themes: [] }) },
 			moduleRegistry: {},
 			modelRuntime: { getError: () => undefined },
 			...overrides.session,
@@ -142,7 +137,6 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		},
 		editor,
 		defaultEditor: { setPaddingX: () => {}, setAutocompleteMaxVisible: () => {}, ...overrides.defaultEditor },
-		themeController: { applyFromSettings: async () => {}, ...overrides.themeController },
 		applyRuntimeSettings: overrides.applyRuntimeSettings ?? (() => {}),
 		customHeader: overrides.customHeader,
 		builtInHeader: overrides.builtInHeader,
@@ -191,8 +185,7 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 					diagnostics: [{ type: "warning", message: "duplicate skill name" }],
 				}),
 				getPrompts: () => ({ prompts: [], diagnostics: [] }),
-				getThemes: () => ({ themes: [], diagnostics: [] }),
-				getModules: () => ({ extensions: [], errors: [] }),
+				getModules: () => ({ modules: [], errors: [] }),
 			},
 			moduleRegistry: {
 				getCommandDiagnostics: () => [],
@@ -209,7 +202,7 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 
 describe("regression #5943: session_start transient UI", () => {
 	it("renders resource diagnostics before restored messages without stale entries", () => {
-		initTheme("dark", false);
+		initTheme();
 		const context = createLoadedResourcesContext();
 		const root = new Container();
 		root.addChild(context.loadedResourcesContainer);
@@ -423,7 +416,7 @@ describe("regression #5943: session_start transient UI", () => {
 	});
 
 	it("refreshes hideThinkingBlock before rebuilding chat during reload", async () => {
-		initTheme("dark", false);
+		initTheme();
 		let hideThinkingBlockAtRebuild = false;
 		let context: ReloadCommandContext;
 		context = createReloadCommandContext({
@@ -441,7 +434,7 @@ describe("regression #5943: session_start transient UI", () => {
 	});
 
 	it("restores the editor when reload fails", async () => {
-		initTheme("dark", false);
+		initTheme();
 		const editor = {};
 		let focused: unknown;
 		const context = createReloadCommandContext({
@@ -460,7 +453,7 @@ describe("regression #5943: session_start transient UI", () => {
 	});
 
 	it("keeps the reload blocker focused until afterReload", async () => {
-		initTheme("dark", false);
+		initTheme();
 		const editor = {};
 		let focused: unknown;
 		let chatRestored = false;

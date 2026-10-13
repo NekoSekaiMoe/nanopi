@@ -732,23 +732,6 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getThemeSetting(): string | undefined {
-		const value = this.settings.theme;
-		if (typeof value === "string") return value;
-		return undefined;
-	}
-
-	getTheme(): string | undefined {
-		const theme = this.getThemeSetting();
-		return theme?.includes("/") ? undefined : theme;
-	}
-
-	setTheme(theme: string): void {
-		this.globalSettings.theme = theme;
-		this.markModified("theme");
-		this.save();
-	}
-
 	getDefaultThinkingLevel(): ThinkingLevel | undefined {
 		return this.settings.defaultThinkingLevel;
 	}
@@ -1116,22 +1099,6 @@ export class SettingsManager {
 	setProjectPromptTemplatePaths(paths: string[]): void {
 		this.updateProjectSettings("prompts", (settings) => {
 			settings.prompts = paths;
-		});
-	}
-
-	getThemePaths(): string[] {
-		return [...(this.settings.themes ?? [])];
-	}
-
-	setThemePaths(paths: string[]): void {
-		this.globalSettings.themes = paths;
-		this.markModified("themes");
-		this.save();
-	}
-
-	setProjectThemePaths(paths: string[]): void {
-		this.updateProjectSettings("themes", (settings) => {
-			settings.themes = paths;
 		});
 	}
 

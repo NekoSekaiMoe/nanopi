@@ -150,7 +150,7 @@ const interactiveModePrototype = InteractiveMode.prototype as unknown as Interac
 
 describe("clear-on-shrink status spacing", () => {
 	it.each([true, false])("routes every status through the editor opt-in (%s)", (embedWorkingStatus) => {
-		initTheme("dark");
+		initTheme();
 		const tui = { requestRender: vi.fn() } as unknown as TUI;
 		const editor: StatusEditor = { embedWorkingStatus, setWorkingStatusIndicator: vi.fn() };
 		const context: ClearStatusContext = {
@@ -253,7 +253,7 @@ describe("Ctrl+C quit reminder", () => {
 	});
 
 	it("shows the reminder, expires it after the window, and quits on the second press", () => {
-		initTheme("dark");
+		initTheme();
 		setKeybindings(new KeybindingsManager());
 		vi.useFakeTimers();
 		const shutdown = vi.fn();

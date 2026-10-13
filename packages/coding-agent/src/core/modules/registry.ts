@@ -6,7 +6,7 @@
 import type { AgentMessage, AgentTool } from "@nanopi/pi-agent-core";
 import type { ImageContent, Model, Provider, ProviderHeaders } from "@nanopi/pi-ai";
 import type { KeyId } from "@nanopi/pi-tui";
-import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
+import { theme } from "../../modes/interactive/theme/theme.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
@@ -294,9 +294,6 @@ const noOpUIContext: ModuleUIContext = {
 	get theme() {
 		return theme;
 	},
-	getAllThemes: () => [],
-	getTheme: () => undefined,
-	setTheme: (_theme: string | Theme) => ({ success: false, error: "UI not available" }),
 	getToolsExpanded: () => false,
 	setToolsExpanded: () => {},
 };

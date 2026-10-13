@@ -52,7 +52,6 @@ describe("regression #3616: in-memory settings survive reload", () => {
 			settingsManager,
 			noSkills: true,
 			noPromptTemplates: true,
-			noThemes: true,
 			noContextFiles: true,
 		});
 
@@ -69,17 +68,17 @@ describe("regression #3616: in-memory settings survive reload", () => {
 			compaction: { enabled: false },
 		});
 
-		settingsManager.setTheme("dark");
+		settingsManager.setDefaultModel("test-model");
 		await settingsManager.flush();
 		await settingsManager.reload();
 
-		expect(settingsManager.getTheme()).toBe("dark");
+		expect(settingsManager.getDefaultModel()).toBe("test-model");
 		expect(settingsManager.getImageAutoResize()).toBe(false);
 		expect(settingsManager.getCompactionEnabled()).toBe(false);
 		expect(settingsManager.getGlobalSettings()).toEqual({
 			images: { autoResize: false },
 			compaction: { enabled: false },
-			theme: "dark",
+			defaultModel: "test-model",
 		});
 	});
 });

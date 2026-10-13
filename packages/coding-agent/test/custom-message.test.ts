@@ -8,7 +8,7 @@ import { stripAnsi } from "../src/utils/ansi.ts";
 
 describe("CustomMessageComponent", () => {
 	test("provides output padding to custom renderers and updates it", () => {
-		initTheme("dark");
+		initTheme();
 		const optionsSeen: MessageRenderOptions[] = [];
 		const renderer: MessageRenderer = (_message, options) => {
 			optionsSeen.push(options);

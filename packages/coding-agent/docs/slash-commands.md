@@ -47,7 +47,6 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 | Command | Description |
 |---|---|
 | `/trust` | Save a project trust decision for future nanopi processes |
-| `/reload` | Reload keybindings, extensions, skills, templates, themes, and context files |
 | `/hotkeys` | Show active keyboard shortcuts |
 | `/changelog` | Show changelog entries |
 | `/init [instructions]` | Generate an AGENTS.md contributor guide for the repository |
@@ -59,4 +58,4 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 - Each prompt template is available under its template name.
 - Skills are available as `/skill:name` when skill commands are enabled.
 
-Use `/reload` after adding or changing a discovered command resource. See [Prompt Templates](prompt-templates.md) and [Skills](skills.md) for their loading and naming rules; module commands are static code registrations.
+Restart nanopi after adding or changing a discovered command resource. See [Prompt Templates](prompt-templates.md) and [Skills](skills.md) for their loading and naming rules; module commands are static code registrations.

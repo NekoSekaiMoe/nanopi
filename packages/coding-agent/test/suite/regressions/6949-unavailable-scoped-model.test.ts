@@ -48,7 +48,7 @@ describe("issue #6949 unavailable scoped models", () => {
 	const harnesses: Harness[] = [];
 
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

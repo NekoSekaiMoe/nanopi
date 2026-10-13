@@ -37,7 +37,7 @@ Project trust does not limit what tool calls can access or affect. After nanopi 
 nanopi requires a project-trust decision when it finds any of these resources from the current working directory:
 
 - `.nanopi/settings.json`
-- `.nanopi/extensions`, `.nanopi/skills`, `.nanopi/prompts`, or `.nanopi/themes`
+- `.nanopi/extensions`, `.nanopi/skills`, or `.nanopi/prompts`
 - `.nanopi/SYSTEM.md` or `.nanopi/APPEND_SYSTEM.md`
 - project `.agents/skills` in the current directory or an ancestor directory
 
@@ -46,7 +46,7 @@ A bare `.nanopi` directory does not require project trust.
 Granting project trust allows nanopi to load:
 
 - project settings
-- extensions, skills, prompt templates, themes, and system-prompt files under `.nanopi`
+- extensions, skills, prompt templates, and system-prompt files under `.nanopi`
 - missing packages configured through project settings
 - project-local and project-package extensions
 

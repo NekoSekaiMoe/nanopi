@@ -65,7 +65,7 @@ function openSelector(harness: Harness, initialModels: readonly Model<Api>[]) {
 describe("issue #7153 scoped models refresh", () => {
 	let harness: Harness | undefined;
 
-	beforeAll(() => initTheme("dark"));
+	beforeAll(() => initTheme());
 	beforeEach(() => setKeybindings(new KeybindingsManager()));
 	afterEach(() => {
 		harness?.cleanup();

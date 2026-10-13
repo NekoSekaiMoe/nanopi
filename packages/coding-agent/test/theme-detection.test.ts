@@ -3,13 +3,13 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
 	detectColorFgBgTheme,
 	detectTerminalTheme,
-	getThemeByName,
-	parseAutoThemeSetting,
-	resolveThemeSetting,
+	refreshSystemTheme,
+	setTerminalColors,
 } from "../src/modes/interactive/theme/theme.ts";
 
 afterEach(() => {
 	resetCapabilitiesCache();
+	setTerminalColors({});
 });
 
 describe("detectColorFgBgTheme", () => {
@@ -45,26 +45,15 @@ describe("detectTerminalTheme", () => {
 
 describe("theme color mode", () => {
 	it("uses terminal capabilities", () => {
+		setTerminalColors({ background: { r: 40, g: 42, b: 54 }, foreground: { r: 248, g: 248, b: 242 } });
 		setCapabilities({ images: null, trueColor: false, hyperlinks: false });
-		const ansi256Theme = getThemeByName("dark");
-		if (!ansi256Theme) throw new Error("dark theme not found");
+		const ansi256Theme = refreshSystemTheme();
 		expect(ansi256Theme.getColorMode()).toBe("256color");
-		expect(ansi256Theme.getFgAnsi("accent")).toMatch(/^\x1b\[38;5;\d+m$/);
+		expect(ansi256Theme.getFgAnsi("error")).toMatch(/^\x1b\[38;5;\d+m$/);
 
 		setCapabilities({ images: null, trueColor: true, hyperlinks: false });
-		const truecolorTheme = getThemeByName("dark");
-		if (!truecolorTheme) throw new Error("dark theme not found");
+		const truecolorTheme = refreshSystemTheme();
 		expect(truecolorTheme.getColorMode()).toBe("truecolor");
-		expect(truecolorTheme.getFgAnsi("accent")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/);
-	});
-});
-
-describe("theme setting helpers", () => {
-	it("parses and resolves automatic theme settings", () => {
-		expect(parseAutoThemeSetting("light/dark")).toEqual({ lightTheme: "light", darkTheme: "dark" });
-		expect(resolveThemeSetting("dark", "light")).toBe("dark");
-		expect(resolveThemeSetting("light/dark", "light")).toBe("light");
-		expect(resolveThemeSetting("light/dark", "dark")).toBe("dark");
-		expect(resolveThemeSetting("light/dark/extra", "dark")).toBeUndefined();
+		expect(truecolorTheme.getFgAnsi("error")).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m$/);
 	});
 });

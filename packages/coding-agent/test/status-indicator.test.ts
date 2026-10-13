@@ -26,7 +26,7 @@ describe("status indicators", () => {
 	});
 
 	it("keeps the top border unchanged unless the editor opts in", () => {
-		initTheme("dark");
+		initTheme();
 		const tui = {
 			requestRender: vi.fn(),
 			terminal: { rows: 10 },
@@ -43,7 +43,7 @@ describe("status indicators", () => {
 	});
 
 	it("embeds the working indicator when the editor opts in", () => {
-		initTheme("dark");
+		initTheme();
 		const tui = {
 			requestRender: vi.fn(),
 			terminal: { rows: 10 },
@@ -64,7 +64,7 @@ describe("status indicators", () => {
 	});
 
 	it("keeps a blank row between the embedded status and the composer input", () => {
-		initTheme("dark");
+		initTheme();
 		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
 		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
 			embedWorkingStatus: true,
@@ -110,7 +110,7 @@ describe("status indicators", () => {
 	});
 
 	it("embeds compaction, summary, and retry labels within the border width", () => {
-		initTheme("dark");
+		initTheme();
 		vi.useFakeTimers();
 		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
 		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
@@ -142,7 +142,7 @@ describe("status indicators", () => {
 	});
 
 	it("disposes retry countdown updates", () => {
-		initTheme("dark");
+		initTheme();
 		vi.useFakeTimers();
 		const requestRender = vi.fn();
 		const tui = { requestRender } as unknown as TUI;

@@ -67,7 +67,7 @@ function createTreeUI() {
 }
 
 describe("InteractiveMode tree navigation availability", () => {
-	beforeEach(() => initTheme("dark"));
+	beforeEach(() => initTheme());
 
 	// Regression for #9178 / PR #9179: rejection must not replace the active operation's UI.
 	it.each(["Summarize", "No summary"])("preserves operation UI when choosing %s while busy", async (choice) => {

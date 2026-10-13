@@ -2,7 +2,7 @@
 
 nanopi supports user-level and project configuration. User-level configuration lives in the agent directory, which defaults to `~/.nanopi/agent`. Project configuration lives in `.nanopi` under the working directory and loads after [project trust](security.md#understand-project-trust) is granted. The only exception is `sessionDir`, which nanopi reads before resolving trust so it can locate sessions.
 
-In interactive mode, use `/settings` to change common preferences. For other options, ask nanopi to update the configuration or edit the relevant files directly. Run `/reload` after manually changing settings, keybindings, instructions, or resources.
+In interactive mode, use `/settings` to change common preferences. For other options, ask nanopi to update the configuration or edit the relevant files directly. Restart nanopi after manually changing settings, keybindings, instructions, or resources.
 
 ## Agent directory
 
@@ -19,7 +19,6 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `<agent-dir>/APPEND_SYSTEM.md` | Adds instructions to nanopi’s system prompt. |
 | `<agent-dir>/skills/` | User [skills](skills.md) and supporting files. |
 | `<agent-dir>/prompts/` | User [prompt templates](prompt-templates.md) exposed as slash commands. |
-| `<agent-dir>/themes/` | User [theme](themes.md) files. |
 
 ## Project `.nanopi` directory
 
@@ -31,7 +30,6 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `.nanopi/extensions/` | Project extensions. |
 | `.nanopi/skills/` | Project skills and supporting files. |
 | `.nanopi/prompts/` | Project prompt templates exposed as slash commands. |
-| `.nanopi/themes/` | Project theme files. |
 
 For `SYSTEM.md` and `APPEND_SYSTEM.md`, the trusted project file takes precedence over the corresponding agent-directory file. Files with the same name are not combined.
 

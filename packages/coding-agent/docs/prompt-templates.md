@@ -20,7 +20,7 @@ The filename becomes the command name, so this template is available as `/review
 
 `argument-hint` is optional. Use `<angle brackets>` for required arguments and `[square brackets]` for optional arguments.
 
-Run `/reload` after adding or changing a template in an active session.
+Restart nanopi after adding or changing a template.
 
 <a id="invoke-a-template"></a>
 

@@ -35,7 +35,7 @@ function createAssistantMessage(
 
 describe("AssistantMessageComponent", () => {
 	test("adds OSC 133 zone markers to assistant messages without tool calls", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new AssistantMessageComponent(createAssistantMessage([{ type: "text", text: "hello" }]));
 		const lines = component.render(40);
@@ -46,7 +46,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("does not add OSC 133 zone markers when assistant message contains tool calls", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([
@@ -62,7 +62,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("renders length stops with neutral truncation wording", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([{ type: "thinking", thinking: "private reasoning" }], { stopReason: "length" }),
@@ -75,7 +75,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("coalesces adjacent thinking blocks into one hidden thinking label", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([
@@ -93,7 +93,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("collapses individual thinking runs when clicked", () => {
-		initTheme("dark");
+		initTheme();
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([
 				{ type: "thinking", thinking: "first reasoning" },
@@ -128,7 +128,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("uses configured output padding for text and thinking", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([
@@ -152,7 +152,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("chains Markdown transformers in registration order", () => {
-		initTheme("dark");
+		initTheme();
 		const calls: string[] = [];
 		const message = createAssistantMessage([{ type: "text", text: "The result is $x^2$." }]);
 		const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1, [
@@ -172,7 +172,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("identifies partial assistant Markdown as streaming", () => {
-		initTheme("dark");
+		initTheme();
 		const streamingStates: boolean[] = [];
 		const message = createAssistantMessage([{ type: "text", text: "partial" }]);
 		const component = new AssistantMessageComponent(undefined, false, undefined, "Thinking...", 1, [
@@ -191,7 +191,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("reapplies Markdown transformers when available width changes", () => {
-		initTheme("dark");
+		initTheme();
 		const availableWidths: number[] = [];
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([{ type: "text", text: "answer" }]),
@@ -214,7 +214,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("continues the Markdown transformer chain when a transformer throws", () => {
-		initTheme("dark");
+		initTheme();
 		const calls: string[] = [];
 		const component = new AssistantMessageComponent(
 			createAssistantMessage([{ type: "text", text: "still visible" }]),
@@ -243,7 +243,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("transforms text and thinking Markdown without mutating the original message", () => {
-		initTheme("dark");
+		initTheme();
 		const message = createAssistantMessage([
 			{ type: "text", text: "answer" },
 			{ type: "thinking", thinking: "reasoning" },
@@ -264,7 +264,7 @@ describe("AssistantMessageComponent", () => {
 	});
 
 	test("uses configured output padding for user messages", () => {
-		initTheme("dark");
+		initTheme();
 
 		const paddedComponent = new UserMessageComponent("hello", undefined, 1);
 		const paddedLines = paddedComponent.render(40).map((line) => stripAnsi(line));

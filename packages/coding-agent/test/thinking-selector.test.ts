@@ -7,7 +7,7 @@ import { stripAnsi } from "../src/utils/ansi.ts";
 
 describe("thinking selector", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

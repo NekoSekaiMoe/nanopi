@@ -6,7 +6,7 @@ import { collectStatusRows, collectStatusSections } from "../src/modules/builtin
 import { wrapStatusText } from "../src/modules/builtin-commands/status-dialog.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
-initTheme("dark");
+initTheme();
 
 function createStatusCtx(): ModuleCommandContext {
 	return {

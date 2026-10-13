@@ -1,5 +1,3 @@
-import * as fs from "node:fs";
-import * as path from "node:path";
 import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import {
 	backgroundAnsi,
@@ -9,7 +7,6 @@ import {
 	type EditorTheme,
 	foregroundAnsi,
 	getTerminalColorMode,
-	indexedColor,
 	type MarkdownTheme,
 	mixColors,
 	parseColor,
@@ -23,11 +20,7 @@ import {
 	type TextAttributes,
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
-import { getCustomThemesDir, getThemesDir } from "../../../config.ts";
-import type { SourceInfo } from "../../../core/source-info.ts";
-import { closeWatcher, watchWithErrorHandler } from "../../../utils/fs-watch.ts";
 import { highlight, supportsLanguage } from "../../../utils/syntax-highlight.ts";
-import { stripBom } from "../../../utils/text.ts";
 import { generateSystemThemeColors, SYSTEM_THEME_NAME, terminalAppearance } from "./system-theme.ts";
 import {
 	type ResolvedThemeColorValues,
@@ -39,16 +32,11 @@ import {
 } from "./theme-tokens.ts";
 
 export { SYSTEM_THEME_NAME } from "./system-theme.ts";
-
-// ============================================================================
-// Types & Schema
-// ============================================================================
-
-/** The schema that validates this shape lives in `theme-schema.ts`; importing the type is free. */
-import type { ThemeColorValue as ColorValue, ValidatedThemeJson as ThemeJson } from "./theme-schema.ts";
-
-export type { ValidatedThemeJson as ThemeJson } from "./theme-schema.ts";
 export type { ThemeBg, ThemeColor, ThemeToken } from "./theme-tokens.ts";
+
+// ============================================================================
+// Types
+// ============================================================================
 
 /**
  * Tokens are only accepted in their own slot, because "" (terminal default) means the default foreground
@@ -59,51 +47,9 @@ export interface ThemeStyle extends TextAttributes {
 	bg?: ThemeBg | Color;
 }
 
-export type ThemeJsonValidator = (label: string, json: unknown) => ThemeJson;
-
-let themeJsonValidator: ThemeJsonValidator | undefined;
-
-/**
- * Install full theme validation. Without it, documents are accepted as-is, which is what built-in
- * themes already do: validating user-authored JSON needs typebox, and a presentation that only uses
- * built-in themes should not pay ~17 MB of module graph for it.
- */
-export function setThemeJsonValidator(validator: ThemeJsonValidator): void {
-	themeJsonValidator = validator;
-}
-
 // ============================================================================
 // Color Utilities
 // ============================================================================
-
-function resolveVarRefs(
-	value: ColorValue,
-	vars: Record<string, ColorValue>,
-	visited = new Set<string>(),
-): string | number {
-	if (typeof value === "number" || value === "" || value.startsWith("#") || /^ok(lch|hsl)\(/i.test(value)) {
-		return value;
-	}
-	if (visited.has(value)) {
-		throw new Error(`Circular variable reference detected: ${value}`);
-	}
-	if (!(value in vars)) {
-		throw new Error(`Variable reference not found: ${value}`);
-	}
-	visited.add(value);
-	return resolveVarRefs(vars[value], vars, visited);
-}
-
-function resolveThemeColors<T extends Record<string, ColorValue>>(
-	colors: T,
-	vars: Record<string, ColorValue> = {},
-): Record<keyof T, string | number> {
-	const resolved: Record<string, string | number> = {};
-	for (const [key, value] of Object.entries(colors)) {
-		resolved[key] = resolveVarRefs(value, vars);
-	}
-	return resolved as Record<keyof T, string | number>;
-}
 
 function withThemeTokenFallbacks<Value>(values: ThemeColorValues<Value>): ResolvedThemeColorValues<Value> {
 	const resolved = { ...values } as Partial<ResolvedThemeColorValues<Value>>;
@@ -137,8 +83,8 @@ let terminalColorsPending = false;
 let terminalColorScheme: TerminalTheme | undefined;
 
 /**
- * Record the terminal's reported colors. Themes use the default colors for tokens set to "" (terminal
- * default); the system theme is generated from all of them. Ends the pending state.
+ * Record the terminal's reported colors. The system theme is generated from them; tokens set to "" use
+ * the defaults. Ends the pending state.
  */
 export function setTerminalColors(colors: TerminalColors): void {
 	terminalColors = { ...colors };
@@ -184,8 +130,6 @@ function detectAppearance(foregrounds: Color[], backgrounds: Color[]): ThemeAppe
 
 export class Theme {
 	readonly name?: string;
-	readonly sourcePath?: string;
-	sourceInfo?: SourceInfo;
 	private mode: TerminalColorMode;
 	// Precomputed escape sequences keep fg()/bg() on the render hot path to a lookup and concat.
 	private readonly fgAnsi = new Map<ThemeColor, string>();
@@ -205,16 +149,12 @@ export class Theme {
 		mode: TerminalColorMode,
 		options: {
 			name?: string;
-			sourcePath?: string;
-			sourceInfo?: SourceInfo;
 			appearance?: ThemeAppearance;
 			/** Foreground tokens to render faint (SGR 2). */
 			dim?: readonly ThemeColor[];
 		} = {},
 	) {
 		this.name = options.name;
-		this.sourcePath = options.sourcePath;
-		this.sourceInfo = options.sourceInfo;
 		this.mode = mode;
 		this.dimTokens = new Set(options.dim);
 		const { fgColors: foregrounds, bgColors: backgrounds } = splitThemeColors(
@@ -243,8 +183,8 @@ export class Theme {
 	}
 
 	/**
-	 * The background the theme is designed for: declared in the theme JSON, detected from its colors,
-	 * or, for themes without usable colors, the terminal's appearance.
+	 * The background the theme is designed for: declared at creation, detected from its colors, or, for
+	 * themes without usable colors, the terminal's appearance.
 	 */
 	get appearance(): ThemeAppearance {
 		return this.ownAppearance ?? getTerminalTheme();
@@ -369,138 +309,8 @@ export class Theme {
 }
 
 // ============================================================================
-// Theme Loading
+// System Theme
 // ============================================================================
-
-let BUILTIN_THEMES: Record<string, ThemeJson> | undefined;
-
-function getBuiltinThemes(): Record<string, ThemeJson> {
-	if (!BUILTIN_THEMES) {
-		const themesDir = getThemesDir();
-		const darkPath = path.join(themesDir, "dark.json");
-		const lightPath = path.join(themesDir, "light.json");
-		BUILTIN_THEMES = {
-			dark: JSON.parse(stripBom(fs.readFileSync(darkPath, "utf-8"))) as ThemeJson,
-			light: JSON.parse(stripBom(fs.readFileSync(lightPath, "utf-8"))) as ThemeJson,
-		};
-	}
-	return BUILTIN_THEMES;
-}
-
-export function getAvailableThemes(): string[] {
-	return getAvailableThemesWithPaths().map(({ name }) => name);
-}
-
-export interface ThemeInfo {
-	name: string;
-	path: string | undefined;
-}
-
-export function getAvailableThemesWithPaths(): ThemeInfo[] {
-	const themesDir = getThemesDir();
-	const result: ThemeInfo[] = [];
-	const seen = new Set<string>();
-	const addTheme = (themeInfo: ThemeInfo) => {
-		if (seen.has(themeInfo.name)) {
-			return;
-		}
-		seen.add(themeInfo.name);
-		result.push(themeInfo);
-	};
-
-	// Built-in themes. The system theme is generated, so it has no file.
-	addTheme({ name: SYSTEM_THEME_NAME, path: undefined });
-	for (const name of Object.keys(getBuiltinThemes())) {
-		addTheme({ name, path: path.join(themesDir, `${name}.json`) });
-	}
-
-	// Custom themes
-	for (const themeInfo of getCustomThemeInfos()) {
-		addTheme(themeInfo);
-	}
-
-	for (const [name, theme] of registeredThemes.entries()) {
-		addTheme({ name, path: theme.sourcePath });
-	}
-
-	// The system theme comes first: it is the default and adapts to every terminal.
-	return result.sort((a, b) =>
-		a.name === SYSTEM_THEME_NAME ? -1 : b.name === SYSTEM_THEME_NAME ? 1 : a.name.localeCompare(b.name),
-	);
-}
-
-function getCustomThemeInfos(): ThemeInfo[] {
-	const customThemesDir = getCustomThemesDir();
-	const result: ThemeInfo[] = [];
-	if (!fs.existsSync(customThemesDir)) {
-		return result;
-	}
-
-	for (const file of fs.readdirSync(customThemesDir)) {
-		if (!file.endsWith(".json")) {
-			continue;
-		}
-		const themePath = path.join(customThemesDir, file);
-		try {
-			const customTheme = loadThemeFromPath(themePath);
-			if (customTheme.name) {
-				result.push({ name: customTheme.name, path: themePath });
-			}
-		} catch {
-			// Invalid themes are ignored here; the resource loader reports them
-			// during normal startup/reload.
-		}
-	}
-	return result;
-}
-
-function assertThemeNameIsValid(name: string): void {
-	if (name.includes("/")) {
-		throw new Error(
-			`Invalid theme name "${name}": theme names cannot contain "/" because it is reserved for automatic light/dark theme settings.`,
-		);
-	}
-}
-
-function parseThemeJson(label: string, json: unknown): ThemeJson {
-	if (themeJsonValidator) return themeJsonValidator(label, json);
-	if (typeof json !== "object" || json === null || !("colors" in json)) {
-		throw new Error(`Invalid theme "${label}": expected an object with a "colors" map.`);
-	}
-	return json as ThemeJson;
-}
-
-function parseThemeJsonContent(label: string, content: string): ThemeJson {
-	let json: unknown;
-	try {
-		json = JSON.parse(stripBom(content));
-	} catch (error) {
-		throw new Error(`Failed to parse theme ${label}: ${error}`);
-	}
-	return parseThemeJson(label, json);
-}
-
-function loadThemeJson(name: string): ThemeJson {
-	const builtinThemes = getBuiltinThemes();
-	if (name in builtinThemes) {
-		return builtinThemes[name];
-	}
-	const registeredTheme = registeredThemes.get(name);
-	if (registeredTheme?.sourcePath) {
-		const content = fs.readFileSync(registeredTheme.sourcePath, "utf-8");
-		return parseThemeJsonContent(registeredTheme.sourcePath, content);
-	}
-	if (registeredTheme) {
-		throw new Error(`Theme "${name}" does not have a source path for export`);
-	}
-	const customThemesDir = getCustomThemesDir();
-	const themePath = path.join(customThemesDir, `${name}.json`);
-	if (!fs.existsSync(themePath)) {
-		throw new Error(`Theme not found: ${name}`);
-	}
-	const content = fs.readFileSync(themePath, "utf-8");
-	return parseThemeJsonContent(name, content);
-}
 
 function splitThemeColors(colors: ResolvedThemeColorValues<string | number>): {
 	fgColors: Record<ThemeColor, string | number>;
@@ -518,17 +328,6 @@ function splitThemeColors(colors: ResolvedThemeColorValues<string | number>): {
 	return { fgColors, bgColors };
 }
 
-function createTheme(themeJson: ThemeJson, mode?: TerminalColorMode, sourcePath?: string): Theme {
-	const colorMode = mode ?? getTerminalColorMode();
-	const resolvedColors = withThemeTokenFallbacks(resolveThemeColors(themeJson.colors, themeJson.vars));
-	const { fgColors, bgColors } = splitThemeColors(resolvedColors);
-	return new Theme(fgColors, bgColors, colorMode, {
-		name: themeJson.name,
-		sourcePath,
-		appearance: themeJson.appearance,
-	});
-}
-
 /** Generate the system theme from the terminal's reported colors (grayscale while they are pending). */
 function createSystemTheme(mode?: TerminalColorMode): Theme {
 	const generated = generateSystemThemeColors({
@@ -544,62 +343,7 @@ function createSystemTheme(mode?: TerminalColorMode): Theme {
 	});
 }
 
-export function loadThemeFromPath(themePath: string, mode?: TerminalColorMode): Theme {
-	const content = fs.readFileSync(themePath, "utf-8");
-	const themeJson = parseThemeJsonContent(themePath, content);
-	return createTheme(themeJson, mode, themePath);
-}
-
-function loadTheme(name: string, mode?: TerminalColorMode): Theme {
-	// The system theme name is reserved: it takes precedence over custom themes of the same name.
-	if (name === SYSTEM_THEME_NAME) return createSystemTheme(mode);
-	const registeredTheme = registeredThemes.get(name);
-	if (registeredTheme) {
-		return registeredTheme;
-	}
-	const themeJson = loadThemeJson(name);
-	return createTheme(themeJson, mode);
-}
-
-export function getThemeByName(name: string): Theme | undefined {
-	try {
-		return loadTheme(name);
-	} catch {
-		return undefined;
-	}
-}
-
 export type TerminalTheme = "dark" | "light";
-
-export function parseAutoThemeSetting(
-	themeSetting: string | undefined,
-): { lightTheme: string; darkTheme: string } | undefined {
-	if (!themeSetting) return undefined;
-	const slashIndex = themeSetting.indexOf("/");
-	if (slashIndex === -1 || themeSetting.indexOf("/", slashIndex + 1) !== -1) {
-		return undefined;
-	}
-
-	const lightTheme = themeSetting.slice(0, slashIndex).trim();
-	const darkTheme = themeSetting.slice(slashIndex + 1).trim();
-	if (!lightTheme || !darkTheme) {
-		return undefined;
-	}
-	return { lightTheme, darkTheme };
-}
-
-export function resolveThemeSetting(
-	themeSetting: string | undefined,
-	terminalTheme: TerminalTheme,
-): string | undefined {
-	const autoTheme = parseAutoThemeSetting(themeSetting);
-	if (autoTheme) {
-		return terminalTheme === "light" ? autoTheme.lightTheme : autoTheme.darkTheme;
-	}
-	if (themeSetting?.includes("/")) return undefined;
-	if (typeof themeSetting === "string") return themeSetting;
-	return undefined;
-}
 
 /**
  * Dark or light from the `COLORFGBG` environment variable some terminals set, or undefined without a
@@ -655,7 +399,7 @@ export const theme: Theme = new Proxy({} as Theme, {
 });
 
 /**
- * The active theme instance. Switching or reloading a theme installs a new instance, so renderers can
+ * The active theme instance. Regenerating the system theme installs a new instance, so renderers can
  * compare identities to invalidate cached styled output.
  */
 export function getThemeInstance(): Theme {
@@ -669,159 +413,19 @@ function setGlobalTheme(t: Theme): void {
 	(globalThis as Record<symbol, Theme>)[THEME_KEY_OLD] = t;
 }
 
-let currentThemeName: string | undefined;
-let themeWatcher: fs.FSWatcher | undefined;
-let themeReloadTimer: NodeJS.Timeout | undefined;
-let onThemeChangeCallback: (() => void) | undefined;
-const registeredThemes = new Map<string, Theme>();
-
-export function setRegisteredThemes(themes: Theme[]): void {
-	registeredThemes.clear();
-	for (const theme of themes) {
-		if (theme.name) {
-			assertThemeNameIsValid(theme.name);
-			registeredThemes.set(theme.name, theme);
-		}
-	}
+/** Install the system theme. Rendered in grayscale until the terminal reports its colors. */
+export function initTheme(): void {
+	setGlobalTheme(createSystemTheme());
 }
 
-export function initTheme(themeName?: string, enableWatcher: boolean = false): void {
-	const name = themeName ?? SYSTEM_THEME_NAME;
-	currentThemeName = name;
-	try {
-		setGlobalTheme(loadTheme(name));
-		if (enableWatcher) {
-			startThemeWatcher();
-		}
-	} catch (_error) {
-		// Theme is invalid - fall back to the system theme silently
-		currentThemeName = SYSTEM_THEME_NAME;
-		setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
-		// Don't start watcher for fallback theme
-	}
-}
-
-export function setTheme(name: string, enableWatcher: boolean = false): { success: boolean; error?: string } {
-	currentThemeName = name;
-	try {
-		setGlobalTheme(loadTheme(name));
-		if (enableWatcher) {
-			startThemeWatcher();
-		}
-		if (onThemeChangeCallback) {
-			onThemeChangeCallback();
-		}
-		return { success: true };
-	} catch (error) {
-		// Theme is invalid - fall back to the system theme
-		currentThemeName = SYSTEM_THEME_NAME;
-		setGlobalTheme(loadTheme(SYSTEM_THEME_NAME));
-		// Don't start watcher for fallback theme
-		return {
-			success: false,
-			error: error instanceof Error ? error.message : String(error),
-		};
-	}
-}
-
-export function setThemeInstance(themeInstance: Theme): void {
-	setGlobalTheme(themeInstance);
-	currentThemeName = "<in-memory>";
-	stopThemeWatcher(); // Can't watch a direct instance
-	if (onThemeChangeCallback) {
-		onThemeChangeCallback();
-	}
-}
-
-export function onThemeChange(callback: () => void): void {
-	onThemeChangeCallback = callback;
-}
-
-function startThemeWatcher(): void {
-	stopThemeWatcher();
-
-	// Only watch if it's a custom theme (not built-in)
-	if (
-		!currentThemeName ||
-		currentThemeName === "dark" ||
-		currentThemeName === "light" ||
-		currentThemeName === SYSTEM_THEME_NAME
-	) {
-		return;
-	}
-
-	const customThemesDir = getCustomThemesDir();
-	const watchedThemeName = currentThemeName;
-	const watchedFileName = `${watchedThemeName}.json`;
-	const themeFile = path.join(customThemesDir, watchedFileName);
-
-	// Only watch if the file exists
-	if (!fs.existsSync(themeFile)) {
-		return;
-	}
-
-	const scheduleReload = () => {
-		if (themeReloadTimer) {
-			clearTimeout(themeReloadTimer);
-		}
-		themeReloadTimer = setTimeout(() => {
-			themeReloadTimer = undefined;
-
-			// Ignore stale timers after switching themes or stopping the watcher
-			if (currentThemeName !== watchedThemeName) {
-				return;
-			}
-
-			// Keep the last successfully loaded theme active if the file is temporarily missing
-			if (!fs.existsSync(themeFile)) {
-				return;
-			}
-
-			try {
-				// Reload the theme from disk and refresh the registry cache
-				const reloadedTheme = loadThemeFromPath(themeFile);
-				registeredThemes.set(watchedThemeName, reloadedTheme);
-				setGlobalTheme(reloadedTheme);
-				// Notify callback (to invalidate UI)
-				if (onThemeChangeCallback) {
-					onThemeChangeCallback();
-				}
-			} catch (_error) {
-				// Ignore errors (file might be in invalid state while being edited)
-			}
-		}, 100);
-	};
-
-	themeWatcher =
-		watchWithErrorHandler(
-			customThemesDir,
-			(_eventType, filename) => {
-				if (currentThemeName !== watchedThemeName) {
-					return;
-				}
-				if (!filename) {
-					scheduleReload();
-					return;
-				}
-				if (filename !== watchedFileName) {
-					return;
-				}
-				scheduleReload();
-			},
-			() => {
-				closeWatcher(themeWatcher);
-				themeWatcher = undefined;
-			},
-		) ?? undefined;
-}
-
-export function stopThemeWatcher(): void {
-	if (themeReloadTimer) {
-		clearTimeout(themeReloadTimer);
-		themeReloadTimer = undefined;
-	}
-	closeWatcher(themeWatcher);
-	themeWatcher = undefined;
+/**
+ * Regenerate the system theme from the colors and light/dark reports recorded so far. Installs a new
+ * instance, so callers must invalidate cached styled output afterwards. Returns the new instance.
+ */
+export function refreshSystemTheme(): Theme {
+	const next = createSystemTheme();
+	setGlobalTheme(next);
+	return next;
 }
 
 // ============================================================================
@@ -829,56 +433,12 @@ export function stopThemeWatcher(): void {
 // ============================================================================
 
 /**
- * Get resolved theme colors as CSS-compatible hex strings.
+ * Resolved theme colors of the active system theme as CSS-compatible hex strings.
  * Used by HTML export to generate CSS custom properties.
  */
-export function getResolvedThemeColors(themeName?: string): Record<string, string> {
-	const colors = loadTheme(themeName ?? currentThemeName ?? SYSTEM_THEME_NAME).colors;
+export function getResolvedThemeColors(): Record<string, string> {
+	const colors = getThemeInstance().colors;
 	return Object.fromEntries(Object.entries(colors).map(([token, color]) => [token, colorToHex(color)]));
-}
-
-/**
- * Check if a theme is a "light" theme (for CSS that needs light/dark variants).
- */
-export function isLightTheme(themeName?: string): boolean {
-	return loadTheme(themeName ?? currentThemeName ?? SYSTEM_THEME_NAME).appearance === "light";
-}
-
-/**
- * Get explicit export colors from theme JSON, if specified.
- * Returns undefined for each color that isn't explicitly set.
- */
-export function getThemeExportColors(themeName?: string): {
-	pageBg?: string;
-	cardBg?: string;
-	infoBg?: string;
-} {
-	const name = themeName ?? currentThemeName ?? SYSTEM_THEME_NAME;
-	if (name === SYSTEM_THEME_NAME) return {};
-	try {
-		const themeJson = loadThemeJson(name);
-		const exportSection = themeJson.export;
-		if (!exportSection) return {};
-
-		const vars = themeJson.vars ?? {};
-		// Export colors end up in CSS, which understands hex and oklch() values directly but not okhsl().
-		const resolve = (value: ColorValue | undefined): string | undefined => {
-			if (value === undefined) return undefined;
-			const resolved = resolveVarRefs(value, vars);
-			if (typeof resolved === "number") return colorToHex(indexedColor(resolved));
-			if (resolved === "") return undefined;
-			if (/^okhsl\(/i.test(resolved)) return colorToHex(parseColor(resolved));
-			return resolved;
-		};
-
-		return {
-			pageBg: resolve(exportSection.pageBg),
-			cardBg: resolve(exportSection.cardBg),
-			infoBg: resolve(exportSection.infoBg),
-		};
-	} catch {
-		return {};
-	}
 }
 
 // ============================================================================

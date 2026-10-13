@@ -1,5 +1,5 @@
 /**
- * Local resource discovery: skills, prompt templates, and themes from the
+ * Local resource discovery: skills and prompt templates from the
  * settings arrays and the conventional directories (~/.nanopi and .nanopi
  * scopes, plus ~/.agents/skills). Extracted from the removed package manager;
  * extension/package sources are gone - only local paths are discovered.
@@ -230,43 +230,6 @@ function collectAutoPromptEntries(dir: string): string[] {
 	return entries;
 }
 
-function collectAutoThemeEntries(dir: string): string[] {
-	const entries: string[] = [];
-	if (!existsSync(dir)) return entries;
-
-	const ig = ignore();
-	addIgnoreRules(ig, dir, dir);
-
-	try {
-		const dirEntries = readdirSync(dir, { withFileTypes: true });
-		for (const entry of dirEntries) {
-			if (entry.name.startsWith(".")) continue;
-			if (entry.name === "node_modules") continue;
-
-			const fullPath = join(dir, entry.name);
-			let isFile = entry.isFile();
-			if (entry.isSymbolicLink()) {
-				try {
-					isFile = statSync(fullPath).isFile();
-				} catch {
-					continue;
-				}
-			}
-
-			const relPath = toPosixPath(relative(dir, fullPath));
-			if (ig.ignores(relPath)) continue;
-
-			if (isFile && entry.name.endsWith(".json")) {
-				entries.push(fullPath);
-			}
-		}
-	} catch {
-		// Ignore errors
-	}
-
-	return entries;
-}
-
 function normalizePattern(pattern: string): string {
 	const normalized = pattern.startsWith("./") || pattern.startsWith(".\\") ? pattern.slice(2) : pattern;
 	return toPosixPath(normalized);
@@ -343,16 +306,16 @@ function isEnabledByOverrides(filePath: string, patterns: string[], baseDir: str
 	return enabled;
 }
 
-/** Discover local skills, prompts, and themes for the current trust state.
+/** Discover local skills and prompts for the current trust state.
  * No package or extension sources: only local paths are discovered. */
 export function resolveLocalResources(options: {
 	cwd: string;
 	globalBaseDir: string;
 	projectBaseDir: string;
 	projectTrusted: boolean;
-	globalSettings: { skills?: string[]; prompts?: string[]; themes?: string[] };
-	projectSettings: { skills?: string[]; prompts?: string[]; themes?: string[] };
-}): { skills: ResolvedResource[]; prompts: ResolvedResource[]; themes: ResolvedResource[] } {
+	globalSettings: { skills?: string[]; prompts?: string[] };
+	projectSettings: { skills?: string[]; prompts?: string[] };
+}): { skills: ResolvedResource[]; prompts: ResolvedResource[] } {
 	const { cwd, globalBaseDir, projectBaseDir, projectTrusted } = options;
 	const globalMetadata: PathMetadata = { source: "auto", scope: "user", origin: "top-level", baseDir: globalBaseDir };
 	const projectMetadata: PathMetadata = {
@@ -364,7 +327,6 @@ export function resolveLocalResources(options: {
 
 	const skills = new Map<string, ResolvedResource>();
 	const prompts = new Map<string, ResolvedResource>();
-	const themes = new Map<string, ResolvedResource>();
 
 	const add = (
 		target: Map<string, ResolvedResource>,
@@ -408,13 +370,6 @@ export function resolveLocalResources(options: {
 			options.projectSettings.prompts ?? [],
 			projectBaseDir,
 		);
-		add(
-			themes,
-			collectAutoThemeEntries(join(projectBaseDir, "themes")),
-			projectMetadata,
-			options.projectSettings.themes ?? [],
-			projectBaseDir,
-		);
 	}
 
 	add(
@@ -439,17 +394,9 @@ export function resolveLocalResources(options: {
 		options.globalSettings.prompts ?? [],
 		globalBaseDir,
 	);
-	add(
-		themes,
-		collectAutoThemeEntries(join(globalBaseDir, "themes")),
-		globalMetadata,
-		options.globalSettings.themes ?? [],
-		globalBaseDir,
-	);
 
 	return {
 		skills: [...skills.values()],
 		prompts: [...prompts.values()],
-		themes: [...themes.values()],
 	};
 }

@@ -46,7 +46,7 @@ function createComponent(command: string): ToolExecutionComponent {
 
 describe("streaming call highlighting", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	test("highlights streamed heredocs incrementally and reuses the result for output updates", () => {

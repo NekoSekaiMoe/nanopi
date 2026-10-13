@@ -5,7 +5,7 @@
  * One self-contained ESM file, zero runtime dependencies (Node >= 22.19):
  * - the full CLI graph bundled by esbuild, including jiti and photon's JS
  *   glue (the wasm itself is a runtime sidecar, see below)
- * - package assets (themes, export-html templates, webui, docs, examples,
+ * - package assets (export-html templates, webui, docs, examples,
  *   package.json) embedded as gzip+base64 and extracted to a versioned cache
  *   directory at startup by src/standalone/assets.ts
  * - builtin sidecars for flavors enabling `sidecar/*` (file contents embedded
@@ -134,9 +134,7 @@ function buildAssetsPayload() {
 		join(codingAgentDir, "CHANGELOG.md"),
 	];
 	// [source tree, path inside the extracted package dir]
-	const distTrees = [
-		[join(codingAgentDistDir, "modes", "interactive", "theme"), join("dist", "modes", "interactive", "theme")],
-	];
+	const distTrees = [];
 	if (isComponentEnabled("export-html")) {
 		distTrees.push([join(codingAgentDistDir, "core", "export-html"), join("dist", "core", "export-html")]);
 	}

@@ -33,7 +33,7 @@ On Windows, use forward slashes or escape backslashes:
 }
 ```
 
-Run `/reload` after changing the setting. See [Run nanopi on Windows](windows.md) for the native Windows defaults.
+Restart nanopi after changing the setting. See [Run nanopi on Windows](windows.md) for the native Windows defaults.
 
 ## Run setup before every Bash command
 
@@ -66,7 +66,7 @@ Then configure nanopi to enable alias expansion and load the file:
 }
 ```
 
-Run `/reload`, then verify the alias through nanopi:
+Restart nanopi, then verify the alias through nanopi:
 
 ```text
 !ll

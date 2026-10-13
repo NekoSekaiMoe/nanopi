@@ -64,8 +64,7 @@ import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { DEFAULT_WEBUI_PORT, InteractiveMode, runPrintMode, runRpcMode, runWebuiMode } from "./modes/index.ts";
-import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
-import { validateThemeJson } from "./modes/interactive/theme/theme-schema.ts";
+import { initTheme } from "./modes/interactive/theme/theme.ts";
 import { BUILTIN_MODULES } from "./modules/index.ts";
 import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./modules/llama/managed.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
@@ -418,20 +417,16 @@ export async function createSessionManager(
 	}
 
 	if (parsed.resume) {
-		try {
-			const selectedPath = await selectSession(
-				(onProgress, signal) => SessionManager.list(cwd, sessionDir, onProgress, signal),
-				(onProgress, signal) => SessionManager.listAll(sessionDir, onProgress, signal),
-				settingsManager,
-			);
-			if (!selectedPath) {
-				console.log(chalk.dim("No session selected"));
-				process.exit(0);
-			}
-			return SessionManager.open(selectedPath, sessionDir);
-		} finally {
-			stopThemeWatcher();
+		const selectedPath = await selectSession(
+			(onProgress, signal) => SessionManager.list(cwd, sessionDir, onProgress, signal),
+			(onProgress, signal) => SessionManager.listAll(sessionDir, onProgress, signal),
+			settingsManager,
+		);
+		if (!selectedPath) {
+			console.log(chalk.dim("No session selected"));
+			process.exit(0);
 		}
+		return SessionManager.open(selectedPath, sessionDir);
 	}
 
 	if (parsed.continue) {
@@ -582,8 +577,6 @@ export async function main(args: string[], options?: MainOptions) {
 		return;
 	}
 	resetTimings();
-	// Commands and startup selectors can load user-authored themes before runtime creation.
-	setThemeJsonValidator(validateThemeJson);
 	const modules = [...BUILTIN_MODULES, ...(options?.modules ?? [])];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.NANOPI_OFFLINE);
 	if (offlineMode) {
@@ -702,15 +695,11 @@ export async function main(args: string[], options?: MainOptions) {
 	const startupSettingsManager = SettingsManager.create(cwd, agentDir);
 	const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);
 
-	// Experimental first-time setup: theme choice and analytics opt-in.
+	// Experimental first-time setup: analytics opt-in.
 	// Runs before any runtime services are created so the chosen settings apply everywhere.
 	if (appMode === "interactive" && !parsed.help && parsed.listModels === undefined && shouldRunFirstTimeSetup()) {
 		await showFirstTimeSetup(startupSettingsManager);
 		time("firstTimeSetup");
-	}
-
-	if (appMode === "interactive" && parsed.useTheme !== undefined) {
-		startupSettingsManager.applyOverrides({ theme: parsed.useTheme });
 	}
 
 	// Decide the final runtime cwd before creating cwd-bound runtime services.
@@ -758,7 +747,6 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
 	const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
-	const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
 	const createRuntime: CreateAgentSessionRuntimeFactory = async ({
 		cwd,
 		agentDir,
@@ -812,10 +800,8 @@ export async function main(args: string[], options?: MainOptions) {
 				modules,
 				additionalSkillPaths: resolvedSkillPaths,
 				additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
-				additionalThemePaths: resolvedThemePaths,
 				noSkills: parsed.noSkills,
 				noPromptTemplates: parsed.noPromptTemplates,
-				noThemes: parsed.noThemes,
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
@@ -927,7 +913,7 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const { initialMessage, initialImages } = await prepareInitialMessage(parsed, stdinContent);
 	time("prepareInitialMessage");
-	initTheme(settingsManager.getTheme(), appMode === "interactive");
+	initTheme();
 	time("initTheme");
 
 	// Show deprecation warnings in interactive mode
@@ -986,7 +972,6 @@ export async function main(args: string[], options?: MainOptions) {
 			initialImages,
 			initialMessages: parsed.messages,
 			verbose: parsed.verbose,
-			initialThemeSetting: parsed.useTheme,
 		});
 		if (startupBenchmark) {
 			await interactiveMode.init();
@@ -995,7 +980,6 @@ export async function main(args: string[], options?: MainOptions) {
 			// (Kitty keyboard protocol, device attributes, cell size) before restoring the terminal.
 			await new Promise((resolve) => setTimeout(resolve, 150));
 			interactiveMode.stop();
-			stopThemeWatcher();
 			printTimings();
 			if (process.stdout.writableLength > 0) {
 				await new Promise<void>((resolve) => process.stdout.once("drain", resolve));
@@ -1016,7 +1000,6 @@ export async function main(args: string[], options?: MainOptions) {
 			initialMessage,
 			initialImages,
 		});
-		stopThemeWatcher();
 		restoreStdout();
 		if (exitCode !== 0) {
 			process.exitCode = exitCode;

@@ -2,13 +2,13 @@
 /**
  * Copies package assets into dist/ (replaces the former shx one-liner).
  *
- * Themes are core and always copied. The export-html templates and the webui
- * build are peripheral components controlled by buildconfig.json flavors
- * (--flavor / NANOPI_BUILD_FLAVOR); a flavor that disables them ships dist/
- * without them and the runtime reports them as not included.
+ * The export-html templates and the webui build are peripheral components
+ * controlled by buildconfig.json flavors (--flavor / NANOPI_BUILD_FLAVOR); a
+ * flavor that disables them ships dist/ without them and the runtime reports
+ * them as not included.
  */
 
-import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveBuildFlavor } from "../../../scripts/buildconfig.mjs";
@@ -27,14 +27,6 @@ const { flavor, components } = resolveBuildFlavor(repoRoot, {
 function copyTree(sourceDir, targetDir) {
 	mkdirSync(targetDir, { recursive: true });
 	cpSync(sourceDir, targetDir, { recursive: true });
-}
-
-// Themes: core, always copied.
-const themeSource = join(packageDir, "src", "modes", "interactive", "theme");
-const themeTarget = join(distDir, "modes", "interactive", "theme");
-mkdirSync(themeTarget, { recursive: true });
-for (const file of readdirSync(themeSource)) {
-	if (file.endsWith(".json")) copyFileSync(join(themeSource, file), join(themeTarget, file));
 }
 
 if (components["export-html"] !== false) {

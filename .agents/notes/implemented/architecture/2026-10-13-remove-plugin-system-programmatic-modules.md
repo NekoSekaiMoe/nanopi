@@ -90,15 +90,19 @@ registerVirtualModel (+unregister*).
 - src/core/extensions/ (whole directory), package-manager.ts,
   package-manager-cli.ts, bundled-extras.ts, nanopi-manifest.ts, jiti dep.
 - Settings: `extensions`, `extensionChangelogVersions`, `packages` (npm/git
-  package sources) + the `nanopi config` panes that edit them. Skills,
-  prompts, themes stay local-file based.
+  package sources) + the `nanopi config` panes that edit them. Skills and
+  prompts stay local-file based (themes followed later:
+  [remove the theme system and the /reload command](../simplification/2026-10-13-remove-theme-system-and-reload-command.md)).
 - CLI: `install`/`remove`/`list` subcommands, `--extension`/`-e`,
   `--no-extensions`, `builtin:<name>`.
 - Build: `extra/<name>` flavor components and dist/extras shipping (all extras
   always compiled in; minimal builds grow slightly). The `modes` component and
   its inert stub stay. scripts/extras.mjs and the extras payload in
   copy-assets/single-file go.
-- /reload keeps reloading settings/skills/prompts/themes; modules are static.
+- /reload was later removed entirely with the theme system
+  ([remove the theme system and the /reload command](../simplification/2026-10-13-remove-theme-system-and-reload-command.md));
+  the runtime reload machinery (module-requested, models.json hot reload)
+  stayed and modules remained static.
 - examples/extensions/ (75 files), docs/extensions.md, docs/packages.md;
   docs/sdk.md gains the programmatic extension guide; extension tests are
   deleted or rewritten against ModuleApi.

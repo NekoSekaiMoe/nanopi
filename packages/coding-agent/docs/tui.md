@@ -99,7 +99,7 @@ Do not permanently store strings with theme colors unless `invalidate()` rebuild
 
 Theme callbacks evaluated during rendering do not need special rebuilding. Stateless components can also calculate themed output on every render.
 
-Use [Themes](themes.md) to create terminal palettes. Use nanopi’s `getMarkdownTheme()` when rendering Markdown that should match the active application theme.
+Use nanopi’s `getMarkdownTheme()` when rendering Markdown that should match the active system theme.
 
 ## Keep rendering responsive
 

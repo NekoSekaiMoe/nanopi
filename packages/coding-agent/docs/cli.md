@@ -119,7 +119,7 @@ See [Settings](settings.md#tools) for configuring the default tool selection.
 - `-nt`, `--no-tools`<br>
   Starts with all built-in, extension, and custom tools disabled.
 
-Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `nanopi --tools +grep,-write` keeps the other default tools, enables `grep`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. `/reload` enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
+Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `nanopi --tools +grep,-write` keeps the other default tools, enables `grep`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. A runtime reload enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
 
 | Built-in | Purpose |
 |---|---|
@@ -154,12 +154,6 @@ See [Configuration](configuration.md) for conventional directories and project t
   Loads a prompt-template file or directory and is repeatable.
 - `-np`, `--no-prompt-templates`<br>
   Disables discovered and configured templates. Explicit `--prompt-template` paths still load.
-- `--theme <path>`<br>
-  Loads a theme file or directory and is repeatable.
-- `--use-theme <name[/name]>`<br>
-  Selects the initial interactive theme for this run.
-- `--no-themes`<br>
-  Disables discovered and configured themes. Explicit `--theme` paths still load.
 - `-nc`, `--no-context-files`<br>
   Disables `AGENTS.md` and `CLAUDE.md` discovery.
 

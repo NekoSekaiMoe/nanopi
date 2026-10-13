@@ -26,7 +26,7 @@ A configured value replaces the default for that action. Use an empty list to di
 }
 ```
 
-After editing the file, run `/reload` to apply the changes to the active session.
+After editing the file, restart nanopi to apply the changes.
 
 ## Key syntax
 

@@ -10,7 +10,7 @@ const BG_RESET = "\x1b[49m";
 
 describe("UserMessageComponent", () => {
 	test("keeps user message height stable while moving closing OSC markers off line end", () => {
-		initTheme("dark");
+		initTheme();
 
 		const component = new UserMessageComponent("hello");
 		const lines = component.render(20);
@@ -25,7 +25,7 @@ describe("UserMessageComponent", () => {
 	});
 
 	test("chains Markdown transformers with user message context", () => {
-		initTheme("dark");
+		initTheme();
 		const calls: string[] = [];
 		const component = new UserMessageComponent("The input is $x^2$.", undefined, 1, [
 			(markdown, context) => {
@@ -44,7 +44,7 @@ describe("UserMessageComponent", () => {
 	});
 
 	test("reapplies Markdown transformers when invalidated", () => {
-		initTheme("dark");
+		initTheme();
 		let suffix = "before";
 		const component = new UserMessageComponent("Message", undefined, 1, [(markdown) => `${markdown} ${suffix}`]);
 

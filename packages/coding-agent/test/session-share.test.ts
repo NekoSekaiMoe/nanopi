@@ -22,7 +22,7 @@ function deferred(): { promise: Promise<void>; resolve: () => void } {
 }
 
 describe("shareSession", () => {
-	beforeAll(() => initTheme("dark"));
+	beforeAll(() => initTheme());
 
 	it("keeps concurrent session exports isolated", async () => {
 		const uploads: string[] = [];

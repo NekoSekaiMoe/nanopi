@@ -36,7 +36,7 @@ function countRenderedValue(lines: string[], value: string): number {
 
 describe("LoginDialogComponent OAuth prompts", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

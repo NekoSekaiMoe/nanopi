@@ -159,7 +159,7 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
 		promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-		promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, themes, skills, or TUI):
+		promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI):
 - Main documentation: ${getReadmePath()} (overview) and ${getDocsPath()}/index.md (topic index)
 - Examples: ${getExamplesPath()}
 - Resolve docs/... and examples/... against ${getDocsPath()} and ${getExamplesPath()}, not the current working directory

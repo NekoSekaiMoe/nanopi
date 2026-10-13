@@ -25,7 +25,7 @@ describe("scoped models selector", () => {
 	let harness: Harness | undefined;
 
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

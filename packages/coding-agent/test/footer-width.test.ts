@@ -107,7 +107,7 @@ describe("resolveFooterUsedTokens", () => {
 
 describe("FooterComponent single-line layout", () => {
 	beforeAll(() => {
-		initTheme(undefined, false);
+		initTheme();
 	});
 
 	it("renders one dim line with used tokens and the details hint", () => {

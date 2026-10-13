@@ -23,7 +23,7 @@ describe("model selector filter resets selection to top", () => {
 	const harnesses: Harness[] = [];
 
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

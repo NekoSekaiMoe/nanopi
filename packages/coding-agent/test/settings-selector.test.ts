@@ -1,5 +1,5 @@
 import { setKeybindings } from "@nanopi/pi-tui";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import {
 	type SettingsCallbacks,
@@ -13,65 +13,13 @@ import { createHarness, type Harness } from "./suite/harness.ts";
 describe("SettingsSelectorComponent", () => {
 	let harness: Harness | undefined;
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 		setKeybindings(new KeybindingsManager());
 	});
 
 	afterEach(() => {
 		harness?.cleanup();
 		harness = undefined;
-	});
-
-	it("keeps the configured fixed theme marked while browsing", () => {
-		const config = {
-			defaultModel: "not set",
-			availableDefaultModels: [],
-			modelThinkingLevels: {},
-			currentTheme: "dark",
-			terminalTheme: "dark",
-			availableThemes: ["system", "dark", "light"],
-			warnings: {},
-		} as unknown as SettingsConfig;
-		const callbacks = { onThemePreview: vi.fn(), onCancel: () => {} } as unknown as SettingsCallbacks;
-		const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
-
-		list.selectItem("theme");
-		list.handleInput("\r");
-		let output = stripAnsi(list.render(120).join("\n"));
-		expect(output).toMatch(
-			/ {4}system +Theme created from your terminal's colors\n {4}automatic +Use separate themes/,
-		);
-		expect(output).toContain("→ ✓ dark");
-
-		list.handleInput("\x1b[B");
-		output = stripAnsi(list.render(120).join("\n"));
-		expect(output).toContain("  ✓ dark");
-		expect(output).toContain("→   light");
-	});
-
-	it("keeps a configured automatic theme marked while browsing", () => {
-		const config = {
-			defaultModel: "not set",
-			availableDefaultModels: [],
-			modelThinkingLevels: {},
-			currentTheme: "light/dark",
-			terminalTheme: "dark",
-			availableThemes: ["dark", "light", "other"],
-			warnings: {},
-		} as unknown as SettingsConfig;
-		const callbacks = { onThemePreview: vi.fn(), onCancel: () => {} } as unknown as SettingsCallbacks;
-		const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
-
-		list.selectItem("theme");
-		list.handleInput("\r");
-		list.handleInput("\r");
-		let output = stripAnsi(list.render(120).join("\n"));
-		expect(output).toContain("→ ✓ light");
-
-		list.handleInput("\x1b[B");
-		output = stripAnsi(list.render(120).join("\n"));
-		expect(output).toContain("  ✓ light");
-		expect(output).toContain("→   other");
 	});
 
 	it("keeps the configured per-model thinking level marked while browsing", async () => {

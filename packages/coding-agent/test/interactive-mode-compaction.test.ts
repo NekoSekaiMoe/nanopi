@@ -26,7 +26,7 @@ describe("InteractiveMode compaction events", () => {
 			},
 		) => void;
 
-		initTheme("dark");
+		initTheme();
 		const enabled = {
 			chatContainer: new Container(),
 			settingsManager: { getShowCacheMissNotices: () => true },

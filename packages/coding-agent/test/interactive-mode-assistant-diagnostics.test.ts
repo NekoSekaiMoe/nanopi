@@ -61,7 +61,7 @@ const maybeShowThinkingDropNotice = Reflect.get(InteractiveMode.prototype, "mayb
 
 describe("InteractiveMode assistant diagnostics", () => {
 	test("shows Anthropic thinking drops when cache miss notices are enabled", () => {
-		initTheme("dark");
+		initTheme();
 		const enabled = {
 			chatContainer: new Container(),
 			settingsManager: { getShowCacheMissNotices: () => true },
@@ -81,7 +81,7 @@ describe("InteractiveMode assistant diagnostics", () => {
 	});
 
 	test("does not repeat unchanged Anthropic thinking drops", () => {
-		initTheme("dark");
+		initTheme();
 		const context = {
 			chatContainer: new Container(),
 			settingsManager: { getShowCacheMissNotices: () => true },

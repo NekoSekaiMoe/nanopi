@@ -89,7 +89,7 @@ describe("syntax highlight renderer", () => {
 describe("theme syntax highlighting", () => {
 	beforeEach(() => {
 		setCapabilities({ images: null, trueColor: true, hyperlinks: false });
-		initTheme("dark");
+		initTheme();
 	});
 
 	afterEach(() => {
@@ -124,7 +124,7 @@ describe("theme syntax highlighting", () => {
 		expect(highlightCode("const re = /foo+/gi;", "javascript")[0]).toContain(
 			`${theme.getFgAnsi("syntaxString")}/foo+/gi\x1b[39m`,
 		);
-		expect(highlightCode("@decorator", "python")[0]).toBe(`${theme.getFgAnsi("muted")}@decorator\x1b[39m`);
+		expect(highlightCode("@decorator", "python")[0]).toBe(theme.fg("muted", "@decorator"));
 		expect(highlightCode("<div></div>", "html")[0]).toContain(`${theme.getFgAnsi("syntaxKeyword")}div\x1b[39m`);
 	});
 });

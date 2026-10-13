@@ -21,7 +21,7 @@ type ShutdownThis = {
 	unregisterSignalHandlers: () => void;
 	runtimeHost: { dispose: () => Promise<void> };
 	ui: { terminal: { drainInput: (ms: number) => Promise<void> } };
-	themeController: { disableAutoSync: () => void };
+	themeController: { dispose: () => void };
 	clearNextPromptSuggestion: () => void;
 	stop: () => void;
 	sessionManager: SessionManager;
@@ -89,7 +89,7 @@ function createContext(order: string[], sessionManager = createSessionManager())
 				}),
 			},
 		},
-		themeController: { disableAutoSync: vi.fn() },
+		themeController: { dispose: vi.fn() },
 		clearNextPromptSuggestion: vi.fn(),
 		stop: vi.fn(() => {
 			order.push("stop");

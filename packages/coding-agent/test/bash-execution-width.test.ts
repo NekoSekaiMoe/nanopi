@@ -29,7 +29,7 @@ function createTuiStub(columns: number): { columns: number; stub: any } {
 
 describe("BashExecutionComponent width handling (#2569)", () => {
 	beforeAll(() => {
-		initTheme(undefined, false);
+		initTheme();
 	});
 
 	it("collapsed preview lines respect render-time width, not construction-time width", () => {

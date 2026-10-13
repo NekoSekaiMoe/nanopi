@@ -10,7 +10,7 @@ function render(container: Container): string {
 }
 
 describe("issue #7829 invalid settings warning", () => {
-	beforeAll(() => initTheme("dark"));
+	beforeAll(() => initTheme());
 
 	it("renders startup diagnostics inside the transcript", async () => {
 		const harness = await createHarness();

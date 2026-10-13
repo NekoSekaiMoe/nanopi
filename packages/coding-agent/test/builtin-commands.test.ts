@@ -10,7 +10,7 @@ import {
 } from "../src/modules/builtin-commands/context.ts";
 import type { ContextPart } from "../src/modules/builtin-commands/context-dialog.ts";
 
-initTheme("dark");
+initTheme();
 
 describe("formatTokens", () => {
 	it("formats small, thousands, and large values", () => {

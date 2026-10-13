@@ -95,9 +95,6 @@ export function createTestUiContext(overrides: Partial<ModuleUIContext> = {}): M
 		get theme() {
 			return theme;
 		},
-		getAllThemes: () => [],
-		getTheme: () => undefined,
-		setTheme: () => ({ success: false, error: "Theme switching not available in tests" }),
 		getToolsExpanded: () => false,
 		setToolsExpanded: () => {},
 		...overrides,

@@ -42,7 +42,7 @@ All interfaces use the same agent and session mechanisms.
 
 Extensions are TypeScript modules loaded into the nanopi process. Their factory functions register tools, commands, shortcuts, providers, event handlers, renderers, and terminal UI.
 
-Skills provide on-demand instructions and supporting files. Prompt templates provide reusable message text. Themes provide terminal colors. nanopi packages distribute these resources through npm or git.
+Skills provide on-demand instructions and supporting files. Prompt templates provide reusable message text. nanopi packages distribute these resources through npm or git.
 
 ## Trust and permissions
 

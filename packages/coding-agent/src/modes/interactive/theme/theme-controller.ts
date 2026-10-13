@@ -1,21 +1,13 @@
 import type { RgbColor, TerminalColors, TUI } from "@nanopi/pi-tui";
-import type { SettingsManager } from "../../../core/settings-manager.ts";
 import {
 	getTerminalTheme,
 	initTheme,
 	markTerminalColorsPending,
-	parseAutoThemeSetting,
-	resolveThemeSetting,
-	SYSTEM_THEME_NAME,
+	refreshSystemTheme,
 	setTerminalColorScheme,
 	setTerminalColors,
-	setTheme,
-	setThemeInstance,
 	type TerminalTheme,
-	type Theme,
 } from "./theme.ts";
-
-type ThemeResult = { success: boolean; error?: string };
 
 /**
  * How long the system theme stays grayscale before falling back to palette indices. Terminals answer
@@ -51,60 +43,40 @@ function sameTerminalColors(a: TerminalColors, b: TerminalColors): boolean {
 }
 
 /**
- * Applies the theme setting and keeps it in sync with the terminal. The theme applies immediately, and the
- * terminal's colors update it when they arrive; the system theme renders in grayscale until then. Callers
- * that bake theme colors into content can wait for the colors with `waitForTerminalColors()`.
+ * Keeps the system theme in sync with the terminal. The theme applies immediately in grayscale, and the
+ * terminal's reported colors regenerate it when they arrive. Callers that bake theme colors into content
+ * can wait for the colors with `waitForTerminalColors()`.
  */
 export class InteractiveThemeController {
 	private readonly ui: TUI;
-	private readonly getSettingsManager: () => SettingsManager;
-	private readonly showError: (message: string) => void;
 	private readonly onChanged: () => void;
-	private currentThemeSetting: string | undefined;
 	// Last reported colors; a query that times out keeps them instead of erasing them.
 	private terminalColors: TerminalColors | undefined;
-	private activeThemeName: string | undefined;
-	private autoSyncEnabled = false;
 	private terminalColorSchemeUnsubscribe: (() => void) | undefined;
 	// Settles when the latest color query completed or timed out, and its colors applied.
 	private terminalColorQuery: Promise<void> = Promise.resolve();
 
-	constructor(
-		ui: TUI,
-		options: {
-			getSettingsManager: () => SettingsManager;
-			showError: (message: string) => void;
-			onChanged: () => void;
-			initialThemeSetting?: string;
-		},
-	) {
+	constructor(ui: TUI, options: { onChanged: () => void }) {
 		this.ui = ui;
-		this.getSettingsManager = options.getSettingsManager;
-		this.showError = options.showError;
 		this.onChanged = options.onChanged;
-		this.currentThemeSetting = options.initialThemeSetting;
-		this.activeThemeName = this.resolveThemeName();
 		// The system theme starts in grayscale; color follows once the terminal reports its colors.
 		markTerminalColorsPending();
-		initTheme(this.activeThemeName, true);
+		initTheme();
 		this.bindTerminalColorSchemeListener();
+		this.ui.setTerminalColorSchemeNotifications(true);
 	}
 
 	rebindTui(): void {
 		this.terminalColorSchemeUnsubscribe?.();
 		this.bindTerminalColorSchemeListener();
-		this.ui.setTerminalColorSchemeNotifications(this.autoSyncEnabled);
+		this.ui.setTerminalColorSchemeNotifications(true);
 	}
 
 	/**
-	 * Apply the theme setting now and query the terminal's colors, which update the theme when they arrive.
-	 * Theme pairs and the system theme follow terminal appearance changes.
+	 * Query the terminal's colors, which regenerate the system theme when they arrive. The system theme
+	 * follows terminal appearance changes on its own.
 	 */
-	applyFromSettings(): void {
-		const themeSetting = this.getThemeSetting();
-		const themeName = this.resolveThemeName();
-		this.setAutoSync(parseAutoThemeSetting(themeSetting) !== undefined || themeName === SYSTEM_THEME_NAME);
-		this.applyThemeName(themeName, themeSetting !== undefined);
+	apply(): void {
 		this.queryTerminalColors();
 	}
 
@@ -117,72 +89,14 @@ export class InteractiveThemeController {
 		return this.terminalColorQuery;
 	}
 
-	getThemeSelection(): string | undefined {
-		return this.currentThemeSetting ?? this.getSettingsManager().getThemeSetting() ?? this.activeThemeName;
-	}
-
-	setThemeName(themeName: string, showError = false): ThemeResult {
-		this.setAutoSync(themeName === SYSTEM_THEME_NAME);
-		const result = this.applyThemeName(themeName, showError);
-		if (result.success) {
-			this.currentThemeSetting = themeName;
-		}
-		return result;
-	}
-
-	setThemeSetting(themeSetting: string): void {
-		this.currentThemeSetting = themeSetting;
-		this.applyFromSettings();
-	}
-
-	setThemeInstance(themeInstance: Theme): ThemeResult {
-		this.setAutoSync(false);
-		setThemeInstance(themeInstance);
-		this.activeThemeName = "<in-memory>";
-		this.notifyChanged();
-		return { success: true };
-	}
-
-	preview(themeSettingOrName: string): void {
-		const themeName = resolveThemeSetting(themeSettingOrName, getTerminalTheme()) ?? this.activeThemeName;
-		if (!themeName) return;
-		if (setTheme(themeName, true).success) {
-			this.ui.invalidate();
-			this.ui.requestRender();
-		}
-	}
-
-	disableAutoSync(): void {
-		this.setAutoSync(false);
-	}
-
-	dispose(): void {
-		this.setAutoSync(false);
-		this.terminalColorSchemeUnsubscribe?.();
-		this.terminalColorSchemeUnsubscribe = undefined;
-	}
-
 	getTerminalTheme(): TerminalTheme {
 		return getTerminalTheme();
 	}
 
-	private getThemeSetting(): string | undefined {
-		return this.currentThemeSetting ?? this.getSettingsManager().getThemeSetting();
-	}
-
-	/** The theme for the current setting and terminal appearance. Without a setting, nanopi uses the system theme. */
-	private resolveThemeName(): string {
-		return resolveThemeSetting(this.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME;
-	}
-
-	private applyThemeName(themeName: string, showError = false): ThemeResult {
-		const result = setTheme(themeName, true);
-		this.activeThemeName = result.success ? themeName : SYSTEM_THEME_NAME;
-		this.notifyChanged();
-		if (!result.success && showError) {
-			this.showError(`Failed to load theme "${themeName}": ${result.error}\nFell back to the system theme.`);
-		}
-		return result;
+	dispose(): void {
+		this.terminalColorSchemeUnsubscribe?.();
+		this.terminalColorSchemeUnsubscribe = undefined;
+		this.ui.setTerminalColorSchemeNotifications(false);
 	}
 
 	/** Query the terminal's colors without waiting for them; `waitForTerminalColors()` waits for this query. */
@@ -191,8 +105,8 @@ export class InteractiveThemeController {
 	}
 
 	/**
-	 * Record reported colors: themes use the default colors for tokens set to "", the system theme is
-	 * generated from all of them, and light/dark detection uses them. Re-renders only when they changed.
+	 * Record reported colors: the system theme is generated from them, and light/dark detection uses them.
+	 * Re-renders only when they changed.
 	 */
 	private applyTerminalColors(reported: TerminalColors): void {
 		const previous = this.terminalColors;
@@ -210,22 +124,10 @@ export class InteractiveThemeController {
 		this.ui.requestRender();
 	}
 
-	/**
-	 * Re-apply the setting after the terminal's colors or appearance changed: regenerate the system theme,
-	 * or switch the theme of a pair. Themes set through extensions or previews are left alone.
-	 */
+	/** Regenerate the system theme from the colors recorded so far. */
 	private reapplyForTerminal(): void {
-		if (this.activeThemeName === "<in-memory>") return;
-		const themeName = this.resolveThemeName();
-		if (themeName === SYSTEM_THEME_NAME || themeName !== this.activeThemeName) {
-			this.applyThemeName(themeName);
-		}
-	}
-
-	private setAutoSync(enabled: boolean): void {
-		if (this.autoSyncEnabled === enabled) return;
-		this.autoSyncEnabled = enabled;
-		this.ui.setTerminalColorSchemeNotifications(enabled);
+		refreshSystemTheme();
+		this.onChanged();
 	}
 
 	private bindTerminalColorSchemeListener(): void {
@@ -239,15 +141,9 @@ export class InteractiveThemeController {
 	 * the appearance. The reported scheme only matters for terminals that do not report their background.
 	 */
 	private applyTerminalColorSchemeChange(terminalTheme: TerminalTheme): void {
-		if (!this.autoSyncEnabled) return;
 		const previous = getTerminalTheme();
 		setTerminalColorScheme(terminalTheme);
 		if (getTerminalTheme() !== previous) this.reapplyForTerminal();
 		this.queryTerminalColors();
-	}
-
-	private notifyChanged(): void {
-		this.ui.invalidate();
-		this.onChanged();
 	}
 }

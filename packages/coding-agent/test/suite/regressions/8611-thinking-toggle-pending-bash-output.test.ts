@@ -20,7 +20,7 @@ function renderChat(container: Container): string {
 
 describe("thinking visibility while a bash tool is running (#8611)", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	test("preserves partial bash output", () => {

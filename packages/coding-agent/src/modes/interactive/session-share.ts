@@ -60,7 +60,7 @@ export async function shareSession(context: SessionShareContext): Promise<void> 
 		}
 
 		try {
-			await context.session.exportToHtml(htmlFile, { themeName: theme.name });
+			await context.session.exportToHtml(htmlFile);
 		} catch (error: unknown) {
 			context.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
 			return;

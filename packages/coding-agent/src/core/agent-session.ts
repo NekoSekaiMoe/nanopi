@@ -56,7 +56,7 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@nanopi/pi-ai/compat";
-import { getThemeByName, theme } from "../modes/interactive/theme/theme.ts";
+import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
 import { sleep } from "../utils/sleep.ts";
@@ -304,7 +304,7 @@ export interface AgentSessionConfig {
 	cwd: string;
 	/** Models to cycle through with Ctrl+P (from --models flag) */
 	scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
-	/** Resource loader for extensions, skills, prompts, themes, context files, and system prompt */
+	/** Resource loader for extensions, skills, prompts, context files, and system prompt */
 	resourceLoader: ResourceLoader;
 	/** SDK custom tools registered outside extensions */
 	customTools?: ToolDefinition[];
@@ -3919,7 +3919,7 @@ export class AgentSession {
 		await this._performReload(this._runtimeReloadHooks);
 	}
 
-	/** Reload settings and resources (skills, prompts, themes). Modules are static:
+	/** Reload settings and resources (skills, prompts). Modules are static:
 	 * their registry and registrations survive a reload. */
 	private async _reloadRuntime(
 		beforeSessionStart: RuntimeReloadCallbacks["beforeSessionStart"],
@@ -4540,14 +4540,9 @@ export class AgentSession {
 	/**
 	 * Export session to HTML.
 	 * @param outputPath Optional output path (defaults to session directory)
-	 * @param options Optional export presentation settings
 	 * @returns Path to exported file
 	 */
-	async exportToHtml(outputPath?: string, options: { themeName?: string } = {}): Promise<string> {
-		const themeName = [options.themeName, this.settingsManager.getTheme()].find(
-			(candidate) => candidate !== undefined && getThemeByName(candidate) !== undefined,
-		);
-
+	async exportToHtml(outputPath?: string): Promise<string> {
 		// Create tool renderer if we have an extension runner (for custom tool HTML rendering)
 		const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
 			getToolRenderers: (name) =>
@@ -4558,7 +4553,6 @@ export class AgentSession {
 
 		return await exportSessionToHtml(this.sessionManager, this.state, {
 			outputPath,
-			themeName,
 			toolRenderer,
 		});
 	}

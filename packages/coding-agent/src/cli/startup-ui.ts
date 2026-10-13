@@ -1,9 +1,7 @@
-import { join } from "node:path";
 import { ProcessTerminal, setCapabilityOverrides, setKeybindings, type TUI, TuiMainScreen } from "@nanopi/pi-tui";
 import { existsSync } from "fs";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, getAgentDir, getSettingsPath, PACKAGE_NAME } from "../config.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
-import { type ResolvedResource, resolveLocalResources } from "../core/resource-discovery.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { ExtensionInputComponent } from "../modes/interactive/components/extension-input.ts";
 import { ExtensionSelectorComponent } from "../modes/interactive/components/extension-selector.ts";
@@ -11,17 +9,11 @@ import {
 	FirstTimeSetupComponent,
 	type FirstTimeSetupResult,
 } from "../modes/interactive/components/first-time-setup.ts";
-import { SYSTEM_THEME_NAME } from "../modes/interactive/theme/system-theme.ts";
 import {
-	getTerminalTheme,
 	initTheme,
-	loadThemeFromPath,
 	markTerminalColorsPending,
-	resolveThemeSetting,
-	setRegisteredThemes,
+	refreshSystemTheme,
 	setTerminalColors,
-	setTheme,
-	type Theme,
 } from "../modes/interactive/theme/theme.ts";
 import { requestTerminalColors } from "../modes/interactive/theme/theme-controller.ts";
 
@@ -43,66 +35,30 @@ function isOfficialDistribution({ packageName, appName, configDirName }: Distrib
 	);
 }
 
-function loadThemes(resources: ResolvedResource[]): Theme[] {
-	const themes: Theme[] = [];
-	const seen = new Set<string>();
-	for (const resource of resources) {
-		if (!resource.enabled) continue;
-		try {
-			const loadedTheme = loadThemeFromPath(resource.path);
-			if (loadedTheme.name) {
-				if (seen.has(loadedTheme.name)) continue;
-				seen.add(loadedTheme.name);
-			}
-			themes.push(loadedTheme);
-		} catch {
-			// Startup prompts should not fail because a theme is broken. The normal
-			// resource loader reports theme diagnostics later in startup.
-		}
-	}
-	return themes;
-}
-
-function loadStartupThemes(settingsManager: SettingsManager): Theme[] {
-	const resolvedPaths = resolveLocalResources({
-		cwd: process.cwd(),
-		globalBaseDir: getAgentDir(),
-		projectBaseDir: join(process.cwd(), ".nanopi"),
-		projectTrusted: false,
-		globalSettings: settingsManager.getGlobalSettings(),
-		projectSettings: settingsManager.getGlobalSettings(),
-	});
-	return loadThemes(resolvedPaths.themes);
-}
-
 export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
 	setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-	setRegisteredThemes(loadStartupThemes(settingsManager));
 	// The system theme starts in grayscale until the terminal reports its colors.
 	markTerminalColorsPending();
-	initTheme(resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME);
+	initTheme();
 	setKeybindings(KeybindingsManager.create());
 	const ui: TUI = new TuiMainScreen(new ProcessTerminal(), settingsManager.getShowHardwareCursor(), getAgentDir());
 	ui.setClearOnShrink(settingsManager.getClearOnShrink());
 	return ui;
 }
 
-export function startStartupTui(ui: TUI, settingsManager: SettingsManager): void {
+export function startStartupTui(ui: TUI): void {
 	ui.start();
-	const themeSetting = settingsManager.getThemeSetting();
-	queryStartupTerminalColors(ui, () => {
-		setTheme(resolveThemeSetting(themeSetting, getTerminalTheme()) ?? SYSTEM_THEME_NAME);
-	});
+	queryStartupTerminalColors(ui);
 }
 
 /**
  * Query the terminal's colors without waiting for them. When they arrive, including after the timeout,
- * record them for the system theme and "" (terminal default) tokens, run `onColors`, and re-render.
+ * record them, regenerate the system theme, and re-render.
  */
-function queryStartupTerminalColors(ui: TUI, onColors: () => void): void {
+function queryStartupTerminalColors(ui: TUI): void {
 	void requestTerminalColors(ui, (colors) => {
 		setTerminalColors(colors);
-		onColors();
+		refreshSystemTheme();
 		ui.invalidate();
 		ui.requestRender();
 	});
@@ -163,7 +119,7 @@ export async function showStartupSelector<T>(
 		);
 		ui.addChild(selector);
 		ui.setFocus(selector);
-		startStartupTui(ui, settingsManager);
+		startStartupTui(ui);
 	});
 }
 
@@ -178,7 +134,6 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 			}
 			settled = true;
 			if (result) {
-				settingsManager.setTheme(result.theme);
 				settingsManager.setEnableAnalytics(result.shareAnalytics);
 				await settingsManager.flush();
 			}
@@ -188,14 +143,7 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 		};
 
 		ui.start();
-		let previewTheme = SYSTEM_THEME_NAME;
-		setTheme(previewTheme);
 		const component = new FirstTimeSetupComponent({
-			onThemePreview: (themeName) => {
-				previewTheme = themeName;
-				setTheme(themeName);
-				ui.requestRender();
-			},
 			onSubmit: (result) => void finish(result),
 			onCancel: () => void finish(undefined),
 		});
@@ -203,7 +151,7 @@ export async function showFirstTimeSetup(settingsManager: SettingsManager): Prom
 		ui.setFocus(component);
 		ui.requestRender();
 		// The terminal's colors regenerate the system theme; re-rendering rebuilds the dialog with it.
-		queryStartupTerminalColors(ui, () => setTheme(previewTheme));
+		queryStartupTerminalColors(ui);
 	});
 }
 
@@ -237,6 +185,6 @@ export async function showStartupInput(
 		);
 		ui.addChild(input);
 		ui.setFocus(input);
-		startStartupTui(ui, settingsManager);
+		startStartupTui(ui);
 	});
 }

@@ -8,7 +8,6 @@ import { KeybindingsManager } from "../src/core/keybindings.ts";
 import { ModelConfig } from "../src/core/model-config.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
 
 const schemaBaseUrl = "https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/packages/coding-agent/schemas";
 const temporaryDirectories: string[] = [];
@@ -25,18 +24,17 @@ function createTemporaryDirectory(): string {
 	return directory;
 }
 
-function schemaUrl(name: "models" | "settings" | "keybindings" | "theme"): string {
+function schemaUrl(name: "models" | "settings" | "keybindings"): string {
 	return `${schemaBaseUrl}/${name}.schema.json`;
 }
 
 describe("generated configuration schemas", () => {
-	it("matches the four committed artifacts", () => {
+	it("matches the three committed artifacts", () => {
 		const rendered = renderConfigSchemas();
 		expect([...rendered.keys()]).toEqual([
 			"schemas/models.schema.json",
 			"schemas/settings.schema.json",
 			"schemas/keybindings.schema.json",
-			"schemas/theme.schema.json",
 		]);
 		for (const [relativePath, expected] of rendered) {
 			expect(
@@ -44,28 +42,6 @@ describe("generated configuration schemas", () => {
 				`${relativePath} is stale; run npm run generate:schemas`,
 			).toBe(expected);
 		}
-	});
-
-	it("preserves editor guidance in the generated theme schema", () => {
-		const schema = JSON.parse(renderConfigSchemas().get("schemas/theme.schema.json") ?? "");
-		const accent = schema.properties.colors.properties.accent;
-		const colorValue = accent.$ref ? schema.$defs.ColorValue : accent;
-		expect(schema).toMatchObject({
-			title: "nanopi Coding Agent Theme",
-			description: "Theme schema for nanopi coding agent",
-			properties: {
-				colors: {
-					description: expect.stringContaining("use compatible fallbacks"),
-					properties: {
-						accent: { description: "Primary accent color (logo, selected items, cursor)" },
-					},
-				},
-				export: { description: expect.stringContaining("defaults derived from userMessageBg") },
-			},
-		});
-		expect(colorValue).toMatchObject({
-			anyOf: [{ description: expect.stringContaining("Hex color") }, expect.any(Object)],
-		});
 	});
 
 	it("preserves moved model and settings guidance", () => {
@@ -114,7 +90,6 @@ describe("generated configuration schemas", () => {
 			name: "settings.json",
 			artifact: "schemas/settings.schema.json",
 			valid: {
-				theme: "dark",
 				cacheWarming: "idle",
 				extensionSetting: { enabled: true },
 				queueMode: "all",
@@ -270,11 +245,10 @@ describe("generated configuration schemas", () => {
 		const directory = createTemporaryDirectory();
 		writeFileSync(
 			join(directory, "settings.json"),
-			JSON.stringify({ $schema: schemaUrl("settings"), theme: "light", extensionSetting: { enabled: true } }),
+			JSON.stringify({ $schema: schemaUrl("settings"), extensionSetting: { enabled: true } }),
 		);
 
 		const manager = SettingsManager.create(directory, directory);
-		expect(manager.getTheme()).toBe("light");
 		expect(manager.getGlobalSettings()).toMatchObject({
 			$schema: schemaUrl("settings"),
 			extensionSetting: { enabled: true },
@@ -295,28 +269,5 @@ describe("generated configuration schemas", () => {
 		const manager = KeybindingsManager.create(directory);
 		expect(manager.getUserBindings()).toEqual({ "app.session.new": "ctrl+n" });
 		expect(manager.getEffectiveConfig()["app.session.new"]).toBe("ctrl+n");
-	});
-
-	it("accepts $schema in themes and rejects malformed themes", () => {
-		const builtIn = JSON.parse(
-			readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-		) as Record<string, unknown>;
-		expect(validateThemeJson("custom", { ...builtIn, $schema: schemaUrl("theme"), name: "custom" }).name).toBe(
-			"custom",
-		);
-		expect(() => validateThemeJson("invalid", { ...builtIn, name: "invalid/name" })).toThrow(
-			"theme names cannot contain",
-		);
-		expect(() => validateThemeJson("invalid", { ...builtIn, colors: {} })).toThrow("Missing required color tokens");
-		for (const invalid of [
-			{ ...builtIn, unexpected: true },
-			{
-				...builtIn,
-				colors: { ...(builtIn.colors as Record<string, unknown>), scrollbarThmb: "" },
-			},
-			{ ...builtIn, export: { unexpected: "" } },
-		]) {
-			expect(() => validateThemeJson("invalid", invalid)).toThrow(/additional properties/i);
-		}
 	});
 });

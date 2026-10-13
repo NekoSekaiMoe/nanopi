@@ -8,7 +8,7 @@ import { gunzipSync } from "node:zlib";
  * Single-file bundle bootstrap: extract embedded package assets.
  *
  * The single-file nanopi.js inlines the JavaScript graph but the CLI still
- * reads data files by path (themes, HTML export templates, webui, docs,
+ * reads data files by path (HTML export templates, webui, docs,
  * examples, package.json). This module extracts them from a gzip+base64
  * payload injected at build time into a versioned cache directory, then points
  * NANOPI_PACKAGE_DIR at it so every config.ts path helper resolves normally.
@@ -135,8 +135,8 @@ function bootstrapEmbeddedAssets(): void {
 			removeStaleVersionDirs(version);
 		}
 	} catch {
-		// Assets stay missing: themes fall back to defaults and webui reports
-		// its assets as missing instead of crashing the CLI.
+		// Assets stay missing: webui reports its assets as missing instead of
+		// crashing the CLI.
 	}
 }
 

@@ -11,15 +11,6 @@
     "lastChangelogVersion": {
       "type": "string"
     },
-    "extensionChangelogVersions": {
-      "type": "object",
-      "patternProperties": {
-        "^.*$": {
-          "type": "string"
-        }
-      },
-      "description": "Last-seen changelog version per extension package, keyed by source and scope."
-    },
     "defaultProvider": {
       "type": "string"
     },
@@ -84,9 +75,6 @@
         }
       ],
       "default": "one-at-a-time"
-    },
-    "theme": {
-      "type": "string"
     },
     "compaction": {
       "type": "object",
@@ -304,65 +292,6 @@
       "type": "string",
       "description": "Analytics tracking identifier, generated when analytics is enabled."
     },
-    "packages": {
-      "type": "array",
-      "items": {
-        "anyOf": [
-          {
-            "type": "string",
-            "description": "Load all resources from the package."
-          },
-          {
-            "type": "object",
-            "required": [
-              "source"
-            ],
-            "properties": {
-              "source": {
-                "type": "string"
-              },
-              "autoload": {
-                "type": "boolean",
-                "description": "When false, start empty and only apply explicit resource patterns."
-              },
-              "extensions": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "skills": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "prompts": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              },
-              "themes": {
-                "type": "array",
-                "items": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        ],
-        "description": "Package source for npm or git packages. Use the string form to load all resources or the object form to filter resources."
-      },
-      "description": "npm or git package sources, as strings or objects with resource filtering."
-    },
-    "extensions": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Local extension file paths or directories."
-    },
     "deviceId": {
       "type": "string",
       "description": "Stable installation UUID, generated when authentication first needs it. Global only."
@@ -399,13 +328,6 @@
         "type": "string"
       },
       "description": "Local prompt template file paths or directories."
-    },
-    "themes": {
-      "type": "array",
-      "items": {
-        "type": "string"
-      },
-      "description": "Local theme file paths or directories."
     },
     "enableSkillCommands": {
       "type": "boolean",

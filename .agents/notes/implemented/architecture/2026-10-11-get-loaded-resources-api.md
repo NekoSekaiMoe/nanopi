@@ -34,8 +34,11 @@ methods on `InteractiveMode`, unreachable from extension code.
   lists (context files keep load order, cwd-relative), wrapped to the dialog
   width by `wrapStatusText`. Outside TUI the notify fallback includes them.
 - `InteractiveMode.showLoadedResources()` now renders diagnostics only
-  (skill/prompt/extension/theme conflicts and errors); the listing branches,
-  `ExpandableText`, and the scope-group/compact-label helpers are deleted.
+  (skill/prompt/extension conflicts and errors; theme conflicts existed until
+  the theme system was removed — see
+  [remove the theme system and the /reload command](../simplification/2026-10-13-remove-theme-system-and-reload-command.md));
+  the listing branches, `ExpandableText`, and the scope-group/compact-label
+  helpers are deleted.
 
 Related: [builtin-commands home](../feature/2026-10-11-builtin-commands-and-codex-compaction.md)
 and [Codex welcome/footer/status reskin](../feature/2026-10-11-codex-welcome-footer-status.md),

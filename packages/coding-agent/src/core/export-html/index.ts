@@ -3,7 +3,7 @@ import { existsSync, readFileSync, writeFileSync } from "fs";
 import { basename, join } from "path";
 import { isBuildComponentEnabled } from "../../build-components.ts";
 import { APP_NAME, getExportTemplateDir } from "../../config.ts";
-import { getResolvedThemeColors, getThemeExportColors } from "../../modes/interactive/theme/theme.ts";
+import { getResolvedThemeColors } from "../../modes/interactive/theme/theme.ts";
 import { normalizePath, resolvePath } from "../../utils/paths.ts";
 import type { ToolDefinition } from "../modules/types.ts";
 import type { SessionEntry } from "../session-manager.ts";
@@ -35,7 +35,6 @@ interface RenderedToolHtml {
 
 export interface ExportOptions {
 	outputPath?: string;
-	themeName?: string;
 	/** Optional tool renderer for custom tools */
 	toolRenderer?: ToolHtmlRenderer;
 }
@@ -109,21 +108,20 @@ function deriveExportColors(baseColor: string): { pageBg: string; cardBg: string
 /**
  * Generate CSS custom property declarations from theme colors.
  */
-function generateThemeVars(themeName?: string): string {
-	const colors = getResolvedThemeColors(themeName);
+function generateThemeVars(): string {
+	const colors = getResolvedThemeColors();
 	const lines: string[] = [];
 	for (const [key, value] of Object.entries(colors)) {
 		lines.push(`--${key}: ${value};`);
 	}
 
-	// Use explicit theme export colors if available, otherwise derive from userMessageBg
-	const themeExport = getThemeExportColors(themeName);
+	// Derive the export surfaces from userMessageBg
 	const userMessageBg = colors.userMessageBg || "#343541";
 	const derivedColors = deriveExportColors(userMessageBg);
 
-	lines.push(`--exportPageBg: ${themeExport.pageBg ?? derivedColors.pageBg};`);
-	lines.push(`--exportCardBg: ${themeExport.cardBg ?? derivedColors.cardBg};`);
-	lines.push(`--exportInfoBg: ${themeExport.infoBg ?? derivedColors.infoBg};`);
+	lines.push(`--exportPageBg: ${derivedColors.pageBg};`);
+	lines.push(`--exportCardBg: ${derivedColors.cardBg};`);
+	lines.push(`--exportInfoBg: ${derivedColors.infoBg};`);
 
 	return lines.join("\n      ");
 }
@@ -141,7 +139,7 @@ interface SessionData {
 /**
  * Core HTML generation logic shared by both export functions.
  */
-function generateHtml(sessionData: SessionData, themeName?: string): string {
+function generateHtml(sessionData: SessionData): string {
 	if (!isBuildComponentEnabled("export-html")) {
 		throw new Error(
 			'HTML export is not included in this build (buildconfig.json component "export-html" is disabled)',
@@ -154,13 +152,12 @@ function generateHtml(sessionData: SessionData, themeName?: string): string {
 	const markedJs = readFileSync(join(templateDir, "vendor", "marked.min.js"), "utf-8");
 	const hljsJs = readFileSync(join(templateDir, "vendor", "highlight.min.js"), "utf-8");
 
-	const themeVars = generateThemeVars(themeName);
-	const colors = getResolvedThemeColors(themeName);
-	const themeExport = getThemeExportColors(themeName);
+	const themeVars = generateThemeVars();
+	const colors = getResolvedThemeColors();
 	const derivedExportColors = deriveExportColors(colors.userMessageBg || "#343541");
-	const bodyBg = themeExport.pageBg ?? derivedExportColors.pageBg;
-	const containerBg = themeExport.cardBg ?? derivedExportColors.cardBg;
-	const infoBg = themeExport.infoBg ?? derivedExportColors.infoBg;
+	const bodyBg = derivedExportColors.pageBg;
+	const containerBg = derivedExportColors.cardBg;
+	const infoBg = derivedExportColors.infoBg;
 
 	// Base64 encode session data to avoid escaping issues
 	const sessionDataBase64 = Buffer.from(JSON.stringify(sessionData)).toString("base64");
@@ -275,7 +272,7 @@ export async function exportSessionToHtml(
 		renderedTools,
 	};
 
-	const html = generateHtml(sessionData, opts.themeName);
+	const html = generateHtml(sessionData);
 
 	let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
 	if (!outputPath) {
@@ -309,7 +306,7 @@ export async function exportFromFile(inputPath: string, options?: ExportOptions 
 		tools: undefined,
 	};
 
-	const html = generateHtml(sessionData, opts.themeName);
+	const html = generateHtml(sessionData);
 
 	let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
 	if (!outputPath) {

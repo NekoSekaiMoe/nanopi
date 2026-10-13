@@ -276,32 +276,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("--theme flag", () => {
-		test("parses single --theme", () => {
-			const result = parseArgs(["--theme", "./theme.json"]);
-			expect(result.themes).toEqual(["./theme.json"]);
-		});
-
-		test("parses multiple --theme flags", () => {
-			const result = parseArgs(["--theme", "./dark.json", "--theme", "./light.json"]);
-			expect(result.themes).toEqual(["./dark.json", "./light.json"]);
-		});
-	});
-
-	describe("--use-theme flag", () => {
-		test("parses --use-theme", () => {
-			const result = parseArgs(["--use-theme", "light"]);
-			expect(result.useTheme).toBe("light");
-		});
-
-		test("reports when the theme name value is missing", () => {
-			const result = parseArgs(["--use-theme", "--print"]);
-			expect(result.useTheme).toBeUndefined();
-			expect(result.print).toBe(true);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--use-theme requires a theme name" }]);
-		});
-	});
-
 	describe("--no-skills flag", () => {
 		test("parses --no-skills flag", () => {
 			const result = parseArgs(["--no-skills"]);
@@ -313,13 +287,6 @@ describe("parseArgs", () => {
 		test("parses --no-prompt-templates flag", () => {
 			const result = parseArgs(["--no-prompt-templates"]);
 			expect(result.noPromptTemplates).toBe(true);
-		});
-	});
-
-	describe("--no-themes flag", () => {
-		test("parses --no-themes flag", () => {
-			const result = parseArgs(["--no-themes"]);
-			expect(result.noThemes).toBe(true);
 		});
 	});
 

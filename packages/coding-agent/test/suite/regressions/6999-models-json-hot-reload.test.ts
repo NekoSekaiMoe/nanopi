@@ -44,7 +44,7 @@ describe("issue #6999 models.json hot reload", () => {
 	let tempDir: string | undefined;
 
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

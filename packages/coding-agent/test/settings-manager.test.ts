@@ -57,7 +57,7 @@ describe("SettingsManager", () => {
 			expect(savedSettings.defaultModel).toBe("claude-sonnet");
 		});
 
-		it("should preserve custom settings when changing theme", async () => {
+		it("should preserve custom settings when changing an unrelated setting", async () => {
 			const settingsPath = join(agentDir, "settings.json");
 			writeFileSync(
 				settingsPath,
@@ -74,15 +74,15 @@ describe("SettingsManager", () => {
 			currentSettings.skills = ["/path/to/skill.md"];
 			writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
-			// User changes theme
-			manager.setTheme("light");
+			// User changes a setting in memory
+			manager.setDefaultModel("claude-sonnet-4");
 			await manager.flush();
 
 			// Verify all settings preserved
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
 			expect(savedSettings.skills).toEqual(["/path/to/skill.md"]);
-			expect(savedSettings.theme).toBe("light");
+			expect(savedSettings.defaultModel).toBe("claude-sonnet-4");
 		});
 
 		it("should let in-memory changes override file changes for same key", async () => {
@@ -144,7 +144,6 @@ describe("SettingsManager", () => {
 			writeFileSync(
 				settingsPath,
 				JSON.stringify({
-					theme: "light",
 					skills: ["/after.ts"],
 					defaultModel: "claude-sonnet",
 				}),
@@ -152,40 +151,21 @@ describe("SettingsManager", () => {
 
 			await manager.reload();
 
-			expect(manager.getTheme()).toBe("light");
 			expect(manager.getSkillPaths()).toEqual(["/after.ts"]);
 			expect(manager.getDefaultModel()).toBe("claude-sonnet");
 		});
 
 		it("should keep previous settings and report the file path when the file is invalid", async () => {
 			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "dark" }));
+			writeFileSync(settingsPath, JSON.stringify({ defaultModel: "claude-sonnet" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 
 			writeFileSync(settingsPath, "{ invalid json");
 			await manager.reload();
 
-			expect(manager.getTheme()).toBe("dark");
+			expect(manager.getDefaultModel()).toBe("claude-sonnet");
 			expect(manager.drainErrors()).toMatchObject([{ scope: "global", path: settingsPath }]);
-		});
-	});
-
-	describe("theme setting", () => {
-		it("stores slash-separated automatic theme settings separately from fixed theme names", async () => {
-			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(settingsPath, JSON.stringify({ theme: "light/dark" }));
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getTheme()).toBeUndefined();
-			expect(manager.getThemeSetting()).toBe("light/dark");
-
-			manager.setTheme("solarized-light/tokyo-night");
-			await manager.flush();
-
-			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-			expect(savedSettings.theme).toBe("solarized-light/tokyo-night");
 		});
 	});
 
@@ -210,25 +190,25 @@ describe("SettingsManager", () => {
 
 	describe("project trust", () => {
 		it("should skip project settings when project is not trusted", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "global" }));
-			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ theme: "project" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ skills: ["global.md"] }));
+			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ skills: ["project.md"] }));
 
 			const manager = SettingsManager.create(projectDir, agentDir, { projectTrusted: false });
 
 			expect(manager.isProjectTrusted()).toBe(false);
-			expect(manager.getTheme()).toBe("global");
+			expect(manager.getSkillPaths()).toEqual(["global.md"]);
 			expect(manager.getProjectSettings()).toEqual({});
 		});
 
 		it("should reload project settings after trust changes to true", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ theme: "global" }));
-			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ theme: "project" }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ skills: ["global.md"] }));
+			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ skills: ["project.md"] }));
 			const manager = SettingsManager.create(projectDir, agentDir, { projectTrusted: false });
 
 			manager.setProjectTrusted(true);
 
 			expect(manager.isProjectTrusted()).toBe(true);
-			expect(manager.getTheme()).toBe("project");
+			expect(manager.getSkillPaths()).toEqual(["project.md"]);
 		});
 
 		it("should fail project settings writes when project is not trusted", async () => {
@@ -278,8 +258,8 @@ describe("SettingsManager", () => {
 			// .nanopi folder should NOT have been created just from reading
 			expect(existsSync(join(projectDir, ".nanopi"))).toBe(false);
 
-			// Settings should still be loaded from global
-			expect(manager.getTheme()).toBe("dark");
+			// Settings should still be loaded from global only
+			expect(manager.getProjectSettings()).toEqual({});
 		});
 
 		it("should create .nanopi folder when writing project settings", async () => {
@@ -500,12 +480,12 @@ describe("SettingsManager", () => {
 			writeFileSync(settingsPath, JSON.stringify({ shellCommandPrefix: "shopt -s expand_aliases" }));
 
 			const manager = SettingsManager.create(projectDir, agentDir);
-			manager.setTheme("light");
+			manager.setShellPath("/bin/zsh");
 			await manager.flush();
 
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.shellCommandPrefix).toBe("shopt -s expand_aliases");
-			expect(savedSettings.theme).toBe("light");
+			expect(savedSettings.shellPath).toBe("/bin/zsh");
 		});
 	});
 

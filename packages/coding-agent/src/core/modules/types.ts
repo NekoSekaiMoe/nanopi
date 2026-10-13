@@ -278,15 +278,6 @@ export interface ModuleUIContext {
 	/** Get the current theme for styling. */
 	readonly theme: Theme;
 
-	/** Get all available themes with their names and file paths. */
-	getAllThemes(): { name: string; path: string | undefined }[];
-
-	/** Load a theme by name without switching to it. Returns undefined if not found. */
-	getTheme(name: string): Theme | undefined;
-
-	/** Set the current theme by name or Theme object. */
-	setTheme(theme: string | Theme): { success: boolean; error?: string };
-
 	/** Get current tool output expansion state. */
 	getToolsExpanded(): boolean;
 

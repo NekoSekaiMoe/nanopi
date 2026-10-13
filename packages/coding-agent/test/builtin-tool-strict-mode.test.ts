@@ -58,7 +58,6 @@ describe("strict built-in tools", () => {
 				settingsManager,
 				noSkills: true,
 				noPromptTemplates: true,
-				noThemes: true,
 				modules: [
 					{
 						name: "test-module-1",

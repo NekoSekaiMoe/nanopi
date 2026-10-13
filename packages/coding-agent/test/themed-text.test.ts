@@ -3,12 +3,12 @@ import { ThemedText } from "../src/modes/interactive/components/themed-text.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 
 afterEach(() => {
-	initTheme("dark");
+	initTheme();
 });
 
 describe("ThemedText", () => {
 	it("builds lazily and rebuilds with the current theme after invalidation", () => {
-		initTheme("dark");
+		initTheme();
 		let builds = 0;
 		const text = new ThemedText(() => {
 			builds++;
@@ -17,7 +17,7 @@ describe("ThemedText", () => {
 		expect(builds).toBe(0);
 		const dark = text.render(20).join("");
 
-		initTheme("light");
+		initTheme();
 		expect(text.render(20).join("")).toBe(dark);
 		text.invalidate();
 		expect(text.render(20).join("")).toContain(theme.getFgAnsi("accent"));

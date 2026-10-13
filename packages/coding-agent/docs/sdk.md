@@ -102,7 +102,7 @@ Each boundary can be supplied explicitly:
 - `modelRuntime`, `model`, `thinkingLevel`, and `scopedModels` control model access and selection.
 - `settingsManager` supplies merged settings or an in-memory configuration.
 - `sessionManager` supplies persistent or in-memory conversation history.
-- `resourceLoader` supplies modules, skills, prompt templates, themes, and context files.
+- `resourceLoader` supplies modules, skills, prompt templates, and context files.
 - `tools`, `noTools`, `excludeTools`, and `customTools` control the active tool set.
 
 Use `DefaultResourceLoader` when you want standard discovery with selected overrides. Supply a custom `ResourceLoader` when the host owns resource storage and discovery completely.

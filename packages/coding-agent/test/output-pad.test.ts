@@ -77,7 +77,7 @@ const components: Array<{ name: string; create: (outputPad: number) => OutputPad
 
 describe("outputPad", () => {
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	afterAll(() => {

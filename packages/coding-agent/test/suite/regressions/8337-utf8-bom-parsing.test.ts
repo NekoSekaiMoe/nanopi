@@ -42,7 +42,7 @@ describe("issue #8337 UTF-8 BOM parsing", () => {
 		expect(settings.getDefaultModel()).toBe("global-model");
 		expect(settings.getDefaultProvider()).toBe("project-provider");
 
-		settings.setTheme("dark");
+		settings.setDefaultModel("test-model");
 		await settings.flush();
 		expect(readFileSync(globalSettingsPath, "utf-8")).not.toMatch(/^\uFEFF/);
 	});

@@ -14,7 +14,7 @@ describe("model selector", () => {
 	let harness: Harness | undefined;
 
 	beforeAll(() => {
-		initTheme("dark");
+		initTheme();
 	});
 
 	beforeEach(() => {

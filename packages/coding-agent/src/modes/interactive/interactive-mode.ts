@@ -170,19 +170,7 @@ import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
 import { type BlockedStatus, ProgramStatusReporter } from "./program-status-reporter.ts";
 import { shareSession } from "./session-share.ts";
-import {
-	getAvailableThemes,
-	getAvailableThemesWithPaths,
-	getEditorTheme,
-	getMarkdownTheme,
-	getThemeByName,
-	onThemeChange,
-	SYSTEM_THEME_NAME,
-	setRegisteredThemes,
-	stopThemeWatcher,
-	Theme,
-	theme,
-} from "./theme/theme.ts";
+import { getEditorTheme, getMarkdownTheme, type Theme, theme } from "./theme/theme.ts";
 import { InteractiveThemeController } from "./theme/theme-controller.ts";
 import { createInteractiveTui, createInteractiveTuiReference } from "./tui-renderer.ts";
 
@@ -400,8 +388,6 @@ export interface InteractiveModeOptions {
 	initialMessages?: string[];
 	/** Force verbose startup (overrides quietStartup setting) */
 	verbose?: boolean;
-	/** Initial interactive theme setting for this invocation. */
-	initialThemeSetting?: string;
 	/** Terminal implementation. Defaults to the current process terminal. */
 	terminal?: Terminal;
 }
@@ -572,7 +558,7 @@ export class InteractiveMode {
 		});
 		this.runtimeHost.setRebindSession(async () => {
 			await this.rebindCurrentSession({ renderBeforeBind: true });
-			this.themeController.applyFromSettings();
+			this.themeController.apply();
 		});
 		this.version = VERSION;
 		this.renderer = createInteractiveTui({
@@ -619,13 +605,9 @@ export class InteractiveMode {
 		this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
 		this.outputPad = this.settingsManager.getOutputPad();
 
-		// Register themes from resource loader and initialize
-		setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
+		// Initialize the system theme and keep it in sync with the terminal.
 		this.themeController = new InteractiveThemeController(this.ui, {
-			getSettingsManager: () => this.settingsManager,
-			showError: (message) => this.showError(message),
 			onChanged: () => this.updateEditorBorderColor(),
-			initialThemeSetting: options.initialThemeSetting,
 		});
 	}
 
@@ -885,7 +867,7 @@ export class InteractiveMode {
 		this.programStatus.report();
 		this.ensurePngTranscoder();
 
-		this.themeController.applyFromSettings();
+		this.themeController.apply();
 		// The header and startup notices bake theme colors into their text, so build them once the terminal
 		// reported its colors. This ends at the terminal's DA1 reply, or after 100 ms if it answers nothing.
 		await this.themeController.waitForTerminalColors();
@@ -939,13 +921,6 @@ export class InteractiveMode {
 
 		// Render initial messages AFTER showing loaded resources
 		this.renderInitialMessages();
-
-		// Set up theme file watcher
-		onThemeChange(() => {
-			this.ui.invalidate();
-			this.updateEditorBorderColor();
-			this.ui.requestRender();
-		});
 
 		// Set up git branch watcher (uses provider instead of footer)
 		this.footerDataProvider.onBranchChange(() => {
@@ -1258,7 +1233,6 @@ export class InteractiveMode {
 
 		const skillsResult = this.session.resourceLoader.getSkills();
 		const promptsResult = this.session.resourceLoader.getPrompts();
-		const themesResult = this.session.resourceLoader.getThemes();
 		const extensions = this.session.resourceLoader
 			.getModules()
 			.modules.filter((extension) => !extension.hidden)
@@ -1280,11 +1254,6 @@ export class InteractiveMode {
 		for (const prompt of promptsResult.prompts) {
 			if (prompt.sourceInfo) {
 				sourceInfos.set(prompt.filePath, prompt.sourceInfo);
-			}
-		}
-		for (const loadedTheme of themesResult.themes) {
-			if (loadedTheme.sourcePath && loadedTheme.sourceInfo) {
-				sourceInfos.set(loadedTheme.sourcePath, loadedTheme.sourceInfo);
 			}
 		}
 
@@ -1326,15 +1295,6 @@ export class InteractiveMode {
 			const warningLines = () => this.formatDiagnostics(extensionDiagnostics, sourceInfos);
 			this.loadedResourcesContainer.addChild(
 				new ThemedText(() => `${theme.fg("warning", "[RegisteredModule issues]")}\n${warningLines()}`, 0, 0),
-			);
-			this.loadedResourcesContainer.addChild(new Spacer(1));
-		}
-
-		const themeDiagnostics = themesResult.diagnostics;
-		if (themeDiagnostics.length > 0) {
-			const warningLines = () => this.formatDiagnostics(themeDiagnostics, sourceInfos);
-			this.loadedResourcesContainer.addChild(
-				new ThemedText(() => `${theme.fg("warning", "[Theme conflicts]")}\n${warningLines()}`, 0, 0),
 			);
 			this.loadedResourcesContainer.addChild(new Spacer(1));
 		}
@@ -1409,7 +1369,6 @@ export class InteractiveMode {
 			},
 		});
 
-		setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
 		this.setupAutocompleteProvider();
 
 		const moduleRegistry = this.session.moduleRegistry;
@@ -1521,7 +1480,6 @@ export class InteractiveMode {
 			const instructions = this.crashReportInstructions();
 			this.chatContainer.addChild(new ThemedText(() => theme.fg("muted", instructions), this.outputPad, 0));
 		}
-		stopThemeWatcher();
 		this.stop();
 		process.exit(1);
 	}
@@ -2015,20 +1973,6 @@ export class InteractiveMode {
 			getEditorComponent: () => this.editorComponentFactory,
 			get theme() {
 				return theme;
-			},
-			getAllThemes: () => getAvailableThemesWithPaths(),
-			getTheme: (name) => getThemeByName(name),
-			setTheme: (themeOrName) => {
-				if (themeOrName instanceof Theme) {
-					return this.themeController.setThemeInstance(themeOrName);
-				}
-				const result = this.themeController.setThemeName(themeOrName);
-				if (result.success) {
-					if (this.settingsManager.getTheme() !== themeOrName) {
-						this.settingsManager.setTheme(themeOrName);
-					}
-				}
-				return result;
 			},
 			getToolsExpanded: () => this.toolOutputExpanded,
 			setToolsExpanded: (expanded) => this.setToolsExpanded(expanded),
@@ -2654,11 +2598,6 @@ export class InteractiveMode {
 				const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
 				this.editor.setText("");
 				await this.handleCompactCommand(customInstructions);
-				return;
-			}
-			if (text === "/reload") {
-				this.editor.setText("");
-				await this.handleReloadCommand();
 				return;
 			}
 			if (text === "/debug") {
@@ -3678,7 +3617,7 @@ export class InteractiveMode {
 			// which the stdout/stderr error handler turns into emergencyTerminalExit;
 			// the render loop is already idle, so this cannot hot-spin (see #4144).
 			await this.runtimeHost.dispose();
-			this.themeController.disableAutoSync();
+			this.themeController.dispose();
 			await this.ui.terminal.drainInput(1000);
 			this.stop();
 			process.exit(0);
@@ -3689,7 +3628,7 @@ export class InteractiveMode {
 		// the final frame while the process is exiting.
 		// Drain any in-flight Kitty key release events before stopping.
 		// This prevents escape sequences from leaking to the parent shell over slow SSH.
-		this.themeController.disableAutoSync();
+		this.themeController.dispose();
 		await this.ui.terminal.drainInput(1000);
 
 		this.clearNextPromptSuggestion();
@@ -4255,9 +4194,6 @@ export class InteractiveMode {
 					thinkingLevel: this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
 					availableThinkingLevels: [...THINKING_LEVEL_OPTIONS],
 					modelThinkingLevels: this.settingsManager.getAllModelThinkingLevels(),
-					currentTheme: this.themeController.getThemeSelection() || SYSTEM_THEME_NAME,
-					terminalTheme: this.themeController.getTerminalTheme(),
-					availableThemes: getAvailableThemes(),
 					hideThinkingBlock: this.hideThinkingBlock,
 					nextPromptSuggestions: this.settingsManager.getNextPromptSuggestions(),
 					mermaidRenderingMode: this.settingsManager.getMermaidRenderingMode(),
@@ -4347,11 +4283,6 @@ export class InteractiveMode {
 							this.updateEditorBorderColor();
 						}
 					},
-					onThemeChange: (themeSetting) => {
-						this.settingsManager.setTheme(themeSetting);
-						this.themeController.setThemeSetting(themeSetting);
-					},
-					onThemePreview: (themeName) => this.themeController.preview(themeName),
 					onHideThinkingBlockChange: (hidden) => {
 						this.hideThinkingBlock = hidden;
 						this.settingsManager.setHideThinkingBlock(hidden);
@@ -5647,23 +5578,6 @@ export class InteractiveMode {
 	// Command handlers
 	// =========================================================================
 
-	private async handleReloadCommand(): Promise<void> {
-		if (this.session.isStreaming) {
-			this.showWarning("Wait for the current response to finish before reloading.");
-			return;
-		}
-		if (this.session.isCompacting) {
-			this.showWarning("Wait for compaction to finish before reloading.");
-			return;
-		}
-
-		try {
-			await this.session.reload();
-		} catch (error) {
-			this.showError(`Reload failed: ${error instanceof Error ? error.message : String(error)}`);
-		}
-	}
-
 	private createReloadHooks(): RuntimeReloadCallbacks {
 		let previousEditor: Component | undefined;
 		let reloadBoxDismissed = true;
@@ -5696,7 +5610,7 @@ export class InteractiveMode {
 				reloadBox.addChild(new Spacer(1));
 				reloadBox.addChild(
 					new Text(
-						theme.fg("muted", "Reloading keybindings, extensions, skills, prompts, themes, and context files..."),
+						theme.fg("muted", "Reloading keybindings, extensions, skills, prompts, and context files..."),
 						1,
 						0,
 					),
@@ -5716,9 +5630,7 @@ export class InteractiveMode {
 				this.keybindings.reload();
 				const activeHeader = this.customHeader ?? this.builtInHeader;
 				if (isExpandable(activeHeader)) activeHeader.setExpanded(this.toolOutputExpanded);
-				setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
 				this.applyRuntimeSettings();
-				await this.themeController.applyFromSettings();
 				this.setupAutocompleteProvider();
 				this.setupExtensionShortcuts(this.session.moduleRegistry);
 				this.showLoadedResources();
@@ -5727,8 +5639,8 @@ export class InteractiveMode {
 				if (modelsJsonError) this.showError(`models.json error: ${modelsJsonError}`);
 				this.showStatus(
 					savedImplicitProjectTrust
-						? "Reloaded keybindings, extensions, skills, prompts, themes, and context files; saved project trust"
-						: "Reloaded keybindings, extensions, skills, prompts, themes, and context files",
+						? "Reloaded keybindings, extensions, skills, prompts, and context files; saved project trust"
+						: "Reloaded keybindings, extensions, skills, prompts, and context files",
 				);
 				dismissReloadBox(this.editor as Component);
 				reloadBoxDismissed = true;
@@ -5747,9 +5659,7 @@ export class InteractiveMode {
 				const filePath = this.session.exportToJsonl(outputPath);
 				this.showStatus(`Session exported to: ${filePath}`);
 			} else {
-				const filePath = await this.session.exportToHtml(outputPath, {
-					themeName: theme.name,
-				});
+				const filePath = await this.session.exportToHtml(outputPath);
 				this.showStatus(`Session exported to: ${filePath}`);
 			}
 		} catch (error: unknown) {
@@ -6246,7 +6156,7 @@ export class InteractiveMode {
 			this.ui.terminal.setProgress(false);
 		}
 		this.clearStatusIndicator();
-		this.themeController.disableAutoSync();
+		this.themeController.dispose();
 		this.clearExtensionTerminalInputListeners();
 		this.footer.dispose();
 		this.footerDataProvider.dispose();

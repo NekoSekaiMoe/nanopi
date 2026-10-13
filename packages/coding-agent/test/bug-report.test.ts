@@ -9,7 +9,7 @@ import { ExtensionEditorComponent } from "../src/modes/interactive/components/ex
 import { ExtensionSelectorComponent } from "../src/modes/interactive/components/extension-selector.ts";
 import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
 
-beforeAll(() => initTheme("dark"));
+beforeAll(() => initTheme());
 
 describe("bug report prompt", () => {
 	it("preserves line breaks in pasted descriptions", async () => {

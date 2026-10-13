@@ -39,9 +39,6 @@ export interface Args {
 	skills?: string[];
 	promptTemplates?: string[];
 	noPromptTemplates?: boolean;
-	themes?: string[];
-	useTheme?: string;
-	noThemes?: boolean;
 	noContextFiles?: boolean;
 	listModels?: string | true;
 	offline?: boolean;
@@ -185,23 +182,10 @@ export function parseArgs(args: string[]): Args {
 		} else if (arg === "--prompt-template" && i + 1 < args.length) {
 			result.promptTemplates = result.promptTemplates ?? [];
 			result.promptTemplates.push(args[++i]);
-		} else if (arg === "--theme" && i + 1 < args.length) {
-			result.themes = result.themes ?? [];
-			result.themes.push(args[++i]);
-		} else if (arg === "--use-theme") {
-			const themeName = args[i + 1];
-			if (themeName === undefined || themeName.startsWith("-")) {
-				result.diagnostics.push({ type: "error", message: "--use-theme requires a theme name" });
-			} else {
-				result.useTheme = themeName;
-				i++;
-			}
 		} else if (arg === "--no-skills" || arg === "-ns") {
 			result.noSkills = true;
 		} else if (arg === "--no-prompt-templates" || arg === "-np") {
 			result.noPromptTemplates = true;
-		} else if (arg === "--no-themes") {
-			result.noThemes = true;
 		} else if (arg === "--no-context-files" || arg === "-nc") {
 			result.noContextFiles = true;
 		} else if (arg === "--list-models") {
@@ -294,9 +278,6 @@ ${chalk.bold("Options:")}
   --no-skills, -ns               Disable skills discovery and loading
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
   --no-prompt-templates, -np     Disable prompt template discovery and loading
-  --theme <path>                 Load a theme file or directory (can be used multiple times)
-  --use-theme <name[/name]>      Set the initial interactive theme for this run
-  --no-themes                    Disable theme discovery and loading
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models (with optional fuzzy search)

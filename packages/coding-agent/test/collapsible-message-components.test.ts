@@ -34,7 +34,7 @@ function clickRow(component: Box, marker: string): void {
 }
 
 describe("collapsible message components", () => {
-	beforeAll(() => initTheme("dark"));
+	beforeAll(() => initTheme());
 
 	test("toggles a compaction summary when clicked", () => {
 		const component = new CompactionSummaryMessageComponent({

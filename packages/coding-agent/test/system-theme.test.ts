@@ -5,13 +5,7 @@ import {
 	type SystemThemeInput,
 	wcagContrast,
 } from "../src/modes/interactive/theme/system-theme.ts";
-import {
-	getAvailableThemes,
-	getThemeByName,
-	getThemeExportColors,
-	setTerminalColors,
-	type ThemeToken,
-} from "../src/modes/interactive/theme/theme.ts";
+import { refreshSystemTheme, setTerminalColors, type ThemeToken } from "../src/modes/interactive/theme/theme.ts";
 
 const rgb = (hex: string): RgbColor => colorToRgb(parseColor(hex));
 const lightness = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).l;
@@ -118,19 +112,17 @@ describe("generateSystemThemeColors", () => {
 });
 
 describe("system theme", () => {
-	it("is listed first, has no export colors, and is generated from the terminal colors", () => {
-		expect(getAvailableThemes()[0]).toBe("system");
-		expect(getThemeExportColors("system")).toEqual({});
-
+	it("is generated from the terminal colors", () => {
 		setTerminalColors(DRACULA);
-		const theme = getThemeByName("system")!;
+		const theme = refreshSystemTheme();
+		expect(theme.name).toBe("system");
 		expect(theme.appearance).toBe("dark");
 		expect(theme.getFgAnsi("text")).toBe("\x1b[39m");
 		expect(theme.getFgAnsi("error")).toMatch(/^\x1b\[38;/);
 	});
 
 	it("renders faint tokens with SGR 2 and closes it", () => {
-		const theme = getThemeByName("system")!;
+		const theme = refreshSystemTheme();
 		expect(theme.fg("muted", "x")).toBe("\x1b[39m\x1b[2mx\x1b[22;39m");
 		expect(theme.style("x", { fg: "muted" })).toBe("\x1b[39m\x1b[2mx\x1b[22m\x1b[39m");
 	});
