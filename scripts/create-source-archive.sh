@@ -123,7 +123,6 @@ tar -tzf "$temporary_archive" > "$manifest"
 
 required_paths=(
     "package.json"
-    "package-lock.json"
     "scripts/build-single-file.sh"
     "scripts/build-coding-agent-single-file.mjs"
     "packages/ai/src/models.generated.ts"
