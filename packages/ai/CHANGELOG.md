@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261013]
 
 ### Breaking Changes
 
@@ -20,6 +20,9 @@
 ### Fixed
 
 - Fixed Mistral streams being aborted mid-generation (e.g. during long thinking) after the request timeout; the timeout now applies only to waiting for response headers ([#10609](https://github.com/earendil-works/pi/issues/10609))
+- Fixed "The upstream provider returned an error" not being retried as a transient provider error ([#10842](https://github.com/earendil-works/pi/issues/10842))
+- Fixed the Codex responses request body being sent as a view into a shared buffer; the zstd-compressed body is now a `Uint8Array<ArrayBuffer>` copy that fetch accepts as a body under every lib
+- Fixed Anthropic `strict: "prefer"` tools failing when the provider rejects the strict tool set for grammar size, tool count, or union limits; requests now retry once with preferred tools non-strict while keeping `strict: "require"` tools strict, and never downgrade an already-started stream ([#10409](https://github.com/earendil-works/pi/issues/10409))
 
 ## [1.1.0] - 2026-10-07
 

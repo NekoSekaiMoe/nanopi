@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261013]
 
 ### Breaking Changes
 
@@ -29,6 +29,8 @@
 
 - Fixed pasted text being submitted at the first line break on terminals without bracketed paste support: chunks of printable text containing embedded CR/LF/TAB (at least three printable characters, or pure CR/LF chunks continuing an active paste stream) are re-classified as pastes and delivered through the paste path, so embedded newlines insert newlines instead of submitting the editor (mirrors Codex's paste-burst protection; typed Enter and short coalesced typing bursts stay keystrokes)
 - Fixed overlay compositing dropping `CURSOR_MARKER` when an overlay ends directly left of the cursor, which lost the hardware cursor position
+- Fixed focused fullscreen overlays blocking mouse-wheel scrolling of the transcript: wheel events that no component handles now scroll the transcript instead of reaching the focused overlay's input handler; overlays that scroll with the wheel must implement `handleMouse` ([#10769](https://github.com/earendil-works/pi/issues/10769))
+- Fixed delayed or fragmented terminal replies (color OSC replies, XTVersion, Kitty graphics) leaking into keyboard input as hex text, Alt keystrokes, or Ctrl+G: input with a recognized reply header waits for its terminator instead of timing out, ambiguous legacy Alt-key input keeps its bounded recovery, and canceled or aborted replies are discarded without swallowing subsequent input
 
 ## [1.1.0] - 2026-10-07
 

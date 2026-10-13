@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261013]
 
 ### Breaking Changes
 
@@ -33,6 +33,7 @@
 - Added sidecar downloads into the agent bin directory (`.nanopi/agent/bin`): the photon wasm is fetched from the npm registry and the TUI native prebuilds from the release sidecar tarball, each sha256-verified against hashes embedded at build time; failures degrade to raw images and no native clipboard instead of crashing.
 - Added built-in `/status` command showing the current model, provider, directory, session, thinking level, token usage, and context in a `/context`-style bottom-docked dialog (plain text via notify outside TUI), plus the loaded-resource listing (`[Context]`/`[Skills]`/`[Prompts]`/`[Extensions]` sections) that the startup page used to render (plain text via notify outside TUI).
 - Added a dim `Type anything...` placeholder in the interactive input box while it is empty.
+- Added `NANOPI_CLIPBOARD_OSC52=1` to send copied text to the terminal with OSC 52 after the local clipboard write, so copies reach a remote client's clipboard when nanopi cannot detect the remote session, such as multiplexer attaches from another machine or remote IDE daemons ([#10826](https://github.com/earendil-works/pi/issues/10826), [#10835](https://github.com/earendil-works/pi/issues/10835), [#10114](https://github.com/earendil-works/pi/issues/10114))
 - Added next-prompt suggestions: after each assistant reply the current model generates a one-line suggested follow-up shown as dim ghost text in the empty input box; right arrow accepts it, any other input dismisses it for that turn. Controlled by the `nextPromptSuggestions` setting (default on, toggle in `/settings`), generated via `AgentSession.generateNextPromptSuggestion()` without touching the transcript.
 
 ### Changed
@@ -62,6 +63,10 @@
 - Fixed the build failing after the clankolas.png and Radius removals: leftover `assets/*.png` copy steps in `copy-assets`/`copy-binary-assets` and a leftover Radius OAuth lazy bundle entry in the bundle script
 
 - Fixed the startup `[Extension issues]` diagnostics warning that the built-in `/status` command "conflicts with built-in interactive command": commands from built-in inline extensions (`source: "builtin"`) are intentionally listed in `BUILTIN_SLASH_COMMANDS` and no longer count as conflicts
+- Fixed print mode (`-p`) exiting 0 without a warning when the final response was cut off at the model's output token limit; it now prints the partial text, writes a warning to stderr, and exits 1 ([#10799](https://github.com/earendil-works/pi/issues/10799))
+- Fixed `~` not being expanded in `!pattern`, `+path`, and `-path` entries of the `skills` and `prompts` settings, so entries like `!~/skills/pdf` matched nothing ([#10765](https://github.com/earendil-works/pi/issues/10765))
+- Fixed reading or writing `auth.json` on Windows failing with `EPERM` when the previous lock folder was still being deleted; nanopi now retries briefly before reporting the error ([#10801](https://github.com/earendil-works/pi/issues/10801))
+- Fixed `serializeConversation()` (compaction, branch summaries, bug reports) including thinking blocks; replayed thinking is often not in the live context, so including it could make a summarization request larger than the context it summarizes and fail. Visible text, tool calls, and tool results record what happened
 ### Removed
 
 - Removed the `extra/pi-extra-cmd` and `extra/pi-codex-compact` build flavor components and their vendored sources; their functionality is built in (bundled extras drop from eleven to nine).
