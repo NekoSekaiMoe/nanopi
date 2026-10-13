@@ -1,7 +1,7 @@
 # 将 CNB 仓库上的改动镜像推送到 GitHub（NekoSekaiMoe/nanopi）。
 #
-# 只在 main 的 push 事件触发；GitHub 侧将来会有推回 CNB 的 workflow，
-# 为避免互相覆盖，这里不用 force push。
+# 只在 main 的 push 事件触发；GitHub 侧的反向镜像见
+# .github/workflows/sync-to-cnb.yml。为避免互相覆盖，两侧都不用 force push。
 # GH_KEY 由密钥仓库 shinytale/keys 的 env.yml 注入。
 
 main:

@@ -1,0 +1,71 @@
+# 将 GitHub 仓库上的改动镜像推送到 CNB（cnb.cool/shinytale/nanopi），
+# 与 .cnb.yml 的 mirror-to-github 互为反向。
+#
+# 双向镜像都不用 force push：任一侧非 fast-forward 时推送会被拒绝并使
+# 本 workflow 失败，由人介入判断方向，避免两侧互相覆盖。
+# CNB_KEY 配置在 GitHub 仓库 Settings > Secrets and variables > Actions。
+
+name: Sync to CNB
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sync-to-cnb
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    name: Push main to CNB
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # merge-base --is-ancestor 需要完整历史
+          fetch-depth: 0
+
+      - name: Push main to CNB
+        env:
+          CNB_KEY: ${{ secrets.CNB_KEY }}
+        run: |
+          set -euo pipefail
+
+          public=https://cnb.cool/shinytale/nanopi.git
+          authed=https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git
+
+          git fetch --quiet "$public" main
+
+          # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
+          # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
+          # HEAD 在后；写反了就变成「远端是否领先于我们」，那恰好是推送
+          # 会被拒绝的情形，等于把 guard 钉死在反面。
+          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
+            echo "fast-forward: $(git rev-parse HEAD) is ahead of $public main"
+          else
+            echo "not a fast-forward of $public main; push will be rejected" >&2
+            exit 1
+          fi
+
+          # 快照本地 HEAD 的树，push 后再回来比一次内容，逻辑与 .cnb.yml
+          # 的 mirror-to-github 相同。
+          local_tree=$(git rev-parse HEAD^{tree})
+
+          git push --quiet "$authed" HEAD:refs/heads/main
+
+          # 远端树必须与本地树逐字节一致，否则不算镜像成功。
+          git fetch --quiet "$public" main
+          remote_tree=$(git rev-parse FETCH_HEAD^{tree})
+          if [ "$local_tree" != "$remote_tree" ]; then
+            echo "tree mismatch after push:" >&2
+            echo "  local  $local_tree" >&2
+            echo "  remote $remote_tree" >&2
+            git diff --stat "$local_tree" "$remote_tree" >&2 || true
+            exit 1
+          fi
+          echo "mirrored $(git rev-parse HEAD): $remote_tree"
