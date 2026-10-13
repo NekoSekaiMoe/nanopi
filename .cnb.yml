@@ -19,6 +19,7 @@ main:
         - name: check-commit-trailers
           script: |
             set -euo pipefail
+            apt-get update && apt-get install nodejs -y && corepack enable npm && npm install -g pnpm
             node scripts/check-commit-trailers.mjs "$CNB_BEFORE_SHA" "$CNB_COMMIT"
 
         - name: push main
