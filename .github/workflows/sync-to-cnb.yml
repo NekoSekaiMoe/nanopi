@@ -35,11 +35,14 @@ jobs:
           CNB_KEY: ${{ secrets.CNB_KEY }}
         run: |
           set -euo pipefail
+          # CNB 对海外 IP 的匿名读会返 401，fetch 也必须带凭据；
+          # 禁掉交互提示，认证失败时直接报错而不是挂起。
+          export GIT_TERMINAL_PROMPT=0
 
           public=https://cnb.cool/shinytale/nanopi.git
           authed=https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git
 
-          git fetch --quiet "$public" main
+          git fetch --quiet "$authed" main
 
           # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
           # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
@@ -59,7 +62,7 @@ jobs:
           git push --quiet "$authed" HEAD:refs/heads/main
 
           # 远端树必须与本地树逐字节一致，否则不算镜像成功。
-          git fetch --quiet "$public" main
+          git fetch --quiet "$authed" main
           remote_tree=$(git rev-parse FETCH_HEAD^{tree})
           if [ "$local_tree" != "$remote_tree" ]; then
             echo "tree mismatch after push:" >&2
