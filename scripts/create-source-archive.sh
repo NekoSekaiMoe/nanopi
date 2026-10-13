@@ -68,7 +68,15 @@ cd "$repo_root"
 commit="$(git rev-parse --verify --end-of-options "${source_ref}^{commit}")"
 
 package_version="$(git show "${commit}:packages/coding-agent/package.json" | node -p 'JSON.parse(require("fs").readFileSync(0, "utf8")).version')"
-if [[ "$package_version" != "$version" ]]; then
+# Date tags (vYYYYMMDD) may omit the minor/patch parts that package.json carries
+# (20261013 vs 20261013.0.0); compare on the padded 3-part form.
+normalize_version() {
+    local IFS=.
+    local -a parts
+    read -ra parts <<< "$1"
+    echo "${parts[0]:-0}.${parts[1]:-0}.${parts[2]:-0}"
+}
+if [[ "$(normalize_version "$package_version")" != "$(normalize_version "$version")" ]]; then
     echo "Version ${version} does not match package version ${package_version} at ${source_ref}" >&2
     exit 1
 fi

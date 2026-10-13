@@ -89,10 +89,20 @@ jobs:
 
           cd packages/coding-agent/binaries
 
+          # Sidecars are named from the full package.json version; a date tag
+          # may omit minor/patch (v20261013 -> 20261013.0.0).
+          version_full() {
+            local IFS=.
+            local -a parts
+            read -ra parts <<< "$1"
+            echo "${parts[0]:-0}.${parts[1]:-0}.${parts[2]:-0}"
+          }
+          FULL_VERSION="$(version_full "${VERSION}")"
+
           test -f nanopi.js
           test -f nanopi-minimal.js
-          test -f "nanopi-sidecars-${VERSION}.tgz"
-          cp nanopi.js nanopi-minimal.js "nanopi-sidecars-${VERSION}.tgz" "${GITHUB_WORKSPACE}/release-assets/"
+          test -f "nanopi-sidecars-${FULL_VERSION}.tgz"
+          cp nanopi.js nanopi-minimal.js "nanopi-sidecars-${FULL_VERSION}.tgz" "${GITHUB_WORKSPACE}/release-assets/"
 
           cd "${GITHUB_WORKSPACE}/release-assets"
           source_asset="nanopi-${VERSION}-source.tar.gz"
@@ -100,7 +110,7 @@ jobs:
             "${source_asset}"
             nanopi.js
             nanopi-minimal.js
-            "nanopi-sidecars-${VERSION}.tgz"
+            "nanopi-sidecars-${FULL_VERSION}.tgz"
           )
           sha256sum "${release_assets[@]}" > SHA256SUMS
 
@@ -171,12 +181,23 @@ jobs:
           cd release-assets
 
           VERSION="${RELEASE_TAG#v}"
+
+          # Sidecars are named from the full package.json version; a date tag
+          # may omit minor/patch (v20261013 -> 20261013.0.0).
+          version_full() {
+            local IFS=.
+            local -a parts
+            read -ra parts <<< "$1"
+            echo "${parts[0]:-0}.${parts[1]:-0}.${parts[2]:-0}"
+          }
+          FULL_VERSION="$(version_full "${VERSION}")"
+
           source_asset="nanopi-${VERSION}-source.tar.gz"
           expected_assets=(
             "${source_asset}"
             nanopi.js
             nanopi-minimal.js
-            "nanopi-sidecars-${VERSION#v}.tgz"
+            "nanopi-sidecars-${FULL_VERSION}.tgz"
             SHA256SUMS
             RELEASE_NOTES.md
           )
@@ -196,12 +217,19 @@ jobs:
           cd release-assets
 
           VERSION="${RELEASE_TAG#v}"
+          version_full() {
+            local IFS=.
+            local -a parts
+            read -ra parts <<< "$1"
+            echo "${parts[0]:-0}.${parts[1]:-0}.${parts[2]:-0}"
+          }
+          FULL_VERSION="$(version_full "${VERSION}")"
           source_asset="nanopi-${VERSION}-source.tar.gz"
           release_assets=(
             "${source_asset}"
             nanopi.js
             nanopi-minimal.js
-            "nanopi-sidecars-${VERSION#v}.tgz"
+            "nanopi-sidecars-${FULL_VERSION}.tgz"
             SHA256SUMS
           )
 
