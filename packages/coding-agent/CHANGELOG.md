@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Added the built-in `github-copilot/auto` virtual model. Copilot Free and Student plans force Auto model selection, leaving no usable model in nanopi's Copilot list; `auto` is now listed for every Copilot login, routes each request through Copilot's Auto session and router, attaches the session token per request, and records the physical model that answered so usage, cost, and compaction limits stay accurate. The route stays sticky per conversation and re-routes after failures
+
 ### Fixed
 
 - The pi-ui footer replaces the built-in footer in every TUI session and silently dropped the extension status channel and the shell-mode label. Its toolbar line now renders right-aligned extension statuses from `ctx.ui.setStatus()` (the extra module's red `yolo` / green `plan` badges, pi-rewind checkpoints) plus the yellow `shell` label while the composer text starts with `!`; the usage line truncates first when the width cannot fit both. `setExtensionStatus()` repaints on change so badge updates appear immediately.

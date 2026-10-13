@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- `prepareRequest` updates may carry `headers` that merge into exactly the next provider request, so virtual-model routers can attach request-scoped credentials such as GitHub Copilot Auto's `Copilot-Session-Token`
+
 ## [20261013]
 
 ## [1.1.0] - 2026-10-07

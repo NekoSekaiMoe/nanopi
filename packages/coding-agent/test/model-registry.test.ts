@@ -2031,7 +2031,7 @@ describe("ModelRegistry", () => {
 						.getAvailable()
 						.filter((m) => m.provider === "github-copilot")
 						.map((m) => m.id),
-				).toEqual([copilotModel.id]);
+				).toEqual([copilotModel.id, "auto"]);
 			});
 
 			test("getApiKeyAndHeaders resolves authHeader on every request", async () => {

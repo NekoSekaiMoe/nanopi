@@ -21,6 +21,7 @@ import {
 	type Model,
 	type ModelThinkingLevel,
 	type Provider,
+	type ProviderHeaders,
 	type ThinkingLevelMap,
 } from "@nanopi/pi-ai";
 import type { SessionEntry } from "./session-manager.ts";
@@ -73,6 +74,12 @@ export interface ModelRouteRequest<TState = unknown> {
 export interface ModelRoute<TState = unknown> {
 	model: Model<Api>;
 	thinkingLevel: ModelThinkingLevel;
+	/**
+	 * Request headers merged into the one request this route produced, e.g. credentials the
+	 * router obtained itself such as GitHub Copilot Auto's `Copilot-Session-Token`. They apply
+	 * to that request only; later requests follow their own routes.
+	 */
+	headers?: ProviderHeaders;
 	/**
 	 * New router state, stored on the session branch unless it is `request.state` itself. Return
 	 * `request.state` or undefined to keep the current state. Must be JSON-serializable. Ignored for

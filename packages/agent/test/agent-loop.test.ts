@@ -2232,3 +2232,72 @@ describe("runToolCall", () => {
 		expect(seen).toEqual([undefined, { value: "replaced" }, { value: "both" }, { value: "original" }]);
 	});
 });
+
+describe("prepareRequest route headers", () => {
+	it("applies request headers to exactly the request whose route returned them", async () => {
+		const toolSchema = Type.Object({});
+		const tool: AgentTool<typeof toolSchema> = {
+			name: "noop",
+			label: "Noop",
+			description: "Noop tool",
+			parameters: Type.Object({}),
+			async execute() {
+				return { content: [{ type: "text", text: "ok" }], details: {} };
+			},
+		};
+		let requestCount = 0;
+		const seenHeaders: Array<Record<string, string> | undefined> = [];
+		let callIndex = 0;
+		const streamFn = (
+			_model: Model<"openai-responses">,
+			_context: unknown,
+			options?: { headers?: Record<string, string> },
+		) => {
+			seenHeaders.push(options?.headers);
+			const stream = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				if (callIndex === 0) {
+					stream.push({
+						type: "done",
+						reason: "toolUse",
+						message: createAssistantMessage(
+							[{ type: "toolCall", id: "tool-1", name: "noop", arguments: {} }],
+							"toolUse",
+						),
+					});
+				} else {
+					stream.push({
+						type: "done",
+						reason: "stop",
+						message: createAssistantMessage([{ type: "text", text: "done" }]),
+					});
+				}
+				callIndex++;
+			});
+			return stream;
+		};
+
+		const messages = await runAgentLoop(
+			[createUserMessage("hi")],
+			{ messages: [], tools: [tool] },
+			{
+				model: createModel(),
+				convertToLlm: identityConverter,
+				prepareRequest: async () => {
+					requestCount++;
+					// Only the first request carries route headers.
+					return requestCount === 1 ? { headers: { "Copilot-Session-Token": "session-1" } } : {};
+				},
+			},
+			async () => {},
+			undefined,
+			streamFn as Parameters<typeof runAgentLoop>[5],
+		);
+		expect(messages.at(-1)?.role).toBe("assistant");
+
+		expect(requestCount).toBe(2);
+		// The first request carries the route headers; the second resets to none.
+		expect(seenHeaders[0]).toMatchObject({ "Copilot-Session-Token": "session-1" });
+		expect(seenHeaders[1]).toBeUndefined();
+	});
+});

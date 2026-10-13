@@ -7,6 +7,7 @@ import type {
 	JsonValue,
 	Message,
 	Model,
+	ProviderHeaders,
 	SimpleStreamOptions,
 	TextContent,
 	Tool,
@@ -176,8 +177,16 @@ export interface PrepareRequestContext {
 	thinkingLevel: ThinkingLevel;
 }
 
-/** Replacement runtime state for the provider request being prepared. */
-export type AgentRequestUpdate = Omit<AgentLoopTurnUpdate, "messages">;
+/**
+ * Replacement runtime state for the provider request being prepared.
+ *
+ * `headers` are extra headers for exactly the next provider request, e.g. session
+ * credentials a virtual-model router obtained; they are merged over the stream
+ * options and never carried into later requests on their own.
+ */
+export interface AgentRequestUpdate extends Omit<AgentLoopTurnUpdate, "messages"> {
+	headers?: ProviderHeaders;
+}
 
 /**
  * Called immediately before every conversational provider request, including the first.

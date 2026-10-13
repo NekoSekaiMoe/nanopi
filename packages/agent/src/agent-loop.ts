@@ -9,6 +9,7 @@ import {
 	getCurrentTools,
 	getToolStateChanges,
 	normalizeContext,
+	type ProviderHeaders,
 	type SystemMessage,
 	type ToolResultMessage,
 	type ToolStateChanges,
@@ -171,6 +172,7 @@ async function runLoop(
 ): Promise<void> {
 	let currentContext = initialContext;
 	let config = initialConfig;
+	let requestHeaders: ProviderHeaders | undefined;
 	let lastCompletedTurn: PrepareNextTurnContext | undefined;
 	let explicitContinuation = false;
 	// Check for steering messages at start (user may have typed while waiting)
@@ -227,6 +229,7 @@ async function runLoop(
 			);
 			if (requestUpdate) {
 				currentContext = requestUpdate.context ?? currentContext;
+				requestHeaders = requestUpdate.headers;
 				config = {
 					...config,
 					model: requestUpdate.model ?? config.model,
@@ -239,8 +242,11 @@ async function runLoop(
 				};
 			}
 
-			// Stream assistant response
-			const message = await streamAssistantResponse(currentContext, config, signal, emit, streamFunction);
+			// Stream assistant response. Route headers apply to this request only; a
+			// request without them resets any previous ones.
+			const requestConfig =
+				requestHeaders === undefined ? config : { ...config, headers: { ...config.headers, ...requestHeaders } };
+			const message = await streamAssistantResponse(currentContext, requestConfig, signal, emit, streamFunction);
 			newMessages.push(message);
 
 			if (message.stopReason === "error" || message.stopReason === "aborted") {

@@ -283,6 +283,15 @@ function withoutDeletedHeaders(headers: ProviderHeaders | undefined): Record<str
 		: undefined;
 }
 
+/** Merge route-issued headers over resolved auth headers for one request. */
+function mergeRequestHeaders(
+	base: Record<string, string> | undefined,
+	routeHeaders: ProviderHeaders | undefined,
+): Record<string, string> | undefined {
+	if (!routeHeaders) return base;
+	return { ...base, ...withoutDeletedHeaders(routeHeaders) };
+}
+
 export class RuntimeReloadError extends Error {
 	constructor(cause: unknown) {
 		super("Runtime reload failed after invalidating the previous runtime", { cause });
@@ -637,15 +646,19 @@ export class AgentSession {
 		thinkingLevel: ThinkingLevel;
 	}> {
 		// Route a virtual model first: summaries size their input and output from the model they get.
-		const { model, thinkingLevel } = isVirtualModel(selectedModel)
+		const route = isVirtualModel(selectedModel)
 			? await this._modelRuntime.resolveModel(selectedModel, convertToLlm(this.messages), {
 					reason: "direct",
 					thinkingLevel: this.thinkingLevel,
 					signal,
 				})
-			: { model: selectedModel, thinkingLevel: this.thinkingLevel };
+			: undefined;
+		const model = route?.model ?? selectedModel;
+		const thinkingLevel = route?.thinkingLevel ?? this.thinkingLevel;
+		const routeHeaders = route?.headers;
 		if (this.agent.streamFunction === streamSimple) {
-			return { ...(await this._getRequiredRequestAuth(model, signal)), thinkingLevel };
+			const auth = await this._getRequiredRequestAuth(model, signal);
+			return { ...auth, headers: mergeRequestHeaders(auth.headers, routeHeaders), thinkingLevel };
 		}
 
 		try {
@@ -655,7 +668,7 @@ export class AgentSession {
 			return {
 				model: requestModel,
 				apiKey: result.auth.apiKey,
-				headers: withoutDeletedHeaders(result.auth.headers),
+				headers: mergeRequestHeaders(withoutDeletedHeaders(result.auth.headers), routeHeaders),
 				env: result.env,
 				thinkingLevel,
 			};
@@ -896,7 +909,13 @@ export class AgentSession {
 				await this._runAutoCompaction("threshold", false);
 				({ previous, context } = await prepare());
 			}
-			return { ...previous, context, model: route.model, thinkingLevel: route.thinkingLevel };
+			return {
+				...previous,
+				context,
+				model: route.model,
+				thinkingLevel: route.thinkingLevel,
+				headers: route.headers,
+			};
 		};
 	}
 

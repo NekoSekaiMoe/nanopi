@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Added
+- Added the Copilot Auto model-selection protocol client (`fetchCopilotAutoSession`, `fetchCopilotAutoRouterDecision`): opens a Copilot model session (`POST /models/session`) and asks Copilot's router to classify a prompt (`POST /models/session/intent`), the flow Copilot Free/Student accounts require because they reject direct model requests with `400 model_not_supported`
+
 ### Fixed
 
 - Fixed Sign in with ChatGPT re-login failing with `OpenAI OAuth token request failed (400): {"error": "invalid_grant"}`: logins now reauthorize with the client ID issued to this installation (stored on the credential, passed to flows via the new `LoginOptions.currentCredential`) instead of re-registering `dynamic_agent_client` for an agent host OpenAI already knows, and an `invalid_grant` code exchange restarts authorization once with the client ID issued for that attempt, as OpenAI's flow documentation prescribes

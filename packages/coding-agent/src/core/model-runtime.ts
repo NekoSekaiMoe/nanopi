@@ -69,6 +69,7 @@ import {
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
+import { type CopilotAutoState, copilotAutoVirtualModel } from "./copilot-auto.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -89,6 +90,7 @@ import {
 	isVirtualModel,
 	type ModelRoute,
 	type ModelRouteReason,
+	type ModelRouteRequest,
 	type VirtualModelDefinition,
 	withVirtualModels,
 } from "./virtual-models.ts";
@@ -220,7 +222,23 @@ export class ModelRuntime implements Models {
 		this.defaultBuiltins = new Map(providers.map((provider) => [provider.id, provider]));
 		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
 		this.models = createModels({ credentials, modelsStore });
+		this.registerBuiltinVirtualModels();
 		this.rebuildProviders();
+	}
+
+	/**
+	 * Seed virtual models nanopi ships itself. Runs before the first provider composition so
+	 * they are part of every catalog snapshot. Extension registrations with the same provider
+	 * and id replace them.
+	 */
+	private registerBuiltinVirtualModels(): void {
+		const definition = copilotAutoVirtualModel(this);
+		const models = this.virtualModels.get(definition.provider) ?? new Map<string, RegisteredVirtualModel>();
+		models.set(definition.id, {
+			model: createVirtualModel(definition),
+			route: (request) => definition.route(request as ModelRouteRequest<CopilotAutoState>),
+		});
+		this.virtualModels.set(definition.provider, models);
 	}
 
 	static async create(options: CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
@@ -996,7 +1014,12 @@ export class ModelRuntime implements Models {
 		const routed = `${name} routed to ${route.model.provider}/${route.model.id}`;
 		if (!target) throw new Error(`${routed}, which is not a physical model.`);
 		if (!this.hasConfiguredAuth(target.provider)) throw new Error(`${routed}, which has no credentials.`);
-		return { model: target, thinkingLevel: clampThinkingLevel(target, route.thinkingLevel), state: route.state };
+		return {
+			model: target,
+			thinkingLevel: clampThinkingLevel(target, route.thinkingLevel),
+			state: route.state,
+			headers: route.headers,
+		};
 	}
 
 	/** A catalog chat model that is not virtual. */
