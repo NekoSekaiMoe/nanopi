@@ -1,0 +1,21 @@
+# 将 CNB 仓库上的改动镜像推送到 GitHub（NekoSekaiMoe/nanopi）。
+#
+# 只在 main 的 push 事件触发；GitHub 侧将来会有推回 CNB 的 workflow，
+# 为避免互相覆盖，这里不用 force push。
+# GH_KEY 由密钥仓库 shinytale/keys 的 env.yml 注入。
+
+main:
+  push:
+    - name: mirror-to-github
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      imports:
+        - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
+      stages:
+        - name: push main
+          script: |
+            set -euo pipefail
+            git config --global credential.helper store
+            printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
+            git push https://github.com/NekoSekaiMoe/nanopi.git HEAD:refs/heads/main
