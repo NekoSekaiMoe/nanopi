@@ -59,6 +59,7 @@ Committing:
 - Before committing, run `git status` and verify you are only staging your files.
 - `packages/ai/src/models.generated.ts` may always be included alongside your files.
 - Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
+- Commit with `git commit -s`, or rely on the `.husky/commit-msg` hook: every commit carries a `Change-Id` and `Signed-off-by` trailer. CI cannot add them after the fact (CNB exposes no API to amend commit messages, and the GitHub mirror is fast-forward only), so a commit pushed without them stays without them.
 
 Never run (destroys other agents' work or bypasses checks):
 
