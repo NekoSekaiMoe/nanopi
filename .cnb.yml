@@ -31,14 +31,37 @@ main:
             remote=https://github.com/NekoSekaiMoe/nanopi.git
             git fetch --quiet "$remote" main
 
-            # 推送不代表成功：非 fast-forward 会被远端拒绝。把本地 HEAD 与
-            # 远端 main 的关系摆到日志里，再推。
-            if git merge-base --is-ancestor HEAD FETCH_HEAD; then
+            # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
+            # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
+            # HEAD 在后；写反了就变成「远端是否领先于我们」，那恰好是推送
+            # 会被拒绝的情形，等于把 guard 钉死在反面。
+            if git merge-base --is-ancestor FETCH_HEAD HEAD; then
               echo "fast-forward: $CNB_COMMIT is ahead of $remote main"
             else
               echo "not a fast-forward of $remote main; push will be rejected" >&2
               exit 1
             fi
+
+            # 快照本地 HEAD 的树，push 后再回来比一次内容。单看 push 的退出码
+            # 不够：CNB 的 merge request 会把每个提交重放到 base 上，重放出的树
+            # 可能与当前 main 的树相同而与上游内容无关，replay 之后再合并就会
+            # 「干净合并」成一个把我们的改动回退掉的树，GitHub 侧却显示成功。
+            local_tree=$(git rev-parse HEAD^{tree})
+
+            git push --quiet "$remote" HEAD:refs/heads/main
+
+            # 远端树必须与本地树逐字节一致。不一致说明落上去的不是我们这份
+            # 内容（replay 造成的静默丢失就长这样），此时不能算镜像成功。
+            git fetch --quiet "$remote" main
+            remote_tree=$(git rev-parse FETCH_HEAD^{tree})
+            if [ "$local_tree" != "$remote_tree" ]; then
+              echo "tree mismatch after push:" >&2
+              echo "  local  $local_tree" >&2
+              echo "  remote $remote_tree" >&2
+              git diff --stat "$local_tree" "$remote_tree" >&2 || true
+              exit 1
+            fi
+            echo "mirrored $CNB_COMMIT: $remote_tree"
 
 # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
 #
