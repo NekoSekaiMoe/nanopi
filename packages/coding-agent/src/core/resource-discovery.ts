@@ -10,6 +10,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
+import { normalizePath } from "../utils/paths.ts";
 import type { SourceScope } from "./source-info.ts";
 
 export interface PathMetadata {
@@ -232,7 +233,8 @@ function collectAutoPromptEntries(dir: string): string[] {
 
 function normalizePattern(pattern: string): string {
 	const normalized = pattern.startsWith("./") || pattern.startsWith(".\\") ? pattern.slice(2) : pattern;
-	return toPosixPath(normalized);
+	// Expands ~ so !/+/- setting entries such as !~/skills/pdf match (#10765).
+	return toPosixPath(normalizePath(normalized));
 }
 
 function matchesAnyPattern(filePath: string, patterns: string[], baseDir: string): boolean {
