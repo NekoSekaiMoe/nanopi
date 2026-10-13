@@ -1,5 +1,5 @@
 /**
- * pi-rewind — Extension entry point
+ * pi-rewind — RegisteredModule entry point
  *
  * Automatic git-based checkpoints with per-tool granularity.
  * Creates snapshots of your working tree so you can rewind when the AI makes mistakes.

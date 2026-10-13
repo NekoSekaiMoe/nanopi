@@ -73,7 +73,7 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 
 	const rebindSession = async (): Promise<void> => {
 		session = runtimeHost.session;
-		await session.bindExtensions({
+		await session.bindModules({
 			mode: mode === "json" ? "json" : "print",
 			commandContextActions: {
 				waitForIdle: () => session.waitForIdle(),
@@ -96,7 +96,7 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 				},
 			},
 			onError: (err) => {
-				console.error(`Extension error (${err.extensionPath}): ${err.error}`);
+				console.error(`RegisteredModule error (${err.moduleName}): ${err.error}`);
 			},
 		});
 

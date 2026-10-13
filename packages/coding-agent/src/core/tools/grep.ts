@@ -5,7 +5,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { ensureTool } from "../../utils/tools-manager.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { resolveToCwd } from "./path-utils.ts";
 import { grepRenderers } from "./renderers/grep.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -99,7 +99,7 @@ export function createGrepToolDefinition(
 			},
 			signal?: AbortSignal,
 			_onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			return new Promise((resolve, reject) => {
 				if (signal?.aborted) {

@@ -19,7 +19,7 @@
  * through as dim continuation rows) rather than breaking.
  */
 
-import type { ExtensionUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ModuleUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 
@@ -138,12 +138,12 @@ function skinFactory(factory: WidgetFactory): WidgetFactory {
  * Wrap ctx.ui.setWidget so pi-subagents' async widget renders with flat rows.
  * Composes with suppressTodoWidget (both wrap the same method; the routed
  * keys are disjoint). ctx.ui is shared for the whole session, so wrapping
- * once per ExtensionUIContext instance is enough.
+ * once per ModuleUIContext instance is enough.
  */
 const skinnedContexts = new WeakSet<object>();
-export function skinSubagentWidget(ui: ExtensionUIContext): void {
+export function skinSubagentWidget(ui: ModuleUIContext): void {
   if (skinnedContexts.has(ui)) return;
-  type SetWidget = ExtensionUIContext["setWidget"];
+  type SetWidget = ModuleUIContext["setWidget"];
   const original = ui.setWidget.bind(ui) as SetWidget;
   const call = original as (key: string, content: unknown, options?: unknown) => void;
   const wrapped = ((key: string, content: unknown, options?: unknown) => {

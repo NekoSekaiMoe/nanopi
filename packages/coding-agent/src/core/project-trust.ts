@@ -1,6 +1,6 @@
 import { APP_NAME, CONFIG_DIR_NAME } from "../config.ts";
-import { emitProjectTrustEvent } from "./extensions/runner.ts";
-import type { LoadExtensionsResult, ProjectTrustContext } from "./extensions/types.ts";
+import { emitProjectTrustEvent } from "./modules/registry.ts";
+import type { LoadModulesResult, ProjectTrustContext } from "./modules/types.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 import type { DefaultProjectTrust } from "./settings-manager.ts";
 import {
@@ -17,7 +17,7 @@ export interface ResolveProjectTrustedOptions {
 	trustStore: ProjectTrustStore;
 	trustOverride?: boolean;
 	defaultProjectTrust?: DefaultProjectTrust;
-	extensionsResult?: LoadExtensionsResult;
+	modulesResult?: LoadModulesResult;
 	projectTrustContext: ProjectTrustContext;
 	onExtensionError?: (message: string) => void;
 }
@@ -52,14 +52,14 @@ export async function resolveProjectTrusted(options: ResolveProjectTrustedOption
 		return true;
 	}
 
-	if (options.extensionsResult) {
+	if (options.modulesResult) {
 		const { result, errors } = await emitProjectTrustEvent(
-			options.extensionsResult,
+			options.modulesResult.modules,
 			{ type: "project_trust", cwd: options.cwd },
 			options.projectTrustContext,
 		);
 		for (const error of errors) {
-			options.onExtensionError?.(`Extension "${error.extensionPath}" project_trust error: ${error.error}`);
+			options.onExtensionError?.(`RegisteredModule "${error.moduleName}" project_trust error: ${error.error}`);
 		}
 		if (result) {
 			const trusted = result.trusted === "yes";

@@ -506,7 +506,7 @@ function rawModelHeaders(
 	config: ModelsJsonProvider | undefined,
 	extension: ProviderConfigInput | undefined,
 ): Record<string, string> | undefined {
-	// models.json definitions and overrides are chat-only. Extension definitions
+	// models.json definitions and overrides are chat-only. RegisteredModule definitions
 	// are matched by operation and id so colliding models cannot share headers.
 	const chatDefinition = isModelType(model, "chat")
 		? config?.models?.find((entry) => entry.id === model.id)

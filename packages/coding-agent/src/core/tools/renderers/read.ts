@@ -13,7 +13,7 @@ import { getReadmePath } from "../../../config.ts";
 import { keyHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
 import { getLanguageFromPath, highlightCode, type Theme } from "../../../modes/interactive/theme/theme.ts";
 import { formatPathRelativeToCwdOrAbsolute } from "../../../utils/paths.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
+import type { ToolDefinition, ToolRenderResultOptions } from "../../modules/types.ts";
 import { resolveToCwd } from "../path-utils.ts";
 import type { ReadToolDetails } from "../read.ts";
 import { getTextOutput, renderToolPath, replaceTabs, str } from "../render-utils.ts";

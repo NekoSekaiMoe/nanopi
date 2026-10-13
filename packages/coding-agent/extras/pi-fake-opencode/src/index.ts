@@ -1,5 +1,5 @@
 /**
- * pi-fake-opencode — Extension entry point
+ * pi-fake-opencode — RegisteredModule entry point
  *
  * Makes pi's requests to OpenCode Zen look like they come from the official
  * OpenCode client, which is required to use Zen's free tier from outside the

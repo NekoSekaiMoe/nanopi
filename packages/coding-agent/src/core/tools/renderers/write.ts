@@ -14,7 +14,7 @@ import {
 	highlightCode,
 	type Theme,
 } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
+import type { ToolDefinition, ToolRenderResultOptions } from "../../modules/types.ts";
 import {
 	normalizeDisplayText,
 	renderToolPath,

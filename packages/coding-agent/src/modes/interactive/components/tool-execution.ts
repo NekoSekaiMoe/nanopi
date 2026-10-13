@@ -10,7 +10,7 @@ import {
 	type TUI,
 	type TuiMouseEvent,
 } from "@nanopi/pi-tui";
-import type { ToolDefinition, ToolRenderContext, ToolRenderers } from "../../../core/extensions/types.ts";
+import type { ToolDefinition, ToolRenderContext, ToolRenderers } from "../../../core/modules/types.ts";
 
 /** What this component needs from a tool: how to draw it, without executing it. */
 export type { ToolRenderers };

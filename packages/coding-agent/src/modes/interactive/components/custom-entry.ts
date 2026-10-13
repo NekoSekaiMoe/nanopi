@@ -1,6 +1,6 @@
 import type { Component } from "@nanopi/pi-tui";
 import { Box, Container, Spacer, Text } from "@nanopi/pi-tui";
-import type { EntryRenderer } from "../../../core/extensions/types.ts";
+import type { EntryRenderer } from "../../../core/modules/types.ts";
 import type { CustomEntry } from "../../../core/session-manager.ts";
 import { theme } from "../theme/theme.ts";
 

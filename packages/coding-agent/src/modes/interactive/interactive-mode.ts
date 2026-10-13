@@ -78,19 +78,6 @@ import { formatCacheWarmingStatus, formatCacheWarmingUsage } from "../../core/ca
 import { getInContextCompactionOutcome } from "../../core/compaction/index.ts";
 import { findExtensionStackMatches, recordCrash, takeUnnotifiedCrash } from "../../core/crash-log.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defaults.ts";
-import type {
-	AutocompleteProviderFactory,
-	EditorFactory,
-	ExtensionCommandContext,
-	ExtensionRunner,
-	ExtensionUIContext,
-	ExtensionUIDialogOptions,
-	ExtensionWidgetOptions,
-	MarkdownTransformer,
-	ProjectTrustContext,
-	UserBashEventResult,
-	WorkingIndicatorOptions,
-} from "../../core/extensions/index.ts";
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
@@ -101,6 +88,18 @@ import {
 	resolveModelScopeFromModels,
 } from "../../core/model-resolver.ts";
 import { CredentialSynchronizationError } from "../../core/model-runtime.ts";
+import type {
+	AutocompleteProviderFactory,
+	EditorFactory,
+	MarkdownTransformer,
+	ModuleCommandContext,
+	ModuleRegistry,
+	ModuleUIContext,
+	ModuleUIDialogOptions,
+	ModuleWidgetOptions,
+	ProjectTrustContext,
+	WorkingIndicatorOptions,
+} from "../../core/modules/index.ts";
 import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../core/resource-listing.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
@@ -525,7 +524,7 @@ export class InteractiveMode {
 	private bugReportHintShown = false;
 	private installChangeWarningShown = false;
 
-	// Extension UI state
+	// RegisteredModule UI state
 	private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
 	private extensionInput: ExtensionInputComponent | undefined = undefined;
 	private extensionEditor: ExtensionEditorComponent | undefined = undefined;
@@ -534,7 +533,7 @@ export class InteractiveMode {
 		unsubscribe: () => void;
 	}>();
 
-	// Extension widgets (components rendered above/below the editor)
+	// RegisteredModule widgets (components rendered above/below the editor)
 	private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
 	private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
 	private widgetContainerAbove!: Container;
@@ -674,10 +673,10 @@ export class InteractiveMode {
 		return description ? `[${sourceTag}] ${description}` : `[${sourceTag}]`;
 	}
 
-	private getBuiltInCommandConflictDiagnostics(extensionRunner: ExtensionRunner): ResourceDiagnostic[] {
+	private getBuiltInCommandConflictDiagnostics(moduleRegistry: ModuleRegistry): ResourceDiagnostic[] {
 		const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
 		return (
-			extensionRunner
+			moduleRegistry
 				.getRegisteredCommands()
 				// Built-in extension commands (e.g. /status from builtin-commands) are listed in
 				// BUILTIN_SLASH_COMMANDS on purpose; only third-party commands with a matching name conflict.
@@ -686,8 +685,8 @@ export class InteractiveMode {
 					type: "warning" as const,
 					message:
 						command.invocationName === command.name
-							? `Extension command '/${command.name}' conflicts with built-in interactive command. Skipping in autocomplete.`
-							: `Extension command '/${command.name}' conflicts with built-in interactive command. Available as '/${command.invocationName}'.`,
+							? `RegisteredModule command '/${command.name}' conflicts with built-in interactive command. Skipping in autocomplete.`
+							: `RegisteredModule command '/${command.name}' conflicts with built-in interactive command. Available as '/${command.invocationName}'.`,
 					path: command.sourceInfo.path,
 				}))
 		);
@@ -763,7 +762,7 @@ export class InteractiveMode {
 
 		// Convert extension commands to SlashCommand format
 		const builtinCommandNames = new Set(slashCommands.map((c) => c.name));
-		const extensionCommands: SlashCommand[] = this.session.extensionRunner
+		const extensionCommands: SlashCommand[] = this.session.moduleRegistry
 			.getRegisteredCommands()
 			.filter((cmd) => !builtinCommandNames.has(cmd.name))
 			.map((cmd) => ({
@@ -844,7 +843,7 @@ export class InteractiveMode {
 			if (this.changelogMarkdown) {
 				this.chatContainer.addChild(new Spacer(1));
 			}
-			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "Extension Updates")), 1, 0));
+			this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "RegisteredModule Updates")), 1, 0));
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(
 				new Markdown(this.extensionChangelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings()),
@@ -1183,7 +1182,7 @@ export class InteractiveMode {
 
 		const seenKeys = new Set<string>();
 		const notices: string[] = [];
-		for (const extension of this.session.resourceLoader.getExtensions().extensions) {
+		for (const extension of this.session.resourceLoader.getModules().modules) {
 			const sourceInfo = extension.sourceInfo;
 			if (sourceInfo.origin !== "package" || !sourceInfo.baseDir || !sourceInfo.changelogPath) {
 				continue;
@@ -1277,7 +1276,7 @@ export class InteractiveMode {
 	}
 
 	// =========================================================================
-	// Extension System
+	// RegisteredModule System
 	// =========================================================================
 
 	/** Startup header (welcome box). Hidden only by quietStartup: true. */
@@ -1377,8 +1376,8 @@ export class InteractiveMode {
 		const promptsResult = this.session.resourceLoader.getPrompts();
 		const themesResult = this.session.resourceLoader.getThemes();
 		const extensions = this.session.resourceLoader
-			.getExtensions()
-			.extensions.filter((extension) => !extension.hidden)
+			.getModules()
+			.modules.filter((extension) => !extension.hidden)
 			.map((extension) => ({
 				path: extension.path,
 				sourceInfo: extension.sourceInfo,
@@ -1424,7 +1423,7 @@ export class InteractiveMode {
 		}
 
 		const extensionDiagnostics: ResourceDiagnostic[] = [];
-		const extensionsResult = this.session.resourceLoader.getExtensions();
+		const extensionsResult = this.session.resourceLoader.getModules();
 		for (const error of extensionsResult.errors) {
 			extensionDiagnostics.push({ type: "error", message: error.error, path: error.path });
 		}
@@ -1432,17 +1431,17 @@ export class InteractiveMode {
 			extensionDiagnostics.push({ type: "warning", message: warning.warning, path: warning.path });
 		}
 
-		const commandDiagnostics = this.session.extensionRunner.getCommandDiagnostics();
+		const commandDiagnostics = this.session.moduleRegistry.getCommandDiagnostics();
 		extensionDiagnostics.push(...commandDiagnostics);
-		extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(this.session.extensionRunner));
+		extensionDiagnostics.push(...this.getBuiltInCommandConflictDiagnostics(this.session.moduleRegistry));
 
-		const shortcutDiagnostics = this.session.extensionRunner.getShortcutDiagnostics();
+		const shortcutDiagnostics = this.session.moduleRegistry.getShortcutDiagnostics();
 		extensionDiagnostics.push(...shortcutDiagnostics);
 
 		if (extensionDiagnostics.length > 0) {
 			const warningLines = () => this.formatDiagnostics(extensionDiagnostics, sourceInfos);
 			this.loadedResourcesContainer.addChild(
-				new ThemedText(() => `${theme.fg("warning", "[Extension issues]")}\n${warningLines()}`, 0, 0),
+				new ThemedText(() => `${theme.fg("warning", "[RegisteredModule issues]")}\n${warningLines()}`, 0, 0),
 			);
 			this.loadedResourcesContainer.addChild(new Spacer(1));
 		}
@@ -1462,7 +1461,7 @@ export class InteractiveMode {
 	 */
 	private async bindCurrentSessionExtensions(): Promise<void> {
 		const uiContext = this.createExtensionUIContext();
-		await this.session.bindExtensions({
+		await this.session.bindModules({
 			uiContext,
 			mode: "tui",
 			abortHandler: () => {
@@ -1522,15 +1521,15 @@ export class InteractiveMode {
 				}
 			},
 			onError: (error) => {
-				this.showExtensionError(error.extensionPath, error.error, error.stack);
+				this.showExtensionError(error.moduleName, error.error, error.stack);
 			},
 		});
 
 		setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
 		this.setupAutocompleteProvider();
 
-		const extensionRunner = this.session.extensionRunner;
-		this.setupExtensionShortcuts(extensionRunner);
+		const moduleRegistry = this.session.moduleRegistry;
+		this.setupExtensionShortcuts(moduleRegistry);
 		this.showLoadedResources();
 		this.showStartupNoticesIfNeeded();
 	}
@@ -1648,7 +1647,7 @@ export class InteractiveMode {
 			return formatCrashExtensionHint(
 				findExtensionStackMatches(
 					error instanceof Error ? error.stack : undefined,
-					this.session.resourceLoader.getExtensions().extensions,
+					this.session.resourceLoader.getModules().modules,
 				),
 			);
 		} catch {
@@ -1736,24 +1735,24 @@ export class InteractiveMode {
 	 * Get a registered tool definition by name (for custom rendering).
 	 */
 	/**
-	 * Extension-registered definition, falling back to the built-in one. The renderer components take
+	 * RegisteredModule-registered definition, falling back to the built-in one. The renderer components take
 	 * whatever this returns, so they never reach into the tool registry themselves.
 	 */
 	private getRegisteredToolDefinition(toolName: string) {
-		return this.session.extensionRunner.resolveToolRenderers(toolName, () =>
+		return this.session.moduleRegistry.resolveToolRenderers(toolName, () =>
 			withBuiltInRenderers(toolName, this.session.getToolDefinition(toolName)),
 		);
 	}
 
 	private getMarkdownTransformers(): MarkdownTransformer[] {
-		return [this.mermaidMarkdownTransformer, ...this.session.extensionRunner.getMarkdownTransformers()];
+		return [this.mermaidMarkdownTransformer, ...this.session.moduleRegistry.getMarkdownTransformers()];
 	}
 
 	/**
 	 * Set up keyboard shortcuts registered by extensions.
 	 */
-	private setupExtensionShortcuts(extensionRunner: ExtensionRunner): void {
-		const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
+	private setupExtensionShortcuts(moduleRegistry: ModuleRegistry): void {
+		const shortcuts = moduleRegistry.getShortcuts(this.keybindings.getEffectiveConfig());
 		if (shortcuts.size === 0) return;
 
 		// Set up the extension shortcut handler on the default editor
@@ -1762,8 +1761,8 @@ export class InteractiveMode {
 				// Cast to KeyId - extension shortcuts use the same format
 				if (matchesKey(data, shortcutStr as KeyId)) {
 					// Run handler async, don't block input
-					void extensionRunner
-						.runExtensionOperation(() => Promise.resolve(shortcut.handler(extensionRunner.createContext())))
+					void moduleRegistry
+						.runExtensionOperation(() => Promise.resolve(shortcut.handler(moduleRegistry.createContext())))
 						.catch((err) => {
 							this.showError(`Shortcut handler error: ${err instanceof Error ? err.message : String(err)}`);
 						});
@@ -1873,7 +1872,7 @@ export class InteractiveMode {
 	private setExtensionWidget(
 		key: string,
 		content: string[] | ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined,
-		options?: ExtensionWidgetOptions,
+		options?: ModuleWidgetOptions,
 	): void {
 		const placement = options?.placement ?? "aboveEditor";
 		const removeExisting = (map: Map<string, Component & { dispose?(): void }>) => {
@@ -2081,7 +2080,7 @@ export class InteractiveMode {
 	}
 
 	/**
-	 * Create the ExtensionUIContext for extensions.
+	 * Create the ModuleUIContext for extensions.
 	 */
 	private createProjectTrustContext(cwd: string): ProjectTrustContext {
 		const ui = this.createExtensionUIContext();
@@ -2098,7 +2097,7 @@ export class InteractiveMode {
 		};
 	}
 
-	private createExtensionUIContext(): ExtensionUIContext {
+	private createExtensionUIContext(): ModuleUIContext {
 		return {
 			select: (title, options, opts) => this.showExtensionSelector(title, options, opts),
 			confirm: (title, message, opts) => this.showExtensionConfirm(title, message, opts),
@@ -2158,7 +2157,7 @@ export class InteractiveMode {
 	private showExtensionSelector(
 		title: string,
 		options: string[],
-		opts?: ExtensionUIDialogOptions,
+		opts?: ModuleUIDialogOptions,
 		blocked: BlockedStatus = { kind: "question", message: title },
 	): Promise<string | undefined> {
 		return new Promise((resolve) => {
@@ -2193,7 +2192,7 @@ export class InteractiveMode {
 			this.editorContainer.clear();
 			this.editorContainer.addChild(this.extensionSelector);
 			this.ui.setFocus(this.extensionSelector);
-			// Extension dialogs share the editor slot: opening one replaces the status of a displaced one.
+			// RegisteredModule dialogs share the editor slot: opening one replaces the status of a displaced one.
 			this.programStatus.setBlocked("extension-dialog", blocked);
 			this.ui.requestRender();
 		});
@@ -2215,11 +2214,7 @@ export class InteractiveMode {
 	/**
 	 * Show a confirmation dialog for extensions.
 	 */
-	private async showExtensionConfirm(
-		title: string,
-		message: string,
-		opts?: ExtensionUIDialogOptions,
-	): Promise<boolean> {
+	private async showExtensionConfirm(title: string, message: string, opts?: ModuleUIDialogOptions): Promise<boolean> {
 		const result = await this.showExtensionSelector(`${title}\n${message}`, ["Yes", "No"], opts, {
 			kind: "permission",
 			message: title,
@@ -2241,7 +2236,7 @@ export class InteractiveMode {
 	private showExtensionInput(
 		title: string,
 		placeholder?: string,
-		opts?: ExtensionUIDialogOptions,
+		opts?: ModuleUIDialogOptions,
 	): Promise<string | undefined> {
 		return new Promise((resolve) => {
 			if (opts?.signal?.aborted) {
@@ -2513,8 +2508,8 @@ export class InteractiveMode {
 	/**
 	 * Show an extension error in the UI.
 	 */
-	private showExtensionError(extensionPath: string, error: string, stack?: string): void {
-		const errorMsg = `Extension "${extensionPath}" error: ${error}`;
+	private showExtensionError(moduleName: string, error: string, stack?: string): void {
+		const errorMsg = `RegisteredModule "${moduleName}" error: ${error}`;
 		const errorText = new ThemedText(() => theme.fg("error", errorMsg), 1, 0);
 		this.chatContainer.addChild(errorText);
 		if (stack) {
@@ -3317,7 +3312,7 @@ export class InteractiveMode {
 	}
 
 	private addCustomEntryToChat(entry: Extract<SessionEntry, { type: "custom" }>): void {
-		const renderer = this.session.extensionRunner.getEntryRenderer(entry.customType);
+		const renderer = this.session.moduleRegistry.getEntryRenderer(entry.customType);
 		if (!renderer) {
 			return;
 		}
@@ -3361,7 +3356,7 @@ export class InteractiveMode {
 			}
 			case "custom": {
 				if (message.display) {
-					const renderer = this.session.extensionRunner.getMessageRenderer(message.customType);
+					const renderer = this.session.moduleRegistry.getMessageRenderer(message.customType);
 					const component = new CustomMessageComponent(
 						message,
 						renderer,
@@ -3792,7 +3787,7 @@ export class InteractiveMode {
 
 		if (options?.fromSignal) {
 			// Signal-triggered shutdown (SIGTERM/SIGHUP). Emit extension cleanup
-			// (session_shutdown) BEFORE touching the terminal. Extension teardown
+			// (session_shutdown) BEFORE touching the terminal. RegisteredModule teardown
 			// such as removing sockets does not write to the tty, so it must not be
 			// skipped if a later terminal-restore write fails on a dead or stalled
 			// terminal. If the terminal is gone, the restore writes below emit EIO,
@@ -4217,11 +4212,11 @@ export class InteractiveMode {
 	private isExtensionCommand(text: string): boolean {
 		if (!text.startsWith("/")) return false;
 
-		const extensionRunner = this.session.extensionRunner;
+		const moduleRegistry = this.session.moduleRegistry;
 
 		const spaceIndex = text.indexOf(" ");
 		const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-		return !!extensionRunner.getCommand(commandName);
+		return !!moduleRegistry.getCommand(commandName);
 	}
 
 	private async flushCompactionQueue(options?: { willRetry?: boolean }): Promise<void> {
@@ -5170,7 +5165,7 @@ export class InteractiveMode {
 
 	private async handleResumeSession(
 		sessionPath: string,
-		options?: Parameters<ExtensionCommandContext["switchSession"]>[1],
+		options?: Parameters<ModuleCommandContext["switchSession"]>[1],
 	): Promise<{ cancelled: boolean }> {
 		this.clearStatusIndicator();
 		try {
@@ -5841,7 +5836,7 @@ export class InteractiveMode {
 				this.applyRuntimeSettings();
 				await this.themeController.applyFromSettings();
 				this.setupAutocompleteProvider();
-				this.setupExtensionShortcuts(this.session.extensionRunner);
+				this.setupExtensionShortcuts(this.session.moduleRegistry);
 				this.showLoadedResources();
 				const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
 				const modelsJsonError = this.session.modelRuntime.getError();
@@ -6226,8 +6221,8 @@ export class InteractiveMode {
 `;
 
 		// Add extension-registered shortcuts
-		const extensionRunner = this.session.extensionRunner;
-		const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
+		const moduleRegistry = this.session.moduleRegistry;
+		const shortcuts = moduleRegistry.getShortcuts(this.keybindings.getEffectiveConfig());
 		if (shortcuts.size > 0) {
 			hotkeys += `
 **Extensions**
@@ -6235,7 +6230,7 @@ export class InteractiveMode {
 |-----|--------|
 `;
 			for (const [key, shortcut] of shortcuts) {
-				const description = shortcut.description ?? shortcut.extensionPath;
+				const description = shortcut.description ?? shortcut.moduleName;
 				const keyDisplay = formatKeyText(key, { capitalize: true });
 				hotkeys += `| \`${keyDisplay}\` | ${description} |\n`;
 			}
@@ -6305,53 +6300,6 @@ export class InteractiveMode {
 	}
 
 	private async handleBashCommand(command: string, excludeFromContext = false): Promise<void> {
-		const extensionRunner = this.session.extensionRunner;
-
-		// Emit user_bash event to let extensions intercept
-		let eventResult: UserBashEventResult | undefined;
-		try {
-			eventResult = await extensionRunner.emitUserBash({
-				type: "user_bash",
-				command,
-				excludeFromContext,
-				cwd: this.sessionManager.getCwd(),
-			});
-		} catch {
-			// The extension runner already reported the error. Do not fall back to local execution.
-			return;
-		}
-
-		// If extension returned a full result, use it directly
-		if (eventResult?.result) {
-			const result = eventResult.result;
-
-			// Create UI component for display
-			this.bashComponent = new BashExecutionComponent(command, this.ui, excludeFromContext, this.outputPad);
-			if (this.session.isStreaming) {
-				this.pendingMessagesContainer.addChild(this.bashComponent);
-				this.pendingBashComponents.push(this.bashComponent);
-			} else {
-				this.chatContainer.addChild(this.bashComponent);
-			}
-
-			// Show output and complete
-			if (result.output) {
-				this.bashComponent.appendOutput(result.output);
-			}
-			this.bashComponent.setComplete(
-				result.exitCode,
-				result.cancelled,
-				result.truncated ? ({ truncated: true, content: result.output } as TruncationResult) : undefined,
-				result.fullOutputPath,
-			);
-
-			// Record the result in session
-			this.session.recordBashResult(command, result, { excludeFromContext });
-			this.bashComponent = undefined;
-			this.ui.requestRender();
-			return;
-		}
-
 		// Normal execution path (possibly with custom operations)
 		const isDeferred = this.session.isStreaming;
 		this.bashComponent = new BashExecutionComponent(command, this.ui, excludeFromContext, this.outputPad);
@@ -6375,7 +6323,7 @@ export class InteractiveMode {
 						this.ui.requestRender();
 					}
 				},
-				{ excludeFromContext, operations: eventResult?.operations },
+				{ excludeFromContext },
 			);
 
 			if (this.bashComponent) {

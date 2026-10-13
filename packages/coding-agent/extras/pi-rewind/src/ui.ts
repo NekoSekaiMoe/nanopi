@@ -4,13 +4,13 @@
  * Footer status and notifications.
  */
 
-import type { ExtensionContext } from "@mariozechner/pi-coding-agent";
+import type { ModuleContext } from "@mariozechner/pi-coding-agent";
 import type { RewindState } from "./state.js";
 
 const STATUS_KEY = "rewind";
 
 /** Update footer status with checkpoint count */
-export function updateStatus(state: RewindState, ctx: ExtensionContext): void {
+export function updateStatus(state: RewindState, ctx: ModuleContext): void {
   if (!ctx.hasUI) return;
 
   if (!state.gitAvailable) {
@@ -27,7 +27,7 @@ export function updateStatus(state: RewindState, ctx: ExtensionContext): void {
 }
 
 /** Clear status */
-export function clearStatus(ctx: ExtensionContext): void {
+export function clearStatus(ctx: ModuleContext): void {
   if (!ctx.hasUI) return;
   ctx.ui.setStatus(STATUS_KEY, undefined);
 }

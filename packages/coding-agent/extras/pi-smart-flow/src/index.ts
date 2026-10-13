@@ -1,5 +1,5 @@
 /**
- * pi-smart-flow — Extension entry point
+ * pi-smart-flow — RegisteredModule entry point
  *
  * A lightweight delegation experience layer on top of pi-subagents:
  *

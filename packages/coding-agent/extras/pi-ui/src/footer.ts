@@ -1,7 +1,7 @@
 /** Codex-style single line below the editor: `used xk/yk · / for more details`. */
 
 import type {
-  ExtensionContext,
+  ModuleContext,
   ReadonlyFooterDataProvider,
   Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -18,7 +18,7 @@ function formatTokens(count: number): string {
   return `${Math.round(count / 1_000_000)}M`;
 }
 
-function resolveUsedTokens(ctx: ExtensionContext): number | null {
+function resolveUsedTokens(ctx: ModuleContext): number | null {
   const usage = ctx.getContextUsage();
   if (usage?.tokens !== null && usage?.tokens !== undefined) return usage.tokens;
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
@@ -29,7 +29,7 @@ function resolveUsedTokens(ctx: ExtensionContext): number | null {
 }
 
 function renderToolbarLine(
-  ctx: ExtensionContext,
+  ctx: ModuleContext,
   theme: Theme,
   _footerData: ReadonlyFooterDataProvider,
   _uiState: ReferenceUiState,
@@ -42,7 +42,7 @@ function renderToolbarLine(
   return truncateToWidth(theme.fg("dim", line), Math.max(0, width), theme.fg("dim", "…"));
 }
 
-export function installFooter(ctx: ExtensionContext, uiState: ReferenceUiState): void {
+export function installFooter(ctx: ModuleContext, uiState: ReferenceUiState): void {
   ctx.ui.setFooter((tui: TUI, theme: Theme, footerData: ReadonlyFooterDataProvider): Component & { dispose?(): void } => {
     // Hand the TUI to thinking.ts so landed summaries can repaint at once;
     // the footer factory is the one place pi-ui still receives it.

@@ -44,10 +44,10 @@ import {
 import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
-import type { InlineExtension } from "./core/extensions/types.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
+import type { SessionModule } from "./core/modules/types.ts";
 import { restoreStdout, takeOverStdout } from "./core/output-guard.ts";
 import { type AppMode, resolveProjectTrusted } from "./core/project-trust.ts";
 import type { CreateAgentSessionOptions } from "./core/sdk.ts";
@@ -62,16 +62,16 @@ import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/setti
 import { SettingsManager } from "./core/settings-manager.ts";
 import { printTimings, resetTimings, time } from "./core/timings.ts";
 import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/trust-manager.ts";
-import { builtInExtensions } from "./extensions/index.ts";
-import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./extensions/llama/managed.ts";
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { DEFAULT_WEBUI_PORT, InteractiveMode, runPrintMode, runRpcMode, runWebuiMode } from "./modes/index.ts";
 import { initTheme, setThemeJsonValidator, stopThemeWatcher } from "./modes/interactive/theme/theme.ts";
 import { validateThemeJson } from "./modes/interactive/theme/theme-schema.ts";
-import { handleConfigCommand, handlePackageCommand } from "./package-manager-cli.ts";
+import { BUILTIN_MODULES } from "./modules/index.ts";
+import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./modules/llama/managed.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 
-const EXTENSION_LOAD_FAILURE_HINT = `Hint: Start without extensions using "${APP_NAME} -ne".`;
+const MODULE_LOAD_FAILURE_HINT =
+	"Hint: a built-in module failed to initialize; this is a bug in the module, not in your configuration.";
 
 /**
  * Read all content from piped stdin.
@@ -572,7 +572,8 @@ async function promptForMissingSessionCwd(
 }
 
 export interface MainOptions {
-	extensionFactories?: InlineExtension[];
+	/** Extra programmatic modules to load in addition to the built-ins. */
+	modules?: SessionModule[];
 }
 
 export async function main(args: string[], options?: MainOptions) {
@@ -583,7 +584,7 @@ export async function main(args: string[], options?: MainOptions) {
 	resetTimings();
 	// Commands and startup selectors can load user-authored themes before runtime creation.
 	setThemeJsonValidator(validateThemeJson);
-	const extensionFactories = [...builtInExtensions, ...(options?.extensionFactories ?? [])];
+	const modules = [...BUILTIN_MODULES, ...(options?.modules ?? [])];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.NANOPI_OFFLINE);
 	if (offlineMode) {
 		process.env.NANOPI_OFFLINE = "1";
@@ -599,16 +600,6 @@ export async function main(args: string[], options?: MainOptions) {
 	const bootstrapSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
 	applyHttpProxySettings(bootstrapSettingsManager.getGlobalSettings().httpProxy);
 	configureHttpDispatcher();
-
-	if (await handlePackageCommand(args, { extensionFactories })) {
-		const exitCode = process.exitCode ?? 0;
-		process.exit(exitCode);
-		return;
-	}
-
-	if (await handleConfigCommand(args, { extensionFactories })) {
-		return;
-	}
 
 	// WebUI subcommand: `nanopi webui [-p <port>]` serves the browser UI.
 	let webuiRequested = false;
@@ -765,7 +756,6 @@ export async function main(args: string[], options?: MainOptions) {
 	const trustPromptMode: AppMode = parsed.help || parsed.listModels !== undefined ? "print" : appMode;
 	const projectTrustByCwd = new Map<string, boolean>();
 
-	const resolvedExtensionPaths = resolveCliPaths(cwd, parsed.extensions);
 	const resolvedSkillPaths = resolveCliPaths(cwd, parsed.skills);
 	const resolvedPromptTemplatePaths = resolveCliPaths(cwd, parsed.promptTemplates);
 	const resolvedThemePaths = resolveCliPaths(cwd, parsed.themes);
@@ -796,13 +786,13 @@ export async function main(args: string[], options?: MainOptions) {
 			extensionFlagValues: parsed.unknownFlags,
 			resourceLoaderReloadOptions: shouldResolveProjectTrust
 				? {
-						resolveProjectTrust: async ({ extensionsResult }) => {
+						resolveProjectTrust: async ({ modulesResult }) => {
 							const trusted = await resolveProjectTrusted({
 								cwd,
 								trustStore,
 								trustOverride: parsed.projectTrustOverride,
 								defaultProjectTrust: startupSettingsManager.getDefaultProjectTrust(),
-								extensionsResult,
+								modulesResult,
 								projectTrustContext:
 									projectTrustContext ??
 									createProjectTrustContext({
@@ -819,18 +809,16 @@ export async function main(args: string[], options?: MainOptions) {
 					}
 				: undefined,
 			resourceLoaderOptions: {
-				additionalExtensionPaths: resolvedExtensionPaths,
+				modules,
 				additionalSkillPaths: resolvedSkillPaths,
 				additionalPromptTemplatePaths: resolvedPromptTemplatePaths,
 				additionalThemePaths: resolvedThemePaths,
-				noExtensions: parsed.noExtensions,
 				noSkills: parsed.noSkills,
 				noPromptTemplates: parsed.noPromptTemplates,
 				noThemes: parsed.noThemes,
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
-				extensionFactories,
 			},
 		});
 		const { settingsManager, modelRuntime, resourceLoader } = services;
@@ -838,13 +826,13 @@ export async function main(args: string[], options?: MainOptions) {
 			...projectTrustDiagnostics,
 			...services.diagnostics,
 			...collectSettingsDiagnostics(settingsManager),
-			...resourceLoader.getExtensions().errors.map(({ path, error }) => ({
+			...resourceLoader.getModules().errors.map(({ path, error }) => ({
 				type: "error" as const,
 				message: `Failed to load extension "${path}": ${error}`,
 			})),
-			...(resourceLoader.getExtensions().warnings ?? []).map(({ path, warning }) => ({
+			...(resourceLoader.getModules().warnings ?? []).map(({ path, warning }) => ({
 				type: "warning" as const,
-				message: `Extension package "${path}": ${warning}`,
+				message: `RegisteredModule package "${path}": ${warning}`,
 			})),
 		];
 
@@ -915,10 +903,8 @@ export async function main(args: string[], options?: MainOptions) {
 
 	if (parsed.help) {
 		reportDiagnostics(startupSettingsDiagnostics);
-		const extensionFlags = resourceLoader
-			.getExtensions()
-			.extensions.flatMap((extension) => Array.from(extension.flags.values()));
-		printHelp(extensionFlags);
+		const moduleFlags = resourceLoader.getModules().modules.flatMap((module) => Array.from(module.flags.values()));
+		printHelp(moduleFlags);
 		process.exit(0);
 	}
 
@@ -957,7 +943,7 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 	if (hasRuntimeErrors) {
 		if (runtime.diagnostics.some((diagnostic) => diagnostic.message.includes("Failed to load extension"))) {
-			console.error(chalk.yellow(EXTENSION_LOAD_FAILURE_HINT));
+			console.error(chalk.yellow(MODULE_LOAD_FAILURE_HINT));
 		}
 		process.exit(1);
 	}

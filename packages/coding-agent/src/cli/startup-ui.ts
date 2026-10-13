@@ -1,9 +1,10 @@
+import { join } from "node:path";
 import { ProcessTerminal, setCapabilityOverrides, setKeybindings, type TUI, TuiMainScreen } from "@nanopi/pi-tui";
 import { existsSync } from "fs";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, getAgentDir, getSettingsPath, PACKAGE_NAME } from "../config.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
-import { DefaultPackageManager, type ResolvedResource } from "../core/package-manager.ts";
-import { SettingsManager } from "../core/settings-manager.ts";
+import { type ResolvedResource, resolveLocalResources } from "../core/resource-discovery.ts";
+import type { SettingsManager } from "../core/settings-manager.ts";
 import { ExtensionInputComponent } from "../modes/interactive/components/extension-input.ts";
 import { ExtensionSelectorComponent } from "../modes/interactive/components/extension-selector.ts";
 import {
@@ -62,22 +63,21 @@ function loadThemes(resources: ResolvedResource[]): Theme[] {
 	return themes;
 }
 
-async function loadStartupThemes(settingsManager: SettingsManager): Promise<Theme[]> {
-	const globalSettingsManager = SettingsManager.inMemory(settingsManager.getGlobalSettings(), {
-		projectTrusted: false,
-	});
-	const packageManager = new DefaultPackageManager({
+function loadStartupThemes(settingsManager: SettingsManager): Theme[] {
+	const resolvedPaths = resolveLocalResources({
 		cwd: process.cwd(),
-		agentDir: getAgentDir(),
-		settingsManager: globalSettingsManager,
+		globalBaseDir: getAgentDir(),
+		projectBaseDir: join(process.cwd(), ".nanopi"),
+		projectTrusted: false,
+		globalSettings: settingsManager.getGlobalSettings(),
+		projectSettings: settingsManager.getGlobalSettings(),
 	});
-	const resolvedPaths = await packageManager.resolve(async () => "skip");
 	return loadThemes(resolvedPaths.themes);
 }
 
 export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
 	setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
-	setRegisteredThemes(await loadStartupThemes(settingsManager));
+	setRegisteredThemes(loadStartupThemes(settingsManager));
 	// The system theme starts in grayscale until the terminal reports its colors.
 	markTerminalColorsPending();
 	initTheme(resolveThemeSetting(settingsManager.getThemeSetting(), getTerminalTheme()) ?? SYSTEM_THEME_NAME);

@@ -13,7 +13,7 @@ import {
 	trackDetachedChildPid,
 	untrackDetachedChildPid,
 } from "../../utils/shell.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
 import { BASH_UPDATE_THROTTLE_MS, createShellRenderers } from "./renderers/bash.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -188,7 +188,7 @@ function resolveSpawnContext(
 	cwd: string,
 	spawnHook: BashSpawnHook | undefined,
 	exposeSessionEnvironment: boolean,
-	ctx: ExtensionContext | undefined,
+	ctx: ModuleContext | undefined,
 ): BashSpawnContext {
 	const env = { ...getShellEnv() };
 	delete env.NANOPI_SESSION_ID;
@@ -265,7 +265,7 @@ export function createShellToolDefinition(
 			{ command, timeout }: { command: string; timeout?: number },
 			signal?: AbortSignal,
 			onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			const resolvedCommand = commandPrefix ? `${commandPrefix}\n${command}` : command;
 			const spawnContext = resolveSpawnContext(

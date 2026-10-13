@@ -1,5 +1,5 @@
 import { type Component, Loader, type TUI, truncateToWidth } from "@nanopi/pi-tui";
-import type { WorkingIndicatorOptions } from "../../../core/extensions/index.ts";
+import type { WorkingIndicatorOptions } from "../../../core/modules/index.ts";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { keyText } from "./keybinding-hints.ts";

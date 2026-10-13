@@ -9,7 +9,7 @@
 import { Text } from "@nanopi/pi-tui";
 import { keyHint } from "../../../modes/interactive/components/keybinding-hints.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
+import type { ToolDefinition, ToolRenderResultOptions } from "../../modules/types.ts";
 import type { FindToolDetails } from "../find.ts";
 import { getTextOutput, invalidArgText, shortenPath, str } from "../render-utils.ts";
 import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";

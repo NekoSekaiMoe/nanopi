@@ -6,7 +6,7 @@
  * graph out of a process that only renders.
  */
 
-import type { ToolRenderers } from "../../extensions/types.ts";
+import type { ToolRenderers } from "../../modules/types.ts";
 import type { ToolName } from "../index.ts";
 import { createShellRenderers } from "./bash.ts";
 import { editRenderers } from "./edit.ts";

@@ -2,7 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { mkdir as fsMkdir, writeFile as fsWriteFile } from "fs/promises";
 import { dirname } from "path";
 import { type Static, Type } from "typebox";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { withFileMutationQueue } from "./file-mutation-queue.ts";
 import { resolveToCwd } from "./path-utils.ts";
 import { writeRenderers } from "./renderers/write.ts";
@@ -60,7 +60,7 @@ export function createWriteToolDefinition(
 			{ path, content }: { path: string; content: string },
 			signal?: AbortSignal,
 			_onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			const absolutePath = resolveToCwd(path, ctx?.cwd || cwd);
 			const dir = dirname(absolutePath);

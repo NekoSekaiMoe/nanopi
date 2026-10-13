@@ -131,7 +131,7 @@ export class FooterDataProvider {
 		return this.cachedBranch;
 	}
 
-	/** Extension status texts set via ctx.ui.setStatus() */
+	/** RegisteredModule status texts set via ctx.ui.setStatus() */
 	getExtensionStatuses(): ReadonlyMap<string, string> {
 		return this.extensionStatuses;
 	}

@@ -4,7 +4,7 @@ import { spawn } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { ensureTool } from "../../utils/tools-manager.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { pathExists, resolveToCwd } from "./path-utils.ts";
 import { findRenderers } from "./renderers/find.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -83,7 +83,7 @@ export function createFindToolDefinition(
 			{ pattern, path: searchDir, limit }: { pattern: string; path?: string; limit?: number },
 			signal?: AbortSignal,
 			_onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			return new Promise((resolve, reject) => {
 				if (signal?.aborted) {

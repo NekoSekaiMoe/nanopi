@@ -53,7 +53,7 @@ const RESTORE_OPTIONS: { label: string; value: RestoreMode }[] = [
 
 async function runRewindFlow(
   state: RewindState,
-  ctx: import("@mariozechner/pi-coding-agent").ExtensionCommandContext,
+  ctx: import("@mariozechner/pi-coding-agent").ModuleCommandContext,
 ): Promise<void> {
   if (!state.gitAvailable || !state.repoRoot || !state.sessionId) {
     ctx.ui.notify("Rewind not available (no git repo or session)", "warning");
@@ -313,7 +313,7 @@ export function registerCommands(pi: ExtensionAPI, state: RewindState): void {
   pi.registerShortcut("escape escape", {
     description: "Rewind (same as /rewind)",
     handler: async (ctx) => {
-      // Shortcut handler gets ExtensionContext, not CommandContext.
+      // Shortcut handler gets ModuleContext, not CommandContext.
       // We can't call navigateTree from here, so do files-only quick rewind.
       if (!state.gitAvailable || !state.repoRoot || !state.sessionId) {
         ctx.ui.notify("Rewind not available", "warning");

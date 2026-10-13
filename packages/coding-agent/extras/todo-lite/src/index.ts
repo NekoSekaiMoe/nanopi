@@ -1,5 +1,5 @@
 /**
- * Todo Extension — 轻量三态任务清单（pending / in_progress / completed）。
+ * Todo RegisteredModule — 轻量三态任务清单（pending / in_progress / completed）。
  *
  * 设计定位：刻意不做状态机约束（与 goal 扩展的 7 态对立），状态自由流转；
  * 状态持久化复用 Pi 自动记录的 toolResult entry（非 appendEntry）；
@@ -20,7 +20,7 @@
  * model 层纯函数返回 Result 对象（合法），dispatcher 拿到 error 时 throw。
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleContext } from "@earendil-works/pi-coding-agent";
 
 import { registerTodosCommand } from "./commands";
 import { registerTodoEventHandlers } from "./handlers";
@@ -38,7 +38,7 @@ export default function (pi: ExtensionAPI) {
 	// todo 进度由 AI 自行管理，goal 不做强制检查。
 
 	// ── 刷新显示（依赖闭包 state） ─────────────────────
-	function refreshDisplay(ctx: ExtensionContext): void {
+	function refreshDisplay(ctx: ModuleContext): void {
 		const statusText = renderStatusText(state.todos, ctx.ui.theme);
 		ctx.ui.setStatus("todo", statusText || undefined);
 		if (state.todos.length === 0) {

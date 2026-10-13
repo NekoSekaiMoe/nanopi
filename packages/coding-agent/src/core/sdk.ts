@@ -9,10 +9,10 @@ import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
 import { CacheWarmer } from "./cache-warmer.ts";
 import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "./compaction/request-metadata.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
-import type { ExtensionRunner, LoadExtensionsResult, SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import type { LoadModulesResult, ModuleRegistry, SessionStartEvent, ToolDefinition } from "./modules/index.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
 import { DefaultResourceLoader } from "./resource-loader.ts";
@@ -75,7 +75,7 @@ export interface CreateAgentSessionOptions {
 	 *
 	 * When omitted, nanopi uses the resolved `defaultTools` setting for the initial
 	 * selection when configured. Otherwise it enables the default built-in tools
-	 * (read, bash, edit, write). Extension/custom tools remain enabled unless
+	 * (read, bash, edit, write). RegisteredModule/custom tools remain enabled unless
 	 * `noTools` changes that default. When provided, only matching tools are
 	 * enabled. An empty list, like `noTools: "all"`, disables every tool.
 	 *
@@ -109,7 +109,7 @@ export interface CreateAgentSessionResult {
 	/** The created session */
 	session: AgentSession;
 	/** Extensions result (for UI context setup in interactive mode) */
-	extensionsResult: LoadExtensionsResult;
+	extensionsResult: LoadModulesResult;
 	/** Warning if session was restored with a different model than saved */
 	modelFallbackMessage?: string;
 }
@@ -118,15 +118,15 @@ export interface CreateAgentSessionResult {
 
 export * from "./agent-session-runtime.ts";
 export type {
-	ExtensionAPI,
-	ExtensionCommandContext,
-	ExtensionContext,
-	ExtensionFactory,
-	InlineExtension,
+	ModuleApi,
+	ModuleCommandContext,
+	ModuleContext,
+	ModuleFactory,
+	SessionModule,
 	SlashCommandInfo,
 	SlashCommandSource,
 	ToolDefinition,
-} from "./extensions/index.ts";
+} from "./modules/index.ts";
 export type { PromptTemplate } from "./prompt-templates.ts";
 export type { Skill } from "./skills.ts";
 export type { Tool } from "./tools/index.ts";
@@ -329,12 +329,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 	};
 
-	const extensionRunnerRef: { current?: ExtensionRunner } = {};
+	const moduleRegistryRef: { current?: ModuleRegistry } = {};
 	const cacheWarmer = new CacheWarmer(
 		modelRuntime,
 		sessionManager,
 		() => settingsManager.getCacheWarmingMode(),
-		async (event) => extensionRunnerRef.current?.emitCacheWarmingDecision(event) ?? event.action,
+		async (event) => event.action,
 	);
 	const buildRequestOptions = (
 		requestModel: Model<any>,
@@ -343,7 +343,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const providerRetrySettings = settingsManager.getProviderRetrySettings();
 		const httpIdleTimeoutMs = settingsManager.getHttpIdleTimeoutMs();
 		const effectiveTimeoutMs = httpIdleTimeoutMs === 0 ? 2147483647 : httpIdleTimeoutMs;
-		const headerRunner = extensionRunnerRef.current;
+		const headerRunner = moduleRegistryRef.current;
 		const requestIdentity = getRequestIdentityMetadata(options.metadata);
 		const compactions = requestIdentity
 			? sessionManager.getBranch().filter((entry) => entry.type === "compaction")
@@ -395,34 +395,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		};
 	};
 	const transformProviderPayload = async (payload: unknown) => {
-		const runner = extensionRunnerRef.current;
+		const runner = moduleRegistryRef.current;
 		if (!runner?.hasHandlers("before_provider_request")) return payload;
 		return runner.emitBeforeProviderRequest(payload);
 	};
-	const handleProviderResponse: NonNullable<ModelsSimpleStreamOptions["onResponse"]> = async (response) => {
-		const runner = extensionRunnerRef.current;
-		if (!runner?.hasHandlers("after_provider_response")) return;
-		await runner.emit({
-			type: "after_provider_response",
-			status: response.status,
-			headers: response.headers,
-		});
-	};
-	const handleProviderStreamEvent: NonNullable<ModelsSimpleStreamOptions["onProviderStreamEvent"]> = async (
-		data,
-		model,
-	) => {
-		const runner = extensionRunnerRef.current;
-		if (!runner?.hasHandlers("provider_stream_event")) return;
-		await runner.emit({
-			data,
-			type: "provider_stream_event",
-			provider: model.provider,
-			api: model.api,
-			model: model.id,
-		});
-	};
-
 	const agent = new Agent({
 		initialState: {
 			systemPrompt: "",
@@ -445,14 +421,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			return modelRuntime.streamSimple(model, context, requestOptions);
 		},
 		onPayload: transformProviderPayload,
-		onResponse: handleProviderResponse,
-		onProviderStreamEvent: handleProviderStreamEvent,
 		sessionId: sessionManager.getSessionId(),
-		transformContext: async (messages) => {
-			const runner = extensionRunnerRef.current;
-			if (!runner) return messages;
-			return runner.emitContext(messages);
-		},
 		steeringMode: settingsManager.getSteeringMode(),
 		followUpMode: settingsManager.getFollowUpMode(),
 		transport: settingsManager.getTransport(),
@@ -488,11 +457,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		defaultToolModifiers: toolModifiers,
 		allowedToolNames,
 		excludedToolNames,
-		extensionRunnerRef,
+		moduleRegistryRef,
 		sessionStartEvent: options.sessionStartEvent,
 	});
 
-	const extensionsResult = resourceLoader.getExtensions();
+	const extensionsResult = resourceLoader.getModules();
 
 	return {
 		session,

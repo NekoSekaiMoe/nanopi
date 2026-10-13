@@ -8,9 +8,9 @@ import { writeZipArchive } from "../utils/zip.ts";
 import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction/compaction.ts";
 import { serializeConversation } from "./compaction/utils.ts";
 import type { CrashRecord } from "./crash-log.ts";
-import type { Extension } from "./extensions/types.ts";
 import { convertToLlm } from "./messages.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
+import type { RegisteredModule } from "./modules/types.ts";
 import type { ReadonlySessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
 
@@ -124,9 +124,9 @@ function describeProvider(modelRuntime: ModelRuntime, provider: Provider) {
 	};
 }
 
-function describeExtension(extension: Extension) {
+function describeExtension(extension: RegisteredModule) {
 	return {
-		path: extension.path,
+		path: extension.name,
 		source: redactUrl(extension.sourceInfo.source),
 		scope: extension.sourceInfo.scope,
 		origin: extension.sourceInfo.origin,
@@ -145,7 +145,7 @@ interface CollectBugReportMetadataOptions {
 	model?: Model<Api>;
 	modelRuntime: ModelRuntime;
 	thinkingLevel: ThinkingLevel;
-	extensions: readonly Extension[];
+	extensions: readonly RegisteredModule[];
 	extensionErrors: ReadonlyArray<{ path: string; error: string }>;
 	globalSettings: Settings;
 	projectSettings: Settings;

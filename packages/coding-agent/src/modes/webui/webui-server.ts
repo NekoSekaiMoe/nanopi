@@ -274,7 +274,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	// Extensions run headless in webui mode: no UI context, but a mode marker so
 	// the extra module routes permission prompts through the bridge below.
 	const rebindSession = async (): Promise<void> => {
-		await runtime.session.bindExtensions({ mode: "webui" });
+		await runtime.session.bindModules({ mode: "webui" });
 	};
 	await rebindSession();
 	runtime.setRebindSession(rebindSession);

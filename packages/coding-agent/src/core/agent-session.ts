@@ -14,7 +14,6 @@
  */
 
 import { readFileSync } from "node:fs";
-import { basename, dirname } from "node:path";
 import {
 	type AfterToolCallContext,
 	type AfterToolCallResult,
@@ -89,26 +88,28 @@ import {
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
+import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
+import { ModelRegistry } from "./model-registry.ts";
+import type { ModelRuntime } from "./model-runtime.ts";
 import {
 	type AgentActivityOutcome,
 	type BoundaryContextPreview,
 	type ContextUsage,
 	type ExecuteToolOptions,
-	type ExtensionCommandContextActions,
-	type ExtensionErrorListener,
-	type ExtensionMode,
-	ExtensionRunner,
-	type ExtensionUIContext,
 	type InputSource,
 	type LoadedResources,
 	type MessageEndEvent,
 	type MessageStartEvent,
 	type MessageUpdateEvent,
+	type ModuleCommandContextActions,
+	type ModuleErrorListener,
+	type ModuleMode,
+	ModuleRegistry,
+	type ModuleUIContext,
 	type ReplacedSessionContext,
 	type SessionBeforeCompactResult,
 	type SessionBeforeTreeResult,
 	type SessionBoundaryDraft,
-	type SessionCompactFailedEvent,
 	type SessionStartEvent,
 	type ShutdownHandler,
 	type ToolDefinition,
@@ -121,14 +122,11 @@ import {
 	type TreePreparation,
 	type TurnStartEvent,
 	wrapRegisteredTools,
-} from "./extensions/index.ts";
-import { type BeforeAgentStartTrigger, emitSessionShutdownEvent } from "./extensions/runner.ts";
-import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
-import { ModelRegistry } from "./model-registry.ts";
-import type { ModelRuntime } from "./model-runtime.ts";
+} from "./modules/index.ts";
+import type { BeforeAgentStartTrigger } from "./modules/registry.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
-import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.ts";
+import type { ResourceLoader } from "./resource-loader.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
@@ -146,7 +144,7 @@ import {
 	type SettingsManager,
 } from "./settings-manager.ts";
 import type { SlashCommandInfo } from "./slash-commands.ts";
-import { BUILTIN_PATH_PREFIX, createSyntheticSourceInfo, isSyntheticPath, type SourceInfo } from "./source-info.ts";
+import { BUILTIN_PATH_PREFIX, createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 import {
 	buildSystemPrompt,
 	buildSystemPromptSections,
@@ -340,19 +338,19 @@ export interface AgentSessionConfig {
 	 * a definition-first registry even when callers provide plain AgentTool instances.
 	 */
 	baseToolsOverride?: Record<string, AgentTool>;
-	/** Mutable ref used by Agent to access the current ExtensionRunner */
-	extensionRunnerRef?: { current?: ExtensionRunner };
+	/** Mutable ref used by Agent to access the current ModuleRegistry */
+	moduleRegistryRef?: { current?: ModuleRegistry };
 	/** Session start event metadata emitted when extensions bind to this runtime. */
 	sessionStartEvent?: SessionStartEvent;
 }
 
-export interface ExtensionBindings {
-	uiContext?: ExtensionUIContext;
-	mode?: ExtensionMode;
-	commandContextActions?: ExtensionCommandContextActions;
+export interface ModuleBindings {
+	uiContext?: ModuleUIContext;
+	mode?: ModuleMode;
+	commandContextActions?: ModuleCommandContextActions;
 	abortHandler?: () => void;
 	shutdownHandler?: ShutdownHandler;
-	onError?: ExtensionErrorListener;
+	onError?: ModuleErrorListener;
 	reloadHooks?: RuntimeReloadCallbacks;
 }
 
@@ -482,16 +480,14 @@ export class AgentSession {
 	private readonly _bashAbortControllers = new Set<AbortController>();
 	private _pendingBashMessages: BashExecutionMessage[] = [];
 
-	// Extension system
-	private _extensionRunner!: ExtensionRunner;
+	// RegisteredModule system
+	private _moduleRegistry!: ModuleRegistry;
 	private _turnIndex = 0;
 	private readonly _entryIdsByMessage = new WeakMap<object, string>();
 	private readonly _boundaryDispatchedMessages = new WeakSet<object>();
 	private _lastAssistantMessage: AssistantMessage | undefined;
 	private _lastAssistantToolResults: AgentMessage[] = [];
 	private _lastActivityOutcome: AgentActivityOutcome = "completed";
-	private _isBeforeSettle = false;
-	private _abortDuringBeforeSettle = false;
 	private _isEmittingAgentSettled = false;
 	private readonly _deferredSettledActions: Array<() => Promise<void>> = [];
 
@@ -499,7 +495,7 @@ export class AgentSession {
 	private _customTools: ToolDefinition[];
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
 	private _cwd: string;
-	private _extensionRunnerRef?: { current?: ExtensionRunner };
+	private _moduleRegistryRef?: { current?: ModuleRegistry };
 	private _initialActiveToolNames?: string[];
 	/**
 	 * Tools of the restored or reloaded loadout that are not registered yet. They are activated when
@@ -514,15 +510,15 @@ export class AgentSession {
 	private _excludedTools?: (name: string) => boolean;
 	private _baseToolsOverride?: Record<string, AgentTool>;
 	private _sessionStartEvent: SessionStartEvent;
-	private _extensionUIContext?: ExtensionUIContext;
-	private _extensionMode: ExtensionMode = "print";
-	private _extensionCommandContextActions?: ExtensionCommandContextActions;
+	private _extensionUIContext?: ModuleUIContext;
+	private _extensionMode: ModuleMode = "print";
+	private _extensionCommandContextActions?: ModuleCommandContextActions;
 	private _extensionAbortHandler?: () => void;
 	private _extensionShutdownHandler?: ShutdownHandler;
-	private _extensionErrorListener?: ExtensionErrorListener;
+	private _extensionErrorListener?: ModuleErrorListener;
 	private _extensionErrorUnsubscriber?: () => void;
 	private _runtimeReloadHooks?: RuntimeReloadCallbacks;
-	private _extensionsBound = false;
+	private _modulesBound = false;
 	private _runtimeAvailability: RuntimeAvailability = "available";
 	private _runtimeReloadError?: RuntimeReloadError;
 
@@ -558,7 +554,7 @@ export class AgentSession {
 		if (this._cacheWarmer) {
 			this._cacheWarmer.onWarmed = (entry) => this._emit({ type: "entry_appended", entry });
 		}
-		this._extensionRunnerRef = config.extensionRunnerRef;
+		this._moduleRegistryRef = config.moduleRegistryRef;
 		this._initialActiveToolNames = config.initialActiveToolNames;
 		this._usesDefaultTools = config.usesDefaultTools ?? false;
 		this._defaultToolModifiers = config.defaultToolModifiers ?? [];
@@ -705,8 +701,8 @@ export class AgentSession {
 	/**
 	 * Install tool hooks once on the Agent instance.
 	 *
-	 * The callbacks read `this._extensionRunner` at execution time, so extension reload swaps in the
-	 * new runner without reinstalling hooks. Extension-specific tool wrappers are still used to adapt
+	 * The callbacks read `this._moduleRegistry` at execution time, so extension reload swaps in the
+	 * new runner without reinstalling hooks. RegisteredModule-specific tool wrappers are still used to adapt
 	 * registered tool execution to the extension context. Tool call and tool result interception now
 	 * happens here instead of in wrappers.
 	 */
@@ -720,7 +716,7 @@ export class AgentSession {
 		{ toolCall, args }: BeforeToolCallContext,
 		parentToolCallId?: string,
 	): Promise<BeforeToolCallResult | undefined> {
-		const runner = this._extensionRunner;
+		const runner = this._moduleRegistry;
 		if (!runner.hasHandlers("tool_call")) {
 			return undefined;
 		}
@@ -737,7 +733,7 @@ export class AgentSession {
 			if (err instanceof Error) {
 				throw err;
 			}
-			throw new Error(`Extension failed, blocking execution: ${String(err)}`);
+			throw new Error(`RegisteredModule failed, blocking execution: ${String(err)}`);
 		}
 	}
 
@@ -746,7 +742,7 @@ export class AgentSession {
 		{ toolCall, args, result, isError }: AfterToolCallContext,
 		parentToolCallId?: string,
 	): Promise<AfterToolCallResult | undefined> {
-		const runner = this._extensionRunner;
+		const runner = this._moduleRegistry;
 		const hookResult = runner.hasHandlers("tool_result")
 			? await runner.emitToolResult({
 					type: "tool_result",
@@ -817,7 +813,7 @@ export class AgentSession {
 				});
 			},
 			emit: async (event) => {
-				await this._extensionRunner.emit(event);
+				await this._moduleRegistry.emit(event);
 				this._emit(event);
 			},
 		});
@@ -911,10 +907,10 @@ export class AgentSession {
 		this._lastActivityOutcome =
 			message.stopReason === "aborted" ? "aborted" : message.stopReason === "error" ? "error" : "completed";
 		const messageEntryId = this._findPersistedMessageEntryId(message);
-		if (!this._extensionRunner.hasHandlers("turn_end")) return false;
+		if (!this._moduleRegistry.hasHandlers("turn_end")) return false;
 		if (!messageEntryId) {
-			this._extensionRunner.emitError({
-				extensionPath: "<boundary>",
+			this._moduleRegistry.emitError({
+				moduleName: "<boundary>",
 				event: "turn_end",
 				error: "turn_end could not resolve the persisted assistant entry ID",
 			});
@@ -924,7 +920,7 @@ export class AgentSession {
 			const entryId = this._findPersistedMessageEntryId(result);
 			return entryId ? [entryId] : [];
 		});
-		const boundary = await this._extensionRunner.emitBoundary(
+		const boundary = await this._moduleRegistry.emitBoundary(
 			{
 				type: "turn_end",
 				turnIndex: this._turnIndex,
@@ -1089,8 +1085,8 @@ export class AgentSession {
 	}
 
 	private _reportInvalidBoundaryContinuation(event: "turn_end" | "agent_before_settle"): void {
-		this._extensionRunner.emitError({
-			extensionPath: "<boundary>",
+		this._moduleRegistry.emitError({
+			moduleName: "<boundary>",
 			event,
 			error: `${event} requested continuation without runnable model context`,
 		});
@@ -1109,12 +1105,6 @@ export class AgentSession {
 			steering: [...this._steeringMessages],
 			followUp: [...this._followUpMessages],
 		});
-	}
-
-	private async _emitSessionCompactFailed(event: Omit<SessionCompactFailedEvent, "type">): Promise<void> {
-		if (this._extensionRunner.hasHandlers("session_compact_failed")) {
-			await this._extensionRunner.emit({ type: "session_compact_failed", ...event });
-		}
 	}
 
 	private _getIdleWaitPromise(): Promise<void> {
@@ -1170,20 +1160,15 @@ export class AgentSession {
 	}
 
 	private async _flushRequestedReload(): Promise<void> {
-		if (
-			this._runtimeAvailability !== "reloadRequested" ||
-			!this._extensionsBound ||
-			!this.isIdle ||
-			this.isCompacting
-		) {
+		if (this._runtimeAvailability !== "reloadRequested" || !this._modulesBound || !this.isIdle || this.isCompacting) {
 			return;
 		}
 
 		try {
 			await this._performReload(this._runtimeReloadHooks);
 		} catch (error) {
-			this._extensionRunner.emitError({
-				extensionPath: "<runtime>",
+			this._moduleRegistry.emitError({
+				moduleName: "<runtime>",
 				event: "request_reload",
 				error: error instanceof Error ? error.message : String(error),
 				stack: error instanceof Error ? error.stack : undefined,
@@ -1249,7 +1234,7 @@ export class AgentSession {
 		this._isEmittingAgentSettled = true;
 		try {
 			const aborted = this._agentRunAbortRequested;
-			await this._extensionRunner.emit({ type: "agent_settled", aborted });
+			await this._moduleRegistry.emit({ type: "agent_settled", aborted });
 			this._emit({ type: "agent_settled", aborted });
 		} finally {
 			this._isEmittingAgentSettled = false;
@@ -1455,16 +1440,16 @@ export class AgentSession {
 	private async _emitExtensionEvent(event: AgentEvent): Promise<void> {
 		if (event.type === "agent_start") {
 			this._turnIndex = 0;
-			await this._extensionRunner.emit({ type: "agent_start" });
+			await this._moduleRegistry.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
-			await this._extensionRunner.emit({ type: "agent_end", messages: event.messages });
+			await this._moduleRegistry.emit({ type: "agent_end", messages: event.messages });
 		} else if (event.type === "turn_start") {
 			const extensionEvent: TurnStartEvent = {
 				type: "turn_start",
 				turnIndex: this._turnIndex,
 				timestamp: Date.now(),
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		} else if (event.type === "turn_end") {
 			if (event.message.role === "assistant" && !this._boundaryDispatchedMessages.delete(event.message)) {
 				await this._dispatchTurnEndBoundary(event.message, event.toolResults);
@@ -1475,20 +1460,20 @@ export class AgentSession {
 				type: "message_start",
 				message: event.message,
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		} else if (event.type === "message_update") {
 			const extensionEvent: MessageUpdateEvent = {
 				type: "message_update",
 				message: event.message,
 				assistantMessageEvent: event.assistantMessageEvent,
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		} else if (event.type === "message_end") {
 			const extensionEvent: MessageEndEvent = {
 				type: "message_end",
 				message: event.message,
 			};
-			const replacement = await this._extensionRunner.emitMessageEnd(extensionEvent);
+			const replacement = await this._moduleRegistry.emitMessageEnd(extensionEvent);
 			if (replacement) {
 				// Untyped extension handlers can return messages with null/missing content;
 				// normalize so it never enters agent state or session history.
@@ -1509,7 +1494,7 @@ export class AgentSession {
 				toolName: event.toolName,
 				args: event.args,
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		} else if (event.type === "tool_execution_update") {
 			const extensionEvent: ToolExecutionUpdateEvent = {
 				type: "tool_execution_update",
@@ -1518,7 +1503,7 @@ export class AgentSession {
 				args: event.args,
 				partialResult: event.partialResult,
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		} else if (event.type === "tool_execution_end") {
 			const extensionEvent: ToolExecutionEndEvent = {
 				type: "tool_execution_end",
@@ -1528,7 +1513,7 @@ export class AgentSession {
 				isError: event.isError,
 				...(event.durationMs === undefined ? {} : { durationMs: event.durationMs }),
 			};
-			await this._extensionRunner.emit(extensionEvent);
+			await this._moduleRegistry.emit(extensionEvent);
 		}
 	}
 
@@ -1573,9 +1558,6 @@ export class AgentSession {
 			// Dispose must succeed even if an abort hook throws.
 		}
 
-		this._extensionRunner.invalidate(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured nanopi or ctx after the runtime that created it has been replaced. For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession.",
-		);
 		this._disconnectFromAgent();
 		this._eventListeners = [];
 		if (this._cacheWarmer) {
@@ -1767,8 +1749,8 @@ export class AgentSession {
 					}
 					for (const name of changes?.hiddenDeclarations ?? []) hidden.add(name);
 				} catch (error) {
-					this._extensionRunner.emitError({
-						extensionPath: sourceInfo.path,
+					this._moduleRegistry.emitError({
+						moduleName: sourceInfo.path,
 						event: "prepare_loadout",
 						error: error instanceof Error ? error.message : String(error),
 						stack: error instanceof Error ? error.stack : undefined,
@@ -2046,7 +2028,7 @@ export class AgentSession {
 		}
 
 		const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
-		const result = await this._extensionRunner.emitBeforeAgentStart(trigger, this._baseSystemPromptOptions);
+		const result = await this._moduleRegistry.emitBeforeAgentStart(trigger, this._baseSystemPromptOptions);
 		// Handlers may edit event.systemPromptOptions.selectedTools or call setActiveTools(),
 		// which updates the live loadout instead. An explicit edit wins; otherwise the live
 		// loadout is authoritative, so a setActiveTools() call is not undone here.
@@ -2131,27 +2113,7 @@ export class AgentSession {
 	}
 
 	private async _runBeforeSettleBoundary(): Promise<boolean> {
-		if (!this._extensionRunner.hasHandlers("agent_before_settle")) return this.agent.hasQueuedMessages();
-		this._isBeforeSettle = true;
-		this._abortDuringBeforeSettle = false;
-		try {
-			const result = await this._extensionRunner.emitBoundary(
-				{ type: "agent_before_settle", outcome: this._lastActivityOutcome },
-				(entries) => this._buildBoundaryContext(entries, "agent_before_settle"),
-			);
-			this._commitBoundaryDrafts(result.entries);
-			this._flushPendingCustomMessages();
-			const finalContext = this._buildBoundaryContext([], "agent_before_settle");
-			if (this._abortDuringBeforeSettle) return false;
-			const shouldContinue = result.continue || this.agent.hasQueuedMessages();
-			if (shouldContinue && !finalContext.canContinue) {
-				if (result.continue) this._reportInvalidBoundaryContinuation("agent_before_settle");
-				return false;
-			}
-			return shouldContinue;
-		} finally {
-			this._isBeforeSettle = false;
-		}
+		return this.agent.hasQueuedMessages();
 	}
 
 	private async _runInputHandlers(
@@ -2160,11 +2122,11 @@ export class AgentSession {
 		source: InputSource,
 		streamingBehavior?: "steer" | "followUp",
 	): Promise<{ text: string; images: ImageContent[] | undefined } | undefined> {
-		if (!this._extensionRunner.hasHandlers("input")) {
+		if (!this._moduleRegistry.hasHandlers("input")) {
 			return { text, images };
 		}
 
-		const inputResult = await this._extensionRunner.emitInput(text, images, source, streamingBehavior);
+		const inputResult = await this._moduleRegistry.emitInput(text, images, source, streamingBehavior);
 		if (inputResult.action === "handled") {
 			return undefined;
 		}
@@ -2268,11 +2230,11 @@ export class AgentSession {
 		const preflightResult = options?.preflightResult;
 		this.assertRuntimeAvailable();
 		// Handle extension commands first (execute immediately, even during streaming)
-		// Extension commands manage their own LLM interaction via nanopi.sendMessage()
+		// RegisteredModule commands manage their own LLM interaction via nanopi.sendMessage()
 		if (expandPromptTemplates && text.startsWith("/")) {
 			const handled = await this._tryExecuteExtensionCommand(text);
 			if (handled) {
-				// Extension command executed, no prompt to send
+				// RegisteredModule command executed, no prompt to send
 				preflightResult?.("handled");
 				return;
 			}
@@ -2354,18 +2316,18 @@ export class AgentSession {
 		const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
 		const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1);
 
-		const command = this._extensionRunner.getCommand(commandName);
+		const command = this._moduleRegistry.getCommand(commandName);
 		if (!command) return false;
 
 		// Get command context from extension runner (includes session control methods)
-		const ctx = this._extensionRunner.createCommandContext();
+		const ctx = this._moduleRegistry.createCommandContext();
 
-		await this._extensionRunner.runExtensionOperation(async () => {
+		await this._moduleRegistry.runExtensionOperation(async () => {
 			try {
 				await command.handler(args, ctx);
 			} catch (err) {
-				this._extensionRunner.emitError({
-					extensionPath: `command:${commandName}`,
+				this._moduleRegistry.emitError({
+					moduleName: `command:${commandName}`,
 					event: "command",
 					error: err instanceof Error ? err.message : String(err),
 				});
@@ -2396,8 +2358,8 @@ export class AgentSession {
 			return args ? `${skillBlock}\n\n${args}` : skillBlock;
 		} catch (err) {
 			// Emit error like extension commands do
-			this._extensionRunner.emitError({
-				extensionPath: skill.filePath,
+			this._moduleRegistry.emitError({
+				moduleName: skill.filePath,
 				event: "skill_expansion",
 				error: err instanceof Error ? err.message : String(err),
 			});
@@ -2504,11 +2466,11 @@ export class AgentSession {
 	private _throwIfExtensionCommand(text: string): void {
 		const spaceIndex = text.indexOf(" ");
 		const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-		const command = this._extensionRunner.getCommand(commandName);
+		const command = this._moduleRegistry.getCommand(commandName);
 
 		if (command) {
 			throw new Error(
-				`Extension command "/${commandName}" cannot be queued. Use prompt() or execute the command when not streaming.`,
+				`RegisteredModule command "/${commandName}" cannot be queued. Use prompt() or execute the command when not streaming.`,
 			);
 		}
 	}
@@ -2674,7 +2636,6 @@ export class AgentSession {
 		this.abortRetry();
 		this.abortCompaction();
 		this.abortBranchSummary();
-		if (this._isBeforeSettle) this._abortDuringBeforeSettle = true;
 		this.agent.abort();
 		await this.waitForIdle();
 	}
@@ -2696,7 +2657,7 @@ export class AgentSession {
 		source: "set" | "cycle" | "restore",
 	): Promise<void> {
 		if (modelsAreEqual(previousModel, nextModel)) return;
-		await this._extensionRunner.emit({
+		await this._moduleRegistry.emit({
 			type: "model_select",
 			model: nextModel,
 			previousModel,
@@ -2862,15 +2823,6 @@ export class AgentSession {
 		if (isChanging) {
 			this.sessionManager.appendThinkingLevelChange(effectiveLevel);
 			this._emit({ type: "thinking_level_changed", level: effectiveLevel });
-			void this._extensionRunner
-				.emit({
-					type: "thinking_level_select",
-					level: effectiveLevel,
-					previousLevel,
-				})
-				.catch(() => {
-					// Deferred reload failures are reported by _flushRequestedReload().
-				});
 		}
 	}
 
@@ -3122,8 +3074,8 @@ export class AgentSession {
 
 			let extensionCompaction: CompactionResult | undefined;
 
-			if (this._extensionRunner.hasHandlers("session_before_compact")) {
-				const result = (await this._extensionRunner.emit({
+			if (this._moduleRegistry.hasHandlers("session_before_compact")) {
+				const result = (await this._moduleRegistry.emit({
 					type: "session_before_compact",
 					preparation,
 					branchEntries: pathEntries,
@@ -3151,7 +3103,7 @@ export class AgentSession {
 			let details: unknown;
 
 			if (extensionCompaction) {
-				// Extension provided compaction content
+				// RegisteredModule provided compaction content
 				summary = extensionCompaction.summary;
 				firstKeptEntryId = extensionCompaction.firstKeptEntryId;
 				tokensBefore = extensionCompaction.tokensBefore;
@@ -3187,8 +3139,8 @@ export class AgentSession {
 				| CompactionEntry
 				| undefined;
 
-			if (this._extensionRunner && savedCompactionEntry) {
-				await this._extensionRunner.emit({
+			if (this._moduleRegistry && savedCompactionEntry) {
+				await this._moduleRegistry.emit({
 					type: "session_compact",
 					compactionEntry: savedCompactionEntry,
 					fromExtension,
@@ -3228,13 +3180,6 @@ export class AgentSession {
 				aborted,
 				willRetry: false,
 				errorMessage,
-			});
-			await this._emitSessionCompactFailed({
-				reason: "manual",
-				errorMessage,
-				aborted,
-				willRetry: false,
-				fromExtension,
 			});
 			throw error;
 		} finally {
@@ -3363,13 +3308,6 @@ export class AgentSession {
 					willRetry: false,
 					errorMessage,
 				});
-				await this._emitSessionCompactFailed({
-					reason: "overflow",
-					errorMessage,
-					aborted: false,
-					willRetry: false,
-					fromExtension: false,
-				});
 				return false;
 			}
 
@@ -3456,8 +3394,8 @@ export class AgentSession {
 
 			let extensionCompaction: CompactionResult | undefined;
 
-			if (this._extensionRunner.hasHandlers("session_before_compact")) {
-				const extensionResult = (await this._extensionRunner.emit({
+			if (this._moduleRegistry.hasHandlers("session_before_compact")) {
+				const extensionResult = (await this._moduleRegistry.emit({
 					type: "session_before_compact",
 					preparation,
 					branchEntries: pathEntries,
@@ -3486,7 +3424,7 @@ export class AgentSession {
 			let details: unknown;
 
 			if (extensionCompaction) {
-				// Extension provided compaction content
+				// RegisteredModule provided compaction content
 				summary = extensionCompaction.summary;
 				firstKeptEntryId = extensionCompaction.firstKeptEntryId;
 				tokensBefore = extensionCompaction.tokensBefore;
@@ -3519,8 +3457,8 @@ export class AgentSession {
 				| CompactionEntry
 				| undefined;
 
-			if (this._extensionRunner && savedCompactionEntry) {
-				await this._extensionRunner.emit({
+			if (this._moduleRegistry && savedCompactionEntry) {
+				await this._moduleRegistry.emit({
 					type: "session_compact",
 					compactionEntry: savedCompactionEntry,
 					fromExtension,
@@ -3561,13 +3499,6 @@ export class AgentSession {
 					willRetry: false,
 					errorMessage,
 				});
-				await this._emitSessionCompactFailed({
-					reason,
-					errorMessage,
-					aborted,
-					willRetry: false,
-					fromExtension,
-				});
 			}
 			return false;
 		} finally {
@@ -3591,7 +3522,7 @@ export class AgentSession {
 		return this.settingsManager.getCompactionEnabled();
 	}
 
-	async bindExtensions(bindings: ExtensionBindings): Promise<void> {
+	async bindModules(bindings: ModuleBindings): Promise<void> {
 		if (bindings.uiContext !== undefined) {
 			this._extensionUIContext = bindings.uiContext;
 		}
@@ -3614,10 +3545,10 @@ export class AgentSession {
 			this._runtimeReloadHooks = bindings.reloadHooks;
 		}
 
-		this._extensionsBound = false;
-		this._applyExtensionBindings(this._extensionRunner);
+		this._modulesBound = false;
+		this._applyModuleBindings(this._moduleRegistry);
 		await this._startRuntime(this._sessionStartEvent);
-		this._extensionsBound = true;
+		this._modulesBound = true;
 		await this._flushRequestedReload();
 	}
 
@@ -3626,63 +3557,10 @@ export class AgentSession {
 		beforeSessionStart?: () => void | Promise<void>,
 	): Promise<void> {
 		await beforeSessionStart?.();
-		await this._extensionRunner.emit(event);
-		await this.extendResourcesFromExtensions(event.reason === "reload" ? "reload" : "startup");
+		await this._moduleRegistry.emit(event);
 	}
 
-	private async extendResourcesFromExtensions(reason: "startup" | "reload"): Promise<void> {
-		if (!this._extensionRunner.hasHandlers("resources_discover")) {
-			return;
-		}
-
-		const { skillPaths, promptPaths, themePaths } = await this._extensionRunner.emitResourcesDiscover(
-			this._cwd,
-			reason,
-		);
-
-		if (skillPaths.length === 0 && promptPaths.length === 0 && themePaths.length === 0) {
-			return;
-		}
-
-		const extensionPaths: ResourceExtensionPaths = {
-			skillPaths: this.buildExtensionResourcePaths(skillPaths),
-			promptPaths: this.buildExtensionResourcePaths(promptPaths),
-			themePaths: this.buildExtensionResourcePaths(themePaths),
-		};
-
-		this._resourceLoader.extendResources(extensionPaths);
-		this._rebuildSystemPrompt(this.getActiveToolNames());
-	}
-
-	private buildExtensionResourcePaths(entries: Array<{ path: string; extensionPath: string }>): Array<{
-		path: string;
-		metadata: { source: string; scope: "temporary"; origin: "top-level"; baseDir?: string };
-	}> {
-		return entries.map((entry) => {
-			const source = this.getExtensionSourceLabel(entry.extensionPath);
-			const baseDir = isSyntheticPath(entry.extensionPath) ? undefined : dirname(entry.extensionPath);
-			return {
-				path: entry.path,
-				metadata: {
-					source,
-					scope: "temporary",
-					origin: "top-level",
-					baseDir,
-				},
-			};
-		});
-	}
-
-	private getExtensionSourceLabel(extensionPath: string): string {
-		if (isSyntheticPath(extensionPath)) {
-			return `extension:${extensionPath.replace(/[<>]/g, "")}`;
-		}
-		const base = basename(extensionPath);
-		const name = base.replace(/\.(ts|js)$/, "");
-		return `extension:${name}`;
-	}
-
-	private _applyExtensionBindings(runner: ExtensionRunner): void {
+	private _applyModuleBindings(runner: ModuleRegistry): void {
 		runner.setUIContext(this._extensionUIContext, this._extensionMode);
 		runner.bindCommandContext(this._extensionCommandContextActions);
 
@@ -3706,7 +3584,7 @@ export class AgentSession {
 		this.agent.state.model = refreshedModel;
 	}
 
-	private _bindExtensionCore(runner: ExtensionRunner): void {
+	private _bindExtensionCore(runner: ModuleRegistry): void {
 		const getLoadedResources = (): LoadedResources => {
 			const loader = this._resourceLoader;
 			const systemPromptSource = loader.getSystemPromptSource();
@@ -3724,9 +3602,9 @@ export class AgentSession {
 					.getPrompts()
 					.prompts.map((prompt) => ({ name: prompt.name, path: prompt.filePath, sourceInfo: prompt.sourceInfo })),
 				extensions: loader
-					.getExtensions()
-					.extensions.filter((extension) => !extension.hidden)
-					.map((extension) => ({ path: extension.path, sourceInfo: extension.sourceInfo })),
+					.getModules()
+					.modules.filter((module) => !module.hidden)
+					.map((module) => ({ path: module.name, sourceInfo: module.sourceInfo })),
 			};
 		};
 		const getCommands = (): SlashCommandInfo[] => {
@@ -3759,7 +3637,7 @@ export class AgentSession {
 				sendMessage: (message, options) => {
 					this.sendCustomMessage(message, options).catch((err) => {
 						runner.emitError({
-							extensionPath: "<runtime>",
+							moduleName: "<runtime>",
 							event: "send_message",
 							error: err instanceof Error ? err.message : String(err),
 						});
@@ -3768,7 +3646,7 @@ export class AgentSession {
 				sendUserMessage: (content, options) => {
 					this.sendUserMessage(content, options).catch((err) => {
 						runner.emitError({
-							extensionPath: "<runtime>",
+							moduleName: "<runtime>",
 							event: "send_user_message",
 							error: err instanceof Error ? err.message : String(err),
 						});
@@ -3880,7 +3758,7 @@ export class AgentSession {
 		const previousActiveToolNames = this.getActiveToolNames();
 		const allowedTools = this._allowedTools;
 
-		const registeredTools = this._extensionRunner.getAllRegisteredTools();
+		const registeredTools = this._moduleRegistry.getAllRegisteredTools();
 		const allCustomTools = [
 			...registeredTools,
 			...this._customTools.map((definition) => ({
@@ -3922,7 +3800,7 @@ export class AgentSession {
 				})
 				.filter((entry): entry is readonly [string, string[]] => entry !== undefined),
 		);
-		const runner = this._extensionRunner;
+		const runner = this._moduleRegistry;
 		const wrappedExtensionTools = wrapRegisteredTools(allCustomTools, runner);
 		const wrappedBuiltInTools = wrapRegisteredTools(
 			Array.from(this._baseToolDefinitions.values())
@@ -4007,25 +3885,21 @@ export class AgentSession {
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
 		);
 
-		const extensionsResult = this._resourceLoader.getExtensions();
-		if (options.flagValues) {
-			for (const [name, value] of options.flagValues) {
-				extensionsResult.runtime.flagValues.set(name, value);
+		const extensionsResult = this._resourceLoader.getModules();
+		if (!this._moduleRegistry) {
+			this._moduleRegistry = new ModuleRegistry(
+				extensionsResult.modules,
+				extensionsResult.runtime,
+				this._cwd,
+				this.sessionManager,
+				new ModelRegistry(this._modelRuntime),
+			);
+			if (this._moduleRegistryRef) {
+				this._moduleRegistryRef.current = this._moduleRegistry;
 			}
+			this._bindExtensionCore(this._moduleRegistry);
+			this._applyModuleBindings(this._moduleRegistry);
 		}
-
-		this._extensionRunner = new ExtensionRunner(
-			extensionsResult.extensions,
-			extensionsResult.runtime,
-			this._cwd,
-			this.sessionManager,
-			new ModelRegistry(this._modelRuntime),
-		);
-		if (this._extensionRunnerRef) {
-			this._extensionRunnerRef.current = this._extensionRunner;
-		}
-		this._bindExtensionCore(this._extensionRunner);
-		this._applyExtensionBindings(this._extensionRunner);
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
@@ -4039,21 +3913,18 @@ export class AgentSession {
 
 	async reload(): Promise<void> {
 		this.assertRuntimeAvailable();
-		if (!this.isIdle || this.isCompacting || this._extensionRunner.hasActiveOperation()) {
+		if (!this.isIdle || this.isCompacting || this._moduleRegistry.hasActiveOperation()) {
 			throw new Error("Cannot reload while a runtime operation is active");
 		}
 		await this._performReload(this._runtimeReloadHooks);
 	}
 
-	/** Tear down the old runtime, then enter the same load and start path used during startup. */
+	/** Reload settings and resources (skills, prompts, themes). Modules are static:
+	 * their registry and registrations survive a reload. */
 	private async _reloadRuntime(
 		beforeSessionStart: RuntimeReloadCallbacks["beforeSessionStart"],
 		onInvalidated: () => void,
 	): Promise<void> {
-		const oldRunner = this._extensionRunner;
-		const previousFlagValues = oldRunner.getFlagValues();
-		await emitSessionShutdownEvent(oldRunner, { type: "session_shutdown", reason: "reload" });
-		oldRunner.invalidate();
 		const getDefaultTools = () =>
 			this._usesDefaultTools
 				? applyToolModifiers(
@@ -4074,10 +3945,9 @@ export class AgentSession {
 		for (const name of this.getActiveToolNames()) this._pendingToolNames.add(name);
 		this._loadRuntime({
 			activeToolNames: [...this.getActiveToolNames(), ...addedDefaultTools],
-			flagValues: previousFlagValues,
 			includeAllExtensionTools: true,
 		});
-		if (this._extensionsBound) {
+		if (this._modulesBound) {
 			await this._startRuntime({ type: "session_start", reason: "reload" }, beforeSessionStart);
 		}
 	}
@@ -4325,11 +4195,7 @@ export class AgentSession {
 	 */
 	setSessionName(name: string): void {
 		this.sessionManager.appendSessionInfo(name);
-		const event = { type: "session_info_changed", name: this.sessionManager.getSessionName() } as const;
-		this._emit(event);
-		void this._extensionRunner.emit(event).catch(() => {
-			// Deferred reload failures are reported by _flushRequestedReload().
-		});
+		this._emit({ type: "session_info_changed", name: this.sessionManager.getSessionName() });
 	}
 
 	// =========================================================================
@@ -4409,8 +4275,8 @@ export class AgentSession {
 			let fromExtension = false;
 
 			// Emit session_before_tree event
-			if (this._extensionRunner.hasHandlers("session_before_tree")) {
-				const result = (await this._extensionRunner.emit({
+			if (this._moduleRegistry.hasHandlers("session_before_tree")) {
+				const result = (await this._moduleRegistry.emit({
 					type: "session_before_tree",
 					preparation,
 					signal: this._branchSummaryAbortController.signal,
@@ -4525,7 +4391,7 @@ export class AgentSession {
 			this._restoreToolsFromTranscript();
 
 			// Emit session_tree event
-			await this._extensionRunner.emit({
+			await this._moduleRegistry.emit({
 				type: "session_tree",
 				newLeafId: this.sessionManager.getLeafId(),
 				oldLeafId,
@@ -4685,7 +4551,7 @@ export class AgentSession {
 		// Create tool renderer if we have an extension runner (for custom tool HTML rendering)
 		const toolRenderer: ToolHtmlRenderer = createToolHtmlRenderer({
 			getToolRenderers: (name) =>
-				this._extensionRunner.resolveToolRenderers(name, () => this.getToolDefinition(name)),
+				this._moduleRegistry.resolveToolRenderers(name, () => this.getToolDefinition(name)),
 			theme,
 			cwd: this.sessionManager.getCwd(),
 		});
@@ -4761,13 +4627,13 @@ export class AgentSession {
 	}
 
 	// =========================================================================
-	// Extension System
+	// RegisteredModule System
 	// =========================================================================
 
 	createReplacedSessionContext(): ReplacedSessionContext {
 		const context = Object.defineProperties(
 			{},
-			Object.getOwnPropertyDescriptors(this._extensionRunner.createCommandContext()),
+			Object.getOwnPropertyDescriptors(this._moduleRegistry.createCommandContext()),
 		) as ReplacedSessionContext;
 		context.sendMessage = (message, options) => this.sendCustomMessage(message, options);
 		context.sendUserMessage = (content, options) => this.sendUserMessage(content, options);
@@ -4778,13 +4644,13 @@ export class AgentSession {
 	 * Check if extensions have handlers for a specific event type.
 	 */
 	hasExtensionHandlers(eventType: string): boolean {
-		return this._extensionRunner.hasHandlers(eventType);
+		return this._moduleRegistry.hasHandlers(eventType);
 	}
 
 	/**
 	 * Get the extension runner (for setting UI context and error handlers).
 	 */
-	get extensionRunner(): ExtensionRunner {
-		return this._extensionRunner;
+	get moduleRegistry(): ModuleRegistry {
+		return this._moduleRegistry;
 	}
 }

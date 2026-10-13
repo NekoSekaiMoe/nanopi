@@ -8,7 +8,7 @@
 import type { ImageContent, TextContent } from "@nanopi/pi-ai";
 import type { Component } from "@nanopi/pi-tui";
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
-import type { ToolRenderContext, ToolRenderers } from "../extensions/types.ts";
+import type { ToolRenderContext, ToolRenderers } from "../modules/types.ts";
 import { ansiLinesToHtml } from "./ansi-to-html.ts";
 
 export interface ToolHtmlRendererDeps {

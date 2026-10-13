@@ -80,7 +80,7 @@ export {
 } from "./write.ts";
 
 import type { AgentTool } from "@nanopi/pi-agent-core";
-import type { ToolDefinition } from "../extensions/types.ts";
+import type { ToolDefinition } from "../modules/types.ts";
 import { type BashToolOptions, createBashTool, createBashToolDefinition } from "./bash.ts";
 import { createEditTool, createEditToolDefinition, type EditToolOptions } from "./edit.ts";
 import { createFindTool, createFindToolDefinition, type FindToolOptions } from "./find.ts";

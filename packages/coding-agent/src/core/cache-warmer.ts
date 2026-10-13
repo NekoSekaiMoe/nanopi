@@ -314,7 +314,7 @@ export class CacheWarmer {
 				action,
 			});
 		} catch {
-			// Extension failures fall back to nanopi's own decision.
+			// RegisteredModule failures fall back to nanopi's own decision.
 		}
 		if (!this.validateRun(run) || this.refreshDeadlineMissed(run)) return;
 		const extensionOverride = action !== decision.action;

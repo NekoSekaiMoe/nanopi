@@ -1,4 +1,4 @@
-import type { MarkdownTransformContext, MarkdownTransformer } from "../../../core/extensions/types.ts";
+import type { MarkdownTransformContext, MarkdownTransformer } from "../../../core/modules/types.ts";
 
 export function createMarkdownTransform(
 	messageType: MarkdownTransformContext["messageType"],

@@ -4,7 +4,7 @@
 
 import { StringEnum } from "@earendil-works/pi-ai";
 import { Text } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleContext, Theme } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 
 import {
@@ -198,8 +198,8 @@ function handleClear(state: TodoSessionState): string {
 function executeTodoAction(
 	params: TodoActionParams,
 	state: TodoSessionState,
-	ctx: ExtensionContext,
-	refreshDisplay: (ctx: ExtensionContext) => void,
+	ctx: ModuleContext,
+	refreshDisplay: (ctx: ModuleContext) => void,
 ): {
 	content: Array<{ type: "text"; text: string }>;
 	details: TodoDetails;
@@ -251,7 +251,7 @@ function executeTodoAction(
 export function registerTodoTool(
 	pi: ExtensionAPI,
 	state: TodoSessionState,
-	refreshDisplay: (ctx: ExtensionContext) => void,
+	refreshDisplay: (ctx: ModuleContext) => void,
 ): void {
 	pi.registerTool({
 		name: "todo",
@@ -265,7 +265,7 @@ export function registerTodoTool(
 		executionMode: "sequential",
 		parameters: TodoParams,
 
-		async execute(_toolCallId: string, params: Static<typeof TodoParams>, signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ExtensionContext) {
+		async execute(_toolCallId: string, params: Static<typeof TodoParams>, signal: AbortSignal | undefined, _onUpdate: unknown, ctx: ModuleContext) {
 			if (signal?.aborted) throw new Error("Todo call aborted by signal.");
 			return executeTodoAction(params as TodoActionParams, state, ctx, refreshDisplay);
 		},

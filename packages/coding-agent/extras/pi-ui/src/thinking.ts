@@ -46,12 +46,12 @@
  *     action) is wrapped to flip this module's expansion flag; the original
  *     still performs the chat rebuild and streaming-component refresh.
  *   - `SettingsList.prototype.render` drops the "hide-thinking" item.
- *   - `pi.on("message_update")` keeps the freshest ExtensionContext (model +
+ *   - `pi.on("message_update")` keeps the freshest ModuleContext (model +
  *     API key) for summary calls; the editor factory hand-off captures the
  *     TUI so a landed summary can request an immediate re-render.
  */
 
-import type { ExtensionAPI, ExtensionContext, MarkdownTransformContext, MarkdownTransformer, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme } from "@earendil-works/pi-coding-agent";
 import { AssistantMessageComponent, InteractiveMode } from "@earendil-works/pi-coding-agent";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import type { MarkdownTheme } from "@earendil-works/pi-tui";
@@ -158,8 +158,8 @@ interface FinalRunState {
 
 const finalRuns = new WeakMap<object, FinalRunState>();
 
-/** Freshest ExtensionContext (model + modelRegistry + signal), from events. */
-let latestCtx: ExtensionContext | undefined;
+/** Freshest ModuleContext (model + modelRegistry + signal), from events. */
+let latestCtx: ModuleContext | undefined;
 /** TUI captured from the editor factory; used to repaint when a summary lands. */
 let requestRender: (() => void) | undefined;
 /** Components showing interim summaries; invalidated when a summary lands. */

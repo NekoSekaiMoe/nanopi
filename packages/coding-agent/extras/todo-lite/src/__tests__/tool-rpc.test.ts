@@ -40,7 +40,7 @@ interface RegisteredTool {
 	) => Promise<ExecuteResult>;
 }
 
-// pi-coding-agent 的 ExtensionContext 类型声明里没有 mode 字段（运行时实际有），
+// pi-coding-agent 的 ModuleContext 类型声明里没有 mode 字段（运行时实际有），
 // 与 extension-protocol 的 GuiContext 结构化兼容。这里做最小 mock 并断言。
 interface MockPi {
 	tool?: RegisteredTool;

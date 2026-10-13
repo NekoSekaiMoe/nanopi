@@ -8,17 +8,17 @@
  * - Commands: JSON objects with `type` field, optional `id` for correlation
  * - Responses: JSON objects with `type: "response"`, `command`, `success`, and optional `data`/`error`
  * - Events: AgentSessionEvent objects streamed as they occur
- * - Extension UI: Extension UI requests are emitted, client responds with extension_ui_response
+ * - RegisteredModule UI: RegisteredModule UI requests are emitted, client responds with extension_ui_response
  */
 
 import * as crypto from "node:crypto";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import type {
-	ExtensionUIContext,
-	ExtensionUIDialogOptions,
-	ExtensionWidgetOptions,
+	ModuleUIContext,
+	ModuleUIDialogOptions,
+	ModuleWidgetOptions,
 	WorkingIndicatorOptions,
-} from "../../core/extensions/index.ts";
+} from "../../core/modules/index.ts";
 import {
 	flushRawStdout,
 	takeOverStdout,
@@ -89,7 +89,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 	/** Helper for dialog methods with signal/timeout support */
 	function createDialogPromise<T>(
-		opts: ExtensionUIDialogOptions | undefined,
+		opts: ModuleUIDialogOptions | undefined,
 		defaultValue: T,
 		request: Record<string, unknown>,
 		parseResponse: (response: RpcExtensionUIResponse) => T,
@@ -133,7 +133,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 	/**
 	 * Create an extension UI context that uses the RPC protocol.
 	 */
-	const createExtensionUIContext = (): ExtensionUIContext => ({
+	const createExtensionUIContext = (): ModuleUIContext => ({
 		select: (title, options, opts) =>
 			createDialogPromise(opts, undefined, { method: "select", title, options, timeout: opts?.timeout }, (r) =>
 				"cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,
@@ -192,7 +192,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// Hidden thinking label not supported in RPC mode - requires TUI message rendering access
 		},
 
-		setWidget(key: string, content: unknown, options?: ExtensionWidgetOptions): void {
+		setWidget(key: string, content: unknown, options?: ModuleWidgetOptions): void {
 			// Only support string arrays in RPC mode - factory functions are ignored
 			if (content === undefined || Array.isArray(content)) {
 				output({
@@ -316,7 +316,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 
 	const rebindSession = async (): Promise<void> => {
 		session = runtimeHost.session;
-		await session.bindExtensions({
+		await session.bindModules({
 			uiContext: createExtensionUIContext(),
 			mode: "rpc",
 			commandContextActions: {
@@ -344,7 +344,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				shutdownRequested = true;
 			},
 			onError: (err) => {
-				output({ type: "extension_error", extensionPath: err.extensionPath, event: err.event, error: err.error });
+				output({ type: "extension_error", moduleName: err.moduleName, event: err.event, error: err.error });
 			},
 		});
 
@@ -557,24 +557,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// =================================================================
 
 			case "bash": {
-				const eventResult = await session.extensionRunner.emitUserBash({
-					type: "user_bash",
-					command: command.command,
-					excludeFromContext: command.excludeFromContext ?? false,
-					cwd: session.sessionManager.getCwd(),
-				});
-
-				if (eventResult?.result) {
-					session.recordBashResult(command.command, eventResult.result, {
-						excludeFromContext: command.excludeFromContext,
-					});
-					return success(id, "bash", eventResult.result);
-				}
-
 				const result = await session.executeBash(command.command, undefined, {
 					excludeFromContext: command.excludeFromContext,
 					id,
-					operations: eventResult?.operations,
 				});
 				return success(id, "bash", result);
 			}
@@ -678,7 +663,7 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			case "get_commands": {
 				const commands: RpcSlashCommand[] = [];
 
-				for (const command of session.extensionRunner.getRegisteredCommands()) {
+				for (const command of session.moduleRegistry.getRegisteredCommands()) {
 					commands.push({
 						name: command.invocationName,
 						description: command.description,

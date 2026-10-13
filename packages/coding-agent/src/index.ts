@@ -51,7 +51,26 @@ export {
 	shouldCompact,
 } from "./core/compaction/index.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
-// Extension system
+// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
+export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
+export { convertToLlm } from "./core/messages.ts";
+export { ModelRegistry } from "./core/model-registry.ts";
+export {
+	type ModelScopeDiagnostic,
+	type ResolveCliModelResult,
+	type ResolveModelScopeResult,
+	resolveCliModel,
+	resolveModelScopeWithDiagnostics,
+	type ScopedModel,
+} from "./core/model-resolver.ts";
+export {
+	type CreateModelRuntimeOptions,
+	CredentialSynchronizationError,
+	type CredentialSynchronizationOperation,
+	ModelRuntime,
+	type ModelRuntimeAuthOverrides,
+} from "./core/model-runtime.ts";
+// RegisteredModule system
 export type {
 	AfterProviderResponseEvent,
 	AgentActivityOutcome,
@@ -94,35 +113,17 @@ export type {
 	ExecOptions,
 	ExecResult,
 	ExecuteToolOptions,
-	Extension,
-	ExtensionActions,
 	ExtensionAPI,
-	ExtensionCommandContext,
-	ExtensionCommandContextActions,
-	ExtensionContext,
-	ExtensionContextActions,
-	ExtensionError,
-	ExtensionEvent,
-	ExtensionFactory,
-	ExtensionFlag,
 	ExtensionHandler,
-	ExtensionRuntime,
-	ExtensionShortcut,
-	ExtensionToolContext,
-	ExtensionUIContext,
-	ExtensionUIDialogOptions,
-	ExtensionVirtualModel,
-	ExtensionWidgetOptions,
 	FindToolCallEvent,
 	GrepToolCallEvent,
-	InlineExtension,
 	InputEvent,
 	InputEventResult,
 	InputSource,
 	KeybindingsManager,
-	LoadExtensionsResult,
 	LoadedResource,
 	LoadedResources,
+	LoadModulesResult,
 	LsToolCallEvent,
 	MarkdownTransformContext,
 	MarkdownTransformer,
@@ -134,6 +135,22 @@ export type {
 	MessageUpdateEvent,
 	ModelSelectEvent,
 	ModelSelectSource,
+	ModuleActions,
+	ModuleCommandContext,
+	ModuleCommandContextActions,
+	ModuleContext,
+	ModuleContextActions,
+	ModuleError,
+	ModuleEvent,
+	ModuleFactory,
+	ModuleFlag,
+	ModuleRuntime,
+	ModuleShortcut,
+	ModuleToolContext,
+	ModuleUIContext,
+	ModuleUIDialogOptions,
+	ModuleVirtualModel,
+	ModuleWidgetOptions,
 	NormalizedBuildSystemPromptOptions,
 	PowerShellToolCallEvent,
 	ProjectTrustContext,
@@ -146,6 +163,7 @@ export type {
 	ProviderStreamEvent,
 	ReadToolCallEvent,
 	RegisteredCommand,
+	RegisteredModule,
 	RegisteredTool,
 	ResolvedCommand,
 	ResourcesDiscoverEvent,
@@ -162,6 +180,7 @@ export type {
 	SessionCompactEvent,
 	SessionCompactFailedEvent,
 	SessionInfoChangedEvent,
+	SessionModule,
 	SessionShutdownEvent,
 	SessionStartEvent,
 	SessionTreeEvent,
@@ -199,12 +218,11 @@ export type {
 	WidgetPlacement,
 	WorkingIndicatorOptions,
 	WriteToolCallEvent,
-} from "./core/extensions/index.ts";
+} from "./core/modules/index.ts";
 export {
-	createExtensionRuntime,
+	createModuleRuntime,
 	defineTool,
 	discoverAndLoadExtensions,
-	ExtensionRunner,
 	isBashToolResult,
 	isEditToolResult,
 	isFindToolResult,
@@ -214,28 +232,10 @@ export {
 	isReadToolResult,
 	isToolCallEventType,
 	isWriteToolResult,
+	ModuleRegistry,
 	wrapRegisteredTool,
 	wrapRegisteredTools,
-} from "./core/extensions/index.ts";
-// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
-export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
-export { convertToLlm } from "./core/messages.ts";
-export { ModelRegistry } from "./core/model-registry.ts";
-export {
-	type ModelScopeDiagnostic,
-	type ResolveCliModelResult,
-	type ResolveModelScopeResult,
-	resolveCliModel,
-	resolveModelScopeWithDiagnostics,
-	type ScopedModel,
-} from "./core/model-resolver.ts";
-export {
-	type CreateModelRuntimeOptions,
-	CredentialSynchronizationError,
-	type CredentialSynchronizationOperation,
-	ModelRuntime,
-	type ModelRuntimeAuthOverrides,
-} from "./core/model-runtime.ts";
+} from "./core/modules/index.ts";
 export type {
 	PackageManager,
 	PathMetadata,

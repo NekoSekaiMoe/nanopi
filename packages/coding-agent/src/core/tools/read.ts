@@ -5,7 +5,7 @@ import { access as fsAccess, readFile as fsReadFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { resolveReadPathAsync } from "./path-utils.ts";
 import { readRenderers } from "./renderers/read.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -104,7 +104,7 @@ export function createReadToolDefinition(
 			{ path, offset, limit }: { path: string; offset?: number; limit?: number },
 			signal?: AbortSignal,
 			_onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			return new Promise<{ content: (TextContent | ImageContent)[]; details: ReadToolDetails | undefined }>(
 				(resolve, reject) => {

@@ -8,8 +8,8 @@ import type {
 	ReplacedSessionContext,
 	SessionShutdownEvent,
 	SessionStartEvent,
-} from "./extensions/index.ts";
-import { emitSessionShutdownEvent } from "./extensions/runner.ts";
+} from "./modules/index.ts";
+import { emitSessionShutdownEvent } from "./modules/registry.ts";
 import type { CreateAgentSessionResult } from "./sdk.ts";
 import { assertSessionCwdExists } from "./session-cwd.ts";
 import { SessionManager } from "./session-manager.ts";
@@ -130,28 +130,11 @@ export class AgentSessionRuntime {
 		this.beforeSessionInvalidate = beforeSessionInvalidate;
 	}
 
-	private async emitBeforeSwitch(
-		reason: "new" | "resume",
-		targetSessionFile?: string,
-	): Promise<{ cancelled: boolean }> {
-		const runner = this.session.extensionRunner;
-		if (!runner.hasHandlers("session_before_switch")) {
-			return { cancelled: false };
-		}
-
-		const result = await runner.emit({
-			type: "session_before_switch",
-			reason,
-			targetSessionFile,
-		});
-		return { cancelled: result?.cancel === true };
-	}
-
 	private async emitBeforeFork(
 		entryId: string,
 		options: { position: "before" | "at" },
 	): Promise<{ cancelled: boolean }> {
-		const runner = this.session.extensionRunner;
+		const runner = this.session.moduleRegistry;
 		if (!runner.hasHandlers("session_before_fork")) {
 			return { cancelled: false };
 		}
@@ -169,7 +152,7 @@ export class AgentSessionRuntime {
 		// Settle any active response first so the aborted turn (including tool
 		// results) is persisted to the outgoing session before it is replaced.
 		await this.session.abort();
-		await emitSessionShutdownEvent(this.session.extensionRunner, {
+		await emitSessionShutdownEvent(this.session.moduleRegistry, {
 			type: "session_shutdown",
 			reason,
 			targetSessionFile,
@@ -190,7 +173,7 @@ export class AgentSessionRuntime {
 			await this.rebindSession(this.session);
 		}
 		if (withSession) {
-			await this.session.extensionRunner.runExtensionOperation(() =>
+			await this.session.moduleRegistry.runExtensionOperation(() =>
 				withSession(this.session.createReplacedSessionContext()),
 			);
 		}
@@ -204,11 +187,6 @@ export class AgentSessionRuntime {
 			projectTrustContextFactory?: (cwd: string) => ProjectTrustContext;
 		},
 	): Promise<{ cancelled: boolean }> {
-		const beforeResult = await this.emitBeforeSwitch("resume", sessionPath);
-		if (beforeResult.cancelled) {
-			return beforeResult;
-		}
-
 		const previousSessionFile = this.session.sessionFile;
 		const sessionManager = SessionManager.open(sessionPath, undefined, options?.cwdOverride);
 		assertSessionCwdExists(sessionManager, this.cwd);
@@ -231,11 +209,6 @@ export class AgentSessionRuntime {
 		setup?: (sessionManager: SessionManager) => Promise<void>;
 		withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
 	}): Promise<{ cancelled: boolean }> {
-		const beforeResult = await this.emitBeforeSwitch("new");
-		if (beforeResult.cancelled) {
-			return beforeResult;
-		}
-
 		const previousSessionFile = this.session.sessionFile;
 		const sessionDir = this.session.sessionManager.getSessionDir();
 		const sessionManager = this.session.sessionManager.isPersisted()
@@ -379,11 +352,6 @@ export class AgentSessionRuntime {
 				destinationPath = join(sessionDir, `${name}-${suffix++}${ext}`);
 			}
 		}
-		const beforeResult = await this.emitBeforeSwitch("resume", destinationPath);
-		if (beforeResult.cancelled) {
-			return beforeResult;
-		}
-
 		const previousSessionFile = this.session.sessionFile;
 		if (!sourceAlreadyStored) {
 			copyFileSync(resolvedPath, destinationPath, constants.COPYFILE_EXCL);
@@ -406,7 +374,7 @@ export class AgentSessionRuntime {
 
 	async dispose(): Promise<void> {
 		this.session.beginTeardown();
-		await emitSessionShutdownEvent(this.session.extensionRunner, {
+		await emitSessionShutdownEvent(this.session.moduleRegistry, {
 			type: "session_shutdown",
 			reason: "quit",
 		});

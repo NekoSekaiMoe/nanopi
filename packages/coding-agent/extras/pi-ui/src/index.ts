@@ -1,5 +1,5 @@
 /**
- * pi-ui — Extension entry point
+ * pi-ui — RegisteredModule entry point
  *
  * Reskins Pi's interactive TUI to match a Codex-style look:
  *
@@ -18,7 +18,7 @@
  *     settings entry
  *
  * Wiring only. Each concern lives in its own module and is installed against
- * documented ExtensionAPI / ExtensionUIContext methods:
+ * documented ExtensionAPI / ModuleUIContext methods:
  *   - editor: none — the default composer stays; input frame and menu
  *     direction belong to the core TUI, not the reskin
  *   - footer.ts   -> ctx.ui.setFooter() status toolbar
@@ -41,7 +41,7 @@
  *   pi install npm:@NekoSekaiMoe/pi-ui
  */
 
-import type { ExtensionAPI, ExtensionUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
@@ -60,9 +60,9 @@ const PI_THEME_KEY = Symbol.for("@earendil-works/pi-coding-agent:theme");
  * enough even though refreshDisplay fires from many handlers.
  */
 const todoWidgetsSuppressed = new WeakSet<object>();
-function suppressTodoWidget(ui: ExtensionUIContext): void {
+function suppressTodoWidget(ui: ModuleUIContext): void {
   if (todoWidgetsSuppressed.has(ui)) return;
-  type SetWidget = ExtensionUIContext["setWidget"];
+  type SetWidget = ModuleUIContext["setWidget"];
   const original = ui.setWidget.bind(ui) as SetWidget;
   const wrapped = ((key: string, content: unknown, options?: unknown) =>
     // The cast erases the call-overload so we can reroute "todo" writes.

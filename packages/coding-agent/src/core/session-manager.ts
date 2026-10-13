@@ -93,7 +93,7 @@ export interface CompactionEntry<T = unknown> extends SessionEntryBase {
 	summary: string;
 	firstKeptEntryId: string;
 	tokensBefore: number;
-	/** Extension-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
+	/** RegisteredModule-specific data (e.g., ArtifactIndex, version markers for structured compaction) */
 	details?: T;
 	/** Usage from the LLM call(s) that generated this summary, if available */
 	usage?: Usage;
@@ -107,7 +107,7 @@ export interface BranchSummaryEntry<T = unknown> extends SessionEntryBase {
 	type: "branch_summary";
 	fromId: string;
 	summary: string;
-	/** Extension-specific data (not sent to LLM) */
+	/** RegisteredModule-specific data (not sent to LLM) */
 	details?: T;
 	/** Usage from the LLM call that generated this summary, if available */
 	usage?: Usage;
@@ -1330,7 +1330,7 @@ export class SessionManager {
 
 	/**
 	 * Append a custom message entry (for extensions) that participates in LLM context.
-	 * @param customType Extension identifier for filtering on reload
+	 * @param customType RegisteredModule identifier for filtering on reload
 	 * @param content Message content (string or TextContent/ImageContent array)
 	 * @param display Whether to show in TUI (true = styled display, false = hidden)
 	 * @param details Optional extension-specific metadata (not sent to LLM)

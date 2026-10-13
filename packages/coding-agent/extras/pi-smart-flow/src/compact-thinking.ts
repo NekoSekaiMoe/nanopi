@@ -26,7 +26,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type ExtensionAPI, type ExtensionContext, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, type ModuleContext, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { completeSimple } from "@earendil-works/pi-ai/compat";
 import { Text } from "@earendil-works/pi-tui";
 
@@ -73,7 +73,7 @@ async function saveConfig(config: CompactThinkingConfig): Promise<void> {
 }
 
 /** Live thinking blocks hidden (persisted Pi setting)? Summaries only make sense then. */
-function thinkingHidden(ctx: ExtensionContext): boolean {
+function thinkingHidden(ctx: ModuleContext): boolean {
   try {
     return SettingsManager.create(ctx.cwd).getHideThinkingBlock();
   } catch {
@@ -126,7 +126,7 @@ export function registerCompactThinking(pi: ExtensionAPI): void {
     pi.appendEntry(ENTRY_TYPE, { text, summarized, durationMs });
   };
 
-  const summarize = async (thinking: string, durationMs: number, ctx: ExtensionContext): Promise<void> => {
+  const summarize = async (thinking: string, durationMs: number, ctx: ModuleContext): Promise<void> => {
     if (visibleLines(thinking).length <= MAX_SUMMARY_LINES) {
       appendSummary(thinking, false, durationMs);
       return;

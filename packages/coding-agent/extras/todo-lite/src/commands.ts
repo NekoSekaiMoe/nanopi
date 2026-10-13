@@ -6,7 +6,7 @@
  * 用户在 TUI 中不可见。
  */
 
-import type { ExtensionAPI, ExtensionCommandContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleCommandContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 
 import type { TodoSessionState } from "./state";
@@ -16,7 +16,7 @@ import { TodoListComponent } from "./component";
 export function registerTodosCommand(pi: ExtensionAPI, state: TodoSessionState): void {
 	pi.registerCommand("todos", {
 		description: "View all todos for the current branch",
-		handler: async (_args: string | undefined, ctx: ExtensionCommandContext) => {
+		handler: async (_args: string | undefined, ctx: ModuleCommandContext) => {
 			if (!ctx.hasUI) {
 				ctx.ui.notify("/todos requires interactive mode", "error");
 				return;

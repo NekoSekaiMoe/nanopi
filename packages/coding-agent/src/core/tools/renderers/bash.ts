@@ -17,7 +17,7 @@ import {
 	theme,
 } from "../../../modes/interactive/theme/theme.ts";
 import { splitShellCommand } from "../../../utils/shell-embedded-code.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
+import type { ToolDefinition, ToolRenderResultOptions } from "../../modules/types.ts";
 import type { BashToolDetails } from "../bash.ts";
 import {
 	getTextOutput,

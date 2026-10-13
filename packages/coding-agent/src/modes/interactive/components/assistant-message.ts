@@ -1,6 +1,6 @@
 import type { AssistantMessage } from "@nanopi/pi-ai";
 import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@nanopi/pi-tui";
-import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
+import type { MarkdownTransformer } from "../../../core/modules/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
 

@@ -5,7 +5,7 @@
 import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
-import type { ExtensionFlag } from "../core/extensions/types.ts";
+import type { ModuleFlag } from "../core/modules/types.ts";
 import { getToolListError } from "../core/settings-manager.ts";
 
 export type Mode = "text" | "json" | "rpc";
@@ -33,8 +33,6 @@ export interface Args {
 	excludeTools?: string[];
 	noTools?: boolean;
 	noBuiltinTools?: boolean;
-	extensions?: string[];
-	noExtensions?: boolean;
 	print?: boolean;
 	export?: string;
 	noSkills?: boolean;
@@ -51,7 +49,7 @@ export interface Args {
 	projectTrustOverride?: boolean;
 	messages: string[];
 	fileArgs: string[];
-	/** Unknown flags (potentially extension flags) - map of flag name to value */
+	/** Unknown flags (potentially module-registered flags) - map of flag name to value */
 	unknownFlags: Map<string, boolean | string>;
 	diagnostics: Array<{ type: "warning" | "error"; message: string }>;
 }
@@ -181,11 +179,6 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--export" && i + 1 < args.length) {
 			result.export = args[++i];
-		} else if ((arg === "--extension" || arg === "-e") && i + 1 < args.length) {
-			result.extensions = result.extensions ?? [];
-			result.extensions.push(args[++i]);
-		} else if (arg === "--no-extensions" || arg === "-ne") {
-			result.noExtensions = true;
 		} else if (arg === "--skill" && i + 1 < args.length) {
 			result.skills = result.skills ?? [];
 			result.skills.push(args[++i]);
@@ -252,13 +245,13 @@ export function parseArgs(args: string[]): Args {
 	return result;
 }
 
-export function printHelp(extensionFlags?: ExtensionFlag[]): void {
-	const extensionFlagsText =
-		extensionFlags && extensionFlags.length > 0
-			? `\n${chalk.bold("Extension CLI Flags:")}\n${extensionFlags
+export function printHelp(moduleFlags?: ModuleFlag[]): void {
+	const moduleFlagsText =
+		moduleFlags && moduleFlags.length > 0
+			? `\n${chalk.bold("Module CLI Flags:")}\n${moduleFlags
 					.map((flag) => {
 						const value = flag.type === "string" ? " <value>" : "";
-						const description = flag.description ?? `Registered by ${flag.extensionPath}`;
+						const description = flag.description ?? `Registered by ${flag.moduleName}`;
 						return `  --${flag.name}${value}`.padEnd(30) + description;
 					})
 					.join("\n")}\n`
@@ -269,14 +262,9 @@ ${chalk.bold("Usage:")}
   ${APP_NAME} [options] [--] [@files...] [messages...]
 
 ${chalk.bold("Commands:")}
-  ${APP_NAME} install <source> [-l]     Install extension source and add to settings
-  ${APP_NAME} remove <source> [-l]      Remove extension source from settings
-  ${APP_NAME} uninstall <source> [-l]   Alias for remove
-  ${APP_NAME} list                      List installed extensions from settings
-  ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
   ${APP_NAME} webui [-p <port>]        Start the browser UI on a loopback port (default ${5335})
-  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/list/config/auth
+  ${APP_NAME} <command> --help          Show help for auth/webui
 
 ${chalk.bold("Options:")}
   --provider <name>              Provider to search for --model (requires --model)
@@ -296,14 +284,12 @@ ${chalk.bold("Options:")}
   --name, -n <name>              Set session display name
   --models <patterns>            Comma-separated model patterns for Ctrl+P cycling
                                  Supports globs (anthropic/*, *sonnet*) and fuzzy matching
-  --no-tools, -nt                Disable all tools by default (built-in and extension)
-  --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
+  --no-tools, -nt                Disable all tools by default (built-in and module)
+  --no-builtin-tools, -nbt       Disable built-in tools by default but keep module/custom tools enabled
   --tools, -t <tools>            Comma-separated allowlist of tool names or patterns (*) to enable
                                  Only +name/-name entries add to or remove from the defaults
   --exclude-tools, -xt <tools>   Comma-separated denylist of tool names or patterns (*) to disable
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh, max
-  --extension, -e <path>         Load an extension file or builtin:<name> (can be used multiple times)
-  --no-extensions, -ne           Disable extension discovery and built-in extensions (explicit -e paths still work)
   --skill <path>                 Load a skill file or directory (can be used multiple times)
   --no-skills, -ns               Disable skills discovery and loading
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
@@ -322,7 +308,7 @@ ${chalk.bold("Options:")}
   --help, -h                     Show this help
   --version, -v                  Show version number
 
-Extensions can register additional flags (e.g., --plan from plan-mode extension).${extensionFlagsText}
+Modules can register additional flags (e.g., --yolo from the run-mode module).${moduleFlagsText}
 
 ${chalk.bold("Examples:")}
   # Print a provider API key for an external client
@@ -379,7 +365,7 @@ ${chalk.bold("Examples:")}
   # Read-only mode (no file modifications possible)
   ${APP_NAME} --tools read,grep,find,ls -p "Review the code in src/"
 
-  # Add an extension tool to the default tools
+  # Add a module tool to the default tools
   ${APP_NAME} --tools +llama
 
   # Disable one tool while keeping the rest available

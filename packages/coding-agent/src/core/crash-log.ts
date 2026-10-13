@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { getAgentDir, VERSION } from "../config.ts";
-import type { Extension } from "./extensions/types.ts";
+import type { RegisteredModule } from "./modules/types.ts";
 import { isSyntheticPath } from "./source-info.ts";
 
 export interface CrashRecord {
@@ -44,7 +44,7 @@ function writeCrashLog(records: readonly CrashRecord[], path: string): void {
 	writeFileSync(path, `${JSON.stringify(records, null, 2)}\n`);
 }
 
-type ExtensionStackMetadata = Pick<Extension, "path" | "resolvedPath" | "sourceInfo">;
+type ExtensionStackMetadata = Pick<RegisteredModule, "name" | "sourceInfo">;
 
 function normalizeStackPath(value: string): string {
 	return value.replace(/\\/g, "/").replace(/\/+$/u, "");
@@ -111,7 +111,7 @@ export function findExtensionStackMatches(
 		const label =
 			extension.sourceInfo.origin === "package" && extension.sourceInfo.source
 				? extension.sourceInfo.source
-				: extension.path;
+				: extension.name;
 		if (!seen.has(label)) {
 			seen.add(label);
 			matches.push(label);

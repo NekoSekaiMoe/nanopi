@@ -2,7 +2,7 @@ import { readdir as fsReaddir, stat as fsStat } from "node:fs/promises";
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import nodePath from "path";
 import { type Static, Type } from "typebox";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { pathExists, resolveToCwd } from "./path-utils.ts";
 import { lsRenderers } from "./renderers/ls.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -67,7 +67,7 @@ export function createLsToolDefinition(
 			{ path, limit }: { path?: string; limit?: number },
 			signal?: AbortSignal,
 			_onUpdate?,
-			ctx?: ExtensionContext,
+			ctx?: ModuleContext,
 		) {
 			return new Promise((resolve, reject) => {
 				if (signal?.aborted) {

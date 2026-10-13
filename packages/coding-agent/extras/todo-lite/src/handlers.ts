@@ -3,7 +3,7 @@
  * before_agent_start / agent_end。
  */
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleContext } from "@earendil-works/pi-coding-agent";
 
 import {
 	migrateTodo,
@@ -22,7 +22,7 @@ const REMINDER_INTERVAL = 2;
 
 // ── 辅助函数 ────────────────────────────────────────
 
-export type RefreshDisplayFn = (ctx: ExtensionContext) => void;
+export type RefreshDisplayFn = (ctx: ModuleContext) => void;
 
 /** 构建极简提醒：只含下一个推荐任务 */
 export function buildMinimalReminder(state: TodoSessionState): string {
@@ -54,7 +54,7 @@ export function buildBeforeAgentStartMessage(state: TodoSessionState): { message
 
 // ── 状态重建 ────────────────────────────────────────
 
-export function reconstructState(state: TodoSessionState, ctx: ExtensionContext): void {
+export function reconstructState(state: TodoSessionState, ctx: ModuleContext): void {
 	state.todos = [];
 	state.nextId = 1;
 	state.userMessageCount = 0;
@@ -161,20 +161,20 @@ export function registerTodoEventHandlers(
 	state: TodoSessionState,
 	refreshDisplay: RefreshDisplayFn,
 ): void {
-	pi.on("session_start", async (_event: unknown, ctx: ExtensionContext) => {
+	pi.on("session_start", async (_event: unknown, ctx: ModuleContext) => {
 		reconstructState(state, ctx);
 		refreshDisplay(ctx);
 	});
-	pi.on("session_tree", async (_event: unknown, ctx: ExtensionContext) => {
+	pi.on("session_tree", async (_event: unknown, ctx: ModuleContext) => {
 		reconstructState(state, ctx);
 		refreshDisplay(ctx);
 	});
 
-	pi.on("agent_start", async (_event: unknown, _ctx: ExtensionContext) => {
+	pi.on("agent_start", async (_event: unknown, _ctx: ModuleContext) => {
 		state.userMessageCount++;
 	});
 
-	pi.on("before_agent_start", async (_event: unknown, ctx: ExtensionContext) => {
+	pi.on("before_agent_start", async (_event: unknown, ctx: ModuleContext) => {
 		try {
 			const pendingTodos = state.todos.filter((t) => t.status !== "completed");
 			if (pendingTodos.length > 0) {
@@ -194,7 +194,7 @@ export function registerTodoEventHandlers(
 		}
 	});
 
-	pi.on("agent_end", async (_event: unknown, ctx: ExtensionContext) => {
+	pi.on("agent_end", async (_event: unknown, ctx: ModuleContext) => {
 		try {
 			if (state.todos.length === 0) return;
 

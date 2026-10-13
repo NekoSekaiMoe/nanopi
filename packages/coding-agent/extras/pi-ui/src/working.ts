@@ -1,6 +1,6 @@
 /** Animated omp-style status shimmer and elapsed transcript row. */
 
-import type { ExtensionAPI, ExtensionContext, Theme, WorkingIndicatorOptions } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModuleContext, Theme, WorkingIndicatorOptions } from "@earendil-works/pi-coding-agent";
 import { Loader, Text } from "@earendil-works/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import {
@@ -156,7 +156,7 @@ export function installWorking(pi: ExtensionAPI): () => void {
   // Unlike setInterval, a blocked event loop never queues catch-up bursts
   // (which coalesce into one paint and make the band jump); missed slots are
   // skipped, and the grid re-anchors after a long stall.
-  const scheduleFrame = (ctx: ExtensionContext) => {
+  const scheduleFrame = (ctx: ModuleContext) => {
     if (timer) return;
     const now = Date.now();
     if (nextFrameAt < now - FRAME_MS) nextFrameAt = now;
@@ -168,7 +168,7 @@ export function installWorking(pi: ExtensionAPI): () => void {
     }, delay);
   };
 
-  const frame = (ctx: ExtensionContext) => {
+  const frame = (ctx: ModuleContext) => {
     const now = Date.now();
     const dt = Math.max(0, now - lastFrameAt);
     lastFrameAt = now;

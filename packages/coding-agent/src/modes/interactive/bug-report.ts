@@ -117,7 +117,7 @@ async function promptForOptions(
 }
 
 function buildBundle(session: AgentSession, options: BugReportOptions, summary: string | undefined): BugReportBundle {
-	const extensions = session.resourceLoader.getExtensions();
+	const extensions = session.resourceLoader.getModules();
 	return {
 		metadata: collectBugReportMetadata({
 			hint: options.hint,
@@ -129,7 +129,7 @@ function buildBundle(session: AgentSession, options: BugReportOptions, summary: 
 			model: session.model,
 			modelRuntime: session.modelRuntime,
 			thinkingLevel: session.thinkingLevel,
-			extensions: extensions.extensions,
+			extensions: extensions.modules,
 			extensionErrors: extensions.errors,
 			globalSettings: session.settingsManager.getGlobalSettings(),
 			projectSettings: session.settingsManager.getProjectSettings(),

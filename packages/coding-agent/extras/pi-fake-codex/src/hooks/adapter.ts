@@ -14,7 +14,7 @@
 import { randomUUID } from "node:crypto";
 import {
   type ExtensionAPI,
-  type ExtensionContext,
+  type ModuleContext,
 } from "@earendil-works/pi-coding-agent";
 import {
   type CodexHookEvent,
@@ -63,7 +63,7 @@ export function registerCodexHookAdapter(pi: ExtensionAPI): void {
     state.lifecycle = new AbortController();
   };
 
-  const reload = async (ctx: ExtensionContext, announce: boolean): Promise<void> => {
+  const reload = async (ctx: ModuleContext, announce: boolean): Promise<void> => {
     resetLifecycle();
     try {
       state.loaded = await loadCodexHooks(ctx.cwd);
@@ -89,7 +89,7 @@ export function registerCodexHookAdapter(pi: ExtensionAPI): void {
     eventName: CodexHookEvent,
     matchValues: string[],
     input: Record<string, unknown>,
-    ctx: ExtensionContext,
+    ctx: ModuleContext,
   ): Promise<ParsedHookOutput[]> => {
     if (!state.active || !state.loaded) return [];
     const lifecycle = state.lifecycle;
@@ -284,7 +284,7 @@ function countExecutableHooks(loaded: LoadedCodexHooks): number {
 
 function commonInput(
   eventName: CodexHookEvent,
-  ctx: ExtensionContext,
+  ctx: ModuleContext,
 ): Record<string, unknown> {
   return {
     session_id: ctx.sessionManager.getSessionId(),
@@ -298,7 +298,7 @@ function commonInput(
 
 function turnInput(
   eventName: CodexHookEvent,
-  ctx: ExtensionContext,
+  ctx: ModuleContext,
   state: HookState,
 ): Record<string, unknown> {
   state.turnId ??= randomUUID();
@@ -371,7 +371,7 @@ function hookSpecific(output: ParsedHookOutput): Record<string, unknown> | undef
   return isRecord(output.json?.hookSpecificOutput) ? output.json.hookSpecificOutput : undefined;
 }
 
-function notifySystemMessage(output: ParsedHookOutput, ctx: ExtensionContext): void {
+function notifySystemMessage(output: ParsedHookOutput, ctx: ModuleContext): void {
   if (!isSuccessfulOutput(output)) return;
   const message = output.json && stringField(output.json, "systemMessage");
   if (message) ctx.ui.notify(truncateHookText(message, MAX_HOOK_NOTICE_LENGTH), "info");
@@ -485,7 +485,7 @@ function contentText(content: unknown): string {
     .join("\n");
 }
 
-function reportCompatibilityWarnings(ctx: ExtensionContext, loaded: LoadedCodexHooks): void {
+function reportCompatibilityWarnings(ctx: ModuleContext, loaded: LoadedCodexHooks): void {
   const configuredUnsupported = UNSUPPORTED_PI_EVENTS.filter((eventName) =>
     (loaded.config.hooks[eventName]?.length ?? 0) > 0,
   );

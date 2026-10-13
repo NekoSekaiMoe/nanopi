@@ -1,8 +1,8 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
-import type { ExtensionToolContext, ToolDefinition } from "../extensions/types.ts";
+import type { ModuleToolContext, ToolDefinition } from "../modules/types.ts";
 
 /** Creates the context for one tool call. */
-export type ToolContextFactory = (toolCallId: string, signal: AbortSignal | undefined) => ExtensionToolContext;
+export type ToolContextFactory = (toolCallId: string, signal: AbortSignal | undefined) => ModuleToolContext;
 
 /** Wrap a ToolDefinition into an AgentTool for the core runtime. */
 export function wrapToolDefinition<TDetails = unknown>(
@@ -18,13 +18,13 @@ export function wrapToolDefinition<TDetails = unknown>(
 		constrainedSampling: definition.constrainedSampling,
 		prepareArguments: definition.prepareArguments,
 		executionMode: definition.executionMode,
-		execute: (toolCallId, params, signal, onUpdate, ctx?: ExtensionToolContext) =>
+		execute: (toolCallId, params, signal, onUpdate, ctx?: ModuleToolContext) =>
 			definition.execute(
 				toolCallId,
 				params,
 				signal,
 				onUpdate,
-				ctx ?? (ctxFactory?.(toolCallId, signal) as ExtensionToolContext),
+				ctx ?? (ctxFactory?.(toolCallId, signal) as ModuleToolContext),
 			),
 	};
 }

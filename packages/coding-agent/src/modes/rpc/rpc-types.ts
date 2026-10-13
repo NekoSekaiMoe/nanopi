@@ -245,7 +245,7 @@ export type RpcResponse =
 	| { id?: string; type: "response"; command: string; success: false; error: string };
 
 // ============================================================================
-// Extension UI Events (stdout)
+// RegisteredModule UI Events (stdout)
 // ============================================================================
 
 /** Emitted when an extension needs user input */
@@ -287,7 +287,7 @@ export type RpcExtensionUIRequest =
 	| { type: "extension_ui_request"; id: string; method: "set_editor_text"; text: string };
 
 // ============================================================================
-// Extension UI Commands (stdin)
+// RegisteredModule UI Commands (stdin)
 // ============================================================================
 
 /** Response to an extension UI request */

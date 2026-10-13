@@ -1,8 +1,8 @@
 import type { TextContent } from "@nanopi/pi-ai";
 import type { Component } from "@nanopi/pi-tui";
 import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@nanopi/pi-tui";
-import type { MessageRenderer } from "../../../core/extensions/types.ts";
 import type { CustomMessage } from "../../../core/messages.ts";
+import type { MessageRenderer } from "../../../core/modules/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 
 /**

@@ -3,8 +3,8 @@ import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import type { Model } from "@nanopi/pi-ai";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
-import type { SessionStartEvent, ToolDefinition } from "./extensions/index.ts";
 import { ModelRuntime } from "./model-runtime.ts";
+import type { SessionStartEvent, ToolDefinition } from "./modules/index.ts";
 import {
 	DefaultResourceLoader,
 	type DefaultResourceLoaderOptions,
@@ -88,9 +88,9 @@ function applyExtensionFlagValues(
 	}
 
 	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
-	const extensionsResult = resourceLoader.getExtensions();
+	const extensionsResult = resourceLoader.getModules();
 	const registeredFlags = new Map<string, { type: "boolean" | "string" }>();
-	for (const extension of extensionsResult.extensions) {
+	for (const extension of extensionsResult.modules) {
 		for (const [name, flag] of extension.flags) {
 			registeredFlags.set(name, { type: flag.type });
 		}
@@ -113,7 +113,7 @@ function applyExtensionFlagValues(
 		}
 		diagnostics.push({
 			type: "error",
-			message: `Extension flag "--${name}" requires a value`,
+			message: `RegisteredModule flag "--${name}" requires a value`,
 		});
 	}
 
@@ -154,39 +154,39 @@ export async function createAgentSessionServices(
 	await resourceLoader.reload(options.resourceLoaderReloadOptions);
 
 	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
-	const extensionsResult = resourceLoader.getExtensions();
-	for (const { name, config, extensionPath } of extensionsResult.runtime.pendingProviderRegistrations) {
+	const extensionsResult = resourceLoader.getModules();
+	for (const { name, config, moduleName } of extensionsResult.runtime.pendingProviderRegistrations) {
 		try {
 			modelRuntime.registerProvider(name, config);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			diagnostics.push({
 				type: "error",
-				message: `Extension "${extensionPath}" error: ${message}`,
+				message: `RegisteredModule "${moduleName}" error: ${message}`,
 			});
 		}
 	}
 	extensionsResult.runtime.pendingProviderRegistrations = [];
-	for (const { provider, extensionPath } of extensionsResult.runtime.pendingNativeProviderRegistrations) {
+	for (const { provider, moduleName } of extensionsResult.runtime.pendingNativeProviderRegistrations) {
 		try {
 			modelRuntime.registerNativeProvider(provider);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			diagnostics.push({
 				type: "error",
-				message: `Extension "${extensionPath}" error: ${message}`,
+				message: `RegisteredModule "${moduleName}" error: ${message}`,
 			});
 		}
 	}
 	extensionsResult.runtime.pendingNativeProviderRegistrations = [];
-	for (const { definition, extensionPath } of extensionsResult.runtime.pendingVirtualModelRegistrations) {
+	for (const { definition, moduleName } of extensionsResult.runtime.pendingVirtualModelRegistrations) {
 		try {
 			modelRuntime.registerVirtualModel(definition);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			diagnostics.push({
 				type: "error",
-				message: `Extension "${extensionPath}" error: ${message}`,
+				message: `RegisteredModule "${moduleName}" error: ${message}`,
 			});
 		}
 	}

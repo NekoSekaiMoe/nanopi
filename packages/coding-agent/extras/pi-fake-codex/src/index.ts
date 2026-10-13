@@ -1,5 +1,5 @@
 /**
- * pi-fake-codex — Extension entry point
+ * pi-fake-codex — RegisteredModule entry point
  *
  * Makes pi's OpenAI Responses-style requests impersonate the official OpenAI
  * Codex CLI (`codex_cli_rs`). Two layers of spoofing:
