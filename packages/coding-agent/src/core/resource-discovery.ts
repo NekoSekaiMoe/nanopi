@@ -344,7 +344,7 @@ function isEnabledByOverrides(filePath: string, patterns: string[], baseDir: str
 }
 
 /** Discover local skills, prompts, and themes for the current trust state.
- * Mirrors the old package-manager discovery minus extension and package sources. */
+ * No package or extension sources: only local paths are discovered. */
 export function resolveLocalResources(options: {
 	cwd: string;
 	globalBaseDir: string;

@@ -640,12 +640,12 @@ export function getTerminalTheme(): TerminalTheme {
 // Global Theme Instance
 // ============================================================================
 
-// Use globalThis to share theme across module loaders (node + jiti in dev mode)
+// Use globalThis to share theme across module loaders
 const THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
 const THEME_KEY_OLD = Symbol.for("@mariozechner/pi-coding-agent:theme");
 
 // Export theme as a getter that reads from globalThis
-// This ensures all module instances (node, jiti) see the same theme
+// This ensures all module instances see the same theme
 export const theme: Theme = new Proxy({} as Theme, {
 	get(_target, prop) {
 		const t = (globalThis as Record<symbol, Theme>)[THEME_KEY];
