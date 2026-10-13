@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { createEventBus } from "../../../src/core/event-bus.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../../../src/core/extensions/loader.ts";
-import type { ExtensionAPI, ExtensionFactory, ResourceLoader } from "../../../src/index.ts";
+import { createModuleRuntime, loadModules } from "../../../src/core/modules/registry.ts";
+import type { ModuleApi, ModuleFactory, ResourceLoader } from "../../../src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 describe("issue #7193 extension event-bus lifecycle", () => {
@@ -17,21 +17,21 @@ describe("issue #7193 extension event-bus lifecycle", () => {
 		const eventBus = createEventBus();
 		let extensionCalls = 0;
 		let hostCalls = 0;
-		let firstApi: ExtensionAPI | undefined;
-		const factory: ExtensionFactory = (nanopi) => {
+		let firstApi: ModuleApi | undefined;
+		const factory: ModuleFactory = (nanopi) => {
 			firstApi ??= nanopi;
 			nanopi.events.on("reload:test", () => extensionCalls++);
 		};
 		eventBus.on("reload:test", () => hostCalls++);
 
 		const loadExtensions = async () => {
-			const runtime = createExtensionRuntime();
-			const extension = await loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime);
-			return { extensions: [extension], errors: [], runtime };
+			const _runtime = createModuleRuntime();
+			const result = await loadModules([{ name: "test", factory }], process.cwd(), eventBus);
+			return result;
 		};
 		let extensionsResult = await loadExtensions();
 		const resourceLoader: ResourceLoader = {
-			getExtensions: () => extensionsResult,
+			getModules: () => extensionsResult,
 			getSkills: () => ({ skills: [], diagnostics: [] }),
 			getPrompts: () => ({ prompts: [], diagnostics: [] }),
 			getThemes: () => ({ themes: [], diagnostics: [] }),
@@ -47,7 +47,7 @@ describe("issue #7193 extension event-bus lifecycle", () => {
 		};
 		const harness = await createHarness({ resourceLoader });
 		harnesses.push(harness);
-		await harness.session.bindExtensions({ shutdownHandler: () => {} });
+		await harness.session.bindModules({ shutdownHandler: () => {} });
 
 		const emit = async () => {
 			const extensionBefore = extensionCalls;

@@ -51,11 +51,13 @@ export {
 	shouldCompact,
 } from "./core/compaction/index.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
+export { execCommand } from "./core/exec.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
 export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
 export {
+	findInitialModel,
 	type ModelScopeDiagnostic,
 	type ResolveCliModelResult,
 	type ResolveModelScopeResult,
@@ -72,10 +74,7 @@ export {
 } from "./core/model-runtime.ts";
 // RegisteredModule system
 export type {
-	AfterProviderResponseEvent,
 	AgentActivityOutcome,
-	AgentBeforeSettleEvent,
-	AgentBeforeSettleEventResult,
 	AgentEndEvent,
 	AgentSettledEvent,
 	AgentStartEvent,
@@ -95,15 +94,10 @@ export type {
 	BoundaryResult,
 	BoundaryState,
 	BuildSystemPromptOptions,
-	CacheWarmingDecisionEvent,
-	CacheWarmingDecisionEventResult,
 	CompactionEntryDraft,
 	CompactOptions,
 	ContextEditEntryDraft,
-	ContextEvent,
-	ContextEventResult,
 	ContextUsage,
-	ContextWithSystemEvent,
 	CustomEntryDraft,
 	CustomMessageEntryDraft,
 	CustomToolCallEvent,
@@ -113,8 +107,6 @@ export type {
 	ExecOptions,
 	ExecResult,
 	ExecuteToolOptions,
-	ExtensionAPI,
-	ExtensionHandler,
 	FindToolCallEvent,
 	GrepToolCallEvent,
 	InputEvent,
@@ -136,6 +128,7 @@ export type {
 	ModelSelectEvent,
 	ModelSelectSource,
 	ModuleActions,
+	ModuleApi,
 	ModuleCommandContext,
 	ModuleCommandContextActions,
 	ModuleContext,
@@ -144,6 +137,7 @@ export type {
 	ModuleEvent,
 	ModuleFactory,
 	ModuleFlag,
+	ModuleHandler,
 	ModuleRuntime,
 	ModuleShortcut,
 	ModuleToolContext,
@@ -160,26 +154,19 @@ export type {
 	ProjectTrustHandler,
 	ProviderConfig,
 	ProviderModelConfig,
-	ProviderStreamEvent,
 	ReadToolCallEvent,
 	RegisteredCommand,
 	RegisteredModule,
 	RegisteredTool,
 	ResolvedCommand,
-	ResourcesDiscoverEvent,
-	ResourcesDiscoverResult,
 	SessionBeforeCompactEvent,
 	SessionBeforeCompactResult,
 	SessionBeforeForkEvent,
 	SessionBeforeForkResult,
-	SessionBeforeSwitchEvent,
-	SessionBeforeSwitchResult,
 	SessionBeforeTreeEvent,
 	SessionBeforeTreeResult,
 	SessionBoundaryDraft,
 	SessionCompactEvent,
-	SessionCompactFailedEvent,
-	SessionInfoChangedEvent,
 	SessionModule,
 	SessionShutdownEvent,
 	SessionStartEvent,
@@ -188,7 +175,6 @@ export type {
 	SlashCommandSource,
 	SourceInfo,
 	TerminalInputHandler,
-	ThinkingLevelSelectEvent,
 	ToolAnnotations,
 	ToolCallEvent,
 	ToolCallEventResult,
@@ -210,11 +196,6 @@ export type {
 	TurnEndEvent,
 	TurnEndEventResult,
 	TurnStartEvent,
-	UIPromptEndEvent,
-	UIPromptKind,
-	UIPromptStartEvent,
-	UserBashEvent,
-	UserBashEventResult,
 	WidgetPlacement,
 	WorkingIndicatorOptions,
 	WriteToolCallEvent,
@@ -222,7 +203,6 @@ export type {
 export {
 	createModuleRuntime,
 	defineTool,
-	discoverAndLoadExtensions,
 	isBashToolResult,
 	isEditToolResult,
 	isFindToolResult,
@@ -232,19 +212,17 @@ export {
 	isReadToolResult,
 	isToolCallEventType,
 	isWriteToolResult,
+	loadModules,
 	ModuleRegistry,
 	wrapRegisteredTool,
 	wrapRegisteredTools,
 } from "./core/modules/index.ts";
-export type {
-	PackageManager,
-	PathMetadata,
-	ProgressCallback,
-	ProgressEvent,
-	ResolvedPaths,
-	ResolvedResource,
-} from "./core/package-manager.ts";
-export { DefaultPackageManager } from "./core/package-manager.ts";
+export { expandPromptTemplate } from "./core/prompt-templates.ts";
+export {
+	type PathMetadata,
+	type ResolvedResource,
+	resolveLocalResources,
+} from "./core/resource-discovery.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
 // SDK for programmatic usage
@@ -313,7 +291,6 @@ export {
 	type CompactionSettings,
 	type DefaultProjectTrust,
 	type ImageSettings,
-	type PackageSource,
 	type QuietStartup,
 	type RetrySettings,
 	SettingsManager,
@@ -330,6 +307,10 @@ export {
 	type SkillFrontmatter,
 } from "./core/skills.ts";
 export { createSyntheticSourceInfo } from "./core/source-info.ts";
+export {
+	buildSystemPrompt,
+	normalizeBuildSystemPromptOptions,
+} from "./core/system-prompt.ts";
 export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
 // Tools
 export {
@@ -479,6 +460,9 @@ export {
 	type ThemeStyle,
 	type ThemeToken,
 } from "./modes/interactive/theme/theme.ts";
+// Broad core surface: these are the interfaces users compose when they extend
+// nanopi programmatically (see docs/sdk.md).
+export { BUILTIN_MODULES } from "./modules/index.ts";
 // Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";

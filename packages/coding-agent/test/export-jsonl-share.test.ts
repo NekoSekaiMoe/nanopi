@@ -5,7 +5,7 @@ import type { AssistantMessage, ToolResultMessage } from "@nanopi/pi-ai/compat";
 import { getModel } from "@nanopi/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
-import { defineTool } from "../src/core/extensions/types.ts";
+import { defineTool } from "../src/core/modules/types.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { exportSessionToJsonl } from "../src/core/session-export.ts";
 import { SessionManager } from "../src/core/session-manager.ts";

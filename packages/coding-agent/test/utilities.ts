@@ -12,14 +12,13 @@ import { getModel, streamSimple } from "@nanopi/pi-ai/compat";
 import { builtinProviders } from "@nanopi/pi-ai/providers/all";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { createEventBus } from "../src/core/event-bus.ts";
-import type {
-	Extension,
-	ExtensionFactory,
-	InlineExtension,
-	LoadExtensionsResult,
-} from "../src/core/extensions/index.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
+import {
+	createModuleRuntime,
+	type LoadModulesResult,
+	loadModules,
+	type ModuleFactory,
+	type SessionModule,
+} from "../src/core/modules/index.ts";
 import type { ResourceLoader } from "../src/core/resource-loader.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
@@ -188,51 +187,38 @@ export interface TestSessionContext {
 	cleanup: () => void;
 }
 
-export interface CreateTestExtensionsResultInput {
-	factory: ExtensionFactory;
-	path?: string;
+export interface CreateTestModulesResultInput {
+	factory: ModuleFactory;
+	name?: string;
 }
 
-type TestExtensionInput = InlineExtension | CreateTestExtensionsResultInput;
+export type TestModuleInput = SessionModule | ModuleFactory | CreateTestModulesResultInput;
 
-export async function createTestExtensionsResult(
-	inputs: TestExtensionInput[],
+export async function createTestModulesResult(
+	inputs: TestModuleInput[],
 	cwd = process.cwd(),
-): Promise<LoadExtensionsResult> {
-	const runtime = createExtensionRuntime();
-	const eventBus = createEventBus();
-	const extensions: Extension[] = [];
-
-	for (const [index, input] of inputs.entries()) {
-		const isObject = typeof input !== "function";
-		const hasName = isObject && "name" in input;
-		const hasPath = isObject && "path" in input && typeof input.path === "string" && input.path !== "";
-		const factory = isObject ? input.factory : input;
-		const extensionPath = hasName ? `<inline:${input.name}>` : hasPath ? input.path : `<inline:${index + 1}>`;
-
-		extensions.push(await loadExtensionFromFactory(factory, cwd, eventBus, runtime, extensionPath));
-	}
-
-	return {
-		extensions,
-		errors: [],
-		runtime,
-	};
+): Promise<LoadModulesResult> {
+	const modules: SessionModule[] = inputs.map((input, index) =>
+		typeof input === "function"
+			? { name: `test-module-${index + 1}`, factory: input }
+			: { name: input.name ?? `test-module-${index + 1}`, factory: input.factory },
+	);
+	return loadModules(modules, cwd);
 }
 
 export interface CreateTestResourceLoaderOptions {
-	extensionsResult?: LoadExtensionsResult;
+	modulesResult?: LoadModulesResult;
 }
 
 export function createTestResourceLoader(options: CreateTestResourceLoaderOptions = {}): ResourceLoader {
-	const extensionsResult = options.extensionsResult ?? {
-		extensions: [],
+	const modulesResult = options.modulesResult ?? {
+		modules: [],
 		errors: [],
-		runtime: createExtensionRuntime(),
+		runtime: createModuleRuntime(),
 	};
 
 	return {
-		getExtensions: () => extensionsResult,
+		getModules: () => modulesResult,
 		getSkills: () => ({ skills: [], diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),

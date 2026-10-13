@@ -12,10 +12,10 @@
 // per session when a config activates.
 
 import { randomUUID } from "node:crypto";
-import {
-  type ExtensionAPI,
-  type ModuleContext,
-} from "@earendil-works/pi-coding-agent";
+import type {
+	ModuleApi,
+	ModuleContext,
+} from "../../../../src/core/modules/types.ts";
 import {
   type CodexHookEvent,
   type LoadedCodexHooks,
@@ -50,7 +50,7 @@ interface HookState {
   stopHookActive: boolean;
 }
 
-export function registerCodexHookAdapter(pi: ExtensionAPI): void {
+export function registerCodexHookAdapter(pi: ModuleApi): void {
   const state: HookState = {
     active: false,
     lifecycle: new AbortController(),
@@ -378,7 +378,7 @@ function notifySystemMessage(output: ParsedHookOutput, ctx: ModuleContext): void
 }
 
 function sendHookFailureMessage(
-  pi: ExtensionAPI,
+  pi: ModuleApi,
   eventName: CodexHookEvent,
   failures: ParsedHookOutput[],
 ): void {

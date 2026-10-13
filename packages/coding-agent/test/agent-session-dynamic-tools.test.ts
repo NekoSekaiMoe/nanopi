@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { getModel } from "@nanopi/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -35,27 +36,30 @@ describe("AgentSession dynamic tool registration", () => {
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerTool(
-						createBashTool(tempDir, {
-							spawnHook: (ctx) => {
-								sessionEnv = ctx.env;
-								return ctx;
-							},
-						}),
-					);
-					nanopi.registerTool({
-						...createBashTool(tempDir, {
-							exposeSessionEnvironment: false,
-							spawnHook: (ctx) => {
-								optedOutEnv = ctx.env;
-								return ctx;
-							},
-						}),
-						name: "bash_without_session_env",
-						label: "bash without session env",
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerTool(
+							createBashTool(tempDir, {
+								spawnHook: (ctx) => {
+									sessionEnv = ctx.env;
+									return ctx;
+								},
+							}),
+						);
+						nanopi.registerTool({
+							...createBashTool(tempDir, {
+								exposeSessionEnvironment: false,
+								spawnHook: (ctx) => {
+									optedOutEnv = ctx.env;
+									return ctx;
+								},
+							}),
+							name: "bash_without_session_env",
+							label: "bash without session env",
+						});
+					},
 				},
 			],
 		});
@@ -104,22 +108,25 @@ describe("AgentSession dynamic tool registration", () => {
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.registerTool({
-							name: "dynamic_tool",
-							label: "Dynamic Tool",
-							description: "Tool registered from session_start",
-							promptSnippet: "Run dynamic test behavior",
-							promptGuidelines: ["Use dynamic_tool when the user asks for dynamic behavior tests."],
-							parameters: Type.Object({}),
-							execute: async () => ({
-								content: [{ type: "text", text: "ok" }],
-								details: {},
-							}),
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.registerTool({
+								name: "dynamic_tool",
+								label: "Dynamic Tool",
+								description: "Tool registered from session_start",
+								promptSnippet: "Run dynamic test behavior",
+								promptGuidelines: ["Use dynamic_tool when the user asks for dynamic behavior tests."],
+								parameters: Type.Object({}),
+								execute: async () => ({
+									content: [{ type: "text", text: "ok" }],
+									details: {},
+								}),
+							});
 						});
-					});
+					},
 				},
 			],
 		});
@@ -136,7 +143,7 @@ describe("AgentSession dynamic tool registration", () => {
 
 		expect(session.getAllTools().map((tool) => tool.name)).not.toContain("dynamic_tool");
 
-		await session.bindExtensions({});
+		await session.bindModules({});
 
 		const allTools = session.getAllTools();
 		const dynamicTool = allTools.find((tool) => tool.name === "dynamic_tool");
@@ -147,8 +154,8 @@ describe("AgentSession dynamic tool registration", () => {
 			"Use dynamic_tool when the user asks for dynamic behavior tests.",
 		]);
 		expect(dynamicTool?.sourceInfo).toMatchObject({
-			path: "<inline:1>",
-			source: "inline",
+			path: "test-module-1",
+			source: "builtin",
 			scope: "temporary",
 			origin: "top-level",
 		});
@@ -216,20 +223,23 @@ describe("AgentSession dynamic tool registration", () => {
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.registerTool({
-							name: "hidden_tool",
-							label: "Hidden Tool",
-							description: "Description should not appear in available tools",
-							parameters: Type.Object({}),
-							execute: async () => ({
-								content: [{ type: "text", text: "ok" }],
-								details: {},
-							}),
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.registerTool({
+								name: "hidden_tool",
+								label: "Hidden Tool",
+								description: "Description should not appear in available tools",
+								parameters: Type.Object({}),
+								execute: async () => ({
+									content: [{ type: "text", text: "ok" }],
+									details: {},
+								}),
+							});
 						});
-					});
+					},
 				},
 			],
 		});
@@ -244,7 +254,7 @@ describe("AgentSession dynamic tool registration", () => {
 			resourceLoader,
 		});
 
-		await session.bindExtensions({});
+		await session.bindModules({});
 
 		expect(session.getAllTools().map((tool) => tool.name)).toContain("hidden_tool");
 		expect(session.getActiveToolNames()).toContain("hidden_tool");

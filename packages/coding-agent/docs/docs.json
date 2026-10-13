@@ -87,20 +87,12 @@
             {
               "title": "Create Themes",
               "path": "themes.md"
-            },
-            {
-              "title": "Use nanopi Packages",
-              "path": "packages.md"
             }
           ]
         },
         {
           "title": "Build on nanopi",
           "items": [
-            {
-              "title": "Build Extensions",
-              "path": "extensions.md"
-            },
             {
               "title": "Add Custom Providers",
               "path": "custom-provider.md"
@@ -174,7 +166,7 @@
         },
         {
           "title": "RPC Extension UI",
-          "path": "rpc-extension-ui.md"
+          "path": "rpc-module-ui.md"
         },
         {
           "title": "Message Types",

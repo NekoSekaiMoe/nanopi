@@ -14,8 +14,8 @@ type FakeSession = {
 	sessionManager: { getHeader: () => object | undefined };
 	agent: { waitForIdle: () => Promise<void>; subscribe: ReturnType<typeof vi.fn> };
 	state: { messages: AssistantMessage[] };
-	extensionRunner: FakeExtensionRunner;
-	bindExtensions: ReturnType<typeof vi.fn>;
+	moduleRegistry: FakeExtensionRunner;
+	bindModules: ReturnType<typeof vi.fn>;
 	subscribe: ReturnType<typeof vi.fn>;
 	prompt: ReturnType<typeof vi.fn>;
 	reload: ReturnType<typeof vi.fn>;
@@ -56,7 +56,7 @@ function createAssistantMessage(options?: {
 }
 
 function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost {
-	const extensionRunner: FakeExtensionRunner = {
+	const moduleRegistry: FakeExtensionRunner = {
 		hasHandlers: (eventType: string) => eventType === "session_shutdown",
 		emit: vi.fn(async () => {}),
 	};
@@ -67,8 +67,8 @@ function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost 
 		sessionManager: { getHeader: () => undefined },
 		agent: { waitForIdle: async () => {}, subscribe: vi.fn(() => () => {}) },
 		state,
-		extensionRunner,
-		bindExtensions: vi.fn(async () => {}),
+		moduleRegistry,
+		bindModules: vi.fn(async () => {}),
 		subscribe: vi.fn(() => () => {}),
 		prompt: vi.fn(async () => {}),
 		reload: vi.fn(async () => {}),
@@ -80,7 +80,7 @@ function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost 
 		fork: vi.fn(async () => ({ selectedText: "" })),
 		switchSession: vi.fn(async () => undefined),
 		dispose: vi.fn(async () => {
-			await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+			await session.moduleRegistry.emit({ type: "session_shutdown", reason: "quit" });
 		}),
 		setRebindSession: vi.fn(),
 	};
@@ -104,8 +104,8 @@ describe("runPrintMode", () => {
 
 		expect(exitCode).toBe(0);
 		expect(session.prompt).toHaveBeenCalledWith("Say done", { images });
-		expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-		expect(session.extensionRunner.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
+		expect(session.moduleRegistry.emit).toHaveBeenCalledTimes(1);
+		expect(session.moduleRegistry.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
 	});
 
 	it("emits session_shutdown in json mode", async () => {
@@ -119,8 +119,8 @@ describe("runPrintMode", () => {
 
 		expect(exitCode).toBe(0);
 		expect(session.prompt).toHaveBeenCalledWith("hello");
-		expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-		expect(session.extensionRunner.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
+		expect(session.moduleRegistry.emit).toHaveBeenCalledTimes(1);
+		expect(session.moduleRegistry.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
 	});
 
 	it("emits session_shutdown and returns non-zero on assistant error", async () => {
@@ -136,7 +136,7 @@ describe("runPrintMode", () => {
 
 		expect(exitCode).toBe(1);
 		expect(errorSpy).toHaveBeenCalledWith("provider failure");
-		expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-		expect(session.extensionRunner.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
+		expect(session.moduleRegistry.emit).toHaveBeenCalledTimes(1);
+		expect(session.moduleRegistry.emit).toHaveBeenCalledWith({ type: "session_shutdown", reason: "quit" });
 	});
 });

@@ -176,4 +176,4 @@ curl http://127.0.0.1:8080/models
 - **Load fails or uses too much memory:** Lower `-c` or unload another model.
 - **Server is not in router mode:** Start it without `--model`, `-m`, or `-hf`.
 
-To remove the `llama.cpp` provider and `/llama`, disable `llama.cpp` under Built-in in `nanopi config`, or set `"extensions": ["-builtin:llama.cpp"]` in [settings](settings.md#resources).
+The `llama.cpp` provider and `/llama` are compiled in as a built-in module; they are always available.

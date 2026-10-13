@@ -25,7 +25,7 @@ The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text 
 
 ## Session lifecycle
 
-`createAgentSession()` creates an `AgentSession`. The session owns one conversation, its model and tools, queued messages, compaction state, and extension runtime.
+`createAgentSession()` creates an `AgentSession`. The session owns one conversation, its model and tools, queued messages, compaction state, and module registry.
 
 Read current state through `session.messages`, `session.model`, `session.thinkingLevel`, `session.systemPrompt`, and `session.getActiveToolNames()`.
 
@@ -53,7 +53,7 @@ See the checked [sessions example](../examples/sdk/11-sessions.ts) for creating,
 
 `cwd` selects the workspace used for project resource discovery, context files, session grouping, and built-in tool paths. Pass it explicitly when the target differs from `process.cwd()`.
 
-`session.dispose()` aborts active work, invalidates extension contexts, disconnects from the agent, and removes event listeners. Call it when the session is no longer needed.
+`session.dispose()` aborts active work, invalidate nothing (modules are static), disconnects from the agent, and removes event listeners. Call it when the session is no longer needed.
 
 `AgentSessionRuntime` adds `newSession()`, `switchSession()`, `fork()`, and `importFromJsonl()`. Each operation replaces the active `AgentSession` and recreates services for the target working directory.
 
@@ -61,11 +61,11 @@ After a runtime replacement, subscriptions belong to the old `AgentSession` and 
 
 ## Prompting
 
-`prompt()` handles extension commands and expands file-based prompt templates before ordinary user messages enter the agent. For an accepted agent run, it resolves after the run finishes, including automatic retries.
+`prompt()` handles module commands and expands file-based prompt templates before ordinary user messages enter the agent. For an accepted agent run, it resolves after the run finishes, including automatic retries.
 
 A prompt sent while the session is already streaming must specify whether it should steer the current run or follow it. Calling `prompt()` without that choice rejects rather than guessing.
 
-A steering message enters after the current assistant turn and its tool calls. A follow-up enters after the current run finishes its pending work. `steer()` and `followUp()` expose those behaviors directly and return `"queued"` if the input was queued (including after an extension transformed it), or `"handled"` if an extension consumed it.
+A steering message enters after the current assistant turn and its tool calls. A follow-up enters after the current run finishes its pending work. `steer()` and `followUp()` expose those behaviors directly and return `"queued"` if the input was queued (including after a module transformed it), or `"handled"` if a module consumed it.
 
 `abort()` stops the active operation and waits for the session to become idle. `waitForIdle()` waits without aborting it.
 
@@ -102,14 +102,14 @@ Each boundary can be supplied explicitly:
 - `modelRuntime`, `model`, `thinkingLevel`, and `scopedModels` control model access and selection.
 - `settingsManager` supplies merged settings or an in-memory configuration.
 - `sessionManager` supplies persistent or in-memory conversation history.
-- `resourceLoader` supplies extensions, skills, prompt templates, themes, and context files.
+- `resourceLoader` supplies modules, skills, prompt templates, themes, and context files.
 - `tools`, `noTools`, `excludeTools`, and `customTools` control the active tool set.
 
 Use `DefaultResourceLoader` when you want standard discovery with selected overrides. Supply a custom `ResourceLoader` when the host owns resource storage and discovery completely.
 
 <a id="inlineextension"></a>
 
-Inline extension factories can be supplied through `DefaultResourceLoader`. Give one an `InlineExtension` name only when it needs a stable name in diagnostics and startup output. A named inline extension with `replaceable: true` is left out when another extension registers a tool, command, or flag with a name it registers during loading, instead of both loading with a conflict. A named entry with `builtin: true` is not an inline extension: it supplies the code of the `builtin:<name>` extension, which loads like a configured extension file. It loads by default, is listed in `nanopi config`, and is disabled by `-builtin:<name>` in the `extensions` setting or by `noExtensions`; `additionalExtensionPaths: ["builtin:<name>"]` loads it explicitly. It loads after project trust is resolved, so it cannot handle `project_trust`. The CLI's built-in llama.cpp extension uses it.
+Modules are the only extension mechanism: pass `SessionModule` objects (`{ name, factory }`, where the factory receives a `ModuleApi`) to `DefaultResourceLoader` via the `modules` option, or compose them in your own entry point with `createAgentSession({ modules })`. Nothing is loaded from disk; the built-in modules (run modes, llama.cpp, compaction, the bundled extras) are compiled in.
 
 See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tools](../examples/sdk/05-tools.ts), [extensions](../examples/sdk/06-extensions.ts), and [full control](../examples/sdk/12-full-control.ts).
 
@@ -138,5 +138,5 @@ See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tool
 - [Choose a Model](models.md) covers model selection and compatible endpoints; [Providers](providers.md) covers credentials and provider-specific setup.
 - [Configuration](configuration.md) explains normal discovery and settings; [Settings](settings.md) lists every setting.
 - [Sessions and Context](sessions.md) explains session behavior; [Session Format](session-format.md) defines persisted entries; [Message Types](message-types.md) defines shared transcript values.
-- [Extensions](extensions.md), [Skills](skills.md), and [Prompt Templates](prompt-templates.md) document resources supplied through a `ResourceLoader`.
+- [Skills](skills.md) and [Prompt Templates](prompt-templates.md) document resources supplied through a `ResourceLoader`; modules are code-time only.
 - [CLI Integration](cli-integration.md) covers print, JSON, and RPC alternatives to an in-process SDK integration.

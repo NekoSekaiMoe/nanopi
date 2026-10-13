@@ -1,25 +1,25 @@
 /** Flat Codex-style renderers for Pi's built-in and selected extension tools. */
 
-import {
-  createBashToolDefinition,
-  createEditToolDefinition,
-  createLsToolDefinition,
-  createReadToolDefinition,
-  createWriteToolDefinition,
-  BashExecutionComponent,
-  ToolExecutionComponent,
-  generateDiffString,
-  renderDiff,
-  type ExtensionAPI,
-  type Theme,
-  type ToolDefinition,
-} from "@earendil-works/pi-coding-agent";
-import type { AgentToolResult, ToolRenderResultOptions } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import type {
+	ModuleApi,
+	ToolDefinition,
+} from "../../../src/core/modules/types.ts";
+import { createEditToolDefinition } from "../../../src/core/tools/edit.ts";
+import type { AgentToolResult, ToolRenderResultOptions } from "@nanopi/pi-coding-agent";
+import { Text } from "@nanopi/pi-tui";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { fgRgb } from "./gradient.ts";
+import { createBashToolDefinition } from "../../../src/core/tools/bash.ts";
+import { createLsToolDefinition } from "../../../src/core/tools/ls.ts";
+import { createReadToolDefinition } from "../../../src/core/tools/read.ts";
+import { createWriteToolDefinition } from "../../../src/core/tools/write.ts";
+import type { Theme } from "../../../src/modes/interactive/theme/theme.ts";
+import { renderDiff } from "../../../src/modes/interactive/components/diff.ts";
+import { BashExecutionComponent } from "../../../src/modes/interactive/components/bash-execution.ts";
+import { ToolExecutionComponent } from "../../../src/modes/interactive/components/tool-execution.ts";
+import { generateDiffString } from "../../../src/core/tools/edit-diff.ts";
 
 interface RowConfig {
   running: string | ((args: Record<string, unknown>) => string);
@@ -732,7 +732,7 @@ function codexifyTool(name: string, cwd: string): ToolDefinition<any, any, any> 
   };
 }
 
-export function installToolRenderers(pi: ExtensionAPI, cwd: string): string[] {
+export function installToolRenderers(pi: ModuleApi, cwd: string): string[] {
   const installed: string[] = [];
   for (const name of Object.keys(FACTORIES)) {
     try {

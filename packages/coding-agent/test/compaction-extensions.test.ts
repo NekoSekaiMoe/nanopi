@@ -12,12 +12,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
-	createExtensionRuntime,
-	type Extension,
+	createModuleRuntime,
+	type RegisteredModule,
 	type SessionBeforeCompactEvent,
 	type SessionCompactEvent,
 	type SessionEvent,
-} from "../src/core/extensions/index.ts";
+} from "../src/core/modules/index.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
@@ -49,7 +49,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 	function createExtension(
 		onBeforeCompact?: (event: SessionBeforeCompactEvent) => { cancel?: boolean; compaction?: any } | undefined,
 		onCompact?: (event: SessionCompactEvent) => void,
-	): Extension {
+	): RegisteredModule {
 		const handlers = new Map<string, ((event: any, ctx: any) => Promise<any>)[]>();
 
 		handlers.set("session_before_compact", [
@@ -73,8 +73,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 		]);
 
 		return {
-			path: "test-extension",
-			resolvedPath: "/test/test-extension.ts",
+			name: "test-extension",
 			sourceInfo: createSyntheticSourceInfo("<test:test-extension>", { source: "test" }),
 			handlers,
 			tools: new Map(),
@@ -85,7 +84,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 		};
 	}
 
-	async function createSession(extensions: Extension[]) {
+	async function createSession(extensions: RegisteredModule[]) {
 		const model = getModel("anthropic", "claude-sonnet-4-5")!;
 		const agent = new Agent({
 			getApiKey: () => API_KEY,
@@ -103,10 +102,10 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 		const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
 		const modelRegistry = await createModelRegistry(authStorage);
 
-		const runtime = createExtensionRuntime();
+		const runtime = createModuleRuntime();
 		const resourceLoader = {
 			...createTestResourceLoader(),
-			getExtensions: () => ({ extensions, errors: [], runtime }),
+			getModules: () => ({ modules: extensions, errors: [], warnings: [], runtime }),
 		};
 
 		session = new AgentSession({
@@ -229,9 +228,8 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 	}, 120000);
 
 	it("should continue with default compaction if extension throws error", async () => {
-		const throwingExtension: Extension = {
-			path: "throwing-extension",
-			resolvedPath: "/test/throwing-extension.ts",
+		const throwingExtension: RegisteredModule = {
+			name: "throwing-extension",
 			sourceInfo: createSyntheticSourceInfo("<test:throwing-extension>", { source: "test" }),
 			handlers: new Map<string, ((event: any, ctx: any) => Promise<any>)[]>([
 				[
@@ -239,7 +237,7 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 					[
 						async (event: SessionBeforeCompactEvent) => {
 							capturedEvents.push(event);
-							throw new Error("Extension intentionally throws");
+							throw new Error("SessionModule intentionally throws");
 						},
 					],
 				],
@@ -278,9 +276,8 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 	it("should call multiple extensions in order", async () => {
 		const callOrder: string[] = [];
 
-		const extension1: Extension = {
-			path: "extension1",
-			resolvedPath: "/test/extension1.ts",
+		const extension1: RegisteredModule = {
+			name: "extension1",
 			sourceInfo: createSyntheticSourceInfo("<test:extension1>", { source: "test" }),
 			handlers: new Map<string, ((event: any, ctx: any) => Promise<any>)[]>([
 				[
@@ -309,9 +306,8 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 			shortcuts: new Map(),
 		};
 
-		const extension2: Extension = {
-			path: "extension2",
-			resolvedPath: "/test/extension2.ts",
+		const extension2: RegisteredModule = {
+			name: "extension2",
 			sourceInfo: createSyntheticSourceInfo("<test:extension2>", { source: "test" }),
 			handlers: new Map<string, ((event: any, ctx: any) => Promise<any>)[]>([
 				[

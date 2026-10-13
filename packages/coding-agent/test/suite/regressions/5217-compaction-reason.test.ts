@@ -1,6 +1,6 @@
 import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
-import type { ExtensionFactory } from "../../../src/index.ts";
+import type { ModuleFactory } from "../../../src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -13,7 +13,7 @@ interface RecordedCompactionEvent {
 	willRetry: boolean;
 }
 
-function recordingExtension(recorded: RecordedCompactionEvent[]): ExtensionFactory {
+function recordingExtension(recorded: RecordedCompactionEvent[]): ModuleFactory {
 	return (nanopi) => {
 		nanopi.on("session_before_compact", async (event) => {
 			recorded.push({ type: event.type, reason: event.reason, willRetry: event.willRetry });
@@ -35,7 +35,7 @@ function recordingExtension(recorded: RecordedCompactionEvent[]): ExtensionFacto
 async function createCompactionHarness(recorded: RecordedCompactionEvent[]): Promise<Harness> {
 	const harness = await createHarness({
 		settings: { compaction: { keepRecentTokens: 1 } },
-		extensionFactories: [recordingExtension(recorded)],
+		modules: [recordingExtension(recorded)],
 	});
 	harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 	await harness.session.prompt("first");

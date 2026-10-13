@@ -1,5 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";
 
 function createUsage(totalTokens: number) {
@@ -27,16 +28,19 @@ describe("pre-prompt compaction regression", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 100, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "pre-prompt summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "pre-prompt summary",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});

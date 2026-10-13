@@ -15,7 +15,7 @@
  *   pi install github.com/arpagon/pi-rewind
  */
 
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import {
   isGitRepo,
   getRepoRoot,
@@ -52,7 +52,7 @@ function describeToolCall(toolName: string, input: any): string {
   }
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ModuleApi) {
   const state = createInitialState();
 
   // Register /rewind command and Esc+Esc shortcut
@@ -72,11 +72,15 @@ export default function (pi: ExtensionAPI) {
     }
 
     state.repoRoot = await getRepoRoot(ctx.cwd);
+    const repoRoot = state.repoRoot;
+    if (!repoRoot) return;
     state.sessionId = ctx.sessionManager.getSessionId();
+    const sessionId = state.sessionId;
+    if (!sessionId) return;
 
     // Rebuild checkpoint cache from existing git refs (for resumed sessions)
     try {
-      const existing = await loadAllCheckpoints(state.repoRoot, state.sessionId);
+      const existing = await loadAllCheckpoints(repoRoot, sessionId);
       for (const cp of existing) {
         state.checkpoints.set(cp.id, cp);
       }
@@ -86,11 +90,11 @@ export default function (pi: ExtensionAPI) {
 
     // Create resume checkpoint (snapshot of current state on session start)
     try {
-      const resumeId = `resume-${state.sessionId}-${Date.now()}`;
+      const resumeId = `resume-${sessionId}-${Date.now()}`;
       const cp = await createCheckpoint({
-        root: state.repoRoot,
+        root: repoRoot,
         id: resumeId,
-        sessionId: state.sessionId,
+        sessionId,
         trigger: "resume",
         turnIndex: 0,
         description: "Session start",
@@ -126,6 +130,8 @@ export default function (pi: ExtensionAPI) {
       // Fork: just update session ID for new checkpoint tagging
       if (!state.gitAvailable) return;
       state.sessionId = ctx.sessionManager.getSessionId();
+    const sessionId = state.sessionId;
+    if (!sessionId) return;
       return;
     }
     // startup, reload, new, resume: full re-initialization
@@ -137,7 +143,7 @@ export default function (pi: ExtensionAPI) {
   // ========================================================================
 
   pi.on("before_agent_start", async (event, _ctx) => {
-    state.currentPrompt = truncate(String(event.prompt || ""), 60);
+    state.currentPrompt = truncate(String(event.messageType === "user" ? event.prompt : ""), 60);
     // Reset tool list for this new turn
     state.turnToolDescriptions = [];
     state.turnHadMutations = false;

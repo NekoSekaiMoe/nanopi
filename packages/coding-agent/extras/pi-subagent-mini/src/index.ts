@@ -3,7 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
-import { getPackageDir, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
+import { getPackageDir } from "../../../src/config.ts";
 
 // jiti (pi's TS loader) injects CJS wrapper params (__dirname/__filename) into
 // transpiled ESM modules, while import.meta.url becomes an inlined data: URL.
@@ -138,7 +139,7 @@ function defaultChildExtensions(): string[] {
 	return found;
 }
 
-export default function subagentMini(pi: ExtensionAPI): void {
+export default function subagentMini(pi: ModuleApi): void {
 	const jobs = new Map<string, Job>();
 	let counter = 0;
 	const piBin = resolvePiBin();

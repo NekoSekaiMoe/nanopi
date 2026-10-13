@@ -12,19 +12,9 @@ import {
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
-import type {
-	ExtensionFactory,
-	SessionBeforeForkEvent,
-	SessionBeforeSwitchEvent,
-	SessionShutdownEvent,
-	SessionStartEvent,
-} from "../src/index.ts";
+import type { ModuleFactory, SessionBeforeForkEvent, SessionShutdownEvent, SessionStartEvent } from "../src/index.ts";
 
-type RecordedSessionEvent =
-	| SessionBeforeSwitchEvent
-	| SessionBeforeForkEvent
-	| SessionShutdownEvent
-	| SessionStartEvent;
+type RecordedSessionEvent = SessionBeforeForkEvent | SessionShutdownEvent | SessionStartEvent;
 
 describe("AgentSessionRuntime session lifecycle events", () => {
 	const cleanups: Array<() => Promise<void> | void> = [];
@@ -35,7 +25,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		}
 	});
 
-	async function createRuntimeHost(extensionFactory: ExtensionFactory, options?: { reloadHooks?: boolean }) {
+	async function createRuntimeHost(extensionFactory: ModuleFactory, options?: { reloadHooks?: boolean }) {
 		const tempDir = join(tmpdir(), `nanopi-runtime-events-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 
@@ -72,7 +62,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 			modelRuntime,
 			model: faux.getModel(),
 			resourceLoaderOptions: {
-				extensionFactories: [extensionFactory],
+				modules: [{ name: "test-module-1", factory: extensionFactory }],
 				noSkills: true,
 				noPromptTemplates: true,
 				noThemes: true,
@@ -99,7 +89,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 			agentDir: tempDir,
 			sessionManager: SessionManager.create(tempDir),
 		});
-		await runtimeHost.session.bindExtensions(options?.reloadHooks ? { reloadHooks: {} } : {});
+		await runtimeHost.session.bindModules(options?.reloadHooks ? { reloadHooks: {} } : {});
 		let disposed = false;
 		const dispose = async () => {
 			if (disposed) return;
@@ -137,106 +127,12 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		expect(originalSessionFile).toBeTruthy();
 
 		await runtimeHost.newSession();
-		await runtimeHost.session.bindExtensions({ reloadHooks: {} });
+		await runtimeHost.session.bindModules({ reloadHooks: {} });
 		await runtimeHost.switchSession(originalSessionFile!);
-		await runtimeHost.session.bindExtensions({ reloadHooks: {} });
+		await runtimeHost.session.bindModules({ reloadHooks: {} });
 		await dispose();
 
 		expect(reloadStarts).toBe(0);
-	});
-
-	it("emits session_before_switch and session_start for new and resume flows", async () => {
-		const events: RecordedSessionEvent[] = [];
-		const { runtimeHost } = await createRuntimeHost((nanopi) => {
-			nanopi.on("session_before_switch", (event) => {
-				events.push(event);
-			});
-			nanopi.on("session_shutdown", (event) => {
-				events.push(event);
-			});
-			nanopi.on("session_start", (event) => {
-				events.push(event);
-			});
-		});
-
-		expect(events).toEqual([{ type: "session_start", reason: "startup" }]);
-		events.length = 0;
-
-		await runtimeHost.session.prompt("hello");
-		const originalSessionFile = runtimeHost.session.sessionFile;
-		expect(originalSessionFile).toBeTruthy();
-
-		const newSessionResult = await runtimeHost.newSession();
-		expect(newSessionResult.cancelled).toBe(false);
-		await runtimeHost.session.bindExtensions({});
-		const secondSessionFile = runtimeHost.session.sessionFile;
-		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "new", targetSessionFile: undefined },
-			{ type: "session_shutdown", reason: "new", targetSessionFile: secondSessionFile },
-			{ type: "session_start", reason: "new", previousSessionFile: originalSessionFile },
-		]);
-
-		events.length = 0;
-		expect(secondSessionFile).toBeTruthy();
-
-		const switchResult = await runtimeHost.switchSession(originalSessionFile!);
-		expect(switchResult.cancelled).toBe(false);
-		await runtimeHost.session.bindExtensions({});
-		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_shutdown", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_start", reason: "resume", previousSessionFile: secondSessionFile },
-		]);
-	});
-
-	it("honors session_before_switch cancellation", async () => {
-		const events: RecordedSessionEvent[] = [];
-		const { runtimeHost } = await createRuntimeHost((nanopi) => {
-			nanopi.on("session_before_switch", (event) => {
-				events.push(event);
-				return { cancel: true };
-			});
-			nanopi.on("session_start", (event) => {
-				events.push(event);
-			});
-		});
-
-		expect(events).toEqual([{ type: "session_start", reason: "startup" }]);
-		events.length = 0;
-
-		await runtimeHost.session.prompt("hello");
-		const originalSessionFile = runtimeHost.session.sessionFile;
-
-		const result = await runtimeHost.newSession();
-		expect(result.cancelled).toBe(true);
-		expect(runtimeHost.session.sessionFile).toBe(originalSessionFile);
-		expect(events).toEqual([{ type: "session_before_switch", reason: "new", targetSessionFile: undefined }]);
-	});
-
-	it("runs beforeSessionInvalidate after session_shutdown and before rebindSession", async () => {
-		const phases: string[] = [];
-		const { runtimeHost } = await createRuntimeHost((nanopi) => {
-			nanopi.on("session_shutdown", () => {
-				phases.push("session_shutdown");
-			});
-		});
-		const oldSession = runtimeHost.session;
-		runtimeHost.setBeforeSessionInvalidate(() => {
-			phases.push("beforeSessionInvalidate");
-			expect(oldSession.extensionRunner.createContext().cwd).toBe(oldSession.sessionManager.getCwd());
-		});
-		runtimeHost.setRebindSession(async () => {
-			phases.push("rebindSession");
-		});
-
-		await runtimeHost.newSession();
-
-		expect(phases).toEqual(["session_shutdown", "beforeSessionInvalidate", "rebindSession"]);
-		expect(() => oldSession.extensionRunner.createContext().cwd).toThrow(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured nanopi or ctx after the runtime that created it has been replaced. For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession.",
-		);
-		runtimeHost.setBeforeSessionInvalidate(undefined);
-		runtimeHost.setRebindSession(undefined);
 	});
 
 	it("emits session_before_fork and session_start and honors cancellation", async () => {
@@ -268,7 +164,7 @@ describe("AgentSessionRuntime session lifecycle events", () => {
 		const successResult = await runtimeHost.fork(userMessage.entryId);
 		expect(successResult.cancelled).toBe(false);
 		expect(successResult.selectedText).toBe("hello");
-		await runtimeHost.session.bindExtensions({});
+		await runtimeHost.session.bindModules({});
 		expect(events).toEqual([
 			{ type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
 			{ type: "session_shutdown", reason: "fork", targetSessionFile: runtimeHost.session.sessionFile },

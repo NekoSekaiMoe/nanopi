@@ -9,7 +9,7 @@ import {
 } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
-import type { BuildSystemPromptOptions, ExtensionAPI } from "../../src/index.ts";
+import type { BuildSystemPromptOptions, ModuleApi } from "../../src/index.ts";
 import { createHarness, getAssistantTexts, type Harness } from "./harness.ts";
 
 describe("AgentSession model and extension characterization", () => {
@@ -28,11 +28,14 @@ describe("AgentSession model and extension characterization", () => {
 				{ id: "faux-1", name: "One", reasoning: true },
 				{ id: "faux-2", name: "Two", reasoning: true },
 			],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("model_select", async (event) => {
-						modelEvents.push(`${event.previousModel?.id ?? "none"}->${event.model.id}:${event.source}`);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("model_select", async (event) => {
+							modelEvents.push(`${event.previousModel?.id ?? "none"}->${event.model.id}:${event.source}`);
+						});
+					},
 				},
 			],
 		});
@@ -253,9 +256,12 @@ describe("AgentSession model and extension characterization", () => {
 		};
 		const harness = await createHarness({
 			tools: [echoTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("tool_call", async () => ({ block: true, reason: "Blocked by test" }));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("tool_call", async () => ({ block: true, reason: "Blocked by test" }));
+					},
 				},
 			],
 		});
@@ -313,16 +319,19 @@ describe("AgentSession model and extension characterization", () => {
 		};
 		const harness = await createHarness({
 			tools: [echoTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("tool_result", async (event) => {
-						observedToolUsage = event.usage;
-						return {
-							content: [{ type: "text", text: "patched result" }],
-							details: { patched: true },
-							usage: patchedToolUsage,
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("tool_result", async (event) => {
+							observedToolUsage = event.usage;
+							return {
+								content: [{ type: "text", text: "patched result" }],
+								details: { patched: true },
+								usage: patchedToolUsage,
+							};
+						});
+					},
 				},
 			],
 		});
@@ -358,58 +367,21 @@ describe("AgentSession model and extension characterization", () => {
 		expect(toolResult?.role === "toolResult" ? toolResult.usage : undefined).toEqual(patchedToolUsage);
 	});
 
-	it("allows extension context handlers to modify messages before the LLM call", async () => {
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("context", async (event) => ({
-						messages: event.messages.map((message) =>
-							message.role === "user"
-								? { ...message, content: [{ type: "text", text: "rewritten" }], timestamp: message.timestamp }
-								: message,
-						),
-					}));
-				},
-			],
-		});
-		harnesses.push(harness);
-		let providerUserText = "";
-		harness.setResponses([
-			(context) => {
-				const user = context.messages.find((message) => message.role === "user");
-				providerUserText =
-					user && typeof user.content !== "string"
-						? user.content
-								.filter((part): part is { type: "text"; text: string } => part.type === "text")
-								.map((part) => part.text)
-								.join("\n")
-						: "";
-				return fauxAssistantMessage("done");
-			},
-		]);
-
-		await harness.session.prompt("original");
-
-		expect(providerUserText).toBe("rewritten");
-		const storedUserMessage = harness.session.messages.find((message) => message.role === "user");
-		expect(storedUserMessage?.role).toBe("user");
-		if (storedUserMessage?.role === "user") {
-			expect(storedUserMessage.content).toEqual([{ type: "text", text: "original" }]);
-		}
-	});
-
 	it("allows extension input handlers to transform or handle input", async () => {
-		let extensionApi: ExtensionAPI | undefined;
+		let extensionApi: ModuleApi | undefined;
 		const transformedHarness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					extensionApi = nanopi;
-					nanopi.on("input", async (event) => {
-						if (event.text === "ping") {
-							return { action: "handled" };
-						}
-						return { action: "transform", text: `transformed:${event.text}` };
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						extensionApi = nanopi;
+						nanopi.on("input", async (event) => {
+							if (event.text === "ping") {
+								return { action: "handled" };
+							}
+							return { action: "transform", text: `transformed:${event.text}` };
+						});
+					},
 				},
 			],
 		});
@@ -440,16 +412,19 @@ describe("AgentSession model and extension characterization", () => {
 	it("allows extension commands to inspect live system prompt options", async () => {
 		const seenOptions: BuildSystemPromptOptions[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("inspect-options", {
-						description: "Inspect system prompt options",
-						handler: async (_args, ctx) => {
-							const options = ctx.getSystemPromptOptions();
-							seenOptions.push(options);
-							options.selectedTools?.push("mutated_tool");
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("inspect-options", {
+							description: "Inspect system prompt options",
+							handler: async (_args, ctx) => {
+								const options = ctx.getSystemPromptOptions();
+								seenOptions.push(options);
+								options.selectedTools?.push("mutated_tool");
+							},
+						});
+					},
 				},
 			],
 		});
@@ -467,17 +442,20 @@ describe("AgentSession model and extension characterization", () => {
 
 	it("allows before_agent_start handlers to inject custom messages and modify the system prompt", async () => {
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("before_agent_start", async (event) => ({
-						message: {
-							customType: "before-start",
-							content: "injected",
-							display: true,
-							details: { injected: true },
-						},
-						systemPrompt: `${event.systemPrompt}\n\nextra instructions`,
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("before_agent_start", async (event) => ({
+							message: {
+								customType: "before-start",
+								content: "injected",
+								display: true,
+								details: { injected: true },
+							},
+							systemPrompt: `${event.systemPrompt}\n\nextra instructions`,
+						}));
+					},
 				},
 			],
 		});
@@ -504,37 +482,5 @@ describe("AgentSession model and extension characterization", () => {
 		expect(
 			harness.session.messages.some((message) => message.role === "custom" && message.customType === "before-start"),
 		).toBe(true);
-	});
-
-	it("uses the same extension lifecycle for startup and reload", async () => {
-		const lifecycleEvents: string[] = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", async (event) => {
-						lifecycleEvents.push(`start:${event.reason}`);
-					});
-					nanopi.on("resources_discover", (event) => {
-						lifecycleEvents.push(`resources:${event.reason}`);
-						return {};
-					});
-					nanopi.on("session_shutdown", async (event) => {
-						lifecycleEvents.push(`shutdown:${event.reason}`);
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-
-		await harness.session.bindExtensions({ mode: "print" });
-		await harness.session.reload();
-
-		expect(lifecycleEvents).toEqual([
-			"start:startup",
-			"resources:startup",
-			"shutdown:reload",
-			"start:reload",
-			"resources:reload",
-		]);
 	});
 });

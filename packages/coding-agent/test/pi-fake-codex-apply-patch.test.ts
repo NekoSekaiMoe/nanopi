@@ -1,7 +1,7 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { describe, expect, test } from "vitest";
 import { registerApplyPatchTool } from "../extras/pi-fake-codex/src/apply-patch.ts";
-import type { ExtensionAPI, ToolDefinition, ToolLoadout } from "../src/core/extensions/types.ts";
+import type { ModuleApi, ToolDefinition, ToolLoadout } from "../src/core/modules/types.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 
 /** Minimal stand-in for a named tool; the loadout contract only reads `name` here. */
@@ -24,7 +24,7 @@ function registerAlias(): ToolDefinition | undefined {
 		},
 		on: () => () => {},
 	};
-	registerApplyPatchTool(pi as unknown as ExtensionAPI);
+	registerApplyPatchTool(pi as unknown as ModuleApi);
 	return registered[0];
 }
 

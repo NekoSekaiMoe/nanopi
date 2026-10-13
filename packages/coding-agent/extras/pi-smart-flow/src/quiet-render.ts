@@ -3,9 +3,9 @@
 // The cockpit-driven quiet-state module was inlined: pi-smart-flow always uses
 // the default "check" glyph set (no cockpit integration).
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import type { Component } from "@earendil-works/pi-tui";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import type { Component } from "@nanopi/pi-tui";
+import { truncateToWidth } from "@nanopi/pi-tui";
 
 type QuietStatus = "running" | "success" | "failure";
 

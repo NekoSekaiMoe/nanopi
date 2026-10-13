@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
-import type { ExtensionFactory } from "../../../src/index.ts";
+import type { ModuleFactory } from "../../../src/index.ts";
 import { createHarness } from "../harness.ts";
 
 function toolNames(tools: Array<{ name: string }>): string[] {
@@ -8,7 +8,7 @@ function toolNames(tools: Array<{ name: string }>): string[] {
 }
 
 describe("regression #5109: exclude tools", () => {
-	const extensionFactories: ExtensionFactory[] = [
+	const modules: ModuleFactory[] = [
 		(nanopi) => {
 			nanopi.on("session_start", () => {
 				nanopi.registerTool({
@@ -40,10 +40,10 @@ describe("regression #5109: exclude tools", () => {
 	it("filters built-in and extension tools from available and active tools", async () => {
 		const harness = await createHarness({
 			excludedToolNames: ["read", "ask_question"],
-			extensionFactories,
+			modules,
 		});
 		try {
-			await harness.session.bindExtensions({});
+			await harness.session.bindModules({});
 
 			const allToolNames = toolNames(harness.session.getAllTools());
 			expect(allToolNames).not.toContain("read");
@@ -64,10 +64,10 @@ describe("regression #5109: exclude tools", () => {
 			allowedToolNames: ["read", "bash", "ask_question"],
 			excludedToolNames: ["read", "ask_question"],
 			initialActiveToolNames: ["read", "bash", "ask_question"],
-			extensionFactories,
+			modules,
 		});
 		try {
-			await harness.session.bindExtensions({});
+			await harness.session.bindModules({});
 
 			expect(toolNames(harness.session.getAllTools())).toEqual(["bash"]);
 			expect(harness.session.getActiveToolNames()).toEqual(["bash"]);
@@ -84,10 +84,10 @@ describe("regression #5109: exclude tools", () => {
 			allowedToolNames: ["*_tool", "ask_*", "re*"],
 			excludedToolNames: ["ask*"],
 			initialActiveToolNames: ["*_tool", "ask_*", "re*"],
-			extensionFactories,
+			modules,
 		});
 		try {
-			await harness.session.bindExtensions({});
+			await harness.session.bindModules({});
 
 			// Patterns that match a tool activate it like its name.
 			expect(toolNames(harness.session.getAllTools())).toEqual(["dynamic_tool", "read"]);

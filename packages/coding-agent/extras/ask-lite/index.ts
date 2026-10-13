@@ -15,7 +15,7 @@
  * "Contributing translations" for the full convention.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { registerAskUserQuestionTool } from "./ask-user-question.js";
 import { I18N_NAMESPACE } from "./state/i18n-bridge.js";
 
@@ -31,7 +31,8 @@ type I18nLoader = {
 // The `/loader` subpath is used instead of the SDK entry so the i18n-ui +
 // pi-tui modules are not pulled into our load graph just to register strings.
 try {
-	const sdk = (await import("@juicesharp/rpiv-i18n/loader")) as I18nLoader;
+	const i18nLoaderId = "@juicesharp/rpiv-i18n/loader";
+	const sdk = (await import(i18nLoaderId)) as I18nLoader;
 	sdk.registerLocalesFromDir(I18N_NAMESPACE, import.meta.url, { label: "rpiv-ask-user-question" });
 } catch {
 	// SDK absent — extension still loads with English-only UI.
@@ -44,6 +45,6 @@ export {
 	type AskUserPromptQuestion,
 } from "./events.js";
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ModuleApi) {
 	registerAskUserQuestionTool(pi);
 }

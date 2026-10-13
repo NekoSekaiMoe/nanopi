@@ -20,17 +20,17 @@
  * model 层纯函数返回 Result 对象（合法），dispatcher 拿到 error 时 throw。
  */
 
-import type { ExtensionAPI, ModuleContext } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi, ModuleContext } from "@nanopi/pi-coding-agent";
 
-import { registerTodosCommand } from "./commands";
-import { registerTodoEventHandlers } from "./handlers";
-import { renderStatusText, renderWidgetLines } from "./render";
-import { createTodoSessionState } from "./state";
-import { registerTodoTool } from "./tool";
+import { registerTodosCommand } from "./commands.ts";
+import { registerTodoEventHandlers } from "./handlers.ts";
+import { renderStatusText, renderWidgetLines } from "./render.ts";
+import { createTodoSessionState } from "./state.ts";
+import { registerTodoTool } from "./tool.ts";
 
 // ── 扩展入口 ─────────────────────────────────────────
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ModuleApi) {
 	// ── 闭包内状态（session 隔离） ─────────────────────
 	const state = createTodoSessionState();
 

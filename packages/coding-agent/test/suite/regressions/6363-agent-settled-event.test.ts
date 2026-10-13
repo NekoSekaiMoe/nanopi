@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, getUserTexts, type Harness } from "../harness.ts";
 
 function createWaitTool(released: Promise<void>): AgentTool {
@@ -31,14 +32,17 @@ describe("regression #6363: agent settled event and idle waiting", () => {
 		const publicEvents: string[] = [];
 		const harness = await createHarness({
 			settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_end", () => {
-						extensionEvents.push("agent_end");
-					});
-					nanopi.on("agent_settled", (_event, ctx) => {
-						extensionEvents.push(`agent_settled:${ctx.isIdle()}`);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("agent_end", () => {
+							extensionEvents.push("agent_end");
+						});
+						nanopi.on("agent_settled", (_event, ctx) => {
+							extensionEvents.push(`agent_settled:${ctx.isIdle()}`);
+						});
+					},
 				},
 			],
 		});
@@ -65,16 +69,19 @@ describe("regression #6363: agent settled event and idle waiting", () => {
 		let queuedFollowUp = false;
 		const settledIdleStates: boolean[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_end", () => {
-						if (queuedFollowUp) return;
-						queuedFollowUp = true;
-						nanopi.sendUserMessage("status follow-up", { deliverAs: "followUp" });
-					});
-					nanopi.on("agent_settled", (_event, ctx) => {
-						settledIdleStates.push(ctx.isIdle());
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("agent_end", () => {
+							if (queuedFollowUp) return;
+							queuedFollowUp = true;
+							nanopi.sendUserMessage("status follow-up", { deliverAs: "followUp" });
+						});
+						nanopi.on("agent_settled", (_event, ctx) => {
+							settledIdleStates.push(ctx.isIdle());
+						});
+					},
 				},
 			],
 		});
@@ -101,21 +108,24 @@ describe("regression #6363: agent settled event and idle waiting", () => {
 		const commandResults: boolean[] = [];
 		const harness = await createHarness({
 			tools: [createWaitTool(released)],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("after-idle", {
-						description: "Wait for idle",
-						handler: async (_args, ctx) => {
-							markCommandStarted();
-							await ctx.waitForIdle();
-							commandResults.push(ctx.isIdle());
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("after-idle", {
+							description: "Wait for idle",
+							handler: async (_args, ctx) => {
+								markCommandStarted();
+								await ctx.waitForIdle();
+								commandResults.push(ctx.isIdle());
+							},
+						});
+					},
 				},
 			],
 		});
 		harnesses.push(harness);
-		await harness.session.bindExtensions({
+		await harness.session.bindModules({
 			commandContextActions: {
 				waitForIdle: () => harness.session.waitForIdle(),
 				newSession: async () => ({ cancelled: false }),

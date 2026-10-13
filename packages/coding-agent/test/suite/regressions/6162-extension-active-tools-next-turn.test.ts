@@ -7,7 +7,7 @@ import {
 } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
-import type { ExtensionAPI, ExtensionFactory } from "../../../src/index.ts";
+import type { ModuleApi, ModuleFactory } from "../../../src/index.ts";
 import { createHarness } from "../harness.ts";
 
 function getProviderToolNames(context: TranscriptContext): string[] {
@@ -17,7 +17,7 @@ function getProviderToolNames(context: TranscriptContext): string[] {
 }
 
 /** Register `switch_tools`, which swaps the active set to `after_switch` when executed. */
-function registerSwitchTools(nanopi: ExtensionAPI): void {
+function registerSwitchTools(nanopi: ModuleApi): void {
 	nanopi.registerTool({
 		name: "switch_tools",
 		label: "Switch Tools",
@@ -42,7 +42,7 @@ function registerSwitchTools(nanopi: ExtensionAPI): void {
 describe("extension active tools next-turn refresh", () => {
 	// Regression #6162
 	it("applies nanopi.setActiveTools before the next provider request in the same run", async () => {
-		const harness = await createHarness({ extensionFactories: [registerSwitchTools] });
+		const harness = await createHarness({ modules: [{ name: "test-module-1", factory: registerSwitchTools }] });
 
 		try {
 			harness.session.setActiveToolsByName(["switch_tools"]);
@@ -71,7 +71,7 @@ describe("extension active tools next-turn refresh", () => {
 	});
 
 	it("reports the refreshed system prompt during the run", async () => {
-		const harness = await createHarness({ extensionFactories: [registerSwitchTools] });
+		const harness = await createHarness({ modules: [{ name: "test-module-1", factory: registerSwitchTools }] });
 		try {
 			harness.session.setActiveToolsByName(["switch_tools"]);
 			const providerPrompts: string[] = [];
@@ -100,7 +100,7 @@ describe("extension active tools next-turn refresh", () => {
 	});
 
 	it("preserves before_agent_start system prompt overrides when tools change mid-run", async () => {
-		const extensionFactories: ExtensionFactory[] = [
+		const modules: ModuleFactory[] = [
 			(nanopi) => {
 				nanopi.on("before_agent_start", async (event) => ({
 					systemPrompt: `${event.systemPrompt}\n\nkeep this run override`,
@@ -110,7 +110,7 @@ describe("extension active tools next-turn refresh", () => {
 			},
 		];
 		const harness = await createHarness({
-			extensionFactories,
+			modules,
 		});
 
 		try {

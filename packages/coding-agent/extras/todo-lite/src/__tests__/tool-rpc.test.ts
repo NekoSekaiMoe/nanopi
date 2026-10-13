@@ -6,12 +6,12 @@
  * 已注册 tool，再以不同 ctx.mode 调 execute。每个用例新建 state（隔离），
  * 无模块级状态需重置。
  */
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { Theme } from "@nanopi/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 
-import { createTodoSessionState, type TodoSessionState } from "../state";
-import { registerTodoTool } from "../tool";
+import { createTodoSessionState, type TodoSessionState } from "../state.ts";
+import { registerTodoTool } from "../tool.ts";
 
 // ── Types for the registered tool ───────────────────────
 type TestMode = "tui" | "rpc" | "json" | "print";
@@ -55,7 +55,7 @@ function setup(): { tool: RegisteredTool; state: TodoSessionState } {
 			this.tool = tool;
 		},
 	};
-	registerTodoTool(pi as unknown as ExtensionAPI, state, () => {});
+	registerTodoTool(pi as unknown as ModuleApi, state, () => {});
 	if (!pi.tool) throw new Error("registerTodoTool did not register a tool");
 	return { tool: pi.tool, state };
 }

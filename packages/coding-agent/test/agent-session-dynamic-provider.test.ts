@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { ModelRuntime } from "../src/core/model-runtime.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import type { ExtensionFactory } from "../src/core/sdk.ts";
+import type { ModuleFactory, SessionModule } from "../src/core/sdk.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
@@ -50,7 +50,11 @@ describe("AgentSession dynamic provider registration", () => {
 		}
 	});
 
-	async function createSession(extensionFactories: ExtensionFactory[]) {
+	async function createSession(moduleFactories: ModuleFactory[]) {
+		const modules: SessionModule[] = moduleFactories.map((factory, i) => ({
+			name: `test-provider-module-${i + 1}`,
+			factory,
+		}));
 		const settingsManager = SettingsManager.create(tempDir, agentDir);
 		const sessionManager = SessionManager.inMemory();
 		const authStorage = AuthStorage.create(join(agentDir, "auth.json"));
@@ -63,7 +67,7 @@ describe("AgentSession dynamic provider registration", () => {
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories,
+			modules,
 		});
 		await resourceLoader.reload();
 
@@ -114,7 +118,7 @@ describe("AgentSession dynamic provider registration", () => {
 			},
 		]);
 
-		await session.bindExtensions({});
+		await session.bindModules({});
 
 		expect(session.model?.baseUrl).toBe("http://localhost:8080/session-start");
 		expect(await capturePromptBaseUrl(session)).toBe("http://localhost:8080/session-start");
@@ -147,7 +151,7 @@ describe("AgentSession dynamic provider registration", () => {
 			},
 		]);
 
-		await session.bindExtensions({});
+		await session.bindModules({});
 		await session.prompt("/use-proxy");
 
 		expect(session.model?.baseUrl).toBe("http://localhost:8080/command");
@@ -168,7 +172,7 @@ describe("AgentSession dynamic provider registration", () => {
 			},
 		]);
 
-		await session.bindExtensions({});
+		await session.bindModules({});
 		await session.prompt("/use-native");
 
 		expect(session.model?.baseUrl).toBe("http://localhost:8080/native-command");

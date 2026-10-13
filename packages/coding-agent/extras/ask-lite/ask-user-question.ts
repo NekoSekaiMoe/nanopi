@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { loadConfig, validateGuidanceFields } from "./config.js";
 import { ASK_USER_PROMPT_EVENT, type AskUserPromptEventPayload } from "./events.js";
 import { displayLabel } from "./state/i18n-bridge.js";
@@ -16,7 +16,7 @@ import {
 import { validateQuestionnaire } from "./tool/validate-questionnaire.js";
 import type { WrappingSelectItem } from "./view/components/wrapping-select.js";
 
-function emitAskUserPromptEvent(pi: ExtensionAPI, params: QuestionParams): void {
+function emitAskUserPromptEvent(pi: ModuleApi, params: QuestionParams): void {
 	const payload: AskUserPromptEventPayload = {
 		questions: params.questions.map((q) => ({
 			question: q.question,
@@ -52,7 +52,7 @@ export const DEFAULT_PROMPT_GUIDELINES: string[] = [
 	`Use ask_user_question when the request is underspecified and you need concrete decisions (up to ${MAX_QUESTIONS} questions in one call, each with ${MIN_OPTIONS}-${MAX_OPTIONS} options: concise label + explanatory description). Options may carry a markdown preview for side-by-side comparison (single-select only); multiSelect allows several answers; put your recommended option first with "(Recommended)".`,
 ];
 
-export function registerAskUserQuestionTool(pi: ExtensionAPI): void {
+export function registerAskUserQuestionTool(pi: ModuleApi): void {
 	const guidance = validateGuidanceFields(loadConfig().guidance);
 	pi.registerTool({
 		name: "ask_user_question",

@@ -11,7 +11,7 @@ import {
 } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { BeforeAgentStartEvent, ExtensionAPI, InputEvent } from "../../src/core/extensions/index.ts";
+import type { BeforeAgentStartEvent, InputEvent, ModuleApi } from "../../src/core/modules/index.ts";
 import type { PromptTemplate } from "../../src/core/prompt-templates.ts";
 import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
 import { createTestResourceLoader } from "../utilities.ts";
@@ -170,12 +170,15 @@ describe("AgentSession prompt characterization", () => {
 		let strictModel: Model<string> | undefined;
 		const harness = await createHarness({
 			models: [{ id: "wide" }, { id: "strict" }],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("before_agent_start", async () => {
-						if (!strictModel) throw new Error("Expected strict model");
-						await nanopi.setModel(strictModel);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("before_agent_start", async () => {
+							if (!strictModel) throw new Error("Expected strict model");
+							await nanopi.setModel(strictModel);
+						});
+					},
 				},
 			],
 		});
@@ -319,14 +322,17 @@ describe("AgentSession prompt characterization", () => {
 	it("dispatches extension commands without consuming a provider response", async () => {
 		const commandRuns: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async (args) => {
-							commandRuns.push(args);
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async (args) => {
+								commandRuns.push(args);
+							},
+						});
+					},
 				},
 			],
 		});
@@ -341,21 +347,24 @@ describe("AgentSession prompt characterization", () => {
 	});
 
 	it("extension sendUserMessage can opt into extension command dispatch", async () => {
-		let extensionApi: ExtensionAPI | undefined;
+		let extensionApi: ModuleApi | undefined;
 		let resolveCommandRun: (args: string) => void = () => {};
 		const commandRun = new Promise<string>((resolve) => {
 			resolveCommandRun = resolve;
 		});
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					extensionApi = nanopi;
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async (args) => {
-							resolveCommandRun(args);
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						extensionApi = nanopi;
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async (args) => {
+								resolveCommandRun(args);
+							},
+						});
+					},
 				},
 			],
 		});
@@ -384,11 +393,14 @@ describe("AgentSession prompt characterization", () => {
 	it("does not report streamingBehavior to input handlers while idle", async () => {
 		const inputEvents: InputEvent[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("input", (event) => {
-						inputEvents.push(event);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("input", (event) => {
+							inputEvents.push(event);
+						});
+					},
 				},
 			],
 		});
@@ -422,11 +434,14 @@ describe("AgentSession prompt characterization", () => {
 		};
 		const harness = await createHarness({
 			tools: [waitTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("input", (event) => {
-						inputEvents.push(event);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("input", (event) => {
+							inputEvents.push(event);
+						});
+					},
 				},
 			],
 		});
@@ -511,20 +526,23 @@ describe("AgentSession prompt characterization", () => {
 		});
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => {
-						markCompactionStarted();
-						await compactionReleased;
-						return {
-							compaction: {
-								summary: "manual compacted",
-								firstKeptEntryId: event.preparation.firstKeptEntryId,
-								tokensBefore: event.preparation.tokensBefore,
-								details: {},
-							},
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => {
+							markCompactionStarted();
+							await compactionReleased;
+							return {
+								compaction: {
+									summary: "manual compacted",
+									firstKeptEntryId: event.preparation.firstKeptEntryId,
+									tokensBefore: event.preparation.tokensBefore,
+									details: {},
+								},
+							};
+						});
+					},
 				},
 			],
 		});
@@ -577,12 +595,15 @@ describe("AgentSession prompt characterization", () => {
 			};
 			const harness = await createHarness({
 				tools: [noopTool],
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("before_agent_start", (event) => {
-							events.push(event);
-							event.systemPromptOptions.sections.extension_rules = "Answer in one word.";
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("before_agent_start", (event) => {
+								events.push(event);
+								event.systemPromptOptions.sections.extension_rules = "Answer in one word.";
+							});
+						},
 					},
 				],
 			});
@@ -616,15 +637,18 @@ describe("AgentSession prompt characterization", () => {
 			let releaseHandler: () => void = () => {};
 			const handlerStarted = Promise.withResolvers<void>();
 			const harness = await createHarness({
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("before_agent_start", async (event) => {
-							if (event.messageType !== "custom" || event.message.customType !== "first") return;
-							handlerStarted.resolve();
-							await new Promise<void>((resolve) => {
-								releaseHandler = resolve;
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("before_agent_start", async (event) => {
+								if (event.messageType !== "custom" || event.message.customType !== "first") return;
+								handlerStarted.resolve();
+								await new Promise<void>((resolve) => {
+									releaseHandler = resolve;
+								});
 							});
-						});
+						},
 					},
 				],
 			});
@@ -661,14 +685,17 @@ describe("AgentSession prompt characterization", () => {
 
 		it("includes a custom message sent without triggerTurn while the run starts in its first request", async () => {
 			const harness = await createHarness({
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("before_agent_start", () => {
-							nanopi.sendMessage(
-								{ customType: "note", content: "context from handler", display: true },
-								{ triggerTurn: false },
-							);
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("before_agent_start", () => {
+								nanopi.sendMessage(
+									{ customType: "note", content: "context from handler", display: true },
+									{ triggerTurn: false },
+								);
+							});
+						},
 					},
 				],
 			});
@@ -691,14 +718,17 @@ describe("AgentSession prompt characterization", () => {
 			let releaseHandler: () => void = () => {};
 			const handlerStarted = Promise.withResolvers<void>();
 			const harness = await createHarness({
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("before_agent_start", async () => {
-							handlerStarted.resolve();
-							await new Promise<void>((resolve) => {
-								releaseHandler = resolve;
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("before_agent_start", async () => {
+								handlerStarted.resolve();
+								await new Promise<void>((resolve) => {
+									releaseHandler = resolve;
+								});
 							});
-						});
+						},
 					},
 				],
 			});

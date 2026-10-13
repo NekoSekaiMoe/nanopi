@@ -3,7 +3,7 @@
 // id/ids）要给消歧反例，失败后 throw 要带 Correct 正例让模型自我纠正。
 //
 // 本测试用源码文本断言锁定这些约束，防止后续重构把正例/反例/纠错文案删掉或
-// 弱化。读源码而非 import，避免 mock 链（tool.ts 依赖 typebox/ExtensionAPI/
+// 弱化。读源码而非 import，避免 mock 链（tool.ts 依赖 typebox/ModuleApi/
 // Theme 等值导入）。参考 subagent-workflow 的 prompt 回归范式。
 
 import { readFileSync } from "node:fs";

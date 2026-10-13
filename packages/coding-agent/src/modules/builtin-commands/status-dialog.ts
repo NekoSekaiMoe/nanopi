@@ -10,8 +10,8 @@
  * indented comma-separated lists, wrapped to the dialog width.
  */
 
-import type { ModuleCommandContext } from "@nanopi/pi-coding-agent";
 import { Key, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import type { ModuleCommandContext } from "../../core/modules/types.ts";
 
 export type StatusRow = {
 	label: string;

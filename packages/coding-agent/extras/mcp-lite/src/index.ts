@@ -13,7 +13,7 @@
  */
 
 import { Type, type TSchema } from "typebox";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { McpClient, type McpToolDefinition } from "./client.ts";
 import { loadMcpConfig } from "./config.ts";
 
@@ -48,7 +48,7 @@ interface ServerState {
 	error?: string;
 }
 
-export default function mcpLiteExtension(pi: ExtensionAPI): void {
+export default function mcpLiteExtension(pi: ModuleApi): void {
 	const states = new Map<string, ServerState>();
 
 	const connectServer = async (name: string, state: ServerState): Promise<void> => {
@@ -104,7 +104,7 @@ export default function mcpLiteExtension(pi: ExtensionAPI): void {
 	});
 }
 
-function registerMcpTool(pi: ExtensionAPI, client: McpClient, serverName: string, tool: McpToolDefinition): void {
+function registerMcpTool(pi: ModuleApi, client: McpClient, serverName: string, tool: McpToolDefinition): void {
 	pi.registerTool({
 		name: mcpToolName(serverName, tool.name),
 		label: `${serverName}: ${tool.name}`,
@@ -132,11 +132,13 @@ function registerMcpTool(pi: ExtensionAPI, client: McpClient, serverName: string
 					.join("\n");
 				return {
 					content: [{ type: "text" as const, text: text || "(no textual output)" }],
+					details: {},
 					isError: result.isError,
 				};
 			} catch (error) {
 				return {
 					content: [{ type: "text" as const, text: error instanceof Error ? error.message : String(error) }],
+					details: {},
 					isError: true,
 				};
 			}

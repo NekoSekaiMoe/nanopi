@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 function createEchoTool(): AgentTool {
@@ -29,13 +30,16 @@ describe("regressions #1717/#2113: agent session event settlement", () => {
 	it("keeps persisted assistant/toolResult message order when extension message_end handlers yield", async () => {
 		const harness = await createHarness({
 			tools: [createEchoTool()],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_end", async (event) => {
-						if (event.message.role === "assistant") {
-							await new Promise((resolve) => setTimeout(resolve, 20));
-						}
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_end", async (event) => {
+							if (event.message.role === "assistant") {
+								await new Promise((resolve) => setTimeout(resolve, 20));
+							}
+						});
+					},
 				},
 			],
 		});
@@ -70,16 +74,19 @@ describe("regressions #1717/#2113: agent session event settlement", () => {
 		const branchRolesAtToolCall: string[][] = [];
 		harness = await createHarness({
 			tools: [createEchoTool()],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("tool_call", () => {
-						branchRolesAtToolCall.push(
-							harness.sessionManager
-								.getBranch()
-								.filter((entry) => entry.type === "message")
-								.map((entry) => entry.message.role),
-						);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("tool_call", () => {
+							branchRolesAtToolCall.push(
+								harness.sessionManager
+									.getBranch()
+									.filter((entry) => entry.type === "message")
+									.map((entry) => entry.message.role),
+							);
+						});
+					},
 				},
 			],
 		});

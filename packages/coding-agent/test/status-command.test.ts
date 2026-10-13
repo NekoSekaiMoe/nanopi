@@ -1,14 +1,14 @@
 import { describe, expect, it } from "vitest";
-import { collectStatusRows, collectStatusSections } from "../src/extensions/builtin-commands/status.ts";
-import { wrapStatusText } from "../src/extensions/builtin-commands/status-dialog.ts";
-import type { ExtensionCommandContext } from "../src/index.ts";
+import type { ModuleCommandContext } from "../src/index.ts";
 import { initTheme } from "../src/index.ts";
 import { renderWelcomeBox, renderWelcomeTip, WelcomeHeader } from "../src/modes/interactive/components/welcome-box.ts";
+import { collectStatusRows, collectStatusSections } from "../src/modules/builtin-commands/status.ts";
+import { wrapStatusText } from "../src/modules/builtin-commands/status-dialog.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 initTheme("dark");
 
-function createStatusCtx(): ExtensionCommandContext {
+function createStatusCtx(): ModuleCommandContext {
 	return {
 		model: { id: "gpt-test", provider: "openai", contextWindow: 200_000, reasoning: true },
 		thinkingLevel: "high",
@@ -27,7 +27,7 @@ function createStatusCtx(): ExtensionCommandContext {
 			],
 		},
 		getContextUsage: () => ({ tokens: 12_300, percent: 6.1, contextWindow: 200_000 }),
-	} as unknown as ExtensionCommandContext;
+	} as unknown as ModuleCommandContext;
 }
 
 describe("welcome box", () => {
@@ -141,7 +141,7 @@ describe("collectStatusSections", () => {
 					},
 				],
 			}),
-		} as unknown as ExtensionCommandContext;
+		} as unknown as ModuleCommandContext;
 
 		const sections = collectStatusSections(ctx);
 		expect(sections).toEqual([
@@ -157,7 +157,7 @@ describe("collectStatusSections", () => {
 			...createStatusCtx(),
 			cwd: "/repo",
 			getLoadedResources: () => ({ contextFiles: [], skills: [], prompts: [], extensions: [] }),
-		} as unknown as ExtensionCommandContext;
+		} as unknown as ModuleCommandContext;
 
 		expect(collectStatusSections(ctx)).toEqual([]);
 	});

@@ -21,7 +21,7 @@ import {
 	buildSystemPromptState,
 	diffSystemPromptSections,
 } from "../src/core/system-prompt.ts";
-import type { ExtensionFactory } from "../src/index.ts";
+import type { ModuleFactory } from "../src/index.ts";
 import { createHarness } from "./suite/harness.ts";
 
 describe("system prompt updates", () => {
@@ -111,13 +111,13 @@ describe("system prompt updates", () => {
 
 	test("a forced prompt is sent as the leading prompt for the run and never recorded", async () => {
 		let turn = 0;
-		const extension: ExtensionFactory = (nanopi) => {
+		const extension: ModuleFactory = (nanopi) => {
 			nanopi.on("before_agent_start", (event) => {
 				if (++turn === 3) event.systemPromptOptions.sections.plan_mode = "Plan only.";
 				return turn === 2 || turn === 3 ? { systemPrompt: "Exact prompt." } : undefined;
 			});
 		};
-		const harness = await createHarness({ extensionFactories: [extension] });
+		const harness = await createHarness({ modules: [{ name: "test-module-1", factory: extension }] });
 		try {
 			const requests: TranscriptContext[] = [];
 			harness.setResponses(
@@ -168,7 +168,7 @@ describe("system prompt updates", () => {
 	});
 
 	test("setActiveTools emits prompt sections and tool changes before the next request", async () => {
-		const extension: ExtensionFactory = (nanopi) => {
+		const extension: ModuleFactory = (nanopi) => {
 			for (const name of ["first", "second"]) {
 				nanopi.registerTool({
 					name,
@@ -181,7 +181,10 @@ describe("system prompt updates", () => {
 				});
 			}
 		};
-		const harness = await createHarness({ extensionFactories: [extension], initialActiveToolNames: ["first"] });
+		const harness = await createHarness({
+			modules: [{ name: "test-module-1", factory: extension }],
+			initialActiveToolNames: ["first"],
+		});
 		try {
 			// Faux response callbacks swallow thrown assertions, so capture and assert afterwards.
 			const requests: TranscriptContext[] = [];
@@ -233,7 +236,7 @@ describe("system prompt updates", () => {
 	});
 
 	test("setActiveTools in before_agent_start controls the same request", async () => {
-		const extension: ExtensionFactory = (nanopi) => {
+		const extension: ModuleFactory = (nanopi) => {
 			for (const name of ["first", "second"]) {
 				nanopi.registerTool({
 					name,
@@ -248,7 +251,10 @@ describe("system prompt updates", () => {
 				if (turn++ === 1) nanopi.setActiveTools(["second"]);
 			});
 		};
-		const harness = await createHarness({ extensionFactories: [extension], initialActiveToolNames: ["first"] });
+		const harness = await createHarness({
+			modules: [{ name: "test-module-1", factory: extension }],
+			initialActiveToolNames: ["first"],
+		});
 		try {
 			const requests: TranscriptContext[] = [];
 			harness.setResponses([

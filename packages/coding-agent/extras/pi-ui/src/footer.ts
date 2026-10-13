@@ -4,9 +4,9 @@ import type {
   ModuleContext,
   ReadonlyFooterDataProvider,
   Theme,
-} from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+} from "@nanopi/pi-coding-agent";
+import type { Component, TUI } from "@nanopi/pi-tui";
+import { truncateToWidth } from "@nanopi/pi-tui";
 import type { ReferenceUiState } from "./state.ts";
 import { captureRenderTrigger } from "./thinking.ts";
 

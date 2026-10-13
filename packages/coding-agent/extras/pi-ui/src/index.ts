@@ -18,7 +18,7 @@
  *     settings entry
  *
  * Wiring only. Each concern lives in its own module and is installed against
- * documented ExtensionAPI / ModuleUIContext methods:
+ * documented ModuleApi / ModuleUIContext methods:
  *   - editor: none — the default composer stays; input frame and menu
  *     direction belong to the core TUI, not the reskin
  *   - footer.ts   -> ctx.ui.setFooter() status toolbar
@@ -41,7 +41,7 @@
  *   pi install npm:@NekoSekaiMoe/pi-ui
  */
 
-import type { ExtensionAPI, ModuleUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
@@ -50,7 +50,7 @@ import { installThinkingDisplay } from "./thinking.ts";
 import { installWorking } from "./working.ts";
 
 const patchedThemes = new WeakSet<Theme>();
-const PI_THEME_KEY = Symbol.for("@earendil-works/pi-coding-agent:theme");
+const PI_THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
 
 /**
  * The todo extension renders its plan as a widget above the editor
@@ -93,7 +93,7 @@ function installResourceHeadingGradient(themeProxy: Theme): void {
   patchedThemes.add(theme);
 }
 
-export default function (pi: ExtensionAPI) {
+export default function (pi: ModuleApi) {
   // Patch renderer lookup before any restored tool components are created.
   // This changes only presentation; extension-owned execute functions remain
   // registered and invoked as-is. The patch covers every tool pi-ui does not

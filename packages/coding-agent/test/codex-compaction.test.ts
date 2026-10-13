@@ -1,13 +1,13 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 import { describe, it } from "vitest";
-import { DEFAULT_USER_RETAIN_TOKENS, planUserRetention } from "../src/extensions/codex-compaction/compact.ts";
+import type { SessionEntry } from "../src/index.ts";
+import { DEFAULT_USER_RETAIN_TOKENS, planUserRetention } from "../src/modules/codex-compaction/compact.ts";
 import {
 	assembleCodexSummary,
 	isCodexSummary,
 	SUMMARY_PREFIX,
 	stripCodexPrefix,
-} from "../src/extensions/codex-compaction/prompt.ts";
-import type { SessionEntry } from "../src/index.ts";
+} from "../src/modules/codex-compaction/prompt.ts";
 
 function messageEntry(id: string, role: "user" | "assistant" | "toolResult", text: string): SessionEntry {
 	const content = role === "toolResult" ? [{ type: "text", text }] : [{ type: "text", text }];

@@ -3,7 +3,7 @@ import { beforeAll, describe, expect, test, vi } from "vitest";
 import { type Component, Container, type Focusable, type TUI } from "../../tui/src/tui.ts";
 import { TuiMainScreen } from "../../tui/src/tui-main-screen.ts";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
-import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
+import type { AutocompleteProviderFactory } from "../src/core/modules/types.ts";
 import type { QuietStartup } from "../src/core/settings-manager.ts";
 import type { AuthSelectorProvider } from "../src/modes/interactive/components/oauth-selector.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
@@ -401,7 +401,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				scopedModels: Array<{ model: TestModel }>;
 				modelRuntime: { getAvailableSnapshot: () => TestModel[] };
 				promptTemplates: [];
-				extensionRunner: { getRegisteredCommands: () => [] };
+				moduleRegistry: { getRegisteredCommands: () => [] };
 				resourceLoader: { getSkills: () => { skills: [] } };
 			};
 			settingsManager: { getEnableSkillCommands: () => boolean };
@@ -424,7 +424,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				scopedModels: [],
 				modelRuntime: { getAvailableSnapshot: () => models },
 				promptTemplates: [],
-				extensionRunner: { getRegisteredCommands: () => [] },
+				moduleRegistry: { getRegisteredCommands: () => [] },
 				resourceLoader: { getSkills: () => ({ skills: [] }) },
 			},
 			settingsManager: { getEnableSkillCommands: () => false },
@@ -451,7 +451,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				scopedModels: [];
 				modelRuntime: { getAvailableSnapshot: () => [] };
 				promptTemplates: [];
-				extensionRunner: { getRegisteredCommands: () => [] };
+				moduleRegistry: { getRegisteredCommands: () => [] };
 				resourceLoader: { getSkills: () => { skills: [] } };
 			};
 			settingsManager: { getEnableSkillCommands: () => boolean };
@@ -471,7 +471,7 @@ describe("InteractiveMode.createBaseAutocompleteProvider", () => {
 				scopedModels: [],
 				modelRuntime: { getAvailableSnapshot: () => [] },
 				promptTemplates: [],
-				extensionRunner: { getRegisteredCommands: () => [] },
+				moduleRegistry: { getRegisteredCommands: () => [] },
 				resourceLoader: { getSkills: () => ({ skills: [] }) },
 			},
 			settingsManager: { getEnableSkillCommands: () => false },
@@ -517,7 +517,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 			settingsManager: { getQuietStartup: () => options.quietStartup ?? false },
 			sessionManager: { getCwd: () => "/tmp/project" },
 			session: {
-				extensionRunner: {
+				moduleRegistry: {
 					getCommandDiagnostics: () => [],
 					getShortcutDiagnostics: () => [],
 				},
@@ -527,7 +527,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 						diagnostics: options.skillDiagnostics ?? [],
 					}),
 					getPrompts: () => ({ prompts: [], diagnostics: [] }),
-					getExtensions: () => ({ extensions: [], errors: [], runtime: {} }),
+					getModules: () => ({ modules: [], errors: [], runtime: {} }),
 					getThemes: () => ({ themes: [], diagnostics: [] }),
 				},
 			},
@@ -567,7 +567,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 	});
 
 	test("flags only non-builtin commands that shadow built-in commands", () => {
-		const extensionRunner = {
+		const moduleRegistry = {
 			getRegisteredCommands: () => [
 				{
 					name: "status",
@@ -585,13 +585,14 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const diagnostics = (InteractiveMode as any).prototype.getBuiltInCommandConflictDiagnostics.call(
 			fakeThis,
-			extensionRunner,
+			moduleRegistry,
 		);
 
 		expect(diagnostics).toEqual([
 			{
 				type: "warning",
-				message: "Extension command '/model' conflicts with built-in interactive command. Available as '/model:2'.",
+				message:
+					"SessionModule command '/model' conflicts with built-in interactive command. Available as '/model:2'.",
 				path: "/tmp/ext/index.ts",
 			},
 		]);

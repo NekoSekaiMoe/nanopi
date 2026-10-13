@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getModel } from "@nanopi/pi-ai/compat";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModuleApi } from "../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -55,19 +56,21 @@ describe("strict built-in tools", () => {
 				cwd,
 				agentDir,
 				settingsManager,
-				noExtensions: true,
 				noSkills: true,
 				noPromptTemplates: true,
 				noThemes: true,
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("session_start", () => {
-							const definitions = createAllToolDefinitions(cwd);
-							for (const name of strictToolNames) {
-								nanopi.registerTool({ ...definitions[name], constrainedSampling: false });
-							}
-							nanopi.setActiveTools(activeTools);
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("session_start", () => {
+								const definitions = createAllToolDefinitions(cwd);
+								for (const name of strictToolNames) {
+									nanopi.registerTool({ ...definitions[name], constrainedSampling: false });
+								}
+								nanopi.setActiveTools(activeTools);
+							});
+						},
 					},
 				],
 			});
@@ -83,7 +86,7 @@ describe("strict built-in tools", () => {
 				});
 				try {
 					const originalPrompt = session.systemPrompt;
-					await session.bindExtensions({});
+					await session.bindModules({});
 					expect(session.getActiveToolNames()).toEqual(activeTools);
 					expect(session.systemPrompt).toBe(originalPrompt);
 					for (const name of strictToolNames) {

@@ -7,7 +7,7 @@
 import { getModel } from "@nanopi/pi-ai/compat";
 import {
 	createAgentSession,
-	createExtensionRuntime,
+	createModuleRuntime,
 	ModelRuntime,
 	type ResourceLoader,
 	SessionManager,
@@ -34,7 +34,7 @@ const settingsManager = SettingsManager.inMemory({
 const cwd = process.cwd();
 
 const resourceLoader: ResourceLoader = {
-	getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+	getModules: () => ({ modules: [], errors: [], warnings: [], runtime: createModuleRuntime() }),
 	getSkills: () => ({ skills: [], diagnostics: [] }),
 	getPrompts: () => ({ prompts: [], diagnostics: [] }),
 	getThemes: () => ({ themes: [], diagnostics: [] }),

@@ -129,7 +129,7 @@ describe("ModelRuntime image generation", () => {
 
 		runtime.registerProvider("mixed", {
 			apiKey: "extension-secret",
-			models: [{ ...chat, id: "extension-chat", name: "Extension chat", baseUrl: "https://chat-proxy.test/v1" }],
+			models: [{ ...chat, id: "extension-chat", name: "SessionModule chat", baseUrl: "https://chat-proxy.test/v1" }],
 		});
 
 		expect(runtime.getAllModels("mixed").map((model) => [model.type ?? "chat", model.id])).toEqual([

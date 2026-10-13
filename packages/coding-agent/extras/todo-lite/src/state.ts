@@ -7,7 +7,7 @@
  * 同一个 TodoSessionState 引用，避免工厂闭包耦合。
  */
 
-import type { Todo } from "./model";
+import type { Todo } from "./model.ts";
 
 export interface TodoSessionState {
 	todos: Todo[];

@@ -6,7 +6,7 @@ import { createInMemoryModelRegistry, createModelRegistry, getModelRuntime } fro
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentMessage, AgentTool } from "@nanopi/pi-agent-core";
+import type { AgentTool } from "@nanopi/pi-agent-core";
 import { Agent } from "@nanopi/pi-agent-core";
 import type {
 	FauxModelDefinition,
@@ -18,18 +18,14 @@ import type {
 import { registerFauxProvider, streamSimple } from "@nanopi/pi-ai/compat";
 import { AgentSession, type AgentSessionConfig, type AgentSessionEvent } from "../../src/core/agent-session.ts";
 import { AuthStorage } from "../../src/core/auth-storage.ts";
-import type { ExtensionRunner, ExtensionUIContext } from "../../src/core/extensions/index.ts";
 import { convertToLlm } from "../../src/core/messages.ts";
+import type { ModuleFactory, ModuleRegistry, ModuleUIContext } from "../../src/core/modules/index.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type { Settings } from "../../src/core/settings-manager.ts";
 import { SettingsManager } from "../../src/core/settings-manager.ts";
-import type { InlineExtension, ResourceLoader } from "../../src/index.ts";
+import type { ResourceLoader, SessionModule } from "../../src/index.ts";
 import { theme } from "../../src/modes/interactive/theme/theme.ts";
-import {
-	type CreateTestExtensionsResultInput,
-	createTestExtensionsResult,
-	createTestResourceLoader,
-} from "../utilities.ts";
+import { type CreateTestModulesResultInput, createTestModulesResult, createTestResourceLoader } from "../utilities.ts";
 
 type MessageTextPart = { type: "text"; text: string };
 
@@ -72,7 +68,7 @@ export function getToolResult(harness: Harness, toolName: string): ToolResultMes
 }
 
 /** An extension UI context that does nothing, with `overrides` applied. */
-export function createTestUiContext(overrides: Partial<ExtensionUIContext> = {}): ExtensionUIContext {
+export function createTestUiContext(overrides: Partial<ModuleUIContext> = {}): ModuleUIContext {
 	return {
 		select: async () => undefined,
 		confirm: async () => false,
@@ -116,7 +112,7 @@ export interface HarnessOptions {
 	allowedToolNames?: string[];
 	excludedToolNames?: string[];
 	resourceLoader?: ResourceLoader;
-	extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
+	modules?: Array<SessionModule | CreateTestModulesResultInput | ModuleFactory>;
 	withConfiguredAuth?: boolean;
 	modelsJson?: Record<string, unknown>;
 	/** Session to continue, for example to test a resume. Default: a new in-memory session. */
@@ -157,7 +153,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 	const model = fauxProvider.getModel();
 	const toolMap = options.tools ? Object.fromEntries(options.tools.map((tool) => [tool.name, tool])) : undefined;
 	const withConfiguredAuth = options.withConfiguredAuth ?? true;
-	const extensionRunnerRef: { current?: ExtensionRunner } = {};
+	const moduleRegistryRef: { current?: ModuleRegistry } = {};
 
 	const sessionManager = options.sessionManager ?? SessionManager.inMemory();
 	const settingsManager = SettingsManager.inMemory(options.settings);
@@ -201,34 +197,16 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 		},
 		convertToLlm,
 		onPayload: async (payload) => {
-			const runner = extensionRunnerRef.current;
+			const runner = moduleRegistryRef.current;
 			if (!runner?.hasHandlers("before_provider_request")) {
 				return payload;
 			}
 			return runner.emitBeforeProviderRequest(payload);
 		},
-		onResponse: async (response) => {
-			const runner = extensionRunnerRef.current;
-			if (!runner?.hasHandlers("after_provider_response")) {
-				return;
-			}
-			await runner.emit({
-				type: "after_provider_response",
-				status: response.status,
-				headers: response.headers,
-			});
-		},
-		transformContext: async (messages: AgentMessage[]) => {
-			const runner = extensionRunnerRef.current;
-			if (!runner) return messages;
-			return runner.emitContext(messages);
-		},
 	});
-	const extensionsResult = options.extensionFactories
-		? await createTestExtensionsResult(options.extensionFactories, tempDir)
-		: undefined;
+	const modulesResult = options.modules ? await createTestModulesResult(options.modules, tempDir) : undefined;
 	const resourceLoader =
-		options.resourceLoader ?? createTestResourceLoader(extensionsResult ? { extensionsResult } : undefined);
+		options.resourceLoader ?? createTestResourceLoader(modulesResult ? { modulesResult } : undefined);
 
 	const session = new AgentSession({
 		agent,
@@ -242,7 +220,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 		initialActiveToolNames: options.initialActiveToolNames,
 		allowedToolNames: options.allowedToolNames,
 		excludedToolNames: options.excludedToolNames,
-		extensionRunnerRef,
+		moduleRegistryRef,
 	});
 
 	const events: AgentSessionEvent[] = [];

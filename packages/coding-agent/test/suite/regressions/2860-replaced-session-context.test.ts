@@ -13,7 +13,7 @@ import {
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
-import type { ExtensionAPI, ExtensionCommandContext, ExtensionFactory } from "../../../src/index.ts";
+import type { ModuleApi, ModuleCommandContext, ModuleFactory } from "../../../src/index.ts";
 
 function getText(message: AgentSession["messages"][number]): string {
 	if (!("content" in message)) {
@@ -36,7 +36,7 @@ describe("regression #2860: replaced session callbacks", () => {
 		}
 	});
 
-	async function createRuntimeForTest(extensionFactory: ExtensionFactory, responses: string[]) {
+	async function createRuntimeForTest(extensionFactory: ModuleFactory, responses: string[]) {
 		const tempDir = join(tmpdir(), `nanopi-2860-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(tempDir, { recursive: true });
 
@@ -58,24 +58,27 @@ describe("regression #2860: replaced session callbacks", () => {
 				agentDir: tempDir,
 				modelRuntime,
 				resourceLoaderOptions: {
-					extensionFactories: [
-						(nanopi: ExtensionAPI) => {
-							nanopi.registerProvider(faux.getModel().provider, {
-								baseUrl: faux.getModel().baseUrl,
-								apiKey: "faux-key",
-								api: faux.api,
-								models: faux.models.map((registeredModel) => ({
-									id: registeredModel.id,
-									name: registeredModel.name,
-									api: registeredModel.api,
-									reasoning: registeredModel.reasoning,
-									input: registeredModel.input,
-									cost: registeredModel.cost,
-									contextWindow: registeredModel.contextWindow,
-									maxTokens: registeredModel.maxTokens,
-								})),
-							});
-							extensionFactory(nanopi);
+					modules: [
+						{
+							name: "test-module-1",
+							factory: (nanopi: ModuleApi) => {
+								nanopi.registerProvider(faux.getModel().provider, {
+									baseUrl: faux.getModel().baseUrl,
+									apiKey: "faux-key",
+									api: faux.api,
+									models: faux.models.map((registeredModel) => ({
+										id: registeredModel.id,
+										name: registeredModel.name,
+										api: registeredModel.api,
+										reasoning: registeredModel.reasoning,
+										input: registeredModel.input,
+										cost: registeredModel.cost,
+										contextWindow: registeredModel.contextWindow,
+										maxTokens: registeredModel.maxTokens,
+									})),
+								});
+								extensionFactory(nanopi);
+							},
 						},
 					],
 					noSkills: true,
@@ -103,7 +106,7 @@ describe("regression #2860: replaced session callbacks", () => {
 
 		const rebindSession = async (): Promise<void> => {
 			const session = runtime.session;
-			await session.bindExtensions({
+			await session.bindModules({
 				commandContextActions: {
 					waitForIdle: () => session.agent.waitForIdle(),
 					newSession: async (options) => runtime.newSession(options),
@@ -143,8 +146,8 @@ describe("regression #2860: replaced session callbacks", () => {
 
 	it("rebinds before withSession, targets the replacement session, and invalidates stale nanopi/ctx", async () => {
 		const events: string[] = [];
-		let oldCtx: ExtensionCommandContext | undefined;
-		let oldPi: ExtensionAPI | undefined;
+		let oldCtx: ModuleCommandContext | undefined;
+		let oldPi: ModuleApi | undefined;
 		let oldSessionFile: string | undefined;
 		let staleCtxThrows = false;
 		let staleNanoPiThrows = false;

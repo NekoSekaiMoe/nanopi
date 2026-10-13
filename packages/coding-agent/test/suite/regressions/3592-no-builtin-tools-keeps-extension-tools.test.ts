@@ -8,6 +8,7 @@ import {
 	createAgentSessionFromServices,
 	createAgentSessionServices,
 } from "../../../src/core/agent-session-services.ts";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
@@ -36,21 +37,24 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.registerTool({
-							name: "dynamic_tool",
-							label: "Dynamic Tool",
-							description: "Tool registered from session_start",
-							promptSnippet: "Run dynamic test behavior",
-							parameters: Type.Object({}),
-							execute: async () => ({
-								content: [{ type: "text", text: "ok" }],
-								details: {},
-							}),
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.registerTool({
+								name: "dynamic_tool",
+								label: "Dynamic Tool",
+								description: "Tool registered from session_start",
+								promptSnippet: "Run dynamic test behavior",
+								parameters: Type.Object({}),
+								execute: async () => ({
+									content: [{ type: "text", text: "ok" }],
+									details: {},
+								}),
+							});
 						});
-					});
+					},
 				},
 			],
 		});
@@ -66,7 +70,7 @@ describe("regression #3592: no-builtin-tools keeps extension tools enabled", () 
 			noTools: options?.noTools,
 			tools: options?.tools,
 		});
-		await session.bindExtensions({});
+		await session.bindModules({});
 		return session;
 	}
 

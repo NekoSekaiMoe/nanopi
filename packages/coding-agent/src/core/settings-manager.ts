@@ -16,7 +16,6 @@ import type {
 	DefaultProjectTrust,
 	LlamaCppSettings,
 	MermaidRenderingMode,
-	PackageSource,
 	QuietStartup,
 	Settings,
 	ThinkingBudgetsSettings,
@@ -34,7 +33,6 @@ export type {
 	LlamaCppSettings,
 	MarkdownSettings,
 	MermaidRenderingMode,
-	PackageSource,
 	ProviderRetrySettings,
 	QuietStartup,
 	RetrySettings,
@@ -681,19 +679,6 @@ export class SettingsManager {
 		this.save();
 	}
 
-	getExtensionChangelogVersion(key: string): string | undefined {
-		return this.settings.extensionChangelogVersions?.[key];
-	}
-
-	setExtensionChangelogVersion(key: string, version: string): void {
-		this.globalSettings.extensionChangelogVersions = {
-			...(this.globalSettings.extensionChangelogVersions ?? {}),
-			[key]: version,
-		};
-		this.markModified("extensionChangelogVersions", key);
-		this.save();
-	}
-
 	getSessionDir(): string | undefined {
 		const sessionDir = this.settings.sessionDir;
 		return sessionDir ? normalizePath(sessionDir) : sessionDir;
@@ -1100,38 +1085,6 @@ export class SettingsManager {
 			this.save();
 		}
 		return this.globalSettings.deviceId;
-	}
-
-	getPackages(): PackageSource[] {
-		return [...(this.settings.packages ?? [])];
-	}
-
-	setPackages(packages: PackageSource[]): void {
-		this.globalSettings.packages = packages;
-		this.markModified("packages");
-		this.save();
-	}
-
-	setProjectPackages(packages: PackageSource[]): void {
-		this.updateProjectSettings("packages", (settings) => {
-			settings.packages = packages;
-		});
-	}
-
-	getExtensionPaths(): string[] {
-		return [...(this.settings.extensions ?? [])];
-	}
-
-	setExtensionPaths(paths: string[]): void {
-		this.globalSettings.extensions = paths;
-		this.markModified("extensions");
-		this.save();
-	}
-
-	setProjectExtensionPaths(paths: string[]): void {
-		this.updateProjectSettings("extensions", (settings) => {
-			settings.extensions = paths;
-		});
 	}
 
 	getSkillPaths(): string[] {

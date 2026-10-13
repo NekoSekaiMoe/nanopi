@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { buildGui, type Todo } from "../model";
+import { buildGui, type Todo } from "../model.ts";
 
 describe("buildGui", () => {
 	it("maps 4 statuses to list-tree with correct icons", () => {

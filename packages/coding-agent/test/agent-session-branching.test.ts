@@ -54,7 +54,6 @@ describe.skipIf(!API_KEY)("AgentSession forking", () => {
 			agentDir: tempDir,
 			authStorage,
 			resourceLoaderOptions: {
-				noExtensions: true,
 				noSkills: true,
 				noPromptTemplates: true,
 				noThemes: true,

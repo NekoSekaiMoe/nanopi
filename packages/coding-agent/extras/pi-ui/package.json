@@ -1,5 +1,6 @@
 {
 	"name": "@NekoSekaiMoe/pi-ui",
+	"type": "module",
 	"version": "0.1.0",
 	"description": "Reskins Pi with an open gradient input frame, compact status toolbar, animated Working shimmer, and flat Codex-style tool rows",
 	"license": "BSD-2-Clause",

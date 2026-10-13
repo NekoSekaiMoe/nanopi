@@ -2,11 +2,11 @@
  * /todos 命令的 TUI 组件 — 独立可关闭的 todo 列表视图（双列布局）。
  */
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { matchesKey, truncateToWidth } from "@nanopi/pi-tui";
 
-import type { Todo } from "./model";
-import { FALLBACK_TERM_WIDTH, renderDualColumn } from "./render";
+import type { Todo } from "./model.ts";
+import { FALLBACK_TERM_WIDTH, renderDualColumn } from "./render.ts";
 
 const HEADER_PREFIX_DASHES = 3;
 const HEADER_RESERVED_WIDTH = 10;

@@ -19,9 +19,9 @@
  * through as dim continuation rows) rather than breaking.
  */
 
-import type { ModuleUIContext, Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
-import type { Component, TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import type { ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
+import type { Component, TUI } from "@nanopi/pi-tui";
+import { truncateToWidth } from "@nanopi/pi-tui";
 
 /** Widget key used by pi-subagents (src/shared/types.ts: WIDGET_KEY). */
 export const SUBAGENT_WIDGET_KEY = "subagent-async";

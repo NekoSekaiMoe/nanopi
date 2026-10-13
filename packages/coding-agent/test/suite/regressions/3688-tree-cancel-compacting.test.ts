@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
@@ -13,9 +14,12 @@ describe("issue #3688 tree cancellation compaction state", () => {
 
 	it("clears branch summary state when session_before_tree cancels navigation", async () => {
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_tree", () => ({ cancel: true }));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_tree", () => ({ cancel: true }));
+					},
 				},
 			],
 		});

@@ -1,4 +1,4 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
+import type { Theme } from "@nanopi/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -8,10 +8,10 @@ import {
 	type Todo,
 	updateTodos,
 	VALID_STATUSES,
-} from "../model";
-import { renderWidgetLines } from "../render";
-import { createTodoSessionState } from "../state";
-import { handleSingleUpdate } from "../tool";
+} from "../model.ts";
+import { renderWidgetLines } from "../render.ts";
+import { createTodoSessionState } from "../state.ts";
+import { handleSingleUpdate } from "../tool.ts";
 
 // ── 数据模型 + 向后兼容 ──────────────────────────────
 

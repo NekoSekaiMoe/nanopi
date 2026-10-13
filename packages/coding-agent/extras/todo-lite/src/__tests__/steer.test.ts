@@ -8,9 +8,9 @@ import {
 	handleReminder,
 	handleStallDetection,
 	reconstructState,
-} from "../handlers";
-import type { Todo } from "../model";
-import { createTodoSessionState, type TodoSessionState } from "../state";
+} from "../handlers.ts";
+import type { Todo } from "../model.ts";
+import { createTodoSessionState, type TodoSessionState } from "../state.ts";
 
 // ── helpers ─────────────────────────────────────────
 

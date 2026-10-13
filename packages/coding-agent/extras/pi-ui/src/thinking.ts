@@ -51,14 +51,16 @@
  *     TUI so a landed summary can request an immediate re-render.
  */
 
-import type { ExtensionAPI, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme } from "@earendil-works/pi-coding-agent";
-import { AssistantMessageComponent, InteractiveMode } from "@earendil-works/pi-coding-agent";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
-import type { MarkdownTheme } from "@earendil-works/pi-tui";
-import { SettingsList, Spacer, Text, Markdown, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
-import type { Component, TUI } from "@earendil-works/pi-tui";
+import type { ModuleApi, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme } from "@nanopi/pi-coding-agent";
+
+import { completeSimple } from "@nanopi/pi-ai/compat";
+import type { MarkdownTheme } from "@nanopi/pi-tui";
+import { SettingsList, Spacer, Text, Markdown, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import type { Component, TUI } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
+import { AssistantMessageComponent } from "../../../src/modes/interactive/components/assistant-message.ts";
+import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 
 /** Theme captured at the latest session_start; fallback for resolveTheme(). */
 let activeTheme: Theme | undefined;
@@ -68,7 +70,7 @@ let thinkingExpanded = false;
 let eventsRegistered = false;
 
 /** Shared global theme instance Pi publishes for cross-loader access. */
-const PI_THEME_KEY = Symbol.for("@earendil-works/pi-coding-agent:theme");
+const PI_THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
 
 /**
  * Resolve the current theme lazily: the shared global instance is live and
@@ -665,7 +667,7 @@ function installSettingsFilterPatch(): void {
  * summary model context are registered once. The theme is refreshed on every
  * TUI session_start so theme switches are followed via the live proxy.
  */
-export function installThinkingDisplay(pi?: ExtensionAPI, theme?: Theme): void {
+export function installThinkingDisplay(pi?: ModuleApi, theme?: Theme): void {
   if (theme) activeTheme = theme;
   installAssistantMessagePatch();
   installThinkingTogglePatch();

@@ -38,7 +38,8 @@ type I18nSDK = { scope: (namespace: string) => ScopeFn };
 // before evaluating any importer.
 let scopeImpl: ScopeFn;
 try {
-	const sdk = (await import("@juicesharp/rpiv-i18n")) as I18nSDK;
+	const i18nModuleId = "@juicesharp/rpiv-i18n";
+	const sdk = (await import(i18nModuleId)) as I18nSDK;
 	scopeImpl = sdk.scope(I18N_NAMESPACE);
 } catch {
 	scopeImpl = (_key, fallback) => fallback;

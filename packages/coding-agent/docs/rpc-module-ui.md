@@ -1,8 +1,8 @@
-# RPC Extension UI
+# RPC Module UI
 
 Extensions can request user interaction through `ctx.ui`. In RPC mode, supported calls become a request/response subprotocol alongside normal [RPC commands](rpc-commands.md) and [session events](json.md).
 
-There are two categories of extension UI methods:
+There are two categories of module UI methods:
 
 - **Dialog methods** (`select`, `confirm`, `input`, `editor`): emit an `extension_ui_request` on stdout and block until the client sends back an `extension_ui_response` on stdin with the matching `id`.
 - **Fire-and-forget methods** (`notify`, `setStatus`, `setWidget`, `setTitle`, `set_editor_text`): emit an `extension_ui_request` on stdout but do not expect a response. The client can display the information or ignore it.
@@ -22,7 +22,7 @@ Some `ExtensionUIContext` methods are not supported or degraded in RPC mode beca
 - `getAllThemes()` returns `[]`, and `getTheme()` returns `undefined`.
 - `setTheme()` returns `{ success: false, error: "Theme switching not supported in RPC mode" }`.
 
-Note: `ctx.mode` is `"rpc"` and `ctx.hasUI` is `true` in RPC mode because the dialog and fire-and-forget methods are functional via the extension UI sub-protocol. Use `ctx.mode === "tui"` to guard TUI-specific features like `custom()` that require a real terminal.
+Note: `ctx.mode` is `"rpc"` and `ctx.hasUI` is `true` in RPC mode because the dialog and fire-and-forget methods are functional via the module UI sub-protocol. Use `ctx.mode === "tui"` to guard TUI-specific features like `custom()` that require a real terminal.
 
 ## Requests from nanopi
 
@@ -195,6 +195,6 @@ Dismiss any dialog method. The extension receives `undefined` (for select/input/
 
 ## Example
 
-See the checked [RPC extension UI client](../examples/rpc-extension-ui.ts) and its [demo extension](../examples/extensions/rpc-demo.ts).
+See the checked [RPC module UI client](../examples/rpc-extension-ui.ts) and its [demo extension](../examples/extensions/rpc-demo.ts).
 
 The exported request and response unions are defined in [`rpc-types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/modes/rpc/rpc-types.ts). See [Extensions](extensions.md#ui-and-modes) for mode-independent extension guidance.

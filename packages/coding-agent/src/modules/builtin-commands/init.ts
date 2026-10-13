@@ -13,7 +13,7 @@
  *   /init also document the CI   append extra instructions to the prompt
  */
 
-import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
+import type { ModuleApi } from "../../core/modules/types.ts";
 
 /** The core AGENTS.md generation instructions. */
 const INIT_PROMPT = `Generate a file named AGENTS.md that serves as a contributor guide for this repository.
@@ -52,7 +52,7 @@ Summarize commit message conventions found in the project's Git history. Outline
 
 (Optional) Add other sections if relevant, such as Security & Configuration Tips, Architecture Overview, or Agent-Specific Instructions.`;
 
-export function registerInit(pi: ExtensionAPI) {
+export function registerInit(pi: ModuleApi) {
 	pi.registerCommand("init", {
 		description: "Generate an AGENTS.md contributor guide for this repository",
 		handler: async (args, _ctx) => {

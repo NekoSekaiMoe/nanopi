@@ -1,6 +1,7 @@
 import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { SessionBeforeCompactEvent } from "../../src/core/extensions/index.ts";
+import type { SessionBeforeCompactEvent } from "../../src/core/modules/index.ts";
+import type { ModuleApi } from "../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "./harness.ts";
 
 function seedHistory(harness: Harness, totalTokens = 650): string {
@@ -48,18 +49,21 @@ describe("AgentSession compaction model overrides", () => {
 						modelOverrides: { "faux/faux-1": { reserveTokens: 2000, keepRecentTokens: 150 } },
 					},
 				},
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("session_before_compact", (event) => {
-							preparations.push(event);
-							return {
-								compaction: {
-									summary: "compacted history",
-									firstKeptEntryId: event.preparation.firstKeptEntryId,
-									tokensBefore: event.preparation.tokensBefore,
-								},
-							};
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("session_before_compact", (event) => {
+								preparations.push(event);
+								return {
+									compaction: {
+										summary: "compacted history",
+										firstKeptEntryId: event.preparation.firstKeptEntryId,
+										tokensBefore: event.preparation.tokensBefore,
+									},
+								};
+							});
+						},
 					},
 				],
 			});
@@ -146,15 +150,18 @@ describe("AgentSession compaction model overrides", () => {
 					modelOverrides: { "faux/big": { reserveTokens: 8000, keepRecentTokens: 150 } },
 				},
 			},
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "big model summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "big model summary",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+					},
 				},
 			],
 		});

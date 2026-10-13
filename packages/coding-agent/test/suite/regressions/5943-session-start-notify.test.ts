@@ -2,6 +2,7 @@ import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { Container, Text } from "@nanopi/pi-tui";
 import { describe, expect, it, vi } from "vitest";
 import type { AgentSessionEvent, RuntimeReloadCallbacks } from "../../../src/core/agent-session.ts";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
 import { createHarness, createTestUiContext } from "../harness.ts";
@@ -22,9 +23,9 @@ type LoadedResourcesContext = {
 			getSkills: () => { skills: []; diagnostics: Array<{ type: "warning"; message: string }> };
 			getPrompts: () => LoadedResourcesResult<{ prompts: [] }>;
 			getThemes: () => LoadedResourcesResult<{ themes: [] }>;
-			getExtensions: () => { extensions: []; errors: [] };
+			getModules: () => { extensions: []; errors: [] };
 		};
-		extensionRunner: {
+		moduleRegistry: {
 			getCommandDiagnostics: () => [];
 			getShortcutDiagnostics: () => [];
 			getRegisteredCommands: () => [];
@@ -33,7 +34,7 @@ type LoadedResourcesContext = {
 	findSourceInfoForPath: (p: string) => undefined;
 	formatPathWithSource: (p: string) => string;
 	formatDiagnostics: (diagnostics: unknown) => string;
-	getBuiltInCommandConflictDiagnostics: (extensionRunner: LoadedResourcesContext["session"]["extensionRunner"]) => [];
+	getBuiltInCommandConflictDiagnostics: (moduleRegistry: LoadedResourcesContext["session"]["moduleRegistry"]) => [];
 };
 
 type RebindContext = {
@@ -53,7 +54,7 @@ type ReloadCommandContext = {
 	hideThinkingBlock: boolean;
 	session: {
 		resourceLoader: { getThemes: () => { themes: [] } };
-		extensionRunner: unknown;
+		moduleRegistry: unknown;
 		modelRuntime: { getError: () => string | undefined };
 	};
 	settingsManager: {
@@ -116,7 +117,7 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		hideThinkingBlock: overrides.hideThinkingBlock ?? false,
 		session: {
 			resourceLoader: { getThemes: () => ({ themes: [] }) },
-			extensionRunner: {},
+			moduleRegistry: {},
 			modelRuntime: { getError: () => undefined },
 			...overrides.session,
 		},
@@ -191,9 +192,9 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 				}),
 				getPrompts: () => ({ prompts: [], diagnostics: [] }),
 				getThemes: () => ({ themes: [], diagnostics: [] }),
-				getExtensions: () => ({ extensions: [], errors: [] }),
+				getModules: () => ({ extensions: [], errors: [] }),
 			},
-			extensionRunner: {
+			moduleRegistry: {
 				getCommandDiagnostics: () => [],
 				getShortcutDiagnostics: () => [],
 				getRegisteredCommands: () => [],
@@ -230,11 +231,14 @@ describe("regression #5943: session_start transient UI", () => {
 	it("renders replacement session state before session_start handlers can notify", async () => {
 		const events: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", (_event, ctx) => {
-						ctx.ui.notify("Hello Error", "error");
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", (_event, ctx) => {
+							ctx.ui.notify("Hello Error", "error");
+						});
+					},
 				},
 			],
 		});
@@ -247,7 +251,7 @@ describe("regression #5943: session_start transient UI", () => {
 				renderCurrentSessionState: () => events.push("render"),
 				bindCurrentSessionExtensions: async () => {
 					events.push("bind");
-					await harness.session.bindExtensions({
+					await harness.session.bindModules({
 						uiContext: createTestUiContext({ notify: (message) => events.push(`notify:${message}`) }),
 						mode: "tui",
 					});
@@ -269,15 +273,18 @@ describe("regression #5943: session_start transient UI", () => {
 	it("subscribes before replacement session_start handlers send messages", async () => {
 		const events: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.sendMessage({
-							customType: "session-start",
-							content: "custom from start",
-							display: true,
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.sendMessage({
+								customType: "session-start",
+								content: "custom from start",
+								display: true,
+							});
 						});
-					});
+					},
 				},
 			],
 		});
@@ -290,7 +297,7 @@ describe("regression #5943: session_start transient UI", () => {
 				renderCurrentSessionState: () => events.push("render"),
 				bindCurrentSessionExtensions: async () => {
 					events.push("bind");
-					await harness.session.bindExtensions({
+					await harness.session.bindModules({
 						uiContext: createTestUiContext(),
 						mode: "tui",
 					});
@@ -326,11 +333,14 @@ describe("regression #5943: session_start transient UI", () => {
 	it("subscribes before replacement session_start handlers send user messages", async () => {
 		const events: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.sendUserMessage("user from start");
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.sendUserMessage("user from start");
+						});
+					},
 				},
 			],
 		});
@@ -344,7 +354,7 @@ describe("regression #5943: session_start transient UI", () => {
 				renderCurrentSessionState: () => events.push("render"),
 				bindCurrentSessionExtensions: async () => {
 					events.push("bind");
-					await harness.session.bindExtensions({
+					await harness.session.bindModules({
 						uiContext: createTestUiContext(),
 						mode: "tui",
 					});
@@ -381,18 +391,21 @@ describe("regression #5943: session_start transient UI", () => {
 			events.push("render");
 		});
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", (event, ctx) => {
-						events.push(`start:${event.reason}`);
-						ctx.ui.notify(`notify:${event.reason}`, "error");
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", (event, ctx) => {
+							events.push(`start:${event.reason}`);
+							ctx.ui.notify(`notify:${event.reason}`, "error");
+						});
+					},
 				},
 			],
 		});
 
 		try {
-			await harness.session.bindExtensions({
+			await harness.session.bindModules({
 				uiContext: createTestUiContext({ notify: (message) => events.push(message) }),
 				mode: "tui",
 				reloadHooks: { beforeSessionStart },

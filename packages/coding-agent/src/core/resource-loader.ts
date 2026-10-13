@@ -1,5 +1,5 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
-import { basename, dirname, join, sep } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import { detectCapabilities, getTerminalColorMode, type TerminalColorMode } from "@nanopi/pi-tui";
 import chalk from "chalk";
 import { CONFIG_DIR_NAME } from "../config.ts";
@@ -20,7 +20,7 @@ import { type PathMetadata, type ResolvedResource, resolveLocalResources } from 
 import { SettingsManager } from "./settings-manager.ts";
 import type { Skill } from "./skills.ts";
 import { loadSkills } from "./skills.ts";
-import { createSourceInfo, type SourceInfo } from "./source-info.ts";
+import { createSourceInfo, getSyntheticPathSource, isSyntheticPath, type SourceInfo } from "./source-info.ts";
 import { resetTimings } from "./timings.ts";
 
 export interface ResourceExtensionPaths {
@@ -516,6 +516,107 @@ export class DefaultResourceLoader implements ResourceLoader {
 		for (const conflict of conflicts) {
 			modulesResult.errors.push({ path: conflict.path, error: conflict.message });
 		}
+	}
+
+	private findSourceInfoForPath(
+		resourcePath: string,
+		extraSourceInfos?: Map<string, SourceInfo>,
+		metadataByPath?: Map<string, PathMetadata>,
+	): SourceInfo | undefined {
+		if (!resourcePath) {
+			return undefined;
+		}
+
+		if (isSyntheticPath(resourcePath)) {
+			return this.getDefaultSourceInfoForPath(resourcePath);
+		}
+
+		const normalizedResourcePath = resolve(resourcePath);
+		if (extraSourceInfos) {
+			for (const [sourcePath, sourceInfo] of extraSourceInfos.entries()) {
+				const normalizedSourcePath = resolve(sourcePath);
+				if (
+					normalizedResourcePath === normalizedSourcePath ||
+					normalizedResourcePath.startsWith(`${normalizedSourcePath}${sep}`)
+				) {
+					return { ...sourceInfo, path: resourcePath };
+				}
+			}
+		}
+
+		if (metadataByPath) {
+			const exact = metadataByPath.get(normalizedResourcePath) ?? metadataByPath.get(resourcePath);
+			if (exact) {
+				return createSourceInfo(resourcePath, exact);
+			}
+
+			for (const [sourcePath, metadata] of metadataByPath.entries()) {
+				const normalizedSourcePath = resolve(sourcePath);
+				if (
+					normalizedResourcePath === normalizedSourcePath ||
+					normalizedResourcePath.startsWith(`${normalizedSourcePath}${sep}`)
+				) {
+					return createSourceInfo(resourcePath, metadata);
+				}
+			}
+		}
+
+		return undefined;
+	}
+
+	private getDefaultSourceInfoForPath(filePath: string): SourceInfo {
+		const syntheticSource = getSyntheticPathSource(filePath);
+		if (syntheticSource) {
+			return {
+				path: filePath,
+				source: syntheticSource,
+				scope: "temporary",
+				origin: "top-level",
+			};
+		}
+
+		const normalizedPath = resolve(filePath);
+		const agentRoots = [
+			join(this.agentDir, "skills"),
+			join(this.agentDir, "prompts"),
+			join(this.agentDir, "themes"),
+			join(this.agentDir, "extensions"),
+		];
+		const projectRoots = [
+			join(this.cwd, CONFIG_DIR_NAME, "skills"),
+			join(this.cwd, CONFIG_DIR_NAME, "prompts"),
+			join(this.cwd, CONFIG_DIR_NAME, "themes"),
+			join(this.cwd, CONFIG_DIR_NAME, "extensions"),
+		];
+
+		for (const root of agentRoots) {
+			if (this.isUnderPath(normalizedPath, root)) {
+				return { path: filePath, source: "local", scope: "user", origin: "top-level", baseDir: root };
+			}
+		}
+
+		for (const root of projectRoots) {
+			if (this.isUnderPath(normalizedPath, root)) {
+				return { path: filePath, source: "local", scope: "project", origin: "top-level", baseDir: root };
+			}
+		}
+
+		return {
+			path: filePath,
+			source: "local",
+			scope: "temporary",
+			origin: "top-level",
+			baseDir: statSync(normalizedPath).isDirectory() ? normalizedPath : resolve(normalizedPath, ".."),
+		};
+	}
+
+	private isUnderPath(target: string, root: string): boolean {
+		const normalizedRoot = resolve(root);
+		if (target === normalizedRoot) {
+			return true;
+		}
+		const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+		return target.startsWith(prefix);
 	}
 
 	private mapSkillPath(resource: ResolvedResource, metadataByPath: Map<string, PathMetadata>): string {

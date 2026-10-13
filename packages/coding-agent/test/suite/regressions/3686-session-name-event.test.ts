@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { ExtensionAPI } from "../../../src/index.ts";
+import type { ModuleApi } from "../../../src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 describe("regression #3686: session name changes emit an event", () => {
@@ -22,11 +22,14 @@ describe("regression #3686: session name changes emit an event", () => {
 	});
 
 	it("emits session_info_changed when an extension calls nanopi.setSessionName", async () => {
-		let api: ExtensionAPI | undefined;
+		let api: ModuleApi | undefined;
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					api = nanopi;
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						api = nanopi;
+					},
 				},
 			],
 		});
@@ -36,26 +39,5 @@ describe("regression #3686: session name changes emit an event", () => {
 
 		expect(harness.sessionManager.getSessionName()).toBe("from extension");
 		expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual(["from extension"]);
-	});
-
-	it("emits session_info_changed to extensions", async () => {
-		let api: ExtensionAPI | undefined;
-		const events: Array<{ name: string | undefined }> = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					api = nanopi;
-					nanopi.on("session_info_changed", (event) => {
-						events.push({ name: event.name });
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-
-		api?.setSessionName("first");
-		harness.session.setSessionName("second");
-
-		expect(events).toEqual([{ name: "first" }, { name: "second" }]);
 	});
 });

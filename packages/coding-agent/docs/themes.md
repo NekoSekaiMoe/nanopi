@@ -129,6 +129,6 @@ If `export` colors are omitted, nanopi derives HTML page and panel backgrounds f
 
 Place a project theme in `.nanopi/themes/`. Project themes load only after [project trust](security.md#understand-project-trust) is granted.
 
-You can also load theme files and directories through the `themes` setting or distribute them in a nanopi package. See [Configuration](configuration.md), [Settings](settings.md#resources), and [nanopi Packages](packages.md).
+You can also load theme files and directories through the `themes` setting. See [Configuration](configuration.md) and [Settings](settings.md#resources).
 
 Each loaded theme must have a unique name. nanopi reports duplicate names as resource collisions.

@@ -1,18 +1,12 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
-import type { ExtensionAPI, InputEvent } from "@nanopi/pi-coding-agent";
+import type { InputEvent, ModuleApi } from "@nanopi/pi-coding-agent";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { SessionModule } from "../../src/core/modules/types.ts";
 import { createHarness, getAssistantTexts, getMessageText, getUserTexts, type Harness } from "./harness.ts";
 
-async function createWaitingHarness(
-	options: {
-		tools?: AgentTool[];
-		extensionFactories?: Harness["session"]["extensionRunner"] extends never
-			? never
-			: Array<(nanopi: ExtensionAPI) => void>;
-	} = {},
-): Promise<{
+async function createWaitingHarness(options: { tools?: AgentTool[]; modules?: SessionModule[] } = {}): Promise<{
 	harness: Harness;
 	releaseToolExecution: () => void;
 	promptPromise: Promise<void>;
@@ -37,7 +31,7 @@ async function createWaitingHarness(
 	};
 	const harness = await createHarness({
 		tools: [waitTool, ...(options.tools ?? [])],
-		extensionFactories: options.extensionFactories,
+		modules: options.modules,
 	});
 
 	const waitForToolStart = new Promise<void>((resolve) => {
@@ -69,14 +63,17 @@ describe("AgentSession queue characterization", () => {
 	it("dispatches extension commands immediately when prompted while idle", async () => {
 		const commandRuns: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async (args) => {
-							commandRuns.push(args);
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async (args) => {
+								commandRuns.push(args);
+							},
+						});
+					},
 				},
 			],
 		});
@@ -90,11 +87,14 @@ describe("AgentSession queue characterization", () => {
 	});
 
 	it("delivers extension-origin steering messages before the next LLM call", async () => {
-		let extensionApi: ExtensionAPI | undefined;
+		let extensionApi: ModuleApi | undefined;
 		const waiting = await createWaitingHarness({
-			extensionFactories: [
-				(nanopi) => {
-					extensionApi = nanopi;
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						extensionApi = nanopi;
+					},
 				},
 			],
 		});
@@ -159,17 +159,20 @@ describe("AgentSession queue characterization", () => {
 	it("runs direct steering and follow-up messages through input handlers", async () => {
 		const inputEvents: Array<Pick<InputEvent, "text" | "source" | "streamingBehavior">> = [];
 		const waiting = await createWaitingHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("input", (event) => {
-						inputEvents.push({
-							text: event.text,
-							source: event.source,
-							streamingBehavior: event.streamingBehavior,
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("input", (event) => {
+							inputEvents.push({
+								text: event.text,
+								source: event.source,
+								streamingBehavior: event.streamingBehavior,
+							});
+							if (event.text.startsWith("handle")) return { action: "handled" };
+							return { action: "transform", text: `transformed: ${event.text}` };
 						});
-						if (event.text.startsWith("handle")) return { action: "handled" };
-						return { action: "transform", text: `transformed: ${event.text}` };
-					});
+					},
 				},
 			],
 		});
@@ -439,45 +442,51 @@ describe("AgentSession queue characterization", () => {
 
 	it("throws when queueing an extension command with steer", async () => {
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async () => {},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async () => {},
+						});
+					},
 				},
 			],
 		});
 		harnesses.push(harness);
 
 		await expect(harness.session.steer("/testcmd queued")).rejects.toThrow(
-			'Extension command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
+			'RegisteredModule command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
 		);
 	});
 
 	it("throws when queueing an extension command with followUp", async () => {
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async () => {},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async () => {},
+						});
+					},
 				},
 			],
 		});
 		harnesses.push(harness);
 
 		await expect(harness.session.followUp("/testcmd queued")).rejects.toThrow(
-			'Extension command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
+			'RegisteredModule command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
 		);
 	});
 
 	it("delivers follow-ups queued during agent_end", async () => {
 		let sent = false;
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi: ExtensionAPI) => {
+			modules: [
+				(nanopi: ModuleApi) => {
 					nanopi.on("agent_end", async () => {
 						if (sent) return;
 						sent = true;

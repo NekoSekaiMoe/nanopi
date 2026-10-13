@@ -17,7 +17,6 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `<agent-dir>/AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, or `CLAUDE.MD` | User instructions applied across working directories. |
 | `<agent-dir>/SYSTEM.md` | Replaces nanopi’s default system prompt. |
 | `<agent-dir>/APPEND_SYSTEM.md` | Adds instructions to nanopi’s system prompt. |
-| `<agent-dir>/extensions/` | User [extensions](extensions.md). |
 | `<agent-dir>/skills/` | User [skills](skills.md) and supporting files. |
 | `<agent-dir>/prompts/` | User [prompt templates](prompt-templates.md) exposed as slash commands. |
 | `<agent-dir>/themes/` | User [theme](themes.md) files. |

@@ -1,9 +1,9 @@
 // Ported from pi-maestro-flow (MIT, Copyright (c) 2026 catlog22)
 // Source: packages/pi-maestro-flow/src/tools/bash-bg.ts
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { getShellConfig } from "@earendil-works/pi-coding-agent";
-import type { AgentToolResult } from "@earendil-works/pi-agent-core";
-import { Text } from "@earendil-works/pi-tui";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
+
+import type { AgentToolResult } from "@nanopi/pi-agent-core";
+import { Text } from "@nanopi/pi-tui";
 import {
   observeTargets,
   registerObservationProvider,
@@ -18,6 +18,7 @@ import type { ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+import { getShellConfig } from "../../../src/utils/shell.ts";
 
 const MAX_TAIL_BYTES = 64 * 1024;
 const MAX_LOG_BYTES = 16 * 1024 * 1024;
@@ -249,7 +250,7 @@ export interface RegisterBashBgOptions {
   maxLogBytes?: number;
 }
 
-export function registerBashBg(pi: ExtensionAPI, options: RegisterBashBgOptions = {}): void {
+export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {}): void {
   const maxActiveJobs = options.maxActiveJobs ?? MAX_ACTIVE_JOBS;
   const maxRetainedCompletedJobs = options.maxRetainedCompletedJobs ?? MAX_RETAINED_COMPLETED_JOBS;
   const maxLogBytes = options.maxLogBytes ?? MAX_LOG_BYTES;

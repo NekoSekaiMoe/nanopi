@@ -1,5 +1,5 @@
-import type { Component } from "@earendil-works/pi-tui";
-import { CURSOR_MARKER, visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import type { Component } from "@nanopi/pi-tui";
+import { CURSOR_MARKER, visibleWidth, wrapTextWithAnsi } from "@nanopi/pi-tui";
 
 // Grapheme-aware extraction at the cursor: pi-tui's Input advances `cursor` by
 // grapheme-cluster code-unit length, so the cursor can land between code units of

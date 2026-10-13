@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { assistantMsg, userMsg } from "../../utilities.ts";
 import { createHarness, getMessageText, type Harness } from "../harness.ts";
 
@@ -21,20 +22,23 @@ describe("issue #9178: tree navigation during manual compaction", () => {
 
 		harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => {
-						compactionStarted.resolve();
-						await compactionReleased.promise;
-						return {
-							compaction: {
-								summary: "summary",
-								firstKeptEntryId: event.preparation.firstKeptEntryId,
-								tokensBefore: event.preparation.tokensBefore,
-								details: {},
-							},
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => {
+							compactionStarted.resolve();
+							await compactionReleased.promise;
+							return {
+								compaction: {
+									summary: "summary",
+									firstKeptEntryId: event.preparation.firstKeptEntryId,
+									tokensBefore: event.preparation.tokensBefore,
+									details: {},
+								},
+							};
+						});
+					},
 				},
 			],
 		});
@@ -70,12 +74,15 @@ describe("issue #9178: tree navigation during manual compaction", () => {
 		const navigationStarted = createDeferred();
 		const navigationReleased = createDeferred();
 		harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_tree", async () => {
-						navigationStarted.resolve();
-						await navigationReleased.promise;
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_tree", async () => {
+							navigationStarted.resolve();
+							await navigationReleased.promise;
+						});
+					},
 				},
 			],
 		});

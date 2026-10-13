@@ -4,7 +4,7 @@ import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { executeBashWithOperations } from "../src/core/bash-executor.ts";
-import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
+import type { ModuleToolContext } from "../src/core/modules/types.ts";
 import {
 	type BashOperations,
 	createBashTool,
@@ -995,8 +995,8 @@ describe("Coding Agent Tools", () => {
 	});
 });
 
-function fakeCtx(cwd: string): ExtensionToolContext {
-	return { cwd } as ExtensionToolContext;
+function fakeCtx(cwd: string): ModuleToolContext {
+	return { cwd } as ModuleToolContext;
 }
 
 describe("tool cwd resolution", () => {

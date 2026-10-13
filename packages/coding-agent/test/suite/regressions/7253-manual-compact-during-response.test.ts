@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 function createNoopTool(): AgentTool {
@@ -37,16 +38,19 @@ describe("issue #7253: manual compaction during an active response", () => {
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 1000 }],
 			settings: { compaction: { enabled: true, reserveTokens: 200, keepRecentTokens: 2 } },
 			tools: [createNoopTool()],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: `${event.reason} summary`,
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: `${event.reason} summary`,
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});

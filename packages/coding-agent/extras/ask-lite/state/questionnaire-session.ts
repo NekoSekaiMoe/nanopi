@@ -1,5 +1,5 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, type Input } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { getKeybindings, type Input } from "@nanopi/pi-tui";
 import type { QuestionData, QuestionnaireResult, QuestionParams } from "../tool/types.js";
 import type { WrappingSelectItem } from "../view/components/wrapping-select.js";
 import { COLLAPSED_HINT } from "../view/dialog-builder.js";

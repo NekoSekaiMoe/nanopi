@@ -2,7 +2,7 @@ import { type Component, TuiMainScreen } from "@nanopi/pi-tui";
 import { Type } from "typebox";
 import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
+import type { ToolDefinition } from "../src/core/modules/types.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
 import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
 import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";

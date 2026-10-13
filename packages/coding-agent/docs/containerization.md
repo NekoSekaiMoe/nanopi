@@ -8,18 +8,18 @@ You can isolate the complete nanopi process or keep nanopi on the host and route
 
 | Method | Where nanopi runs | What is isolated | Credential handling | Best for |
 |---|---|---|---|---|
-| Plain Docker | Container | nanopi, built-in tools, `!` commands, and extensions | Credentials passed into the container | A straightforward local container boundary |
-| Docker Sandboxes | Managed sandbox | nanopi, built-in tools, `!` commands, and extensions | Provider credentials remain on the host and are substituted by the proxy | Managed local isolation without exposing the real provider key |
-| OpenShell | Local or remote sandbox | nanopi, built-in tools, `!` commands, and extensions | Policy-controlled credentials and inference routing | Filesystem, process, network, and credential policies |
+| Plain Docker | Container | nanopi, built-in tools, `!` commands, and modules | Credentials passed into the container | A straightforward local container boundary |
+| Docker Sandboxes | Managed sandbox | nanopi, built-in tools, `!` commands, and modules | Provider credentials remain on the host and are substituted by the proxy | Managed local isolation without exposing the real provider key |
+| OpenShell | Local or remote sandbox | nanopi, built-in tools, `!` commands, and modules | Policy-controlled credentials and inference routing | Filesystem, process, network, and credential policies |
 
-The method changes where extensions run. When the complete nanopi process runs inside an isolated environment, its extensions run there too.
+The method changes where module tools run. When the complete nanopi process runs inside an isolated environment, its module tools run there too.
 
 ## Decide what nanopi can access
 
 An isolated process can still affect resources you expose to it:
 
 - A read-write host mount lets nanopi modify those host files.
-- Mounting `~/.nanopi/agent` exposes your nanopi credentials, settings, extensions, and sessions.
+- Mounting `~/.nanopi/agent` exposes your nanopi credentials, settings, and sessions.
 - Environment variables passed into a container are available to processes inside it.
 - Network access may allow code or tool output to leave the environment.
 - Tool-only isolation does not constrain the host nanopi process or extension tools that do not use the isolated backend.

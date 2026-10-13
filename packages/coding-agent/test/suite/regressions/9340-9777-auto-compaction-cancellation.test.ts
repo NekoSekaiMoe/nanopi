@@ -1,5 +1,6 @@
 import { type AssistantMessage, fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -51,9 +52,12 @@ describe("automatic compaction cancellation regressions", () => {
 				compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1 },
 				retry: { enabled: false },
 			},
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", () => ({ cancel: true }));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", () => ({ cancel: true }));
+					},
 				},
 			],
 		});
@@ -142,9 +146,12 @@ describe("automatic compaction cancellation regressions", () => {
 	it("reports extension cancellation as aborted", async () => {
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", () => ({ cancel: true }));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", () => ({ cancel: true }));
+					},
 				},
 			],
 		});

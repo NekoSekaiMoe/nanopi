@@ -151,7 +151,7 @@ describe("ModelRuntime auth options", () => {
 	it("constructs an API key method for an extension API-key provider", async () => {
 		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
 		runtime.registerProvider("extension-api-key", {
-			name: "Extension API Key",
+			name: "SessionModule API Key",
 			baseUrl: "https://example.test/v1",
 			apiKey: "$EXTENSION_TEST_API_KEY",
 			api: "openai-completions",
@@ -162,7 +162,7 @@ describe("ModelRuntime auth options", () => {
 		expect(options).toHaveLength(1);
 		expect(options[0]).toMatchObject({
 			type: "api_key",
-			provider: { id: "extension-api-key", name: "Extension API Key" },
+			provider: { id: "extension-api-key", name: "SessionModule API Key" },
 			method: { name: "API key" },
 		});
 		expect(options[0]?.method.login).toBeTypeOf("function");
@@ -267,11 +267,11 @@ describe("ModelRuntime auth options", () => {
 		const runtime = await ModelRuntime.create({ credentials, modelsPath: null });
 		let refreshSignal: AbortSignal | undefined;
 		runtime.registerProvider("extension-oauth", {
-			name: "Extension OAuth",
+			name: "SessionModule OAuth",
 			baseUrl: "https://example.test/v1",
 			api: "openai-completions",
 			oauth: {
-				name: "Extension subscription",
+				name: "SessionModule subscription",
 				login: async () => ({ access: "access", refresh: "refresh", expires: Date.now() + 60_000 }),
 				refreshToken: async (credential, signal) => {
 					refreshSignal = signal;
@@ -294,11 +294,11 @@ describe("ModelRuntime auth options", () => {
 	it("does not fabricate an API key method for an extension OAuth-only provider", async () => {
 		const runtime = await ModelRuntime.create({ credentials: AuthStorage.inMemory(), modelsPath: null });
 		runtime.registerProvider("extension-oauth", {
-			name: "Extension OAuth",
+			name: "SessionModule OAuth",
 			baseUrl: "https://example.test/v1",
 			api: "openai-completions",
 			oauth: {
-				name: "Extension subscription",
+				name: "SessionModule subscription",
 				isSubscription: true,
 				login: async () => ({ access: "access", refresh: "refresh", expires: Date.now() + 60_000 }),
 				refreshToken: async (credentials) => credentials,
@@ -311,8 +311,8 @@ describe("ModelRuntime auth options", () => {
 		expect(options).toHaveLength(1);
 		expect(options[0]).toMatchObject({
 			type: "oauth",
-			provider: { id: "extension-oauth", name: "Extension OAuth" },
-			method: { name: "Extension subscription", isSubscription: true },
+			provider: { id: "extension-oauth", name: "SessionModule OAuth" },
+			method: { name: "SessionModule subscription", isSubscription: true },
 		});
 	});
 });

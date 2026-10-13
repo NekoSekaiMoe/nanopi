@@ -65,6 +65,10 @@ export type {
 	ExecOptions,
 	ExecResult,
 	ExecuteToolOptions,
+	FindToolCallEvent,
+	FindToolResultEvent,
+	GrepToolCallEvent,
+	GrepToolResultEvent,
 	// Events - Input
 	InputEvent,
 	InputEventResult,
@@ -73,6 +77,8 @@ export type {
 	LoadedResource,
 	LoadedResources,
 	LoadModulesResult,
+	LsToolCallEvent,
+	LsToolResultEvent,
 	MarkdownTransformContext,
 	MarkdownTransformer,
 	// Events - Message
@@ -121,6 +127,7 @@ export type {
 	ReadToolResultEvent,
 	// Commands
 	RegisteredCommand,
+	RegisteredModule,
 	RegisteredTool,
 	ReplacedSessionContext,
 	ResolvedCommand,
@@ -140,6 +147,8 @@ export type {
 	SessionTreeEvent,
 	SetActiveToolsHandler,
 	// Events - Tool
+	TerminalInputHandler,
+	ToolAnnotations,
 	ToolCallEvent,
 	ToolCallEventResult,
 	// Tools

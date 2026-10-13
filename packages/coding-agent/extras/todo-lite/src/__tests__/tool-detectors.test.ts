@@ -8,8 +8,8 @@
 
 import { describe, expect, it } from "vitest";
 
-import { createTodoSessionState } from "../state";
-import { handleAdd, handleDelete } from "../tool";
+import { createTodoSessionState } from "../state.ts";
+import { handleAdd, handleDelete } from "../tool.ts";
 
 describe("handleAdd — text/texts dual-form detection", () => {
   it("triggers dual-form error when singular 'text' used instead of 'texts'", () => {

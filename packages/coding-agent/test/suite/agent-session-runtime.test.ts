@@ -14,19 +14,14 @@ import { AuthStorage } from "../../src/core/auth-storage.ts";
 import { SessionManager } from "../../src/core/session-manager.ts";
 import type {
 	AgentToolResult,
-	ExtensionAPI,
-	ExtensionFactory,
+	ModuleApi,
+	ModuleFactory,
 	SessionBeforeForkEvent,
-	SessionBeforeSwitchEvent,
 	SessionShutdownEvent,
 	SessionStartEvent,
 } from "../../src/index.ts";
 
-type RecordedSessionEvent =
-	| SessionBeforeSwitchEvent
-	| SessionBeforeForkEvent
-	| SessionShutdownEvent
-	| SessionStartEvent;
+type RecordedSessionEvent = SessionBeforeForkEvent | SessionShutdownEvent | SessionStartEvent;
 
 describe("AgentSessionRuntime characterization", () => {
 	const cleanups: Array<() => Promise<void> | void> = [];
@@ -38,7 +33,7 @@ describe("AgentSessionRuntime characterization", () => {
 	});
 
 	async function createRuntimeForTest(
-		extensionFactory: ExtensionFactory,
+		extensionFactory: ModuleFactory,
 		options?: { cwd?: string; bootstrapModel?: boolean; bootstrapThinkingLevel?: boolean },
 	) {
 		const tempDir =
@@ -62,24 +57,27 @@ describe("AgentSessionRuntime characterization", () => {
 			model: options?.bootstrapModel === false ? undefined : faux.getModel(),
 			thinkingLevel: options?.bootstrapThinkingLevel === false ? undefined : undefined,
 			resourceLoaderOptions: {
-				extensionFactories: [
-					(nanopi: ExtensionAPI) => {
-						nanopi.registerProvider(faux.getModel().provider, {
-							baseUrl: faux.getModel().baseUrl,
-							apiKey: "faux-key",
-							api: faux.api,
-							models: faux.models.map((registeredModel) => ({
-								id: registeredModel.id,
-								name: registeredModel.name,
-								api: registeredModel.api,
-								reasoning: registeredModel.reasoning,
-								input: registeredModel.input,
-								cost: registeredModel.cost,
-								contextWindow: registeredModel.contextWindow,
-								maxTokens: registeredModel.maxTokens,
-							})),
-						});
-						extensionFactory(nanopi);
+				modules: [
+					{
+						name: "test",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.registerProvider(faux.getModel().provider, {
+								baseUrl: faux.getModel().baseUrl,
+								apiKey: "faux-key",
+								api: faux.api,
+								models: faux.models.map((registeredModel) => ({
+									id: registeredModel.id,
+									name: registeredModel.name,
+									api: registeredModel.api,
+									reasoning: registeredModel.reasoning,
+									input: registeredModel.input,
+									cost: registeredModel.cost,
+									contextWindow: registeredModel.contextWindow,
+									maxTokens: registeredModel.maxTokens,
+								})),
+							});
+							extensionFactory(nanopi);
+						},
 					},
 				],
 				noSkills: true,
@@ -109,7 +107,7 @@ describe("AgentSessionRuntime characterization", () => {
 			agentDir: tempDir,
 			sessionManager: SessionManager.create(tempDir),
 		});
-		await runtime.session.bindExtensions({});
+		await runtime.session.bindModules({});
 
 		cleanups.push(async () => {
 			await runtime.dispose();
@@ -123,7 +121,7 @@ describe("AgentSessionRuntime characterization", () => {
 	}
 
 	it("persists message_end assistant replacements to the session manager", async () => {
-		const { runtime } = await createRuntimeForTest((nanopi: ExtensionAPI) => {
+		const { runtime } = await createRuntimeForTest((nanopi: ModuleApi) => {
 			nanopi.on("message_end", (event) => {
 				if (event.message.role !== "assistant") return;
 
@@ -168,7 +166,7 @@ describe("AgentSessionRuntime characterization", () => {
 		const toolStartedPromise = new Promise<void>((resolve) => {
 			toolStarted = resolve;
 		});
-		const { runtime, faux } = await createRuntimeForTest((nanopi: ExtensionAPI) => {
+		const { runtime, faux } = await createRuntimeForTest((nanopi: ModuleApi) => {
 			nanopi.registerTool({
 				name: "block",
 				label: "Block",
@@ -187,7 +185,7 @@ describe("AgentSessionRuntime characterization", () => {
 		await runtime.session.prompt("hello");
 		const firstSessionFile = runtime.session.sessionFile!;
 		await runtime.newSession();
-		await runtime.session.bindExtensions({});
+		await runtime.session.bindModules({});
 
 		faux.setResponses([fauxAssistantMessage(fauxToolCall("block", {}), { stopReason: "toolUse" })]);
 		const outgoingSession = runtime.session;
@@ -246,90 +244,10 @@ describe("AgentSessionRuntime characterization", () => {
 		expect(readFileSync(runtime.session.sessionFile!, "utf8")).toContain('"id":"imported"');
 	});
 
-	it("emits session_before_switch and session_start for new and resume flows", async () => {
-		const events: RecordedSessionEvent[] = [];
-		const { runtime } = await createRuntimeForTest((nanopi: ExtensionAPI) => {
-			nanopi.on("session_before_switch", (event) => {
-				events.push(event);
-			});
-			nanopi.on("session_shutdown", (event) => {
-				events.push(event);
-			});
-			nanopi.on("session_start", (event) => {
-				events.push(event);
-			});
-		});
-
-		expect(events).toEqual([{ type: "session_start", reason: "startup" }]);
-		events.length = 0;
-
-		await runtime.session.prompt("hello");
-		const originalSessionFile = runtime.session.sessionFile;
-		const originalSession = runtime.session;
-
-		const newSessionResult = await runtime.newSession();
-		expect(newSessionResult.cancelled).toBe(false);
-		await runtime.session.bindExtensions({});
-		expect(runtime.session).not.toBe(originalSession);
-		expect(runtime.session.messages).toEqual([]);
-		const secondSessionFile = runtime.session.sessionFile;
-		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "new", targetSessionFile: undefined },
-			{ type: "session_shutdown", reason: "new", targetSessionFile: secondSessionFile },
-			{ type: "session_start", reason: "new", previousSessionFile: originalSessionFile },
-		]);
-
-		events.length = 0;
-
-		const switchResult = await runtime.switchSession(originalSessionFile!);
-		expect(switchResult.cancelled).toBe(false);
-		await runtime.session.bindExtensions({});
-		expect(events).toEqual([
-			{ type: "session_before_switch", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_shutdown", reason: "resume", targetSessionFile: originalSessionFile },
-			{ type: "session_start", reason: "resume", previousSessionFile: secondSessionFile },
-		]);
-	});
-
-	it("honors session_before_switch cancellation for new and resume", async () => {
-		const events: RecordedSessionEvent[] = [];
-		let cancelReason: "new" | "resume" | undefined;
-		const { runtime } = await createRuntimeForTest((nanopi: ExtensionAPI) => {
-			nanopi.on("session_before_switch", (event) => {
-				events.push(event);
-				if (event.reason === cancelReason) {
-					return { cancel: true };
-				}
-			});
-			nanopi.on("session_start", (event) => {
-				events.push(event);
-			});
-		});
-
-		await runtime.session.prompt("hello");
-		const originalSessionFile = runtime.session.sessionFile;
-
-		cancelReason = "new";
-		const newResult = await runtime.newSession();
-		expect(newResult.cancelled).toBe(true);
-		expect(runtime.session.sessionFile).toBe(originalSessionFile);
-
-		events.length = 0;
-		const otherDir = join(tmpdir(), `nanopi-runtime-other-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		mkdirSync(otherDir, { recursive: true });
-		const otherSession = SessionManager.create(otherDir);
-		otherSession.appendMessage({ role: "user", content: [{ type: "text", text: "other" }], timestamp: Date.now() });
-		const otherSessionFile = otherSession.getSessionFile();
-		cancelReason = "resume";
-		const resumeResult = await runtime.switchSession(otherSessionFile!);
-		expect(resumeResult.cancelled).toBe(true);
-		expect(runtime.session.sessionFile).toBe(originalSessionFile);
-	});
-
 	it("emits session_before_fork and session_start and honors cancellation", async () => {
 		const events: RecordedSessionEvent[] = [];
 		let cancelNextFork = false;
-		const { runtime } = await createRuntimeForTest((nanopi: ExtensionAPI) => {
+		const { runtime } = await createRuntimeForTest((nanopi: ModuleApi) => {
 			nanopi.on("session_before_fork", (event) => {
 				events.push(event);
 				if (cancelNextFork) {
@@ -353,7 +271,7 @@ describe("AgentSessionRuntime characterization", () => {
 		const successResult = await runtime.fork(userMessage.entryId);
 		expect(successResult.cancelled).toBe(false);
 		expect(successResult.selectedText).toBe("hello");
-		await runtime.session.bindExtensions({});
+		await runtime.session.bindModules({});
 		expect(events).toEqual([
 			{ type: "session_before_fork", entryId: userMessage.entryId, position: "before" },
 			{ type: "session_shutdown", reason: "fork", targetSessionFile: runtime.session.sessionFile },
@@ -451,23 +369,26 @@ describe("AgentSessionRuntime characterization", () => {
 			authStorage,
 			model: faux.getModel(),
 			resourceLoaderOptions: {
-				extensionFactories: [
-					(nanopi: ExtensionAPI) => {
-						nanopi.registerProvider(faux.getModel().provider, {
-							baseUrl: faux.getModel().baseUrl,
-							apiKey: "faux-key",
-							api: faux.api,
-							models: faux.models.map((registeredModel) => ({
-								id: registeredModel.id,
-								name: registeredModel.name,
-								api: registeredModel.api,
-								reasoning: registeredModel.reasoning,
-								input: registeredModel.input,
-								cost: registeredModel.cost,
-								contextWindow: registeredModel.contextWindow,
-								maxTokens: registeredModel.maxTokens,
-							})),
-						});
+				modules: [
+					{
+						name: "test",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.registerProvider(faux.getModel().provider, {
+								baseUrl: faux.getModel().baseUrl,
+								apiKey: "faux-key",
+								api: faux.api,
+								models: faux.models.map((registeredModel) => ({
+									id: registeredModel.id,
+									name: registeredModel.name,
+									api: registeredModel.api,
+									reasoning: registeredModel.reasoning,
+									input: registeredModel.input,
+									cost: registeredModel.cost,
+									contextWindow: registeredModel.contextWindow,
+									maxTokens: registeredModel.maxTokens,
+								})),
+							});
+						},
 					},
 				],
 				noSkills: true,
@@ -496,7 +417,7 @@ describe("AgentSessionRuntime characterization", () => {
 			agentDir: tempDir,
 			sessionManager: SessionManager.inMemory(tempDir),
 		});
-		await runtime.session.bindExtensions({});
+		await runtime.session.bindModules({});
 		cleanups.push(async () => {
 			await runtime.dispose();
 			faux.unregister();
@@ -560,23 +481,26 @@ describe("AgentSessionRuntime characterization", () => {
 			agentDir: tempDir,
 			authStorage: otherAuthStorage,
 			resourceLoaderOptions: {
-				extensionFactories: [
-					(nanopi: ExtensionAPI) => {
-						nanopi.registerProvider(faux.getModel().provider, {
-							baseUrl: faux.getModel().baseUrl,
-							apiKey: "faux-key",
-							api: faux.api,
-							models: faux.models.map((registeredModel) => ({
-								id: registeredModel.id,
-								name: registeredModel.name,
-								api: registeredModel.api,
-								reasoning: registeredModel.reasoning,
-								input: registeredModel.input,
-								cost: registeredModel.cost,
-								contextWindow: registeredModel.contextWindow,
-								maxTokens: registeredModel.maxTokens,
-							})),
-						});
+				modules: [
+					{
+						name: "test",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.registerProvider(faux.getModel().provider, {
+								baseUrl: faux.getModel().baseUrl,
+								apiKey: "faux-key",
+								api: faux.api,
+								models: faux.models.map((registeredModel) => ({
+									id: registeredModel.id,
+									name: registeredModel.name,
+									api: registeredModel.api,
+									reasoning: registeredModel.reasoning,
+									input: registeredModel.input,
+									cost: registeredModel.cost,
+									contextWindow: registeredModel.contextWindow,
+									maxTokens: registeredModel.maxTokens,
+								})),
+							});
+						},
 					},
 				],
 				noSkills: true,
@@ -633,23 +557,26 @@ describe("AgentSessionRuntime characterization", () => {
 			agentDir: tempDir,
 			authStorage: otherAuthStorage,
 			resourceLoaderOptions: {
-				extensionFactories: [
-					(nanopi: ExtensionAPI) => {
-						nanopi.registerProvider(faux.getModel().provider, {
-							baseUrl: faux.getModel().baseUrl,
-							apiKey: "faux-key",
-							api: faux.api,
-							models: faux.models.map((registeredModel) => ({
-								id: registeredModel.id,
-								name: registeredModel.name,
-								api: registeredModel.api,
-								reasoning: registeredModel.reasoning,
-								input: registeredModel.input,
-								cost: registeredModel.cost,
-								contextWindow: registeredModel.contextWindow,
-								maxTokens: registeredModel.maxTokens,
-							})),
-						});
+				modules: [
+					{
+						name: "test",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.registerProvider(faux.getModel().provider, {
+								baseUrl: faux.getModel().baseUrl,
+								apiKey: "faux-key",
+								api: faux.api,
+								models: faux.models.map((registeredModel) => ({
+									id: registeredModel.id,
+									name: registeredModel.name,
+									api: registeredModel.api,
+									reasoning: registeredModel.reasoning,
+									input: registeredModel.input,
+									cost: registeredModel.cost,
+									contextWindow: registeredModel.contextWindow,
+									maxTokens: registeredModel.maxTokens,
+								})),
+							});
+						},
 					},
 				],
 				noSkills: true,

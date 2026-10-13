@@ -28,9 +28,9 @@ The protocol has four record families:
 | stdin | Command | Ask nanopi to prompt, inspect state, change configuration, or manage the session |
 | stdout | `response` | Report whether one command succeeded and return any command data |
 | stdout | Session event | Stream run, message, tool, queue, compaction, and retry activity |
-| Both | Extension UI record | Forward supported extension interactions between nanopi and the client |
+| Both | Module UI record | Forward supported extension interactions between nanopi and the client |
 
-See [RPC Commands](rpc-commands.md), [JSON Event Stream](json.md), and [RPC Extension UI](rpc-extension-ui.md) for the canonical record definitions.
+See [RPC Commands](rpc-commands.md), [JSON Event Stream](json.md), and [RPC Module UI](rpc-extension-ui.md) for the canonical record definitions.
 
 ### Correlate commands and responses
 
@@ -135,7 +135,7 @@ For maintained TypeScript clients, use the checked [RPC client example](../examp
 
 - [RPC Commands](rpc-commands.md): every stdin command and response
 - [JSON Event Stream](json.md): shared stdout session events and streaming reconstruction
-- [RPC Extension UI](rpc-extension-ui.md): dialogs, notifications, responses, and limitations
+- [RPC Module UI](rpc-extension-ui.md): dialogs, notifications, responses, and limitations
 - [Message Types](message-types.md): messages and content blocks used by responses and events
 - [Session File Format](session-format.md): entries returned by session commands
 - [`rpc-types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/modes/rpc/rpc-types.ts): exported TypeScript protocol definitions
@@ -190,4 +190,4 @@ Event details moved to [JSON Event Stream](json.md).
 
 <a id="extension-ui-protocol"></a>
 
-Extension interaction details moved to [RPC Extension UI](rpc-extension-ui.md).
+Extension interaction details moved to [RPC Module UI](rpc-extension-ui.md).

@@ -12,7 +12,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "../src/core/compaction/request-metadata.ts";
-import type { ExtensionFactory } from "../src/core/extensions/types.ts";
+import type { ModuleFactory } from "../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -84,7 +84,7 @@ describe("createAgentSession stream options", () => {
 		api: Api,
 		settings: Partial<Settings>,
 		requestOptions: SimpleStreamOptions = {},
-		extensionFactory?: ExtensionFactory,
+		extensionFactory?: ModuleFactory,
 		providerEvent?: unknown,
 	): Promise<SimpleStreamOptions | undefined> {
 		const model = createModel(api);
@@ -93,7 +93,7 @@ describe("createAgentSession stream options", () => {
 			cwd,
 			agentDir,
 			settingsManager,
-			extensionFactories: extensionFactory ? [extensionFactory] : [],
+			modules: extensionFactory ? [{ name: "test", factory: extensionFactory }] : [],
 		});
 		await resourceLoader.reload();
 
@@ -297,33 +297,6 @@ describe("createAgentSession stream options", () => {
 	});
 
 	// Regression test for #9784.
-	it("forwards provider stream events to extensions", async () => {
-		const providerEvent = { openrouter_metadata: { strategy: "direct" } };
-		const extensionEvents: unknown[] = [];
-
-		const options = await captureStreamOptions(
-			"openai-completions",
-			{},
-			{},
-			(nanopi) => {
-				nanopi.on("provider_stream_event", (event) => {
-					extensionEvents.push(event);
-				});
-			},
-			providerEvent,
-		);
-
-		expect(options?.onProviderStreamEvent).toEqual(expect.any(Function));
-		expect(extensionEvents).toEqual([
-			{
-				data: providerEvent,
-				type: "provider_stream_event",
-				provider: "capture-provider",
-				api: "openai-completions",
-				model: "capture-model",
-			},
-		]);
-	});
 
 	it("runs before_provider_headers on assembled headers without forwarding the transform", async () => {
 		const options = await captureStreamOptions(

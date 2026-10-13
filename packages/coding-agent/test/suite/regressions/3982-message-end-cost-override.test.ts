@@ -1,5 +1,6 @@
 import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 describe("regression #3982: message_end cost override", () => {
@@ -13,24 +14,27 @@ describe("regression #3982: message_end cost override", () => {
 
 	it("allows extensions to replace finalized assistant usage cost", async () => {
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_end", (event) => {
-						if (event.message.role !== "assistant") return;
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_end", (event) => {
+							if (event.message.role !== "assistant") return;
 
-						return {
-							message: {
-								...event.message,
-								usage: {
-									...event.message.usage,
-									cost: {
-										...event.message.usage.cost,
-										total: 0.123,
+							return {
+								message: {
+									...event.message,
+									usage: {
+										...event.message.usage,
+										cost: {
+											...event.message.usage.cost,
+											total: 0.123,
+										},
 									},
 								},
-							},
-						};
-					});
+							};
+						});
+					},
 				},
 			],
 		});

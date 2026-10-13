@@ -18,14 +18,9 @@
  * In non-TUI modes a plain text summary is emitted via `ctx.ui.notify`.
  */
 
-import {
-	type BuildSystemPromptOptions,
-	type ExtensionAPI,
-	estimateTokens,
-	formatSkillsForPrompt,
-	type ModuleCommandContext,
-	type ToolInfo,
-} from "@nanopi/pi-coding-agent";
+import { estimateTokens } from "../../core/compaction/index.ts";
+import type { BuildSystemPromptOptions, ModuleApi, ModuleCommandContext, ToolInfo } from "../../core/modules/types.ts";
+import { formatSkillsForPrompt } from "../../core/skills.ts";
 import { type ContextPart, type ContextPreview, showContextDialog } from "./context-dialog.ts";
 
 const tokenEstimate = (value: unknown): number => {
@@ -203,7 +198,7 @@ export function collectContextBreakdown(ctx: ModuleCommandContext, allTools: Too
 	};
 }
 
-export function registerContext(pi: ExtensionAPI) {
+export function registerContext(pi: ModuleApi) {
 	pi.registerCommand("context", {
 		description: "Show the current context-window distribution",
 		handler: async (_args, ctx) => {

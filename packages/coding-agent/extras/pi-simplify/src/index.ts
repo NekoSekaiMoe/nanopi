@@ -1,10 +1,10 @@
 import type {
-  ExtensionAPI,
+  ModuleApi,
   ModuleCommandContext,
-} from "@earendil-works/pi-coding-agent";
+} from "@nanopi/pi-coding-agent";
 import { handleSimplifyCommand, COMMAND_NAME } from "./simplify-command.js";
 
-export default function (pi: ExtensionAPI): void {
+export default function (pi: ModuleApi): void {
   pi.registerCommand(COMMAND_NAME, {
     description:
       "Review recently changed code for clarity, consistency, and maintainability improvements",

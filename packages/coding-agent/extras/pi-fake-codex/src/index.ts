@@ -49,7 +49,7 @@
  * There are no commands; the extension takes effect on load.
  */
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { CODEX_APIS, registerApplyPatchTool } from "./apply-patch.ts";
 import { buildOriginator, buildUserAgent } from "./headers.ts";
 import { registerCodexHookAdapter } from "./hooks/adapter.ts";
@@ -57,7 +57,7 @@ import { codexifyResponsesPayload } from "./payload.ts";
 
 export { CODEX_APIS };
 
-export default function (pi: ExtensionAPI): void {
+export default function (pi: ModuleApi): void {
   // `before_provider_headers` fires after request headers are assembled and
   // before the HTTP call. Handlers mutate `headers` in place; a `null` value
   // deletes that header. Return value is ignored.

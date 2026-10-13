@@ -7,8 +7,7 @@ function packageExtension(source: string, baseDir: string, entry = "extensions/i
 	const normalizedBaseDir = baseDir.replace(/\\/g, "/");
 	const resolvedPath = `${normalizedBaseDir}/${entry}`;
 	return {
-		path: resolvedPath,
-		resolvedPath,
+		name: resolvedPath,
 		sourceInfo: {
 			path: resolvedPath,
 			source,
@@ -47,8 +46,7 @@ describe("extension crash attribution", () => {
 
 	test("does not attribute sibling single-file packages", () => {
 		const extension = (name: string): StackExtension => ({
-			path: `/plugins/${name}.ts`,
-			resolvedPath: `/plugins/${name}.ts`,
+			name: `/plugins/${name}.ts`,
 			sourceInfo: {
 				path: `/plugins/${name}.ts`,
 				source: `/plugins/${name}.ts`,
@@ -64,15 +62,14 @@ describe("extension crash attribution", () => {
 
 	test("ignores extension paths in the error message", () => {
 		const extension = packageExtension("npm:memory", "/tmp/node_modules/memory");
-		const stack = `Error: Failed to read ${extension.resolvedPath}\n    at run (file:///opt/nanopi/dist/core.js:4:2)`;
+		const stack = `Error: Failed to read ${extension.name}\n    at run (file:///opt/nanopi/dist/core.js:4:2)`;
 
 		expect(findExtensionStackMatches(stack, [extension])).toEqual([]);
 	});
 
 	test("decodes frame paths independently from malformed error text", () => {
 		const extension: StackExtension = {
-			path: "/Users/reporter/.nanopi/agent/extensions/local memory/index.ts",
-			resolvedPath: "/Users/reporter/.nanopi/agent/extensions/local memory/index.ts",
+			name: "/Users/reporter/.nanopi/agent/extensions/local memory/index.ts",
 			sourceInfo: {
 				path: "/Users/reporter/.nanopi/agent/extensions/local memory/index.ts",
 				source: "local",
@@ -84,6 +81,6 @@ describe("extension crash attribution", () => {
 		const stack =
 			"Error: progress 100%\n    at run (file:///Users/reporter/.nanopi/agent/extensions/local%20memory/worker.ts:4:2)";
 
-		expect(findExtensionStackMatches(stack, [extension])).toEqual([extension.path]);
+		expect(findExtensionStackMatches(stack, [extension])).toEqual([extension.name]);
 	});
 });

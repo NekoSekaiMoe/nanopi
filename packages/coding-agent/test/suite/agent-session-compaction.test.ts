@@ -13,6 +13,7 @@ import {
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { estimateTokens } from "../../src/core/compaction/index.ts";
+import type { ModuleApi } from "../../src/core/modules/types.ts";
 import { createHarness, getUserTexts, type Harness } from "./harness.ts";
 
 type SessionWithCompactionInternals = {
@@ -107,14 +108,17 @@ async function createAbortableCompactionHarness(): Promise<{
 	});
 	const harness = await createHarness({
 		settings: { compaction: { keepRecentTokens: 1 } },
-		extensionFactories: [
-			(nanopi) => {
-				nanopi.on("session_before_compact", async (event) => {
-					return await new Promise<{ cancel: true }>((resolve) => {
-						event.signal.addEventListener("abort", () => resolve({ cancel: true }), { once: true });
-						markCompactionStarted();
+		modules: [
+			{
+				name: "test-module-1",
+				factory: (nanopi: ModuleApi) => {
+					nanopi.on("session_before_compact", async (event) => {
+						return await new Promise<{ cancel: true }>((resolve) => {
+							event.signal.addEventListener("abort", () => resolve({ cancel: true }), { once: true });
+							markCompactionStarted();
+						});
 					});
-				});
+				},
 			},
 		],
 	});
@@ -144,17 +148,20 @@ describe("AgentSession compaction characterization", () => {
 		};
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "summary from extension",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							usage: summaryUsage,
-							details: { source: "extension" },
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "summary from extension",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								usage: summaryUsage,
+								details: { source: "extension" },
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -238,16 +245,19 @@ describe("AgentSession compaction characterization", () => {
 	it("allows a queued prompt to start when manual compaction ends", async () => {
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "manual compacted",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "manual compacted",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -395,64 +405,23 @@ describe("AgentSession compaction characterization", () => {
 		expect(getStreamCallCount()).toBe(1);
 	});
 
-	it("notifies extensions when auto-compaction fails", async () => {
-		const failedEvents: Array<{
-			reason: "manual" | "threshold" | "overflow";
-			errorMessage?: string;
-			aborted: boolean;
-			willRetry: boolean;
-			fromExtension: boolean;
-		}> = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_compact_failed", async (event) => {
-						failedEvents.push(event);
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		seedCompactableSession(harness);
-		harness.session.agent.streamFunction = () => {
-			throw new Error("summary generator blew up");
-		};
-		const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
-
-		await expect(sessionInternals._runAutoCompaction("threshold", false)).resolves.toBe(false);
-
-		expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
-			reason: "threshold",
-			aborted: false,
-			willRetry: false,
-			errorMessage: "Auto-compaction failed: summary generator blew up",
-		});
-		expect(failedEvents).toEqual([
-			expect.objectContaining({
-				type: "session_compact_failed",
-				reason: "threshold",
-				aborted: false,
-				willRetry: false,
-				fromExtension: false,
-				errorMessage: "Auto-compaction failed: summary generator blew up",
-			}),
-		]);
-	});
-
 	it("compacts and resumes after a length stop below the desired output limit", async () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
 			settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "overflow compacted",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "overflow compacted",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -501,20 +470,23 @@ describe("AgentSession compaction characterization", () => {
 						: { enabled: true, reserveTokens: 400, keepRecentTokens: 1750 },
 				},
 				tools: [largeTool],
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("session_before_compact", (event) => {
-							order.push("compaction");
-							observedSettings.push(event.preparation.settings);
-							return {
-								compaction: {
-									summary: "compacted history",
-									firstKeptEntryId: event.preparation.firstKeptEntryId,
-									tokensBefore: event.preparation.tokensBefore,
-									details: {},
-								},
-							};
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("session_before_compact", (event) => {
+								order.push("compaction");
+								observedSettings.push(event.preparation.settings);
+								return {
+									compaction: {
+										summary: "compacted history",
+										firstKeptEntryId: event.preparation.firstKeptEntryId,
+										tokensBefore: event.preparation.tokensBefore,
+										details: {},
+									},
+								};
+							});
+						},
 					},
 				],
 			});
@@ -572,20 +544,23 @@ describe("AgentSession compaction characterization", () => {
 			models: [{ id: "faux-1", contextWindow: 2600, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, reserveTokens: 400, keepRecentTokens: 1750 } },
 			tools: [largeTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => {
-						markCompactionStarted();
-						await compactionReleased;
-						return {
-							compaction: {
-								summary: "compacted history",
-								firstKeptEntryId: event.preparation.firstKeptEntryId,
-								tokensBefore: event.preparation.tokensBefore,
-								details: {},
-							},
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => {
+							markCompactionStarted();
+							await compactionReleased;
+							return {
+								compaction: {
+									summary: "compacted history",
+									firstKeptEntryId: event.preparation.firstKeptEntryId,
+									tokensBefore: event.preparation.tokensBefore,
+									details: {},
+								},
+							};
+						});
+					},
 				},
 			],
 		});
@@ -630,16 +605,19 @@ describe("AgentSession compaction characterization", () => {
 			models: [{ id: "faux-1", contextWindow: 2600, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, reserveTokens: 400, keepRecentTokens: 1750 } },
 			tools: [terminatingTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "unexpected compaction",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "unexpected compaction",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -676,16 +654,19 @@ describe("AgentSession compaction characterization", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1_000_000, maxTokens: 100 }],
 			settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "overflow compacted",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "overflow compacted",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -771,16 +752,19 @@ describe("AgentSession compaction characterization", () => {
 		vi.useFakeTimers();
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "auto compacted",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "auto compacted",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -832,16 +816,19 @@ describe("AgentSession compaction characterization", () => {
 		const harness = await createHarness({
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
 			models: [{ id: "faux-1", contextWindow: 1, maxTokens: 100 }],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => ({
-						compaction: {
-							summary: "successful overflow compacted",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-							details: {},
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => ({
+							compaction: {
+								summary: "successful overflow compacted",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+								details: {},
+							},
+						}));
+					},
 				},
 			],
 		});

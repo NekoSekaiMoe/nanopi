@@ -1,5 +1,5 @@
-import { DynamicBorder, type Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, Container, type Input, Spacer } from "@earendil-works/pi-tui";
+
+import { type Component, Container, type Input, Spacer } from "@nanopi/pi-tui";
 import type { QuestionnaireState } from "../state/state.js";
 import type { QuestionData } from "../tool/types.js";
 import type { ChatRowView } from "./components/chat-row-view.js";
@@ -8,6 +8,8 @@ import type { TabBar } from "./components/tab-bar.js";
 import type { StatefulView } from "./stateful-view.js";
 import type { TabComponents } from "./tab-components.js";
 import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from "./tab-content-strategy.js";
+import type { Theme } from "../../../src/modes/interactive/theme/theme.ts";
+import { DynamicBorder } from "../../../src/modes/interactive/components/dynamic-border.ts";
 
 export const HINT_PART_ENTER = "Enter to select";
 export const HINT_PART_NAV = "↑/↓ to navigate";

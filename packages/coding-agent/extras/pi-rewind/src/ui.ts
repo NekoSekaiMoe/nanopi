@@ -4,7 +4,7 @@
  * Footer status and notifications.
  */
 
-import type { ModuleContext } from "@mariozechner/pi-coding-agent";
+import type { ModuleContext } from "../../../src/core/modules/types.ts";
 import type { RewindState } from "./state.js";
 
 const STATUS_KEY = "rewind";

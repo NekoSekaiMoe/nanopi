@@ -1,4 +1,4 @@
-import type { Input } from "@earendil-works/pi-tui";
+import type { Input } from "@nanopi/pi-tui";
 import type { BindingContext, PerTabBindingContext } from "../state/selectors/contract.js";
 import { selectActivePreviewPaneIndex } from "../state/selectors/derivations.js";
 import { selectActiveView } from "../state/selectors/focus.js";

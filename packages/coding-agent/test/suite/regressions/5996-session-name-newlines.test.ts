@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import type { ExtensionAPI } from "../../../src/index.ts";
+import type { ModuleApi } from "../../../src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 describe("regression #5996: session names do not contain newlines", () => {
@@ -22,11 +22,14 @@ describe("regression #5996: session names do not contain newlines", () => {
 	});
 
 	it("filters newlines when an extension calls nanopi.setSessionName", async () => {
-		let api: ExtensionAPI | undefined;
+		let api: ModuleApi | undefined;
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					api = nanopi;
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						api = nanopi;
+					},
 				},
 			],
 		});

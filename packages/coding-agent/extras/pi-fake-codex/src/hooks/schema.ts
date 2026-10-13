@@ -53,8 +53,11 @@ export interface LoadedCodexHooks {
 }
 
 export class CodexHookConfigError extends Error {
-  constructor(readonly filePath: string, message: string) {
+  readonly filePath: string;
+
+  constructor(filePath: string, message: string) {
     super(`E_CODEX_HOOK_CONFIG_INVALID: ${message} (${filePath})`);
+    this.filePath = filePath;
     this.name = "CodexHookConfigError";
   }
 }

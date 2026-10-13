@@ -28,8 +28,8 @@ import {
 	streamSimple as streamSimpleOpenAICodexResponses,
 } from "../../ai/src/api/openai-codex-responses.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { createExtensionRuntime } from "../src/core/extensions/loader.ts";
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
+import { createModuleRuntime } from "../src/core/modules/registry.ts";
+import type { ToolDefinition } from "../src/core/modules/types.ts";
 import type { ResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
@@ -174,7 +174,7 @@ function buildPrompt(turn: number): string {
 
 function createMinimalResourceLoader(systemPrompt: string): ResourceLoader {
 	return {
-		getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
+		getModules: () => ({ modules: [], errors: [], runtime: createModuleRuntime() }),
 		getSkills: () => ({ skills: [], diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getThemes: () => ({ themes: [], diagnostics: [] }),

@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { LoadExtensionsResult } from "../src/core/extensions/index.ts";
+import type { LoadModulesResult } from "../src/core/modules/index.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import { runRpcMode } from "../src/modes/rpc/rpc-mode.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { createTestExtensionsResult, createTestResourceLoader } from "./utilities.ts";
+import { createTestModulesResult, createTestResourceLoader } from "./utilities.ts";
 
 const rpcIo = vi.hoisted(() => ({
 	outputLines: [] as string[],
@@ -81,7 +81,7 @@ async function createRuntimeHost(options: {
 	withAuth: boolean;
 	responseDelayMs: number;
 	model?: Model<any>;
-	extensionsResult?: LoadExtensionsResult;
+	modulesResult?: LoadModulesResult;
 }): Promise<{
 	runtimeHost: AgentSessionRuntime;
 	cleanup: () => Promise<void>;
@@ -127,7 +127,7 @@ async function createRuntimeHost(options: {
 		settingsManager,
 		cwd: tempDir,
 		modelRuntime: getModelRuntime(modelRegistry),
-		resourceLoader: createTestResourceLoader({ extensionsResult: options.extensionsResult }),
+		resourceLoader: createTestResourceLoader({ modulesResult: options.modulesResult }),
 	});
 
 	const runtimeHost = {
@@ -241,7 +241,7 @@ describe("RPC prompt response semantics", () => {
 		const { lineHandler, cleanup } = await startRpcMode({
 			withAuth: false,
 			responseDelayMs: 0,
-			extensionsResult: await createTestExtensionsResult([
+			modulesResult: await createTestModulesResult([
 				(nanopi) => {
 					nanopi.registerCommand("handled", { handler: async () => {} });
 					nanopi.on("input", (event) => {
@@ -313,7 +313,7 @@ describe("RPC prompt response semantics", () => {
 			const { lineHandler, cleanup } = await startRpcMode({
 				withAuth: true,
 				responseDelayMs: 500,
-				extensionsResult: await createTestExtensionsResult([
+				modulesResult: await createTestModulesResult([
 					(nanopi) => {
 						nanopi.on("input", (event) => {
 							if (event.text === "A" && event.source === "rpc") {
@@ -359,7 +359,7 @@ describe("RPC prompt response semantics", () => {
 		const { lineHandler, cleanup } = await startRpcMode({
 			withAuth: false,
 			responseDelayMs: 0,
-			extensionsResult: await createTestExtensionsResult([
+			modulesResult: await createTestModulesResult([
 				(nanopi) => {
 					nanopi.on("input", (event) => {
 						if (event.text === "A") return { action: "transform", text: "B" };

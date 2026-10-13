@@ -1,7 +1,7 @@
 import type {
-  ExtensionAPI,
+  ModuleApi,
   ModuleCommandContext,
-} from "@earendil-works/pi-coding-agent";
+} from "@nanopi/pi-coding-agent";
 import { getChangedFiles } from "./git-diff.js";
 import { buildSimplifyPrompt } from "./prompt-builder.js";
 import type { SimplifyOptions } from "./types.js";
@@ -30,7 +30,7 @@ export function parseArgs(args: string): SimplifyOptions {
 export async function handleSimplifyCommand(
   args: string,
   ctx: ModuleCommandContext,
-  pi: ExtensionAPI,
+  pi: ModuleApi,
 ): Promise<void> {
   const options = parseArgs(args);
   const files = await getChangedFiles(pi, ctx.cwd, options);

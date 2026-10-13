@@ -131,9 +131,11 @@ class StdioTransport extends McpTransport {
 	private proc: ChildProcess | undefined;
 	private buffer = "";
 	private closed = false;
+	readonly config: StdioServerConfig;
 
-	constructor(private readonly config: StdioServerConfig) {
+	constructor(config: StdioServerConfig) {
 		super();
+		this.config = config;
 	}
 
 	private ensureProcess(): ChildProcess {
@@ -193,9 +195,11 @@ class StdioTransport extends McpTransport {
 class HttpTransport extends McpTransport {
 	private sessionId: string | undefined;
 	private closed = false;
+	readonly config: HttpServerConfig;
 
-	constructor(private readonly config: HttpServerConfig) {
+	constructor(config: HttpServerConfig) {
 		super();
+		this.config = config;
 	}
 
 	private async exchange(payload: Record<string, unknown>): Promise<string> {
@@ -271,10 +275,13 @@ export class McpClient {
 	private transport: McpTransport | undefined;
 	readonly serverInfo: { name?: string; version?: string } = {};
 
-	constructor(
-		readonly serverName: string,
-		readonly config: McpServerConfig,
-	) {}
+	readonly serverName: string;
+	readonly config: McpServerConfig;
+
+	constructor(serverName: string, config: McpServerConfig) {
+		this.serverName = serverName;
+		this.config = config;
+	}
 
 	get connected(): boolean {
 		return this.transport !== undefined;

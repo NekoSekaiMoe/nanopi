@@ -9,7 +9,6 @@ import {
 } from "@nanopi/pi-ai";
 import { getBuiltinModel } from "@nanopi/pi-ai/providers/all";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { AuthStorage } from "../src/core/auth-storage.ts";
 import {
 	CacheWarmer,
 	type CacheWarmingAction,
@@ -22,13 +21,8 @@ import {
 	getPromptCacheTtlMs,
 	isReplayable,
 } from "../src/core/cache-warmer.ts";
-import { createEventBus } from "../src/core/event-bus.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ExtensionFactory } from "../src/core/extensions/types.ts";
 import { type SessionEntry, SessionManager, type UsageEntry } from "../src/core/session-manager.ts";
 import type { CacheWarmingMode } from "../src/core/settings-manager.ts";
-import { createInMemoryModelRegistry } from "./model-runtime-test-utils.ts";
 
 const adaptiveModel: Model<Api> = {
 	...getBuiltinModel("anthropic", "claude-opus-4-6"),
@@ -332,35 +326,5 @@ describe("cache warming", () => {
 			"extension override",
 		);
 		expect(formatCacheWarmingUsage(entry)).toBe("Cache warmed (extension override): $0.029497");
-	});
-});
-
-describe("ExtensionRunner.emitCacheWarmingDecision", () => {
-	it("uses the last extension override", async () => {
-		const runtime = createExtensionRuntime();
-		const eventBus = createEventBus();
-		const factories: ExtensionFactory[] = [
-			(nanopi) => {
-				nanopi.on("cache_warming_decision", () => ({ action: "warm" }));
-			},
-			(nanopi) => {
-				nanopi.on("cache_warming_decision", () => ({ action: "stop" }));
-			},
-		];
-		const extensions = [];
-		for (const factory of factories) {
-			extensions.push(await loadExtensionFromFactory(factory, process.cwd(), eventBus, runtime));
-		}
-		const modelRegistry = await createInMemoryModelRegistry(AuthStorage.inMemory());
-		const runner = new ExtensionRunner(extensions, runtime, process.cwd(), SessionManager.inMemory(), modelRegistry);
-		const event: CacheWarmingDecisionEvent = {
-			type: "cache_warming_decision",
-			warmCost: 0.05,
-			missCost: 0.5,
-			continuationProbability: 0.15,
-			action: "warm",
-		};
-
-		expect(await runner.emitCacheWarmingDecision(event)).toBe("stop");
 	});
 });

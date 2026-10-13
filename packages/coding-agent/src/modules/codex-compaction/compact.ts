@@ -33,15 +33,10 @@
  * must never break.
  */
 
-import {
-	type CompactionResult,
-	estimateTokens,
-	generateSummaryWithUsage,
-	type ModuleContext,
-	type SessionBeforeCompactEvent,
-	type SessionEntry,
-	sessionEntryToContextMessages,
-} from "@nanopi/pi-coding-agent";
+import { type CompactionResult, estimateTokens, generateSummaryWithUsage } from "../../core/compaction/index.ts";
+import type { ModuleContext, SessionBeforeCompactEvent } from "../../core/modules/types.ts";
+import type { SessionEntry } from "../../core/session-manager.ts";
+import { sessionEntryToContextMessages } from "../../core/session-manager.ts";
 import { assembleCodexSummary, SUMMARIZATION_PROMPT, stripCodexPrefix } from "./prompt.ts";
 
 /** Codex's `COMPACT_USER_MESSAGE_MAX_TOKENS`. */

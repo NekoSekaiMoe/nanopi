@@ -14,7 +14,7 @@ vi.mock("../src/utils/syntax-highlight.ts", async (importOriginal) => {
 	};
 });
 
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
+import type { ToolDefinition } from "../src/core/modules/types.ts";
 import { createBashToolDefinition } from "../src/core/tools/bash.ts";
 import { createWriteToolDefinition } from "../src/core/tools/write.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";

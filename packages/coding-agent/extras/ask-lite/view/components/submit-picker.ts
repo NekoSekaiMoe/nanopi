@@ -1,5 +1,5 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { truncateToWidth } from "@nanopi/pi-tui";
 import { t } from "../../state/i18n-bridge.js";
 import type { StatefulView } from "../stateful-view.js";
 
@@ -34,9 +34,10 @@ export interface SubmitPickerProps {
 export class SubmitPicker implements StatefulView<SubmitPickerProps> {
 	private props: SubmitPickerProps;
 
-	constructor(private readonly theme: Theme) {
-		this.props = { rows: [{ active: false }, { active: false }] };
-	}
+	readonly theme: Theme;
+	constructor(theme: Theme) {
+		this.theme = theme;
+		this.props = { rows: [{ active: false }, { active: false }] };}
 
 	setProps(props: SubmitPickerProps): void {
 		this.props = props;

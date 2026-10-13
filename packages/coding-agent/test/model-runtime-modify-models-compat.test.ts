@@ -44,7 +44,7 @@ describe("extension provider model lifecycle", () => {
 		};
 		const provider: Provider = {
 			id: "extension-native",
-			name: "Extension Native",
+			name: "SessionModule Native",
 			auth: {
 				apiKey: {
 					name: "Native setup",
@@ -112,7 +112,7 @@ describe("extension provider model lifecycle", () => {
 		};
 		const provider: Provider = {
 			id: "extension-native",
-			name: "Extension Native",
+			name: "SessionModule Native",
 			auth: {
 				oauth: {
 					name: "Native OAuth",
@@ -164,7 +164,7 @@ describe("extension provider model lifecycle", () => {
 			let cancelledOptions: DeferredCancelOptions | undefined;
 			const provider: Provider = {
 				id: "extension-native-deferred",
-				name: "Extension Native Deferred",
+				name: "SessionModule Native Deferred",
 				auth: {
 					apiKey: {
 						name: "Native key",
@@ -288,7 +288,7 @@ describe("extension provider model lifecycle", () => {
 			};
 			runtime.registerNativeProvider({
 				id: "extension-native",
-				name: "Extension Native",
+				name: "SessionModule Native",
 				auth: {
 					apiKey: {
 						name: "Native key",
@@ -355,7 +355,7 @@ describe("extension provider model lifecycle", () => {
 			api: "openai-completions",
 			models: [model("base")],
 			oauth: {
-				name: "Extension OAuth",
+				name: "SessionModule OAuth",
 				login: async () => {
 					throw new Error("not used");
 				},

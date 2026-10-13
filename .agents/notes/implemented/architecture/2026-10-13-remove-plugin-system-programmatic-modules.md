@@ -1,6 +1,6 @@
 # Agent Note: Remove the plugin system in favor of programmatic modules
 
-Status: proposed
+Status: implemented
 
 ## Problem
 
@@ -20,7 +20,7 @@ through a few exported core interfaces. The 10 bundled extras become compiled-in
 built-ins with unchanged functionality; the exported interface set is
 session + tools + hooks + custom provider/model registration.
 
-## Proposal
+## Decision
 
 Replace the plugin runtime with one programmatic module interface. Everything
 registerable stays registerable, but only at code time: built-in modules are
@@ -138,16 +138,17 @@ pi-extra) get the same export audit.
   it exists to distribute plugin payloads; local discovery covers the rest and
   the package manager is the main deletion target.
 
-## Acceptance criteria
+## Testing
 
-- `pnpm run check` passes; no references to extensions/, jiti, package-manager,
-  `--extension`, settings `extensions`/`packages` remain in src.
-- The 10 extras + pi-extra + 3 built-ins function as compiled-in modules
-  (todo/ask/subagent tools, fake providers for the test suite, run modes,
-  permissions, compaction, llama, /context /status /init).
-- Users can build a custom entry with exported interfaces only
-  (examples/sdk rewritten to prove it).
-- CHANGELOG breaking-changes entry lands in the same change.
+- `pnpm run check` passes (biome, pinned deps, runtime deps, ts imports,
+  entry graphs, tsc, browser smoke); zero references to extensions/, jiti,
+  package-manager, `--extension`, or settings `extensions`/`packages` remain
+  under src.
+- The 10 extras + pi-extra + 3 built-ins compile in as BUILTIN_MODULES; the
+  faux-provider suites (test-harness, dynamic-tools, runtime) pass.
+- examples/sdk/06-modules.ts demonstrates user composition with exported
+  interfaces only.
+- CHANGELOG breaking-changes entry landed.
 
 ## Related
 
@@ -157,7 +158,7 @@ Partially supersedes (at implementation time):
 [built-in commands and codex compaction](../../implemented/feature/2026-10-11-builtin-commands-and-codex-compaction.md),
 [build flavors via buildconfig.json](../../implemented/process/2026-10-11-build-flavors-buildconfig.md).
 
-## Risks
+## Consequences
 
 - ESM cycles between src/modules/index.ts and extras' deep imports: mitigated
   by importing concrete modules (tools, theme helpers) rather than the package
@@ -167,3 +168,19 @@ Partially supersedes (at implementation time):
   those hooks until re-added on demand.
 - Test suite depends on extensionFactories/plugin loading in ~65 files; the
   migration must rewrite the harness-relevant ones (faux provider) first.
+
+## Deviations from the proposal
+
+- `nanopi config` (the resource-toggle TUI) was removed with the package
+  manager: its panes are package/extension management. Settings are edited in
+  settings.json directly.
+- pi-rewind's `"escape escape"` shortcut registration was dropped (KeyId does
+  not admit multi-key sequences; /rewind remains).
+- ask-lite's optional i18n SDK import uses a non-literal dynamic-import
+  specifier so the optional dependency stays optional under strict typecheck.
+- The extras were never typechecked before (jiti loaded them at runtime); the
+  compiled-in migration surfaced and fixed pre-existing type drift (mcp-lite
+  tool results lacked `details`, pi-rewind null handling, parameter
+  properties banned by erasableSyntaxOnly).
+- Webui subsystem toggles no longer write settings.packages; they persist in
+  the extra module's own settings and apply via tool activation only.

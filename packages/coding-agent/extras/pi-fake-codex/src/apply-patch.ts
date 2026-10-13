@@ -32,13 +32,16 @@
  * lives in this package purely as a packaging decision.
  */
 
-import { createEditToolDefinition, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type {
+	ModuleApi,
+} from "../../../src/core/modules/types.ts";
+import { createEditToolDefinition } from "../../../src/core/tools/edit.ts";
 
 /** APIs whose traffic we impersonate as Codex CLI — `apply_patch` rides along. */
 export const CODEX_APIS = new Set(["openai-responses", "openai-codex-responses"]);
 
 /** Register the `apply_patch` editing alias, scoped to Codex-impersonated APIs. */
-export function registerApplyPatchTool(pi: ExtensionAPI): void {
+export function registerApplyPatchTool(pi: ModuleApi): void {
   const edit = createEditToolDefinition(process.cwd());
   pi.registerTool({
     ...edit,

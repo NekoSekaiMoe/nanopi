@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxThinking, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../src/core/modules/types.ts";
 import { createHarness, type Harness } from "./harness.ts";
 
 function normalizeEventOrder(events: Harness["events"]): string[] {
@@ -125,13 +126,16 @@ describe("AgentSession retry and event characterization", () => {
 	it("prompt waits for retry completion even when assistant message_end handling is delayed", async () => {
 		const harness = await createHarness({
 			settings: { retry: { enabled: true, maxRetries: 3, baseDelayMs: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_end", async (event) => {
-						if (event.message.role === "assistant") {
-							await new Promise((resolve) => setTimeout(resolve, 40));
-						}
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_end", async (event) => {
+							if (event.message.role === "assistant") {
+								await new Promise((resolve) => setTimeout(resolve, 40));
+							}
+						});
+					},
 				},
 			],
 		});
@@ -229,14 +233,17 @@ describe("AgentSession retry and event characterization", () => {
 	it("emits extension events before public event subscribers", async () => {
 		const order: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_start", async (event) => {
-						order.push(`extension:${event.type}:${event.message.role}`);
-					});
-					nanopi.on("message_end", async (event) => {
-						order.push(`extension:${event.type}:${event.message.role}`);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_start", async (event) => {
+							order.push(`extension:${event.type}:${event.message.role}`);
+						});
+						nanopi.on("message_end", async (event) => {
+							order.push(`extension:${event.type}:${event.message.role}`);
+						});
+					},
 				},
 			],
 		});

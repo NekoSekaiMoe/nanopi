@@ -1,5 +1,5 @@
-import { getMarkdownTheme, type Theme } from "@earendil-works/pi-coding-agent";
-import { Input } from "@earendil-works/pi-tui";
+
+import { Input } from "@nanopi/pi-tui";
 import type { QuestionData } from "../tool/types.js";
 import {
 	type BoundGlobalBinding,
@@ -34,6 +34,8 @@ import {
 	selectTabBarProps,
 } from "./selectors/projections.js";
 import type { QuestionnaireState } from "./state.js";
+import { getMarkdownTheme } from "../../../src/modes/interactive/theme/theme.ts";
+import type { Theme } from "../../../src/modes/interactive/theme/theme.ts";
 
 export interface QuestionnaireBuildConfig {
 	tui: { terminal: { columns: number; rows: number }; requestRender(): void };

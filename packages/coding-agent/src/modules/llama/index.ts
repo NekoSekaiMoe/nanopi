@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { sep } from "node:path";
-import type { ExtensionAPI, ModuleCommandContext } from "../../core/modules/types.ts";
+import type { ModuleApi, ModuleCommandContext } from "../../core/modules/types.ts";
 import { formatBytes, LlamaClient, type LlamaModelInfo, normalizeLlamaServerUrl } from "./client.ts";
 import { findHuggingFaceToken, HuggingFaceClient } from "./huggingface.ts";
 import { createManagedLlama, huggingFaceCacheDir, type ManagedLlamaServerInfo } from "./managed.ts";
@@ -77,7 +77,7 @@ function sessionHeader(session: LlamaSession): string[] {
 	];
 }
 
-export default function llamaExtension(nanopi: ExtensionAPI): void {
+export default function llamaExtension(nanopi: ModuleApi): void {
 	const managed = createManagedLlama();
 	const provider = createLlamaProvider(managed);
 	nanopi.registerProvider(provider.provider);

@@ -1,6 +1,7 @@
 import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import type { PromptDisposition } from "../../../src/core/agent-session.ts";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, getMessageText, getUserTexts, type Harness } from "../harness.ts";
 
 describe("issue #7150: RPC prompt during manual compaction", () => {
@@ -24,20 +25,23 @@ describe("issue #7150: RPC prompt during manual compaction", () => {
 
 		const harness = await createHarness({
 			settings: { compaction: { keepRecentTokens: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", async (event) => {
-						markCompactionStarted();
-						await compactionReleased;
-						return {
-							compaction: {
-								summary: "manual compacted",
-								firstKeptEntryId: event.preparation.firstKeptEntryId,
-								tokensBefore: event.preparation.tokensBefore,
-								details: {},
-							},
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", async (event) => {
+							markCompactionStarted();
+							await compactionReleased;
+							return {
+								compaction: {
+									summary: "manual compacted",
+									firstKeptEntryId: event.preparation.firstKeptEntryId,
+									tokensBefore: event.preparation.tokensBefore,
+									details: {},
+								},
+							};
+						});
+					},
 				},
 			],
 		});

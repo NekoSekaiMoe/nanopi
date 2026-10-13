@@ -11,6 +11,7 @@ import {
 } from "../../../src/core/agent-session-runtime.ts";
 import { AuthStorage } from "../../../src/core/auth-storage.ts";
 import { ModelRuntime } from "../../../src/core/model-runtime.ts";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
 
 describe("issue #2753 reload stale resource settings", () => {
@@ -45,23 +46,26 @@ describe("issue #2753 reload stale resource settings", () => {
 				agentDir,
 				modelRuntime,
 				resourceLoaderOptions: {
-					extensionFactories: [
-						(nanopi) => {
-							nanopi.registerProvider(faux.getModel().provider, {
-								baseUrl: faux.getModel().baseUrl,
-								apiKey: "faux-key",
-								api: faux.api,
-								models: faux.models.map((registeredModel) => ({
-									id: registeredModel.id,
-									name: registeredModel.name,
-									api: registeredModel.api,
-									reasoning: registeredModel.reasoning,
-									input: registeredModel.input,
-									cost: registeredModel.cost,
-									contextWindow: registeredModel.contextWindow,
-									maxTokens: registeredModel.maxTokens,
-								})),
-							});
+					modules: [
+						{
+							name: "test-module-1",
+							factory: (nanopi: ModuleApi) => {
+								nanopi.registerProvider(faux.getModel().provider, {
+									baseUrl: faux.getModel().baseUrl,
+									apiKey: "faux-key",
+									api: faux.api,
+									models: faux.models.map((registeredModel) => ({
+										id: registeredModel.id,
+										name: registeredModel.name,
+										api: registeredModel.api,
+										reasoning: registeredModel.reasoning,
+										input: registeredModel.input,
+										cost: registeredModel.cost,
+										contextWindow: registeredModel.contextWindow,
+										maxTokens: registeredModel.maxTokens,
+									})),
+								});
+							},
 						},
 					],
 					noSkills: true,

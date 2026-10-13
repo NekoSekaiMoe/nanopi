@@ -21,21 +21,6 @@ import {
 import type { ExtraStatePayload, RunMode, SubsystemKey, SubsystemStatus } from "./types.ts";
 import { isPermissionDecision, isRunMode } from "./types.ts";
 
-/** Packages backing each subsystem switch, as registered in settings.packages. */
-export const SUBSYSTEM_PACKAGES: Record<SubsystemKey, string> = {
-	lsp: "pi-lsp-mini",
-	mcp: "mcp-lite",
-	subagent: "pi-subagent-mini",
-	askquestion: "ask-lite",
-	todo: "todo-lite",
-};
-
-/** Core-side hooks the webui server wires in (settings.packages editing needs the core SettingsManager). */
-export interface BridgeCoreAccess {
-	/** Upsert or remove a package filter so the package loads (enabled) or not. */
-	setPackageEnabled(packageName: string, enabled: boolean): void;
-}
-
 /** Extension-side hooks registered when the extra extension loads. */
 export interface BridgeExtensionHooks {
 	/** Live subsystem availability/enabled status for display. */
@@ -58,7 +43,6 @@ export class ExtraBridge {
 	readonly pairing = new PairingManager();
 
 	private extensionHooks: BridgeExtensionHooks | undefined;
-	private coreAccess: BridgeCoreAccess | undefined;
 	private bridgeCwd: string | undefined;
 	private judgeContext: BridgeJudgeContext | undefined;
 
@@ -70,10 +54,6 @@ export class ExtraBridge {
 	}
 
 	/** Called by the webui server once at startup. */
-	bindCore(core: BridgeCoreAccess): void {
-		this.coreAccess = core;
-	}
-
 	state(): ExtraStatePayload {
 		const snapshot = this.engine.snapshot();
 		return { available: true, mode: snapshot.mode, yolo: snapshot.yolo };
@@ -111,10 +91,9 @@ export class ExtraBridge {
 		return this.extensionHooks?.subsystemStatus() ?? [];
 	}
 
-	/** Toggle a subsystem: persist the extra switch, rewrite settings.packages, apply in-session effects. */
+	/** Toggle a subsystem: persist the extra switch and apply the in-session tool effect. */
 	setSubsystem(key: SubsystemKey, enabled: boolean): SubsystemStatus[] {
 		saveExtraSettings({ subsystems: { [key]: enabled } });
-		this.coreAccess?.setPackageEnabled(SUBSYSTEM_PACKAGES[key], enabled);
 		this.extensionHooks?.applySubsystem(key, enabled);
 		return this.subsystemStatus();
 	}

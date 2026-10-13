@@ -1,6 +1,6 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
-import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHarness, getAssistantTexts, getUserTexts, type Harness } from "../harness.ts";
@@ -15,7 +15,7 @@ describe("issue #2023 queued slash-command follow-up", () => {
 	});
 
 	it("treats extension-origin queued slash-command follow-ups as raw user text instead of dispatching the command", async () => {
-		let extensionApi: ExtensionAPI | undefined;
+		let extensionApi: ModuleApi | undefined;
 		const commandRuns: string[] = [];
 		let releaseToolExecution: (() => void) | undefined;
 		const toolRelease = new Promise<void>((resolve) => {
@@ -36,15 +36,18 @@ describe("issue #2023 queued slash-command follow-up", () => {
 		};
 		const harness = await createHarness({
 			tools: [waitTool],
-			extensionFactories: [
-				(nanopi) => {
-					extensionApi = nanopi;
-					nanopi.registerCommand("testcmd", {
-						description: "Test command",
-						handler: async (args) => {
-							commandRuns.push(args);
-						},
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						extensionApi = nanopi;
+						nanopi.registerCommand("testcmd", {
+							description: "Test command",
+							handler: async (args) => {
+								commandRuns.push(args);
+							},
+						});
+					},
 				},
 			],
 		});

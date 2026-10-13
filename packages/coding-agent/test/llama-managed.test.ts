@@ -5,7 +5,7 @@ import type { AddressInfo } from "node:net";
 import { join } from "node:path";
 import { type AuthContext, type AuthPrompt, type ClassifierModel, type Model, normalizeContext } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
-import { LlamaClient } from "../src/extensions/llama/client.ts";
+import { LlamaClient } from "../src/modules/llama/client.ts";
 import {
 	huggingFaceCacheDir,
 	LlamaSupervisor,
@@ -14,8 +14,8 @@ import {
 	type ManagedLlama,
 	ManagedLlamaClient,
 	type ManagedLlamaServerInfo,
-} from "../src/extensions/llama/managed.ts";
-import { createLlamaProvider, LLAMA_MODE_ENV, MANAGED_LLAMA_SERVER_URL } from "../src/extensions/llama/provider.ts";
+} from "../src/modules/llama/managed.ts";
+import { createLlamaProvider, LLAMA_MODE_ENV, MANAGED_LLAMA_SERVER_URL } from "../src/modules/llama/provider.ts";
 
 // Stands in for llama-server: binds the host and port nanopi passes and requires the API key.
 const FAKE_SERVER = `

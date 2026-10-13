@@ -25,7 +25,7 @@ import {
 	type NormalizedBuildSystemPromptOptions,
 	normalizeBuildSystemPromptOptions,
 } from "../src/core/system-prompt.ts";
-import { createTestExtensionsResult, createTestResourceLoader } from "./utilities.ts";
+import { createTestModulesResult, createTestResourceLoader } from "./utilities.ts";
 
 function createAssistantMessage(text: string): AssistantMessage {
 	return {
@@ -236,7 +236,7 @@ describe("AgentSession concurrent prompt guard", () => {
 		const modelRegistry = await createModelRegistry(authStorage, tempDir);
 		await authStorage.modify("anthropic", async () => ({ type: "api_key", key: "test-key" }));
 
-		const extensionsResult = await createTestExtensionsResult([
+		const modulesResult = await createTestModulesResult([
 			(nanopi) => {
 				(globalThis as typeof globalThis & { testExtensionApi?: unknown }).testExtensionApi = nanopi;
 			},
@@ -253,7 +253,7 @@ describe("AgentSession concurrent prompt guard", () => {
 			settingsManager,
 			cwd: tempDir,
 			modelRuntime: getModelRuntime(modelRegistry),
-			resourceLoader: createTestResourceLoader({ extensionsResult }),
+			resourceLoader: createTestResourceLoader({ modulesResult }),
 		});
 		session.subscribe((event) => {
 			if (event.type === "queue_update") {

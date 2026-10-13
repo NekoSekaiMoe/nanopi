@@ -3,13 +3,13 @@
  * before_agent_start / agent_end。
  */
 
-import type { ExtensionAPI, ModuleContext } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi, ModuleContext } from "@nanopi/pi-coding-agent";
 
 import {
 	migrateTodo,
 	type TodoDetails,
-} from "./model";
-import type { TodoSessionState } from "./state";
+} from "./model.ts";
+import type { TodoSessionState } from "./state.ts";
 
 // ── 常量 ────────────────────────────────────────────
 
@@ -157,7 +157,7 @@ export function handleReminder(state: TodoSessionState): boolean {
 // ── Event handler 注册入口 ──────────────────────────
 
 export function registerTodoEventHandlers(
-	pi: ExtensionAPI,
+	pi: ModuleApi,
 	state: TodoSessionState,
 	refreshDisplay: RefreshDisplayFn,
 ): void {

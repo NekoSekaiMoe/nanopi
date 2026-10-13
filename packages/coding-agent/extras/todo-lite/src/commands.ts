@@ -6,14 +6,14 @@
  * 用户在 TUI 中不可见。
  */
 
-import type { ExtensionAPI, ModuleCommandContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
+import type { ModuleApi, ModuleCommandContext, KeybindingsManager, Theme } from "@nanopi/pi-coding-agent";
+import type { TUI } from "@nanopi/pi-tui";
 
-import type { TodoSessionState } from "./state";
-import { TodoListComponent } from "./component";
+import type { TodoSessionState } from "./state.ts";
+import { TodoListComponent } from "./component.ts";
 
 /** 注册 /todos 命令到 pi */
-export function registerTodosCommand(pi: ExtensionAPI, state: TodoSessionState): void {
+export function registerTodosCommand(pi: ModuleApi, state: TodoSessionState): void {
 	pi.registerCommand("todos", {
 		description: "View all todos for the current branch",
 		handler: async (_args: string | undefined, ctx: ModuleCommandContext) => {

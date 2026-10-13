@@ -5,8 +5,9 @@ import { getModel } from "@nanopi/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createAgentSessionFromServices, createAgentSessionServices } from "../src/core/agent-session-services.ts";
+import type { ModuleApi, ModuleFactory, SessionModule } from "../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { type CreateAgentSessionOptions, createAgentSession, type InlineExtension } from "../src/core/sdk.ts";
+import { type CreateAgentSessionOptions, createAgentSession } from "../src/core/sdk.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
@@ -31,14 +32,17 @@ describe("defaultTools setting", () => {
 	async function createSession(
 		defaultTools: string[],
 		options: ToolOptions = {},
-		extensionFactories: InlineExtension[] = [],
+		moduleInputs: Array<SessionModule | ModuleFactory> = [],
 	) {
+		const modules: SessionModule[] = moduleInputs.map((input, i) =>
+			typeof input === "function" ? { name: `test-module-${i + 1}`, factory: input } : input,
+		);
 		const settingsManager = SettingsManager.inMemory({ defaultTools });
 		const resourceLoader = new DefaultResourceLoader({
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories,
+			modules,
 		});
 		await resourceLoader.reload();
 
@@ -81,11 +85,11 @@ describe("defaultTools setting", () => {
 
 	it("activates an inactive extension tool with +name", async () => {
 		const session = await createSession(["+inactive_tool", "-write"], {}, [
-			(nanopi) => {
+			(nanopi: ModuleApi) => {
 				nanopi.registerTool({
 					name: "inactive_tool",
 					label: "Inactive Tool",
-					description: "Extension tool registered inactive",
+					description: "SessionModule tool registered inactive",
 					parameters: Type.Object({}),
 					execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
 					defaultActive: false,
@@ -112,7 +116,7 @@ describe("defaultTools setting", () => {
 				],
 			},
 			[
-				(nanopi) => {
+				(nanopi: ModuleApi) => {
 					nanopi.registerTool({
 						name: "static_tool",
 						label: "Static Tool",
@@ -132,7 +136,7 @@ describe("defaultTools setting", () => {
 				},
 			],
 		);
-		await session.bindExtensions({});
+		await session.bindModules({});
 
 		expect(session.getActiveToolNames().sort()).toEqual(["dynamic_tool", "grep", "sdk_tool", "static_tool"]);
 		expect(session.getAllTools().map((tool) => tool.name)).toEqual(
@@ -157,11 +161,11 @@ describe("defaultTools setting", () => {
 	});
 
 	it("applies +name and -name tool options to the default selection", async () => {
-		const inactiveTool: InlineExtension = (nanopi) => {
+		const inactiveTool: ModuleFactory = (nanopi: ModuleApi) => {
 			nanopi.registerTool({
 				name: "inactive_tool",
 				label: "Inactive Tool",
-				description: "Extension tool registered inactive",
+				description: "SessionModule tool registered inactive",
 				parameters: Type.Object({}),
 				execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
 				defaultActive: false,
@@ -169,7 +173,7 @@ describe("defaultTools setting", () => {
 			nanopi.registerTool({
 				name: "active_tool",
 				label: "Active Tool",
-				description: "Extension tool registered active",
+				description: "SessionModule tool registered active",
 				parameters: Type.Object({}),
 				execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
 			});
@@ -201,11 +205,11 @@ describe("defaultTools setting", () => {
 	});
 
 	describe("reload", () => {
-		const inactiveTool: InlineExtension = (nanopi) => {
+		const inactiveTool: ModuleFactory = (nanopi: ModuleApi) => {
 			nanopi.registerTool({
 				name: "inactive_tool",
 				label: "Inactive Tool",
-				description: "Extension tool registered inactive",
+				description: "SessionModule tool registered inactive",
 				parameters: Type.Object({}),
 				execute: async () => ({ content: [{ type: "text", text: "ok" }], details: {} }),
 				defaultActive: false,
@@ -221,7 +225,7 @@ describe("defaultTools setting", () => {
 				cwd: tempDir,
 				agentDir,
 				settingsManager,
-				extensionFactories: [inactiveTool],
+				modules: [{ name: "test-module-1", factory: inactiveTool }],
 			});
 			await resourceLoader.reload();
 			return (

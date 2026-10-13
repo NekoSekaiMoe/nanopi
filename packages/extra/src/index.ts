@@ -10,8 +10,8 @@
 
 export type { JudgeModelRegistry } from "./ai-judge.ts";
 export { judgeWithModel } from "./ai-judge.ts";
-export type { BridgeCoreAccess, BridgeExtensionHooks, BridgeJudgeContext } from "./bridge.ts";
-export { ExtraBridge, extraBridge, SUBSYSTEM_PACKAGES } from "./bridge.ts";
+export type { BridgeExtensionHooks, BridgeJudgeContext } from "./bridge.ts";
+export { ExtraBridge, extraBridge } from "./bridge.ts";
 export { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
 export { createExtraExtension, extraInlineExtension } from "./extension.ts";
 export { badgeLabels, createBadgeFooter, renderBadges, renderFooterLine } from "./footer.ts";

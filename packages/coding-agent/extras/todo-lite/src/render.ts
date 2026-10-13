@@ -2,14 +2,14 @@
  * Todo 渲染函数 — 状态栏、widget（双列）、tool result 渲染。
  */
 
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 
 import {
 	getDisplayStatus,
 	type Todo,
 	type TodoDetails,
-} from "./model";
+} from "./model.ts";
 
 // ── 常量 ────────────────────────────────────────────
 
@@ -166,7 +166,7 @@ function buildTodoListText(todoList: Todo[], options: { expanded: boolean }, the
 
 // ── Tool renderResult handler ────────────────────────
 
-import { Text } from "@earendil-works/pi-tui";
+import { Text } from "@nanopi/pi-tui";
 
 export function renderTodoResult(result: unknown, options: { expanded: boolean }, theme: Theme): Text {
 	const r = result as { content: Array<{ type: string; text?: string }>; details?: unknown };

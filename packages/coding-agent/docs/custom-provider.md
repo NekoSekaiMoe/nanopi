@@ -14,7 +14,7 @@ Provider extensions run inside nanopi and can inspect credentials, prompts, tool
 | Add a `/login` flow | A provider with native or legacy OAuth configuration |
 | Implement an unsupported wire protocol | A provider with `stream` or `streamSimple` |
 
-A provider extension is an [extension](extensions.md), so it follows the same loading, trust, reload, and error behavior.
+A provider module is code you compose into your own entry point (`createAgentSession({ modules })`), so it follows the same construction, trust, and error behavior as any module.
 
 ## Register a provider
 
@@ -170,4 +170,4 @@ Test at least:
 
 The provider tests under [`packages/ai/test`](https://github.com/NekoSekaiMoe/nanopi/tree/main/packages/ai/test) define the behavior expected from built-in providers. Adapt the relevant suites rather than relying only on manual prompts.
 
-Run the extension directly while developing, then move it to a discovered extension location or distribute it through a [nanopi package](packages.md). Use `/reload` after changing a discovered provider extension in an active session.
+Register the module in your own nanopi entry point while developing; module registrations are static for the life of a session.

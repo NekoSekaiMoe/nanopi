@@ -71,7 +71,7 @@ describe("SettingsManager", () => {
 			// User adds custom settings externally
 			const currentSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			currentSettings.shellPath = "/bin/zsh";
-			currentSettings.extensions = ["/path/to/extension.ts"];
+			currentSettings.skills = ["/path/to/skill.md"];
 			writeFileSync(settingsPath, JSON.stringify(currentSettings, null, 2));
 
 			// User changes theme
@@ -81,7 +81,7 @@ describe("SettingsManager", () => {
 			// Verify all settings preserved
 			const savedSettings = JSON.parse(readFileSync(settingsPath, "utf-8"));
 			expect(savedSettings.shellPath).toBe("/bin/zsh");
-			expect(savedSettings.extensions).toEqual(["/path/to/extension.ts"]);
+			expect(savedSettings.skills).toEqual(["/path/to/skill.md"]);
 			expect(savedSettings.theme).toBe("light");
 		});
 
@@ -128,51 +128,6 @@ describe("SettingsManager", () => {
 		});
 	});
 
-	describe("packages migration", () => {
-		it("should keep local-only extensions in extensions array", () => {
-			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(
-				settingsPath,
-				JSON.stringify({
-					extensions: ["/local/ext.ts", "./relative/ext.ts"],
-				}),
-			);
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			expect(manager.getPackages()).toEqual([]);
-			expect(manager.getExtensionPaths()).toEqual(["/local/ext.ts", "./relative/ext.ts"]);
-		});
-
-		it("should handle packages with filtering objects", () => {
-			const settingsPath = join(agentDir, "settings.json");
-			writeFileSync(
-				settingsPath,
-				JSON.stringify({
-					packages: [
-						"npm:simple-pkg",
-						{
-							source: "npm:shitty-extensions",
-							extensions: ["extensions/oracle.ts"],
-							skills: [],
-						},
-					],
-				}),
-			);
-
-			const manager = SettingsManager.create(projectDir, agentDir);
-
-			const packages = manager.getPackages();
-			expect(packages).toHaveLength(2);
-			expect(packages[0]).toBe("npm:simple-pkg");
-			expect(packages[1]).toEqual({
-				source: "npm:shitty-extensions",
-				extensions: ["extensions/oracle.ts"],
-				skills: [],
-			});
-		});
-	});
-
 	describe("reload", () => {
 		it("should reload global settings from disk", async () => {
 			const settingsPath = join(agentDir, "settings.json");
@@ -180,7 +135,7 @@ describe("SettingsManager", () => {
 				settingsPath,
 				JSON.stringify({
 					theme: "dark",
-					extensions: ["/before.ts"],
+					skills: ["/before.ts"],
 				}),
 			);
 
@@ -190,7 +145,7 @@ describe("SettingsManager", () => {
 				settingsPath,
 				JSON.stringify({
 					theme: "light",
-					extensions: ["/after.ts"],
+					skills: ["/after.ts"],
 					defaultModel: "claude-sonnet",
 				}),
 			);
@@ -198,7 +153,7 @@ describe("SettingsManager", () => {
 			await manager.reload();
 
 			expect(manager.getTheme()).toBe("light");
-			expect(manager.getExtensionPaths()).toEqual(["/after.ts"]);
+			expect(manager.getSkillPaths()).toEqual(["/after.ts"]);
 			expect(manager.getDefaultModel()).toBe("claude-sonnet");
 		});
 
@@ -278,16 +233,16 @@ describe("SettingsManager", () => {
 
 		it("should fail project settings writes when project is not trusted", async () => {
 			const projectSettingsPath = join(projectDir, ".nanopi", "settings.json");
-			writeFileSync(projectSettingsPath, JSON.stringify({ packages: ["npm:existing"] }));
+			writeFileSync(projectSettingsPath, JSON.stringify({ skills: ["/existing.md"] }));
 			const manager = SettingsManager.create(projectDir, agentDir, { projectTrusted: false });
 
-			expect(() => manager.setProjectPackages(["npm:new"])).toThrow(
+			expect(() => manager.setProjectSkillPaths(["/new.md"])).toThrow(
 				"Project is not trusted; refusing to write project settings",
 			);
 			await manager.flush();
 
 			expect(manager.getProjectSettings()).toEqual({});
-			expect(JSON.parse(readFileSync(projectSettingsPath, "utf-8"))).toEqual({ packages: ["npm:existing"] });
+			expect(JSON.parse(readFileSync(projectSettingsPath, "utf-8"))).toEqual({ skills: ["/existing.md"] });
 		});
 
 		it("should read default project trust from global settings only", () => {
@@ -341,7 +296,7 @@ describe("SettingsManager", () => {
 			expect(existsSync(join(projectDir, ".nanopi"))).toBe(false);
 
 			// Write a project-specific setting
-			manager.setProjectPackages([{ source: "npm:test-pkg" }]);
+			manager.setProjectSkillPaths(["/test.md"]);
 			await manager.flush();
 
 			// Now .nanopi folder should exist

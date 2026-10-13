@@ -12,7 +12,7 @@
  * width changes and prevents multi-cell jumps when the event loop stalls.
  */
 
-import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
+import type { Theme, ThemeColor } from "@nanopi/pi-coding-agent";
 
 /** Band travel speed in cells per second (fixed velocity, length-independent). */
 const SHIMMER_SPEED_CELLS_PER_S = 30;

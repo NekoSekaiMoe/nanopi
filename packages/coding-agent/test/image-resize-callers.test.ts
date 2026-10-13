@@ -10,7 +10,7 @@ vi.mock("../src/utils/image-resize.js", () => ({
 }));
 
 import { processFileArguments } from "../src/cli/file-processor.ts";
-import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
+import type { ModuleToolContext } from "../src/core/modules/types.ts";
 import { createReadTool, createReadToolDefinition } from "../src/core/tools/read.ts";
 import { resizeImage } from "../src/utils/image-resize.ts";
 
@@ -70,7 +70,7 @@ describe("image resize callers", () => {
 			contextWindow: 1000,
 			maxTokens: 100,
 		};
-		const ctx = { cwd: testDir, model } as unknown as ExtensionToolContext;
+		const ctx = { cwd: testDir, model } as unknown as ModuleToolContext;
 
 		await createReadToolDefinition(testDir).execute(
 			"test-read-model-profile",

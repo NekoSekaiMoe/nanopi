@@ -22,7 +22,6 @@ import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { parseSessionEntries, type SessionInfo, SessionManager } from "../../core/session-manager.ts";
-import type { SettingsManager } from "../../core/settings-manager.ts";
 import {
 	addAccountModels,
 	createAccount,
@@ -118,37 +117,12 @@ function modelKey(model: Model<any>): string {
 }
 
 /** Packages the build registers as bundled extras (auto-registered when unfiltered). */
-const BUNDLED_EXTRA_PACKAGE_NAMES = new Set(["pi-subagent-mini", "ask-lite", "todo-lite", "mcp-lite"]);
+const _BUNDLED_EXTRA_PACKAGE_NAMES = new Set(["pi-subagent-mini", "ask-lite", "todo-lite", "mcp-lite"]);
 
-function packageSourceName(source: string): string {
+function _packageSourceName(source: string): string {
 	const spec = source.replace(/^npm:/, "").trim();
 	const versionSeparator = spec.lastIndexOf("@");
 	return versionSeparator > 0 ? spec.slice(0, versionSeparator) : spec;
-}
-
-/**
- * Toggle a package on the package-enable layer: disabling replaces its entry
- * (or adds one) with the filtered object form (`autoload: false`, no resource
- * patterns), enabling drops the filter (bundled extras re-register on their
- * own; user packages restore the plain string form).
- */
-function setPackageEnabled(settingsManager: SettingsManager, packageName: string, enabled: boolean): void {
-	const current = settingsManager.getPackages();
-	const matches = (pkg: unknown): boolean =>
-		typeof pkg === "string"
-			? packageSourceName(pkg) === packageName
-			: typeof pkg === "object" &&
-				pkg !== null &&
-				packageSourceName((pkg as { source: string }).source) === packageName;
-	const next = current.filter((pkg) => !(typeof pkg === "object" && pkg !== null && matches(pkg)));
-	if (!enabled) {
-		const existingString = current.find((pkg) => typeof pkg === "string" && matches(pkg));
-		const source = typeof existingString === "string" ? existingString : packageName;
-		next.push({ source, autoload: false });
-	} else if (!BUNDLED_EXTRA_PACKAGE_NAMES.has(packageName) && !next.some(matches)) {
-		next.push(packageName);
-	}
-	settingsManager.setPackages(next);
 }
 
 /** One browser-driven OAuth login flow. */
@@ -278,13 +252,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	};
 	await rebindSession();
 	runtime.setRebindSession(rebindSession);
-
-	// Give the bridge a core settings writer for subsystem toggles (package
-	// enable layer). Inert when the module is stubbed out of this build.
-	const settingsManager = runtime.services.settingsManager;
-	extraBridge.bindCore({
-		setPackageEnabled: (packageName, enabled) => setPackageEnabled(settingsManager, packageName, enabled),
-	});
 
 	const server = createServer((req, res) => {
 		void handleRequest(req, res).catch((error) => {
@@ -640,8 +607,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		/** Settings-configured default model key ("provider/id"), the single source of truth shared with the CLI. */
 		function defaultModelKey(): string {
-			const provider = settingsManager.getDefaultProvider();
-			const modelId = settingsManager.getDefaultModel();
+			const provider = runtime.services.settingsManager.getDefaultProvider();
+			const modelId = runtime.services.settingsManager.getDefaultModel();
 			if (!provider) return "";
 			return modelId ? `${provider}/${modelId}` : provider;
 		}

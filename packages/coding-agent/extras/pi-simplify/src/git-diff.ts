@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import type { ChangedFile, LineRange, SimplifyOptions } from "./types.js";
 
 const STATUS_MAP: Record<string, ChangedFile["status"]> = {
@@ -70,7 +70,7 @@ function diffArgs(
 }
 
 async function addChangedLines(
-  pi: ExtensionAPI,
+  pi: ModuleApi,
   cwd: string,
   options: SimplifyOptions,
   files: readonly ChangedFile[],
@@ -87,7 +87,7 @@ async function addChangedLines(
 }
 
 export async function getChangedFiles(
-  pi: ExtensionAPI,
+  pi: ModuleApi,
   cwd: string,
   options: SimplifyOptions,
 ): Promise<ChangedFile[]> {

@@ -1,14 +1,14 @@
 import { strictEqual } from "node:assert";
 import { describe, it } from "vitest";
+import type { ModuleCommandContext } from "../src/index.ts";
+import { formatSkillsForPrompt, initTheme } from "../src/index.ts";
 import {
 	capParts,
 	collectContextBreakdown,
 	formatTokens,
 	resolveUsedTokens,
-} from "../src/extensions/builtin-commands/context.ts";
-import type { ContextPart } from "../src/extensions/builtin-commands/context-dialog.ts";
-import type { ExtensionCommandContext } from "../src/index.ts";
-import { formatSkillsForPrompt, initTheme } from "../src/index.ts";
+} from "../src/modules/builtin-commands/context.ts";
+import type { ContextPart } from "../src/modules/builtin-commands/context-dialog.ts";
 
 initTheme("dark");
 
@@ -117,7 +117,7 @@ describe("collectContextBreakdown", () => {
 					},
 				],
 			},
-		} as unknown as ExtensionCommandContext;
+		} as unknown as ModuleCommandContext;
 
 		const breakdown = collectContextBreakdown(ctx, [
 			{ name: "read", description: "Read files", parameters: { type: "object" } },

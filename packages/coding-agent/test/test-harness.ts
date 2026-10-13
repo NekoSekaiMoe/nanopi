@@ -33,12 +33,8 @@ import { AuthStorage } from "../src/core/auth-storage.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import type { Settings } from "../src/core/settings-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
-import type { InlineExtension, ResourceLoader } from "../src/index.ts";
-import {
-	type CreateTestExtensionsResultInput,
-	createTestExtensionsResult,
-	createTestResourceLoader,
-} from "./utilities.ts";
+import type { ResourceLoader, SessionModule } from "../src/index.ts";
+import { type CreateTestModulesResultInput, createTestModulesResult, createTestResourceLoader } from "./utilities.ts";
 
 // ============================================================================
 // Faux model
@@ -346,8 +342,8 @@ export interface HarnessOptions {
 	baseToolsOverride?: Record<string, AgentTool>;
 	/** Optional resource loader override. */
 	resourceLoader?: ResourceLoader;
-	/** Inline extensions to load into the session resource loader. */
-	extensionFactories?: Array<InlineExtension | CreateTestExtensionsResultInput>;
+	/** Inline modules to load into the session resource loader. */
+	modules?: Array<SessionModule | CreateTestModulesResultInput>;
 }
 
 export interface Harness {
@@ -460,8 +456,8 @@ async function createHarnessWithResourceLoader(
 }
 
 export async function createHarness(options: HarnessOptions = {}): Promise<Harness> {
-	if (options.extensionFactories?.length) {
-		throw new Error("createHarness does not support extensionFactories. Use createHarnessWithExtensions().");
+	if (options.modules?.length) {
+		throw new Error("createHarness does not support modules. Use createHarnessWithExtensions().");
 	}
 
 	const tempDir = createTempDir();
@@ -470,7 +466,7 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 
 export async function createHarnessWithExtensions(options: HarnessOptions = {}): Promise<Harness> {
 	const tempDir = createTempDir();
-	const extensionsResult = await createTestExtensionsResult(options.extensionFactories ?? [], tempDir);
-	const resourceLoader = options.resourceLoader ?? createTestResourceLoader({ extensionsResult });
+	const modulesResult = await createTestModulesResult(options.modules ?? [], tempDir);
+	const resourceLoader = options.resourceLoader ?? createTestResourceLoader({ modulesResult });
 	return await createHarnessWithResourceLoader(options, resourceLoader, tempDir);
 }

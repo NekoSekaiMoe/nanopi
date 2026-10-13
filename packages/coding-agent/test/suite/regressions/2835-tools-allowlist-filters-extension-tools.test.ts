@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { getModel } from "@nanopi/pi-ai/compat";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
 import { createAgentSession } from "../../../src/core/sdk.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
@@ -32,21 +33,24 @@ describe("regression #2835: tool allowlists filter extension tools", () => {
 			cwd: tempDir,
 			agentDir,
 			settingsManager,
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_start", () => {
-						nanopi.registerTool({
-							name: "dynamic_tool",
-							label: "Dynamic Tool",
-							description: "Tool registered from session_start",
-							promptSnippet: "Run dynamic test behavior",
-							parameters: Type.Object({}),
-							execute: async () => ({
-								content: [{ type: "text", text: "ok" }],
-								details: {},
-							}),
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_start", () => {
+							nanopi.registerTool({
+								name: "dynamic_tool",
+								label: "Dynamic Tool",
+								description: "Tool registered from session_start",
+								promptSnippet: "Run dynamic test behavior",
+								parameters: Type.Object({}),
+								execute: async () => ({
+									content: [{ type: "text", text: "ok" }],
+									details: {},
+								}),
+							});
 						});
-					});
+					},
 				},
 			],
 		});
@@ -61,7 +65,7 @@ describe("regression #2835: tool allowlists filter extension tools", () => {
 			resourceLoader,
 			tools: allowedToolNames,
 		});
-		await session.bindExtensions({});
+		await session.bindModules({});
 		return session;
 	}
 

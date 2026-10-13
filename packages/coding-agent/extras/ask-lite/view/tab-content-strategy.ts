@@ -1,5 +1,5 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, Container, type Input, Spacer, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { type Component, Container, type Input, Spacer, Text, truncateToWidth } from "@nanopi/pi-tui";
 import { t } from "../state/i18n-bridge.js";
 import { formatAnswerScalar } from "../tool/format-answer.js";
 import type { QuestionData } from "../tool/types.js";
@@ -33,10 +33,13 @@ const NOTES_HEADER = "Notes:";
  * `…` on terminals too narrow to advertise it.
  */
 class OneLineClippedText implements Component {
-	constructor(
-		private readonly text: string,
-		private readonly paddingLeft: number = 0,
-	) {}
+	private readonly text: string;
+	private readonly paddingLeft: number;
+
+	constructor(text: string, paddingLeft: number = 0) {
+		this.text = text;
+		this.paddingLeft = paddingLeft;
+	}
 
 	render(width: number): string[] {
 		const pad = " ".repeat(this.paddingLeft);
@@ -92,7 +95,11 @@ export class QuestionTabStrategy implements TabContentStrategy {
 	/** Spacer(1) + chatRow(1) + Spacer(1) + Text(hint, 1) = 4 rendered rows. */
 	readonly footerRowCount = 4;
 
-	constructor(private readonly config: QuestionTabStrategyConfig) {}
+	private readonly config: QuestionTabStrategyConfig;
+
+	constructor(config: QuestionTabStrategyConfig) {
+		this.config = config;
+	}
 
 	headingRows(state: DialogState): Component[] {
 		const out: Component[] = [];
@@ -162,7 +169,11 @@ export class SubmitTabStrategy implements TabContentStrategy {
 	/** Spacer(1) + Text(prompt, 1) + Spacer(1) + submitPicker(2) = 5 rendered rows. Fallback path lands at 5 via 2 trailing Spacer(1)s. */
 	readonly footerRowCount = 5;
 
-	constructor(private readonly config: SubmitTabStrategyConfig) {}
+	private readonly config: SubmitTabStrategyConfig;
+
+	constructor(config: SubmitTabStrategyConfig) {
+		this.config = config;
+	}
 
 	headingRows(_state: DialogState): Component[] {
 		return [

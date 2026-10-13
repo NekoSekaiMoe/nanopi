@@ -6,11 +6,7 @@ This page documents nanopi's built-in command-line commands and options. Run `na
 
 ```sh
 nanopi [options] [--] [@files...] [messages...]
-nanopi install <source> [options]
-nanopi remove <source> [options]
-nanopi uninstall <source> [options]
 nanopi list
-nanopi config [options]
 nanopi auth <check|print-api-key|print-bearer-token> [options]
 ```
 
@@ -144,7 +140,7 @@ Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTo
 nanopi --extension ./review.ts
 ```
 
-See [Configuration](configuration.md) for conventional directories and project trust, [Settings](settings.md#resources) for configured paths, and [nanopi Packages](packages.md) for package sources.
+See [Configuration](configuration.md) for conventional directories and project trust and [Settings](settings.md#resources) for configured paths.
 
 - `-e`, `--extension <path>`<br>
   Loads an extension file or directory, or a built-in extension such as `builtin:llama.cpp`, and is repeatable.
@@ -201,25 +197,17 @@ Extensions may register additional long-form options. Unknown short options are 
 ## Package commands
 
 ```sh
-nanopi install npm:@scope/package
-```
-
-See [nanopi Packages](packages.md) for source formats, filtering, installation, and project scope.
 
 ### Common tasks
 
 | Task | Command |
 |---|---|
-| Install a package | `nanopi install <source>` |
 | List configured packages | `nanopi list` |
-| Remove a package and its settings entry | `nanopi remove <source>` |
-| Configure which package resources load | `nanopi config` |
 
 Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use project settings instead of global settings.
 
 ### Aliases and command options
 
-- `nanopi uninstall <source>` is an alias for `nanopi remove <source>`.
 - `-a`, `--approve` trusts project-local files for one command. `-na`, `--no-approve` ignores trust-gated project-local files.
 - Append `-h` or `--help` to a command for its exact usage and option constraints.
 

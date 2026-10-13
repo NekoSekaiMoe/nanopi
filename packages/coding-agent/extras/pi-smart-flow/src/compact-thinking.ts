@@ -26,9 +26,13 @@ import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { type ExtensionAPI, type ModuleContext, SettingsManager } from "@earendil-works/pi-coding-agent";
-import { completeSimple } from "@earendil-works/pi-ai/compat";
-import { Text } from "@earendil-works/pi-tui";
+import type {
+	ModuleApi,
+	ModuleContext,
+} from "../../../src/core/modules/types.ts";
+import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import { completeSimple } from "@nanopi/pi-ai/compat";
+import { Text } from "@nanopi/pi-tui";
 
 const ENTRY_TYPE = "pi-smart-flow:thinking-summary";
 const MAX_SUMMARY_LINES = 3;
@@ -110,7 +114,7 @@ function boundInput(text: string): string {
   return `${text.slice(0, HEAD_CHARS)}\n[...]\n${text.slice(-(MAX_INPUT_CHARS - HEAD_CHARS))}`;
 }
 
-export function registerCompactThinking(pi: ExtensionAPI): void {
+export function registerCompactThinking(pi: ModuleApi): void {
   const config = loadConfig();
   let enabled = config.compactThinking === true;
   // Serialize summaries so transcript entries stay in message order.

@@ -2,9 +2,10 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { ModuleApi } from "../../src/core/modules/types.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
-function deferred(): { promise: Promise<void>; resolve: () => void } {
+function _deferred(): { promise: Promise<void>; resolve: () => void } {
 	let resolve = () => {};
 	const promise = new Promise<void>((done) => {
 		resolve = done;
@@ -24,24 +25,27 @@ describe("AgentSession actionable boundaries", () => {
 		const observedIds: string[] = [];
 		const requests: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event) => {
-						observedIds.push(event.messageEntryId);
-						if (handled) return;
-						handled = true;
-						return {
-							entries: [
-								{
-									type: "compaction",
-									summary: "exact handoff",
-									firstKeptEntryId: null,
-									details: { source: "test" },
-								},
-							],
-							continue: true,
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event) => {
+							observedIds.push(event.messageEntryId);
+							if (handled) return;
+							handled = true;
+							return {
+								entries: [
+									{
+										type: "compaction",
+										summary: "exact handoff",
+										firstKeptEntryId: null,
+										details: { source: "test" },
+									},
+								],
+								continue: true,
+							};
+						});
+					},
 				},
 			],
 		});
@@ -74,22 +78,25 @@ describe("AgentSession actionable boundaries", () => {
 			let handled = false;
 			const requests: string[] = [];
 			const harness = await createHarness({
-				extensionFactories: [
-					(nanopi) => {
-						nanopi.on("turn_end", () => {
-							if (handled) return;
-							handled = true;
-							if (queueKind === "steering" || queueKind === "both") {
-								nanopi.sendUserMessage("queued steering", { deliverAs: "steer" });
-							}
-							if (queueKind === "follow-up" || queueKind === "both") {
-								nanopi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
-							}
-							return {
-								entries: [{ type: "compaction", summary: "exact handoff", firstKeptEntryId: null }],
-								continue: true,
-							};
-						});
+				modules: [
+					{
+						name: "test-module-1",
+						factory: (nanopi: ModuleApi) => {
+							nanopi.on("turn_end", () => {
+								if (handled) return;
+								handled = true;
+								if (queueKind === "steering" || queueKind === "both") {
+									nanopi.sendUserMessage("queued steering", { deliverAs: "steer" });
+								}
+								if (queueKind === "follow-up" || queueKind === "both") {
+									nanopi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+								}
+								return {
+									entries: [{ type: "compaction", summary: "exact handoff", firstKeptEntryId: null }],
+									continue: true,
+								};
+							});
+						},
 					},
 				],
 			});
@@ -132,31 +139,34 @@ describe("AgentSession actionable boundaries", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event, ctx) => {
-						if (handled) return;
-						handled = true;
-						const user = [...ctx.sessionManager.getBranch()]
-							.reverse()
-							.find((entry) => entry.type === "message" && entry.message.role === "user");
-						if (!user) throw new Error("missing user entry");
-						return {
-							entries: [
-								{ type: "context_edit", targetId: user.id, replacement: { content: instruction } },
-								{ type: "context_edit", targetId: event.messageEntryId, replacement: null },
-								{ type: "custom", customType: "bookkeeping", data: { source: "test" } },
-							],
-							continue: true,
-						};
-					});
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "older history summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event, ctx) => {
+							if (handled) return;
+							handled = true;
+							const user = [...ctx.sessionManager.getBranch()]
+								.reverse()
+								.find((entry) => entry.type === "message" && entry.message.role === "user");
+							if (!user) throw new Error("missing user entry");
+							return {
+								entries: [
+									{ type: "context_edit", targetId: user.id, replacement: { content: instruction } },
+									{ type: "context_edit", targetId: event.messageEntryId, replacement: null },
+									{ type: "custom", customType: "bookkeeping", data: { source: "test" } },
+								],
+								continue: true,
+							};
+						});
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "older history summary",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -193,31 +203,34 @@ describe("AgentSession actionable boundaries", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 2_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", () => {
-						if (handled) return;
-						handled = true;
-						return {
-							entries: [
-								{
-									type: "custom_message",
-									customType: "next-work",
-									content: instruction,
-									display: false,
-								},
-								{ type: "custom", customType: "bookkeeping", data: { source: "test" } },
-							],
-							continue: true,
-						};
-					});
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "older history summary",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", () => {
+							if (handled) return;
+							handled = true;
+							return {
+								entries: [
+									{
+										type: "custom_message",
+										customType: "next-work",
+										content: instruction,
+										display: false,
+									},
+									{ type: "custom", customType: "bookkeeping", data: { source: "test" } },
+								],
+								continue: true,
+							};
+						});
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "older history summary",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -241,23 +254,26 @@ describe("AgentSession actionable boundaries", () => {
 		let handled = false;
 		const snapshots: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", () => {
-						if (handled) return;
-						handled = true;
-						return {
-							entries: [
-								{ type: "custom", customType: "metadata", data: true },
-								{
-									type: "custom_message",
-									customType: "visible-context",
-									content: "committed context",
-									display: true,
-								},
-							],
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", () => {
+							if (handled) return;
+							handled = true;
+							return {
+								entries: [
+									{ type: "custom", customType: "metadata", data: true },
+									{
+										type: "custom_message",
+										customType: "visible-context",
+										content: "committed context",
+										display: true,
+									},
+								],
+							};
+						});
+					},
 				},
 			],
 		});
@@ -273,158 +289,30 @@ describe("AgentSession actionable boundaries", () => {
 		expect(snapshots.every((snapshot) => snapshot.includes("committed context"))).toBe(true);
 	});
 
-	it("continues from an agent_before_settle custom message before final settlement", async () => {
-		let requested = false;
-		const requests: string[] = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_before_settle", () => {
-						if (requested) return;
-						requested = true;
-						return {
-							entries: [
-								{
-									type: "custom_message",
-									customType: "test-continuation",
-									content: "continue now",
-									display: false,
-								},
-							],
-							continue: true,
-						};
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([
-			fauxAssistantMessage("first"),
-			(context) => {
-				requests.push(JSON.stringify(context.messages));
-				return fauxAssistantMessage("second");
-			},
-		]);
-
-		await harness.session.prompt("start");
-
-		expect(requests[0]).toContain("continue now");
-		expect(harness.sessionManager.getEntries()).toContainEqual(
-			expect.objectContaining({ type: "custom_message", customType: "test-continuation", display: false }),
-		);
-		expect(harness.eventsOfType("agent_start")).toHaveLength(2);
-		expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
-	});
-
-	it("persists custom context queued by agent_end before pre-settlement continuation", async () => {
-		let firstRun = true;
-		let continued = false;
-		const requests: string[] = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_end", () => {
-						if (!firstRun) return;
-						firstRun = false;
-						nanopi.sendMessage(
-							{ customType: "agent-end-context", content: "queued after agent end", display: false },
-							{ triggerTurn: false },
-						);
-					});
-					nanopi.on("agent_before_settle", (event) => {
-						if (continued) return;
-						continued = true;
-						expect(JSON.stringify(event.context.pendingMessages)).toContain("queued after agent end");
-						expect(JSON.stringify(event.context.contextMessages)).not.toContain("queued after agent end");
-						return { continue: true };
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([
-			fauxAssistantMessage("first"),
-			(context) => {
-				requests.push(JSON.stringify(context.messages));
-				return fauxAssistantMessage("second");
-			},
-		]);
-
-		await harness.session.prompt("start");
-
-		expect(requests[0]).toContain("queued after agent end");
-		expect(harness.sessionManager.getEntries()).toContainEqual(
-			expect.objectContaining({ type: "custom_message", customType: "agent-end-context" }),
-		);
-	});
-
-	it("keeps a pre-settlement follow-up deferred until the explicit continuation would stop", async () => {
-		let handled = false;
-		const requests: string[] = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_before_settle", () => {
-						if (handled) return;
-						handled = true;
-						nanopi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
-						return {
-							entries: [
-								{
-									type: "custom_message",
-									customType: "boundary",
-									content: "boundary context",
-									display: false,
-								},
-							],
-							continue: true,
-						};
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([
-			fauxAssistantMessage("first"),
-			(context) => {
-				requests.push(JSON.stringify(context.messages));
-				return fauxAssistantMessage("second");
-			},
-			(context) => {
-				requests.push(JSON.stringify(context.messages));
-				return fauxAssistantMessage("follow-up response");
-			},
-		]);
-
-		await harness.session.prompt("start");
-
-		expect(harness.faux.state.callCount).toBe(3);
-		expect(requests[0]).toContain("boundary context");
-		expect(requests[0]).not.toContain("queued follow-up");
-		expect(requests[1]).toContain("queued follow-up");
-	});
-
 	it("defers runs started by agent_settled handlers until every settled handler completes", async () => {
 		let triggered = false;
 		const lifecycle: string[] = [];
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_start", () => {
-						lifecycle.push("start");
-					});
-					nanopi.on("agent_settled", (_event, ctx) => {
-						lifecycle.push(`settled-first:${ctx.isIdle()}`);
-						if (triggered) return;
-						triggered = true;
-						nanopi.sendMessage(
-							{ customType: "settled-trigger", content: "start later", display: false },
-							{ triggerTurn: true },
-						);
-					});
-					nanopi.on("agent_settled", (_event, ctx) => {
-						lifecycle.push(`settled-second:${ctx.isIdle()}`);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("agent_start", () => {
+							lifecycle.push("start");
+						});
+						nanopi.on("agent_settled", (_event, ctx) => {
+							lifecycle.push(`settled-first:${ctx.isIdle()}`);
+							if (triggered) return;
+							triggered = true;
+							nanopi.sendMessage(
+								{ customType: "settled-trigger", content: "start later", display: false },
+								{ triggerTurn: true },
+							);
+						});
+						nanopi.on("agent_settled", (_event, ctx) => {
+							lifecycle.push(`settled-second:${ctx.isIdle()}`);
+						});
+					},
 				},
 			],
 		});
@@ -453,22 +341,25 @@ describe("AgentSession actionable boundaries", () => {
 		};
 		const harness = await createHarness({
 			tools: [tool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event, ctx) => {
-						const user = [...ctx.sessionManager.getBranch()]
-							.reverse()
-							.find((entry) => entry.type === "message" && entry.message.role === "user");
-						if (!user) throw new Error("missing user entry");
-						return {
-							entries: [user.id, event.messageEntryId, ...event.toolResultEntryIds].map((targetId) => ({
-								type: "context_edit" as const,
-								targetId,
-								replacement: null,
-							})),
-							continue: true,
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event, ctx) => {
+							const user = [...ctx.sessionManager.getBranch()]
+								.reverse()
+								.find((entry) => entry.type === "message" && entry.message.role === "user");
+							if (!user) throw new Error("missing user entry");
+							return {
+								entries: [user.id, event.messageEntryId, ...event.toolResultEntryIds].map((targetId) => ({
+									type: "context_edit" as const,
+									targetId,
+									replacement: null,
+								})),
+								continue: true,
+							};
+						});
+					},
 				},
 			],
 		});
@@ -486,13 +377,16 @@ describe("AgentSession actionable boundaries", () => {
 	it("dispatches actionable turn_end for synthetic run failures", async () => {
 		let turnEnds = 0;
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event) => {
-						turnEnds++;
-						expect(event.outcome).toBe("error");
-						return { entries: [{ type: "custom", customType: "failure-boundary", data: true }] };
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event) => {
+							turnEnds++;
+							expect(event.outcome).toBe("error");
+							return { entries: [{ type: "custom", customType: "failure-boundary", data: true }] };
+						});
+					},
 				},
 			],
 		});
@@ -515,24 +409,27 @@ describe("AgentSession actionable boundaries", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 10_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 300 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_end", (event) => {
-						if (event.message.role !== "assistant") return;
-						return {
-							message: {
-								...event.message,
-								usage: { ...event.message.usage, input: 9_800, output: 1, totalTokens: 9_801 },
-							},
-						};
-					});
-					nanopi.on("turn_end", (event) => {
-						if (handled) return;
-						handled = true;
-						return {
-							entries: [{ type: "context_edit", targetId: event.messageEntryId, replacement: null }],
-						};
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_end", (event) => {
+							if (event.message.role !== "assistant") return;
+							return {
+								message: {
+									...event.message,
+									usage: { ...event.message.usage, input: 9_800, output: 1, totalTokens: 9_801 },
+								},
+							};
+						});
+						nanopi.on("turn_end", (event) => {
+							if (handled) return;
+							handled = true;
+							return {
+								entries: [{ type: "context_edit", targetId: event.messageEntryId, replacement: null }],
+							};
+						});
+					},
 				},
 			],
 		});
@@ -550,26 +447,29 @@ describe("AgentSession actionable boundaries", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 5_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("message_end", (event) => {
-						if (event.message.role !== "assistant") return;
-						return {
-							message: {
-								...event.message,
-								usage: { ...event.message.usage, input: 5_100, output: 1, totalTokens: 5_101 },
-							},
-						};
-					});
-					nanopi.on("turn_end", (_event, ctx) => {
-						if (handled) return;
-						handled = true;
-						const user = [...ctx.sessionManager.getBranch()]
-							.reverse()
-							.find((entry) => entry.type === "message" && entry.message.role === "user");
-						if (!user) throw new Error("missing user entry");
-						return { entries: [{ type: "context_edit", targetId: user.id, replacement: null }] };
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("message_end", (event) => {
+							if (event.message.role !== "assistant") return;
+							return {
+								message: {
+									...event.message,
+									usage: { ...event.message.usage, input: 5_100, output: 1, totalTokens: 5_101 },
+								},
+							};
+						});
+						nanopi.on("turn_end", (_event, ctx) => {
+							if (handled) return;
+							handled = true;
+							const user = [...ctx.sessionManager.getBranch()]
+								.reverse()
+								.find((entry) => entry.type === "message" && entry.message.role === "user");
+							if (!user) throw new Error("missing user entry");
+							return { entries: [{ type: "context_edit", targetId: user.id, replacement: null }] };
+						});
+					},
 				},
 			],
 		});
@@ -632,116 +532,6 @@ describe("AgentSession actionable boundaries", () => {
 
 		expect(harness.session.getContextUsage()?.tokens).toBeNull();
 	});
-
-	it("persists custom context sent during pre-settlement before continuing", async () => {
-		let handled = false;
-		const requests: string[] = [];
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_before_settle", () => {
-						if (handled) return;
-						handled = true;
-						nanopi.sendMessage(
-							{ customType: "pending-boundary", content: "persist before continue", display: false },
-							{ triggerTurn: false },
-						);
-						return { continue: true };
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([
-			fauxAssistantMessage("first"),
-			(context) => {
-				requests.push(JSON.stringify(context.messages));
-				return fauxAssistantMessage("second");
-			},
-		]);
-
-		await harness.session.prompt("start");
-
-		expect(harness.faux.state.callCount).toBe(2);
-		expect(requests[0]).toContain("persist before continue");
-		expect(harness.sessionManager.getEntries()).toContainEqual(
-			expect.objectContaining({ type: "custom_message", customType: "pending-boundary" }),
-		);
-	});
-
-	it("does not consume queued input when pre-settlement drafts leave system-only context", async () => {
-		let handled = false;
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_before_settle", (_event, ctx) => {
-						if (handled) return;
-						handled = true;
-						nanopi.sendUserMessage("still queued", { deliverAs: "followUp" });
-						const targets = ctx.sessionManager
-							.getBranch()
-							.flatMap((entry) =>
-								entry.type === "message" &&
-								(entry.message.role === "user" ||
-									entry.message.role === "assistant" ||
-									entry.message.role === "toolResult")
-									? [entry.id]
-									: [],
-							);
-						return {
-							entries: targets.map((targetId) => ({
-								type: "context_edit" as const,
-								targetId,
-								replacement: null,
-							})),
-							continue: true,
-						};
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
-
-		await harness.session.prompt("start");
-
-		expect(harness.faux.state.callCount).toBe(1);
-		expect(harness.session.pendingMessageCount).toBe(1);
-	});
-
-	it("commits pre-settlement drafts but suppresses continuation when aborted during the hook", async () => {
-		const started = deferred();
-		const release = deferred();
-		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("agent_before_settle", async () => {
-						started.resolve();
-						await release.promise;
-						return {
-							entries: [{ type: "custom", customType: "committed-after-abort", data: true }],
-							continue: true,
-						};
-					});
-				},
-			],
-		});
-		harnesses.push(harness);
-		harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
-
-		const prompt = harness.session.prompt("start");
-		await started.promise;
-		const abort = harness.session.abort();
-		release.resolve();
-		await Promise.all([prompt, abort]);
-
-		expect(harness.faux.state.callCount).toBe(1);
-		expect(harness.sessionManager.getEntries()).toContainEqual(
-			expect.objectContaining({ type: "custom", customType: "committed-after-abort", data: true }),
-		);
-		// #10607: settlement reports the abort although the last response succeeded.
-		expect(harness.eventsOfType("agent_settled")).toEqual([{ type: "agent_settled", aborted: true }]);
-	});
 });
 
 describe("durable length recovery", () => {
@@ -796,15 +586,18 @@ describe("durable length recovery", () => {
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
 			settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
 			tools: [tool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "recovered input",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "recovered input",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -838,21 +631,24 @@ describe("durable length recovery", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1000, maxTokens: 100 }],
 			settings: { compaction: { keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "recovered input",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
-					nanopi.on("agent_end", (event) => {
-						if (queued || !event.messages.some((message) => getMessageText(message) === "first recovered"))
-							return;
-						queued = true;
-						nanopi.sendUserMessage("distinct follow-up", { deliverAs: "followUp" });
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "recovered input",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+						nanopi.on("agent_end", (event) => {
+							if (queued || !event.messages.some((message) => getMessageText(message) === "first recovered"))
+								return;
+							queued = true;
+							nanopi.sendUserMessage("distinct follow-up", { deliverAs: "followUp" });
+						});
+					},
 				},
 			],
 		});
@@ -903,9 +699,12 @@ describe("durable length recovery", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_compact", () => ({ cancel: true }));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_compact", () => ({ cancel: true }));
+					},
 				},
 			],
 		});
@@ -939,29 +738,32 @@ describe("durable length recovery", () => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 1_000, maxTokens: 100 }],
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event) => {
-						if (replaced || event.outcome !== "error") return;
-						replaced = true;
-						overflowId = event.messageEntryId;
-						return {
-							entries: [
-								{
-									type: "context_edit",
-									targetId: event.messageEntryId,
-									replacement: { content: [{ type: "text", text: "retained error" }] },
-								},
-							],
-						};
-					});
-					nanopi.on("session_before_compact", (event) => ({
-						compaction: {
-							summary: "recovered overflow",
-							firstKeptEntryId: event.preparation.firstKeptEntryId,
-							tokensBefore: event.preparation.tokensBefore,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event) => {
+							if (replaced || event.outcome !== "error") return;
+							replaced = true;
+							overflowId = event.messageEntryId;
+							return {
+								entries: [
+									{
+										type: "context_edit",
+										targetId: event.messageEntryId,
+										replacement: { content: [{ type: "text", text: "retained error" }] },
+									},
+								],
+							};
+						});
+						nanopi.on("session_before_compact", (event) => ({
+							compaction: {
+								summary: "recovered overflow",
+								firstKeptEntryId: event.preparation.firstKeptEntryId,
+								tokensBefore: event.preparation.tokensBefore,
+							},
+						}));
+					},
 				},
 			],
 		});
@@ -985,13 +787,16 @@ describe("durable length recovery", () => {
 		const lifecycle: string[] = [];
 		const harness = await createHarness({
 			settings: { retry: { enabled: true, maxRetries: 2, baseDelayMs: 1 } },
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("turn_end", (event) => {
-						if (queued || event.outcome !== "error") return;
-						queued = true;
-						nanopi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("turn_end", (event) => {
+							if (queued || event.outcome !== "error") return;
+							queued = true;
+							nanopi.sendUserMessage("queued follow-up", { deliverAs: "followUp" });
+						});
+					},
 				},
 			],
 		});

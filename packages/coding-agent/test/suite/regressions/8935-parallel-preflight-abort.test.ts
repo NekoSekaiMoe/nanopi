@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, getMessageText, type Harness } from "../harness.ts";
 
 describe("#8935 parallel preflight abort", () => {
@@ -31,16 +32,19 @@ describe("#8935 parallel preflight abort", () => {
 		};
 		const harness = await createHarness({
 			tools: [externalWrite],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("tool_call", async (event, ctx) => {
-						const value = "value" in event.input ? String(event.input.value) : "";
-						preflights.push(value);
-						if (value === "second") ctx.abort();
-					});
-					nanopi.on("tool_result", async (event) => {
-						resultHooks.push(event.toolCallId);
-					});
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("tool_call", async (event, ctx) => {
+							const value = "value" in event.input ? String(event.input.value) : "";
+							preflights.push(value);
+							if (value === "second") ctx.abort();
+						});
+						nanopi.on("tool_result", async (event) => {
+							resultHooks.push(event.toolCallId);
+						});
+					},
 				},
 			],
 		});

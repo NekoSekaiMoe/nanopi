@@ -2,9 +2,9 @@
  * Todo tool 注册 + execute dispatcher + 5 个 action handler。
  */
 
-import { StringEnum } from "@earendil-works/pi-ai";
-import { Text } from "@earendil-works/pi-tui";
-import type { ExtensionAPI, ModuleContext, Theme } from "@earendil-works/pi-coding-agent";
+import { StringEnum } from "@nanopi/pi-ai";
+import { Text } from "@nanopi/pi-tui";
+import type { ModuleApi, ModuleContext, Theme } from "@nanopi/pi-coding-agent";
 import { type Static, Type } from "typebox";
 
 import {
@@ -15,9 +15,9 @@ import {
 	type TodoDetails,
 	updateTodos,
 	VALID_STATUSES,
-} from "./model";
-import { renderTodoResult } from "./render";
-import type { TodoSessionState } from "./state";
+} from "./model.ts";
+import { renderTodoResult } from "./render.ts";
+import type { TodoSessionState } from "./state.ts";
 
 // ── Action 参数类型 ──────────────────────────────────
 
@@ -249,7 +249,7 @@ function executeTodoAction(
 // ── Tool 注册入口 ─────────────────────────────────────
 
 export function registerTodoTool(
-	pi: ExtensionAPI,
+	pi: ModuleApi,
 	state: TodoSessionState,
 	refreshDisplay: (ctx: ModuleContext) => void,
 ): void {

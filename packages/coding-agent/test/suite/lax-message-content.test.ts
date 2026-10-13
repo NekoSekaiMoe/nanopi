@@ -12,7 +12,7 @@ import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { describe, expect, it } from "vitest";
 import { type SessionEntry, sessionEntryToContextMessages } from "../../src/core/session-manager.ts";
-import type { ExtensionFactory } from "../../src/index.ts";
+import type { ModuleFactory } from "../../src/index.ts";
 import { createHarness } from "./harness.ts";
 
 function messageEntry(message: Record<string, unknown>): SessionEntry {
@@ -27,7 +27,7 @@ function messageEntry(message: Record<string, unknown>): SessionEntry {
 
 describe("lax message content handling", () => {
 	it("normalizes tool results from untyped tools that omit content", async () => {
-		const extensionFactories: ExtensionFactory[] = [
+		const modules: ModuleFactory[] = [
 			(nanopi) => {
 				nanopi.registerTool({
 					name: "web_search",
@@ -39,7 +39,7 @@ describe("lax message content handling", () => {
 				});
 			},
 		];
-		const harness = await createHarness({ extensionFactories });
+		const harness = await createHarness({ modules });
 
 		try {
 			harness.setResponses([
@@ -60,7 +60,7 @@ describe("lax message content handling", () => {
 	});
 
 	it("normalizes null content in message_end extension replacements", async () => {
-		const extensionFactories: ExtensionFactory[] = [
+		const modules: ModuleFactory[] = [
 			(nanopi) => {
 				nanopi.on("message_end", async (event) => {
 					if (event.message.role !== "assistant") return undefined;
@@ -69,7 +69,7 @@ describe("lax message content handling", () => {
 				});
 			},
 		];
-		const harness = await createHarness({ extensionFactories });
+		const harness = await createHarness({ modules });
 
 		try {
 			harness.setResponses([fauxAssistantMessage("hello")]);

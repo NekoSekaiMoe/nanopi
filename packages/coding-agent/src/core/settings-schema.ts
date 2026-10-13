@@ -154,26 +154,6 @@ const WarningSettingsSchema = Type.Object({
 	anthropicExtraUsage: Type.Optional(Type.Boolean({ default: SETTINGS_DEFAULTS.warnings.anthropicExtraUsage })),
 });
 
-const PackageSourceSchema = Type.Union(
-	[
-		Type.String({ description: "Load all resources from the package." }),
-		Type.Object({
-			source: Type.String(),
-			autoload: Type.Optional(
-				Type.Boolean({ description: "When false, start empty and only apply explicit resource patterns." }),
-			),
-			extensions: Type.Optional(Type.Array(Type.String())),
-			skills: Type.Optional(Type.Array(Type.String())),
-			prompts: Type.Optional(Type.Array(Type.String())),
-			themes: Type.Optional(Type.Array(Type.String())),
-		}),
-	],
-	{
-		description:
-			"Package source for npm or git packages. Use the string form to load all resources or the object form to filter resources.",
-	},
-);
-
 const StringArraySchema = Type.Array(Type.String());
 const SkillsInputSchema = Type.Union(
 	[
@@ -209,11 +189,6 @@ export const SettingsSchema = Type.Object(
 	{
 		$schema: Type.Optional(Type.String({ description: "JSON Schema reference." })),
 		lastChangelogVersion: Type.Optional(Type.String()),
-		extensionChangelogVersions: Type.Optional(
-			Type.Record(Type.String(), Type.String(), {
-				description: "Last-seen changelog version per extension package, keyed by source and scope.",
-			}),
-		),
 		defaultProvider: Type.Optional(Type.String()),
 		defaultModel: Type.Optional(Type.String()),
 		defaultThinkingLevel: Type.Optional(ModelThinkingLevelSchema),
@@ -305,14 +280,6 @@ export const SettingsSchema = Type.Object(
 		),
 		trackingId: Type.Optional(
 			Type.String({ description: "Analytics tracking identifier, generated when analytics is enabled." }),
-		),
-		packages: Type.Optional(
-			Type.Array(PackageSourceSchema, {
-				description: "npm or git package sources, as strings or objects with resource filtering.",
-			}),
-		),
-		extensions: Type.Optional(
-			Type.Array(Type.String(), { description: "Local extension file paths or directories." }),
 		),
 		deviceId: Type.Optional(
 			Type.String({
@@ -449,7 +416,6 @@ export interface LlamaCppSettings extends Static<typeof LlamaCppSettingsSchema> 
 export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
 export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;
-export type PackageSource = Static<typeof PackageSourceSchema>;
 export type CacheWarmingMode = NonNullable<SettingsInput["cacheWarming"]>;
 export interface Settings extends Omit<SettingsInput, "queueMode" | "retry" | "skills" | "websockets"> {
 	retry?: RetrySettings;

@@ -252,36 +252,6 @@ describe("parseArgs", () => {
 		});
 	});
 
-	describe("--extension flag", () => {
-		test("parses single --extension", () => {
-			const result = parseArgs(["--extension", "./my-extension.ts"]);
-			expect(result.extensions).toEqual(["./my-extension.ts"]);
-		});
-
-		test("parses -e shorthand", () => {
-			const result = parseArgs(["-e", "./my-extension.ts"]);
-			expect(result.extensions).toEqual(["./my-extension.ts"]);
-		});
-
-		test("parses multiple --extension flags", () => {
-			const result = parseArgs(["--extension", "./ext1.ts", "-e", "./ext2.ts"]);
-			expect(result.extensions).toEqual(["./ext1.ts", "./ext2.ts"]);
-		});
-	});
-
-	describe("--no-extensions flag", () => {
-		test("parses --no-extensions flag", () => {
-			const result = parseArgs(["--no-extensions"]);
-			expect(result.noExtensions).toBe(true);
-		});
-
-		test("parses --no-extensions with explicit -e flags", () => {
-			const result = parseArgs(["--no-extensions", "-e", "foo.ts", "-e", "bar.ts"]);
-			expect(result.noExtensions).toBe(true);
-			expect(result.extensions).toEqual(["foo.ts", "bar.ts"]);
-		});
-	});
-
 	describe("--skill flag", () => {
 		test("parses single --skill", () => {
 			const result = parseArgs(["--skill", "./skill-dir"]);

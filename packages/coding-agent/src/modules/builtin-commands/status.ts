@@ -12,8 +12,8 @@
  * emitted via `ctx.ui.notify`.
  */
 
-import type { ExtensionAPI, ModuleCommandContext, ToolInfo } from "@nanopi/pi-coding-agent";
 import { VERSION } from "../../config.ts";
+import type { ModuleApi, ModuleCommandContext, ToolInfo } from "../../core/modules/types.ts";
 import { formatContextPath, getCompactExtensionLabels, type ResourceItem } from "../../core/resource-listing.ts";
 import { formatTokens } from "./context.ts";
 import { type StatusRow, type StatusSection, showStatusDialog } from "./status-dialog.ts";
@@ -129,7 +129,7 @@ export function collectStatusSections(ctx: ModuleCommandContext): StatusSection[
 	return sections;
 }
 
-export function registerStatus(pi: ExtensionAPI) {
+export function registerStatus(pi: ModuleApi) {
 	pi.registerCommand("status", {
 		description: "Show the current model, session, usage, and loaded resources",
 		handler: async (_args, ctx) => {

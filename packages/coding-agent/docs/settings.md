@@ -136,7 +136,7 @@ Keep `retry.provider.maxRetries` at `0` unless provider-level retries are requir
 | `shellCommandPrefix` | string | None | Prefix prepended to every shell command. |
 | `npmCommand` | `string[]` | `npm` | Command and arguments used for npm package lookup and installation. |
 
-See [Shell aliases](shell-aliases.md) for shell setup and [nanopi Packages](packages.md) for package-manager behavior.
+See [Shell aliases](shell-aliases.md) for shell setup.
 
 ## llama.cpp
 
@@ -155,7 +155,6 @@ Resource paths in user settings resolve from the agent directory. Paths in proje
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `packages` | array | `[]` | npm, git, or local nanopi package sources. See [nanopi Packages](packages.md). |
 | `extensions` | `string[]` | `[]` | Extension files or directories. |
 | `skills` | `string[]` | `[]` | Skill files or directories. |
 | `prompts` | `string[]` | `[]` | Prompt-template files or directories. |

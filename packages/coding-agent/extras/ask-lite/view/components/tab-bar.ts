@@ -1,5 +1,5 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { truncateToWidth } from "@earendil-works/pi-tui";
+import type { Theme } from "@nanopi/pi-coding-agent";
+import { truncateToWidth } from "@nanopi/pi-tui";
 import type { StatefulView } from "../stateful-view.js";
 
 /**
@@ -19,9 +19,10 @@ export interface TabBarProps {
 export class TabBar implements StatefulView<TabBarProps> {
 	private props: TabBarProps;
 
-	constructor(private readonly theme: Theme) {
-		this.props = { tabs: [], submit: { active: false, allAnswered: false } };
-	}
+	readonly theme: Theme;
+	constructor(theme: Theme) {
+		this.theme = theme;
+		this.props = { tabs: [], submit: { active: false, allAnswered: false } };}
 
 	setProps(props: TabBarProps): void {
 		this.props = props;

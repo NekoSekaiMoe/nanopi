@@ -1178,7 +1178,7 @@ describe("ModelRegistry", () => {
 				"extension-provider": {
 					modelOverrides: {
 						"extension-model": {
-							name: "Overridden Extension Model",
+							name: "Overridden SessionModule Model",
 							thinkingLevelMap: {
 								off: null,
 								minimal: null,
@@ -1200,7 +1200,7 @@ describe("ModelRegistry", () => {
 				models: [
 					{
 						id: "extension-model",
-						name: "Extension Model",
+						name: "SessionModule Model",
 						reasoning: true,
 						input: ["text"],
 						cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -1215,7 +1215,7 @@ describe("ModelRegistry", () => {
 			if (!model) {
 				throw new Error("extension model was not registered");
 			}
-			expect(model.name).toBe("Overridden Extension Model");
+			expect(model.name).toBe("Overridden SessionModule Model");
 			expect(model.thinkingLevelMap).toEqual({
 				off: null,
 				minimal: null,

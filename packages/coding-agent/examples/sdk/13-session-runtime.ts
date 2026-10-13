@@ -40,7 +40,7 @@ let unsubscribe: (() => void) | undefined;
 async function bindSession() {
 	unsubscribe?.();
 	const session = runtime.session;
-	await session.bindExtensions({});
+	await session.bindModules({});
 	unsubscribe = session.subscribe((event) => {
 		if (event.type === "queue_update") {
 			console.log("Queued:", event.steering.length + event.followUp.length);

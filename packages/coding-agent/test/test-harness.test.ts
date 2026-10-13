@@ -275,9 +275,9 @@ describe("test harness", () => {
 		const calls: string[] = [];
 
 		harness = await createHarnessWithExtensions({
-			extensionFactories: [
+			modules: [
 				{
-					path: "<alpha>",
+					name: "alpha",
 					factory: (nanopi) => {
 						nanopi.registerCommand("shared-cmd", {
 							description: "Alpha command",
@@ -288,7 +288,7 @@ describe("test harness", () => {
 					},
 				},
 				{
-					path: "<beta>",
+					name: "beta",
 					factory: (nanopi) => {
 						nanopi.registerCommand("shared-cmd", {
 							description: "Beta command",
@@ -301,7 +301,7 @@ describe("test harness", () => {
 			],
 		});
 
-		const runner = harness.session.extensionRunner;
+		const runner = harness.session.moduleRegistry;
 		expect(runner).toBeDefined();
 
 		const commands = runner!.getRegisteredCommands();

@@ -2,6 +2,7 @@ import type { AgentTool } from "@nanopi/pi-agent-core";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../../../src/core/modules/types.ts";
 import { createHarness, getAssistantTexts, type Harness } from "../harness.ts";
 
 describe("#5998 blocked tool termination", () => {
@@ -25,13 +26,16 @@ describe("#5998 blocked tool termination", () => {
 		};
 		const harness = await createHarness({
 			tools: [echoTool],
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("tool_call", async () => ({
-						block: true,
-						reason: "Blocked by terminating policy",
-						terminate: true,
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("tool_call", async () => ({
+							block: true,
+							reason: "Blocked by terminating policy",
+							terminate: true,
+						}));
+					},
 				},
 			],
 		});

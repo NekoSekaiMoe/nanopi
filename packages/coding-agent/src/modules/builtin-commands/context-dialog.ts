@@ -19,8 +19,9 @@
  * pure keyboard interaction.
  */
 
-import { getMarkdownTheme, type ModuleCommandContext } from "@nanopi/pi-coding-agent";
 import { Key, Markdown, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import type { ModuleCommandContext } from "../../core/modules/types.ts";
+import { getMarkdownTheme } from "../../modes/interactive/theme/theme.ts";
 
 export type ContextPartColor = "accent" | "success" | "warning" | "customMessageLabel" | "muted" | "dim" | "error";
 

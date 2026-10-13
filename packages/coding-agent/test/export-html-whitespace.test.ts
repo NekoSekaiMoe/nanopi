@@ -3,7 +3,7 @@ import { readFileSync } from "fs";
 import { describe, expect, it } from "vitest";
 import { ansiLinesToHtml } from "../src/core/export-html/ansi-to-html.ts";
 import { createToolHtmlRenderer } from "../src/core/export-html/tool-renderer.ts";
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
+import type { ToolDefinition } from "../src/core/modules/types.ts";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
 
 describe("export HTML tool output whitespace", () => {

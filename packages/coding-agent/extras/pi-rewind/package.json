@@ -1,7 +1,8 @@
 {
 	"name": "pi-rewind",
+	"type": "module",
 	"version": "0.5.0",
-	"description": "Checkpoint/rewind extension for the Pi coding agent — per-tool snapshots, /rewind command, Esc+Esc shortcut, safe restore, redo stack",
+	"description": "Checkpoint/rewind extension for the Pi coding agent \u2014 per-tool snapshots, /rewind command, Esc+Esc shortcut, safe restore, redo stack",
 	"license": "MIT",
 	"author": "arpagon",
 	"repository": {

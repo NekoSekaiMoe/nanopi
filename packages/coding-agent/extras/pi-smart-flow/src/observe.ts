@@ -5,9 +5,9 @@
 // observes any provider registered via registerObservationProvider (bash_bg
 // registers itself automatically).
 
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import type { AgentToolResult } from "@earendil-works/pi-agent-core";
-import { Text } from "@earendil-works/pi-tui";
+import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { AgentToolResult } from "@nanopi/pi-agent-core";
+import { Text } from "@nanopi/pi-tui";
 import { Type } from "typebox";
 import {
   formatObserveResult,
@@ -75,7 +75,7 @@ interface ObserveDetails {
   result: ObserveResult;
 }
 
-export function registerObserve(pi: ExtensionAPI): void {
+export function registerObserve(pi: ModuleApi): void {
   pi.registerTool({
     name: "observe",
     label: "Observe",

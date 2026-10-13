@@ -36,12 +36,12 @@ function text(message: Message): string {
 
 async function createInContextHarness(
 	inContext = true,
-	extensionFactories?: HarnessOptions["extensionFactories"],
+	modules?: HarnessOptions["modules"],
 	tools?: AgentTool[],
 ): Promise<Harness> {
 	const harness = await createHarness({
 		settings: { compaction: { keepRecentTokens: 200, inContext } },
-		extensionFactories,
+		modules,
 		tools,
 	});
 	// The faux catalog has no compat settings; mark the session model as probe-verified.

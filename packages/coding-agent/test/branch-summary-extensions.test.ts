@@ -1,5 +1,6 @@
 import type { Usage } from "@nanopi/pi-ai/compat";
 import { afterEach, describe, expect, it } from "vitest";
+import type { ModuleApi } from "../src/core/modules/types.ts";
 import { createHarness, type Harness } from "./suite/harness.ts";
 import { assistantMsg, userMsg } from "./utilities.ts";
 
@@ -22,14 +23,17 @@ describe("Branch summary extensions", () => {
 			cost: { input: 0.1, output: 0.2, cacheRead: 0.3, cacheWrite: 0.4, total: 1 },
 		};
 		const harness = await createHarness({
-			extensionFactories: [
-				(nanopi) => {
-					nanopi.on("session_before_tree", () => ({
-						summary: {
-							summary: "Summary provided by extension",
-							usage,
-						},
-					}));
+			modules: [
+				{
+					name: "test-module-1",
+					factory: (nanopi: ModuleApi) => {
+						nanopi.on("session_before_tree", () => ({
+							summary: {
+								summary: "Summary provided by extension",
+								usage,
+							},
+						}));
+					},
 				},
 			],
 		});

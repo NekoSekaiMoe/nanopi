@@ -90,7 +90,7 @@ export function findExtensionStackMatches(
 	const seen = new Set<string>();
 
 	for (const extension of extensions) {
-		const resolvedPath = normalizeStackPath(extension.resolvedPath);
+		const resolvedPath = normalizeStackPath(extension.name);
 		const singleFilePackage =
 			extension.sourceInfo.origin === "package" &&
 			!/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
