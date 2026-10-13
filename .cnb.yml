@@ -19,3 +19,36 @@ main:
             git config --global credential.helper store
             printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
             git push https://github.com/NekoSekaiMoe/nanopi.git HEAD:refs/heads/main
+
+# AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
+#
+# install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
+# 而 pnpm install 的 --ignore-scripts 会把 prepare 一起跳过。hooks 装不上时
+# .husky/commit-msg 不会运行，NPC 提交就没有 Change-Id。
+$:
+  issue.comment@npc:
+    - runner:
+        cpus: 2
+      docker:
+        image: cnbcool/default-npc:latest
+      stages:
+        - name: install git hooks
+          script: |
+            set -euo pipefail
+            pnpm install --frozen-lockfile
+            pnpm prepare
+        - name: npc go
+          type: npc:go
+  pull_request.comment@npc:
+    - runner:
+        cpus: 2
+      docker:
+        image: cnbcool/default-npc:latest
+      stages:
+        - name: install git hooks
+          script: |
+            set -euo pipefail
+            pnpm install --frozen-lockfile
+            pnpm prepare
+        - name: npc go
+          type: npc:go
