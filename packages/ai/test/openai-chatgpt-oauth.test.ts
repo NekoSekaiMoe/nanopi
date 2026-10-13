@@ -108,6 +108,84 @@ describe("OpenAI ChatGPT OAuth", () => {
 		});
 	});
 
+	it("reauthorizes with the stored issued client ID instead of re-registering", async () => {
+		const authorizeUrls: URL[] = [];
+		let exchangeBody: URLSearchParams | undefined;
+		stubTokenEndpoint(tokenResponse(), (body) => {
+			exchangeBody = body;
+		});
+
+		const credential = await openaiChatGPTOAuth.login(
+			loginInteraction({ onAuthorize: (url) => authorizeUrls.push(url) }),
+			{ getDeviceId: () => DEVICE_ID, currentCredential: connectedCredential() },
+		);
+
+		expect(authorizeUrls).toHaveLength(1);
+		expect(authorizeUrls[0]?.searchParams.get("client_id")).toBe("oaiapp_existing");
+		expect(authorizeUrls[0]?.searchParams.get("agent_name_hint")).toBeNull();
+		expect(exchangeBody?.get("client_id")).toBe("oaiapp_existing");
+		expect(credential).toMatchObject({ access: "access-token", clientId: "oaiapp_existing" });
+	});
+
+	it("rejects a reauthorization callback carrying a different client ID", async () => {
+		const fetchMock = stubTokenEndpoint(tokenResponse());
+
+		await expect(
+			openaiChatGPTOAuth.login(loginInteraction({ callbackClientId: "oaiapp_other" }), {
+				getDeviceId: () => DEVICE_ID,
+				currentCredential: connectedCredential(),
+			}),
+		).rejects.toThrow("different client ID");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("restarts authorization with the issued client ID after an invalid_grant exchange", async () => {
+		const authorizeUrls: URL[] = [];
+		const exchangeBodies: URLSearchParams[] = [];
+		let tokenCall = 0;
+		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+			expect(input instanceof Request ? input.url : String(input)).toBe(TOKEN_URL);
+			exchangeBodies.push(new URLSearchParams(String(init?.body)));
+			tokenCall += 1;
+			return tokenCall === 1 ? jsonResponse({ error: "invalid_grant" }, 400) : jsonResponse(tokenResponse());
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const credential = await openaiChatGPTOAuth.login(
+			loginInteraction({
+				callbackClientId: "oaiapp_issued",
+				onAuthorize: (url) => authorizeUrls.push(url),
+			}),
+			{ getDeviceId: () => DEVICE_ID },
+		);
+
+		expect(authorizeUrls).toHaveLength(2);
+		expect(authorizeUrls[0]?.searchParams.get("client_id")).toBe("dynamic_agent_client");
+		expect(authorizeUrls[0]?.searchParams.get("agent_name_hint")).toBe("nanopi");
+		expect(authorizeUrls[1]?.searchParams.get("client_id")).toBe("oaiapp_issued");
+		expect(authorizeUrls[1]?.searchParams.get("agent_name_hint")).toBeNull();
+		expect(authorizeUrls[0]?.searchParams.get("state")).not.toBe(authorizeUrls[1]?.searchParams.get("state"));
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(exchangeBodies[0]?.get("client_id")).toBe("oaiapp_issued");
+		expect(exchangeBodies[1]?.get("client_id")).toBe("oaiapp_issued");
+		expect(credential.access).toBe("access-token");
+	});
+
+	it("does not restart authorization when the stored client ID itself is rejected", async () => {
+		const authorizeUrls: URL[] = [];
+		const fetchMock = vi.fn(async () => jsonResponse({ error: "invalid_grant" }, 400));
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			openaiChatGPTOAuth.login(loginInteraction({ onAuthorize: (url) => authorizeUrls.push(url) }), {
+				getDeviceId: () => DEVICE_ID,
+				currentCredential: connectedCredential(),
+			}),
+		).rejects.toThrow("OpenAI OAuth token request failed (400)");
+		expect(authorizeUrls).toHaveLength(1);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("uses the app's agent name as the name hint", async () => {
 		let authorizeUrl: URL | undefined;
 		stubTokenEndpoint(tokenResponse());

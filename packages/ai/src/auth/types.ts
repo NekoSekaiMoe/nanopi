@@ -198,7 +198,10 @@ export interface ApiKeyAuth {
 	}): Promise<AuthResult | undefined>;
 }
 
-/** App-supplied context for `Models.login`. */
+/**
+ * Context for `Models.login`. Apps supply the device ID and agent name;
+ * `Models.login` itself adds the provider's stored OAuth credential.
+ */
 export interface LoginOptions {
 	/**
 	 * Returns the stable ID of this app installation, e.g. sent to OpenAI as its
@@ -211,6 +214,14 @@ export interface LoginOptions {
 	 * Codex originator. Defaults to nanopi's own name.
 	 */
 	agentName?: string;
+	/**
+	 * The provider's currently stored OAuth credential, added by `Models.login`
+	 * before the flow runs. OpenAI's Sign in with ChatGPT binds its issued client
+	 * ID to the agent host, so a re-login must reauthorize with this stored ID
+	 * instead of registering again; OpenAI answers re-registration with
+	 * invalid_grant.
+	 */
+	currentCredential?: OAuthCredential;
 }
 
 /**

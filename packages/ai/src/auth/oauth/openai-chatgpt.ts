@@ -3,6 +3,12 @@
  *
  * This public-client flow uses no client secret and sends the resulting user
  * access token directly to api.openai.com.
+ *
+ * First login registers a client dynamically (`client_id=dynamic_agent_client`);
+ * the callback returns the issued client ID, which is stored with the
+ * credential. Later logins reauthorize with that ID: OpenAI binds the
+ * registration to the agent host (`ext_agent_host_id`) and answers a repeated
+ * dynamic registration for a known host with `invalid_grant` at the exchange.
  */
 
 import { randomBytes } from "node:crypto";
@@ -30,6 +36,7 @@ const EXPIRY_MARGIN_MS = 3 * 60 * 1000;
 
 type AuthorizationResult = {
 	code: string;
+	/** The client ID the code exchange must use. */
 	clientId: string;
 };
 
@@ -50,18 +57,40 @@ function randomValue(): string {
 	return randomBytes(32).toString("base64url");
 }
 
-function authorizationResultFromCallback(url: URL, expectedState: string): AuthorizationResult {
+function authorizationResultFromCallback(
+	url: URL,
+	expectedState: string,
+	expectedClientId: string | undefined,
+): AuthorizationResult {
 	const code = url.searchParams.get("code");
 	if (!code) throw new Error("Missing authorization code");
 	const state = url.searchParams.get("state");
 	if (!state) throw new Error("Missing OAuth state");
 	if (state !== expectedState) throw new Error("OAuth state mismatch");
-	const clientId = url.searchParams.get("client_id")?.trim();
-	if (!clientId) throw new Error("OpenAI OAuth registration callback did not contain an issued client ID");
-	return { code, clientId };
+	const callbackClientId = url.searchParams.get("client_id")?.trim();
+	if (expectedClientId === undefined) {
+		// Dynamic registration: the callback carries the newly issued client ID.
+		if (!callbackClientId) {
+			throw new Error("OpenAI OAuth registration callback did not contain an issued client ID");
+		}
+		return { code, clientId: callbackClientId };
+	}
+	// Reauthorization may omit client_id; retain the ID this attempt started with.
+	// A different ID would replace the account's registration, which the flow rejects.
+	if (callbackClientId === undefined) return { code, clientId: expectedClientId };
+	if (callbackClientId !== expectedClientId) {
+		throw new Error(
+			"OpenAI OAuth callback returned a different client ID than the one this sign-in started with. Log out first to connect a different ChatGPT account.",
+		);
+	}
+	return { code, clientId: expectedClientId };
 }
 
-function authorizationResultFromManualInput(input: string, expectedState: string): AuthorizationResult {
+function authorizationResultFromManualInput(
+	input: string,
+	expectedState: string,
+	expectedClientId: string | undefined,
+): AuthorizationResult {
 	let url: URL;
 	try {
 		url = new URL(input.trim());
@@ -74,7 +103,7 @@ function authorizationResultFromManualInput(input: string, expectedState: string
 	}
 	const error = url.searchParams.get("error");
 	if (error) throw new Error(`ChatGPT authorization failed: ${error}`);
-	return authorizationResultFromCallback(url, expectedState);
+	return authorizationResultFromCallback(url, expectedState, expectedClientId);
 }
 
 function sendHtml(response: ServerResponse, status: number, body: string): void {
@@ -82,7 +111,7 @@ function sendHtml(response: ServerResponse, status: number, body: string): void 
 	response.end(body);
 }
 
-function startCallbackServer(expectedState: string): Promise<CallbackServer> {
+function startCallbackServer(expectedState: string, expectedClientId: string | undefined): Promise<CallbackServer> {
 	return new Promise((resolve, reject) => {
 		let resolveResult!: (result: AuthorizationResult) => void;
 		let rejectResult!: (error: Error) => void;
@@ -108,7 +137,7 @@ function startCallbackServer(expectedState: string): Promise<CallbackServer> {
 
 				let authorizationResult: AuthorizationResult;
 				try {
-					authorizationResult = authorizationResultFromCallback(url, expectedState);
+					authorizationResult = authorizationResultFromCallback(url, expectedState, expectedClientId);
 				} catch (error) {
 					const message = error instanceof Error ? error.message : "Invalid callback";
 					sendHtml(response, 400, oauthErrorHtml(message));
@@ -131,6 +160,23 @@ function startCallbackServer(expectedState: string): Promise<CallbackServer> {
 	});
 }
 
+/** Token-endpoint failure carrying the parsed OAuth `error` code, when present. */
+class OAuthTokenRequestError extends Error {
+	readonly status: number;
+	readonly errorCode: string | undefined;
+
+	constructor(status: number, errorCode: string | undefined, message: string) {
+		super(message);
+		this.name = "OAuthTokenRequestError";
+		this.status = status;
+		this.errorCode = errorCode;
+	}
+}
+
+function isInvalidGrantError(error: unknown): boolean {
+	return error instanceof OAuthTokenRequestError && error.errorCode === "invalid_grant";
+}
+
 async function requestToken(body: URLSearchParams, signal: AbortSignal): Promise<TokenResponse> {
 	const response = await fetch(TOKEN_URL, {
 		method: "POST",
@@ -143,7 +189,21 @@ async function requestToken(body: URLSearchParams, signal: AbortSignal): Promise
 	});
 	if (!response.ok) {
 		const responseBody = await response.text().catch(() => "");
-		throw new Error(`OpenAI OAuth token request failed (${response.status}): ${responseBody || response.statusText}`);
+		let errorCode: string | undefined;
+		try {
+			const parsed: unknown = JSON.parse(responseBody);
+			if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
+				const error = (parsed as { error?: unknown }).error;
+				if (typeof error === "string" && error.trim().length > 0) errorCode = error.trim();
+			}
+		} catch {
+			// Non-JSON error bodies keep only the raw text in the message below.
+		}
+		throw new OAuthTokenRequestError(
+			response.status,
+			errorCode,
+			`OpenAI OAuth token request failed (${response.status}): ${responseBody || response.statusText}`,
+		);
 	}
 	const data: unknown = await response.json();
 	if (typeof data !== "object" || data === null || Array.isArray(data)) {
@@ -230,28 +290,36 @@ function agentHostId(deviceId: string | undefined): string {
 	return `urn:uuid:${deviceId.toLowerCase()}`;
 }
 
-async function loginOpenAIChatGPT(
+/** The saved issued client ID for a reauthorization attempt, if the store has one. */
+function storedIssuedClientId(credential: OAuthCredential | undefined): string | undefined {
+	const clientId = credential?.clientId;
+	if (typeof clientId !== "string") return undefined;
+	const trimmed = clientId.trim();
+	// `dynamic_agent_client` is the registration entrypoint, never a stored issued ID.
+	return trimmed.length === 0 || trimmed === DYNAMIC_CLIENT_ID ? undefined : trimmed;
+}
+
+/** One browser round-trip: fresh PKCE/state/nonce, callback server, manual-paste fallback. */
+async function runAuthorizationAttempt(
 	interaction: ProviderAuthInteraction,
-	options?: LoginOptions,
-): Promise<OAuthCredential> {
-	const hostId = agentHostId(options?.getDeviceId?.());
+	inputs: { hostId: string; clientId: string | undefined; agentName: string | undefined },
+): Promise<{ code: string; clientId: string; verifier: string }> {
+	const isDynamicRegistration = inputs.clientId === undefined;
 	const { verifier, challenge } = await generatePKCE();
 	const state = randomValue();
 	const nonce = randomValue();
 	// Without this server, the browser's callback would reach whatever else holds the port (another
 	// pending login or the Codex CLI), which rejects it as a state mismatch. Fail with a clear error instead.
-	const callback = await startCallbackServer(state).catch((error: unknown) => {
+	const callback = await startCallbackServer(state, inputs.clientId).catch((error: unknown) => {
 		if (!(error instanceof Error && "code" in error && error.code === "EADDRINUSE")) throw error;
 		throw new Error(
 			`Port ${CALLBACK_PORT} is in use, probably by an unfinished login in another nanopi session or by the Codex CLI. Cancel that login and try again.`,
 		);
 	});
 
-	const authorizationUrl = new URL(AUTHORIZE_URL);
-	authorizationUrl.search = new URLSearchParams({
-		client_id: DYNAMIC_CLIENT_ID,
-		agent_name_hint: options?.agentName ?? AGENT_NAME_HINT,
-		ext_agent_host_id: hostId,
+	const parameters: Record<string, string> = {
+		client_id: inputs.clientId ?? DYNAMIC_CLIENT_ID,
+		ext_agent_host_id: inputs.hostId,
 		response_type: "code",
 		redirect_uri: REDIRECT_URI,
 		resource: RESOURCE,
@@ -260,7 +328,11 @@ async function loginOpenAIChatGPT(
 		code_challenge: challenge,
 		code_challenge_method: "S256",
 		nonce,
-	}).toString();
+	};
+	// The name hint is registration metadata only; reauthorization with an issued client ID omits it.
+	if (isDynamicRegistration) parameters.agent_name_hint = inputs.agentName ?? AGENT_NAME_HINT;
+	const authorizationUrl = new URL(AUTHORIZE_URL);
+	authorizationUrl.search = new URLSearchParams(parameters).toString();
 	interaction.notify({
 		type: "auth_url",
 		url: authorizationUrl.toString(),
@@ -276,15 +348,11 @@ async function loginOpenAIChatGPT(
 			placeholder: REDIRECT_URI,
 			signal: AbortSignal.any([manualAbort.signal, interaction.signal]),
 		})
-		.then((input) => authorizationResultFromManualInput(input, state));
+		.then((input) => authorizationResultFromManualInput(input, state, inputs.clientId));
 
 	try {
 		const result = await Promise.race([callback.result, manualCode]);
-		interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
-		return await exchangeAuthorizationCode(result.code, verifier, result.clientId, interaction.signal);
-	} catch (error) {
-		if (interaction.signal.aborted) throw new Error("Login cancelled");
-		throw error;
+		return { code: result.code, clientId: result.clientId, verifier };
 	} finally {
 		manualAbort.abort();
 		callback.server.close();
@@ -294,6 +362,41 @@ async function loginOpenAIChatGPT(
 		// may send that login's callback over the spare connection. This server would then handle
 		// it and reject it with "OAuth state mismatch", and the new login would never see it.
 		callback.server.closeAllConnections();
+	}
+}
+
+async function loginOpenAIChatGPT(
+	interaction: ProviderAuthInteraction,
+	options?: LoginOptions,
+): Promise<OAuthCredential> {
+	const hostId = agentHostId(options?.getDeviceId?.());
+	let clientId = storedIssuedClientId(options?.currentCredential);
+	try {
+		for (;;) {
+			const result = await runAuthorizationAttempt(interaction, {
+				hostId,
+				clientId,
+				agentName: options?.agentName,
+			});
+			interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
+			try {
+				return await exchangeAuthorizationCode(result.code, result.verifier, result.clientId, interaction.signal);
+			} catch (error) {
+				if (isInvalidGrantError(error) && result.clientId !== clientId) {
+					// OpenAI binds the registration to the agent host, so it answers a dynamic
+					// registration for an already-registered host with invalid_grant. The documented
+					// recovery is to discard the code and restart authorization with the client ID
+					// issued for that attempt. After the restart the IDs are equal, so this cannot loop.
+					clientId = result.clientId;
+					interaction.notify({ type: "progress", message: "Retrying sign-in with the issued client ID..." });
+					continue;
+				}
+				throw error;
+			}
+		}
+	} catch (error) {
+		if (interaction.signal.aborted) throw new Error("Login cancelled");
+		throw error;
 	}
 }
 

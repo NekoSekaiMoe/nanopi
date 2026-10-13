@@ -779,7 +779,13 @@ class ModelsImpl implements MutableModels {
 		if (!method?.login) {
 			throw new ModelsError("auth", `${provider.name} does not support ${type} login`);
 		}
-		const loginOperation: Promise<Credential> = method.login({ ...interaction, signal }, options);
+		// Flows such as OpenAI's Sign in with ChatGPT reauthorize with the stored
+		// issued client ID instead of registering a new client for the same host.
+		const storedCredential = type === "oauth" ? await this.credentials.read(providerId, { signal }) : undefined;
+		const loginOperation: Promise<Credential> = method.login(
+			{ ...interaction, signal },
+			{ ...options, currentCredential: storedCredential?.type === "oauth" ? storedCredential : undefined },
+		);
 		const credential = await raceWithAbortSignal(loginOperation, signal);
 		let mutationStarted = false;
 		let markMutationStarted: (() => void) | undefined;
