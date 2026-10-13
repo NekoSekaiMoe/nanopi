@@ -1,0 +1,35 @@
+# 将 CNB 仓库上的改动镜像推送到 GitHub（NekoSekaiMoe/nanopi）。
+#
+# PR 合并到 main 后触发；nightly 兜底挂一次，避免漏推。
+# GH_TOKEN 由密钥仓库 shinytale/keys 的 env.yml 注入。
+
+main:
+  push:
+    - name: mirror-to-github
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      imports:
+        - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
+      stages:
+        - name: push main
+          script: |
+            set -euo pipefail
+            git config --global credential.helper store
+            printf 'https://x-access-token:%s@github.com\n' "$GH_TOKEN" > ~/.git-credentials
+            git push --force https://github.com/NekoSekaiMoe/nanopi.git HEAD:refs/heads/main
+
+  "crontab: 23 4 * * *":
+    - name: mirror-to-github-nightly
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      imports:
+        - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
+      stages:
+        - name: push main
+          script: |
+            set -euo pipefail
+            git config --global credential.helper store
+            printf 'https://x-access-token:%s@github.com\n' "$GH_TOKEN" > ~/.git-credentials
+            git push --force https://github.com/NekoSekaiMoe/nanopi.git HEAD:refs/heads/main
