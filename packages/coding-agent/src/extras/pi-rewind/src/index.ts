@@ -15,7 +15,7 @@
  *   pi install github.com/arpagon/pi-rewind
  */
 
-import type { ModuleApi } from "../../../src/core/modules/types.ts";
+import type { ModuleApi } from "../../../core/modules/types.ts";
 import {
   isGitRepo,
   getRepoRoot,

@@ -75,10 +75,13 @@ registerVirtualModel (+unregister*).
   src/modules/ registering through ModuleApi.
 - packages/extra keeps its structural-slice approach; ExtraExtensionAPI is
   re-sliced against ModuleApi (names unchanged where possible).
-- extras/* (10 packages) are imported directly from src/modules/index.ts
-  (compiled in). Their `@earendil-works/pi-coding-agent` imports are rewritten
-  to relative deep imports (the root tsconfig paths, loader alias map, and
-  bundle virtual modules for upstream names all die with the loader). Their
+- extras/* (10 packages) live under `src/extras/<name>` and are imported
+  directly from src/modules/index.ts (compiled in). Their host imports stay
+  bare `@nanopi/pi-coding-agent` specifiers: the root tsconfig already maps
+  the self-name to src/, tsconfig.build.json gained the same mapping (a clean
+  checkout has no dist for the exports map to point at, and a stale dist
+  would otherwise win), Node resolves the self-reference through the exports
+  map at runtime, and esbuild bundles it via the workspace link. Their
   factories keep working because ESM cycles only matter at module-eval time;
   value imports are consumed inside factory bodies.
 - pi-subagent-mini: the spawn `extensions` param and `-e` forwarding are
@@ -98,7 +101,10 @@ registerVirtualModel (+unregister*).
 - Build: `extra/<name>` flavor components and dist/extras shipping (all extras
   always compiled in; minimal builds grow slightly). The `modes` component and
   its inert stub stay. scripts/extras.mjs and the extras payload in
-  copy-assets/single-file go.
+  copy-assets/single-file are superseded: after the extras moved under src/,
+  resolveBundledExtras() finds no vendored directory and returns [], so the
+  remaining call sites no-op; deleting them outright is pending follow-up
+  cleanup.
 - /reload was later removed entirely with the theme system
   ([remove the theme system and the /reload command](../simplification/2026-10-13-remove-theme-system-and-reload-command.md));
   the runtime reload machinery (module-requested, models.json hot reload)
@@ -126,6 +132,34 @@ machinery (compaction, session manager, system prompt builder, exec, skills,
 prompt templates, event bus). Sibling packages (pi-ai, pi-agent-core, pi-tui,
 pi-extra) get the same export audit.
 
+### 6. Build integration of the extras (completed 2026-10-13)
+
+The WIP checkpoint compiled extras in but left the build broken on a clean
+tree; completing it set three rules:
+
+- Extras sit under `src/extras/`, not beside `src/`. `rootDir: "src"` in
+  tsconfig.build.json stays valid and the emitted layout is unchanged
+  (tsc now emits dist/extras/<name> itself), so package.json exports, the
+  bundle entry list (dist/cli.js, dist/index.js, dist/rpc-entry.js),
+  copy-assets, and config.ts dist-path asset resolution all keep working.
+- Relative specifiers inside src/extras must climb exactly to the src root
+  and stop — never a literal `../src/` segment. A specifier that escapes
+  rootDir still type-resolves (against the source tree), but emitted JS
+  mirrors the src tree under dist, so the same climb lands back in src/ at
+  runtime and fails with ERR_MODULE_NOT_FOUND. 28 such specifiers were
+  rewritten during the move.
+- No top-level await anywhere under src/. The bundle launcher
+  (scripts/build-coding-agent-bundle.mjs) require()s the ESM cli-runtime graph
+  synchronously to benefit from the V8 compile cache, and require(ESM)
+  rejects TLA graphs — the CLI died on `--version` otherwise. ask-lite's two
+  optional-i18n TLAs became fire-and-forget imports that fall back to English
+  until (if ever) the SDK resolves.
+
+Vendored boundaries: biome excludes `packages/coding-agent/src/extras/**`
+(vendored formatting is preserved byte-for-byte), and extras' own `__tests__`
+directories are excluded from both tsc programs (they drift against core
+APIs and are not shipped).
+
 ## Alternatives considered
 
 - **Keep ExtensionRunner as an internal seam, delete only loading/installation**
@@ -138,18 +172,23 @@ pi-extra) get the same export audit.
 - **Keep per-extra build flavor components** via per-module alias stubs:
   rejected — 10 generated stubs for ~200 KiB savings; extras are always
   compiled in instead.
+- **Widen the build rootDir to the package root (rootDir: ".") instead of
+  moving extras under src/**: rejected — tsc would emit dist/src/** and ripple
+  into package.json exports, the bundle entry list, copy-assets targets, and
+  config.ts dist-path asset resolution; the move keeps the emitted layout
+  identical and touches none of them.
 - **Keep the packages pipeline for skills/prompts/themes delivery**: rejected —
   it exists to distribute plugin payloads; local discovery covers the rest and
   the package manager is the main deletion target.
 
 ## Testing
 
-- `pnpm run check` passes (biome, pinned deps, runtime deps, ts imports,
-  entry graphs, tsc, browser smoke); zero references to extensions/, jiti,
-  package-manager, `--extension`, or settings `extensions`/`packages` remain
-  under src.
-- The 10 extras + pi-extra + 3 built-ins compile in as BUILTIN_MODULES; the
-  faux-provider suites (test-harness, dynamic-tools, runtime) pass.
+- `pnpm run build` and `pnpm run check` pass on a clean tree after the
+  2026-10-13 build fix; the WIP checkpoint alone broke clean builds (extras
+  outside rootDir, no self-import paths mapping, two TLAs) and the bundled
+  CLI failed at startup. Both dist/bundle/cli.js and dist/cli.js answer
+  `--version`; the faux-provider suites (test-harness, dynamic-tools,
+  runtime) pass.
 - examples/sdk/06-modules.ts demonstrates user composition with exported
   interfaces only.
 - CHANGELOG breaking-changes entry landed.
@@ -181,7 +220,12 @@ Partially supersedes (at implementation time):
 - pi-rewind's `"escape escape"` shortcut registration was dropped (KeyId does
   not admit multi-key sequences; /rewind remains).
 - ask-lite's optional i18n SDK import uses a non-literal dynamic-import
-  specifier so the optional dependency stays optional under strict typecheck.
+  specifier so the optional dependency stays optional under strict typecheck;
+  it also had to drop top-level await (see the build-integration rules above).
+- The planned rewrite of extras' host imports to relative deep imports was
+  abandoned in favor of keeping the 70 bare `@nanopi/pi-coding-agent`
+  specifiers and adding one self-mapping line to tsconfig.build.json paths;
+  runtime self-reference through the exports map already worked.
 - The extras were never typechecked before (jiti loaded them at runtime); the
   compiled-in migration surfaced and fixed pre-existing type drift (mcp-lite
   tool results lacked `details`, pi-rewind null handling, parameter

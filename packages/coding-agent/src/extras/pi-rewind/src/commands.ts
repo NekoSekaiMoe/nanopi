@@ -5,7 +5,7 @@
  * browser and restore options.
  */
 
-import type { ModuleApi, ModuleCommandContext } from "../../../src/core/modules/types.ts";
+import type { ModuleApi, ModuleCommandContext } from "../../../core/modules/types.ts";
 import type { RewindState } from "./state.js";
 import type { CheckpointData } from "./core.js";
 import { restoreCheckpoint, createCheckpoint, diffCheckpoints, sanitizeForRef, git } from "./core.js";

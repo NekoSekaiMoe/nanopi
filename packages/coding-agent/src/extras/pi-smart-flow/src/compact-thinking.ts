@@ -29,8 +29,8 @@ import { join } from "node:path";
 import type {
 	ModuleApi,
 	ModuleContext,
-} from "../../../src/core/modules/types.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
+} from "../../../core/modules/types.ts";
+import { SettingsManager } from "../../../core/settings-manager.ts";
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import { Text } from "@nanopi/pi-tui";
 

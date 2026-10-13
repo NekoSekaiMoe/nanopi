@@ -34,8 +34,8 @@
 
 import type {
 	ModuleApi,
-} from "../../../src/core/modules/types.ts";
-import { createEditToolDefinition } from "../../../src/core/tools/edit.ts";
+} from "../../../core/modules/types.ts";
+import { createEditToolDefinition } from "../../../core/tools/edit.ts";
 
 /** APIs whose traffic we impersonate as Codex CLI — `apply_patch` rides along. */
 export const CODEX_APIS = new Set(["openai-responses", "openai-codex-responses"]);

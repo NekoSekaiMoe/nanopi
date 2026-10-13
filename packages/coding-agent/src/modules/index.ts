@@ -5,17 +5,17 @@
  */
 
 import { extraInlineExtension } from "@nanopi/pi-extra";
-import askLite from "../../extras/ask-lite/index.ts";
-import mcpLite from "../../extras/mcp-lite/src/index.ts";
-import piFakeCodex from "../../extras/pi-fake-codex/src/index.ts";
-import piFakeOpencode from "../../extras/pi-fake-opencode/src/index.ts";
-import piRewind from "../../extras/pi-rewind/src/index.ts";
-import piSimplify from "../../extras/pi-simplify/src/index.ts";
-import piSmartFlow from "../../extras/pi-smart-flow/src/index.ts";
-import piSubagentMini from "../../extras/pi-subagent-mini/src/index.ts";
-import piUi from "../../extras/pi-ui/src/index.ts";
-import todoLite from "../../extras/todo-lite/index.ts";
 import type { SessionModule } from "../core/modules/types.ts";
+import askLite from "../extras/ask-lite/index.ts";
+import mcpLite from "../extras/mcp-lite/src/index.ts";
+import piFakeCodex from "../extras/pi-fake-codex/src/index.ts";
+import piFakeOpencode from "../extras/pi-fake-opencode/src/index.ts";
+import piRewind from "../extras/pi-rewind/src/index.ts";
+import piSimplify from "../extras/pi-simplify/src/index.ts";
+import piSmartFlow from "../extras/pi-smart-flow/src/index.ts";
+import piSubagentMini from "../extras/pi-subagent-mini/src/index.ts";
+import piUi from "../extras/pi-ui/src/index.ts";
+import todoLite from "../extras/todo-lite/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
 import llamaExtension from "./llama/index.ts";

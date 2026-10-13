@@ -33,19 +33,25 @@ type I18nSDK = { scope: (namespace: string) => ScopeFn };
 // rpiv-i18n), the dynamic import fails, every t(key, fallback) returns the
 // canonical English literal, and the extension stays online.
 //
-// Top-level await is required so a synchronous `t(...)` call from any
-// downstream module sees the resolved scope; ESM module loading awaits this
-// before evaluating any importer.
-let scopeImpl: ScopeFn;
+// The import resolves in the background rather than via top-level await:
+// this module is compiled into the nanopi CLI bundle, whose launcher
+// require()s the ESM graph synchronously (for the V8 compile cache), and
+// require() rejects any graph containing top-level await. Until the SDK
+// resolves, t() serves the English fallback — the same result as the
+// SDK-missing case.
+let scopeImpl: ScopeFn = (_key, fallback) => fallback;
 try {
 	const i18nModuleId = "@juicesharp/rpiv-i18n";
-	const sdk = (await import(i18nModuleId)) as I18nSDK;
-	scopeImpl = sdk.scope(I18N_NAMESPACE);
+	void import(i18nModuleId)
+		.then((sdk) => {
+			scopeImpl = (sdk as I18nSDK).scope(I18N_NAMESPACE);
+		})
+		.catch(() => {});
 } catch {
-	scopeImpl = (_key, fallback) => fallback;
+	// Synchronous import() scheduling failure: keep the English fallback.
 }
 
-export const t: ScopeFn = scopeImpl;
+export const t: ScopeFn = (key, fallback) => scopeImpl(key, fallback);
 
 export function displayLabel(kind: SentinelKind): string {
 	return t(`sentinel.${kind}`, ROW_INTENT_META[kind].label);

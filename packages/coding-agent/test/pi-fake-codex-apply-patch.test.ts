@@ -1,8 +1,8 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { describe, expect, test } from "vitest";
-import { registerApplyPatchTool } from "../extras/pi-fake-codex/src/apply-patch.ts";
 import type { ModuleApi, ToolDefinition, ToolLoadout } from "../src/core/modules/types.ts";
 import { createEditToolDefinition } from "../src/core/tools/edit.ts";
+import { registerApplyPatchTool } from "../src/extras/pi-fake-codex/src/apply-patch.ts";
 
 /** Minimal stand-in for a named tool; the loadout contract only reads `name` here. */
 const namedTool = (name: string): AgentTool => ({ name }) as unknown as AgentTool;

@@ -34,8 +34,8 @@ import {
 	selectTabBarProps,
 } from "./selectors/projections.js";
 import type { QuestionnaireState } from "./state.js";
-import { getMarkdownTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import type { Theme } from "../../../src/modes/interactive/theme/theme.ts";
+import { getMarkdownTheme } from "../../../modes/interactive/theme/theme.ts";
+import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 
 export interface QuestionnaireBuildConfig {
 	tui: { terminal: { columns: number; rows: number }; requestRender(): void };

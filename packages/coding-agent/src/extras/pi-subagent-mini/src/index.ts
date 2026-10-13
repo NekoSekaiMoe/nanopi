@@ -3,8 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
-import type { ModuleApi } from "../../../src/core/modules/types.ts";
-import { getPackageDir } from "../../../src/config.ts";
+import type { ModuleApi } from "../../../core/modules/types.ts";
+import { getPackageDir } from "../../../config.ts";
 
 // jiti (pi's TS loader) injects CJS wrapper params (__dirname/__filename) into
 // transpiled ESM modules, while import.meta.url becomes an inlined data: URL.

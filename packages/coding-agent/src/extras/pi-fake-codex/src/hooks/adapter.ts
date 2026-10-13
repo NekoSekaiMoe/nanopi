@@ -15,7 +15,7 @@ import { randomUUID } from "node:crypto";
 import type {
 	ModuleApi,
 	ModuleContext,
-} from "../../../../src/core/modules/types.ts";
+} from "../../../../core/modules/types.ts";
 import {
   type CodexHookEvent,
   type LoadedCodexHooks,

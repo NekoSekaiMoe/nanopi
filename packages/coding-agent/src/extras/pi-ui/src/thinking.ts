@@ -59,8 +59,8 @@ import { SettingsList, Spacer, Text, Markdown, truncateToWidth, visibleWidth } f
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
-import { AssistantMessageComponent } from "../../../src/modes/interactive/components/assistant-message.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import { AssistantMessageComponent } from "../../../modes/interactive/components/assistant-message.ts";
+import { InteractiveMode } from "../../../modes/interactive/interactive-mode.ts";
 
 /** Theme captured at the latest session_start; fallback for resolveTheme(). */
 let activeTheme: Theme | undefined;

@@ -18,7 +18,7 @@ import type { ChildProcess } from "node:child_process";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { getShellConfig } from "../../../src/utils/shell.ts";
+import { getShellConfig } from "../../../utils/shell.ts";
 
 const MAX_TAIL_BYTES = 64 * 1024;
 const MAX_LOG_BYTES = 16 * 1024 * 1024;

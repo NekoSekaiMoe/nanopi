@@ -30,12 +30,25 @@ type I18nLoader = {
 //
 // The `/loader` subpath is used instead of the SDK entry so the i18n-ui +
 // pi-tui modules are not pulled into our load graph just to register strings.
+//
+// The import is fire-and-forget instead of top-level await: this module is
+// compiled into the nanopi CLI bundle, whose launcher require()s the ESM
+// graph synchronously (for the V8 compile cache), and require() rejects any
+// graph containing top-level await. Registration is idempotent and
+// render-time lookups fall back to English until it completes.
 try {
 	const i18nLoaderId = "@juicesharp/rpiv-i18n/loader";
-	const sdk = (await import(i18nLoaderId)) as I18nLoader;
-	sdk.registerLocalesFromDir(I18N_NAMESPACE, import.meta.url, { label: "rpiv-ask-user-question" });
+	void import(i18nLoaderId)
+		.then((sdk) => {
+			(sdk as I18nLoader).registerLocalesFromDir(I18N_NAMESPACE, import.meta.url, {
+				label: "rpiv-ask-user-question",
+			});
+		})
+		.catch(() => {
+			// SDK absent — extension still loads with English-only UI.
+		});
 } catch {
-	// SDK absent — extension still loads with English-only UI.
+	// Synchronous import() scheduling failure — same English-only outcome.
 }
 
 export {

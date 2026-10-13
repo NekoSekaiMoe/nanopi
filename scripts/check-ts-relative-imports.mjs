@@ -12,7 +12,7 @@ import {
 } from "typescript/unstable/ast/is";
 import { API } from "typescript/unstable/sync";
 
-// "extras" holds vendored bundled extras (packages/coding-agent/extras):
+// "extras" holds vendored bundled extras (packages/coding-agent/src/extras):
 // third-party sources whose ./x.js specifiers are outside this rule.
 const ignoredDirectories = new Set([".git", "coverage", "dist", "node_modules", "extras"]);
 const files = [];

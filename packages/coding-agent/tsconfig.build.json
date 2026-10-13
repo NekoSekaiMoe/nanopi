@@ -8,10 +8,18 @@
 			"@nanopi/pi-ai": ["../ai/dist/index.d.ts"],
 			"@nanopi/pi-ai/*": ["../ai/dist/*.d.ts", "../ai/dist/providers/*.d.ts"],
 			"@nanopi/pi-tui": ["../tui/dist/index.d.ts"],
-			"@nanopi/pi-tui/*": ["../tui/dist/*.d.ts", "../tui/dist/components/*.d.ts"]
+			"@nanopi/pi-tui/*": ["../tui/dist/*.d.ts", "../tui/dist/components/*.d.ts"],
+			"@nanopi/pi-coding-agent": ["./src/index.ts"]
 		},
 		"rootDir": "./src"
 	},
 	"include": ["src/**/*.ts", "src/**/*.d.ts"],
-	"exclude": ["node_modules", "dist", "src/client", "src/experimental", "src/cli/experimental"]
+	"exclude": [
+		"node_modules",
+		"dist",
+		"src/client",
+		"src/experimental",
+		"src/cli/experimental",
+		"src/extras/**/__tests__/**"
+	]
 }

@@ -3,7 +3,7 @@
  * scripts.
  *
  * Extras are vendored package directories under
- * packages/coding-agent/extras/<name>, one buildconfig.json component
+ * packages/coding-agent/src/extras/<name>, one buildconfig.json component
  * `extra/<name>` each. Enabled extras are copied into dist/extras/<name> (npm
  * dist) and embedded in the single-file asset payload; the runtime registers
  * them as default packages (see src/core/bundled-extras.ts).
