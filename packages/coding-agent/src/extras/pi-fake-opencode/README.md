@@ -41,7 +41,7 @@ Two hooks, both scoped to OpenCode-bound requests only:
 
 **`before_provider_request`** — reshapes the payload into the accepted form (all three transforms verified against the live gateway):
 
-1. Prepends the official title-generator prompt (plus a separator that tells the model to follow the operator's instructions) to the system message. The gateway only inspects the prefix, so the session's real system prompt is preserved verbatim after the separator.
+1. Prepends the official title-generator prompt (plus a separator that tells the model to follow the operator's instructions) to the system message, and restates the override at the top of the first user turn — without it, small free models latch onto the title-generation role and answer with a thread title instead of the task. The gateway only inspects the system-message prefix, so the session's real system prompt is preserved verbatim after the separator.
 2. Strips `tools` / `tool_choice` — the gate accepts tool-carrying requests only when the whole body matches the official agent template (official system prompt AND official tool definitions; nanopi's tool set is rejected). **Consequence: models reached through the free-tier path cannot call tools — they answer as plain chat models.**
 3. Renames `max_completion_tokens` to `max_tokens` — the gate rejects the newer field name.
 
@@ -108,7 +108,7 @@ When the gateway stops accepting the embedded prompt or the composite User-Agent
 - Free-tier usage is still subject to Zen's rate limits and terms. This module only fixes client identification, not entitlement.
 - **Tool calling is unavailable on the free-tier path**: the gateway only accepts tool-carrying requests whose tool definitions match the official client's, so the module strips tools and free models answer as plain chat models. Use them for questions, code review, and one-shot generation — not for agentic tool loops.
 - `Authorization: Bearer public` + a paid model returns `AuthError` ("Missing API key") — that is Zen rejecting the anonymous key for non-free models, not something this module can or should bypass.
-- The prepended prompt biases the model slightly (it describes a title-generation role); the separator explicitly overrides it, and free-tier models verified to follow the operative instructions, but expect small behavioral differences versus a clean system prompt.
+- The prepended prompt biases the model toward title generation; the separator plus the user-turn override neutralizes it in testing (mimo-v2.6-flash-free answered tasks correctly 3/3 with the override, 1/3 without), but expect small behavioral differences versus a clean system prompt.
 
 ## License
 
