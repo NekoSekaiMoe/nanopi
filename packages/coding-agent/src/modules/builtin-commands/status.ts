@@ -12,7 +12,7 @@
  * emitted via `ctx.ui.notify`.
  */
 
-import { VERSION } from "../../config.ts";
+import { BUILD_VERSION } from "../../core/build-version.ts";
 import type { ModuleApi, ModuleCommandContext, ToolInfo } from "../../core/modules/types.ts";
 import { formatContextPath, getCompactExtensionLabels, type ResourceItem } from "../../core/resource-listing.ts";
 import { formatTokens } from "./context.ts";
@@ -135,7 +135,7 @@ export function registerStatus(pi: ModuleApi) {
 		handler: async (_args, ctx) => {
 			const rows = collectStatusRows(ctx, pi.getAllTools());
 			const sections = collectStatusSections(ctx);
-			const title = `π nanopi (v${VERSION})`;
+			const title = `π nanopi (${BUILD_VERSION})`;
 			if (ctx.mode !== "tui" || !ctx.hasUI) {
 				const sectionLines = sections
 					.filter((section) => section.items.length > 0)

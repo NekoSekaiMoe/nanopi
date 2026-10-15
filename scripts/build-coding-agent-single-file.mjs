@@ -288,6 +288,13 @@ const collectedSidecars = collectSidecarFiles();
 const sidecarManifest = buildSidecarManifest(collectedSidecars);
 const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
 const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
+// Same contract as the npm bundle: the single-file artifact has no .git directory
+// at runtime, so the commit is baked in at build time.
+const buildCommit = execFileSync("git", ["rev-parse", "HEAD"], {
+	cwd: repoRoot,
+	encoding: "utf8",
+	stdio: ["ignore", "pipe", "ignore"],
+}).trim();
 
 // OAuth flows disabled by the flavor must not be statically imported either:
 // alias the bundled-oauth registration module to a shim registering only the
@@ -341,6 +348,7 @@ try {
 			NANOPI_BUNDLED_NODE: "true",
 			NANOPI_SINGLE_FILE: "true",
 			NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
+			NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
 			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
 			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
 			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),

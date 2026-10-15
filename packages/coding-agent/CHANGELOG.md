@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+- The welcome box and `--version` now report the build as `v<date>.<short-commit>` (for example `v20261013.718adde`): the date comes from the package.json version and the seven-character commit from `git HEAD` of the build that produced the process (bundled builds bake it in as a build-time define, source checkouts and npm installs resolve it at startup and fall back to the bare date outside a repository). Long directory paths in the welcome box fold in the middle (`~/a/…/d`) instead of truncating at the tail, so both the home prefix and the directory being worked in stay visible
+- The welcome box `directory:` row now appends the current git branch (`~/a/…/d (main)`) when the working directory is inside a repository. The branch comes from the same watcher the footer already uses, so it tracks branch switches instead of freezing the startup value, and the suffix is omitted entirely outside a repository or on a detached HEAD
+
 ### Added
 - Added the built-in `github-copilot/auto` virtual model. Copilot Free and Student plans force Auto model selection, leaving no usable model in nanopi's Copilot list; `auto` is now listed for every Copilot login, routes each request through Copilot's Auto session and router, attaches the session token per request, and records the physical model that answered so usage, cost, and compaction limits stay accurate. The route stays sticky per conversation and re-routes after failures
 
