@@ -205,7 +205,7 @@ export function buildProjectId(): string {
  *      comma-separated `PI_FAKE_OPENCODE_PROVIDERS` env var (for custom
  *      provider ids that point at Zen).
  *   3. The model's base URL contains `opencode.ai` (models.json providers
- *      configured with `https://opencode.ai/zen/v1` or similar).
+ *      configured with `https://opencode.ai/inference/v1` or similar).
  *
  * Untouched requests keep pi's own identity, so unrelated providers are never
  * affected.

@@ -52,7 +52,7 @@ Authorization, the endpoint, and every other header stay exactly as nanopi and t
 A request is spoofed when **any** of these holds:
 
 - the model's provider is `opencode` or `opencode-go` (nanopi's built-in Zen providers), or
-- the model's base URL contains `opencode.ai` (custom `models.json` providers pointing at `https://opencode.ai/zen/v1`), or
+- the model's base URL contains `opencode.ai` (custom `models.json` providers pointing at `https://opencode.ai/inference/v1`), or
 - the provider id is listed in `PI_FAKE_OPENCODE_PROVIDERS` (for proxies that front Zen and forward client headers), or
 - `PI_FAKE_OPENCODE_ALL` is set truthy.
 
@@ -66,7 +66,7 @@ OpenCode itself uses the literal API key `public` when no key is configured, whi
 {
   "providers": {
     "opencode": {
-      "baseUrl": "https://opencode.ai/zen/v1",
+      "baseUrl": "https://opencode.ai/inference/v1",
       "apiKey": "public",
       "api": "openai-completions",
       "models": [
@@ -85,7 +85,7 @@ OpenCode itself uses the literal API key `public` when no key is configured, whi
 }
 ```
 
-Free model ids (query the live gateway): `curl https://opencode.ai/zen/v1/models` and pick the `*-free` entries. For paid models, authenticate properly instead (`/login opencode` or `OPENCODE_API_KEY` with a real `sk-zen-…` key); paid usage is not subject to the client check.
+Free model ids (query the live gateway): `curl https://opencode.ai/inference/v1/models` and pick the `*-free` entries. For paid models, authenticate properly instead (`/login opencode` or `OPENCODE_API_KEY` with a real `sk-zen-…` key); paid usage is not subject to the client check.
 
 Verified end-to-end 2026-10: a request with the three signals above passes from Node (nanopi's own transport) against the live gateway; any one signal missing returns the exact `FreeTierError` above.
 

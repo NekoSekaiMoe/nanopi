@@ -240,7 +240,7 @@ describe("createAgentSession provider attribution headers", () => {
 	});
 
 	it("adds OpenCode session headers", async () => {
-		const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/zen/v1"), {
+		const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/inference/v1"), {
 			sessionId: "opencode-session",
 		});
 
@@ -249,7 +249,7 @@ describe("createAgentSession provider attribution headers", () => {
 	});
 
 	it("lets configured OpenCode headers override the defaults", async () => {
-		const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/zen/v1"), {
+		const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/inference/v1"), {
 			sessionId: "opencode-session",
 			providerHeaders: {
 				"x-opencode-session": "configured-session",

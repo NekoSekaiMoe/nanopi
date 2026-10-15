@@ -10,7 +10,7 @@ const model: Model<Api> = {
 	name: "Test model",
 	api: "test-api",
 	provider: "opencode",
-	baseUrl: "https://opencode.ai/zen/v1",
+	baseUrl: "https://opencode.ai/inference/v1",
 	reasoning: false,
 	input: ["text"],
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
