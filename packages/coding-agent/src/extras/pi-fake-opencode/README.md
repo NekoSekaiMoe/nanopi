@@ -41,7 +41,7 @@ Two hooks, both scoped to OpenCode-bound requests only:
 
 **`before_provider_request`** — reshapes the payload into the accepted form (all three transforms verified against the live gateway):
 
-1. Prepends the official title-generator prompt (plus a separator that tells the model to follow the operator's instructions) to the system message, and restates the override at the top of the first user turn — without it, small free models latch onto the title-generation role and answer with a thread title instead of the task. The gateway only inspects the system-message prefix, so the session's real system prompt is preserved verbatim after the separator.
+1. Prepends the official title-generator prompt (plus a separator that tells the model to follow the operator's instructions) to the system message, and restates the override at the top of the first user turn (both string and OpenAI content-parts content forms — pi emits the parts form for user turns) — without it, small free models latch onto the title-generation role and answer with a thread title instead of the task. The gateway only inspects the system-message prefix, so the session's real system prompt is preserved verbatim after the separator.
 2. Strips `tools` / `tool_choice` — the gate accepts tool-carrying requests only when the whole body matches the official agent template (official system prompt AND official tool definitions; nanopi's tool set is rejected). **Consequence: models reached through the free-tier path cannot call tools — they answer as plain chat models.**
 3. Renames `max_completion_tokens` to `max_tokens` — the gate rejects the newer field name.
 

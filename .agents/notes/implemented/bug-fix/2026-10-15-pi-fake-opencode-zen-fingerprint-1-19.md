@@ -22,7 +22,7 @@ Explicitly ruled out, each tested with the three signals held correct: TLS/HTTP-
 
 - Live gateway, Node transport, one signal varied at a time: all three signals present → 200 completion from `mimo-v2.6-flash-free` with `Bearer public`; any one removed → `FreeTierError`. Logged in the extension README's experiment table.
 - End-to-end through nanopi itself (`dist/cli.js -p --model opencode/mimo-v2.6-flash-free` against `https://opencode.ai/inference/v1`, `apiKey: public`): free model answered ("4") — the full builtin-module chain (headers + payload shaping) verified on the real gateway.
-- Behavior: the title-generator preamble at the top of the system message makes small models answer with a thread title instead of the task (observed: "Quick math check: 2+2" for a math question). The fix is a `[SYSTEM OVERRIDE]` block prepended to the first user turn restating that the title role is inert; with it, mimo-v2.6-flash-free answered three different one-shot tasks correctly 3/3.
+- Behavior: the title-generator preamble at the top of the system message makes small models answer with a thread title instead of the task (observed: "Quick math check: 2+2" for a math question). The fix is a note prepended to the first user turn (string and OpenAI content-parts forms) stating that the title role does not apply; with it, mimo-v2.6-flash-free answered three different one-shot tasks correctly 3/3.
 - Local: header-capturing echo server driven through `dist/cli.js -p` — nanopi's real request path asserts UA shape, descending `ses_` / ascending `msg_` ids, header set, the prepended system prompt, the stripped tools, and the renamed `max_tokens`.
 
 ## Alternatives considered
