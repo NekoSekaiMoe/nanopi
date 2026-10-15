@@ -1,9 +1,11 @@
+import { randomBytes } from "node:crypto";
+
 /**
  * pi-fake-opencode — Identity header construction
  *
- * Pure helpers that build the identity headers the official OpenCode client
+ * Pure helpers that build the identity signals the official OpenCode client
  * sends to the OpenCode Zen gateway, plus the scoping logic that decides
- * which requests get the treatment. Kept separate from the extension factory
+ * which requests get the treatment. Kept separate from the module factory
  * so the values are easy to read and update without touching pi plumbing.
  *
  * OpenCode Zen's free tier rejects requests that do not look like they come
@@ -13,34 +15,45 @@
  *   {"type":"FreeTierError","message":"Error from provider (Console):
  *    OpenCode's free tier can only be used from within OpenCode"}
  *
- * Verified against the live gateway (see README for the full experiment):
+ * Black-box verification (2026-10, against the 1.19.0 npm client and the
+ * live gateway; details and experiment log in README) shows the gate checks
+ * three things and all three must hold:
  *
- *   PASS  User-Agent: opencode/{recent version}
- *         x-opencode-session: ses_{26 chars of [0-9A-Za-z]}
- *   FAIL  any other User-Agent (including pi's, `opencode-foo/1.2`, bare
- *         `opencode`)                          -> FreeTierError
- *   FAIL  malformed session ids (short / no `ses_` prefix) -> FreeTierError
- *   FAIL  old versions (e.g. `opencode/0.6.9`) -> UpgradeRequired
+ *   1. User-Agent must be the official composite form:
+ *        opencode/{version} ai-sdk/provider-utils/{n} runtime/bun/{n}
+ *      e.g. "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14".
+ *      The 2-segment `opencode/{version}` and 4-segment
+ *      `opencode/{channel}/{version}/{client}` forms are both rejected.
+ *   2. `x-opencode-session` / `x-opencode-session-id` must carry a
+ *      well-formed DESCENDING opencode identifier and `x-opencode-request`
+ *      an ASCENDING one (`ses_`/`msg_` + 12 lowercase hex of the low 48
+ *      bits of (ms*0x1000 + counter), optionally NOT-ed, + 14 base62
+ *      chars — opencode `packages/schema/src/identifier.ts`).
+ *   3. The request's system message must START with a known official
+ *      OpenCode prompt (the session title-generator prompt works; anything
+ *      may be appended after it). Enforced in index.ts.
  *
- * The other headers the real client sends (`x-opencode-request`,
- * `x-opencode-client`) are not checked by the gateway today, but we send
- * faithful values anyway so traffic is indistinguishable from real OpenCode.
- *
- * Reference: opencode's `packages/opencode/src/session/llm/request.ts`
- * (headers for providers whose id starts with "opencode") and
- * `packages/schema/src/identifier.ts` (ID format).
+ * None of this is transport-dependent: the same request passes from curl,
+ * Node/undici, and Bun once the three signals are right.
  */
 
 /**
  * OpenCode client version to impersonate.
  *
- * The gateway rejects too-old versions with `UpgradeRequired`, so this must
- * track a recent OpenCode release. Override at runtime with the
+ * The gateway rejects stale versions with `UpgradeRequired`, so this must
+ * track a recent OpenCode release (npm `opencode-ai` latest at the time of
+ * the 2026-10 re-verification). Override at runtime with the
  * `PI_FAKE_OPENCODE_VERSION` env var, or replace the whole User-Agent via
  * `PI_FAKE_OPENCODE_UA`, when the gateway starts rejecting older
  * fingerprints.
  */
-export const DEFAULT_OPENCODE_VERSION = "1.18.31";
+export const DEFAULT_OPENCODE_VERSION = "1.19.0";
+
+/** `ai-sdk/provider-utils` version embedded in the official User-Agent. */
+export const DEFAULT_PROVIDER_UTILS_VERSION = "4.0.23";
+
+/** Bun runtime version embedded in the official User-Agent. */
+export const DEFAULT_BUN_VERSION = "1.3.14";
 
 /**
  * pi provider ids that target OpenCode infrastructure.
@@ -75,8 +88,7 @@ function envList(name: string): Set<string> {
 
 /** Random bytes as base62-ish characters, mirroring opencode's identifier tail. */
 function randomChars(count: number): string {
-  const bytes = new Uint8Array(count);
-  globalThis.crypto.getRandomValues(bytes);
+  const bytes = randomBytes(count);
   let out = "";
   for (const byte of bytes) out += IDENTIFIER_CHARS[byte % IDENTIFIER_CHARS.length];
   return out;
@@ -86,12 +98,16 @@ let lastTimestamp = 0;
 let counter = 0;
 
 /**
- * Generate an opencode-style ascending identifier: 12 lowercase-hex chars
- * (millisecond timestamp + per-process counter, exactly like
- * `Identifier.create()` in `packages/schema/src/identifier.ts`) followed by
- * 14 random alphanumerics.
+ * Generate an opencode identifier body: 12 lowercase-hex chars — the low 48
+ * bits of (timestamp*0x1000 + per-process counter), NOT-ed for descending
+ * ids — plus 14 random alphanumerics, exactly like `Identifier.create()` in
+ * opencode's `packages/schema/src/identifier.ts`.
+ *
+ * Session ids are DESCENDING (newest-first sort); message ids are ASCENDING.
+ * The gateway validates both directions — an ascending session id is
+ * rejected with `FreeTierError` even when every other signal is correct.
  */
-function ascendingIdentifier(): string {
+function identifierBody(descending: boolean): string {
   const timestamp = Date.now();
   if (timestamp !== lastTimestamp) {
     lastTimestamp = timestamp;
@@ -99,8 +115,9 @@ function ascendingIdentifier(): string {
   }
   counter++;
   const current = BigInt(timestamp) * 0x1000n + BigInt(counter);
+  const value = descending ? ~current : current;
   const time = Array.from({ length: 6 }, (_, index) =>
-    Number((current >> BigInt(40 - 8 * index)) & 0xffn)
+    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
       .toString(16)
       .padStart(2, "0"),
   ).join("");
@@ -110,10 +127,15 @@ function ascendingIdentifier(): string {
 /**
  * Build the OpenCode client's User-Agent string.
  *
+ * Mirrors the official client (`App.useragent` composed with the AI SDK and
+ * runtime segments in the 1.19.x line), e.g.:
+ *
+ *   opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14
+ *
  * Priority:
- *   1. `PI_FAKE_OPENCODE_UA`       — full string override
- *   2. `PI_FAKE_OPENCODE_VERSION`  — version segment of `opencode/{version}`
- *   3. `DEFAULT_OPENCODE_VERSION`
+ *   1. `PI_FAKE_OPENCODE_UA`      — full string override
+ *   2. `PI_FAKE_OPENCODE_VERSION` — opencode version segment override
+ *   3. Defaults above
  */
 export function buildUserAgent(): string {
   const full = process.env.PI_FAKE_OPENCODE_UA?.trim();
@@ -121,35 +143,38 @@ export function buildUserAgent(): string {
 
   const version =
     process.env.PI_FAKE_OPENCODE_VERSION?.trim() || DEFAULT_OPENCODE_VERSION;
-  return `opencode/${version}`;
+  return [
+    `opencode/${version}`,
+    `ai-sdk/provider-utils/${DEFAULT_PROVIDER_UTILS_VERSION}`,
+    `runtime/bun/${DEFAULT_BUN_VERSION}`,
+  ].join(" ");
 }
 
 /** Per-pi-session cache: one stable opencode session id per pi session. */
 const sessionIds = new Map<string, string>();
 
 /**
- * Build the `x-opencode-session` value for a pi session.
- *
- * Real opencode sends its own session id (`ses_` + 26 chars); the gateway
- * validates the format. We derive a stable, well-formed id from pi's session
- * id so retries and follow-up requests within one pi session reuse the same
- * value, just like the real client would.
+ * Build the `x-opencode-session` / `x-opencode-session-id` value for a pi
+ * session: a stable, well-formed DESCENDING opencode session id
+ * (`ses_` + 26 chars). Cached per pi session id so retries and follow-up
+ * requests within one pi session reuse the same value, just like the real
+ * client would.
  */
 export function buildSessionId(piSessionId: string): string {
   const existing = sessionIds.get(piSessionId);
   if (existing) return existing;
 
-  const generated = `ses_${ascendingIdentifier()}`;
+  const generated = `ses_${identifierBody(true)}`;
   sessionIds.set(piSessionId, generated);
   return generated;
 }
 
 /**
- * Build the `x-opencode-request` value: a fresh message id (`msg_` + 26
- * chars) per request, mirroring opencode's user-message id.
+ * Build the `x-opencode-request` value: a fresh ASCENDING message id
+ * (`msg_` + 26 chars) per request, mirroring opencode's user-message id.
  */
 export function buildRequestId(): string {
-  return `msg_${ascendingIdentifier()}`;
+  return `msg_${identifierBody(false)}`;
 }
 
 /**
@@ -158,6 +183,15 @@ export function buildRequestId(): string {
  */
 export function buildClient(): string {
   return process.env.OPENCODE_CLIENT?.trim() || "cli";
+}
+
+/**
+ * The `x-opencode-project` value. The official CLI sends the literal
+ * `global` for ad-hoc runs (observed in the 1.19.0 client's request log);
+ * project-scoped runs send the resolved project id. We send `global`.
+ */
+export function buildProjectId(): string {
+  return "global";
 }
 
 /**
