@@ -297,11 +297,10 @@ describe("widget rendering", () => {
 			{ id: 3, text: "C", status: "completed" },
 		];
 		const lines = renderWidgetLines(todos, mockTheme, 80);
-		expect(lines.length).toBe(4); // 1 header + 3 items
-		expect(lines[0]).toContain("1/3");
-		expect(lines[1]).toContain("#1");
-		expect(lines[2]).toContain("#2");
-		expect(lines[3]).toContain("#3");
+		expect(lines.length).toBe(3); // no header row; the plan items only
+		expect(lines[0]).toContain("#1");
+		expect(lines[1]).toContain("#2");
+		expect(lines[2]).toContain("#3");
 	});
 
 	it("should use single column up to 8 tasks", () => {
@@ -311,9 +310,9 @@ describe("widget rendering", () => {
 			status: "pending" as const,
 		}));
 		const lines = renderWidgetLines(todos, mockTheme, 80);
-		expect(lines.length).toBe(9); // 1 header + 8 items
-		for (let i = 1; i < lines.length; i++) {
-			expect(lines[i]).toContain(`#${i}`);
+		expect(lines.length).toBe(8); // no header row
+		for (let i = 0; i < lines.length; i++) {
+			expect(lines[i]).toContain(`#${i + 1}`);
 		}
 	});
 
@@ -324,8 +323,8 @@ describe("widget rendering", () => {
 			status: "pending" as const,
 		}));
 		const lines = renderWidgetLines(todos, mockTheme, 80);
-		expect(lines.length).toBe(6); // 1 header + ceil(9/2)=5 rows
-		expect(lines[0]).toContain("0/9");
+		expect(lines.length).toBe(5); // ceil(9/2)=5 rows, no header
+		expect(lines.join("\n")).not.toContain("0/9");
 	});
 
 	it("should keep dual column within Pi widget max lines for 18 tasks", () => {
@@ -335,7 +334,7 @@ describe("widget rendering", () => {
 			status: "pending" as const,
 		}));
 		const lines = renderWidgetLines(todos, mockTheme, 80);
-		expect(lines.length).toBe(10); // 1 header + 9 rows
+		expect(lines.length).toBe(9); // ceil(18/2)=9 rows, no header
 	});
 
 	it("should keep widget lines within Pi max for 19 tasks", () => {
@@ -345,7 +344,7 @@ describe("widget rendering", () => {
 			status: "pending" as const,
 		}));
 		const lines = renderWidgetLines(todos, mockTheme, 80);
-		expect(lines.length).toBe(11); // 1 header + ceil(19/2)=10 rows; Pi truncates at 10
+		expect(lines.length).toBe(10); // ceil(19/2)=10 rows, no header; Pi truncates at 10
 	});
 });
 

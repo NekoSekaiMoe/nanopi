@@ -42,13 +42,10 @@ function fixedWidth(text: string, width: number): string {
 export function renderStatusText(todoList: Todo[], th: Theme): string {
 	if (todoList.length === 0) return "";
 
-	const completed = todoList.filter((t) => getDisplayStatus(t) === "completed").length;
-	const total = todoList.length;
-
-	if (completed === total) {
-		return th.fg("success", `\u2713 ${completed}/${total}`);
-	}
-	return th.fg("accent", "\u2611") + th.fg("muted", ` ${completed}/${total}`);
+	// 进度计数（「N/M」）已从输入框右下角移除：计数只保留在 /todos 视图里，
+	// 状态栏此处退化为「有清单」的存在性指示，避免与 Working 行重复。
+	const hasOpen = todoList.some((t) => getDisplayStatus(t) !== "completed");
+	return hasOpen ? th.fg("accent", "\u2611") : th.fg("success", "\u2713");
 }
 
 // ── Widget 双列渲染 ──────────────────────────────────
@@ -116,12 +113,9 @@ export function renderWidgetLines(
 
 	const width = termWidth ?? (process.stdout.columns || FALLBACK_TERM_WIDTH);
 	const lines: string[] = [];
-	const completed = todoList.filter((t) => getDisplayStatus(t) === "completed").length;
-	const total = todoList.length;
 
-	lines.push(th.fg("accent", "\u2611") + th.fg("muted", ` ${completed}/${total}`));
-
-	// 标题占 1 行；任务部分超过 WIDGET_MAX_LINES - 1 时启用双列
+	// 标题占 1 行的计数（「☑ N/M」）已移除：pi-ui 的 Working 行与 /todos 视图已展示进度，
+	// 输入框上方再挂一份计数属于重复信息。
 	const indent = "  ";
 	if (todoList.length <= SINGLE_COLUMN_BUDGET) {
 		for (const line of renderSingleColumn(todoList, th, width, indent)) {

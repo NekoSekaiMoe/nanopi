@@ -7,6 +7,7 @@
 
 ### Fixed
 
+- The todo plan's progress counter (`☑ 0/9`) no longer renders in the bottom-right corner of the input box. The count was pushed both as the widget header row and through the `ctx.ui.setStatus()` channel that the footer renders right-aligned, duplicating the `<done>/<total> <step>` progress pi-ui already shows on the Working line and the `N/M completed` summary in `/todos`. The status channel keeps a bare presence glyph (`☑` while any todo is open, `✓` once all are completed) so the corner slot still clears and fills as before, and the widget starts directly with the plan items
 - The pi-ui footer replaces the built-in footer in every TUI session and silently dropped the extension status channel and the shell-mode label. Its toolbar line now renders right-aligned extension statuses from `ctx.ui.setStatus()` (the extra module's red `yolo` / green `plan` badges, pi-rewind checkpoints) plus the yellow `shell` label while the composer text starts with `!`; the usage line truncates first when the width cannot fit both. `setExtensionStatus()` repaints on change so badge updates appear immediately.
 
 ## [20261013]
