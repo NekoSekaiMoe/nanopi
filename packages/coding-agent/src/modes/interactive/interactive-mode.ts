@@ -66,6 +66,7 @@ import {
 } from "../../core/agent-session.ts";
 import { type AgentSessionRuntime, SessionImportFileNotFoundError } from "../../core/agent-session-runtime.ts";
 import type { AgentSessionRuntimeDiagnostic } from "../../core/agent-session-services.ts";
+import { BUILD_VERSION } from "../../core/build-version.ts";
 import {
 	CACHE_TTL_MS,
 	type CacheMiss,
@@ -878,7 +879,7 @@ export class InteractiveMode {
 			const header = new WelcomeHeader(() => {
 				const model = this.session.state.model;
 				return {
-					version: this.version,
+					version: BUILD_VERSION,
 					modelId: model?.id ?? "no-model",
 					provider: model?.provider,
 					thinkingLevel: this.session.state.thinkingLevel,
@@ -887,6 +888,7 @@ export class InteractiveMode {
 						this.session.sessionManager.getCwd(),
 						process.env.HOME || process.env.USERPROFILE,
 					),
+					branch: this.footerDataProvider.getGitBranch() ?? undefined,
 				};
 			});
 			this.builtInHeader = header;

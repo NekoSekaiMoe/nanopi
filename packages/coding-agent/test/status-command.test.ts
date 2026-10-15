@@ -1,3 +1,4 @@
+import { visibleWidth } from "@nanopi/pi-tui";
 import { describe, expect, it } from "vitest";
 import type { ModuleCommandContext } from "../src/index.ts";
 import { initTheme } from "../src/index.ts";
@@ -34,7 +35,7 @@ describe("welcome box", () => {
 	it("renders π title, model/provider/thinking/directory rows without the /model hint", () => {
 		const lines = renderWelcomeBox(
 			{
-				version: "0.99.0",
+				version: "v0.99.0",
 				modelId: "gpt-test",
 				provider: "openai",
 				thinkingLevel: "high",
@@ -56,7 +57,7 @@ describe("welcome box", () => {
 
 		const prefixed = renderWelcomeBox(
 			{
-				version: "0.99.0",
+				version: "v0.99.0",
 				modelId: "openai/gpt-5.2",
 				provider: "openai",
 				thinkingLevel: "high",
@@ -72,7 +73,7 @@ describe("welcome box", () => {
 		expect(prefixed).toContain("provider:  openai");
 
 		const header = new WelcomeHeader(() => ({
-			version: "0.99.0",
+			version: "v0.99.0",
 			modelId: "gpt-test",
 			provider: "openai",
 			thinkingLevel: "high",
@@ -82,10 +83,109 @@ describe("welcome box", () => {
 		expect(header.render(80).map(stripAnsi).join("\n")).toContain("π NanoPi v0.99.0");
 	});
 
+	it("appends the git branch to the directory row", () => {
+		const directoryRow = renderWelcomeBox(
+			{
+				version: "v20261013.718adde",
+				modelId: "gpt-test",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: "~/project",
+				branch: "main",
+			},
+			80,
+		)
+			.map(stripAnsi)
+			.find((line) => line.includes("directory:"));
+		expect(directoryRow).toContain("directory: ~/project (main)");
+	});
+
+	it("omits the branch suffix outside a repository", () => {
+		const directoryRow = renderWelcomeBox(
+			{
+				version: "v20261013.718adde",
+				modelId: "gpt-test",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: "~/project",
+			},
+			80,
+		)
+			.map(stripAnsi)
+			.find((line) => line.includes("directory:"));
+		expect(directoryRow).toContain("directory: ~/project");
+		expect(directoryRow).not.toContain("(");
+	});
+
+	it("folds a long path and keeps its branch visible", () => {
+		const longCwd = "~/verylongdirectoryname/anotherlongsegment/deeply/nested/finalproject";
+		const directoryRow = renderWelcomeBox(
+			{
+				version: "v20261013.718adde",
+				modelId: "gpt-test",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: longCwd,
+				branch: "main",
+			},
+			60,
+		)
+			.map(stripAnsi)
+			.find((line) => line.includes("directory:"));
+		expect(directoryRow).toBeDefined();
+		expect(directoryRow).toContain("~/verylong");
+		expect(directoryRow).toContain("(main)");
+		expect(directoryRow).toContain("…");
+		expect(visibleWidth(directoryRow ?? "")).toBeLessThanOrEqual(62);
+	});
+
 	it("truncates the tip to the terminal width", () => {
 		const tip = stripAnsi(renderWelcomeTip(40));
 		expect(tip.length).toBeLessThanOrEqual(40);
 		expect(tip.endsWith("…")).toBe(true);
+	});
+
+	it("folds the middle of a long directory path, keeping both ends", () => {
+		const longCwd = "~/verylongdirectoryname/anotherlongsegment/deeply/nested/finalproject";
+		const directoryRow = renderWelcomeBox(
+			{
+				version: "v20261013.718adde",
+				modelId: "gpt-test",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: longCwd,
+			},
+			60,
+		)
+			.map(stripAnsi)
+			.find((line) => line.includes("directory:"));
+		expect(directoryRow).toBeDefined();
+		expect(directoryRow).toContain("~/verylong");
+		expect(directoryRow).toContain("finalproject");
+		expect(directoryRow).toContain("…");
+		// The row keeps the box's inner width, so the fold must not overflow it.
+		expect(visibleWidth(directoryRow ?? "")).toBeLessThanOrEqual(62);
+
+		// Short paths are untouched and no ellipsis appears.
+		const shortRow = renderWelcomeBox(
+			{
+				version: "v20261013.718adde",
+				modelId: "gpt-test",
+				provider: "openai",
+				thinkingLevel: "high",
+				showThinking: true,
+				cwd: "~/project",
+			},
+			80,
+		)
+			.map(stripAnsi)
+			.find((line) => line.includes("directory:"));
+		expect(shortRow).toContain("directory: ~/project");
+		expect(shortRow).not.toContain("…");
 	});
 });
 

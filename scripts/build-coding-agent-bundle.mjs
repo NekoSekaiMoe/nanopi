@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
@@ -34,6 +35,21 @@ const piExtraStubPlugin = {
 const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
+
+/**
+ * Commit the bundle is built from, baked in as the NANOPI_BUILD_COMMIT define.
+ * `core/build-version.ts` prefers the define over spawning git at runtime, so
+ * the version a user sees matches the source they can inspect. Archives built
+ * by CI carry no .git directory, hence the explicit HEAD lookup here.
+ */
+function resolveBuildCommit() {
+	try {
+		return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
+	} catch {
+		return "";
+	}
+}
+const buildCommit = resolveBuildCommit();
 const allowedExternalPackages = new Set([
 	"@silvia-odwyer/photon-node",
 	"jiti",
@@ -108,6 +124,7 @@ function commonBuildOptions() {
 		bundle: true,
 		define: {
 			NANOPI_BUNDLED_NODE: "true",
+			NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 		},

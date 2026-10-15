@@ -1,5 +1,5 @@
 import type { Component } from "@nanopi/pi-tui";
-import { truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { sliceByColumn, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import { theme } from "../theme/theme.ts";
 
 export interface WelcomeBoxData {
@@ -9,6 +9,8 @@ export interface WelcomeBoxData {
 	thinkingLevel: string | undefined;
 	showThinking: boolean;
 	cwd: string;
+	/** Current git branch of the working directory, when it is a repository. */
+	branch?: string | undefined;
 }
 
 function fitRow(text: string, innerWidth: number): string {
@@ -17,17 +19,38 @@ function fitRow(text: string, innerWidth: number): string {
 }
 
 /**
+ * Fold the middle of text that does not fit: `/a/b/..../d`.
+ *
+ * Both ends carry the information a reader needs (where the path starts, which
+ * directory it ends in), so they stay visible and the elided middle collapses
+ * into one ellipsis. A plain tail truncation would drop the directory the user
+ * is actually in, which is the part that matters.
+ */
+export function foldMiddle(text: string, maxWidth: number): string {
+	const ellipsis = "…";
+	if (visibleWidth(text) <= maxWidth) return text;
+	const ellipsisWidth = visibleWidth(ellipsis);
+	if (maxWidth <= ellipsisWidth) return truncateToWidth(text, Math.max(0, maxWidth), ellipsis);
+	// sliceByColumn keeps graphemes and ANSI codes intact, so wide characters
+	// are never split in half.
+	const budget = maxWidth - ellipsisWidth;
+	const headWidth = Math.ceil(budget / 2);
+	return `${sliceByColumn(text, 0, headWidth)}${ellipsis}${sliceByColumn(text, visibleWidth(text) - (budget - headWidth), budget - headWidth)}`;
+}
+
+/**
  * Codex-style welcome box:
  *
  * ┌──────────────────────────────────┐
- * │ π NanoPi vx.x.x                  │
+ * │ π NanoPi v20261013.718adde       │
  * │                                  │
  * │ model: xxx                       │
  * │ provider: xxx  thinking: high    │
- * │ directory: ~                     │
+ * │ directory: ~/a/.../d (main)      │
  * └──────────────────────────────────┘
  *
- * Border is dim; title is bold. Content rows truncate to fit.
+ * Border is dim; title is bold. Content rows fold long paths in the middle and
+ * truncate anything else.
  */
 export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] {
 	const inner = Math.max(10, Math.min(width - 2, 62));
@@ -35,7 +58,7 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 		theme.fg("dim", `${left}${fill.repeat(inner + 2)}${right}`);
 	const row = (text: string): string => theme.fg("dim", "│ ") + fitRow(text, inner) + theme.fg("dim", " │");
 
-	const title = theme.bold(`π NanoPi v${data.version}`);
+	const title = theme.bold(`π NanoPi ${data.version}`);
 	// The provider row already names the provider, so strip a matching "provider/" prefix
 	// from the model id (catalogs like OpenRouter use "vendor/model" ids).
 	const providerPrefix = data.provider ? `${data.provider}/` : undefined;
@@ -51,7 +74,11 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 		theme.fg("dim", "│ ") +
 		fitRow(`provider:  ${providerText}  thinking: ${thinkingText}`, inner) +
 		theme.fg("dim", " │");
-	const dirLine = theme.fg("dim", "│ ") + fitRow(`directory: ${data.cwd}`, inner) + theme.fg("dim", " │");
+	// The branch suffix rides along with the path, so a long path is folded to
+	// the width left after `directory: ` and the suffix.
+	const directory = data.branch ? `${data.cwd} (${data.branch})` : data.cwd;
+	const dirLine =
+		theme.fg("dim", "│ ") + fitRow(`directory: ${foldMiddle(directory, inner - 11)}`, inner) + theme.fg("dim", " │");
 
 	return [
 		border("┌", "─", "┐"),

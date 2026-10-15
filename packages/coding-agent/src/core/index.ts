@@ -26,6 +26,7 @@ export {
 	createAgentSessionServices,
 } from "./agent-session-services.ts";
 export { type BashExecutorOptions, type BashResult, executeBashWithOperations } from "./bash-executor.ts";
+export { BUILD_VERSION, dateFromVersion, formatBuildVersion, resolveBuildCommit } from "./build-version.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./cache-warmer.ts";
 export type { CompactionResult } from "./compaction/index.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./event-bus.ts";

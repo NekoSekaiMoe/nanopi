@@ -45,3 +45,4 @@ plans/
 .nanopi/hf-sessions-backup/
 collect.sh
 packages/agent/docs/extensions/nanopi-server-artifact/index.md
+.pnpm-store/
