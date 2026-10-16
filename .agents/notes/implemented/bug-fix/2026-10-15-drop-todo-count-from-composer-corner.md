@@ -68,6 +68,10 @@ frees a line, never truncates a plan item.
   asserts the header row is gone (`lines.length` drops by one at every size,
   and the 9-task case asserts `0/9` no longer appears).
 
+Superseded: this note kept a bare presence glyph in the corner; issue #17 showed
+the glyph itself was the complaint. See
+[2026-10-16-todo-writes-nothing-to-the-corner](2026-10-16-todo-writes-nothing-to-the-corner.md).
+
 Related: [footer badges through the status channel](2026-10-13-footer-badges-status-channel.md)
 (the channel that rendered the corner text),
 [codex welcome, footer, /status](../feature/2026-10-11-codex-welcome-footer-status.md)

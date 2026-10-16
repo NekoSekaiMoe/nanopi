@@ -176,10 +176,9 @@ export function registerTodoEventHandlers(
 
 	pi.on("before_agent_start", async (_event: unknown, ctx: ModuleContext) => {
 		try {
-			const pendingTodos = state.todos.filter((t) => t.status !== "completed");
-			if (pendingTodos.length > 0) {
-				ctx.ui.setStatus("todo", `📋 ${pendingTodos.length} pending`);
-			}
+			// 清 status 槽而非写计数：`📋 N pending` 与 `☑` 曾交替占用输入框
+			// 右下角，正是 issue 要求去掉的角标。
+			ctx.ui.setStatus("todo", undefined);
 			// 优先级 1: agent_end 设置的延迟 steer
 			if (state.pendingSteerMessage) {
 				const msg = state.pendingSteerMessage;

@@ -11,7 +11,7 @@
  * - tool.ts:     todo tool 注册 — 5 个 action（list/add/update/delete/clear）+ execute dispatcher
  * - handlers.ts: 5 个事件处理器（session_start/session_tree/agent_start/before_agent_start/agent_end）
  *                + reconstructState（回放最后一条 todo toolResult）+ steer 四机制（autoClear/completion/stall/reminder）
- * - render.ts:   状态栏（status line）/ widget（单双列自适应）/ tool result 三层渲染
+ * - render.ts:   widget（单双列自适应）/ tool result 渲染
  * - component.ts: /todos 命令的 TodoListComponent TUI 视图（只读双列）
  * - commands.ts: /todos 命令注册
  * - index.ts（本文件）: 工厂入口（创建 state + 注册 tool/command/event + refreshDisplay）
@@ -24,7 +24,7 @@ import type { ModuleApi, ModuleContext } from "@nanopi/pi-coding-agent";
 
 import { registerTodosCommand } from "./commands.ts";
 import { registerTodoEventHandlers } from "./handlers.ts";
-import { renderStatusText, renderWidgetLines } from "./render.ts";
+import { renderWidgetLines } from "./render.ts";
 import { createTodoSessionState } from "./state.ts";
 import { registerTodoTool } from "./tool.ts";
 
@@ -39,8 +39,10 @@ export default function (pi: ModuleApi) {
 
 	// ── 刷新显示（依赖闭包 state） ─────────────────────
 	function refreshDisplay(ctx: ModuleContext): void {
-		const statusText = renderStatusText(state.todos, ctx.ui.theme);
-		ctx.ui.setStatus("todo", statusText || undefined);
+		// todo 不写 status 通道：那个通道渲染在输入框右下角，而角标只在
+		// 每次 todo 更新时变化，是用户明确要求去掉的噪音。写 undefined 是
+		// 为了让 session 恢复时清掉旧值，而不是留一个空槽。
+		ctx.ui.setStatus("todo", undefined);
 		if (state.todos.length === 0) {
 			ctx.ui.setWidget("todo", undefined);
 		} else {

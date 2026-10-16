@@ -10,6 +10,7 @@ import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import type { Theme } from "@nanopi/pi-coding-agent";
 import { describe, expect, it } from "vitest";
 
+import todoModule from "../index.ts";
 import { createTodoSessionState, type TodoSessionState } from "../state.ts";
 import { registerTodoTool } from "../tool.ts";
 
@@ -281,5 +282,91 @@ describe("executeTodoAction — state isolation & snapshot", () => {
 		// clear 改 state.todos 数组，已发出的 before 快照仍为 2 项
 		await tool.execute("id", { action: "clear" }, undefined, undefined, makeRpcCtx());
 		expect(before).toHaveLength(2);
+	});
+});
+
+// ── 输入框右下角角标：todo 不写 status 通道（issue #17） ──
+
+/** 记录每次 setStatus(key, text) 的原始值，按顺序保留。 */
+function makeStatusRecorder() {
+	const calls: Array<{ key: string; text: string | undefined }> = [];
+	return {
+		calls,
+		setStatus: (key: string, text?: string) => {
+			calls.push({ key, text });
+		},
+	};
+}
+
+/** 走真实工厂入口注册全部 tool/command/event，返回捕获的 handler 与撤销函数。 */
+function setupFactory() {
+	const tool = { current: undefined as RegisteredTool | undefined };
+	const handlers = new Map<string, (event: unknown, ctx: unknown) => Promise<unknown>>();
+	const status = makeStatusRecorder();
+	const pi = {
+		registerTool(t: RegisteredTool) {
+			tool.current = t;
+		},
+		registerCommand() {},
+		on(name: string, handler: (event: unknown, ctx: unknown) => Promise<unknown>) {
+			handlers.set(name, handler);
+		},
+		registerShortcut() {},
+		registerMessageRenderer() {},
+	};
+	todoModule(pi as unknown as ModuleApi);
+	if (!tool.current) throw new Error("factory did not register the todo tool");
+	return { tool: tool.current, handlers, status };
+}
+
+/** 工厂注册的 handler 需要的 ctx：ui（theme/setStatus/setWidget）+ sessionManager。 */
+function makeFactoryCtx(status: ReturnType<typeof makeStatusRecorder>) {
+	return {
+		mode: "tui" as const,
+		hasUI: true,
+		sessionManager: { getEntries: () => [] },
+		ui: {
+			theme: stubTheme,
+			setStatus: status.setStatus,
+			setWidget: () => {},
+		},
+	};
+}
+
+/** tool 路径与 before_agent_start 路径上的每一次 setStatus("todo", …)。 */
+function todoStatusWrites(status: ReturnType<typeof makeStatusRecorder>) {
+	return status.calls.filter((c) => c.key === "todo");
+}
+
+describe("todo does not write the composer corner (issue #17)", () => {
+	it("C-1: every setStatus('todo', …) on the tool path is empty", async () => {
+		const { tool, status } = setupFactory();
+		const ctx = makeFactoryCtx(status);
+		await tool.execute("id", { action: "add", texts: ["a", "b"] }, undefined, undefined, ctx);
+		await tool.execute("id", { action: "update", updates: [{ id: 1, status: "completed" }] }, undefined, undefined, ctx);
+		await tool.execute("id", { action: "list" }, undefined, undefined, ctx);
+		await tool.execute("id", { action: "clear" }, undefined, undefined, ctx);
+
+		const writes = todoStatusWrites(status);
+		// 写入必须发生（清槽），否则旧值会留在角标上
+		expect(writes.length).toBeGreaterThan(0);
+		// 且没有一次带非空文本 —— ☑ / ✓ / 📋 N pending 都算非空
+		expect(writes.filter((w) => w.text !== undefined && w.text !== "")).toEqual([]);
+	});
+
+	it("C-2: before_agent_start does not write a pending count", async () => {
+		const { tool, handlers, status } = setupFactory();
+		const ctx = makeFactoryCtx(status);
+		await tool.execute("id", { action: "add", texts: ["a", "b", "c"] }, undefined, undefined, ctx);
+		status.calls.length = 0;
+
+		const beforeAgentStart = handlers.get("before_agent_start");
+		expect(beforeAgentStart).toBeDefined();
+		await beforeAgentStart!(undefined, ctx);
+
+		const writes = todoStatusWrites(status);
+		// 有三条 pending，旧实现会写 "📋 3 pending"
+		expect(writes.length).toBeGreaterThan(0);
+		expect(writes.filter((w) => w.text !== undefined && w.text !== "")).toEqual([]);
 	});
 });

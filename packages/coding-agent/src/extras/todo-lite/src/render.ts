@@ -1,5 +1,5 @@
 /**
- * Todo 渲染函数 — 状态栏、widget（双列）、tool result 渲染。
+ * Todo 渲染函数 — widget（双列）、tool result 渲染。
  */
 
 import type { Theme } from "@nanopi/pi-coding-agent";
@@ -35,17 +35,6 @@ function fixedWidth(text: string, width: number): string {
 	}
 	if (width <= ELLIPSIS_MIN_WIDTH) return "...".slice(0, width);
 	return truncateToWidth(text, width - ELLIPSIS_MIN_WIDTH) + "...";
-}
-
-// ── 状态栏 ────────────────────────────────────────────
-
-export function renderStatusText(todoList: Todo[], th: Theme): string {
-	if (todoList.length === 0) return "";
-
-	// 进度计数（「N/M」）已从输入框右下角移除：计数只保留在 /todos 视图里，
-	// 状态栏此处退化为「有清单」的存在性指示，避免与 Working 行重复。
-	const hasOpen = todoList.some((t) => getDisplayStatus(t) !== "completed");
-	return hasOpen ? th.fg("accent", "\u2611") : th.fg("success", "\u2713");
 }
 
 // ── Widget 双列渲染 ──────────────────────────────────

@@ -1,6 +1,6 @@
 # todo
 
-轻量三态任务清单 — `pending` / `in_progress` / `completed`。支持 session 持久化、状态栏、双列 widget、`/todos` TUI 视图，以及延迟 steer 驱动任务推进。
+轻量三态任务清单 — `pending` / `in_progress` / `completed`。支持 session 持久化、双列 widget、`/todos` TUI 视图，以及延迟 steer 驱动任务推进。
 
 ## 设计定位
 
@@ -78,9 +78,11 @@ todo 扩展**自己不调用 `appendEntry`**。状态快照随 Pi 框架自动�
 
 ## 三层渲染
 
+todo 只渲染两层：widget 和 tool result。输入框右下角的 status 通道不再写入任何内容
+（`setStatus("todo", undefined)` 只用于清槽），角标留给 `shell` / 模式徽标。
+
 | 层 | 触发 | 规则 |
 |----|------|------|
-| **status line** | 每次 tool execute / session 恢复 | 空列表不显示；全完成 `✓ c/t`（绿）；否则 `☑ c/t` |
 | **widget**（侧边） | 有 todo 时 | ≤8 项单列；≥9 项双列（规避 Pi 的 10 行 widget 截断） |
 | **tool result** | tool 返回时 | collapsed 显示前 5 项 + `... N more`；expanded 全显示 |
 
@@ -101,7 +103,7 @@ todo/
     ├── model.ts          # 纯函数数据层（类型/迁移/addTodos/updateTodos/format/buildGui）
     ├── tool.ts           # todo tool 注册 — 5 action + execute dispatcher
     ├── handlers.ts       # 5 事件处理器 + reconstructState + steer 四机制
-    ├── render.ts         # status line / widget / tool result 三层渲染
+    ├── render.ts         # widget / tool result 渲染
     ├── component.ts      # /todos 的 TodoListComponent TUI 组件
     ├── commands.ts       # /todos 命令注册
     └── __tests__/        # 单测（model 纯函数 + widget 布局 + agent_end 数据条件）
