@@ -47,4 +47,4 @@ Status: implemented
 - 镜像 stage 多一次 `git fetch`、一次 ancestor 判定和一次 push 后回读比对；非 fast-forward 会在 push 前就失败，树不一致会在 push 后失败，不再出现「日志成功、远端内容不对」。
 - ancestor 断言方向修正后，正常镜像（本地领先远端）不再被自己的 guard 拦下；此前若发生过这种情况，日志里的 `not a fast-forward ... push will be rejected` 正是误报。
 
-Related: [single-file release artifact](2026-10-11-single-file-release-artifact.md)（同一类「发布流程与镜像」的工具链改动）。
+Related: [single-file release artifact](2026-10-11-single-file-release-artifact.md)（同一类「发布流程与镜像」的工具链改动）、[tag 镜像与 main 分开处理](2026-10-16-tag-mirroring-between-github-and-cnb.md)（同一对镜像脚本的 tag 部分；本文的守卫只覆盖 main）。

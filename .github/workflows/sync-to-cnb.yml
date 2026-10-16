@@ -72,3 +72,70 @@ jobs:
             exit 1
           fi
           echo "mirrored $(git rev-parse HEAD): $remote_tree"
+      # tag 同步与 main 是两件事：main 用 fast-forward 断言加推送后树比对，
+      # tag 是「已存在且指向同一 commit 就跳过、指向不同 commit 就报错」。
+      # 两个方向都不 force，所以 tag 一旦在两侧分叉就会永久卡住，需人介入。
+      - name: Push tags to CNB
+        env:
+          CNB_KEY: ${{ secrets.CNB_KEY }}
+        run: |
+          set -eu
+          export GIT_TERMINAL_PROMPT=0
+          git config --global credential.helper store
+          printf 'https://cnb:%s@cnb.cool\n' > ~/.git-credentials
+
+          remote=https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git
+
+          # 远端 tag 落到独立命名空间 refs/remote-tags/，不写 refs/tags/：写进去之后
+          # 下面的循环会把 fetch 来的远端 tag 当成「本地也有」，远端不存在的 tag 就
+          # 永远判不出来。（也不能用 --prune-tags，那会按本地的 tag 名单去清远端。）
+          git fetch --quiet --force "$remote" 'refs/tags/*:refs/remote-tags/tags/*'
+
+          # 只处理本地的 annotated tag，即能 peel 成 commit 的那类。同名轻量 tag 在
+          # 另一侧是 annotated 不算冲突：判定是「已存在且指向不同 commit 才报错」，
+          # 不是对象 id 不等就报错。
+          pending=""
+          # 用管道喂 while 会把循环放进子 shell，pending 就留不到循环外，所以先落临时文件。
+          tags_file=$(mktemp)
+          trap 'rm -f "$tags_file"' EXIT
+          git for-each-ref --format='%(objectname) %(objecttype) %(refname)' refs/tags | awk '$2 == "tag"' > "$tags_file"
+          while read -r obj type ref; do
+            name=${ref#refs/tags/}
+            remote_obj=$(git rev-parse --verify --quiet "refs/remote-tags/tags/$name" || true)
+            [ "$remote_obj" = "$obj" ] && continue
+            if [ -n "$remote_obj" ]; then
+              local_commit=$(git rev-parse "$obj^{commit}")
+              remote_commit=$(git rev-parse "$remote_obj^{commit}")
+              if [ "$local_commit" != "$remote_commit" ]; then
+                echo "tag $name points to different commits on both sides; refusing to overwrite:" >&2
+                echo "  local  $obj ($local_commit)" >&2
+                echo "  remote $remote_obj ($remote_commit)" >&2
+                exit 1
+              fi
+              echo "tag $name exists on the remote ($remote_obj); not rewriting it"
+              continue
+            fi
+            pending="$pending $name"
+          done < "$tags_file"
+
+          if [ -z "$(echo "$pending" | tr -d ' ')" ]; then
+            echo "no new annotated tags to mirror"
+            exit 0
+          fi
+
+          # 不带 force：两个方向都不覆盖已有 tag，分叉在上面已经拦住了。
+          for name in $pending; do
+            git push --quiet "$remote" "refs/tags/$name:refs/tags/$name"
+          done
+
+          # push 的退出码不足以证明落上去的是本地这个对象，重新 fetch 后逐字节比一次。
+          git fetch --quiet --force "$remote" 'refs/tags/*:refs/remote-tags/tags/*'
+          for name in $pending; do
+            local_obj=$(git rev-parse "refs/tags/$name")
+            remote_obj=$(git rev-parse "refs/remote-tags/tags/$name")
+            if [ "$local_obj" != "$remote_obj" ]; then
+              echo "tag $name mismatch after push: local $local_obj remote $remote_obj" >&2
+              exit 1
+            fi
+            echo "mirrored tag $name: $remote_obj"
+          done
