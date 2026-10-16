@@ -44,6 +44,12 @@ export interface Args {
 	offline?: boolean;
 	verbose?: boolean;
 	projectTrustOverride?: boolean;
+	/**
+	 * Built-in modules to enable by name, replacing the build's default set.
+	 * Subagents use this to run with the parent's modules minus the
+	 * interactive-only ones (`--modules`).
+	 */
+	modules?: string[];
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially module-registered flags) - map of flag name to value */
@@ -203,6 +209,11 @@ export function parseArgs(args: string[]): Args {
 			result.projectTrustOverride = false;
 		} else if (arg === "--offline") {
 			result.offline = true;
+		} else if (arg === "--modules" && i + 1 < args.length) {
+			result.modules = args[++i]
+				.split(",")
+				.map((name) => name.trim())
+				.filter((name) => name.length > 0);
 		} else if (arg.startsWith("@")) {
 			result.fileArgs.push(arg.slice(1)); // Remove @ prefix
 		} else if (arg.startsWith("--")) {
@@ -285,6 +296,7 @@ ${chalk.bold("Options:")}
   --approve, -a                  Trust project-local files for this run
   --no-approve, -na              Ignore project-local files for this run
   --offline                      Disable startup network operations (same as NANOPI_OFFLINE=1)
+  --modules <names>              Comma-separated built-in modules to enable, replacing the build's default set
   --                             End option parsing; treat remaining arguments as messages/files
   --help, -h                     Show this help
   --version, -v                  Show version number

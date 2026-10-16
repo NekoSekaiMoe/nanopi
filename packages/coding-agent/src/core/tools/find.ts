@@ -1,6 +1,6 @@
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@nanopi/pi-agent-core";
-import { spawn } from "child_process";
+import { spawn, spawnSync } from "child_process";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { ensureTool } from "../../utils/tools-manager.ts";
@@ -30,6 +30,12 @@ const findSchema = Type.Object({
 	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
 	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
 });
+
+/** fd gained `--no-require-git` in 9.0; 8.x rejects the flag. */
+function supportsNoRequireGit(fdPath: string): boolean {
+	const result = spawnSync(fdPath, ["--help"], { encoding: "utf8" });
+	return `${result.stdout ?? ""}${result.stderr ?? ""}`.includes("--no-require-git");
+}
 
 export const findToolSystemPromptContribution = {
 	snippet: "Find files by glob pattern (respects .gitignore)",
@@ -195,7 +201,10 @@ export function createFindToolDefinition(
 							if (parent === current) break;
 							current = parent;
 						}
-						if (!insideGitRepo) args.push("--no-require-git");
+						// `--no-require-git` exists from fd 9.0; older releases reject the whole
+						// invocation ("Found argument ... wasn't expected"), which turns every search
+						// outside a repo into a hard failure. Ask the binary instead of assuming.
+						if (!insideGitRepo && supportsNoRequireGit(fdPath)) args.push("--no-require-git");
 						args.push("--max-results", String(effectiveLimit));
 
 						// fd --glob matches against the basename unless --full-path is set; in --full-path

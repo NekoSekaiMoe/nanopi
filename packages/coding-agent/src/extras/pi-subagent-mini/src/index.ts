@@ -1,20 +1,19 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { Type } from "typebox";
 import type { ModuleApi } from "../../../core/modules/types.ts";
-import { getPackageDir } from "../../../config.ts";
-
-// jiti (pi's TS loader) injects CJS wrapper params (__dirname/__filename) into
-// transpiled ESM modules, while import.meta.url becomes an inlined data: URL.
-// Declared optional so this also type-checks under real ESM.
-declare const __dirname: string | undefined;
+import { APP_NAME, getPackageDir } from "../../../config.ts";
 
 /**
  * pi-subagent-mini — one tool, four actions.
- * Children run `pi --mode json -p --no-session -ne` and their final output is
+ * Children run `nanopi --mode json -p --no-session` and their final output is
  * delivered back via a steering message on completion (a new turn).
+ *
+ * Children see this build's compiled-in modules minus the interactive-only ones
+ * (`CHILD_MODULE_SKIP`). The flag below keeps that choice in one place so a new
+ * built-in module reaches children automatically instead of being missed by a
+ * hand-maintained path list.
  */
 
 const MAX_CONCURRENT = 4;
@@ -25,12 +24,14 @@ const MAX_REPORT_CHARS = 6000;
 const WIDGET_KEY = "subagent-async";
 
 /**
- * Sibling packages auto-forwarded to children via `-e` (extension discovery is
- * otherwise disabled with `-ne`). pi-fake-opencode spoofs the OpenCode client
- * headers so OpenCode Zen's free tier works outside the OpenCode app — without
- * it, children using an `opencode` model get 403 FreeTierError.
+ * Built-in modules a child must not load: `pi-ui` renders a TUI footer and
+ * `pi-rewind` keeps interactive checkpoints — both are inert but pointless in a
+ * `-p` child, and `ask-lite`/`todo-lite` would only burn tokens on tools the
+ * child's default tool list does not enable. Everything else (notably
+ * `pi-fake-opencode`, whose OpenCode Zen header spoofing children need for
+ * `opencode` models) is inherited from the parent build.
  */
-const FORWARDED_EXTENSION_PACKAGES = ["pi-fake-opencode"];
+const CHILD_MODULE_SKIP = new Set(["pi-ui", "pi-rewind", "ask-lite", "todo-lite"]);
 
 interface Job {
 	id: string;
@@ -48,43 +49,40 @@ function textResult(text: string) {
 	return { content: [{ type: "text" as const, text }], details: {} };
 }
 
-function resolvePiBin(): { cmd: string; args: string[] } {
+/**
+ * The command that launches a child session.
+ *
+ * Reads the running package's own `bin` map rather than assuming a name: the
+ * manifest exposes `nanopi` (this fork) where upstream pi exposed `pi`, and the
+ * old `bin.pi` lookup silently returned undefined, so every spawn fell through
+ * to a bare `pi` on PATH and died with "spawn pi ENOENT" wherever that command
+ * does not exist — which is everywhere in a nanopi-only install.
+ */
+function resolveChildCommand(): { cmd: string; args: string[] } {
 	try {
 		const dir = getPackageDir();
-		const bin = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).bin?.pi;
-		if (typeof bin === "string") return { cmd: process.execPath, args: [path.join(dir, bin)] };
+		const bin = JSON.parse(fs.readFileSync(path.join(dir, "package.json"), "utf8")).bin as
+			| Record<string, string>
+			| undefined;
+		const entry = bin?.[APP_NAME] ?? Object.values(bin ?? {})[0];
+		if (typeof entry === "string") return { cmd: process.execPath, args: [path.join(dir, entry)] };
 	} catch {
 		// fall through
 	}
-	return { cmd: "pi", args: [] };
+	// Not a nanopi checkout: fall back to whatever the user has on PATH.
+	return { cmd: APP_NAME, args: [] };
 }
 
 function textOf(message: { content?: Array<{ type: string; text?: string }> }): string {
 	return (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n").trim();
 }
 
-/** Directory containing this extension's source file, best-effort. */
-function ownDir(): string | undefined {
-	if (typeof __dirname === "string" && __dirname) return __dirname; // jiti
-	try {
-		const url = (import.meta as { url?: string }).url;
-		if (url && url.startsWith("file:")) return path.dirname(fileURLToPath(url)); // real ESM
-	} catch {
-		// data:/blob URL or unsupported scheme
-	}
-	return undefined;
-}
-
 /**
- * Extensions to load in child sessions. Priority:
- *   1. spawn param `extensions` (comma-separated entry files)
- *   2. `PI_SUBAGENT_EXTENSIONS` env var (comma-separated entry files)
- *   3. auto-detected sibling packages (FORWARDED_EXTENSION_PACKAGES), plus
- *      mcp-lite when the extra module's mcp subsystem switch is on
+ * Whether the extra module's mcp subsystem switch is on. Mirrors packages/extra
+ * settings (<agentDir>/extra/settings.json with a .nanopi/extra/settings.json
+ * project override); default enabled.
  */
 function isMcpSubsystemEnabled(): boolean {
-	// Mirrors packages/extra settings (<agentDir>/extra/settings.json with a
-	// .nanopi/extra/settings.json project override); default enabled.
 	const read = (file: string): boolean | undefined => {
 		try {
 			const parsed: unknown = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -105,44 +103,23 @@ function isMcpSubsystemEnabled(): boolean {
 	);
 }
 
-/** Candidate entry files for the mcp-lite bundled extra (sibling of install root layouts). */
-function mcpLiteEntry(): string | undefined {
-	const here = ownDir();
-	const candidates = [
-		here && path.resolve(here, "..", "mcp-lite", "src", "index.ts"),
-		process.env.HOME && path.join(process.env.HOME, ".nanopi", "packages", "mcp-lite", "src", "index.ts"),
-		process.env.HOME && path.join(process.env.HOME, ".pi", "agent", "packages", "mcp-lite", "src", "index.ts"),
-	];
-	for (const candidate of candidates) {
-		if (candidate && fs.existsSync(candidate)) return candidate;
-	}
-	return undefined;
-}
-
-function defaultChildExtensions(): string[] {
-	const raw = process.env.PI_SUBAGENT_EXTENSIONS;
-	if (raw !== undefined) return raw.split(",").map((s) => s.trim()).filter(Boolean); // set-but-empty = forward nothing
-	const found: string[] = [];
-	const here = ownDir();
-	for (const name of FORWARDED_EXTENSION_PACKAGES) {
-		const rel = here && path.resolve(here, "..", name, "src", "index.ts");
-		const home = process.env.HOME && path.join(process.env.HOME, ".pi", "agent", "packages", name, "src", "index.ts");
-		// Prefer the sibling of this package; fall back to the standard agent-dir layout.
-		const candidate = (rel && fs.existsSync(rel) && rel) || (home && fs.existsSync(home) && home);
-		if (candidate) found.push(candidate);
-	}
-	if (isMcpSubsystemEnabled()) {
-		// MCP tools are subagent-only: forward mcp-lite so children can use them.
-		const mcp = mcpLiteEntry();
-		if (mcp) found.push(mcp);
-	}
-	return found;
+/**
+ * Built-in modules a child should load, derived from the modules this process
+ * actually registered — not from a hand-written path list. The previous
+ * `src/<pkg>/index.ts` guesses only existed in a source checkout, so bundled and
+ * installed builds silently fell back to no modules at all.
+ */
+function childModuleNames(registered: readonly string[]): string[] {
+	const names = registered.filter((name) => !CHILD_MODULE_SKIP.has(name));
+	// MCP tools are subagent-only: mcp-lite has to come along or the `mcp__*`
+	// tools added to the child's default tool list cannot resolve.
+	return names.filter((name) => name !== "mcp-lite" || isMcpSubsystemEnabled());
 }
 
 export default function subagentMini(pi: ModuleApi): void {
 	const jobs = new Map<string, Job>();
 	let counter = 0;
-	const piBin = resolvePiBin();
+	const childCommand = resolveChildCommand();
 	let uiRef: { setWidget(key: string, content: unknown, options?: unknown): void } | undefined;
 	let widgetTimer: NodeJS.Timeout | undefined;
 
@@ -199,24 +176,27 @@ export default function subagentMini(pi: ModuleApi): void {
 		}
 	};
 
-	const spawnJob = (params: { task: string; tools?: string; cwd?: string; model?: string; extensions?: string[]; timeoutSec?: number }, ctxCwd: string): Job => {
+	const spawnJob = (params: { task: string; tools?: string; cwd?: string; model?: string; modules: string[]; timeoutSec?: number }, ctxCwd: string): Job => {
 		const id = `sa-${++counter}`;
-		// MCP is subagent-only: default tool lists activate mcp__* when the mcp
-		// subsystem switch is on (children load mcp-lite via defaultChildExtensions).
+		// MCP is subagent-only: the default tool list activates mcp__* when the mcp
+		// subsystem switch is on, and `childModuleNames` brings mcp-lite along.
 		const defaultTools = isMcpSubsystemEnabled() ? `${DEFAULT_TOOLS},mcp__*` : DEFAULT_TOOLS;
 		const args = [
-			...piBin.args,
-			"--mode", "json", "-p", "--no-session", "-ne",
+			...childCommand.args,
+			"--mode", "json", "-p", "--no-session",
 			"--no-skills", "--no-prompt-templates", "--no-context-files",
 			"-t", params.tools || defaultTools,
 		];
 		if (params.model) args.push("--model", params.model); // no -m short flag exists
-		// -ne disables discovery but explicit -e paths still load — forward only
-		// what children need (e.g. OpenCode Zen header spoofing).
-		for (const ext of params.extensions ?? []) args.push("-e", ext);
+		// Pin the child's module set explicitly instead of relying on discovery:
+		// this is the only way a bundled install can hand the child `pi-fake-opencode`.
+		args.push("--modules", params.modules.join(","));
+		// The task must be the last argument: otherwise a following `--flag value`
+		// pair would swallow it, and `parseArgs` would then take the orphaned
+		// extension path as `parsed.messages[0]` — i.e. as the child's prompt.
 		args.push(`Task: ${params.task}`);
 
-		const proc = spawn(piBin.cmd, args, {
+		const proc = spawn(childCommand.cmd, args, {
 			cwd: params.cwd || ctxCwd,
 			env: process.env,
 			stdio: ["ignore", "pipe", "pipe"],
@@ -342,7 +322,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			tools: Type.Optional(Type.String({ description: `spawn: comma list, default ${DEFAULT_TOOLS}${" (plus mcp__* when MCP is enabled)"}` })),
 			cwd: Type.Optional(Type.String({ description: "spawn: working directory" })),
 			model: Type.Optional(Type.String({ description: "spawn: model id (provider/model); defaults to the current session model" })),
-			extensions: Type.Optional(Type.String({ description: "spawn: comma-separated extension entry files to load in the child (e.g. pi-fake-opencode for OpenCode Zen free tier); default: auto-detect" })),
+			modules: Type.Optional(Type.String({ description: "spawn: comma-separated built-in module names for the child, replacing the inherited set; default: this session's modules minus interactive-only ones" })),
 			timeoutSec: Type.Optional(Type.Number({ description: "spawn: max seconds, default 600" })),
 			jobId: Type.Optional(Type.String({ description: "wait/status/kill: job id" })),
 		}),
@@ -355,12 +335,12 @@ export default function subagentMini(pi: ModuleApi): void {
 				// Children inherit the session's current model by default; without this they
 				// fall back to settings.json defaults, which may be stale or unusable.
 				const model = params.model || (ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : undefined);
-				const extensions = params.extensions !== undefined
-					? params.extensions.split(",").map((s) => s.trim()).filter(Boolean) // empty = forward none
-					: defaultChildExtensions();
-				const job = spawnJob({ task: params.task, tools: params.tools, cwd: params.cwd, model, extensions, timeoutSec: params.timeoutSec }, ctx.cwd);
+				const modules = params.modules !== undefined
+					? params.modules.split(",").map((s) => s.trim()).filter(Boolean)
+					: childModuleNames(pi.getModuleNames());
+				const job = spawnJob({ task: params.task, tools: params.tools, cwd: params.cwd, model, modules, timeoutSec: params.timeoutSec }, ctx.cwd);
 				return textResult(
-					`subagent ${job.id} spawned (cwd: ${params.cwd || ctx.cwd}, tools: ${params.tools || DEFAULT_TOOLS}, model: ${model || "default"}${extensions.length ? `, +${extensions.length} ext` : ""}).\n` +
+					`subagent ${job.id} spawned (cwd: ${params.cwd || ctx.cwd}, tools: ${params.tools || DEFAULT_TOOLS}, model: ${model || "default"}, modules: ${modules.length}).\n` +
 					"A subagent-complete notification with its report arrives when done — continue other work meanwhile. action=status peeks, action=wait blocks, action=kill stops it.",
 				);
 			}

@@ -1570,6 +1570,14 @@ export interface ModuleApi {
 	/** Get available slash commands in the current session. */
 	getCommands(): SlashCommandInfo[];
 
+	/**
+	 * Get the names of every module registered in this process, in registration
+	 * order. A module that wants a child session to run with the same functionality
+	 * as this one needs these names: extension discovery is gone, so a child can
+	 * only be handed modules this build already compiled in.
+	 */
+	getModuleNames(): string[];
+
 	// =========================================================================
 	// Model and Thinking Level
 	// =========================================================================

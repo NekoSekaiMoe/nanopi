@@ -55,9 +55,11 @@ MCP is `extras/mcp-lite`, a zero-dependency slimming of
 irahardianto/pi-mcp-extension (stdio + streamable-http transports, initialize,
 tools/list, tools/call; no OAuth, health pings, or reconnect machinery). Its
 tools register with `defaultActive: false`, so the main agent never declares
-them; subagent children get them via `-e <mcp-lite entry>` plus
+them; subagent children get them via `--modules …,mcp-lite` plus
 `-t …,mcp__*` (pi-subagent-mini forwards both when the `mcp` subsystem toggle
-is on). The extra's interceptor hard-blocks `mcp__*` in the main session and
+is on; the `-e` entry-file forwarding this originally used was removed with the
+plugin system — see
+[subagent children are launched from the module registry](../bug-fix/2026-10-16-subagent-child-process-launch.md)). The extra's interceptor hard-blocks `mcp__*` in the main session and
 injects a "subagents only" guideline, satisfying both the prompt and the
 functional isolation requirements. The vendored-extra mechanics are the
 established [bundled-extras](../feature/2026-10-11-bundled-extras.md) ones.

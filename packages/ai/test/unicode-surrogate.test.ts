@@ -9,6 +9,7 @@ import { hasAzureOpenAICredentials, resolveAzureDeploymentName } from "./azure-u
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { hasCloudflareAiGatewayCredentials, hasCloudflareWorkersAICredentials } from "./cloudflare-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
+import { mimoModel } from "./xiaomi-utils.ts";
 
 // Empty schema for test tools - must be proper OBJECT type for Cloud Code Assist
 const emptySchema = Type.Object({});
@@ -628,7 +629,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 	});
 
 	describe.skipIf(!process.env.XIAOMI_API_KEY)("Xiaomi MiMo (API billing) Provider Unicode Handling", () => {
-		const llm = getModel("xiaomi", "mimo-v2.5-pro");
+		const llm = mimoModel("xiaomi");
 
 		it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
 			await testEmojiInToolResults(llm);
@@ -646,7 +647,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_CN_API_KEY)(
 		"Xiaomi MiMo Token Plan (CN) Provider Unicode Handling",
 		() => {
-			const llm = getModel("xiaomi-token-plan-cn", "mimo-v2.5-pro");
+			const llm = mimoModel("xiaomi-token-plan-cn");
 
 			it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
 				await testEmojiInToolResults(llm);
@@ -669,7 +670,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_AMS_API_KEY)(
 		"Xiaomi MiMo Token Plan (AMS) Provider Unicode Handling",
 		() => {
-			const llm = getModel("xiaomi-token-plan-ams", "mimo-v2.5-pro");
+			const llm = mimoModel("xiaomi-token-plan-ams");
 
 			it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
 				await testEmojiInToolResults(llm);
@@ -692,7 +693,7 @@ describe("AI Providers Unicode Surrogate Pair Tests", () => {
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_SGP_API_KEY)(
 		"Xiaomi MiMo Token Plan (SGP) Provider Unicode Handling",
 		() => {
-			const llm = getModel("xiaomi-token-plan-sgp", "mimo-v2.5-pro");
+			const llm = mimoModel("xiaomi-token-plan-sgp");
 
 			it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, async () => {
 				await testEmojiInToolResults(llm);

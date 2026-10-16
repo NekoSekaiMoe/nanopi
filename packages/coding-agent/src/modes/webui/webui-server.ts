@@ -17,7 +17,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import { basename, extname, join, normalize } from "node:path";
 import type { AgentMessage } from "@nanopi/pi-agent-core";
 import type { AssistantMessageEvent, ImageContent, Message, Model, ToolResultMessage } from "@nanopi/pi-ai";
-import { extraBridge } from "@nanopi/pi-extra";
+import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
 import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
@@ -459,6 +459,26 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					});
 				})
 			: undefined;
+		// Structured input (ask_user_question) renders in the same composer seat.
+		// The frontend's flat fields mirror questions[0] so a single question needs
+		// no batch protocol; multi-question requests always send `questions`.
+		const unsubscribeAsks = extraBridge.available
+			? extraBridge.asks.subscribe((event) => {
+					if (event.type !== "prompt") return;
+					const first = event.questions[0];
+					send({
+						type: "user_input_request",
+						request_id: event.requestId,
+						session_id: session.sessionId,
+						header: first?.header ?? "",
+						question: first?.question ?? "",
+						mode: first?.mode ?? "text",
+						options: first?.options ?? [],
+						custom: first?.custom ?? true,
+						...(event.questions.length > 1 ? { questions: event.questions } : {}),
+					});
+				})
+			: undefined;
 		const finish = () => {
 			if (!settled) {
 				settled = true;
@@ -467,6 +487,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 			unsubscribe();
 			unsubscribeBroker?.();
+			unsubscribeAsks?.();
 			turnActive = false;
 		};
 
@@ -494,6 +515,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			void session.abort().finally(() => {
 				unsubscribe();
 				unsubscribeBroker?.();
+				unsubscribeAsks?.();
 				turnActive = false;
 			});
 		});
@@ -846,7 +868,28 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (path === "/chat/user-input" && req.method === "POST") {
-			json(res, 200, { accepted: false, error: "not supported" });
+			if (!extraBridge.available) {
+				json(res, 200, { accepted: false, error: "structured input is not included in this build" });
+				return;
+			}
+			const body = await readBody(req);
+			const requestId = typeof body.request_id === "number" ? body.request_id : undefined;
+			if (requestId === undefined) {
+				json(res, 200, { accepted: false, error: "request_id is required" });
+				return;
+			}
+			const resolution = Array.isArray(body.responses)
+				? { type: "batch" as const, answers: body.responses as AskBrokerAnswer[] }
+				: {
+						type: "single" as const,
+						answer: {
+							declined: body.declined === true,
+							selected: Array.isArray(body.selected) ? (body.selected as string[]) : [],
+							text: typeof body.text === "string" ? body.text : null,
+						},
+					};
+			const accepted = extraBridge.asks.answer(requestId, resolution);
+			json(res, 200, accepted ? { accepted: true } : { accepted: false, error: "no matching question is pending" });
 			return;
 		}
 

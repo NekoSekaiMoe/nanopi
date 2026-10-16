@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the structured-input broker (`AskBroker`, `extraBridge.asks`): one outstanding questionnaire at a time, published to the webui server as a prompt event and answered by request id, with `cancelAll()` on session shutdown. It exists because `ask_user_question` renders through `ctx.ui.custom()`, which the headless webui session cannot provide, so the tool failed with "UI not available" there
+
+### Changed
+
+- Plan mode now allows `ask_user_question` in addition to `read` and the `ls`/`find`/`pwd` shell commands. Questionnaire answering is not a modification, and blocking it left plan mode unable to resolve the ambiguities it exists to find. The tool policy moved into the exported `planModeVerdict(toolName, input)` so the whitelist is testable on its own
+
 ### Fixed
 
 - Mode badges (red `yolo`, green `plan`) were invisible in the default TUI: `ctx.ui.setFooter()` is a replacing setter and pi-ui installs its own footer later in every session start, silently dropping the extra's badge footer. Badges now flow through the `ctx.ui.setStatus()` channel under the `mode` key, with colors embedded by the producer via `theme.fg()`, and render right-aligned in whatever footer is installed.

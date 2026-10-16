@@ -20,6 +20,7 @@ import { isContextOverflow } from "../src/utils/overflow.ts";
 import { hasAzureOpenAICredentials } from "./azure-utils.ts";
 import { hasBedrockCredentials } from "./bedrock-utils.ts";
 import { resolveApiKey } from "./oauth.ts";
+import { mimoModel } from "./xiaomi-utils.ts";
 
 // Resolve OAuth tokens at module level (async, runs before tests)
 const oauthTokens = await Promise.all([resolveApiKey("github-copilot"), resolveApiKey("openai-codex")]);
@@ -420,8 +421,8 @@ describe("Context overflow error handling", () => {
 		// Xiaomi silently truncates oversized input to fill the context window exactly,
 		// then returns finish_reason "length" with output=0 (no room left to generate).
 		// This is a detectable overflow signal but uses stopReason "length" rather than "error".
-		it("mimo-v2.5-pro - should detect overflow via isContextOverflow", async () => {
-			const model = getModel("xiaomi", "mimo-v2.5-pro");
+		it("MiMo - should detect overflow via isContextOverflow", async () => {
+			const model = mimoModel("xiaomi");
 			const result = await testContextOverflow(model, process.env.XIAOMI_API_KEY!);
 			logResult(result);
 
@@ -432,8 +433,8 @@ describe("Context overflow error handling", () => {
 	});
 
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_CN_API_KEY)("Xiaomi MiMo Token Plan (CN)", () => {
-		it("mimo-v2.5-pro - should detect overflow via isContextOverflow", async () => {
-			const model = getModel("xiaomi-token-plan-cn", "mimo-v2.5-pro");
+		it("MiMo - should detect overflow via isContextOverflow", async () => {
+			const model = mimoModel("xiaomi-token-plan-cn");
 			const result = await testContextOverflow(model, process.env.XIAOMI_TOKEN_PLAN_CN_API_KEY!);
 			logResult(result);
 
@@ -444,8 +445,8 @@ describe("Context overflow error handling", () => {
 	});
 
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_AMS_API_KEY)("Xiaomi MiMo Token Plan (AMS)", () => {
-		it("mimo-v2.5-pro - should detect overflow via isContextOverflow", async () => {
-			const model = getModel("xiaomi-token-plan-ams", "mimo-v2.5-pro");
+		it("MiMo - should detect overflow via isContextOverflow", async () => {
+			const model = mimoModel("xiaomi-token-plan-ams");
 			const result = await testContextOverflow(model, process.env.XIAOMI_TOKEN_PLAN_AMS_API_KEY!);
 			logResult(result);
 
@@ -456,8 +457,8 @@ describe("Context overflow error handling", () => {
 	});
 
 	describe.skipIf(!process.env.XIAOMI_TOKEN_PLAN_SGP_API_KEY)("Xiaomi MiMo Token Plan (SGP)", () => {
-		it("mimo-v2.5-pro - should detect overflow via isContextOverflow", async () => {
-			const model = getModel("xiaomi-token-plan-sgp", "mimo-v2.5-pro");
+		it("MiMo - should detect overflow via isContextOverflow", async () => {
+			const model = mimoModel("xiaomi-token-plan-sgp");
 			const result = await testContextOverflow(model, process.env.XIAOMI_TOKEN_PLAN_SGP_API_KEY!);
 			logResult(result);
 

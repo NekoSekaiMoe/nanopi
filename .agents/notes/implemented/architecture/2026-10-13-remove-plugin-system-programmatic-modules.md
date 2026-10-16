@@ -86,8 +86,11 @@ registerVirtualModel (+unregister*).
   factories keep working because ESM cycles only matter at module-eval time;
   value imports are consumed inside factory bodies.
 - pi-subagent-mini: the spawn `extensions` param and `-e` forwarding are
-  removed; mcp tools reach children via `-t mcp__*` only (mcp-lite is compiled
-  into every binary, including child processes).
+  removed; children select built-in modules by name with `--modules`, and mcp
+  tools reach them via `-t mcp__*` (mcp-lite is compiled into every binary,
+  including child processes). The forwarding itself was missed here at the
+  time and only landed later — see
+  [subagent children are launched from the module registry](../bug-fix/2026-10-16-subagent-child-process-launch.md).
 
 ### 4. Deleted surface
 

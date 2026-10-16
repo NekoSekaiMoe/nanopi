@@ -2,7 +2,15 @@ import { Type } from "typebox";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { convertMessages } from "../src/api/openai-completions.ts";
 import { getModel, normalizeContext, stream, streamSimple } from "../src/compat.ts";
-import type { AssistantMessage, Model, SimpleStreamOptions, Tool, ToolResultMessage } from "../src/types.ts";
+import type {
+	AssistantMessage,
+	Model,
+	OpenAICompletionsCompat,
+	SimpleStreamOptions,
+	Tool,
+	ToolResultMessage,
+} from "../src/types.ts";
+import { mimoModel, XIAOMI_PROVIDERS } from "./xiaomi-utils.ts";
 
 const mockState = vi.hoisted(() => ({
 	lastParams: undefined as unknown,
@@ -1231,14 +1239,12 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("stores Xiaomi MiMo reasoning replay compat in built-in metadata", () => {
-		const providers = ["xiaomi", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp"] as const;
-
-		for (const provider of providers) {
-			const model = getModel(provider, "mimo-v2.5-pro")!;
-			expect(model.compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
-			expect(model.compat?.thinkingFormat).toBe("deepseek");
-			expect(model.compat?.maxTokensField).toBeUndefined();
-			expect(model.compat?.supportsDeveloperRole).toBeUndefined();
+		for (const provider of XIAOMI_PROVIDERS) {
+			const compat = mimoModel(provider).compat as OpenAICompletionsCompat | undefined;
+			expect(compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
+			expect(compat?.thinkingFormat).toBe("deepseek");
+			expect(compat?.maxTokensField).toBeUndefined();
+			expect(compat?.supportsDeveloperRole).toBeUndefined();
 		}
 	});
 
@@ -1255,12 +1261,12 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("replays Xiaomi MiMo assistant tool calls with empty reasoning_content when thinking is missing", async () => {
-		const model = getModel("xiaomi", "mimo-v2.5-pro")!;
+		const model = mimoModel("xiaomi")!;
 		const assistantMessage: AssistantMessage = {
 			role: "assistant",
 			api: "openai-completions",
 			provider: "xiaomi",
-			model: "mimo-v2.5-pro",
+			model: model.id,
 			content: [{ type: "toolCall", id: "call_1", name: "read", arguments: { path: "README.md" } }],
 			usage: {
 				input: 0,

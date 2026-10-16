@@ -9,6 +9,7 @@
  */
 
 import { type JudgeModelRegistry, judgeWithModel } from "./ai-judge.ts";
+import { AskBroker } from "./ask-broker.ts";
 import { type ModeEngine, modeEngine } from "./mode-engine.ts";
 import { PairingManager } from "./pairing.ts";
 import { PermissionBroker } from "./permissions.ts";
@@ -40,6 +41,8 @@ export class ExtraBridge {
 	readonly available = true as const;
 	readonly engine: ModeEngine = modeEngine;
 	readonly permissions = new PermissionBroker();
+	/** Structured-input channel for webui sessions (see ask-broker.ts). */
+	readonly asks = new AskBroker();
 	readonly pairing = new PairingManager();
 
 	private extensionHooks: BridgeExtensionHooks | undefined;

@@ -572,13 +572,40 @@ export interface MainOptions {
 	modules?: SessionModule[];
 }
 
+/**
+ * Parse `--modules a,b` without going through `parseArgs`, which runs later and
+ * would need the module list already resolved. Names that match no built-in are
+ * dropped: a child pinned to `--modules` sees the same build it was launched
+ * from, so a stale name means the child is newer than its launcher, not a
+ * configuration error worth failing the run over.
+ */
+function parseModulesFlag(args: readonly string[]): Set<string> | undefined {
+	for (let i = 0; i < args.length; i++) {
+		const arg = args[i];
+		const inline = arg.startsWith("--modules=") ? arg.slice("--modules=".length) : undefined;
+		const value = inline ?? (arg === "--modules" ? args[i + 1] : undefined);
+		if (value === undefined) continue;
+		return new Set(
+			value
+				.split(",")
+				.map((name) => name.trim())
+				.filter((name) => name.length > 0),
+		);
+	}
+	return undefined;
+}
+
 export async function main(args: string[], options?: MainOptions) {
 	if (args[0] === LLAMA_SUPERVISOR_FLAG) {
 		await runLlamaSupervisorProcess();
 		return;
 	}
 	resetTimings();
-	const modules = [...BUILTIN_MODULES, ...(options?.modules ?? [])];
+	const requestedModules = parseModulesFlag(args);
+	const modules = [
+		...(requestedModules ? BUILTIN_MODULES.filter((module) => requestedModules.has(module.name)) : BUILTIN_MODULES),
+		...(options?.modules ?? []),
+	];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.NANOPI_OFFLINE);
 	if (offlineMode) {
 		process.env.NANOPI_OFFLINE = "1";
