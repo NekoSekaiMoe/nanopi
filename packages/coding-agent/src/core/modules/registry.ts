@@ -1365,6 +1365,7 @@ function createModuleApi(
 	runtime: ModuleRuntime,
 	cwd: string,
 	eventBus: EventBus,
+	getModuleNames: () => string[],
 ): { api: ModuleApi; commit: () => void; discard: () => void } {
 	const pendingFlagValues = new Map<string, boolean | string>();
 	const pendingRuntimeChanges: Array<() => void> = [];
@@ -1527,6 +1528,13 @@ function createModuleApi(
 			return runtime.getCommands();
 		},
 
+		// Self-description, not a runtime action: the registry already holds the
+		// module list, so it answers from itself instead of round-tripping through
+		// ModuleActions.
+		getModuleNames() {
+			return getModuleNames();
+		},
+
 		setModel(model) {
 			return runtime.setModel(model);
 		},
@@ -1616,9 +1624,13 @@ async function initializeModule(
 	cwd: string,
 	eventBus: EventBus,
 	runtime: ModuleRuntime,
+	loadedNames: readonly string[],
 ): Promise<RegisteredModule> {
 	const module = createRegisteredModule(sessionModule);
-	const load = createModuleApi(module, runtime, cwd, eventBus);
+	// Factories run before the registry object exists, so the names come from the
+	// list built so far. `loadedNames` is captured by reference to the caller's
+	// array, which is appended as each module finishes loading.
+	const load = createModuleApi(module, runtime, cwd, eventBus, () => [...loadedNames]);
 	try {
 		await sessionModule.factory(load.api);
 		load.commit();
@@ -1641,10 +1653,13 @@ export async function loadModules(
 	const runtime = createModuleRuntime();
 	const loaded: RegisteredModule[] = [];
 	const errors: Array<{ path: string; error: string }> = [];
+	// Names of every module in the load set (not just the ones loaded so far), so
+	// a module asking mid-load sees the full list it is part of.
+	const loadedNames: string[] = modules.map((sessionModule) => sessionModule.name);
 
 	for (const sessionModule of modules) {
 		try {
-			loaded.push(await initializeModule(sessionModule, resolvedCwd, resolvedEventBus, runtime));
+			loaded.push(await initializeModule(sessionModule, resolvedCwd, resolvedEventBus, runtime, loadedNames));
 		} catch (error) {
 			errors.push({
 				path: sessionModule.name,

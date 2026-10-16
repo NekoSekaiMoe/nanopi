@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The structured-input card (`UserInputCard`) now receives requests. The card and the `POST /chat/user-input` client already existed, but the daemon answered `{ accepted: false, error: "not supported" }` and never emitted `user_input_request`, so `ask_user_question` showed only "UI not available" in the browser. The daemon now publishes the questionnaire as a `user_input_request` SSE event (flat fields mirroring the first question, plus `questions` for a multi-question batch) and accepts the answer at `POST /chat/user-input`
+
 ## [20261013]
 
 ### Added

@@ -473,3 +473,54 @@ describe("parseArgs", () => {
 		});
 	});
 });
+
+describe("--modules", () => {
+	test("splits the module list", () => {
+		expect(parseArgs(["--modules", "extra,pi-fake-opencode,mcp-lite"]).modules).toEqual([
+			"extra",
+			"pi-fake-opencode",
+			"mcp-lite",
+		]);
+	});
+
+	test("is absent when not passed, so the build default applies", () => {
+		expect(parseArgs([]).modules).toBeUndefined();
+	});
+
+	test("accepts an empty list rather than the build default", () => {
+		// A child pinned to no modules at all must stay expressible.
+		expect(parseArgs(["--modules", ""]).modules).toEqual([]);
+	});
+
+	describe("subagent child argv", () => {
+		// Regression: the child was launched with `-ne` and `-e <path>`, neither of
+		// which exists any more. The parse errors aborted the child, and the
+		// orphaned `-e` value became `parsed.messages[0]` -- the child's prompt.
+		const childArgs = [
+			"--mode",
+			"json",
+			"-p",
+			"--no-session",
+			"--no-skills",
+			"--no-prompt-templates",
+			"--no-context-files",
+			"-t",
+			"read,bash",
+			"--modules",
+			"extra,pi-subagent-mini",
+			"Task: summarize the repo",
+		];
+
+		test("parses without diagnostics", () => {
+			expect(parseArgs(childArgs).diagnostics).toEqual([]);
+		});
+
+		test("keeps the task as the only message", () => {
+			expect(parseArgs(childArgs).messages).toEqual(["Task: summarize the repo"]);
+		});
+
+		test("does not treat the tool list as a message", () => {
+			expect(parseArgs(childArgs).messages).not.toContain("read,bash");
+		});
+	});
+});

@@ -34,7 +34,30 @@ const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
 const GATED_TOOL_NAMES = new Set(["edit", "write", "bash", "powershell"]);
 
 const PLAN_GUIDELINE =
-	"You are in PLAN MODE: exploration and planning only. Only the read tool and the ls, find, and pwd shell commands are available; every other call is blocked. Investigate, then produce a concrete step-by-step plan. Do not attempt modifications.";
+	"You are in PLAN MODE: exploration and planning only. Only the read tool, the ask_user_question tool, and the ls, find, and pwd shell commands are available; every other call is blocked. Investigate, ask about anything ambiguous, then produce a concrete step-by-step plan. Do not attempt modifications.";
+/** Tools plan mode allows besides `read`, in addition to the ls/find/pwd shell commands. */
+const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
+
+/**
+ * Plan-mode verdict for one tool call, or undefined to allow it.
+ *
+ * Pure so the whitelist is testable on its own: it is the whole safety boundary
+ * of plan mode, and the tools it does *not* list are the ones that can change
+ * the repository.
+ */
+export function planModeVerdict(toolName: string, input: unknown): string | undefined {
+	if (toolName === "read" || PLAN_ALLOWED_TOOLS.has(toolName)) return undefined;
+	if (SHELL_TOOL_NAMES.has(toolName)) {
+		const command =
+			typeof (input as Record<string, unknown>)?.command === "string"
+				? ((input as Record<string, unknown>).command as string)
+				: "";
+		const analysis = analyzeCommandForPlan(command);
+		if (analysis.allowed) return undefined;
+		return analysis.reason ?? "command not allowed in plan mode";
+	}
+	return `plan mode allows only the read and ask_user_question tools and the ls, find, and pwd commands (blocked ${toolName})`;
+}
 const MINIMAL_GUIDELINE =
 	"You are in MINIMAL MODE: only the shell (bash) tool is available. Accomplish the task through shell commands.";
 
@@ -296,18 +319,10 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 
 		if (engine.mode === "plan") {
-			if (event.toolName === "read") return undefined;
-			if (event.toolName === "bash" || event.toolName === "powershell") {
-				const input = event.input as Record<string, unknown>;
-				const command = typeof input.command === "string" ? input.command : "";
-				const analysis = analyzeCommandForPlan(command);
-				if (analysis.allowed) return undefined;
-				return { block: true, reason: analysis.reason ?? "command not allowed in plan mode" };
-			}
-			return {
-				block: true,
-				reason: `plan mode allows only the read tool and the ls, find, and pwd commands (blocked ${event.toolName})`,
-			};
+			// Asking a question is not a modification, and a plan built without
+			// resolving ambiguity is the failure plan mode exists to prevent.
+			const blocked = planModeVerdict(event.toolName, event.input);
+			return blocked === undefined ? undefined : { block: true, reason: blocked };
 		}
 
 		if (engine.mode === "minimal" && !SHELL_TOOL_NAMES.has(event.toolName)) {
