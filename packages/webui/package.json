@@ -16,7 +16,7 @@
 	},
 	"dependencies": {
 		"@fontsource/source-serif-4": "5.2.9",
-		"dompurify": "3.4.7",
+		"dompurify": "3.4.17",
 		"marked": "12.0.2",
 		"preact": "10.29.2"
 	},
