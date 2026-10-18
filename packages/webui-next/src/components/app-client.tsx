@@ -27,6 +27,14 @@ import {
 import { useChat } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
 
+function readNotifications(): boolean {
+	try {
+		return localStorage.getItem("nanopi.notifications") === "1";
+	} catch {
+		return false;
+	}
+}
+
 function readStoredTheme(): ThemeChoice {
 	try {
 		const value = localStorage.getItem("nanopi.theme");
@@ -52,7 +60,14 @@ export function AppClient() {
 	const [booted, setBooted] = useState(false);
 	const [authRequired, setAuthRequired] = useState(false);
 	const [pendingSession, setPendingSession] = useState<string | null>(null);
+	const [notifications, setNotifications] = useState(readNotifications);
 	const restoredRef = useRef(false);
+	const titleRef = useRef("NanoPi");
+	const notificationsRef = useRef(notifications);
+
+	useEffect(() => {
+		notificationsRef.current = notifications;
+	}, [notifications]);
 
 	const projectHash = project?.project_hash ?? "";
 	const workingDir = project?.working_dir ?? "";
@@ -67,11 +82,26 @@ export function AppClient() {
 		}
 	}, [projectHash]);
 
+	const notifyTurnDone = useCallback(() => {
+		if (!notificationsRef.current) return;
+		if (!document.hidden) return;
+		if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+		const notification = new Notification("NanoPi", {
+			body: `${titleRef.current} 已完成`,
+			icon: "/icon-192.png",
+		});
+		notification.onclick = () => {
+			window.focus();
+			notification.close();
+		};
+	}, []);
+
 	const chat = useChat({
 		projectHash,
 		workingDir,
 		provider,
 		onSessionsChanged: refreshSessions,
+		onTurnDone: notifyTurnDone,
 	});
 
 	// Boot: project + model catalog.
@@ -234,6 +264,10 @@ export function AppClient() {
 		project?.name || workingDir.split("/").filter(Boolean).pop() || "";
 	const title = currentSession?.name || "NanoPi";
 
+	useEffect(() => {
+		titleRef.current = title;
+	}, [title]);
+
 	const onSend = useCallback(() => {
 		const text = composer;
 		const pendingImages = images;
@@ -301,6 +335,33 @@ export function AppClient() {
 		},
 		[chat],
 	);
+
+	const toggleNotifications = useCallback(async () => {
+		if (notifications) {
+			setNotifications(false);
+			try {
+				localStorage.setItem("nanopi.notifications", "0");
+			} catch {
+				/* ignore */
+			}
+			return;
+		}
+		if (typeof Notification === "undefined") {
+			setBootError("当前浏览器不支持通知");
+			return;
+		}
+		const permission = await Notification.requestPermission();
+		if (permission !== "granted") {
+			setBootError("通知权限被拒绝");
+			return;
+		}
+		setNotifications(true);
+		try {
+			localStorage.setItem("nanopi.notifications", "1");
+		} catch {
+			/* ignore */
+		}
+	}, [notifications]);
 
 	const useSkill = useCallback((name: string) => {
 		setComposer(`/${name} `);
@@ -435,6 +496,8 @@ export function AppClient() {
 				onRefreshProviders={refreshProviders}
 				onChangeDir={onWorkspaceChange}
 				onUseSkill={useSkill}
+				notifications={notifications}
+				onToggleNotifications={toggleNotifications}
 			/>
 		</div>
 	);

@@ -1,18 +1,19 @@
 "use client";
 
-import { ArrowLeft, Cpu, Info, Monitor, Moon, Palette, Sparkles, Sun, X } from "lucide-react";
+import { ArrowLeft, Cpu, Info, Monitor, Moon, Network, Palette, Sparkles, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getSkills, type ApprovalMode, type ConfigInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
+import { getMcpStatus, getSkills, type ApprovalMode, type ConfigInfo, type McpStatusInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
 import { ProviderSettings } from "@/components/provider-settings";
 import { cn } from "@/lib/utils";
 
-type Section = "appearance" | "models" | "skills" | "workspace" | "about";
+type Section = "appearance" | "models" | "skills" | "mcp" | "workspace" | "about";
 export type ThemeChoice = "system" | "light" | "dark";
 
 const SECTIONS: Array<{ id: Section; label: string; icon: React.ReactNode }> = [
 	{ id: "appearance", label: "外观", icon: <Palette className="size-4" strokeWidth={1.75} /> },
 	{ id: "models", label: "模型", icon: <Cpu className="size-4" strokeWidth={1.75} /> },
 	{ id: "skills", label: "技能", icon: <Sparkles className="size-4" strokeWidth={1.75} /> },
+	{ id: "mcp", label: "MCP", icon: <Network className="size-4" strokeWidth={1.75} /> },
 	{ id: "workspace", label: "工作区", icon: <Monitor className="size-4" strokeWidth={1.75} /> },
 	{ id: "about", label: "关于", icon: <Info className="size-4" strokeWidth={1.75} /> },
 ];
@@ -32,6 +33,8 @@ export function SettingsOverlay({
 	onRefreshProviders,
 	onChangeDir,
 	onUseSkill,
+	notifications,
+	onToggleNotifications,
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -47,6 +50,8 @@ export function SettingsOverlay({
 	onRefreshProviders: () => Promise<void>;
 	onChangeDir: (path: string) => Promise<void>;
 	onUseSkill: (name: string) => void;
+	notifications: boolean;
+	onToggleNotifications: () => void;
 }) {
 	const [section, setSection] = useState<Section>("appearance");
 	const [dirDraft, setDirDraft] = useState(project?.working_dir ?? "");
@@ -55,10 +60,27 @@ export function SettingsOverlay({
 	const [dirNotice, setDirNotice] = useState<string | null>(null);
 	const [skills, setSkills] = useState<SkillInfo[] | null>(null);
 	const [skillsError, setSkillsError] = useState<string | null>(null);
+	const [mcp, setMcp] = useState<McpStatusInfo | null>(null);
+	const [mcpError, setMcpError] = useState<string | null>(null);
 
 	useEffect(() => {
 		setDirDraft(project?.working_dir ?? "");
 	}, [project?.working_dir]);
+
+	useEffect(() => {
+		if (section !== "mcp" || mcp !== null) return;
+		let cancelled = false;
+		void getMcpStatus()
+			.then((status) => {
+				if (!cancelled) setMcp(status);
+			})
+			.catch((cause) => {
+				if (!cancelled) setMcpError(cause instanceof Error ? cause.message : String(cause));
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [section, mcp]);
 
 	useEffect(() => {
 		if (section !== "skills" || skills !== null) return;
@@ -216,6 +238,27 @@ export function SettingsOverlay({
 										</button>
 									))}
 								</div>
+
+								<div className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+									<div>
+										<h2 className="text-[13px] font-medium">完成通知</h2>
+										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
+											页面在后台时，回合完成会发送浏览器通知。
+										</p>
+									</div>
+									<button
+										type="button"
+										onClick={onToggleNotifications}
+										className={cn(
+											"h-8 shrink-0 rounded-full border px-3 text-[12px] transition-colors",
+											notifications
+												? "border-brand bg-brand-soft/50 text-brand"
+												: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+										)}
+									>
+										{notifications ? "已开启" : "开启"}
+									</button>
+								</div>
 							</div>
 						) : null}
 
@@ -272,6 +315,70 @@ export function SettingsOverlay({
 										))
 									)}
 								</div>
+							</div>
+						) : null}
+
+						{section === "mcp" ? (
+							<div>
+								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">MCP</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									当前工作区配置的 MCP 服务器。工具仍由 agent 在会话中调用。
+								</p>
+								{mcpError ? (
+									<p className="mt-4 text-[11.5px] text-destructive">{mcpError}</p>
+								) : mcp === null ? (
+									<p className="mt-4 text-[12px] text-muted-foreground">加载中…</p>
+								) : (
+									<>
+										{mcp.trusted === false ? (
+											<p className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11.5px] text-warning">
+												当前项目尚未信任 MCP，服务器可能被隐藏。
+											</p>
+										) : null}
+										<div className="mt-3 space-y-1.5">
+											{mcp.servers.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+													<p className="text-[12.5px] text-muted-foreground">还没有 MCP 服务器</p>
+													<p className="mt-1 text-[11px] text-muted-foreground/70">
+														在配置文件中添加 MCP server 后刷新。
+													</p>
+												</div>
+											) : (
+												mcp.servers.map((server) => (
+													<div
+														key={server.name}
+														className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"
+													>
+														<span
+															className={cn(
+																"size-2 shrink-0 rounded-full",
+																server.status === "connected" || server.status === "ready"
+																	? "bg-success"
+																	: server.status === "error"
+																		? "bg-destructive"
+																		: "bg-muted-foreground/50",
+															)}
+														/>
+														<span className="min-w-0 flex-1">
+															<span className="block truncate font-mono text-[12px] text-foreground">
+																{server.name}
+															</span>
+															<span className="block text-[10.5px] text-muted-foreground">
+																{server.status}
+																{server.tool_count != null ? ` · ${server.tool_count} tools` : ""}
+															</span>
+															{server.error ? (
+																<span className="mt-0.5 block text-[10.5px] text-destructive">
+																	{server.error}
+																</span>
+															) : null}
+														</span>
+													</div>
+												))
+											)}
+										</div>
+									</>
+								)}
 							</div>
 						) : null}
 

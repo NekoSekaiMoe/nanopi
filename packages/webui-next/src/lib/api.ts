@@ -504,6 +504,24 @@ export async function postChatUserInput(
 	return result;
 }
 
+export interface McpServerInfo {
+	name: string;
+	status: string;
+	tool_count?: number;
+	error?: string;
+}
+
+export interface McpStatusInfo {
+	servers: McpServerInfo[];
+	trusted?: boolean;
+	blocked?: string[];
+}
+
+export async function getMcpStatus(): Promise<McpStatusInfo> {
+	const response = await fetch("/mcp/status", { headers: authHeaders() });
+	return readJson<McpStatusInfo>(response);
+}
+
 export interface SkillInfo {
 	name: string;
 	description: string;

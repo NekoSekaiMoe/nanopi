@@ -63,6 +63,7 @@ interface UseChatOptions {
 	workingDir: string;
 	provider: string;
 	onSessionsChanged: () => void;
+	onTurnDone?: () => void;
 }
 
 function fromSessionMessages(messages: SessionMessage[]): UiMessage[] {
@@ -198,7 +199,7 @@ function finishTool(
 	return copy;
 }
 
-export function useChat({ projectHash, workingDir, provider, onSessionsChanged }: UseChatOptions) {
+export function useChat({ projectHash, workingDir, provider, onSessionsChanged, onTurnDone }: UseChatOptions) {
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [messages, setMessages] = useState<UiMessage[]>([]);
 	const [streaming, setStreaming] = useState(false);
@@ -213,6 +214,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 	const requestIdRef = useRef<string | null>(null);
 	const sessionIdRef = useRef<string | null>(null);
 	const generationRef = useRef(0);
+	const artifactRef = useRef<{ lang: string; buffer: string } | null>(null);
 
 	const setCurrentSession = useCallback((id: string | null) => {
 		sessionIdRef.current = id;
@@ -237,6 +239,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 			setPermission(null);
 			setUserInput(null);
 			setError(null);
+			artifactRef.current = null;
 			setLoading(true);
 			setCurrentSession(id);
 			try {
@@ -264,6 +267,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 		setPermission(null);
 		setUserInput(null);
 		setError(null);
+		artifactRef.current = null;
 		setMessages([]);
 		setCurrentSession(null);
 		try {
@@ -283,6 +287,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 			generationRef.current = generation;
 			setError(null);
 			setNotice(null);
+			artifactRef.current = null;
 
 			let targetSession = sessionIdRef.current;
 			if (!targetSession) {
@@ -402,6 +407,32 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 									updateLastAssistant(current, (blocks) => finishTool(blocks, event)),
 								);
 								break;
+							case "artifact_start":
+								artifactRef.current = { lang: event.language ?? "", buffer: "" };
+								break;
+							case "artifact_content":
+								if (artifactRef.current) artifactRef.current.buffer += event.content;
+								break;
+							case "artifact_end": {
+								const artifact = artifactRef.current;
+								artifactRef.current = null;
+								if (!artifact) break;
+								const fence = "```";
+								const block = `\n\n${fence}${artifact.lang}\n${artifact.buffer}\n${fence}\n\n`;
+								setMessages((current) =>
+									updateLastAssistant(current, (blocks) =>
+										appendStreamBlock(blocks, "text", block),
+									),
+								);
+								break;
+							}
+							case "command_output":
+								setMessages((current) =>
+									updateLastAssistant(current, (blocks) =>
+										appendStreamBlock(blocks, "text", `\n\n${event.text}\n\n`),
+									),
+								);
+								break;
 							case "permission_request":
 								setPermission({
 									sessionId: event.session_id || targetSession || "",
@@ -435,6 +466,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 								setPermission(null);
 								setUserInput(null);
 								window.setTimeout(onSessionsChanged, 250);
+								onTurnDone?.();
 								break;
 							default:
 								break;
@@ -464,6 +496,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged }
 		[
 			approvalMode,
 			onSessionsChanged,
+			onTurnDone,
 			provider,
 			setCurrentSession,
 			streaming,
