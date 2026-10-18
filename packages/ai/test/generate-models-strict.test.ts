@@ -6,6 +6,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { afterEach, describe, expect, it } from "vitest";
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
+/** The generator reads the repo-level buildconfig.json and its loader next to packages/. */
+const repoBuildConfig = fileURLToPath(new URL("../../../buildconfig.json", import.meta.url));
+const repoBuildModule = fileURLToPath(new URL("../../../scripts/buildconfig.mjs", import.meta.url));
 const temporaryRoots: string[] = [];
 
 afterEach(() => {
@@ -14,13 +17,19 @@ afterEach(() => {
 
 describe("strict model generation", () => {
 	it("fails before mutating generated data when an Individual model loses tool support", () => {
+		// The generator resolves buildconfig.json and its data through the script's
+		// own location (`<repo>/packages/ai/scripts`), so the fixture keeps that
+		// layout: a flatter one resolves outside the fixture.
 		const fixtureRoot = mkdtempSync(join(tmpdir(), "nanopi-generate-models-"));
 		temporaryRoots.push(fixtureRoot);
-		const isolatedPackageRoot = join(fixtureRoot, "package");
-		mkdirSync(isolatedPackageRoot);
+		const isolatedPackageRoot = join(fixtureRoot, "repo", "packages", "ai");
+		mkdirSync(join(fixtureRoot, "repo", "scripts"), { recursive: true });
+		mkdirSync(isolatedPackageRoot, { recursive: true });
 		for (const entry of ["package.json", "scripts", "src"]) {
 			cpSync(join(packageRoot, entry), join(isolatedPackageRoot, entry), { recursive: true });
 		}
+		cpSync(repoBuildConfig, join(fixtureRoot, "repo", "buildconfig.json"));
+		cpSync(repoBuildModule, join(fixtureRoot, "repo", "scripts", "buildconfig.mjs"));
 		const preloadPath = join(fixtureRoot, "mock-models-dev.mjs");
 		const modelIds = [
 			"deepseek-v4-flash-0731",

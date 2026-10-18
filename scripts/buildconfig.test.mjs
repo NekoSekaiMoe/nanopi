@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, it } from "node:test";
 import {
 	ALL_PROVIDERS,
 	BUILD_FLAVOR_ENV,
+	NO_PROVIDERS,
 	loadBuildConfig,
 	parseFlavorArg,
 	resolveBuildFlavor,
+	resolveBuiltinProviderIds,
 	resolveFlavorComponents,
 	resolveFlavorProviders,
 	resolveFlavorToolset,
@@ -223,11 +225,13 @@ describe("providers component", () => {
 		components: { providers: { description: "Provider set" }, webui: {} },
 		providerSets: {
 			all: { description: "Every catalog", providers: ["__ALL__"] },
+			none: { description: "No catalog", providers: ["__NONE__"] },
 			presets: { description: "Presets", providers: ["openai", "anthropic"] },
 		},
 		flavors: {
 			full: { components: { "*": true, providers: "all" } },
 			small: { components: { "*": false, providers: "presets" } },
+			empty: { components: { "*": false, providers: "none" } },
 			unnamed: { components: { "*": true } },
 		},
 	};
@@ -286,6 +290,45 @@ describe("providers component", () => {
 		const dir = writeConfig(config);
 		tempDirs.push(dir);
 		validateFlavorProviders(dir, ["openai", "anthropic", "google"], "full");
+	});
+
+	it("resolves a set with no provider to an empty registration list", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const loaded = loadBuildConfig(dir);
+		strictEqual(resolveFlavorProviders(loaded, "empty").join(","), NO_PROVIDERS);
+		strictEqual(resolveBuiltinProviderIds(resolveFlavorProviders(loaded, "empty")).length, 0);
+		strictEqual(resolveBuiltinProviderIds(resolveFlavorProviders(loaded, "full")), undefined);
+		strictEqual(
+			resolveBuiltinProviderIds(resolveFlavorProviders(loaded, "small")).join(","),
+			"openai,anthropic",
+		);
+	});
+
+	it("accepts a flavor with no provider without cross-checking the catalogs", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		validateFlavorProviders(dir, ["openai", "anthropic", "google"], "empty");
+	});
+
+	it("rejects a marker listed alongside concrete provider ids", () => {
+		const withAll = writeConfig({
+			...config,
+			providerSets: { ...config.providerSets, mixed: { providers: [ALL_PROVIDERS, "openai"] } },
+		});
+		const withNone = writeConfig({
+			...config,
+			providerSets: { ...config.providerSets, mixed: { providers: ["openai", NO_PROVIDERS] } },
+		});
+		tempDirs.push(withAll, withNone);
+		throws(() => loadBuildConfig(withAll), /uses "__ALL__" alongside concrete provider ids/);
+		throws(() => loadBuildConfig(withNone), /uses "__NONE__" alongside concrete provider ids/);
+	});
+
+	it("reads the no-provider set from the real buildconfig", () => {
+		const loaded = loadBuildConfig(join(import.meta.dirname, ".."));
+		strictEqual(loaded.flavors.minimal.components.providers, "none");
+		strictEqual(resolveBuiltinProviderIds(resolveFlavorProviders(loaded, "minimal")).length, 0);
 	});
 });
 

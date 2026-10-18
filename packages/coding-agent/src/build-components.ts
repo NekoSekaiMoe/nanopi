@@ -24,13 +24,29 @@ export function isBashOnlyBuild(): boolean {
 }
 
 /**
- * Whether this build carries a provider's catalog. The `providers` component
- * picks a provider set from buildconfig.json, and the model generator only
- * writes the catalogs of that set, so a trimmed build has neither the data nor
- * the registration for the rest. The build scripts inject the resolved set; a
- * source checkout or npm install has no define and ships every provider.
+ * The provider ids this build carries, or undefined when every provider is
+ * built in. A flavor that names a provider set narrows the model generator to
+ * that set (or to none, for the `__NONE__` marker), and the build scripts
+ * inject the resolved list, so a trimmed build registers neither the catalog
+ * nor the registration of the providers it drops. A source checkout or npm
+ * install has no define and ships every provider.
  */
+export function builtinProviderIds(): readonly string[] | undefined {
+	return typeof NANOPI_BUILD_PROVIDERS === "undefined" ? undefined : NANOPI_BUILD_PROVIDERS;
+}
+
+/** Whether this build carries a provider's catalog. */
 export function isProviderIncluded(providerId: string): boolean {
-	if (typeof NANOPI_BUILD_PROVIDERS === "undefined") return true;
-	return NANOPI_BUILD_PROVIDERS.includes(providerId);
+	const included = builtinProviderIds();
+	return included === undefined || included.includes(providerId);
+}
+
+/**
+ * Whether this build ships no built-in provider at all. Such a build takes its
+ * endpoint and key from `models.json`, so its no-models guidance points there
+ * instead of at `/login`.
+ */
+export function isNoBuiltinProviderBuild(): boolean {
+	const included = builtinProviderIds();
+	return included !== undefined && included.length === 0;
 }
