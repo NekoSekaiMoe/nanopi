@@ -119,6 +119,31 @@ export interface ExtraExtensionAPI {
 	getAllTools(): Array<{ name: string }>;
 	getActiveTools(): string[];
 	setActiveTools(toolNames: string[]): void;
+	/**
+	 * Register a backend the built-in shell tools can route `exec()` through.
+	 * Undefined removes the registration.
+	 */
+	registerBashOperations?(
+		id: string,
+		operations:
+			| {
+					exec: (
+						command: string,
+						cwd: string,
+						options: {
+							onData: (data: Buffer) => void;
+							signal?: AbortSignal;
+							timeout?: number;
+							env?: NodeJS.ProcessEnv;
+						},
+					) => Promise<{ exitCode: number | null }>;
+			  }
+			| undefined,
+	): void;
+	/** Select the backend that runs shell commands, or undefined for local execution. */
+	setActiveBashOperations?(id: string | undefined): void;
+	/** Id of the backend selected with `setActiveBashOperations()`. */
+	getActiveBashOperations?(): string | undefined;
 	getFlag(name: string): boolean | string | undefined;
 }
 

@@ -79,6 +79,7 @@ import type { SourceInfo } from "../source-info.ts";
 import type { BuildSystemPromptOptions, NormalizedBuildSystemPromptOptions } from "../system-prompt.ts";
 import type { EditToolDetails } from "../tools/edit.ts";
 import type {
+	BashOperations,
 	BashToolDetails,
 	BashToolInput,
 	EditToolInput,
@@ -1462,6 +1463,30 @@ export interface ModuleApi {
 		tool: ToolDefinition<TParams, TDetails, TState>,
 	): void;
 
+	/**
+	 * Register a backend that the built-in shell tools can route command
+	 * execution through, for example a sandbox. The backend only wraps
+	 * `exec()`; the caller keeps the tool description, output truncation,
+	 * renderers, and permission gating.
+	 *
+	 * Registering the same id again replaces it. Undefined removes it. The
+	 * built-in tools keep running locally until a backend is activated with
+	 * `setActiveBashOperations()`. A registered backend only takes effect when
+	 * it delegates to the local shell for the commands it lets through;
+	 * returning an exit code without running anything breaks the tool.
+	 */
+	registerBashOperations(id: string, operations: BashOperations | undefined): void;
+
+	/**
+	 * Select the registered backend that runs shell commands, or undefined to
+	 * run locally. Takes effect on the next command, so a session can switch at
+	 * runtime; the id is reported back by `getActiveBashOperations()`.
+	 */
+	setActiveBashOperations(id: string | undefined): void;
+
+	/** Id of the backend selected with `setActiveBashOperations()`. */
+	getActiveBashOperations(): string | undefined;
+
 	// =========================================================================
 	// Command, Shortcut, Flag Registration
 	// =========================================================================
@@ -1872,6 +1897,12 @@ export type GetSessionNameHandler = () => string | undefined;
 
 export type GetActiveToolsHandler = () => string[];
 
+export type RegisterBashOperationsHandler = (id: string, operations: BashOperations | undefined) => void;
+
+export type SetActiveBashOperationsHandler = (id: string | undefined) => void;
+
+export type GetActiveBashOperationsHandler = () => string | undefined;
+
 /** Tool info with name, description, parameter schema, prompt guidelines, and source metadata. */
 export type ToolInfo = Pick<ToolDefinition, "name" | "description" | "parameters" | "promptGuidelines"> & {
 	exposure: ToolExposure;
@@ -1945,6 +1976,9 @@ export interface ModuleActions {
 	setModel: SetModelHandler;
 	getThinkingLevel: GetThinkingLevelHandler;
 	setThinkingLevel: SetThinkingLevelHandler;
+	registerBashOperations: RegisterBashOperationsHandler;
+	setActiveBashOperations: SetActiveBashOperationsHandler;
+	getActiveBashOperations: GetActiveBashOperationsHandler;
 }
 
 /**

@@ -503,6 +503,10 @@ export class AgentSession {
 	private _resourceLoader: ResourceLoader;
 	private _customTools: ToolDefinition[];
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
+	/** Module-registered shell execution backends (sandboxes), keyed by id. */
+	private readonly _bashOperationsBackends = new Map<string, BashOperations>();
+	/** Backend the shell tools route commands through; undefined runs locally. */
+	private _activeBashOperations: string | undefined;
 	private _cwd: string;
 	private _moduleRegistryRef?: { current?: ModuleRegistry };
 	private _initialActiveToolNames?: string[];
@@ -3700,6 +3704,14 @@ export class AgentSession {
 				},
 				getThinkingLevel: () => this.thinkingLevel,
 				setThinkingLevel: (level) => this.setThinkingLevel(level),
+				registerBashOperations: (id, operations) => {
+					if (operations) this._bashOperationsBackends.set(id, operations);
+					else this._bashOperationsBackends.delete(id);
+				},
+				setActiveBashOperations: (id) => {
+					this._activeBashOperations = id;
+				},
+				getActiveBashOperations: () => this._activeBashOperations,
 			},
 			{
 				getModel: () => this.model,
@@ -3897,7 +3909,12 @@ export class AgentSession {
 				)
 			: createAllToolDefinitions(this._cwd, {
 					read: { autoResizeImages },
-					bash: { commandPrefix: shellCommandPrefix, shellPath },
+					bash: {
+						commandPrefix: shellCommandPrefix,
+						shellPath,
+						operationsProviders: () => Object.fromEntries(this._bashOperationsBackends),
+						operationsProvider: () => this._activeBashOperations,
+					},
 				});
 
 		this._baseToolDefinitions = new Map(

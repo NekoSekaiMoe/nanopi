@@ -315,6 +315,7 @@ export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from ".
 // Tools
 export {
 	type BashOperations,
+	type BashOperationsProviders,
 	type BashSpawnContext,
 	type BashSpawnHook,
 	type BashToolDetails,
@@ -359,6 +360,7 @@ export {
 	type ReadToolDetails,
 	type ReadToolInput,
 	type ReadToolOptions,
+	resolveShellOperations,
 	type ToolsOptions,
 	type TruncationOptions,
 	type TruncationResult,

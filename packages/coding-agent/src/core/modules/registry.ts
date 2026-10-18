@@ -24,6 +24,7 @@ import {
 	normalizeBuildSystemPromptOptions,
 } from "../system-prompt.ts";
 import { time } from "../timings.ts";
+import type { BashOperations } from "../tools/bash.ts";
 import type { ModelRouteRequest, VirtualModelDefinition } from "../virtual-models.ts";
 import type {
 	BeforeAgentStartCustomEvent,
@@ -384,6 +385,9 @@ export class ModuleRegistry {
 		this.runtime.setModel = actions.setModel;
 		this.runtime.getThinkingLevel = actions.getThinkingLevel;
 		this.runtime.setThinkingLevel = actions.setThinkingLevel;
+		this.runtime.registerBashOperations = actions.registerBashOperations;
+		this.runtime.setActiveBashOperations = actions.setActiveBashOperations;
+		this.runtime.getActiveBashOperations = actions.getActiveBashOperations;
 		this.runtime.createContext = () => this.createContext();
 
 		// Context actions (required)
@@ -1323,6 +1327,9 @@ export function createModuleRuntime(): ModuleRuntime {
 		setModel: () => Promise.reject(new Error("Module runtime not initialized")),
 		getThinkingLevel: notInitialized,
 		setThinkingLevel: notInitialized,
+		registerBashOperations: notInitialized,
+		setActiveBashOperations: notInitialized,
+		getActiveBashOperations: notInitialized,
 		flagValues: new Map(),
 		pendingProviderRegistrations: [],
 		pendingNativeProviderRegistrations: [],
@@ -1514,6 +1521,18 @@ function createModuleApi(
 
 		getAllTools() {
 			return runtime.getAllTools();
+		},
+
+		registerBashOperations(id: string, operations: BashOperations | undefined): void {
+			runtime.registerBashOperations(id, operations);
+		},
+
+		setActiveBashOperations(id: string | undefined): void {
+			runtime.setActiveBashOperations(id);
+		},
+
+		getActiveBashOperations(): string | undefined {
+			return runtime.getActiveBashOperations();
 		},
 
 		getSettings() {
