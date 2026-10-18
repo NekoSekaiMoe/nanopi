@@ -31,6 +31,13 @@ follow-up questions are handled by spawning a new subagent with context from
 the previous report (stated in the tool description so the model knows).
 Max 4 concurrent subagents. `-ne` in children also prevents recursive spawning.
 
+Parallel subagents share one working tree, and `bash` makes every child a
+potential writer, so writes cannot be told apart file by file. The convention
+is one writer at a time; to write in parallel, give each subagent its own tree
+with `git worktree add <dir> -b <branch>` and pass `cwd` to spawn, then merge
+the branches yourself. This is a prompt guideline, not a mechanism — nothing
+enforces it.
+
 ## Notes
 
 - Children are fully isolated: own minimal prompt (~1.7k tokens), ephemeral

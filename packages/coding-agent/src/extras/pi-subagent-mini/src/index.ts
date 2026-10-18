@@ -315,6 +315,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		promptSnippet: "Delegate self-contained tasks to an isolated subagent; result arrives via completion notification",
 		promptGuidelines: [
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) to subagent spawn with read-only tools; keep only the final report in this conversation. Add write/edit to tools only when the subagent should modify files.",
+			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time. To write in parallel, give each one its own tree — `git worktree add <dir> -b <branch>` — and pass `cwd` to spawn; merge the branches yourself once the reports are in.",
 		],
 		parameters: Type.Object({
 			action: Type.Union([Type.Literal("spawn"), Type.Literal("wait"), Type.Literal("status"), Type.Literal("kill")], { description: "default flow: spawn, then wait for the notification" }),
