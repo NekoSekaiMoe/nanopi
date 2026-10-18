@@ -1,4 +1,4 @@
-name: npm audit
+name: dependency audit
 
 on:
   schedule:
@@ -16,7 +16,9 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm
-        run: npm install -g pnpm@12.3.1
+        uses: pnpm/action-setup@v4
+        with:
+          version: 12.3.1
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -25,4 +27,4 @@ jobs:
           cache: pnpm
 
       - name: Audit production vulnerabilities
-        run: node scripts/npm-audit.mjs
+        run: node scripts/dependency-audit.mjs

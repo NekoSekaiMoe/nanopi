@@ -10,7 +10,7 @@
  * 1. Check for uncommitted changes
  * 2. Verify every public workspace package is registered on npm
  *    and refresh the Nix model catalog pin if it is stale
- * 3. Bump version via npm run version:xxx or set an explicit version
+ * 3. Bump version via pnpm run version:xxx or set an explicit version
  * 4. Update CHANGELOG.md files: [Unreleased] -> [version] - date
  * 5. Regenerate release artifacts
  * 6. Run checks and tests
@@ -219,7 +219,7 @@ console.log("Building packages for tests...");
 run("pnpm run build:offline");
 console.log();
 
-// NANOPI_RELEASE_SKIP_TESTS=1 skips the test suite, e.g. when it already passed in `npm run release:local`
+// NANOPI_RELEASE_SKIP_TESTS=1 skips the test suite, e.g. when it already passed in `pnpm run release:local`
 // and an overloaded machine makes timing-sensitive tests fail. Checks and the install check still run.
 if (process.env.NANOPI_RELEASE_SKIP_TESTS === "1") {
 	console.log("Skipping tests (NANOPI_RELEASE_SKIP_TESTS=1)\n");

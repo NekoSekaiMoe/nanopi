@@ -44,8 +44,8 @@ export class SessionManager { static inMemory() {} }
 export class ModelRuntime { static create() {} }
 `,
 			"dist/index.d.ts": "export {};\n",
-			"dist/cli.js": 'console.log("1.0.0");\n',
-			"dist/bundle/cli.js": 'console.log("1.0.0");\n',
+			"dist/cli.js": 'console.log("v1.0.0");\n',
+			"dist/bundle/cli.js": 'console.log("v1.0.0");\n',
 		},
 	);
 	const artifactSet = produceArtifactSet({ build: false, outDir: join(root, "artifacts"), repoRoot, source: null });

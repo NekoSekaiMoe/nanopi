@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Developer wrapper that runs nanopi from this checkout's latest `npm run build`.
+# Developer wrapper that runs nanopi from this checkout's latest `pnpm run build`.
 # Development invocations use NANOPI_EXPERIMENTAL=1 by default. Pass --stable to use
 # the next nanopi executable on PATH.
 #
@@ -66,7 +66,7 @@ fi
 
 dev_pi="$repo_dir/packages/coding-agent/dist/bundle/cli.js"
 if [[ ! -x "$dev_pi" ]]; then
-	echo "error: development nanopi build not found; run \`npm run build\` in $repo_dir" >&2
+	echo "error: development nanopi build not found; run \`pnpm run build\` in $repo_dir" >&2
 	exit 1
 fi
 

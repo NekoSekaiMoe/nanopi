@@ -56,7 +56,7 @@ for (const id of seenAccepted) {
 
 for (const id of Object.keys(acceptedAdvisories)) {
 	if (!seenAccepted.has(id)) {
-		console.log(`::warning::Accepted advisory ${id} no longer matches; remove it from scripts/npm-audit.mjs.`);
+		console.log(`::warning::Accepted advisory ${id} no longer matches; remove it from scripts/dependency-audit.mjs.`);
 	}
 }
 

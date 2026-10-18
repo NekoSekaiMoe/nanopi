@@ -15,7 +15,6 @@ function writePackage(directory, manifest, files) {
 	}
 }
 
-// #10633: Covers npm 12's package-keyed `npm pack --json` output only when npm 12 is on PATH.
 test("produces a verified, content-addressed artifact set", (t) => {
 	const temporaryRoot = mkdtempSync(join(tmpdir(), "nanopi-package-artifacts-test-"));
 	t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
@@ -36,7 +35,7 @@ test("produces a verified, content-addressed artifact set", (t) => {
 	execFileSync("git", ["config", "user.email", "test@example.com"], { cwd: repoRoot });
 	execFileSync("git", ["config", "user.name", "Test"], { cwd: repoRoot });
 	execFileSync("git", ["add", "."], { cwd: repoRoot });
-	execFileSync("git", ["commit", "--quiet", "-m", "fixture"], { cwd: repoRoot });
+	execFileSync("git", ["commit", "--quiet", "--no-gpg-sign", "-m", "fixture"], { cwd: repoRoot });
 
 	const artifactSet = produceArtifactSet({ build: false, outDir: join(repoRoot, ".artifacts", "package set"), repoRoot });
 	assert.deepEqual(artifactSet.packages.map((pkg) => pkg.name), ["@nanopi-package-test/shared", "@nanopi-package-test/target"]);

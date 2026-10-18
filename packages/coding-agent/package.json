@@ -30,12 +30,12 @@
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist",
-		"build": "npm run build:unbundled && node ../../scripts/build-coding-agent-bundle.mjs",
-		"build:unbundled": "tsc -p tsconfig.build.json && shx chmod +x dist/cli.js dist/rpc-entry.js && npm run copy-assets",
+		"build": "pnpm run build:unbundled && node ../../scripts/build-coding-agent-bundle.mjs",
+		"build:unbundled": "tsc -p tsconfig.build.json && shx chmod +x dist/cli.js dist/rpc-entry.js && pnpm run copy-assets",
 		"copy-assets": "node scripts/copy-assets.mjs",
 		"test": "vitest --run",
 		"generate:schemas": "node --import ../../ts-import.mjs --import ./scripts/source-resolver.ts scripts/generate-schemas.ts",
-		"prepublishOnly": "npm run clean && npm run build",
+		"prepublishOnly": "pnpm run clean && pnpm run build",
 		"build:single-file": "node ../../scripts/build-coding-agent-single-file.mjs"
 	},
 	"dependencies": {

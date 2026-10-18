@@ -42,7 +42,7 @@ const artifactSet = produceArtifactSet({
 });
 console.log(`\nLocal package artifacts created: ${artifactSet.artifactDirectory}`);
 console.log(`Manifest: ${artifactSet.manifestPath}`);
-console.log("\nConnect an external npm project with:");
+console.log("\nConnect an external project with:");
 console.log(
 	`  node ${resolve("scripts/use-local-packages.mjs")} --manifest ${artifactSet.manifestPath} --consumer <project> --package <name>`,
 );

@@ -2,9 +2,9 @@ import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { getPublicWorkspacePackages } from "./release-packages.mjs";
-import { execNpmSync } from "./npm-command.mjs";
+import { execPnpmSync } from "./pnpm-command.mjs";
 
 const manifestSchemaVersion = 1;
 
@@ -25,26 +25,25 @@ function packPackages(packages, tarballDirectory) {
 	for (const pkg of packages) {
 		const packageJson = JSON.parse(readFileSync(join(pkg.directory, "package.json"), "utf8"));
 		if (packageJson.name !== pkg.name) throw new Error(`Unexpected package name in ${pkg.directory}`);
-		const output = execNpmSync(["pack", "--ignore-scripts", "--json", "--pack-destination", tarballDirectory], {
+		const output = execPnpmSync(["pack", "--json", "--pack-destination", tarballDirectory], {
 			cwd: pkg.directory,
 			encoding: "utf8",
 			stdio: ["inherit", "pipe", "inherit"],
 		});
-		const parsed = JSON.parse(output);
-		const packed = Array.isArray(parsed) ? (parsed.length === 1 ? parsed[0] : undefined) : parsed?.[pkg.name];
+		const packed = JSON.parse(output);
 		if (packed?.name !== pkg.name || typeof packed.filename !== "string") {
-			throw new Error(`npm pack returned an unexpected result for ${pkg.name}`);
+			throw new Error(`pnpm pack returned an unexpected result for ${pkg.name}`);
 		}
 
-		const originalPath = join(tarballDirectory, packed.filename);
+		// pnpm reports the tarball path, npm reports just the file name; pack-destination
+		// puts both in tarballDirectory, so only the basename is safe to join.
+		const originalPath = join(tarballDirectory, basename(packed.filename));
 		const contents = readFileSync(originalPath);
 		const digest = createHash("sha512").update(contents).digest();
 		const hash = digest.toString("hex").slice(0, 12);
 		const tarballPath = originalPath.replace(/\.tgz$/, `-${hash}.tgz`);
 		renameSync(originalPath, tarballPath);
-		console.log(
-			`  ${pkg.name}@${pkg.version}: ${packed.files.length} files, ${packed.size} bytes packed, ${packed.unpackedSize} bytes unpacked`,
-		);
+		console.log(`  ${pkg.name}@${pkg.version}: ${packed.files.length} files packed`);
 		packedPackages.push({
 			name: pkg.name,
 			version: pkg.version,
@@ -77,8 +76,8 @@ export function produceArtifactSet({ repoRoot, outDir, build = true, offlineMode
 	const root = resolve(repoRoot);
 	const artifactDirectory = prepareOutputDirectory(outDir, { force, repoRoot: root });
 	if (build) {
-		execNpmSync(["run", "clean"], { cwd: root, stdio: "inherit" });
-		execNpmSync(["run", offlineModelData ? "build:offline" : "build"], { cwd: root, stdio: "inherit" });
+		execPnpmSync(["run", "clean"], { cwd: root, stdio: "inherit" });
+		execPnpmSync(["run", offlineModelData ? "build:offline" : "build"], { cwd: root, stdio: "inherit" });
 	}
 	const artifactSource = source === undefined ? getGitSource(root) : source;
 	const packages = getPublicWorkspacePackages(join(root, "packages"));
