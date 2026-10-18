@@ -36,7 +36,9 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages", "coding-agent");
 const codingAgentDistDir = join(codingAgentDir, "dist");
 const aiDistDir = join(repoRoot, "packages", "ai", "dist");
-const webuiDistDir = join(repoRoot, "packages", "webui", "dist");
+const webuiNextDistDir = join(repoRoot, "packages", "webui-next", "dist");
+const webuiLegacyDistDir = join(repoRoot, "packages", "webui", "dist");
+const webuiDistDir = existsSync(webuiNextDistDir) ? webuiNextDistDir : webuiLegacyDistDir;
 const tuiNativeDir = join(repoRoot, "packages", "tui", "native");
 const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 

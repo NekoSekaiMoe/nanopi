@@ -1,5 +1,5 @@
 /**
- * WebUI mode: serves the browser UI from packages/webui and bridges its HTTP/SSE
+ * WebUI mode: serves the browser UI from packages/webui-next (legacy packages/webui fallback) and bridges its HTTP/SSE
  * API onto a headless AgentSession.
  *
  * Frontend contract ported from AtomCode's webui (MIT). The default `/chat`
@@ -59,7 +59,7 @@ const MIME: Record<string, string> = {
 	".map": "application/json",
 };
 
-/** Wire types from the webui frontend (see packages/webui/src/api.ts). */
+/** Wire types from the webui frontend (see packages/webui-next/src/lib/api.ts). */
 interface WebuiModelInfo {
 	provider: string;
 	model: string;
@@ -137,8 +137,10 @@ interface OAuthFlowState {
 /** Locate the built webui assets: source checkout first, then installed dist. */
 function getWebuiDistDir(): string {
 	const packageDir = getPackageDir();
-	const sourceDist = normalize(join(packageDir, "..", "webui", "dist"));
-	if (existsSync(sourceDist)) return sourceDist;
+	const nextDist = normalize(join(packageDir, "..", "webui-next", "dist"));
+	if (existsSync(nextDist)) return nextDist;
+	const legacyDist = normalize(join(packageDir, "..", "webui", "dist"));
+	if (existsSync(legacyDist)) return legacyDist;
 	const installedDist = join(packageDir, "dist", "webui");
 	if (existsSync(installedDist)) return installedDist;
 	return installedDist;
@@ -277,7 +279,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	async function serveStatic(res: ServerResponse, pathname: string): Promise<void> {
 		if (!distExists) {
 			res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
-			res.end("webui assets are not built. Run `pnpm --filter @nanopi/webui run build` first.");
+			res.end("webui assets are not built. Run `pnpm --filter @nanopi/webui-next run build` first.");
 			return;
 		}
 		let rel = pathname === "/" ? "index.html" : pathname.replace(/^\/+/, "");
@@ -1245,7 +1247,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const url = `http://${host}:${actualPort}`;
 			console.log(`nanopi webui listening on ${url}`);
 			if (!distExists) {
-				console.log("webui assets are missing; run `pnpm --filter @nanopi/webui run build` and restart.");
+				console.log("webui assets are missing; run `pnpm --filter @nanopi/webui-next run build` and restart.");
 			} else if (extraBridge.available) {
 				// Pairing handoff: short one-time code exchanged at /extra/pair for the
 				// bearer token, replacing the long token-in-URL.

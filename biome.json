@@ -37,6 +37,7 @@
 			"!**/*.models.ts",
 			"!packages/mom/data/**/*",
 			"!packages/webui/**/*",
+			"!packages/webui-next/**/*",
 			"!packages/coding-agent/src/extras/**/*",
 			"!!**/node_modules"
 		]

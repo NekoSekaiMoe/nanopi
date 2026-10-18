@@ -4,8 +4,8 @@
 	"type": "module",
 	"scripts": {
 		"clean": "pnpm -r run clean",
-		"build": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build && cd ../agent && pnpm run build && cd ../webui && pnpm run build && cd ../extra && pnpm run build && cd ../coding-agent && pnpm run build",
-		"build:offline": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build:offline && cd ../agent && pnpm run build && cd ../webui && pnpm run build && cd ../extra && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build && cd ../agent && pnpm run build && cd ../webui-next && pnpm run build && cd ../extra && pnpm run build && cd ../coding-agent && pnpm run build",
+		"build:offline": "cd packages/tui && pnpm run build && cd ../ai && pnpm run build:offline && cd ../agent && pnpm run build && cd ../webui-next && pnpm run build && cd ../extra && pnpm run build && cd ../coding-agent && pnpm run build",
 		"build:native:darwin": "pnpm --filter ./packages/tui run build:native:darwin",
 		"build:native:linux": "pnpm --filter ./packages/tui run build:native:linux",
 		"build:native:win32": "pnpm --filter ./packages/tui run build:native:win32",

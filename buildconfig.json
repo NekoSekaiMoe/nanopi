@@ -2,7 +2,7 @@
 	"defaultFlavor": "full",
 	"components": {
 		"webui": {
-			"description": "Browser UI served by `nanopi webui` (packages/webui, copied to dist/webui and embedded in single-file builds)"
+			"description": "Browser UI served by `nanopi webui` (packages/webui-next, copied to dist/webui and embedded in single-file builds)"
 		},
 		"export-html": {
 			"description": "HTML export templates and vendored assets (dist/core/export-html)"

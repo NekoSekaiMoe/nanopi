@@ -1,3 +1,7 @@
+> Legacy: the Next.js rewrite lives in `packages/webui-next` and is what
+> `nanopi webui` serves. This package remains as a fallback until the rewrite
+> reaches feature parity.
+
 # @nanopi/webui
 
 Browser UI for nanopi, served by `nanopi webui -p <port>` (default port 5335).

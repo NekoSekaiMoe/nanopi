@@ -1,0 +1,394 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Memoh-inspired design tokens, reimplemented clean-room.
+ * The values follow Memoh's documented high-contrast flat system:
+ * near-neutral warm surfaces, 1px borders, no atomic shadows, and a
+ * single brand accent reserved for the send button and active marks.
+ */
+:root {
+	--font-sans: "Inter Variable", "Inter", "MiSans", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei UI", "Noto Sans SC", "Noto Sans CJK SC", "WenQuanYi Micro Hei", sans-serif;
+	--radius: 0.625rem;
+
+	--background: oklch(0.981 0.0026 63);
+	--background-chrome: oklch(0.975 0.0026 63);
+	--foreground: oklch(0.21 0.004 95);
+	--card: oklch(1 0 0);
+	--card-foreground: oklch(0.21 0.004 95);
+	--popover: var(--card);
+	--popover-foreground: var(--card-foreground);
+	--muted: oklch(0.968 0 0);
+	--muted-foreground: oklch(0.52 0.006 95);
+	--accent: oklch(0.968 0 0);
+	--accent-foreground: oklch(0.21 0.004 95);
+	--border: oklch(0.915 0.0045 72);
+	--border-soft: color-mix(in oklab, var(--border) 60%, transparent);
+	--input: oklch(0.915 0.0045 72);
+	--ring: oklch(0.575 0 0);
+	--sidebar: var(--background);
+	--sidebar-accent: rgb(0 0 0 / 0.055);
+	--sidebar-border: oklch(0.905 0.0045 72);
+	--brand: oklch(0.55 0.22 290);
+	--brand-foreground: oklch(0.985 0.001 286);
+	--brand-soft: oklch(0.96 0.025 290);
+	--brand-border: oklch(0.84 0.08 290);
+	--chat-user-bubble: #ede7fb;
+	--chat-user-bubble-fg: #2e1a5e;
+	--chat-user-bubble: oklch(from var(--brand) 0.936 0.035 calc(h + 12));
+	--chat-user-bubble-fg: oklch(from var(--brand) 0.235 0.04 calc(h + 12));
+	--surface-editor: oklch(1 0 0);
+	--surface-composer: var(--surface-editor);
+	--success: oklch(0.58 0.13 150);
+	--warning: oklch(0.66 0.14 70);
+	--destructive: oklch(0.577 0.245 27.325);
+	--scrollbar-thumb: oklch(0 0 0 / 0.18);
+	--scrollbar-thumb-hover: oklch(0 0 0 / 0.32);
+}
+
+.dark {
+	--background: oklch(0.12212 0 0);
+	--background-chrome: oklch(0.16 0 0);
+	--foreground: oklch(0.9 0 0);
+	--card: oklch(0.21 0 0);
+	--card-foreground: oklch(0.9 0 0);
+	--popover: var(--card);
+	--popover-foreground: var(--card-foreground);
+	--muted: oklch(0.26 0 0);
+	--muted-foreground: oklch(0.7 0 0);
+	--accent: oklch(0.26 0 0);
+	--accent-foreground: oklch(0.86 0 0);
+	--border: oklch(1 0 0 / 8%);
+	--border-soft: color-mix(in oklab, var(--border) 60%, transparent);
+	--input: oklch(1 0 0 / 14%);
+	--ring: oklch(0.86 0.005 285);
+	--sidebar: oklch(0.185 0 0);
+	--sidebar-accent: rgb(255 255 255 / 0.06);
+	--sidebar-border: oklch(1 0 0 / 8%);
+	--brand: oklch(0.72 0.16 290);
+	--brand-foreground: oklch(0.985 0.001 286);
+	--brand-soft: oklch(0.3 0.07 290 / 0.45);
+	--brand-border: oklch(0.72 0.16 290 / 0.35);
+	--chat-user-bubble: #5b3aa6;
+	--chat-user-bubble-fg: #fff;
+	--chat-user-bubble: oklch(from var(--brand) 0.4 0.15 calc(h + 7));
+	--surface-editor: var(--background);
+	--surface-composer: var(--card);
+	--success: oklch(0.72 0.13 150);
+	--warning: oklch(0.78 0.13 70);
+	--destructive: oklch(0.704 0.191 22.216);
+	--scrollbar-thumb: oklch(1 0 0 / 0.14);
+	--scrollbar-thumb-hover: oklch(1 0 0 / 0.26);
+}
+
+@theme inline {
+	--color-background: var(--background);
+	--color-background-chrome: var(--background-chrome);
+	--color-foreground: var(--foreground);
+	--color-card: var(--card);
+	--color-card-foreground: var(--card-foreground);
+	--color-popover: var(--popover);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-muted: var(--muted);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-accent: var(--accent);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-border: var(--border);
+	--color-border-soft: var(--border-soft);
+	--color-input: var(--input);
+	--color-ring: var(--ring);
+	--color-sidebar: var(--sidebar);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-brand: var(--brand);
+	--color-brand-foreground: var(--brand-foreground);
+	--color-brand-soft: var(--brand-soft);
+	--color-brand-border: var(--brand-border);
+	--color-chat-user-bubble: var(--chat-user-bubble);
+	--color-chat-user-bubble-fg: var(--chat-user-bubble-fg);
+	--color-surface-editor: var(--surface-editor);
+	--color-surface-composer: var(--surface-composer);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-destructive: var(--destructive);
+	--font-sans: var(--font-sans);
+	--radius-sm: 6px;
+	--radius-md: 8px;
+	--radius-lg: 10px;
+	--radius-xl: 12px;
+	--radius-2xl: 16px;
+	--radius-3xl: 24px;
+}
+
+* {
+	border-color: var(--border);
+}
+
+html,
+body {
+	height: 100%;
+}
+
+html {
+	background: var(--background);
+	color: var(--foreground);
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	font-family: var(--font-sans);
+	font-size: 14px;
+	line-height: 1.5;
+	background: var(--background);
+	color: var(--foreground);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+	background: color-mix(in oklab, var(--brand) 24%, transparent);
+}
+
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+	background: var(--scrollbar-thumb);
+	border-radius: 999px;
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+	background: var(--scrollbar-thumb-hover);
+	background-clip: padding-box;
+}
+
+.scrollbar-none {
+	scrollbar-width: none;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+	display: none;
+}
+
+button,
+input,
+textarea {
+	font: inherit;
+}
+
+button {
+	cursor: pointer;
+}
+
+button:disabled {
+	cursor: default;
+}
+
+textarea {
+	resize: none;
+}
+
+/* One subtle press/pulse used by streaming status words. */
+@keyframes nanopi-shimmer {
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
+}
+
+.shimmer {
+	background: linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%);
+	background-size: 200% 100%;
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+	animation: nanopi-shimmer 2.4s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.shimmer {
+		animation: none;
+		background: none;
+		color: var(--muted-foreground);
+	}
+}
+
+.chat-user-bubble:lang(zh) {
+	line-height: 1.6;
+}
+
+.markdown {
+	font-size: 16px;
+	line-height: 1.62;
+	color: var(--foreground);
+	overflow-wrap: anywhere;
+}
+
+.markdown > :first-child {
+	margin-top: 0;
+}
+
+.markdown > :last-child {
+	margin-bottom: 0;
+}
+
+.markdown p,
+.markdown ul,
+.markdown ol,
+.markdown blockquote,
+.markdown pre,
+.markdown table {
+	margin: 0.7em 0;
+}
+
+.markdown h1,
+.markdown h2,
+.markdown h3,
+.markdown h4 {
+	margin: 1.1em 0 0.45em;
+	font-weight: 600;
+	letter-spacing: -0.015em;
+	line-height: 1.3;
+}
+
+.markdown h1 {
+	font-size: 1.35em;
+}
+
+.markdown h2 {
+	font-size: 1.2em;
+}
+
+.markdown h3 {
+	font-size: 1.08em;
+}
+
+.markdown ul,
+.markdown ol {
+	padding-left: 1.35em;
+}
+
+.markdown li {
+	margin: 0.2em 0;
+}
+
+.markdown li::marker {
+	color: var(--muted-foreground);
+}
+
+.markdown a {
+	color: var(--brand);
+	text-decoration: underline;
+	text-underline-offset: 2px;
+}
+
+.markdown blockquote {
+	border-left: 2px solid var(--border);
+	padding-left: 0.85em;
+	color: var(--muted-foreground);
+}
+
+.markdown code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+	font-size: 0.88em;
+	background: var(--muted);
+	border-radius: 4px;
+	padding: 0.15em 0.35em;
+}
+
+.markdown pre code {
+	background: transparent;
+	padding: 0;
+	border-radius: 0;
+	font-size: 12px;
+}
+
+.markdown table {
+	display: block;
+	max-width: 100%;
+	overflow-x: auto;
+	border-collapse: collapse;
+	font-size: 12.5px;
+}
+
+.markdown th,
+.markdown td {
+	border: 1px solid var(--border);
+	padding: 6px 8px;
+	text-align: left;
+}
+
+.markdown th {
+	background: var(--muted);
+	font-weight: 500;
+}
+
+.code-block {
+	overflow: hidden;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--card);
+	margin: 0.8em 0;
+}
+
+.code-block-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 30px;
+	padding: 0 10px;
+	border-bottom: 1px solid var(--border-soft);
+	font-size: 10.5px;
+	color: var(--muted-foreground);
+	text-transform: lowercase;
+}
+
+.code-block-head button {
+	font-size: 10.5px;
+	color: var(--muted-foreground);
+	background: transparent;
+	border: 0;
+	padding: 2px 4px;
+	border-radius: 4px;
+}
+
+.code-block-head button:hover {
+	background: var(--accent);
+	color: var(--foreground);
+}
+
+.code-block pre {
+	margin: 0;
+	padding: 12px;
+	overflow-x: auto;
+	line-height: 1.55;
+}
+
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
