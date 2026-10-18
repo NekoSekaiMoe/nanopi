@@ -10,13 +10,23 @@
  * and the webui hides its mode selector.
  */
 
+import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, rm } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { basename, extname, join, normalize } from "node:path";
-import type { AgentMessage } from "@nanopi/pi-agent-core";
-import type { AssistantMessageEvent, ImageContent, Message, Model, ToolResultMessage } from "@nanopi/pi-ai";
+import type { Socket } from "node:net";
+import { homedir } from "node:os";
+import { basename, extname, isAbsolute, join, normalize, resolve } from "node:path";
+import type { AgentMessage, ThinkingLevel } from "@nanopi/pi-agent-core";
+import {
+	type AssistantMessageEvent,
+	getSupportedThinkingLevels,
+	type ImageContent,
+	type Message,
+	type Model,
+	type ToolResultMessage,
+} from "@nanopi/pi-ai";
 import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
 import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
@@ -116,6 +126,23 @@ function modelKey(model: Model<any>): string {
 	return `${model.provider}/${model.id}`;
 }
 
+/**
+ * Split a provider error string into a display message and the HTTP status it
+ * carries. Provider adapters compose errors as `"<status>: <body>"` or
+ * `"<prefix> (<status>): <body>"`, so the status is recoverable without
+ * wrapping every adapter's error type.
+ */
+export function describeProviderError(raw: string | undefined): { message: string; code?: number } {
+	const text = (raw ?? "").trim();
+	if (!text) return { message: "unknown provider error" };
+	const prefix = /^(?:[A-Za-z][\w .-]*\s)?\((\d{3})\)\s*:?\s*/.exec(text);
+	const bare = /^(\d{3})\s*:\s*/.exec(text);
+	const code = prefix ? Number(prefix[1]) : bare ? Number(bare[1]) : undefined;
+	if (code === undefined) return { message: text };
+	const message = text.slice(prefix ? prefix[0].length : bare ? bare[0].length : 0).trim() || text;
+	return { message, code };
+}
+
 /** Packages the build registers as bundled extras (auto-registered when unfiltered). */
 const _BUNDLED_EXTRA_PACKAGE_NAMES = new Set(["pi-subagent-mini", "ask-lite", "todo-lite", "mcp-lite"]);
 
@@ -123,6 +150,200 @@ function _packageSourceName(source: string): string {
 	const spec = source.replace(/^npm:/, "").trim();
 	const versionSeparator = spec.lastIndexOf("@");
 	return versionSeparator > 0 ? spec.slice(0, versionSeparator) : spec;
+}
+
+/** Largest file the viewer will read into memory. */
+const MAX_VIEWABLE_FILE_BYTES = 2 * 1024 * 1024;
+
+/** Resolve a user-supplied path against the workspace root; undefined when empty. */
+function resolveWorkspacePath(requested: string, cwd: string): string | undefined {
+	const trimmed = requested.trim();
+	if (!trimmed) return undefined;
+	const expanded = trimmed.startsWith("~") ? join(homedir(), trimmed.slice(1).replace(/^\//, "")) : trimmed;
+	return normalize(isAbsolute(expanded) ? expanded : resolve(cwd, expanded));
+}
+
+async function isDirectory(target: string): Promise<boolean> {
+	try {
+		return (await stat(target)).isDirectory();
+	} catch {
+		return false;
+	}
+}
+
+/** POSIX login shell for the scratch terminal. */
+function shellPath(): string {
+	return process.env.SHELL || "/bin/sh";
+}
+
+/**
+ * Incremental WebSocket text reader. One reader per connection: the handshake
+ * takes the first frame and `push` continues with the rest, so no chunk is lost
+ * between the two consumers.
+ */
+class WebSocketTextReader {
+	private buffered = Buffer.alloc(0);
+	private readonly queue: string[] = [];
+	private readonly waiters: Array<(frame: string) => void> = [];
+	private readonly socket: Socket;
+
+	/** Start reading frames; the caller consumes them through `next`. */
+	constructor(socket: Socket) {
+		this.socket = socket;
+		// `prepend` keeps our unbuffered reader ahead of any other listener once
+		// the socket switches into flowing mode.
+		socket.prependListener("data", this.handleData);
+	}
+
+	readonly handleData = (chunk: Buffer): void => {
+		this.buffered = Buffer.concat([this.buffered, chunk]);
+		for (;;) {
+			const frame = this.takeFrame();
+			if (frame === undefined) return;
+			const pending = this.waiters.shift();
+			if (pending) pending(frame);
+			else this.queue.push(frame);
+		}
+	};
+
+	/** Resolve with the next frame, pulling from the queue or waiting on the socket. */
+	next(): Promise<string> {
+		const queued = this.queue.shift();
+		if (queued !== undefined) return Promise.resolve(queued);
+		return new Promise((resolve) => this.waiters.push(resolve));
+	}
+
+	/** Stop delivering frames; the caller owns the socket from here on. */
+	detach(): void {
+		this.socket.off("data", this.handleData);
+	}
+
+	private takeFrame(): string | undefined {
+		if (this.buffered.length < 2) return undefined;
+		const opcode = this.buffered[0] & 0x0f;
+		const masked = (this.buffered[1] & 0x80) !== 0;
+		let length = this.buffered[1] & 0x7f;
+		let offset = 2;
+		if (length === 126) {
+			if (this.buffered.length < 4) return undefined;
+			length = this.buffered.readUInt16BE(2);
+			offset = 4;
+		} else if (length === 127) {
+			if (this.buffered.length < 10) return undefined;
+			length = Number(this.buffered.readBigUInt64BE(2));
+			offset = 10;
+		}
+		const maskOffset = offset;
+		if (masked) offset += 4;
+		if (this.buffered.length < offset + length) return undefined;
+		let payload = this.buffered.subarray(offset, offset + length);
+		if (masked) {
+			const mask = this.buffered.subarray(maskOffset, maskOffset + 4);
+			payload = Buffer.from(payload.map((byte, index) => byte ^ mask[index % 4]));
+		}
+		this.buffered = this.buffered.subarray(offset + length);
+		if (opcode === 0x8) return "\u0000close";
+		if (opcode === 0x9 || opcode === 0xa) return undefined;
+		return payload.toString("utf8");
+	}
+}
+
+/** Encode one unmasked text frame. */
+function encodeWebSocketText(text: string): Buffer {
+	const payload = Buffer.from(text, "utf8");
+	const length = payload.length;
+	if (length < 126) return Buffer.concat([Buffer.from([0x81, length]), payload]);
+	if (length < 65_536) {
+		const head = Buffer.alloc(4);
+		head[0] = 0x81;
+		head[1] = 126;
+		head.writeUInt16BE(length, 2);
+		return Buffer.concat([head, payload]);
+	}
+	const head = Buffer.alloc(10);
+	head[0] = 0x81;
+	head[1] = 127;
+	head.writeBigUInt64BE(BigInt(length), 2);
+	return Buffer.concat([head, payload]);
+}
+
+/** One scratch shell: commands run one at a time in the session's directory. */
+interface TerminalSession {
+	shell: string;
+	cwd: string;
+	/** The command currently running, so the UI can cancel it. */
+	running: ChildProcess | undefined;
+	exec(command: string): Promise<{ output: string; code: number | null }>;
+	cancel(): void;
+	kill(): void;
+}
+
+/** Cap on retained output per command; a runaway command must not freeze the tab. */
+const MAX_TERMINAL_OUTPUT_CHARS = 200_000;
+
+/** Terminal protocol messages, newest client to newest server. */
+type TerminalMessage =
+	| { type: "exec"; command: string; id: string }
+	| { type: "cd"; path: string }
+	| { type: "cancel" };
+
+interface TerminalState {
+	cwd: string;
+	session: TerminalSession;
+	/** Id of the command in flight, so a second one is rejected instead of racing. */
+	running: string | undefined;
+}
+
+function startTerminal(cwd: string): TerminalSession {
+	const shell = shellPath();
+	// Each command runs in its own `sh -c` with piped stdio. A long-lived
+	// interactive shell looked simpler, but it needs a tty to drive the command
+	// loop reliably: without one it buffers prompts and stops consuming stdin,
+	// so writes seem to succeed and no output ever arrives.
+	const session: TerminalSession = {
+		shell,
+		cwd,
+		running: undefined,
+		exec(command) {
+			return new Promise((resolve) => {
+				const child = spawn(shell, ["-c", command], {
+					cwd: session.cwd,
+					env: { ...process.env, TERM: "dumb" },
+					stdio: ["ignore", "pipe", "pipe"],
+				});
+				session.running = child;
+				let output = "";
+				let truncated = false;
+				const collect = (data: Buffer) => {
+					if (truncated) return;
+					output += data.toString("utf8");
+					if (output.length > MAX_TERMINAL_OUTPUT_CHARS) {
+						output = output.slice(0, MAX_TERMINAL_OUTPUT_CHARS);
+						truncated = true;
+					}
+				};
+				child.stdout.on("data", collect);
+				child.stderr.on("data", collect);
+				child.on("error", (error) => {
+					session.running = undefined;
+					resolve({ output: `${output}${error.message}\n`, code: null });
+				});
+				child.on("close", (code) => {
+					session.running = undefined;
+					const suffix = truncated ? "\n[output truncated]\n" : "";
+					resolve({ output: `${output}${suffix}`, code });
+				});
+			});
+		},
+		cancel() {
+			session.running?.kill("SIGKILL");
+			session.running = undefined;
+		},
+		kill() {
+			session.cancel();
+		},
+	};
+	return session;
 }
 
 /** One browser-driven OAuth login flow. */
@@ -260,6 +481,67 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		});
 	});
 
+	// Terminal transport. A WebSocket keeps one shell alive across commands; the
+	// connection carries a single masked frame holding the session key, then
+	// newline-delimited JSON both ways.
+	server.on("upgrade", (req: IncomingMessage, socket: Socket) => {
+		const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+		if (url.pathname !== "/terminal") {
+			socket.destroy();
+			return;
+		}
+		const reject = (status: number, message: string) => {
+			socket.write(`HTTP/1.1 ${status} ${message}\r\nconnection: close\r\n\r\n`);
+			socket.destroy();
+		};
+		// Browsers cannot set headers on a WebSocket, so the token may also arrive
+		// as the `token` query parameter (the SPA keeps it in session storage) or
+		// as a subprotocol entry.
+		const offered =
+			req.headers.authorization && bearerTokenMatches(token, req.headers.authorization)
+				? true
+				: url.searchParams.get("token") === token ||
+					(req.headers["sec-websocket-protocol"] ?? "")
+						.split(",")
+						.map((entry) => entry.trim())
+						.includes(token);
+		if (!offered) {
+			reject(401, "Unauthorized");
+			return;
+		}
+		const key = req.headers["sec-websocket-key"];
+		if (typeof key !== "string" || req.headers["sec-websocket-version"] !== "13") {
+			reject(400, "Bad Request");
+			return;
+		}
+		const accept = createHash("sha1").update(`${key}258EAFA5-E914-47DA-95CA-C5AB0DC85B11`).digest("base64");
+		socket.write(
+			"HTTP/1.1 101 Switching Protocols\r\n" +
+				"upgrade: websocket\r\n" +
+				"connection: Upgrade\r\n" +
+				`sec-websocket-accept: ${accept}\r\n\r\n`,
+		);
+		// The HTTP parser paused the socket before emitting `upgrade`; resume it
+		// so frames start flowing into the terminal reader.
+		socket.resume();
+
+		// The terminal is live before the first frame arrives: the client sends a
+		// `{ session }` frame only to pick the working directory, and dropping
+		// nothing is easier than handing buffered bytes between readers.
+		const terminal = new WebSocketTextReader(socket);
+		void (async () => {
+			const first = await terminal.next();
+			let sessionKey = "";
+			try {
+				sessionKey = (JSON.parse(first) as { session?: string }).session ?? "";
+			} catch {
+				/* an empty handshake still opens the terminal */
+			}
+			const cwd = (sessionKey ? await findSessionCwd(sessionKey) : undefined) ?? runtime.cwd;
+			if (!socket.destroyed) runTerminalSocket(socket, cwd, terminal);
+		})();
+	});
+
 	// Single in-flight turn; the frontend blocks sending while a turn streams.
 	let turnActive = false;
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
@@ -302,9 +584,107 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 	}
 
+	/**
+	 * Opt-in scratch shell for the sidebar terminal: one process per socket, plus
+	 * a `read`/`write` path so WebKit browsers see output before the whole
+	 * command exits. Nothing here reaches the agent transcript; the shell runs in
+	 * the session's working directory with the process environment.
+	 */
+	function runTerminalSocket(ws: Socket, cwd: string, reader: WebSocketTextReader): void {
+		const state: TerminalState = { cwd, session: startTerminal(cwd), running: undefined };
+		let buffer = "";
+
+		const write = (message: Record<string, unknown>) => {
+			if (ws.destroyed) return;
+			ws.write(encodeWebSocketText(JSON.stringify(message)));
+		};
+
+		write({ type: "start", cwd: state.cwd, shell: state.session.shell });
+
+		// Frames carry one JSON message each. A stray newline inside a frame is
+		// tolerated so a client that batches messages still works.
+		const handleFrame = (text: string) => {
+			buffer += text;
+			for (;;) {
+				const index = buffer.indexOf("\n");
+				const line = index < 0 ? buffer.trim() : buffer.slice(0, index).trim();
+				buffer = index < 0 ? "" : buffer.slice(index + 1);
+				if (!line) {
+					if (index < 0) return;
+					continue;
+				}
+				let message: TerminalMessage;
+				try {
+					message = JSON.parse(line) as TerminalMessage;
+				} catch {
+					if (index < 0) return;
+					continue;
+				}
+				if (message.type === "cd") {
+					const target = resolveWorkspacePath(message.path, state.cwd);
+					if (target) {
+						state.cwd = target;
+						state.session = startTerminal(target);
+						write({ type: "start", cwd: target, shell: state.session.shell });
+					}
+					continue;
+				}
+				if (message.type === "cancel") {
+					state.session.cancel();
+					continue;
+				}
+				if (message.type === "exec") {
+					if (state.running) {
+						write({
+							type: "exit",
+							id: message.id,
+							code: null,
+							error: "a command is already running",
+						});
+						continue;
+					}
+					state.running = message.id;
+					void state.session
+						.exec(message.command)
+						.then((result) => {
+							write({ type: "output", data: result.output });
+							write({ type: "exit", id: message.id, code: result.code });
+						})
+						.catch((error: Error) => {
+							write({ type: "exit", id: message.id, code: null, error: error.message });
+						})
+						.finally(() => {
+							state.running = undefined;
+						});
+				}
+			}
+		};
+
+		void (async () => {
+			for (;;) {
+				const frame = await reader.next();
+				// The close frame decodes to NUL; anything else is protocol text.
+				if (frame.startsWith("\u0000")) return;
+				handleFrame(frame);
+			}
+		})();
+
+		const dispose = () => {
+			state.session.kill();
+		};
+		ws.on("close", dispose);
+		ws.on("error", dispose);
+	}
+
 	async function listAllSessions(): Promise<(WebuiSessionMeta & { project_hash: string })[]> {
 		const infos = await SessionManager.listAll();
 		return infos.map(sessionMeta);
+	}
+
+	/** Working directory of a session by id or short id; undefined when unknown. */
+	async function findSessionCwd(id: string): Promise<string | undefined> {
+		const info = await findSessionFile(id);
+		return info?.cwd || undefined;
 	}
 
 	async function findSessionFile(id: string): Promise<SessionInfo | undefined> {
@@ -342,6 +722,14 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		});
 		send({ type: "session_assigned", session_id: session.sessionId });
 
+		// The final assistant message decides the turn outcome; keep its stop
+		// reason and provider error so `done` carries them.
+		let lastStopReason: string | undefined;
+		let lastErrorMessage: string | undefined;
+		let lastErrorCode: number | undefined;
+
+		let eventUnsubscribe: (() => void) | undefined;
+
 		const onEvent = (event: AgentSessionEvent) => {
 			switch (event.type) {
 				case "turn_start":
@@ -359,11 +747,25 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				case "message_end": {
 					const message = event.message;
 					if (message.role === "assistant") {
-						const usage = (message as Extract<Message, { role: "assistant" }>).usage;
+						const assistant = message as Extract<Message, { role: "assistant" }>;
+						const usage = assistant.usage;
 						if (usage) {
 							promptTokens += usage.input;
 							completionTokens += usage.output;
 							cachedTokens += usage.cacheRead;
+						}
+						// A failed model response keeps its stream open in the
+						// session; surface the provider error right away so the UI
+						// never sits on "thinking" while the runtime retries.
+						lastStopReason = assistant.stopReason;
+						if (assistant.stopReason === "error") {
+							const detail = describeProviderError(assistant.errorMessage);
+							lastErrorMessage = detail.message;
+							lastErrorCode = detail.code;
+							send({ type: "error", message: detail.message, code: detail.code, retrying: true });
+						} else {
+							lastErrorMessage = undefined;
+							lastErrorCode = undefined;
 						}
 					}
 					break;
@@ -412,7 +814,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					send({ type: "warning", message: "compacting context…" });
 					break;
 				case "auto_retry_start":
-					send({ type: "warning", message: `retrying after error (attempt ${event.attempt})…` });
+					send({
+						type: "retry",
+						attempt: event.attempt,
+						max_attempts: event.maxAttempts,
+						delay_ms: event.delayMs,
+						message: describeProviderError(event.errorMessage).message,
+					});
+					break;
+				case "auto_retry_end":
+					if (!event.success) {
+						const detail = describeProviderError(event.finalError);
+						send({ type: "error", message: detail.message, code: detail.code, retrying: false });
+					}
 					break;
 				case "agent_settled": {
 					if (settled) return;
@@ -425,6 +839,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 							tokens: null,
 							tool_calls: null,
 							session_id: session.sessionId,
+							stop_reason: lastStopReason ?? undefined,
+							message: lastErrorMessage ?? undefined,
+							code: lastErrorCode ?? undefined,
 							stats: {
 								duration_ms: Date.now() - startedAt,
 								rounds,
@@ -443,7 +860,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 		};
 
-		const unsubscribe = session.subscribe(onEvent);
+		eventUnsubscribe = session.subscribe(onEvent);
 		// Surface extra-module permission prompts as SSE permission_request events;
 		// POST /chat/permission answers them (see handleApi).
 		const unsubscribeBroker = extraBridge.available
@@ -485,7 +902,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				send({ type: "done", tokens: null, tool_calls: null, session_id: session.sessionId });
 				res.end();
 			}
-			unsubscribe();
+			eventUnsubscribe?.();
 			unsubscribeBroker?.();
 			unsubscribeAsks?.();
 			turnActive = false;
@@ -513,7 +930,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		req.on("close", () => {
 			// Client disconnected: abort the turn so tools stop.
 			void session.abort().finally(() => {
-				unsubscribe();
+				eventUnsubscribe?.();
 				unsubscribeBroker?.();
 				unsubscribeAsks?.();
 				turnActive = false;
@@ -594,22 +1011,55 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		if (path === "/models" && req.method === "GET") {
 			const models = await chatModels();
 			const defaultKey = defaultModelKey();
-			const current = session.model;
-			const infos: WebuiModelInfo[] = models.map((model) => ({
-				provider: modelKey(model),
-				model: model.id,
-				provider_type: model.provider,
-				is_default: defaultKey
-					? modelKey(model) === defaultKey
-					: current
-						? model.provider === current.provider && model.id === current.id
-						: false,
-				effort_applicable: false,
-				reasoning_effort: null,
-				effort_levels: [],
-			}));
-			json(res, 200, infos);
+			json(res, 200, modelInfos(models, defaultKey));
 			return;
+		}
+		// Reasoning effort for one model. The composer's effort control writes
+		// here; the value is stored both as the session's thinking level and as
+		// the per-model setting so a switch away and back keeps the choice.
+		if (path === "/models/reasoning-effort" && req.method === "POST") {
+			const body = await readBody(req);
+			const key = typeof body.provider === "string" ? body.provider : "";
+			const models = await chatModels();
+			const model = models.find((candidate) => modelKey(candidate) === key);
+			if (!model) {
+				json(res, 404, { error: `unknown model ${key}` });
+				return;
+			}
+			const requested = typeof body.reasoning_effort === "string" ? body.reasoning_effort : "";
+			const levels = getSupportedThinkingLevels(model);
+			const level = requested && levels.includes(requested as never) ? requested : (levels[0] ?? "off");
+			session.settingsManager.setModelThinkingLevel(model.provider, model.id, level as ThinkingLevel);
+			const isCurrent = session.model?.provider === model.provider && session.model?.id === model.id;
+			if (isCurrent) session.setThinkingLevel(level as ThinkingLevel);
+			json(res, 200, { provider: key, reasoning_effort: level });
+			return;
+		}
+
+		/**
+		 * Wire shape for one model. `effort_levels` mirrors the levels the model
+		 * really supports (a non-reasoning model gets `["off"]`), and
+		 * `reasoning_effort` is the stored value for that model, else the live
+		 * session level when it is the active model.
+		 */
+		function modelInfos(models: Model<any>[], defaultKey: string): WebuiModelInfo[] {
+			const current = session.model;
+			return models.map((model) => {
+				const key = modelKey(model);
+				const levels = getSupportedThinkingLevels(model).filter((level) => level !== "off");
+				const stored = session.settingsManager.getModelThinkingLevel(model.provider, model.id);
+				const active = current?.provider === model.provider && current?.id === model.id;
+				const effective = active ? session.thinkingLevel : stored;
+				return {
+					provider: key,
+					model: model.id,
+					provider_type: model.provider,
+					is_default: defaultKey ? key === defaultKey : current ? active : false,
+					effort_applicable: levels.length > 0,
+					reasoning_effort: effective ?? (levels.length > 0 ? null : "off"),
+					effort_levels: levels,
+				};
+			});
 		}
 
 		/** Settings-configured default model key ("provider/id"), the single source of truth shared with the CLI. */
@@ -797,6 +1247,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			};
 			if (Array.isArray(body.images)) {
 				chatBody.images = body.images as { media_type: string; data: string }[];
+			}
+			// Honour a working directory the SPA believes it is in (it survives a
+			// `/cd`); a stale path is ignored rather than failing the turn.
+			if (typeof body.working_dir === "string" && body.working_dir) {
+				const wanted = resolveWorkspacePath(body.working_dir, runtime.cwd);
+				if (wanted && wanted !== runtime.cwd && (await isDirectory(wanted))) {
+					try {
+						await runtime.newSession();
+						await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: wanted });
+					} catch {
+						// Keep serving the current directory.
+					}
+				}
 			}
 			// Switch to the requested session when it is not the active one.
 			if (chatBody.session_id) {
@@ -1039,16 +1502,103 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, { path: url.searchParams.get("path") ?? runtime.cwd, matches: [] });
 			return;
 		}
+		// The host cannot focus an external editor, so the viewer reads files over
+		// HTTP instead: the same bytes an editor would show, plus whether they are
+		// binary (the viewer shows a notice) and the size cap that keeps the API
+		// from buffering large assets.
+		if (path === "/fs/read" && req.method === "GET") {
+			const requested = url.searchParams.get("path") ?? "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : "";
+			if (!target) {
+				json(res, 400, { error: "path is required" });
+				return;
+			}
+			let info: Awaited<ReturnType<typeof stat>>;
+			try {
+				info = await stat(target);
+			} catch {
+				json(res, 404, { error: `not found: ${requested}` });
+				return;
+			}
+			if (!info.isFile()) {
+				json(res, 400, { error: `not a file: ${requested}` });
+				return;
+			}
+			if (info.size > MAX_VIEWABLE_FILE_BYTES) {
+				json(res, 200, {
+					path: target,
+					size: info.size,
+					binary: true,
+					content: "",
+					truncated: true,
+				});
+				return;
+			}
+			const buffer = await readFile(target);
+			const binary = buffer.includes(0);
+			json(res, 200, {
+				path: target,
+				size: info.size,
+				binary,
+				content: binary ? "" : buffer.toString("utf8"),
+				truncated: false,
+			});
+			return;
+		}
+		if (path === "/fs/write" && req.method === "POST") {
+			const body = await readBody(req);
+			const requested = typeof body.path === "string" ? body.path : "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : "";
+			const content = typeof body.content === "string" ? body.content : undefined;
+			if (!target || content === undefined) {
+				json(res, 400, { error: "path and content are required" });
+				return;
+			}
+			await writeFile(target, content, "utf8");
+			json(res, 200, { path: target, size: Buffer.byteLength(content) });
+			return;
+		}
+		// Keep the endpoint for older clients: report success so the caller falls
+		// back to its inline viewer instead of showing a hard failure.
 		if (path === "/fs/open" && req.method === "POST") {
-			json(res, 400, { error: "opening files from the host is not supported" });
+			json(res, 200, { opened: false, reason: "the host cannot focus an external editor" });
 			return;
 		}
 
 		// --- Working directory ---
+		// The runtime's cwd is fixed for the process, so switching means opening a
+		// session rooted elsewhere; `/chat` then restores the requested dir.
 		if (path === "/cd" && req.method === "POST") {
-			json(res, 400, {
-				success: false,
-				message: "changing the working directory from the webui is not supported yet",
+			const body = await readBody(req);
+			const requested = typeof body.path === "string" ? body.path.trim() : "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : "";
+			if (!target || !(await isDirectory(target))) {
+				json(res, 400, {
+					success: false,
+					message: `not a directory: ${requested || "(empty)"}`,
+					current_dir: runtime.cwd,
+					project_hash: projectHash(runtime.cwd),
+				});
+				return;
+			}
+			try {
+				// Open a session rooted at `target`. A fresh session there has its
+				// own project hash; `/chat` switches back to the requested dir when
+				// a turn arrives with an explicit `working_dir`.
+				await runtime.newSession();
+				await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: target });
+			} catch (error) {
+				json(res, 400, {
+					success: false,
+					message: (error as Error).message,
+					current_dir: runtime.cwd,
+					project_hash: projectHash(runtime.cwd),
+				});
+				return;
+			}
+			json(res, 200, {
+				success: true,
+				message: "",
 				current_dir: runtime.cwd,
 				project_hash: projectHash(runtime.cwd),
 			});

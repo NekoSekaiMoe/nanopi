@@ -4,29 +4,43 @@ import {
 	ChevronDown,
 	ChevronLeft,
 	ChevronRight,
-	File,
+	FileCode,
+	FileText,
 	Folder,
+	FolderOpen,
+	GitBranch,
 	MessageCircle,
 	MoreHorizontal,
 	Pencil,
 	Plus,
 	Search,
 	Settings,
+	Terminal,
 	Trash2,
 	X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { IconButton } from "@/components/icon-button";
-import {
-	type FsListResult,
-	type SessionMetaWithProject,
-	listDir,
-	openWorkspaceFile,
-} from "@/lib/api";
+import { type FsListResult, type SessionMetaWithProject, listDir } from "@/lib/api";
 import { asMs, cn, relativeTime } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
-type SidebarView = "sessions" | "files";
+type SidebarView = "sessions" | "files" | "terminal";
+
+/** A directory row that is expanded inline with its children. */
+interface OpenDir {
+	path: string;
+	dirs: string[];
+	files: string[];
+}
+
+const C_EXTENSIONS = new Set(["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts", "json", "css", "py", "rs", "go", "sh"]);
+
+function fileIcon(name: string): React.ReactNode {
+	const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
+	if (C_EXTENSIONS.has(ext)) return <FileCode className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />;
+	return <FileText className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />;
+}
 
 function joinPath(base: string, name: string): string {
 	const trimmed = base.replace(/\/+$/, "");
@@ -62,6 +76,10 @@ export function Sidebar({
 	onClose,
 	onRename,
 	onDelete,
+	onOpenFile,
+	activeFile,
+	branch,
+	onOpenTerminal,
 	mobile,
 }: {
 	sessions: SessionMetaWithProject[];
@@ -74,6 +92,10 @@ export function Sidebar({
 	onClose?: () => void;
 	onRename: (session: SessionMetaWithProject, name: string) => void;
 	onDelete: (session: SessionMetaWithProject) => void;
+	onOpenFile: (path: string) => void;
+	activeFile?: string | null;
+	branch?: string;
+	onOpenTerminal: () => void;
 	mobile?: boolean;
 }) {
 	const [view, setView] = useState<SidebarView>("sessions");
@@ -86,10 +108,21 @@ export function Sidebar({
 	const [renaming, setRenaming] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState("");
 	const [confirmingDelete, setConfirmingDelete] = useState<SessionMetaWithProject | null>(null);
+	const [openDirs, setOpenDirs] = useState<OpenDir[]>([]);
 
 	useEffect(() => {
 		if (workingDir) setDir(workingDir);
+		setOpenDirs([]);
 	}, [workingDir]);
+
+	const loadDir = (path: string, apply: (result: FsListResult) => void) => {
+		setFilesError(null);
+		void listDir(path)
+			.then(apply)
+			.catch((cause) => {
+				setFilesError(cause instanceof Error ? cause.message : String(cause));
+			});
+	};
 
 	useEffect(() => {
 		if (view !== "files" || !dir) return;
@@ -106,6 +139,18 @@ export function Sidebar({
 			cancelled = true;
 		};
 	}, [dir, view]);
+
+	// Inline expansion: a second click collapses, and switching directories
+	// replaces the open set instead of accumulating stale listings.
+	const toggleDir = (path: string) => {
+		if (openDirs.some((entry) => entry.path === path)) {
+			setOpenDirs((current) => current.filter((entry) => entry.path !== path));
+			return;
+		}
+		loadDir(path, (result) => {
+			setOpenDirs((current) => [...current, { path: result.path || path, dirs: result.dirs, files: result.files ?? [] }]);
+		});
+	};
 
 	const filtered = useMemo(() => {
 		const term = query.trim().toLowerCase();
@@ -124,8 +169,6 @@ export function Sidebar({
 		return [...buckets.entries()];
 	}, [filtered]);
 
-	const initial = (projectName.trim()[0] || "N").toUpperCase();
-
 	return (
 		<aside
 			className={cn(
@@ -138,17 +181,16 @@ export function Sidebar({
 				<button
 					type="button"
 					onClick={onOpenSettings}
+					title={workingDir || "NanoPi"}
 					className="flex h-12 w-full items-center gap-2.5 rounded-xl px-2 text-left transition-colors hover:bg-sidebar-accent"
 				>
-					<span className="grid size-7 shrink-0 place-items-center rounded-lg bg-white/[0.08] text-[12px] font-medium text-foreground">
-						{initial}
-					</span>
 					<span className="min-w-0 flex-1">
 						<span className="block truncate text-[14px] font-medium text-foreground">
 							{projectName || t("本地工作区")}
 						</span>
-						<span className="block truncate text-[11px] text-muted-foreground">
-							{workingDir || "NanoPi"}
+						<span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+							<GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
+							<span className="min-w-0 truncate">{branch || workingDir || "NanoPi"}</span>
 						</span>
 					</span>
 					<ChevronDown className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
@@ -167,6 +209,15 @@ export function Sidebar({
 					label={t("文件")}
 					icon={<Folder className="size-[19px]" strokeWidth={1.7} />}
 					onClick={() => setView("files")}
+				/>
+				<NavRow
+					active={view === "terminal"}
+					label={t("终端")}
+					icon={<Terminal className="size-[19px]" strokeWidth={1.7} />}
+					onClick={() => {
+						setView("terminal");
+						onOpenTerminal();
+					}}
 				/>
 			</div>
 
@@ -188,7 +239,9 @@ export function Sidebar({
 
 			<div className="mt-5 flex min-h-0 flex-1 flex-col px-3">
 				<div className="flex h-8 shrink-0 items-center justify-between pl-2 pr-0.5">
-					<span className="text-[12px] text-muted-foreground/70">{t("最近")}</span>
+					<span className="text-[12px] text-muted-foreground/70">
+						{view === "sessions" ? t("最近") : view === "files" ? t("文件") : t("终端")}
+					</span>
 					<div className="flex items-center">
 						<IconButton
 							label={t("搜索会话")}
@@ -221,7 +274,17 @@ export function Sidebar({
 					</div>
 				) : null}
 
-				<div className="min-h-0 flex-1 overflow-y-auto pb-2">
+				<div
+					className="min-h-0 flex-1 overflow-y-auto pb-2"
+					onClick={(event) => {
+						// Clicking blank space in the list (never a row or control) collapses
+						// the secondary view back to the session list.
+						if (event.target !== event.currentTarget) return;
+						setMenuFor(null);
+						setSearchOpen(false);
+						if (view !== "sessions") setView("sessions");
+					}}
+				>
 					{view === "sessions" ? (
 						groups.length === 0 ? (
 							<p className="px-2 py-6 text-center text-[12.5px] text-muted-foreground">
@@ -332,13 +395,23 @@ export function Sidebar({
 								))}
 							</div>
 						)
+					) : view === "terminal" ? (
+						<div className="px-2 py-4">
+							<p className="text-[12.5px] text-muted-foreground">{t("终端已在右侧打开。")}</p>
+							<p className="mt-1 text-[11.5px] text-muted-foreground/70">
+								{t("命令只在本机执行，不进入对话上下文。")}
+							</p>
+						</div>
 					) : (
 						<div className="space-y-0.5">
 							<div className="flex items-center gap-1 pb-1">
 								<IconButton
 									label={t("上一级")}
 									disabled={!dir || dir === "/"}
-									onClick={() => setDir(parentPath(dir))}
+									onClick={() => {
+										setOpenDirs([]);
+										setDir(parentPath(dir));
+									}}
 									className="size-7"
 								>
 									<ChevronLeft className="size-4" />
@@ -350,38 +423,94 @@ export function Sidebar({
 							{filesError ? (
 								<p className="px-2 py-4 text-[12px] text-destructive">{filesError}</p>
 							) : null}
-							{(listing?.dirs ?? []).map((name) => (
-								<button
-									key={`dir-${name}`}
-									type="button"
-									onClick={() => setDir(joinPath(listing?.path || dir, name))}
-									className="flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13.5px] text-foreground/85 transition-colors hover:bg-sidebar-accent"
-								>
-									<Folder className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
-									<span className="min-w-0 flex-1 truncate">{name}</span>
-									<ChevronRight className="size-3.5 text-muted-foreground/50" />
-								</button>
-							))}
-							{(listing?.files ?? []).map((name) => (
-								<button
-									key={`file-${name}`}
-									type="button"
-									title={t("在编辑器中打开")}
-									onClick={() => {
-										setFilesError(null);
-										void openWorkspaceFile(
-											joinPath(listing?.path || dir, name),
-											currentSessionId ?? undefined,
-										).catch((cause) => {
-											setFilesError(cause instanceof Error ? cause.message : String(cause));
-										});
-									}}
-									className="flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
-								>
-									<File className="size-4 shrink-0" strokeWidth={1.7} />
-									<span className="min-w-0 flex-1 truncate">{name}</span>
-								</button>
-							))}
+							{listing === null && !filesError ? (
+								<p className="px-2 py-4 text-[12px] text-muted-foreground">{t("加载中…")}</p>
+							) : null}
+							{(listing?.dirs ?? []).map((name) => {
+								const path = joinPath(listing?.path || dir, name);
+								const open = openDirs.find((entry) => entry.path === path);
+								return (
+									<div key={`dir-${name}`}>
+										<button
+											type="button"
+											onClick={() => toggleDir(path)}
+											aria-expanded={Boolean(open)}
+											className="flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13.5px] text-foreground/85 transition-colors hover:bg-sidebar-accent"
+										>
+											{open ? (
+												<FolderOpen className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+											) : (
+												<Folder className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+											)}
+											<span className="min-w-0 flex-1 truncate">{name}</span>
+											<ChevronRight
+												className={cn(
+													"size-3.5 shrink-0 text-muted-foreground/50 transition-transform",
+													open && "rotate-90",
+												)}
+											/>
+										</button>
+										{open ? (
+											<div className="ml-4 space-y-px border-l border-sidebar-border pl-1">
+												{open.dirs.map((child) => (
+													<button
+														key={`sub-${child}`}
+														type="button"
+														onClick={() => setDir(joinPath(path, child))}
+														className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+													>
+														<Folder className="size-3.5 shrink-0" strokeWidth={1.7} />
+														<span className="min-w-0 flex-1 truncate">{child}</span>
+													</button>
+												))}
+												{open.files.map((child) => {
+													const childPath = joinPath(path, child);
+													return (
+														<button
+															key={`sub-file-${child}`}
+															type="button"
+															onClick={() => onOpenFile(childPath)}
+															className={cn(
+																"flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] transition-colors",
+																childPath === activeFile
+																	? "bg-sidebar-accent text-foreground"
+																	: "text-foreground/75 hover:bg-sidebar-accent hover:text-foreground",
+															)}
+														>
+															{fileIcon(child)}
+															<span className="min-w-0 flex-1 truncate">{child}</span>
+														</button>
+													);
+												})}
+												{open.dirs.length === 0 && open.files.length === 0 ? (
+													<p className="px-2 py-1 text-[11.5px] text-muted-foreground/60">
+														{t("空目录")}
+													</p>
+												) : null}
+											</div>
+										) : null}
+									</div>
+								);
+							})}
+							{(listing?.files ?? []).map((name) => {
+								const path = joinPath(listing?.path || dir, name);
+								return (
+									<button
+										key={`file-${name}`}
+										type="button"
+										onClick={() => onOpenFile(path)}
+										className={cn(
+											"flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13px] transition-colors",
+											path === activeFile
+												? "bg-sidebar-accent text-foreground"
+												: "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+										)}
+									>
+										{fileIcon(name)}
+										<span className="min-w-0 flex-1 truncate">{name}</span>
+									</button>
+								);
+							})}
 						</div>
 					)}
 				</div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp, ImagePlus, Monitor, Square, X } from "lucide-react";
+import { ArrowUp, Folder, GitBranch, ImagePlus, Square, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import type { ImageData, ModelInfo } from "@/lib/api";
@@ -16,11 +16,14 @@ export function Composer({
 	models,
 	provider,
 	onProvider,
+	effort,
+	onEffort,
 	onConfigure,
 	images,
 	onImages,
 	disabled,
 	workspaceName,
+	branch,
 }: {
 	value: string;
 	onChange: (value: string) => void;
@@ -30,11 +33,14 @@ export function Composer({
 	models: ModelInfo[];
 	provider: string;
 	onProvider: (provider: string) => void;
+	effort?: string | null;
+	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
 	disabled?: boolean;
 	workspaceName: string;
+	branch?: string;
 }) {
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const fileRef = useRef<HTMLInputElement>(null);
@@ -130,6 +136,8 @@ export function Composer({
 								models={models}
 								provider={provider}
 								onChange={onProvider}
+								effort={effort}
+								onEffort={onEffort}
 								onConfigure={onConfigure}
 								compact
 							/>
@@ -170,8 +178,14 @@ export function Composer({
 						</div>
 
 						<div className="mt-2 flex items-center gap-2 border-t border-white/[0.05] pt-2 text-[12px] text-muted-foreground">
-							<Monitor className="size-3.5 shrink-0" strokeWidth={1.75} />
+							<Folder className="size-3.5 shrink-0" strokeWidth={1.75} />
 							<span className="min-w-0 truncate">{workspaceName || t("本地工作区")}</span>
+							{branch ? (
+								<span className="flex shrink-0 items-center gap-1 rounded-full bg-white/[0.06] px-1.5 text-[10.5px]">
+									<GitBranch className="size-3" strokeWidth={1.75} />
+									{branch}
+								</span>
+							) : null}
 							{currentModel ? (
 								<span className="ml-auto min-w-0 truncate text-muted-foreground/70">
 									{currentModel.model}

@@ -8,7 +8,7 @@ import { PermissionCard } from "@/components/permission-card";
 import { UserInputCard } from "@/components/user-input-card";
 import type { ImageData, ModelInfo, UserInputRequestEvent, UserInputResponse } from "@/lib/api";
 import { type Poem, randomPoem } from "@/lib/greeting";
-import type { PendingPermission, UiMessage } from "@/lib/use-chat";
+import type { PendingPermission, TurnError, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
 import { getLocale, t } from "@/lib/i18n";
 
@@ -29,6 +29,8 @@ export function ChatPane({
 	models,
 	provider,
 	onProvider,
+	effort,
+	onEffort,
 	onConfigure,
 	onDismissError,
 	onDismissNotice,
@@ -42,17 +44,20 @@ export function ChatPane({
 	onImages,
 	sessionName,
 	workspaceName,
+	branch,
 }: {
 	messages: UiMessage[];
 	loading: boolean;
 	streaming: boolean;
-	error: string | null;
+	error: TurnError | null;
 	notice: string | null;
 	permission: PendingPermission | null;
 	userInput: UserInputRequestEvent | null;
 	models: ModelInfo[];
 	provider: string;
 	onProvider: (provider: string) => void;
+	effort?: string | null;
+	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
 	onDismissError: () => void;
 	onDismissNotice: () => void;
@@ -66,6 +71,7 @@ export function ChatPane({
 	onImages: (images: ImageData[]) => void;
 	sessionName: string;
 	workspaceName: string;
+	branch?: string;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
@@ -123,7 +129,15 @@ export function ChatPane({
 			<div className="shrink-0">
 				{error ? (
 					<Banner tone="error" onDismiss={onDismissError}>
-						{error}
+						{error.code ? (
+							<span className="mr-1.5 rounded bg-destructive/15 px-1 font-mono text-[11px]">
+								{error.code}
+							</span>
+						) : null}
+						{error.message}
+						{error.retrying ? (
+							<span className="ml-1 text-muted-foreground">· {t("正在重试")}</span>
+						) : null}
 					</Banner>
 				) : notice ? (
 					<Banner tone="notice" onDismiss={onDismissNotice}>
@@ -155,11 +169,14 @@ export function ChatPane({
 					models={models}
 					provider={provider}
 					onProvider={onProvider}
+					effort={effort}
+					onEffort={onEffort}
 					onConfigure={onConfigure}
 					images={images}
 					onImages={onImages}
 					disabled={models.length === 0}
 					workspaceName={workspaceName}
+					branch={branch}
 				/>
 				<span className="sr-only">{sessionName}</span>
 			</div>
