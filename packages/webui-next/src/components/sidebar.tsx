@@ -5,9 +5,12 @@ import {
 	File,
 	Folder,
 	MessageCircle,
+	MoreHorizontal,
+	Pencil,
 	Plus,
 	Search,
 	Settings,
+	Trash2,
 	X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -50,6 +53,8 @@ export function Sidebar({
 	onNew,
 	onOpenSettings,
 	onClose,
+	onRename,
+	onDelete,
 	mobile,
 }: {
 	sessions: SessionMetaWithProject[];
@@ -60,6 +65,8 @@ export function Sidebar({
 	onNew: () => void;
 	onOpenSettings: () => void;
 	onClose?: () => void;
+	onRename: (session: SessionMetaWithProject, name: string) => void;
+	onDelete: (session: SessionMetaWithProject) => void;
 	mobile?: boolean;
 }) {
 	const [view, setView] = useState<SidebarView>("sessions");
@@ -68,6 +75,10 @@ export function Sidebar({
 	const [dir, setDir] = useState(workingDir);
 	const [listing, setListing] = useState<FsListResult | null>(null);
 	const [filesError, setFilesError] = useState<string | null>(null);
+	const [menuFor, setMenuFor] = useState<string | null>(null);
+	const [renaming, setRenaming] = useState<string | null>(null);
+	const [renameValue, setRenameValue] = useState("");
+	const [confirmingDelete, setConfirmingDelete] = useState<SessionMetaWithProject | null>(null);
 
 	useEffect(() => {
 		if (workingDir) setDir(workingDir);
@@ -109,7 +120,7 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"flex h-full w-[256px] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
+				"relative flex h-full w-[256px] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
 				mobile && "w-[86vw] max-w-[340px] border-r-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
 			)}
 		>
@@ -195,24 +206,97 @@ export function Sidebar({
 									</h2>
 									<ul className="space-y-px">
 										{items.map((session) => (
-											<li key={session.id}>
-												<button
-													type="button"
-													onClick={() => onSelectSession(session)}
+											<li key={session.id} className="relative">
+												<div
 													className={cn(
-														"group flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left transition-colors md:h-9",
+														"group flex h-10 w-full items-center gap-1 rounded-lg pr-1 transition-colors md:h-9",
 														session.id === currentSessionId
 															? "bg-sidebar-accent text-foreground"
 															: "text-foreground/85 hover:bg-sidebar-accent",
 													)}
 												>
-													<span className="min-w-0 flex-1 truncate text-[13px]">
-														{session.name || "新会话"}
-													</span>
-													<span className="shrink-0 text-[10.5px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-														{relativeTime(session.updated_at)}
-													</span>
-												</button>
+													{renaming === session.id ? (
+														<input
+															autoFocus
+															value={renameValue}
+															onChange={(event) => setRenameValue(event.target.value)}
+															onClick={(event) => event.stopPropagation()}
+															onKeyDown={(event) => {
+																event.stopPropagation();
+																if (event.key === "Enter") {
+																	const name = renameValue.trim();
+																	if (name) onRename(session, name);
+																	setRenaming(null);
+																}
+																if (event.key === "Escape") setRenaming(null);
+															}}
+																	className="mx-1 h-7 min-w-0 flex-1 rounded-md border border-border bg-background px-2 text-[12.5px] text-foreground outline-none focus:border-foreground/30"
+														/>
+													) : (
+														<button
+															type="button"
+															onClick={() => {
+																setRenaming(null);
+																onSelectSession(session);
+															}}
+															className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg pl-2 text-left"
+														>
+															<span className="min-w-0 flex-1 truncate text-[13px]">
+																{session.name || "新会话"}
+															</span>
+															<span className="shrink-0 pr-1 text-[10.5px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+																{relativeTime(session.updated_at)}
+															</span>
+														</button>
+													)}
+													<button
+														type="button"
+														aria-label="会话操作"
+														title="会话操作"
+														onClick={(event) => {
+															event.stopPropagation();
+															setMenuFor(menuFor === session.id ? null : session.id);
+														}}
+														className="grid size-7 shrink-0 place-items-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-background/60 hover:text-foreground group-hover:opacity-100"
+													>
+														<MoreHorizontal className="size-3.5" />
+													</button>
+												</div>
+												{menuFor === session.id ? (
+													<>
+														<button
+															type="button"
+															aria-label="关闭会话菜单"
+															onClick={() => setMenuFor(null)}
+															className="fixed inset-0 z-10 cursor-default"
+														/>
+														<div className="absolute right-1 top-9 z-20 w-32 overflow-hidden rounded-lg border border-border bg-popover p-1 shadow-md">
+														<button
+															type="button"
+															onClick={() => {
+																setMenuFor(null);
+																setRenaming(session.id);
+																setRenameValue(session.name || "新会话");
+															}}
+															className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-foreground hover:bg-accent"
+														>
+															<Pencil className="size-3.5 text-muted-foreground" />
+															重命名
+														</button>
+														<button
+															type="button"
+															onClick={() => {
+																setMenuFor(null);
+																setConfirmingDelete(session);
+															}}
+															className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-destructive hover:bg-destructive/10"
+														>
+															<Trash2 className="size-3.5" />
+															删除
+														</button>
+														</div>
+													</>
+												) : null}
 											</li>
 										))}
 									</ul>
@@ -260,6 +344,36 @@ export function Sidebar({
 					</div>
 				)}
 			</div>
+
+			{confirmingDelete ? (
+				<div className="absolute inset-0 z-50 flex items-end bg-black/30 p-3">
+					<div className="w-full rounded-xl border border-border bg-card p-3 shadow-lg">
+						<p className="text-[12.5px] font-medium text-foreground">删除会话？</p>
+						<p className="mt-1 text-[11.5px] text-muted-foreground">
+							{confirmingDelete.name || "新会话"} 将从本机移除，无法撤销。
+						</p>
+						<div className="mt-3 flex justify-end gap-1.5">
+							<button
+								type="button"
+								onClick={() => setConfirmingDelete(null)}
+								className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
+							>
+								取消
+							</button>
+							<button
+								type="button"
+								onClick={() => {
+									onDelete(confirmingDelete);
+									setConfirmingDelete(null);
+								}}
+								className="h-8 rounded-lg bg-destructive px-3 text-[12px] font-medium text-white"
+							>
+								删除
+							</button>
+						</div>
+					</div>
+				</div>
+			) : null}
 
 			<footer className="shrink-0 border-t border-sidebar-border p-2">
 				<button

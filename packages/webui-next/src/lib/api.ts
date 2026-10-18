@@ -222,6 +222,46 @@ export async function listProjectSessions(projectHash: string): Promise<SessionM
 	return list.map((meta) => ({ ...meta, project_hash: projectHash }));
 }
 
+export async function renameSession(
+	projectHash: string,
+	sessionId: string,
+	name: string,
+): Promise<void> {
+	const response = await fetch(
+		`/projects/${encodeURIComponent(projectHash)}/sessions/${encodeURIComponent(sessionId)}/rename`,
+		{
+			method: "PATCH",
+			headers: { "Content-Type": "application/json", ...authHeaders() },
+			body: JSON.stringify({ name }),
+		},
+	);
+	if (!response.ok) throw await failure(response);
+}
+
+export async function deleteSession(projectHash: string, sessionId: string): Promise<void> {
+	const response = await fetch(
+		`/projects/${encodeURIComponent(projectHash)}/sessions/${encodeURIComponent(sessionId)}`,
+		{ method: "DELETE", headers: authHeaders() },
+	);
+	if (!response.ok) throw await failure(response);
+}
+
+export interface ChangeDirResult {
+	success: boolean;
+	message: string;
+	current_dir: string;
+	project_hash: string;
+}
+
+export async function changeDir(path: string, setDefault = false): Promise<ChangeDirResult> {
+	const response = await fetch("/cd", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify({ path, set_default: setDefault }),
+	});
+	return readJson<ChangeDirResult>(response);
+}
+
 export async function getSession(projectHash: string, sessionId: string): Promise<SessionDetail> {
 	const response = await fetch(
 		`/projects/${encodeURIComponent(projectHash)}/sessions/${encodeURIComponent(sessionId)}`,
@@ -478,9 +518,38 @@ export async function listDir(path: string): Promise<FsListResult> {
 
 export interface ProviderInfo {
 	name: string;
+	type: string;
 	provider: string;
 	model: string;
 	base_url?: string;
+	has_api_key?: boolean;
+	is_default?: boolean;
+}
+
+export interface ProviderAccountInfo {
+	id: string;
+	provider: string;
+	display_name?: string;
+	type: string;
+	base_url?: string;
+	has_api_key: boolean;
+	model_ids: string[];
+	legacy: boolean;
+	managed: boolean;
+	label?: string;
+	preset_name?: string;
+	custom?: boolean;
+	discoverable?: boolean;
+	probeable?: boolean;
+}
+
+export interface ProviderPresetInfo {
+	id: string;
+	display_name: string;
+	type: string;
+	default_base_url?: string;
+	requires_api_key: boolean;
+	discoverable?: boolean;
 }
 
 export interface ConfigInfo {
@@ -488,9 +557,107 @@ export interface ConfigInfo {
 	default_provider: string;
 	default_workdir?: string;
 	providers: ProviderInfo[];
+	provider_accounts?: ProviderAccountInfo[];
+	provider_presets?: ProviderPresetInfo[];
+	provider_protocols?: ProviderPresetInfo[];
+	reasoning_effort_levels?: string[];
 }
 
 export async function getConfig(): Promise<ConfigInfo> {
 	const response = await fetch("/config", { headers: authHeaders() });
 	return readJson<ConfigInfo>(response);
+}
+
+export interface NewModelBody {
+	model: string;
+	display_name?: string;
+	context_window?: number;
+	max_tokens?: number;
+	supports_vision?: boolean;
+	reasoning_effort?: string;
+}
+
+export interface CreateAccountBody {
+	id?: string;
+	provider: string;
+	display_name?: string;
+	base_url?: string;
+	api_key?: string;
+	models: NewModelBody[];
+}
+
+export interface AccountMutationResult {
+	account?: string;
+	models?: string[];
+	config: ConfigInfo;
+}
+
+export async function createAccount(body: CreateAccountBody): Promise<AccountMutationResult> {
+	const response = await fetch("/provider-accounts", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify(body),
+	});
+	return readJson<AccountMutationResult>(response);
+}
+
+export async function editAccount(
+	id: string,
+	body: { display_name?: string; base_url?: string; api_key?: string },
+): Promise<{ config: ConfigInfo }> {
+	const response = await fetch(`/provider-accounts/${encodeURIComponent(id)}`, {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify(body),
+	});
+	return readJson<{ config: ConfigInfo }>(response);
+}
+
+export async function deleteAccount(id: string): Promise<{ config: ConfigInfo }> {
+	const response = await fetch(`/provider-accounts/${encodeURIComponent(id)}`, {
+		method: "DELETE",
+		headers: authHeaders(),
+	});
+	return readJson<{ config: ConfigInfo }>(response);
+}
+
+export async function addAccountModels(
+	id: string,
+	models: NewModelBody[],
+): Promise<{ created: string[]; config: ConfigInfo }> {
+	const response = await fetch(`/provider-accounts/${encodeURIComponent(id)}/models`, {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify({ models }),
+	});
+	return readJson<{ created: string[]; config: ConfigInfo }>(response);
+}
+
+export async function deleteAccountModel(id: string, modelId: string): Promise<{ config: ConfigInfo }> {
+	const response = await fetch(
+		`/provider-accounts/${encodeURIComponent(id)}/models/${encodeURIComponent(modelId)}`,
+		{ method: "DELETE", headers: authHeaders() },
+	);
+	return readJson<{ config: ConfigInfo }>(response);
+}
+
+export interface DiscoveredModelInfo {
+	id: string;
+	name?: string;
+	context_window?: number;
+	max_tokens?: number;
+}
+
+export async function discoverProviderModels(body: {
+	type: string;
+	base_url: string;
+	api_key?: string;
+}): Promise<DiscoveredModelInfo[]> {
+	const response = await fetch("/providers/discover-models", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify(body),
+	});
+	const payload = await readJson<{ models: DiscoveredModelInfo[] }>(response);
+	return payload.models;
 }

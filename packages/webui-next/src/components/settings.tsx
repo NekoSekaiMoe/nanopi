@@ -1,8 +1,9 @@
 "use client";
 
-import { ArrowLeft, Check, ChevronRight, Cpu, Info, Monitor, Moon, Palette, Sun, X } from "lucide-react";
-import { useState } from "react";
-import type { ApprovalMode, ModelInfo, ProjectState } from "@/lib/api";
+import { ArrowLeft, Cpu, Info, Monitor, Moon, Palette, Sun, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import type { ApprovalMode, ConfigInfo, ModelInfo, ProjectState } from "@/lib/api";
+import { ProviderSettings } from "@/components/provider-settings";
 import { cn } from "@/lib/utils";
 
 type Section = "appearance" | "models" | "workspace" | "about";
@@ -26,6 +27,9 @@ export function SettingsOverlay({
 	project,
 	approvalMode,
 	onApprovalMode,
+	config,
+	onRefreshProviders,
+	onChangeDir,
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -37,9 +41,37 @@ export function SettingsOverlay({
 	project: ProjectState | null;
 	approvalMode: ApprovalMode;
 	onApprovalMode: (mode: ApprovalMode) => void;
+	config: ConfigInfo | null;
+	onRefreshProviders: () => Promise<void>;
+	onChangeDir: (path: string) => Promise<void>;
 }) {
 	const [section, setSection] = useState<Section>("appearance");
+	const [dirDraft, setDirDraft] = useState(project?.working_dir ?? "");
+	const [changingDir, setChangingDir] = useState(false);
+	const [dirError, setDirError] = useState<string | null>(null);
+	const [dirNotice, setDirNotice] = useState<string | null>(null);
+
+	useEffect(() => {
+		setDirDraft(project?.working_dir ?? "");
+	}, [project?.working_dir]);
+
 	if (!open) return null;
+
+	async function submitDir(event: React.FormEvent) {
+		event.preventDefault();
+		if (!dirDraft.trim() || changingDir) return;
+		setChangingDir(true);
+		setDirError(null);
+		setDirNotice(null);
+		try {
+			await onChangeDir(dirDraft.trim());
+			setDirNotice("工作目录已切换；新会话会使用该目录。");
+		} catch (cause) {
+			setDirError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setChangingDir(false);
+		}
+	}
 
 	return (
 		<div className="fixed inset-0 z-50 flex bg-background">
@@ -168,67 +200,50 @@ export function SettingsOverlay({
 						) : null}
 
 						{section === "models" ? (
-							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">模型</h1>
-								<p className="mt-1 text-[12.5px] text-muted-foreground">
-									选择当前会话使用的 provider。添加或编辑 provider 请使用 CLI。
-								</p>
-								<div className="mt-4 overflow-hidden rounded-xl border border-border">
-									{models.length === 0 ? (
-										<p className="px-3 py-6 text-center text-[12px] text-muted-foreground">
-											还没有可用模型
-										</p>
-									) : (
-										models.map((model, index) => (
-											<button
-												key={model.provider}
-												type="button"
-												onClick={() => onProvider(model.provider)}
-												className={cn(
-													"flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-accent",
-													index > 0 && "border-t border-border-soft",
-												)}
-											>
-												<span className="grid size-4 shrink-0 place-items-center">
-													{model.provider === provider ? (
-														<Check className="size-3.5 text-brand" />
-													) : null}
-												</span>
-												<span className="min-w-0 flex-1">
-													<span className="block truncate text-[12.5px] text-foreground">
-														{model.model}
-													</span>
-													<span className="block truncate text-[10.5px] text-muted-foreground">
-														{model.provider} · {model.provider_type}
-													</span>
-												</span>
-												{model.is_default ? (
-													<span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-														默认
-													</span>
-												) : null}
-												<ChevronRight className="size-3.5 text-muted-foreground" />
-											</button>
-										))
-									)}
-								</div>
-							</div>
+							<ProviderSettings
+								config={config}
+								models={models}
+								provider={provider}
+								onProvider={onProvider}
+								onRefresh={onRefreshProviders}
+							/>
 						) : null}
 
 						{section === "workspace" ? (
 							<div>
 								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">工作区</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
-									会话的工作目录。切换目录请使用 CLI 或在侧栏进入其他项目。
+									当前会话的工作目录。切换后新会话会使用新的目录。
 								</p>
-								<div className="mt-4 rounded-xl border border-border p-3">
-									<div className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-										当前目录
+								<form onSubmit={submitDir} className="mt-4 rounded-xl border border-border p-3">
+									<label className="block">
+										<span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+											当前目录
+										</span>
+										<input
+											value={dirDraft}
+											onChange={(event) => setDirDraft(event.target.value)}
+											placeholder="/path/to/project"
+											spellCheck={false}
+											className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-2.5 font-mono text-[12px] text-foreground outline-none focus:border-foreground/30"
+										/>
+									</label>
+									<div className="mt-2 flex items-center justify-end gap-2">
+										{dirNotice ? (
+											<span className="mr-auto text-[11px] text-success">{dirNotice}</span>
+										) : null}
+										{dirError ? (
+											<span className="mr-auto text-[11px] text-destructive">{dirError}</span>
+										) : null}
+										<button
+											type="submit"
+											disabled={changingDir || !dirDraft.trim()}
+											className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+										>
+											{changingDir ? "切换中…" : "切换目录"}
+										</button>
 									</div>
-									<div className="mt-1 break-all font-mono text-[12px] text-foreground">
-										{project?.working_dir || "未连接"}
-									</div>
-								</div>
+								</form>
 							</div>
 						) : null}
 

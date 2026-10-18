@@ -9,14 +9,19 @@ import { SettingsOverlay, type ThemeChoice } from "@/components/settings";
 import { Sidebar } from "@/components/sidebar";
 import {
 	ApiError,
+	type ConfigInfo,
 	type ImageData,
 	type ModelInfo,
 	type ProjectState,
 	type SessionMetaWithProject,
+	changeDir,
+	deleteSession,
+	getConfig,
 	getModels,
 	getProject,
 	getToken,
 	listProjectSessions,
+	renameSession,
 	resolveSession,
 } from "@/lib/api";
 import { useChat } from "@/lib/use-chat";
@@ -36,6 +41,7 @@ export function AppClient() {
 	const [project, setProject] = useState<ProjectState | null>(null);
 	const [sessions, setSessions] = useState<SessionMetaWithProject[]>([]);
 	const [models, setModels] = useState<ModelInfo[]>([]);
+	const [config, setConfig] = useState<ConfigInfo | null>(null);
 	const [provider, setProvider] = useState("");
 	const [theme, setTheme] = useState<ThemeChoice>(readStoredTheme);
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -76,11 +82,12 @@ export function AppClient() {
 			return;
 		}
 		let cancelled = false;
-		void Promise.all([getProject(), getModels()])
-			.then(([nextProject, nextModels]) => {
+		void Promise.all([getProject(), getModels(), getConfig().catch(() => null)])
+			.then(([nextProject, nextModels, nextConfig]) => {
 				if (cancelled) return;
 				setProject(nextProject);
 				setModels(nextModels);
+				setConfig(nextConfig);
 				const usable = nextModels.filter((model) => model.provider_type !== "unknown");
 				const fallback =
 					usable.find((model) => model.is_default)?.provider ?? usable[0]?.provider ?? "";
@@ -110,6 +117,17 @@ export function AppClient() {
 	useEffect(() => {
 		void refreshSessions();
 	}, [refreshSessions]);
+
+	const refreshProviders = useCallback(async () => {
+		const [nextConfig, nextModels] = await Promise.all([getConfig(), getModels()]);
+		setConfig(nextConfig);
+		setModels(nextModels);
+		const usable = nextModels.filter((model) => model.provider_type !== "unknown");
+		setProvider((current) => {
+			if (current && usable.some((model) => model.provider === current)) return current;
+			return usable.find((model) => model.is_default)?.provider ?? usable[0]?.provider ?? "";
+		});
+	}, []);
 
 	// Restore a session from the short id in the URL, inside the current project.
 	useEffect(() => {
@@ -242,6 +260,48 @@ export function AppClient() {
 		[chat],
 	);
 
+	const onRenameSession = useCallback(
+		async (session: SessionMetaWithProject, name: string) => {
+			if (!projectHash) return;
+			try {
+				await renameSession(projectHash, session.id, name);
+				await refreshSessions();
+			} catch (cause) {
+				setBootError(cause instanceof Error ? cause.message : String(cause));
+			}
+		},
+		[projectHash, refreshSessions],
+	);
+
+	const onDeleteSession = useCallback(
+		async (session: SessionMetaWithProject) => {
+			if (!projectHash) return;
+			try {
+				await deleteSession(projectHash, session.id);
+				if (chat.sessionId === session.id) chat.newSession();
+				await refreshSessions();
+			} catch (cause) {
+				setBootError(cause instanceof Error ? cause.message : String(cause));
+			}
+		},
+		[chat, projectHash, refreshSessions],
+	);
+
+	const onWorkspaceChange = useCallback(
+		async (path: string) => {
+			const result = await changeDir(path);
+			if (!result.success) throw new Error(result.message || "切换目录失败");
+			setProject({
+				working_dir: result.current_dir,
+				project_hash: result.project_hash,
+				name: result.current_dir.split("/").filter(Boolean).pop() || "",
+			});
+			setSessions([]);
+			chat.newSession();
+		},
+		[chat],
+	);
+
 	const openSettings = useCallback(() => {
 		setSettingsOpen(true);
 		setNavOpen(false);
@@ -273,6 +333,8 @@ export function AppClient() {
 					onSelectSession={onSelectSession}
 					onNew={onNew}
 					onOpenSettings={openSettings}
+					onRename={onRenameSession}
+					onDelete={onDeleteSession}
 				/>
 			</div>
 
@@ -347,6 +409,8 @@ export function AppClient() {
 						onNew={onNew}
 						onOpenSettings={openSettings}
 						onClose={() => setNavOpen(false)}
+						onRename={onRenameSession}
+						onDelete={onDeleteSession}
 					/>
 				</div>
 			</div>
@@ -362,6 +426,9 @@ export function AppClient() {
 				project={project}
 				approvalMode={chat.approvalMode}
 				onApprovalMode={chat.setApprovalMode}
+				config={config}
+				onRefreshProviders={refreshProviders}
+				onChangeDir={onWorkspaceChange}
 			/>
 		</div>
 	);
