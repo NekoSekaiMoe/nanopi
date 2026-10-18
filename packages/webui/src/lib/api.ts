@@ -2,8 +2,6 @@
 // previous Preact webui API client (MIT) so the Next.js UI keeps the same wire
 // contract.
 
-import { t } from "@/lib/i18n";
-
 const SESSION_KEY = "nanopi.webuiToken";
 
 function readToken(): string {
@@ -35,33 +33,10 @@ function readToken(): string {
 	}
 }
 
-let token = typeof window === "undefined" ? "" : readToken();
+const token = typeof window === "undefined" ? "" : readToken();
 
 export function getToken(): string {
 	return token;
-}
-
-export function storeToken(value: string): void {
-	token = value;
-	try {
-		sessionStorage.setItem(SESSION_KEY, value);
-	} catch {
-		/* ignore */
-	}
-}
-
-/** Exchange the one-time pairing code printed by `nanopi webui` for a token. */
-export async function pairWithCode(code: string): Promise<void> {
-	const response = await fetch("/extra/pair", {
-		method: "POST",
-		headers: { "Content-Type": "application/json" },
-		body: JSON.stringify({ code }),
-	});
-	const body = (await response.json().catch(() => ({}))) as { token?: string; error?: string };
-	if (!response.ok || !body.token) {
-		throw new Error(body.error ?? `${t("配对失败")}（HTTP ${response.status}）`);
-	}
-	storeToken(body.token);
 }
 
 function authHeaders(): Record<string, string> {

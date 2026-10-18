@@ -1,16 +1,17 @@
 "use client";
 
 import { AlertCircle, Sparkles } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Composer } from "@/components/composer";
 import { Logo } from "@/components/logo";
 import { MessageItem } from "@/components/message-item";
 import { PermissionCard } from "@/components/permission-card";
 import { UserInputCard } from "@/components/user-input-card";
 import type { ImageData, ModelInfo, UserInputRequestEvent, UserInputResponse } from "@/lib/api";
+import { type Poem, randomPoem } from "@/lib/greeting";
 import type { PendingPermission, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
-import { t } from "@/lib/i18n";
+import { getLocale, t } from "@/lib/i18n";
 
 const SUGGESTIONS = [
 	t("解释一下这个项目的结构"),
@@ -203,14 +204,27 @@ function Welcome({
 }) {
 	const hour = new Date().getHours();
 	const greeting = hour < 6 ? t("夜深了") : hour < 12 ? t("早上好") : hour < 18 ? t("下午好") : t("晚上好");
+	// Chinese landing shows a random classical poem; English keeps the greeting.
+	const [poem] = useState<Poem | null>(() => (getLocale() === "zh" ? randomPoem() : null));
 
 	return (
 		<div className="mx-auto flex min-h-full w-full max-w-[840px] flex-col items-center justify-center px-6 py-16 text-center">
 			<Logo size={48} className="shadow-lg" />
-			<h1 className="mt-5 text-[26px] font-semibold tracking-[-0.03em] text-foreground">
-				{greeting}
-			</h1>
-			<p className="mt-1.5 text-[14px] text-muted-foreground">{t('今天要完成什么？')}</p>
+			{poem ? (
+				<>
+					<h1 className="mt-5 max-w-[600px] text-balance text-[19px] font-medium leading-8 tracking-[-0.01em] text-foreground">
+						{poem.text}
+					</h1>
+					<p className="mt-2 text-[12px] text-muted-foreground">—— {poem.source}</p>
+				</>
+			) : (
+				<>
+					<h1 className="mt-5 text-[26px] font-semibold tracking-[-0.03em] text-foreground">
+						{greeting}
+					</h1>
+					<p className="mt-1.5 text-[14px] text-muted-foreground">{t("今天要完成什么？")}</p>
+				</>
+			)}
 
 			{models.length === 0 ? (
 				<div className="mt-6 flex flex-col items-center gap-2">

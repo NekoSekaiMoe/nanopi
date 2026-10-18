@@ -536,25 +536,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 		const path = url.pathname;
 
-		// Health, static assets, and the pairing exchange are unauthenticated; the
-		// SPA shows its own auth notice when API calls get 401.
+		// Health and static assets are unauthenticated; the SPA shows its own auth
+		// notice when API calls get 401.
 		if (path === "/health") {
 			json(res, 200, { ok: true });
-			return;
-		}
-		if (path === "/extra/pair" && req.method === "POST") {
-			if (!extraBridge.available) {
-				json(res, 404, { error: "pairing is not included in this build" });
-				return;
-			}
-			const body = await readBody(req);
-			const code = typeof body.code === "string" ? body.code : "";
-			try {
-				extraBridge.pairing.verify(code);
-				json(res, 200, { token });
-			} catch (error) {
-				json(res, 401, { error: error instanceof Error ? error.message : "pairing failed" });
-			}
 			return;
 		}
 		if (
@@ -1246,16 +1231,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			console.log(`nanopi webui listening on ${url}`);
 			if (!distExists) {
 				console.log("webui assets are missing; run `pnpm --filter @nanopi/webui run build` and restart.");
-			} else if (extraBridge.available) {
-				// Pairing handoff: short one-time code exchanged at /extra/pair for the
-				// bearer token, replacing the long token-in-URL.
-				const pairing = extraBridge.pairing.generate();
-				const minutes = Math.max(1, Math.round((pairing.expiresAt - Date.now()) / 60_000));
-				console.log(`Open: ${url}`);
-				console.log(`Pairing code: ${pairing.code} (valid ${minutes} min, one-time)`);
-			} else {
-				console.log(`Open: ${url}/?token=${token}`);
 			}
+			console.log(`Open: ${url}/?token=${token}`);
 			console.log("Press Ctrl+C to stop.");
 		});
 		// Keep running until the process is killed.

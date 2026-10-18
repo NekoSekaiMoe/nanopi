@@ -24,8 +24,8 @@ commands, badges, prompts, or webui selector behind.
 - **ENV overrides** — `NANOPI_INIT_MD` replaces the default system-prompt
   prefix; `NANOPI_API_URL`/`NANOPI_API_TOKEN`/`NANOPI_API_MODEL` register an
   additional OpenAI-compatible provider without touching the default model.
-- **Webui bridge** — mode state, permission prompts over SSE, settings, OAuth
-  flow status, and one-time pairing codes (`nanopi webui` prints code + URL).
+- **Webui bridge** — mode state, permission prompts over SSE, settings, and
+  OAuth flow status.
 
 ## MCP isolation
 

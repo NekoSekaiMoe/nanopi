@@ -26,7 +26,6 @@ export {
 } from "./mcp-policy.ts";
 export type { ModeListener, ModeSnapshot } from "./mode-engine.ts";
 export { ModeEngine, modeEngine } from "./mode-engine.ts";
-export { PairingError, PairingManager } from "./pairing.ts";
 export type { PermissionCallInfo, PermissionOutcome } from "./permission-types.ts";
 export type { PermissionBrokerEvent, PermissionPrompter } from "./permissions.ts";
 export { PermissionBroker, PermissionGate } from "./permissions.ts";

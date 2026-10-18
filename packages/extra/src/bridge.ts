@@ -3,15 +3,14 @@
  *
  * The extension and `nanopi webui` share one process and one module instance,
  * so the bridge is a plain singleton: the webui server reads mode state,
- * subscribes to permission prompts, exchanges pairing codes, and edits extra
- * settings through it. When a build flavor excludes the module, the bundle
- * scripts replace this module with an inert stub whose `available` is false.
+ * subscribes to permission prompts, and edits extra settings through it. When a
+ * build flavor excludes the module, the bundle scripts replace this module with
+ * an inert stub whose `available` is false.
  */
 
 import { type JudgeModelRegistry, judgeWithModel } from "./ai-judge.ts";
 import { AskBroker } from "./ask-broker.ts";
 import { type ModeEngine, modeEngine } from "./mode-engine.ts";
-import { PairingManager } from "./pairing.ts";
 import { PermissionBroker } from "./permissions.ts";
 import {
 	type ExtraSettingsPatch,
@@ -43,7 +42,6 @@ export class ExtraBridge {
 	readonly permissions = new PermissionBroker();
 	/** Structured-input channel for webui sessions (see ask-broker.ts). */
 	readonly asks = new AskBroker();
-	readonly pairing = new PairingManager();
 
 	private extensionHooks: BridgeExtensionHooks | undefined;
 	private bridgeCwd: string | undefined;
