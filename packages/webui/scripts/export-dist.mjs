@@ -12,4 +12,4 @@ if (!existsSync(out)) {
 
 rmSync(dist, { recursive: true, force: true });
 cpSync(out, dist, { recursive: true });
-console.log("webui-next static export copied to dist/");
+console.log("webui static export copied to dist/");

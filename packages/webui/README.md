@@ -1,4 +1,4 @@
-# @nanopi/webui-next
+# @nanopi/webui
 
 Next.js (static export) rewrite of the nanopi browser UI.
 
@@ -11,7 +11,7 @@ navigation. No Memoh code is copied (its repository is AGPL-3.0).
 
 ```bash
 pnpm install
-pnpm --filter @nanopi/webui-next run dev
+pnpm --filter @nanopi/webui run dev
 ```
 
 The dev server needs the nanopi webui API. Proxy `/project`, `/models`,
@@ -21,7 +21,7 @@ exported `dist/` from it directly.
 ## Build
 
 ```bash
-pnpm --filter @nanopi/webui-next run build
+pnpm --filter @nanopi/webui run build
 ```
 
 `next build` writes the static export to `out/`, then `scripts/export-dist.mjs`

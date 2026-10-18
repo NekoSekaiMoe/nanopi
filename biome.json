@@ -36,7 +36,7 @@
 			"!**/models.generated.ts",
 			"!**/*.models.ts",
 			"!packages/mom/data/**/*",
-			"!packages/webui-next/**/*",
+			"!packages/webui/**/*",
 			"!packages/coding-agent/src/extras/**/*",
 			"!!**/node_modules"
 		]

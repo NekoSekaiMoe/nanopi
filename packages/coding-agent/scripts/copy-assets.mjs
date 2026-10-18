@@ -41,7 +41,7 @@ if (components["export-html"] !== false) {
 }
 
 if (components["webui"] !== false) {
-	const webuiDist = join(packageDir, "..", "webui-next", "dist");
+	const webuiDist = join(packageDir, "..", "webui", "dist");
 	mkdirSync(join(distDir, "webui"), { recursive: true });
 	if (existsSync(webuiDist)) {
 		copyTree(webuiDist, join(distDir, "webui"));

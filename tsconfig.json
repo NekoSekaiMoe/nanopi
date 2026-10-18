@@ -88,7 +88,7 @@
 	],
 	"exclude": [
 		"**/dist/**",
-		"packages/webui-next",
+		"packages/webui",
 		"packages/coding-agent/src/extras/**/__tests__/**"
 	]
 }

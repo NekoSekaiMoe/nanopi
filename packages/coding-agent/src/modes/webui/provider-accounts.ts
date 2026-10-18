@@ -14,7 +14,7 @@ import { getAgentDir } from "../../config.ts";
 import { stripJsonComments } from "../../utils/json.ts";
 import { stripBom } from "../../utils/text.ts";
 
-/** Wire type from the webui frontend (see packages/webui-next/src/lib/api.ts). */
+/** Wire type from the webui frontend (see packages/webui/src/lib/api.ts). */
 export interface ProviderPresetInfo {
 	id: string;
 	display_name: string;
