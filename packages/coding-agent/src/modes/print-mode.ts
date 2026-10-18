@@ -133,26 +133,30 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 			await session.prompt(message);
 		}
 
-		if (mode === "text") {
-			const state = session.state;
-			const lastMessage = state.messages[state.messages.length - 1];
+		// Both modes report failure through the exit code. In json mode the error is
+		// also on the wire (stopReason/errorMessage), but a caller that only checks
+		// the process status must not read an auth or model failure as success —
+		// that is how a subagent used to report `completed` with an empty report.
+		const state = session.state;
+		const lastMessage = state.messages[state.messages.length - 1];
+		if (lastMessage?.role === "assistant") {
+			const assistantMsg = lastMessage as AssistantMessage;
+			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
+				console.error(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
+				exitCode = 1;
+			}
+		}
 
-			if (lastMessage?.role === "assistant") {
-				const assistantMsg = lastMessage as AssistantMessage;
-				if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
-					console.error(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
-					exitCode = 1;
-				} else {
-					for (const content of assistantMsg.content) {
-						if (content.type === "text") {
-							writeRawStdout(`${content.text}\n`);
-						}
-					}
-					if (assistantMsg.stopReason === "length") {
-						console.error("Response was truncated: the model reached its output token limit.");
-						exitCode = 1;
-					}
+		if (mode === "text" && lastMessage?.role === "assistant" && exitCode === 0) {
+			const assistantMsg = lastMessage as AssistantMessage;
+			for (const content of assistantMsg.content) {
+				if (content.type === "text") {
+					writeRawStdout(`${content.text}\n`);
 				}
+			}
+			if (assistantMsg.stopReason === "length") {
+				console.error("Response was truncated: the model reached its output token limit.");
+				exitCode = 1;
 			}
 		}
 
