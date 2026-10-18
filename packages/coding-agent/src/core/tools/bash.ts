@@ -59,6 +59,8 @@ const bashOutputSchema = Type.Object({
 	full_output_path: Type.Optional(Type.String({ description: "Full output, when truncated" })),
 	exit_code: Type.Number(),
 	wall_time_seconds: Type.Number(),
+	/** Backend that ran the command when it was not the local shell, e.g. `sandbox`. */
+	executed_on: Type.Optional(Type.String()),
 });
 
 export type BashToolOutput = Static<typeof bashOutputSchema>;
@@ -175,6 +177,13 @@ export function createLocalBashOperations(options?: { shellPath?: string }): Bas
 	return createLocalShellOperations("bash", () => getShellConfig(options?.shellPath));
 }
 
+/**
+ * Backends that wrap command execution without replacing it, keyed by id.
+ * Undefined means "run locally"; any other value must be a `BashOperations`
+ * that delegates to `createLocalBashOperations()`.
+ */
+export type BashOperationsProviders = () => Readonly<Record<string, BashOperations | undefined>>;
+
 export interface BashSpawnContext {
 	command: string;
 	cwd: string;
@@ -214,6 +223,14 @@ function resolveSpawnContext(
 export interface BashToolOptions {
 	/** Custom operations for command execution. Default: local shell */
 	operations?: BashOperations;
+	/**
+	 * Resolve the operations of a named backend (for example a sandbox). Consulted
+	 * before `operations`, so a session can select a backend after the tool was
+	 * built. An id that resolves to undefined falls back to the default.
+	 */
+	operationsProviders?: BashOperationsProviders;
+	/** Backend id consulted in `operationsProviders`. Default: none */
+	operationsProvider?: () => string | undefined;
 	/** Command prefix prepended to every command (for example shell setup commands) */
 	commandPrefix?: string;
 	/** Optional explicit shell path from settings */
@@ -242,12 +259,26 @@ export interface ShellToolConfig {
 	tempFilePrefix: string;
 }
 
+/**
+ * Resolve which backend runs the commands of one shell tool: a registered
+ * provider when the session selected one, otherwise the fixed `operations`
+ * override, otherwise the local shell.
+ */
+export function resolveShellOperations(options?: BashToolOptions): BashOperations & { backend?: string } {
+	const providers = options?.operationsProviders?.();
+	const backend = options?.operationsProvider?.();
+	if (backend !== undefined && providers?.[backend]) {
+		return Object.assign(providers[backend] as BashOperations, { backend });
+	}
+	const local = options?.operations ?? createLocalBashOperations({ shellPath: options?.shellPath });
+	return options?.operations ? local : Object.assign(local, { backend: undefined });
+}
+
 export function createShellToolDefinition(
 	cwd: string,
 	config: ShellToolConfig,
 	options?: BashToolOptions,
 ): ToolDefinition<typeof bashSchema, BashToolDetails | undefined, BashRenderState> {
-	const ops = options?.operations ?? createLocalBashOperations({ shellPath: options?.shellPath });
 	const commandPrefix = options?.commandPrefix;
 	const exposeSessionEnvironment = options?.exposeSessionEnvironment ?? true;
 	const spawnHook = options?.spawnHook;
@@ -275,6 +306,7 @@ export function createShellToolDefinition(
 				exposeSessionEnvironment,
 				ctx,
 			);
+			const ops = resolveShellOperations(options);
 			const output = new OutputAccumulator({ tempFilePrefix: config.tempFilePrefix });
 			let acceptingOutput = true;
 			let updateTimer: NodeJS.Timeout | undefined;
@@ -389,6 +421,7 @@ export function createShellToolDefinition(
 					throw new Error(appendStatus(outputText, "Command terminated without an exit code"));
 				}
 				const wallTimeSeconds = Math.round((performance.now() - startedAt) / 100) / 10;
+				const executedOn = (ops as { backend?: string }).backend;
 				const fullOutput = await output.readFullOutput(STRUCTURED_OUTPUT_MAX_BYTES);
 				const structuredContent: BashToolOutput = {
 					output: fullOutput.content,
@@ -398,6 +431,7 @@ export function createShellToolDefinition(
 						: {}),
 					exit_code: exitCode,
 					wall_time_seconds: wallTimeSeconds,
+					...(executedOn ? { executed_on: executedOn } : {}),
 				};
 				if (exitCode !== 0) {
 					return {

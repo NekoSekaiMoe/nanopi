@@ -13,6 +13,7 @@ import { judgeWithModel } from "./ai-judge.ts";
 import { modeBadgeText } from "./badges.ts";
 import { extraBridge } from "./bridge.ts";
 import { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
+import { execInLocalShell } from "./executables.ts";
 import type {
 	ExtraExtensionAPI,
 	ExtraExtensionContext,
@@ -26,7 +27,16 @@ import { modeEngine } from "./mode-engine.ts";
 import type { PermissionCallInfo, PermissionDecision, PermissionPrompter } from "./permissions.ts";
 import { PermissionGate } from "./permissions.ts";
 import { analyzeCommandForPlan, firstShellWord } from "./plan-shell.ts";
-import { loadExtraSettings } from "./settings-store.ts";
+import {
+	createSandboxedBashOperations,
+	DEFAULT_SANDBOX_CONFIG,
+	describeSandboxCall,
+	detectSandbox,
+	resolveSandboxHome,
+	type SandboxAvailability,
+	type SandboxConfig,
+} from "./sandbox.ts";
+import { loadExtraSettings, saveExtraSettings } from "./settings-store.ts";
 import { SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
 const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
@@ -123,6 +133,117 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		sessionCtx.ui.setStatus("mode", modeBadgeText(engine, sessionCtx.ui.theme));
 	}
 	engine.subscribe(() => applyModeStatus());
+
+	// --- Shell sandbox (registered as a bash backend, inert until activated) ---
+	const SANDBOX_BACKEND_ID = "sandbox";
+	let sandboxConfig: SandboxConfig | undefined;
+	let sandboxAvailability: SandboxAvailability | undefined;
+
+	/**
+	 * Build the sandbox backend from the current settings and hand it to the
+	 * shell tools. Runs on every session start, after settings were reloaded, so
+	 * `/sandbox` needs no separate plumbing beyond a reload.
+	 */
+	function applySandbox(cwd: string): void {
+		const configured = loadExtraSettings(cwd).settings.sandbox;
+		if (!configured) {
+			sandboxConfig = undefined;
+			sandboxAvailability = undefined;
+			nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, undefined);
+			nanopi.setActiveBashOperations?.(undefined);
+			return;
+		}
+		sandboxConfig = { ...DEFAULT_SANDBOX_CONFIG, ...configured };
+		sandboxAvailability = detectSandbox(sandboxConfig);
+		if (!sandboxAvailability.available) {
+			// Leave shell execution local instead of failing every command: the
+			// user is told why, and the next session retries.
+			nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, undefined);
+			nanopi.setActiveBashOperations?.(undefined);
+			return;
+		}
+		nanopi.registerBashOperations?.(
+			SANDBOX_BACKEND_ID,
+			createSandboxedBashOperations({
+				config: sandboxConfig,
+				availability: sandboxAvailability,
+				exec: (command, execCwd, options) => execInLocalShell(command, execCwd, options.onData, options.signal),
+				home: resolveSandboxHome(sandboxConfig),
+			}),
+		);
+		nanopi.setActiveBashOperations?.(SANDBOX_BACKEND_ID);
+	}
+
+	/** One-line sandbox status for `/sandbox` and the footer. */
+	function sandboxStatusLine(): string {
+		if (!sandboxConfig) return "off (shell commands run unsandboxed)";
+		if (!sandboxAvailability?.available) {
+			return `off: ${sandboxAvailability?.reason ?? "launcher unavailable"}`;
+		}
+		const network = sandboxConfig.allowNetwork ? "network on" : "network off";
+		return `${sandboxAvailability.kind} (${network})`;
+	}
+
+	// --- CLI command: /sandbox [on|off] [--engine bwrap|sandbox-exec] [--network] [--writable <dir>] ---
+	nanopi.registerCommand("sandbox", {
+		description: "Show or configure the shell sandbox (on | off | --engine, --network, --writable)",
+		handler: async (args, ctx) => {
+			const argv = args.trim().split(/\s+/).filter(Boolean);
+			const first = argv[0];
+			if (first === undefined) {
+				ctx.ui.notify(`Sandbox: ${sandboxStatusLine()}`, "info");
+				return;
+			}
+			if (first === "off") {
+				saveExtraSettings({ sandbox: null });
+				applySandbox(ctx.cwd);
+				ctx.ui.notify("Sandbox off; shell commands run unsandboxed", "info");
+				return;
+			}
+			if (first !== "on") {
+				ctx.ui.notify(
+					"Usage: /sandbox [on|off] [--engine bwrap|sandbox-exec] [--network] [--writable <dir>]",
+					"error",
+				);
+				return;
+			}
+			const next: SandboxConfig = {
+				...(sandboxConfig ?? DEFAULT_SANDBOX_CONFIG),
+				engine: undefined,
+				writable: [...(sandboxConfig?.writable ?? [])],
+			};
+			for (let index = 1; index < argv.length; index++) {
+				const arg = argv[index];
+				if (arg === "--network") next.allowNetwork = true;
+				else if (arg === "--engine") {
+					const engine = argv[++index];
+					if (engine !== "bwrap" && engine !== "sandbox-exec") {
+						ctx.ui.notify("--engine expects bwrap or sandbox-exec", "error");
+						return;
+					}
+					next.engine = engine;
+				} else if (arg === "--writable") {
+					const dir = argv[++index];
+					if (!dir) {
+						ctx.ui.notify("--writable expects a directory", "error");
+						return;
+					}
+					next.writable.push(dir);
+				} else {
+					ctx.ui.notify(`Unknown /sandbox option "${arg}"`, "error");
+					return;
+				}
+			}
+			const availability = detectSandbox(next);
+			if (!availability.available) {
+				ctx.ui.notify(`Cannot enable the sandbox: ${availability.reason}`, "error");
+				return;
+			}
+			saveExtraSettings({ sandbox: next });
+			applySandbox(ctx.cwd);
+			ctx.ui.notify(`Sandbox enabled: ${sandboxStatusLine()}`, "info");
+		},
+	});
 
 	// --- ENV provider (append-only; never changes the default model) ---
 	const envProvider = resolveEnvProvider();
@@ -247,6 +368,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				if (settings.subsystems[key] === false) applySubsystem(key, false);
 			}
 		}
+		// Rebuilt on every start so a reloaded settings file (and /sandbox) applies.
+		applySandbox(ctx.cwd);
 		// Fresh permission memory per session.
 		const prompter: PermissionPrompter | undefined =
 			ctx.mode === "webui" ? extraBridge.permissions.prompter : ctx.hasUI ? makeDialogPrompter(ctx) : undefined;
@@ -329,7 +452,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			return { block: true, reason: `minimal mode provides only the shell tools (blocked ${event.toolName})` };
 		}
 
-		if (engine.yolo || gate === undefined || !GATED_TOOL_NAMES.has(event.toolName)) return undefined;
+		const sandboxNote = sandboxConfig ? describeSandboxCall(sandboxConfig, event.toolName) : undefined;
+		if (engine.yolo || gate === undefined || !GATED_TOOL_NAMES.has(event.toolName)) {
+			if (sandboxNote) sessionCtx?.ui.notify(sandboxNote, "info");
+			return undefined;
+		}
 		const { summary, firstCommand } = summarizeCall(event);
 		const outcome = await gate.check({
 			callId: event.toolCallId,

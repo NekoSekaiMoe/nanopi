@@ -1,5 +1,6 @@
 export {
 	type BashOperations,
+	type BashOperationsProviders,
 	type BashSpawnContext,
 	type BashSpawnHook,
 	type BashToolDetails,
@@ -8,6 +9,7 @@ export {
 	createBashTool,
 	createBashToolDefinition,
 	createLocalBashOperations,
+	resolveShellOperations,
 } from "./bash.ts";
 export {
 	createEditTool,

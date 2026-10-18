@@ -3,6 +3,10 @@
  * extra-owned settings, and the webui bridge wire shapes.
  */
 
+import { normalizeSandboxConfig, type SandboxConfig } from "./sandbox.ts";
+
+export type { SandboxConfig };
+
 /** Agent run modes. Tool whitelist semantics; orthogonal to permissions. */
 export type RunMode = "plan" | "minimal" | "standard";
 
@@ -32,6 +36,8 @@ export interface ExtraSettings {
 	defaultMode: RunMode;
 	/** Subsystem switches; missing entries default to enabled. */
 	subsystems: Partial<Record<SubsystemKey, boolean>>;
+	/** Shell sandbox. Absent means shell commands run unsandboxed. */
+	sandbox?: SandboxConfig;
 }
 
 export const DEFAULT_EXTRA_SETTINGS: ExtraSettings = {
@@ -54,7 +60,8 @@ export function normalizeExtraSettings(value: unknown): ExtraSettings {
 			if (typeof entry === "boolean") subsystems[key] = entry;
 		}
 	}
-	return { defaultMode, subsystems };
+	const sandbox = record?.sandbox === undefined ? undefined : normalizeSandboxConfig(record.sandbox);
+	return { defaultMode, subsystems, ...(sandbox ? { sandbox } : {}) };
 }
 
 /** Status of one subsystem switch, as reported to the webui. */

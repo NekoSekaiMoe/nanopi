@@ -4,6 +4,7 @@
 
 ### Added
 
+- The shell sandbox: `/sandbox on|off` registers a `BashOperations` backend that wraps `bash` commands in `bubblewrap` (Linux) or `sandbox-exec` (macOS) and activates it through the coding-agent's `registerBashOperations`/`setActiveBashOperations`. The working directory stays writable, everything else is read-only, `$HOME` inside the sandbox is `<agentDir>/sandbox`, and network is cut unless `--network` was passed (`--engine` and `--writable` configure the rest). Configuration lives in the extra settings (`sandbox: { engine, home, writable, allowNetwork }`), applies on session start so a reloaded file or `/sandbox` takes effect, and refuses to enable when no launcher is found instead of silently running unsandboxed. `detectSandbox`, `buildSandboxCommand`, `createSandboxedBashOperations`, `describeSandboxCall`, `normalizeSandboxConfig`, `resolveSandboxHome`, `shellQuote`, and `findExecutable` are exported. This is containment, not approval: the permission prompt still decides whether a command runs, and only `bash` is covered — not `edit`/`write`, `!` commands, or macOS relative-path writes
 - Added the structured-input broker (`AskBroker`, `extraBridge.asks`): one outstanding questionnaire at a time, published to the webui server as a prompt event and answered by request id, with `cancelAll()` on session shutdown. It exists because `ask_user_question` renders through `ctx.ui.custom()`, which the headless webui session cannot provide, so the tool failed with "UI not available" there
 
 ### Changed

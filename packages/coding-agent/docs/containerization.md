@@ -11,8 +11,49 @@ You can isolate the complete nanopi process or keep nanopi on the host and route
 | Plain Docker | Container | nanopi, built-in tools, `!` commands, and modules | Credentials passed into the container | A straightforward local container boundary |
 | Docker Sandboxes | Managed sandbox | nanopi, built-in tools, `!` commands, and modules | Provider credentials remain on the host and are substituted by the proxy | Managed local isolation without exposing the real provider key |
 | OpenShell | Local or remote sandbox | nanopi, built-in tools, `!` commands, and modules | Policy-controlled credentials and inference routing | Filesystem, process, network, and credential policies |
+| Shell sandbox (`/sandbox`) | On the host, inside `bubblewrap` or `sandbox-exec` | Commands started by the `bash` tool | The host process keeps every credential; the sandbox narrows what a command can write or reach | Blocking writes and network for shell commands without a container |
 
 The method changes where module tools run. When the complete nanopi process runs inside an isolated environment, its module tools run there too.
+
+## Confine shell commands without a container
+
+`/sandbox on` wraps the `bash` tool in `bubblewrap` (Linux) or `sandbox-exec` (macOS). Only the command execution is wrapped: the model keeps the same tool description and output handling, and the host nanopi process stays outside the boundary.
+
+```text
+/sandbox on
+/sandbox on --network
+/sandbox on --engine bwrap --writable /tmp/build
+/sandbox
+/sandbox off
+```
+
+What the sandbox does:
+
+- The working directory is writable. Everything else is read-only, except the extra roots passed with `--writable`.
+- `$HOME` inside sandboxed commands is `<agentDir>/sandbox`, so a command cannot rewrite your real dotfiles or `~/.ssh`.
+- Network is blocked unless the sandbox was enabled with `--network`.
+- Sandboxed commands see the system's read-only roots (`/usr`, `/lib`, `/etc`, and so on), so ordinary toolchains still run.
+
+What it does not do:
+
+- It is not a permission prompt. Approving a call still decides whether a command runs; the sandbox only limits what it can touch afterwards. `--yolo` skips the prompt and the sandbox still applies.
+- It only covers the `bash` tool. The `edit` and `write` tools write as the nanopi process, and `!` commands run outside the sandbox because they are your own input.
+- macOS `sandbox-exec` filters on resolved absolute paths only, so writes through relative paths outside the working directory are not stopped. Do not treat it as equivalent to `bubblewrap`.
+- It does not protect credentials that sit inside a writable root.
+
+Settings live in `<agentDir>/extra/settings.json`, with an optional `.nanopi/extra/settings.json` project override:
+
+```json
+{
+  "sandbox": {
+    "engine": "bwrap",
+    "allowNetwork": false,
+    "writable": ["/tmp/build"]
+  }
+}
+```
+
+If the launcher is missing, `/sandbox on` refuses to enable it and shell commands keep running unsandboxed; nothing silently falls back once it is on. For a boundary that also covers `edit`, `write`, `!` commands, and modules, use a container or one of the methods above instead.
 
 ## Decide what nanopi can access
 

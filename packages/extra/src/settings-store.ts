@@ -9,6 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
+import type { SandboxConfig } from "./sandbox.ts";
 import { type ExtraSettings, normalizeExtraSettings } from "./types.ts";
 
 const ENV_AGENT_DIR = "NANOPI_CODING_AGENT_DIR";
@@ -77,6 +78,7 @@ export function loadExtraSettings(cwd: string): ResolvedExtraSettings {
 				...(projectRaw.subsystems as Record<string, unknown>),
 			};
 		}
+		if (projectRaw.sandbox !== undefined) merged.sandbox = projectRaw.sandbox;
 	}
 	return { settings: normalizeExtraSettings(merged), sources };
 }
@@ -88,6 +90,8 @@ export function loadExtraSettings(cwd: string): ResolvedExtraSettings {
 export interface ExtraSettingsPatch {
 	defaultMode?: ExtraSettings["defaultMode"];
 	subsystems?: Partial<Record<string, boolean | null>>;
+	/** Sandbox configuration; `null` removes it (shell commands run unsandboxed). */
+	sandbox?: SandboxConfig | null;
 }
 
 export function saveExtraSettings(patch: ExtraSettingsPatch): ExtraSettings {
@@ -102,6 +106,10 @@ export function saveExtraSettings(patch: ExtraSettingsPatch): ExtraSettings {
 			else subsystems[key] = value;
 		}
 		next.subsystems = subsystems;
+	}
+	if (patch.sandbox !== undefined) {
+		if (patch.sandbox === null) delete next.sandbox;
+		else next.sandbox = patch.sandbox;
 	}
 	writeJsonAtomic(file, next);
 	return normalizeExtraSettings(next);

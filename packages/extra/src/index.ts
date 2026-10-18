@@ -16,6 +16,7 @@ export { type BadgeThemeSlice, badgeLabels, modeBadgeText } from "./badges.ts";
 export type { BridgeExtensionHooks, BridgeJudgeContext } from "./bridge.ts";
 export { ExtraBridge, extraBridge } from "./bridge.ts";
 export { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
+export { execInLocalShell, findExecutable } from "./executables.ts";
 export { createExtraExtension, extraInlineExtension, planModeVerdict } from "./extension.ts";
 export {
 	isMcpToolName,
@@ -30,6 +31,17 @@ export type { PermissionCallInfo, PermissionOutcome } from "./permission-types.t
 export type { PermissionBrokerEvent, PermissionPrompter } from "./permissions.ts";
 export { PermissionBroker, PermissionGate } from "./permissions.ts";
 export { analyzeCommandForPlan, firstShellWord, tokenizeSimpleCommand } from "./plan-shell.ts";
+export type { SandboxAvailability, SandboxCommand, SandboxKind } from "./sandbox.ts";
+export {
+	buildSandboxCommand,
+	createSandboxedBashOperations,
+	DEFAULT_SANDBOX_CONFIG,
+	describeSandboxCall,
+	detectSandbox,
+	normalizeSandboxConfig,
+	resolveSandboxHome,
+	shellQuote,
+} from "./sandbox.ts";
 export type { ExtraSettingsPatch, ResolvedExtraSettings } from "./settings-store.ts";
 export {
 	globalExtraSettingsPath,
