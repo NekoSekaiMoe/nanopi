@@ -1,5 +1,6 @@
 // Core session management
 
+export { isBashOnlyBuild, isBuildComponentEnabled, type Toolset } from "./build-components.ts";
 export { type Args, parseArgs } from "./cli/args.ts";
 
 // Config paths
@@ -24,7 +25,21 @@ export {
 	RuntimeReloadError,
 	type SessionStats,
 } from "./core/agent-session.ts";
-export { readStoredCredential } from "./core/auth-storage.ts";
+export { AuthStorage, ReadOnlyAuthStorage, readStoredCredential } from "./core/auth-storage.ts";
+// Process and shell helpers
+export { type BashExecutorOptions, type BashResult, executeBashWithOperations } from "./core/bash-executor.ts";
+export {
+	BUG_REPORT_CUSTOM_ENTRY_TYPE,
+	type BugReportBundle,
+	type BugReportDiagnostics,
+	type BugReportMetadata,
+	type BugReportSessionEntryData,
+	bugReportFiles,
+	collectBugReportDiagnostics,
+	collectBugReportMetadata,
+	redactJsonValue,
+	redactUrl,
+} from "./core/bug-report.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
 // Compaction
 export {
@@ -50,6 +65,7 @@ export {
 	serializeConversation,
 	shouldCompact,
 } from "./core/compaction/index.ts";
+export { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./core/defaults.ts";
 export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
 export { execCommand } from "./core/exec.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
@@ -217,6 +233,7 @@ export {
 	wrapRegisteredTool,
 	wrapRegisteredTools,
 } from "./core/modules/index.ts";
+export { resolveProjectTrusted } from "./core/project-trust.ts";
 export { expandPromptTemplate } from "./core/prompt-templates.ts";
 export {
 	type PathMetadata,
@@ -286,15 +303,24 @@ export {
 	type ThinkingLevelChangeEntry,
 } from "./core/session-manager.ts";
 export {
+	applyToolModifiers,
 	type CacheWarmingMode,
 	type CompactionModelOverride,
 	type CompactionSettings,
+	DEFAULT_TOOL_NAMES,
 	type DefaultProjectTrust,
+	FileSettingsStorage,
+	getToolListError,
 	type ImageSettings,
+	InMemorySettingsStorage,
+	isToolModifier,
 	type QuietStartup,
 	type RetrySettings,
+	type SettingsError,
 	SettingsManager,
 	type SettingsManagerCreateOptions,
+	type SettingsScope,
+	type SettingsStorage,
 } from "./core/settings-manager.ts";
 // Skills
 export {
@@ -311,6 +337,7 @@ export {
 	buildSystemPrompt,
 	normalizeBuildSystemPromptOptions,
 } from "./core/system-prompt.ts";
+export { createToolNameMatcher } from "./core/tool-patterns.ts";
 export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
 // Tools
 export {
@@ -463,12 +490,33 @@ export {
 } from "./modes/interactive/theme/theme.ts";
 // Broad core surface: these are the interfaces users compose when they extend
 // nanopi programmatically (see docs/sdk.md).
-export { BUILTIN_MODULES } from "./modules/index.ts";
+export { BUILTIN_MODULES, enabledModules } from "./modules/index.ts";
+
 // Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";
 export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
 export { convertToPng } from "./utils/image-convert.ts";
 export { formatDimensionNote, type ResizedImage, resizeImage } from "./utils/image-resize.ts";
 export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
+// Path utilities
+export {
+	canonicalizePath,
+	getCwdRelativePath,
+	getFileRevision,
+	isLocalPath,
+	normalizePath,
+	normalizeWindowsShellPath,
+	type PathInputOptions,
+	resolvePath,
+} from "./utils/paths.ts";
+
 // Shell utilities
-export { getPowerShellConfig, getShellConfig } from "./utils/shell.ts";
+export {
+	getPowerShellConfig,
+	getShellConfig,
+	getShellEnv,
+	killProcessTree,
+	POWERSHELL_ARGS,
+	type ShellConfig,
+	sanitizeBinaryOutput,
+} from "./utils/shell.ts";

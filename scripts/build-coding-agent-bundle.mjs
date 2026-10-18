@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { resolveBuildFlavor } from "./buildconfig.mjs";
+import { loadBuildConfig, resolveBuildFlavor, validateFlavorModules } from "./buildconfig.mjs";
+import { createModuleStubPlugin } from "./build-modules.mjs";
+import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -19,19 +22,18 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // Build flavors (buildconfig.json) control peripheral components. The
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
-const { flavor, components } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset } = resolveBuildFlavor(repoRoot);
 validateOAuthFlowRegistry({ repoRoot, components });
-// A flavor may exclude the modes module (packages/extra): alias @nanopi/pi-extra
-// to an inert stub so the module is physically absent from the bundle while
-// its import sites keep working (see scripts/pi-extra-disabled-stub.mjs).
-const piExtraStubPlugin = {
-	name: "pi-extra-disabled-stub",
-	setup(build) {
-		build.onResolve({ filter: /^@nanopi\/pi-extra$/ }, () => ({
-			path: join(repoRoot, "scripts", "pi-extra-disabled-stub.mjs"),
-		}));
-	},
-};
+// Every built-in module is a `module/<name>` component; validateFlavorModules
+// fails the build when the module list and buildconfig.json disagree.
+const buildConfig = loadBuildConfig(repoRoot);
+validateFlavorModules(repoRoot, readBuiltinModuleNames(repoRoot));
+const moduleStubDir = mkdtempSync(join(tmpdir(), "nanopi-module-stubs-"));
+const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStubPlugin({
+	stubDir: moduleStubDir,
+	modules: resolveModuleBundles(repoRoot, buildConfig),
+	components,
+});
 const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
@@ -127,6 +129,7 @@ function commonBuildOptions() {
 			NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
+			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
 		},
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",
@@ -141,7 +144,7 @@ function commonBuildOptions() {
 		// when importing an extension; Babel remains deferred until a cache miss
 		// needs transformation.
 		plugins: [
-			...(components.modes === false ? [piExtraStubPlugin] : []),
+			moduleStubPlugin,
 			lazyJitiPlugin,
 			httpsProxyAgentNamedExportPlugin,
 		],
@@ -277,10 +280,13 @@ writeFileSync(join(bundleDir, "cli.js"), cliLauncher);
 chmodSync(join(bundleDir, "cli.js"), 0o755);
 chmodSync(join(bundleDir, "rpc-entry.js"), 0o755);
 
+rmSync(moduleStubDir, { force: true, recursive: true });
+
 const files = new Set(metafiles.flatMap((metafile) => Object.keys(metafile.outputs))).size + 1;
 const mib = (outputBytes(metafiles) + cliLauncher.length) / (1024 * 1024);
 console.log(
-	`Built ${relative(repoRoot, bundleDir)} (${files} files, ${mib.toFixed(1)} MiB, flavor: ${flavor}` +
+	`Built ${relative(repoRoot, bundleDir)} (${files} files, ${mib.toFixed(1)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
 		(excludedFlows.length > 0 ? `, excluded OAuth: ${excludedFlows.join(", ")}` : "") +
+		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
 		")",
 );

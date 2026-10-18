@@ -56,6 +56,7 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@nanopi/pi-ai/compat";
+import { isBashOnlyBuild } from "../build-components.ts";
 import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -154,7 +155,7 @@ import {
 } from "./system-prompt.ts";
 import { createToolNameMatcher } from "./tool-patterns.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
-import { createAllToolDefinitions } from "./tools/index.ts";
+import { createAllToolDefinitions, filterToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
@@ -304,6 +305,18 @@ export interface RuntimeReloadCallbacks {
 	beforeSessionStart?(): void | Promise<void>;
 	afterReload?(): void | Promise<void>;
 	reloadFailed?(error: unknown): void | Promise<void>;
+}
+
+/** Tools a bash-only build registers: the shell tools, nothing else. */
+const BASH_ONLY_TOOL_NAMES: readonly string[] = ["bash", "powershell"];
+
+/** System-prompt guideline telling the model what a bash-only build provides. */
+const BASH_ONLY_GUIDELINE =
+	"Only the bash tool is available. Use shell commands for everything, including reading files and running searches.";
+
+/** Guard reason for a call a bash-only build cannot run. */
+function BASH_ONLY_BUILD_BLOCK_REASON(toolName: string): string {
+	return `this is a bash-only build: only the bash tool is available (blocked ${toolName})`;
 }
 
 export interface AgentSessionConfig {
@@ -733,6 +746,9 @@ export class AgentSession {
 		{ toolCall, args }: BeforeToolCallContext,
 		parentToolCallId?: string,
 	): Promise<BeforeToolCallResult | undefined> {
+		if (!this._isBashOnlyTool(toolCall.name)) {
+			return { block: true, reason: BASH_ONLY_BUILD_BLOCK_REASON(toolCall.name) };
+		}
 		const runner = this._moduleRegistry;
 		if (!runner.hasHandlers("tool_call")) {
 			return undefined;
@@ -752,6 +768,14 @@ export class AgentSession {
 			}
 			throw new Error(`RegisteredModule failed, blocking execution: ${String(err)}`);
 		}
+	}
+
+	/**
+	 * Whether the call may run. A bash-only build registers and declares only
+	 * the shell tools, so this backstop only fires for a call another tool issued.
+	 */
+	private _isBashOnlyTool(toolName: string): boolean {
+		return !isBashOnlyBuild() || BASH_ONLY_TOOL_NAMES.includes(toolName);
 	}
 
 	/** `tool_result` handlers and image normalization. `parentToolCallId` is set for calls another tool made. */
@@ -2059,6 +2083,12 @@ export class AgentSession {
 			result.systemPromptOptions.selectedTools.length !== selectedToolsBefore.length ||
 			result.systemPromptOptions.selectedTools.some((name, index) => name !== selectedToolsBefore[index]);
 		if (!handlerEditedTools) result.systemPromptOptions.selectedTools = this.getActiveToolNames();
+		if (isBashOnlyBuild()) {
+			result.systemPromptOptions.promptGuidelines = [
+				...(result.systemPromptOptions.promptGuidelines ?? []),
+				BASH_ONLY_GUIDELINE,
+			];
+		}
 
 		const messages: AgentMessage[] = [];
 		if (trigger.messageType === "custom") {
@@ -3907,15 +3937,21 @@ export class AgentSession {
 						createToolDefinitionFromAgentTool(tool),
 					]),
 				)
-			: createAllToolDefinitions(this._cwd, {
-					read: { autoResizeImages },
-					bash: {
-						commandPrefix: shellCommandPrefix,
-						shellPath,
-						operationsProviders: () => Object.fromEntries(this._bashOperationsBackends),
-						operationsProvider: () => this._activeBashOperations,
-					},
-				});
+			: filterToolDefinitions(
+					createAllToolDefinitions(this._cwd, {
+						read: { autoResizeImages },
+						bash: {
+							commandPrefix: shellCommandPrefix,
+							shellPath,
+							operationsProviders: () => Object.fromEntries(this._bashOperationsBackends),
+							operationsProvider: () => this._activeBashOperations,
+						},
+					}),
+					// A bash-only build (the buildconfig.json `toolset: "bash"` component)
+					// registers the shell tools alone, so the rest cannot be activated by
+					// settings, `--tools`, a resumed transcript, or a module.
+					isBashOnlyBuild() ? BASH_ONLY_TOOL_NAMES : undefined,
+				);
 
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
@@ -3939,7 +3975,9 @@ export class AgentSession {
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
-			: ["read", "bash", "edit", "write"];
+			: this._baseToolDefinitions.has("read")
+				? [...DEFAULT_TOOL_NAMES]
+				: ["bash"];
 		const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
 		this._refreshToolRegistry({
 			activeToolNames: baseActiveToolNames,
@@ -3961,12 +3999,10 @@ export class AgentSession {
 		beforeSessionStart: RuntimeReloadCallbacks["beforeSessionStart"],
 		onInvalidated: () => void,
 	): Promise<void> {
+		const builtinToolNames = isBashOnlyBuild() ? BASH_ONLY_TOOL_NAMES : DEFAULT_TOOL_NAMES;
 		const getDefaultTools = () =>
 			this._usesDefaultTools
-				? applyToolModifiers(
-						this.settingsManager.getDefaultTools() ?? DEFAULT_TOOL_NAMES,
-						this._defaultToolModifiers,
-					)
+				? applyToolModifiers(this.settingsManager.getDefaultTools() ?? builtinToolNames, this._defaultToolModifiers)
 				: [];
 		const previousDefaultTools = new Set(getDefaultTools());
 		onInvalidated();

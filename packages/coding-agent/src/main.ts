@@ -66,7 +66,7 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "./core/tru
 import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { DEFAULT_WEBUI_PORT, InteractiveMode, runPrintMode, runRpcMode, runWebuiMode } from "./modes/index.ts";
 import { initTheme } from "./modes/interactive/theme/theme.ts";
-import { BUILTIN_MODULES } from "./modules/index.ts";
+import { enabledModules } from "./modules/index.ts";
 import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./modules/llama/managed.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 
@@ -602,10 +602,12 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 	resetTimings();
 	const requestedModules = parseModulesFlag(args);
-	const modules = [
-		...(requestedModules ? BUILTIN_MODULES.filter((module) => requestedModules.has(module.name)) : BUILTIN_MODULES),
-		...(options?.modules ?? []),
-	];
+	// A flavor can leave out built-in modules; `--modules` narrows that set, it
+	// cannot add one the build does not carry.
+	const builtinModules = requestedModules
+		? enabledModules().filter((module) => requestedModules.has(module.name))
+		: enabledModules();
+	const modules = [...builtinModules, ...(options?.modules ?? [])];
 	const offlineMode = args.includes("--offline") || isTruthyEnvFlag(process.env.NANOPI_OFFLINE);
 	if (offlineMode) {
 		process.env.NANOPI_OFFLINE = "1";

@@ -71,11 +71,15 @@ jobs:
           node "${build_root}/nanopi-${VERSION}/scripts/build-single-file.mjs" \
             --offline-model-data \
             --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
-          # Minimal flavor bundles from the same built tree; only the bundle
-          # step is flavor-aware, so no second install/build is needed.
-          NANOPI_BUILD_FLAVOR=minimal \
-            node "${build_root}/nanopi-${VERSION}/scripts/build-coding-agent-single-file.mjs" \
-            --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries/nanopi-minimal.js"
+          # Smaller flavor bundles from the same built tree; only the bundle
+          # step is flavor-aware, so no second install/build is needed. `base`
+          # drops the bundled extras and peripherals, `minimal` additionally
+          # registers the shell tools alone.
+          for flavor in base minimal; do
+            NANOPI_BUILD_FLAVOR="${flavor}" \
+              node "${build_root}/nanopi-${VERSION}/scripts/build-coding-agent-single-file.mjs" \
+              --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries/nanopi-${flavor}.js"
+          done
 
       - name: Prepare GitHub release payload
         run: |
@@ -100,15 +104,17 @@ jobs:
           FULL_VERSION="$(version_full "${VERSION}")"
 
           test -f nanopi.js
+          test -f nanopi-base.js
           test -f nanopi-minimal.js
           test -f "nanopi-sidecars-${FULL_VERSION}.tgz"
-          cp nanopi.js nanopi-minimal.js "nanopi-sidecars-${FULL_VERSION}.tgz" "${GITHUB_WORKSPACE}/release-assets/"
+          cp nanopi.js nanopi-base.js nanopi-minimal.js "nanopi-sidecars-${FULL_VERSION}.tgz" "${GITHUB_WORKSPACE}/release-assets/"
 
           cd "${GITHUB_WORKSPACE}/release-assets"
           source_asset="nanopi-${VERSION}-source.tar.gz"
           release_assets=(
             "${source_asset}"
             nanopi.js
+            nanopi-base.js
             nanopi-minimal.js
             "nanopi-sidecars-${FULL_VERSION}.tgz"
           )
@@ -153,6 +159,8 @@ jobs:
 
           node release-assets/nanopi.js --help
           node release-assets/nanopi.js --version
+          node release-assets/nanopi-base.js --help
+          node release-assets/nanopi-base.js --version
           node release-assets/nanopi-minimal.js --help
           node release-assets/nanopi-minimal.js --version
 
@@ -196,6 +204,7 @@ jobs:
           expected_assets=(
             "${source_asset}"
             nanopi.js
+            nanopi-base.js
             nanopi-minimal.js
             "nanopi-sidecars-${FULL_VERSION}.tgz"
             SHA256SUMS
@@ -228,6 +237,7 @@ jobs:
           release_assets=(
             "${source_asset}"
             nanopi.js
+            nanopi-base.js
             nanopi-minimal.js
             "nanopi-sidecars-${FULL_VERSION}.tgz"
             SHA256SUMS

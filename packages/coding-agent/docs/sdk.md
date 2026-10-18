@@ -107,6 +107,19 @@ Each boundary can be supplied explicitly:
 
 Use `DefaultResourceLoader` when you want standard discovery with selected overrides. Supply a custom `ResourceLoader` when the host owns resource storage and discovery completely.
 
+<a id="build-flavors"></a>
+
+### Build flavors
+
+A published package and a source checkout carry every built-in module. Bundled
+builds may carry fewer (the root `buildconfig.json` flavors): each module is a
+`module/<name>` component, and the CLI passes `enabledModules()` (the modules the
+build carries) to the resource loader. Build-side helpers are exported too:
+`isBuildComponentEnabled("webui")` for a component switch, `isBashOnlyBuild()`
+for the shell-tools-only flavor, and the module list itself as `BUILTIN_MODULES`.
+`enabledModules()` and `isBashOnlyBuild()` describe the running build, so guard
+code that assumes a tool or module is present.
+
 <a id="inlineextension"></a>
 
 Modules are the only extension mechanism: pass `SessionModule` objects (`{ name, factory }`, where the factory receives a `ModuleApi`) to `DefaultResourceLoader` via the `modules` option, or compose them in your own entry point with `createAgentSession({ modules })`. Nothing is loaded from disk; the built-in modules (run modes, llama.cpp, compaction, the bundled extras) are compiled in.

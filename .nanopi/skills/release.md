@@ -13,7 +13,7 @@ Run repository commands from the repo root (two directories above this skill), u
 
 **GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`. The `npm run release:patch|minor` scripts are obsolete; do not use them.
 
-Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-minimal.js` (single-file, `minimal` flavor: no webui, export templates, docs, examples, or OAuth flows), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`.
+Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, webui, export templates, sidecars, and OAuth flows), `nanopi-minimal.js` (`minimal` flavor: `base` with only the shell tools registered), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
 
 1. **Update CHANGELOGs**: ask the user whether they ran the `/cl` prompt on the latest commit on `main`. If not, they must run `/cl` first to audit and update each package's `[Unreleased]` section before releasing.
 
@@ -27,10 +27,11 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
 
    Then in every `packages/*/CHANGELOG.md` that has one, rename `## [Unreleased]` to `## [<YYYYMMDD>]` (no date suffix), commit everything as `Release v<YYYYMMDD>`, tag `v<YYYYMMDD>` on that commit, then add a fresh empty `## [Unreleased]` heading at the top of each changelog and commit as `Add [Unreleased] sections for next cycle` (after the tag, so the tagged tree has no empty sections). Push `main` and the tag to GitHub. Pushing the tag is what starts the release build; the next push to `main` mirrors the tag to CNB.
 
-3. **Local smoke test** (optional but recommended before tagging): build both flavors from the repo and smoke test from outside the repo:
+3. **Local smoke test** (optional but recommended before tagging): build the flavors from the repo and smoke test from outside the repo:
 
    ```bash
    node scripts/build-single-file.mjs --out /tmp/nanopi-bundles
+   NANOPI_BUILD_FLAVOR=base node scripts/build-coding-agent-single-file.mjs --out /tmp/nanopi-bundles/nanopi-base.js
    NANOPI_BUILD_FLAVOR=minimal node scripts/build-coding-agent-single-file.mjs --out /tmp/nanopi-bundles/nanopi-minimal.js
 
    cd /tmp
@@ -38,12 +39,16 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
    /tmp/nanopi-bundles/nanopi.js --version
    /tmp/nanopi-bundles/nanopi.js --list-models
    /tmp/nanopi-bundles/nanopi.js -p "Say exactly: ok"
+   /tmp/nanopi-bundles/nanopi-base.js --help
+   /tmp/nanopi-bundles/nanopi-base.js --version
    /tmp/nanopi-bundles/nanopi-minimal.js --help
    /tmp/nanopi-bundles/nanopi-minimal.js --version
    ```
 
+   The minimal bundle registers the shell tools alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup.
+
    Verify startup, model/account listing, and at least one real prompt with the intended default provider. Start each bundle bare in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk. Load and follow [interactive-testing.md](interactive-testing.md) for the tmux workflow; start each release binary from `/tmp`, not the repo root.
 
-4. **CI builds and publishes**: pushing the `vYYYYMMDD` tag triggers `.github/workflows/build-binaries.yml`. It archives the tagged source, builds both single-file bundles from that archive, smoke tests them on Linux/macOS/Windows, stages a draft GitHub Release with the assets above, then publishes it. No npm step runs. Do not rerun the pipeline after the release published.
+4. **CI builds and publishes**: pushing the `vYYYYMMDD` tag triggers `.github/workflows/build-binaries.yml`. It archives the tagged source, builds the single-file bundles from that archive, smoke tests them on Linux/macOS/Windows, stages a draft GitHub Release with the assets above, then publishes it. No npm step runs. Do not rerun the pipeline after the release published.
 
 5. **If a CI step fails**: the cleanup job deletes the staged draft. Inspect the failed job and fix `main`. A pushed tag cannot be rebuilt as-is if it predates the fix, so dispatch the workflow manually with `tag` set to the release tag and `source_ref` pointing at the fixed commit on `main` (Actions page → Build Binaries → Run workflow, or `gh workflow run build-binaries.yml -f tag=<tag> -f source_ref=<sha>`); the tag stays where it is and assets are built from `source_ref`. A published release is never mutated; if the tag itself is wrong, ship the next date release.

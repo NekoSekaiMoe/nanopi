@@ -16,8 +16,53 @@
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
-		"modes": {
-			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); disabled flavors alias the module to an inert stub"
+		"toolset": {
+			"description": "Built-in tool set the build registers: \"standard\" (read, bash, edit, write plus the optional tools) or \"bash\" (the shell tools alone). Flavors set it as a name, not a switch; group keys like \"module/*\" work here too"
+		},
+		"module/extra": {
+			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); a flavor that drops it aliases the module to an inert stub"
+		},
+		"module/llama.cpp": {
+			"description": "llama.cpp provider and llama-server supervisor"
+		},
+		"module/builtin-commands": {
+			"description": "Built-in slash commands (/compact, /context, /status, /init)"
+		},
+		"module/codex-compaction": {
+			"description": "Codex-style compaction and its post-compaction warning"
+		},
+		"module/ask-lite": {
+			"description": "ask_user_question tool and its dialog"
+		},
+		"module/mcp-lite": {
+			"description": "MCP client, subagent-only mcp__* tools"
+		},
+		"module/pi-fake-codex": {
+			"description": "Codex-compatible provider fingerprint"
+		},
+		"module/pi-fake-opencode": {
+			"description": "opencode-compatible provider fingerprint"
+		},
+		"module/pi-lsp-mini": {
+			"description": "LSP tools"
+		},
+		"module/pi-rewind": {
+			"description": "Session rewind command"
+		},
+		"module/pi-simplify": {
+			"description": "Code simplification command"
+		},
+		"module/pi-smart-flow": {
+			"description": "Smart flow tool routing"
+		},
+		"module/pi-subagent-mini": {
+			"description": "subagent tool and child sessions"
+		},
+		"module/pi-ui": {
+			"description": "UI enhancements module"
+		},
+		"module/todo-lite": {
+			"description": "todo tool and its rendering"
 		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand)"
@@ -50,6 +95,53 @@
 			"description": "xAI OAuth login flow"
 		}
 	},
+	"moduleBundles": {
+		"extra": {
+			"source": "packages/extra/src/index.ts"
+		},
+		"llama.cpp": {
+			"source": "packages/coding-agent/src/modules/llama/index.ts"
+		},
+		"builtin-commands": {
+			"source": "packages/coding-agent/src/modules/builtin-commands/index.ts"
+		},
+		"codex-compaction": {
+			"source": "packages/coding-agent/src/modules/codex-compaction/index.ts"
+		},
+		"ask-lite": {
+			"source": "packages/coding-agent/src/extras/ask-lite/index.ts"
+		},
+		"mcp-lite": {
+			"source": "packages/coding-agent/src/extras/mcp-lite/src/index.ts"
+		},
+		"pi-fake-codex": {
+			"source": "packages/coding-agent/src/extras/pi-fake-codex/src/index.ts"
+		},
+		"pi-fake-opencode": {
+			"source": "packages/coding-agent/src/extras/pi-fake-opencode/src/index.ts"
+		},
+		"pi-lsp-mini": {
+			"source": "packages/coding-agent/src/extras/pi-lsp-mini/src/index.ts"
+		},
+		"pi-rewind": {
+			"source": "packages/coding-agent/src/extras/pi-rewind/src/index.ts"
+		},
+		"pi-simplify": {
+			"source": "packages/coding-agent/src/extras/pi-simplify/src/index.ts"
+		},
+		"pi-smart-flow": {
+			"source": "packages/coding-agent/src/extras/pi-smart-flow/src/index.ts"
+		},
+		"pi-subagent-mini": {
+			"source": "packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts"
+		},
+		"pi-ui": {
+			"source": "packages/coding-agent/src/extras/pi-ui/src/index.ts"
+		},
+		"todo-lite": {
+			"source": "packages/coding-agent/src/extras/todo-lite/index.ts"
+		}
+	},
 	"flavors": {
 		"full": {
 			"description": "Everything included; the only flavor the npm packages are published from",
@@ -57,11 +149,46 @@
 				"*": true
 			}
 		},
-		"minimal": {
-			"description": "Core CLI only: no webui, export templates, docs, examples, or OAuth flows",
+		"base": {
+			"description": "Core CLI with every builtin module but the bundled extras, and only the standard tool set; no webui, export templates, sidecars, or OAuth flows",
 			"components": {
-				"*": false
+				"*": false,
+				"module/*": true,
+				"module/ask-lite": false,
+				"module/mcp-lite": false,
+				"module/pi-fake-codex": false,
+				"module/pi-fake-opencode": false,
+				"module/pi-lsp-mini": false,
+				"module/pi-rewind": false,
+				"module/pi-simplify": false,
+				"module/pi-smart-flow": false,
+				"module/pi-subagent-mini": false,
+				"module/pi-ui": false,
+				"module/todo-lite": false
+			}
+		},
+		"minimal": {
+			"description": "base plus the bash tool set: the shell tools are the only tools the build registers, and only that tool set ships",
+			"components": {
+				"*": false,
+				"module/*": true,
+				"module/ask-lite": false,
+				"module/mcp-lite": false,
+				"module/pi-fake-codex": false,
+				"module/pi-fake-opencode": false,
+				"module/pi-lsp-mini": false,
+				"module/pi-rewind": false,
+				"module/pi-simplify": false,
+				"module/pi-smart-flow": false,
+				"module/pi-subagent-mini": false,
+				"module/pi-ui": false,
+				"module/todo-lite": false,
+				"toolset": "bash"
 			}
 		}
+	},
+	"toolsetComponents": {
+		"standard": {},
+		"bash": {}
 	}
 }
