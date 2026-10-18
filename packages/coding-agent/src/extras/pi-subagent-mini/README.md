@@ -8,8 +8,8 @@ One tool (`subagent`), four actions, ~296 prompt tokens (vs 1,563 for the
 
 | action | what it does |
 | --- | --- |
-| `spawn` | Start an isolated child pi session (`pi --mode json -p --no-session -ne`) with a tool allowlist; returns a `jobId` immediately |
-| `wait` | Block until done (max 120s), return full report |
+| `spawn` | Start an isolated child session (`--mode json -p --no-session`) with a tool allowlist; returns a `jobId` immediately |
+| `wait` | Block until done (default 120s, `waitSec` to change), return the report |
 | `status` | State + report tail |
 | `kill` | Stop it |
 
@@ -20,7 +20,9 @@ child's intermediate work.
 ## Parameters
 
 - `action`: spawn / wait / status / kill
-- `task` (spawn): full task incl. role, e.g. "You are a code reviewer; review X and report findings"
+- `task` (spawn): the brief, written as `GOAL` / `CONTEXT` / `EXPECTED OUTPUT` / `STOP RULES`
+- `description` (spawn): one-line scope for status and the notification (defaults to the GOAL line)
+- `waitSec` (wait): how long to block; a timeout returns the job as still running
 - `tools` (spawn): comma list, default `read,bash,grep,find,ls`; add `write,edit` only when the child should modify files
 - `cwd` (spawn): working directory (default: session cwd)
 - `model` / `timeoutSec` (spawn): optional; timeout default 600s
@@ -29,14 +31,24 @@ child's intermediate work.
 Design trade-offs (deliberate, to stay lean): no agent registry, no mailbox —
 follow-up questions are handled by spawning a new subagent with context from
 the previous report (stated in the tool description so the model knows).
-Max 4 concurrent subagents. `-ne` in children also prevents recursive spawning.
+Max 4 concurrent subagents, and only one of them may write at a time: `bash`
+makes any child writable in practice, so writers are serialized rather than
+told apart file by file. Recursion is prevented at the execution layer (the
+child's module set has no subagent tool) and at the prompt layer (the
+description opens by saying the subagent is not the main agent).
 
 ## Notes
 
-- Children are fully isolated: own minimal prompt (~1.7k tokens), ephemeral
-  (`--no-session`), launched with `--no-skills --no-prompt-templates
-  --no-context-files` so no extra context leaks in; results truncated at 6k
-  chars in the notification (`action=status` shows the rest).
+- Children start from their own prompt (~1.7k tokens) and keep no session
+  (`--no-session`), with `--no-skills --no-prompt-templates`. `AGENTS.md` stays
+  on: the child has `bash` and can commit, so the repository rules (no `git add
+  -A`, `pnpm run check`, no emoji) are the cheapest thing to keep.
+- The notification clips a long report head-and-tail so the conclusion survives;
+  the full text goes to the session as a `subagent-job` entry, which is also how
+  `/compact` and a restart learn which subagents ran.
+- Child tools default to the parent's declared order, matching its `<rules>`
+  block. Tool order is the tail of the Anthropic cached prefix, so a different
+  order means a full cache miss on every child turn.
 - Uses the same subprocess mechanism as the big suites (`--mode json` NDJSON
   events), just without the orchestration/TUI/config layers.
 - Interactive mode shows a live `subagent-async` widget (one row per running

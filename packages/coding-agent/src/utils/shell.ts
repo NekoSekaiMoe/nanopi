@@ -182,9 +182,13 @@ export function killTrackedDetachedChildren(): void {
 }
 
 /**
- * Kill a process and all its children (cross-platform)
+ * Kill a process and all its children (cross-platform).
+ *
+ * `signal` applies on POSIX only; Windows keeps using `taskkill /F`, which has no
+ * graceful variant. A group kill is what reaps the grandchildren, so a caller that
+ * spawns with `detached: true` gets the whole tree, not just the direct child.
  */
-export function killProcessTree(pid: number): void {
+export function killProcessTree(pid: number, signal: NodeJS.Signals = "SIGKILL"): void {
 	if (process.platform === "win32") {
 		// Use the trusted System32 executable so cleanup does not depend on PATH.
 		try {
@@ -203,13 +207,13 @@ export function killProcessTree(pid: number): void {
 			// Ignore errors if taskkill fails.
 		}
 	} else {
-		// Use SIGKILL on Unix/Linux/Mac
+		// Signal the whole process group on Unix/Linux/Mac.
 		try {
-			process.kill(-pid, "SIGKILL");
+			process.kill(-pid, signal);
 		} catch {
 			// Fallback to killing just the child if process group kill fails
 			try {
-				process.kill(pid, "SIGKILL");
+				process.kill(pid, signal);
 			} catch {
 				// Process already dead
 			}
