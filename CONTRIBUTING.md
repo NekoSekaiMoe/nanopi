@@ -61,7 +61,7 @@ Before submitting a PR:
 
 ```bash
 pnpm run check
-./test.sh
+node ./test.mjs
 ```
 
 Both must pass.

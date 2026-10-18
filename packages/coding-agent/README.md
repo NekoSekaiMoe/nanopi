@@ -58,16 +58,16 @@ Clone the repository, install its dependencies, and run nanopi from source:
 git clone https://github.com/NekoSekaiMoe/nanopi
 cd nanopi
 npm install --ignore-scripts
-./nanopi-test.sh
+node ./nanopi-test.mjs
 ```
 
-`nanopi-test.sh` can be called from any directory and preserves the caller's working directory.
+`nanopi-test.mjs` can be called from any directory and preserves the caller's working directory.
 
 Before submitting changes, run:
 
 ```bash
 npm run check
-./test.sh
+node ./test.mjs
 ```
 
 Read [CONTRIBUTING.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/CONTRIBUTING.md) before opening an issue or pull request. It defines the contribution gate, issue quality bar, and required checks. Read [AGENTS.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/AGENTS.md) for repository-specific implementation, testing, dependency, and release rules.

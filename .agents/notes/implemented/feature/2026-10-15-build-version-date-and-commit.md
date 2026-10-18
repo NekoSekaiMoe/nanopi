@@ -68,7 +68,7 @@ note's layout decisions still hold.
 - Bump the package.json version per commit (`<date>.<n>.0` on every merge):
   rejected — it breaks lockstep versioning, the release flow in
   `.agents/skills/release.md`, and the tag/package-version check in
-  `create-source-archive.sh`, all for a string that git already knows.
+  `create-source-archive.mjs`, all for a string that git already knows.
 - Truncate the directory row from the head instead (`…/nested/finalproject`):
   rejected — it keeps the current directory but loses the anchor that says
   which checkout of the tree this is; both ends are cheap to show.

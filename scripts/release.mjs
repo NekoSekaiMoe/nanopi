@@ -225,7 +225,7 @@ if (process.env.NANOPI_RELEASE_SKIP_TESTS === "1") {
 	console.log("Skipping tests (NANOPI_RELEASE_SKIP_TESTS=1)\n");
 } else {
 	console.log("Running tests...");
-	run("./test.sh");
+	run(`"${process.execPath}" ./test.mjs`);
 	console.log();
 }
 

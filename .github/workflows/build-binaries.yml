@@ -55,7 +55,7 @@ jobs:
 
           VERSION="${RELEASE_TAG#v}"
           mkdir -p release-assets
-          ./scripts/create-source-archive.sh \
+          node scripts/create-source-archive.mjs \
             --version "${VERSION}" \
             --ref HEAD \
             --out "release-assets/nanopi-${VERSION}-source.tar.gz"
@@ -68,7 +68,7 @@ jobs:
           build_root="$(mktemp -d)"
           trap 'rm -rf "${build_root}"' EXIT
           tar -xzf "release-assets/nanopi-${VERSION}-source.tar.gz" -C "${build_root}"
-          "${build_root}/nanopi-${VERSION}/scripts/build-single-file.sh" \
+          node "${build_root}/nanopi-${VERSION}/scripts/build-single-file.mjs" \
             --offline-model-data \
             --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
           # Minimal flavor bundles from the same built tree; only the bundle
