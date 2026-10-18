@@ -66,6 +66,7 @@ import {
 	classifierErrorResult,
 	imageErrorResult,
 } from "@nanopi/pi-ai/utils/model-operations";
+import { isProviderIncluded } from "../build-components.ts";
 import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
@@ -252,18 +253,24 @@ export class ModelRuntime implements Models {
 				? new FileModelsStore(options.modelsStorePath ?? join(dirname(modelsPath), "models-store.json"))
 				: new InMemoryCodingAgentModelsStore());
 		const builtinModelDataGeneratedAt = builtinProviderCatalog.getBuiltinModelDataGeneratedAt();
-		const providers = builtinProviderCatalog.builtinProviders().map((provider) => {
-			// OpenRouter narrows the catalog to the models, limits and prices of the user's key.
-			if (provider.id === "openrouter") {
-				return withPersonalizedCatalog(
-					provider,
-					personalizeOpenRouterCatalog,
-					options.catalogBaseUrl,
-					builtinModelDataGeneratedAt,
-				);
-			}
-			return withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt);
-		});
+		// A trimmed build (buildconfig.json `providers` component) has no catalog
+		// data for the providers outside its set, so it registers only those the
+		// build carries. Hand-written `models.json` providers are unaffected.
+		const providers = builtinProviderCatalog
+			.builtinProviders()
+			.filter((provider) => isProviderIncluded(provider.id))
+			.map((provider) => {
+				// OpenRouter narrows the catalog to the models, limits and prices of the user's key.
+				if (provider.id === "openrouter") {
+					return withPersonalizedCatalog(
+						provider,
+						personalizeOpenRouterCatalog,
+						options.catalogBaseUrl,
+						builtinModelDataGeneratedAt,
+					);
+				}
+				return withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt);
+			});
 		const runtime = new ModelRuntime(
 			credentials,
 			config,

@@ -7,7 +7,13 @@ import { createRequire, isBuiltin } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
-import { loadBuildConfig, resolveBuildFlavor, validateFlavorModules } from "./buildconfig.mjs";
+import {
+	loadBuildConfig,
+	readProviderCatalogIds,
+	resolveBuildFlavor,
+	validateFlavorModules,
+	validateFlavorProviders,
+} from "./buildconfig.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
@@ -22,12 +28,15 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // Build flavors (buildconfig.json) control peripheral components. The
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
-const { flavor, components, toolset } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
 validateOAuthFlowRegistry({ repoRoot, components });
 // Every built-in module is a `module/<name>` component; validateFlavorModules
 // fails the build when the module list and buildconfig.json disagree.
 const buildConfig = loadBuildConfig(repoRoot);
 validateFlavorModules(repoRoot, readBuiltinModuleNames(repoRoot));
+// Provider sets name built-in catalogs; validateFlavorProviders fails the build
+// when a set and the generated catalogs in packages/ai disagree.
+validateFlavorProviders(repoRoot, readProviderCatalogIds(repoRoot), flavor);
 const moduleStubDir = mkdtempSync(join(tmpdir(), "nanopi-module-stubs-"));
 const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStubPlugin({
 	stubDir: moduleStubDir,
@@ -130,6 +139,7 @@ function commonBuildOptions() {
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
+			NANOPI_BUILD_PROVIDERS: JSON.stringify(providers),
 		},
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",
