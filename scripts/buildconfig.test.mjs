@@ -1,9 +1,17 @@
-import { strictEqual, throws } from "node:assert";
+import assert, { strictEqual, throws } from "node:assert";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
-import { BUILD_FLAVOR_ENV, loadBuildConfig, parseFlavorArg, resolveBuildFlavor, resolveFlavorComponents } from "./buildconfig.mjs";
+import {
+	BUILD_FLAVOR_ENV,
+	loadBuildConfig,
+	parseFlavorArg,
+	resolveBuildFlavor,
+	resolveFlavorComponents,
+	resolveFlavorToolset,
+	validateFlavorModules,
+} from "./buildconfig.mjs";
 
 const validConfig = {
 	defaultFlavor: "full",
@@ -161,5 +169,97 @@ describe("resolveBuildFlavor selection order", () => {
 
 	it("throws on unknown selected flavors", () => {
 		throws(() => resolveBuildFlavor(tempDirs.at(-1), { argv: ["--flavor", "nope"], env: {} }), /Unknown build flavor "nope"/);
+	});
+});
+
+describe("toolset components", () => {
+	const config = {
+		defaultFlavor: "full",
+		components: { toolset: { description: "Tool set" }, webui: {} },
+		toolsetComponents: { standard: {}, bash: {} },
+		flavors: {
+			full: { components: { "*": true } },
+			bashOnly: { components: { "*": true, toolset: "bash" } },
+		},
+	};
+
+	it("defaults to standard when a flavor names no tool set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		strictEqual(resolveFlavorToolset(loadBuildConfig(dir), "full"), "standard");
+		strictEqual(resolveBuildFlavor(dir, { argv: ["--flavor", "full"], env: {} }).toolset, "standard");
+	});
+
+	it("reads the named tool set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const resolved = resolveBuildFlavor(dir, { argv: ["--flavor", "bashOnly"], env: {} });
+		strictEqual(resolved.toolset, "bash");
+		strictEqual(resolved.components.toolset, "bash");
+	});
+
+	it("rejects an undeclared tool set", () => {
+		const dir = writeConfig({
+			...config,
+			flavors: { ...config.flavors, broken: { components: { "*": true, toolset: "nope" } } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /sets "toolset" to an unknown tool set/);
+	});
+
+	it("rejects a toolset component without a toolsetComponents map", () => {
+		const dir = writeConfig({ ...config, toolsetComponents: undefined });
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /declares "toolset" without a "toolsetComponents" map/);
+	});
+});
+
+describe("module components", () => {
+	const modules = ["alpha", "beta"];
+	const config = {
+		defaultFlavor: "full",
+		components: { "module/alpha": {}, "module/beta": {} },
+		moduleBundles: {
+			alpha: { source: "packages/coding-agent/src/modules/alpha/index.ts" },
+			beta: { source: "packages/coding-agent/src/extras/beta/index.ts" },
+		},
+		flavors: {
+			full: { components: { "*": true } },
+			few: { components: { "*": true, "module/beta": false } },
+			group: { components: { "*": false, "module/*": true } },
+		},
+	};
+
+	it("allows a group key to set every module at once", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const components = resolveFlavorComponents(loadBuildConfig(dir), "group");
+		strictEqual(components["module/alpha"], true);
+		strictEqual(components["module/beta"], true);
+	});
+
+	it("lets a named module override the group key", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const components = resolveFlavorComponents(loadBuildConfig(dir), "few");
+		strictEqual(components["module/alpha"], true);
+		strictEqual(components["module/beta"], false);
+	});
+
+	it("rejects a module bundle without its component", () => {
+		const dir = writeConfig({
+			...config,
+			moduleBundles: { ...config.moduleBundles, gamma: { source: "packages/coding-agent/src/x.ts" } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /entry "gamma" has no "module\/gamma" component/);
+	});
+
+	it("rejects an out-of-sync module list", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		throws(() => validateFlavorModules(dir, ["alpha"]), /"moduleBundles" does not list every builtin module/);
+		throws(() => validateFlavorModules(dir, ["alpha", "beta", "gamma"]), /modules without a "module\/" component: gamma/);
+		assert.doesNotThrow(() => validateFlavorModules(dir, modules));
 	});
 });

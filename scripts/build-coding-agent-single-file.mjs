@@ -26,7 +26,9 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
-import { resolveBuildFlavor } from "./buildconfig.mjs";
+import { loadBuildConfig, resolveBuildFlavor, validateFlavorModules } from "./buildconfig.mjs";
+import { createModuleStubPlugin } from "./build-modules.mjs";
+import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -41,8 +43,12 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // Build flavors (buildconfig.json) drop peripheral components from the
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
-const { flavor, components } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset } = resolveBuildFlavor(repoRoot);
 validateOAuthFlowRegistry({ repoRoot, components });
+// Every built-in module is a `module/<name>` component; a flavor can drop one,
+// in which case its code stays out of the single file (see build-modules.mjs).
+const buildConfig = loadBuildConfig(repoRoot);
+validateFlavorModules(repoRoot, readBuiltinModuleNames(repoRoot));
 const isComponentEnabled = (name) => components[name] !== false;
 
 const outArgs = process.argv.slice(2);
@@ -300,19 +306,13 @@ const buildCommit = execFileSync("git", ["rev-parse", "HEAD"], {
 // alias the bundled-oauth registration module to a shim registering only the
 // enabled flows. load.ts's component guard fails disabled flows cleanly.
 const enabledFlows = OAUTH_FLOWS.filter((flow) => isComponentEnabled(oauthComponentName(flow)));
-const plugins = [httpsProxyAgentNamedExportPlugin];
-if (components["modes"] === false) {
-	// Same inert-stub alias as the bundle build: the modes module stays out of
-	// the single-file artifact entirely.
-	plugins.unshift({
-		name: "pi-extra-disabled-stub",
-		setup(build) {
-			build.onResolve({ filter: /^@nanopi\/pi-extra$/ }, () => ({
-				path: join(repoRoot, "scripts", "pi-extra-disabled-stub.mjs"),
-			}));
-		},
-	});
-}
+const moduleStubDir = mkdtempSync(join(tmpdir(), "nanopi-module-stubs-"));
+const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStubPlugin({
+	stubDir: moduleStubDir,
+	modules: resolveModuleBundles(repoRoot, buildConfig),
+	components,
+});
+const plugins = [moduleStubPlugin, httpsProxyAgentNamedExportPlugin];
 let shimDir;
 if (enabledFlows.length < OAUTH_FLOWS.length) {
 	shimDir = mkdtempSync(join(tmpdir(), "nanopi-bundled-oauth-"));
@@ -354,6 +354,7 @@ try {
 			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
+			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
 		},
 		entryPoints: [entryPoint],
 		external: Array.from(allowedExternalPackages),
@@ -375,6 +376,7 @@ try {
 	});
 } finally {
 	if (shimDir) rmSync(shimDir, { recursive: true, force: true });
+	rmSync(moduleStubDir, { recursive: true, force: true });
 }
 
 const unexpected = new Set();
@@ -405,7 +407,11 @@ chmodSync(outputFilePath, 0o755);
 const mib = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
 const outputBytes = statSync(outputFilePath).size;
 const sidecarCount = sidecarManifest.sources.reduce((total, source) => total + source.files.length, 0);
-console.log(`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor})`);
+console.log(
+	`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
+		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
+		")",
+);
 console.log(
 	`  embedded assets: ${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed; sidecar manifest: ${sidecarCount} files; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
 );

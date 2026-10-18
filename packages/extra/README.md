@@ -6,9 +6,9 @@ bridge for [nanopi](https://github.com/NekoSekaiMoe/nanopi).
 This package is a first-party module of the nanopi CLI, not a user-installable
 extension: the coding-agent registers `extraInlineExtension` as a hidden
 built-in and the webui server reads `extraBridge` in-process. The
-`modes` build component (buildconfig.json) controls inclusion; flavors that
-disable it alias this module to an inert stub, leaving no flags, commands,
-badges, prompts, or webui selector behind.
+The `module/extra` build component (buildconfig.json) controls inclusion;
+flavors that disable it alias this module to an inert stub, leaving no flags,
+commands, badges, prompts, or webui selector behind.
 
 ## Features
 

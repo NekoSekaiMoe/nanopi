@@ -194,6 +194,19 @@ export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): R
 	};
 }
 
+/**
+ * Keep only the named tool definitions, in name order. `undefined` keeps all
+ * of them. Bash-only builds register the shell tools alone, so the rest cannot
+ * be activated by settings, `--tools`, a resumed transcript, or a module.
+ */
+export function filterToolDefinitions<T extends Record<string, unknown>>(
+	definitions: T,
+	names: readonly string[] | undefined,
+): T {
+	if (names === undefined) return definitions;
+	return Object.fromEntries(Object.entries(definitions).filter(([name]) => names.includes(name))) as T;
+}
+
 export function createCodingTools(cwd: string, options?: ToolsOptions): Tool[] {
 	return [
 		createReadTool(cwd, options?.read),
