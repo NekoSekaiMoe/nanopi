@@ -119,13 +119,28 @@ function extractFileOperations(
 // ============================================================================
 
 /**
- * Extract AgentMessage from an entry if it produces one.
- * Returns undefined for entries that don't contribute to LLM context.
+ * Extract the messages a projected entry contributes to a compaction range.
+ * Entries superseded by a later context edit contribute nothing: the projection of
+ * `sourceEntry` never runs forward, so reading it back cannot see that edit.
  */
-function getMessagesFromProjectedEntryForCompaction(entry: ProjectedSessionEntry): AgentMessage[] {
-	if (entry.sourceEntry.type === "compaction") return [];
-	// System messages are prompt state, not conversation; the compaction entry carries their replay.
-	return entry.messages.filter((message) => message.role !== "system");
+function getMessagesFromProjectedEntryForCompaction(
+	entry: ProjectedSessionEntry,
+	entries: ProjectedSessionEntry[],
+	index: number,
+): AgentMessage[] {
+	if (entry.sourceEntry.type === "compaction" || entry.sourceEntry.type === "context_edit") return [];
+	const messages = entry.messages.filter((message) => message.role !== "system");
+	// buildSessionProjection() collapses every context edit into the edited target. The
+	// projected view of that target can drop out of the compaction range while its edit
+	// entry stays inside it, so only the edit entry proves the entry is still visible.
+	// Without this check a replacement survives in one range and its target in the other,
+	// and an omitted entry comes back through the range that kept the raw messages.
+	const editedLater = entries
+		.slice(index + 1)
+		.some(
+			(later) => later.sourceEntry.type === "context_edit" && later.sourceEntry.targetId === entry.sourceEntry.id,
+		);
+	return editedLater ? [] : messages;
 }
 
 /** Result from compact() - SessionManager adds uuid/parentUuid when saving */
@@ -403,6 +418,40 @@ function isTurnStartMessage(message: AgentMessage): boolean {
 			return false;
 	}
 	return false;
+}
+
+/** Collect the tool call ids an assistant message dispatches. */
+function toolCallIds(messages: AgentMessage[]): Set<string> {
+	const ids = new Set<string>();
+	for (const message of messages) {
+		if (message.role !== "assistant") continue;
+		for (const block of message.content) {
+			if (block.type === "toolCall") ids.add(block.id);
+		}
+	}
+	return ids;
+}
+
+/**
+ * Throw unless every tool call in `messages` has its result and every result its call.
+ *
+ * A summary is a checkpoint: dropping a call while keeping its result (or the reverse) makes the
+ * provider reject the next request, and no later stage can repair it. The cut point search already
+ * keeps these pairs together; this guard turns a silent regression into a loud one.
+ */
+function assertToolPairsClosed(messages: AgentMessage[], label: string): void {
+	const calls = toolCallIds(messages);
+	const results = new Set<string>();
+	for (const message of messages) {
+		if (message.role === "toolResult") results.add(message.toolCallId);
+	}
+	const unpairedCalls = [...calls].filter((id) => !results.has(id));
+	const unpairedResults = [...results].filter((id) => !calls.has(id));
+	if (unpairedCalls.length > 0 || unpairedResults.length > 0) {
+		throw new Error(
+			`Compaction range ${label} splits tool calls from their results (calls: ${unpairedCalls.join(", ") || "none"}; results: ${unpairedResults.join(", ") || "none"})`,
+		);
+	}
 }
 
 function isTurnStartEntry(entry: SessionEntry): boolean {
@@ -929,16 +978,21 @@ export function prepareCompaction(
 	const firstKeptEntryId = firstKeptEntry.id;
 	const historyEnd = cutPoint.isSplitTurn ? cutPoint.turnStartIndex : cutPoint.firstKeptEntryIndex;
 
-	const messagesToSummarize = projectedEntries
-		.slice(boundaryStart, historyEnd)
-		.flatMap(getMessagesFromProjectedEntryForCompaction);
+	const collect = (start: number, end: number): AgentMessage[] => {
+		const messages: AgentMessage[] = [];
+		for (let i = start; i < end; i++) {
+			messages.push(...getMessagesFromProjectedEntryForCompaction(projectedEntries[i], projectedEntries, i));
+		}
+		return messages;
+	};
+	const messagesToSummarize = collect(boundaryStart, historyEnd);
 	const turnPrefixMessages = cutPoint.isSplitTurn
-		? projectedEntries
-				.slice(cutPoint.turnStartIndex, cutPoint.firstKeptEntryIndex)
-				.flatMap(getMessagesFromProjectedEntryForCompaction)
+		? collect(cutPoint.turnStartIndex, cutPoint.firstKeptEntryIndex)
 		: [];
 
 	if (messagesToSummarize.length === 0 && turnPrefixMessages.length === 0) return undefined;
+	assertToolPairsClosed(messagesToSummarize, "messagesToSummarize");
+	assertToolPairsClosed(turnPrefixMessages, "turnPrefixMessages");
 
 	// Extract file operations from edited model-visible messages and the previous compaction.
 	const fileOps = extractFileOperations(messagesToSummarize, sourceEntries, prevCompactionIndex);
