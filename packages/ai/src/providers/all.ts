@@ -22,6 +22,7 @@ import { metaProvider } from "./meta.ts";
 import { minimaxProvider } from "./minimax.ts";
 import { minimaxCnProvider } from "./minimax-cn.ts";
 import { mistralProvider } from "./mistral.ts";
+import { modalProvider } from "./modal.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
 import { moonshotaiCnProvider } from "./moonshotai-cn.ts";
 import { nvidiaProvider } from "./nvidia.ts";
@@ -33,6 +34,9 @@ import { openrouterProvider } from "./openrouter.ts";
 import { qwenTokenPlanProvider } from "./qwen-token-plan.ts";
 import { qwenTokenPlanCnProvider } from "./qwen-token-plan-cn.ts";
 import { qwenTokenPlanIndividualProvider } from "./qwen-token-plan-individual.ts";
+import { sensenovaProvider } from "./sensenova.ts";
+import { stepfunProvider } from "./stepfun.ts";
+import { stepfunAiProvider } from "./stepfun-ai.ts";
 import { togetherProvider } from "./together.ts";
 import { typesafeProvider } from "./typesafe.ts";
 import { vercelAIGatewayProvider } from "./vercel-ai-gateway.ts";
@@ -151,6 +155,7 @@ export function builtinProviders(): Provider[] {
 		minimaxProvider(),
 		minimaxCnProvider(),
 		mistralProvider(),
+		modalProvider(),
 		moonshotaiProvider(),
 		moonshotaiCnProvider(),
 		nvidiaProvider(),
@@ -162,6 +167,9 @@ export function builtinProviders(): Provider[] {
 		qwenTokenPlanProvider(),
 		qwenTokenPlanCnProvider(),
 		qwenTokenPlanIndividualProvider(),
+		sensenovaProvider(),
+		stepfunProvider(),
+		stepfunAiProvider(),
 		togetherProvider(),
 		typesafeProvider(),
 		vercelAIGatewayProvider(),

@@ -220,6 +220,18 @@ const AI_GATEWAY_BASE_URL = "https://ai-gateway.vercel.sh";
 const AI_GATEWAY_TYPESAFE_BASE_URL = "https://ai-gateway.vercel.sh/typesafe/v1";
 const VERTEX_BASE_URL = "https://{location}-aiplatform.googleapis.com";
 const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
+const SENSENOVA_BASE_URL = "https://token.sensenova.cn/v1";
+const STEPFUN_CN_BASE_URL = "https://api.stepfun.com/v1";
+const STEPFUN_GLOBAL_BASE_URL = "https://api.stepfun.ai/v1";
+const MODAL_BASE_URL = "https://inference.us-west.modal.direct/v1";
+const PLAIN_OPENAI_COMPAT: OpenAICompletionsCompat = {
+	supportsStore: false,
+	supportsDeveloperRole: false,
+	supportsReasoningEffort: false,
+	maxTokensField: "max_tokens",
+	supportsStrictMode: false,
+	supportsLongCacheRetention: false,
+};
 const NVIDIA_HEADERS = {
 	"NVCF-POLL-SECONDS": "3600",
 } as const;
@@ -2408,6 +2420,87 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		}
 
 		models.push(...processBasetenModels(data.baseten));
+
+		// Process SenseNova (China) models
+		if (data.sensenova?.models) {
+			for (const [modelId, model] of Object.entries(data.sensenova.models)) {
+				const m = model as ModelsDevModel;
+				if (m.tool_call !== true) continue;
+				if (m.status === "deprecated") continue;
+
+				models.push({
+					id: modelId,
+					name: m.name || modelId,
+					api: "openai-completions",
+					provider: "sensenova",
+					baseUrl: SENSENOVA_BASE_URL,
+					compat: PLAIN_OPENAI_COMPAT,
+					reasoning: m.reasoning === true,
+					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					cost: getModelsDevCost(m.cost),
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+				});
+				recordModelsDevReasoningOptions("sensenova", modelId, m);
+			}
+		}
+
+		// Process StepFun models (China and Global)
+		const stepfunVariants = [
+			{ source: "stepfun", provider: "stepfun", baseUrl: STEPFUN_CN_BASE_URL },
+			{ source: "stepfun-ai", provider: "stepfun-ai", baseUrl: STEPFUN_GLOBAL_BASE_URL },
+		] as const;
+
+		for (const { source, provider, baseUrl } of stepfunVariants) {
+			const providerModels = data[source]?.models;
+			if (!providerModels) continue;
+
+			for (const [modelId, model] of Object.entries(providerModels)) {
+				const m = model as ModelsDevModel;
+				if (m.tool_call !== true) continue;
+				if (m.status === "deprecated") continue;
+
+				models.push({
+					id: modelId,
+					name: m.name || modelId,
+					api: "openai-completions",
+					provider,
+					baseUrl,
+					compat: PLAIN_OPENAI_COMPAT,
+					reasoning: m.reasoning === true,
+					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					cost: getModelsDevCost(m.cost),
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+				});
+				recordModelsDevReasoningOptions(provider, modelId, m);
+			}
+		}
+
+		// Process Modal models. The OpenAI-compatible Modal endpoint serves
+		// open-weight models; models.dev publishes them under upstream ids.
+		if (data.modal?.models) {
+			for (const [modelId, model] of Object.entries(data.modal.models)) {
+				const m = model as ModelsDevModel;
+				if (m.tool_call !== true) continue;
+				if (m.status === "deprecated") continue;
+
+				models.push({
+					id: modelId,
+					name: m.name || modelId,
+					api: "openai-completions",
+					provider: "modal",
+					baseUrl: MODAL_BASE_URL,
+					compat: PLAIN_OPENAI_COMPAT,
+					reasoning: m.reasoning === true,
+					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					cost: getModelsDevCost(m.cost),
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+				});
+				recordModelsDevReasoningOptions("modal", modelId, m);
+			}
+		}
 
 		// Process OpenCode models (Zen and Go)
 		// API mapping based on provider.npm field:
