@@ -2,6 +2,7 @@
 
 import { ShieldAlert } from "lucide-react";
 import type { PendingPermission } from "@/lib/use-chat";
+import { t } from "@/lib/i18n";
 
 export function PermissionCard({
 	pending,
@@ -22,7 +23,7 @@ export function PermissionCard({
 					</span>
 					<div className="min-w-0 flex-1">
 						<div className="flex items-baseline gap-2">
-							<h3 className="text-[12.5px] font-medium text-foreground">需要确认</h3>
+							<h3 className="text-[12.5px] font-medium text-foreground">{t('需要确认')}</h3>
 							<span className="truncate text-[11.5px] text-muted-foreground">{pending.toolName}</span>
 						</div>
 						<p className="mt-0.5 text-[12px] leading-5 text-muted-foreground">{pending.reason}</p>
@@ -37,21 +38,21 @@ export function PermissionCard({
 								onClick={() => onAnswer("deny")}
 								className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 							>
-								拒绝
+								{t("拒绝")}
 							</button>
 							<button
 								type="button"
 								onClick={() => onAnswer("allow_session")}
 								className="h-8 rounded-lg border border-border px-2.5 text-[12px] text-foreground transition-colors hover:bg-accent"
 							>
-								本次会话允许
+								{t("本次会话允许")}
 							</button>
 							<button
 								type="button"
 								onClick={() => onAnswer("allow")}
 								className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
 							>
-								允许
+								{t("允许")}
 							</button>
 						</div>
 					</div>

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { getLocale, t } from "@/lib/i18n";
 
 export function cn(...inputs: ClassValue[]): string {
 	return twMerge(clsx(inputs));
@@ -14,7 +15,15 @@ export function relativeTime(timestamp: number, now = Date.now()): string {
 	const minute = 60_000;
 	const hour = 3_600_000;
 	const day = 86_400_000;
-	if (diff < minute) return "刚刚";
+	if (getLocale() === "en") {
+		if (diff < minute) return "just now";
+		if (diff < hour) return `${Math.floor(diff / minute)}m ago`;
+		if (diff < day) return `${Math.floor(diff / hour)}h ago`;
+		if (diff < 30 * day) return `${Math.floor(diff / day)}d ago`;
+		if (diff < 365 * day) return `${Math.floor(diff / (30 * day))}mo ago`;
+		return `${Math.floor(diff / (365 * day))}y ago`;
+	}
+	if (diff < minute) return t("刚刚");
 	if (diff < hour) return `${Math.floor(diff / minute)} 分钟前`;
 	if (diff < day) return `${Math.floor(diff / hour)} 小时前`;
 	if (diff < 30 * day) return `${Math.floor(diff / day)} 天前`;
@@ -23,7 +32,7 @@ export function relativeTime(timestamp: number, now = Date.now()): string {
 }
 
 export function timeOfDay(timestamp: number): string {
-	return new Date(asMs(timestamp)).toLocaleTimeString("zh-CN", {
+	return new Date(asMs(timestamp)).toLocaleTimeString(getLocale() === "en" ? "en-US" : "zh-CN", {
 		hour: "2-digit",
 		minute: "2-digit",
 	});

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { UserInputRequestEvent, UserInputResponse } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 interface Answer {
 	declined: boolean;
@@ -53,7 +54,7 @@ export function UserInputCard({
 						<div key={index}>
 							<div className="flex items-baseline gap-2">
 								<span className="text-[11px] font-medium uppercase tracking-[0.06em] text-brand">
-									{question.header || "需要你的输入"}
+									{question.header || t("需要你的输入")}
 								</span>
 								{questions.length > 1 ? (
 									<span className="text-[10.5px] text-muted-foreground">
@@ -100,7 +101,7 @@ export function UserInputCard({
 								<input
 									value={answers[index]?.text ?? ""}
 									onChange={(event) => update(index, { text: event.target.value })}
-									placeholder={question.mode === "text" ? "输入回答" : "或输入自定义回答"}
+									placeholder={question.mode === "text" ? t("输入回答") : t("或输入自定义回答")}
 									className="mt-2 h-8 w-full rounded-lg border border-border bg-background px-2.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/25"
 								/>
 							) : null}
@@ -113,7 +114,7 @@ export function UserInputCard({
 						onClick={() => onAnswer({ declined: true, selected: [], text: null })}
 						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 					>
-						跳过
+						{t("跳过")}
 					</button>
 					<button
 						type="button"
@@ -132,7 +133,7 @@ export function UserInputCard({
 								: "bg-muted text-muted-foreground",
 						)}
 					>
-						提交
+						{t("提交")}
 					</button>
 				</div>
 			</div>

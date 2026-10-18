@@ -2,6 +2,8 @@
 // previous Preact webui API client (MIT) so the Next.js UI keeps the same wire
 // contract.
 
+import { t } from "@/lib/i18n";
+
 const SESSION_KEY = "nanopi.webuiToken";
 
 function readToken(): string {
@@ -57,7 +59,7 @@ export async function pairWithCode(code: string): Promise<void> {
 	});
 	const body = (await response.json().catch(() => ({}))) as { token?: string; error?: string };
 	if (!response.ok || !body.token) {
-		throw new Error(body.error ?? `配对失败（HTTP ${response.status}）`);
+		throw new Error(body.error ?? `${t("配对失败")}（HTTP ${response.status}）`);
 	}
 	storeToken(body.token);
 }
@@ -669,6 +671,22 @@ export async function addAccountModels(
 		body: JSON.stringify({ models }),
 	});
 	return readJson<{ created: string[]; config: ConfigInfo }>(response);
+}
+
+export async function editAccountModel(
+	id: string,
+	modelId: string,
+	body: { reasoning_effort?: string; clear_reasoning_effort?: boolean },
+): Promise<{ config: ConfigInfo }> {
+	const response = await fetch(
+		`/provider-accounts/${encodeURIComponent(id)}/models/${encodeURIComponent(modelId)}`,
+		{
+			method: "PATCH",
+			headers: { "Content-Type": "application/json", ...authHeaders() },
+			body: JSON.stringify(body),
+		},
+	);
+	return readJson<{ config: ConfigInfo }>(response);
 }
 
 export async function deleteAccountModel(id: string, modelId: string): Promise<{ config: ConfigInfo }> {

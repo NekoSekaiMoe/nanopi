@@ -4,6 +4,7 @@ import { Check, ChevronDown, Cpu } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ModelInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export function ModelPicker({
 	models,
@@ -39,7 +40,7 @@ export function ModelPicker({
 				className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-2.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 			>
 				<Cpu className="size-3.5" />
-				配置模型
+				{t("配置模型")}
 			</button>
 		);
 	}
@@ -56,7 +57,7 @@ export function ModelPicker({
 				)}
 			>
 				<Cpu className="size-3.5 shrink-0" strokeWidth={1.75} />
-				<span className="min-w-0 truncate">{current?.model ?? "选择模型"}</span>
+				<span className="min-w-0 truncate">{current?.model ?? t("选择模型")}</span>
 				<ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />
 			</button>
 			{open ? (

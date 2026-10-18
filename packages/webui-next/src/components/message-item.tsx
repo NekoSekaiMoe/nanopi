@@ -11,6 +11,7 @@ import {
 import { Markdown } from "@/components/markdown";
 import type { ReasoningBlock, ToolBlock, UiBlock, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 function toolSummary(block: ToolBlock): string {
 	const display = block.display?.trim();
@@ -77,7 +78,7 @@ export function MessageItem({ message }: { message: UiMessage }) {
 			{message.blocks.length === 0 ? (
 				<div className="flex h-7 items-center gap-2 text-[12px] text-muted-foreground">
 					<Loader2 className="size-3.5 animate-spin" />
-					<span className="shimmer">正在思考</span>
+					<span className="shimmer">{t('正在思考')}</span>
 				</div>
 			) : null}
 			{message.blocks.map((block, index) => (
@@ -102,7 +103,7 @@ function ReasoningView({ block }: { block: ReasoningBlock }) {
 		<details className="group max-w-full text-[12.5px] text-muted-foreground">
 			<summary className="flex cursor-pointer list-none items-center gap-1.5 py-0.5 transition-colors hover:text-foreground/80">
 				<Brain className="size-3.5 shrink-0" strokeWidth={1.75} />
-				<span>思考过程</span>
+				<span>{t('思考过程')}</span>
 				<ChevronRight className="size-3 transition-transform group-open:rotate-90" />
 			</summary>
 			<div className="mt-1 border-l border-border pl-3 leading-[1.6] whitespace-pre-wrap">

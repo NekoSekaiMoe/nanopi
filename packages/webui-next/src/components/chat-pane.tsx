@@ -10,11 +10,12 @@ import { UserInputCard } from "@/components/user-input-card";
 import type { ImageData, ModelInfo, UserInputRequestEvent, UserInputResponse } from "@/lib/api";
 import type { PendingPermission, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 const SUGGESTIONS = [
-	"解释一下这个项目的结构",
-	"找到并修复一个 bug",
-	"为当前代码补充测试",
+	t("解释一下这个项目的结构"),
+	t("找到并修复一个 bug"),
+	t("为当前代码补充测试"),
 ];
 
 export function ChatPane({
@@ -201,7 +202,7 @@ function Welcome({
 	onConfigure: () => void;
 }) {
 	const hour = new Date().getHours();
-	const greeting = hour < 6 ? "夜深了" : hour < 12 ? "早上好" : hour < 18 ? "下午好" : "晚上好";
+	const greeting = hour < 6 ? t("夜深了") : hour < 12 ? t("早上好") : hour < 18 ? t("下午好") : t("晚上好");
 
 	return (
 		<div className="mx-auto flex min-h-full w-full max-w-[840px] flex-col items-center justify-center px-6 py-16 text-center">
@@ -209,17 +210,17 @@ function Welcome({
 			<h1 className="mt-5 text-[26px] font-semibold tracking-[-0.03em] text-foreground">
 				{greeting}
 			</h1>
-			<p className="mt-1.5 text-[14px] text-muted-foreground">今天要完成什么？</p>
+			<p className="mt-1.5 text-[14px] text-muted-foreground">{t('今天要完成什么？')}</p>
 
 			{models.length === 0 ? (
 				<div className="mt-6 flex flex-col items-center gap-2">
-					<p className="text-[12px] text-muted-foreground">还没有配置模型</p>
+					<p className="text-[12px] text-muted-foreground">{t('还没有配置模型')}</p>
 					<button
 						type="button"
 						onClick={onConfigure}
 						className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
 					>
-						去设置
+						{t("去设置")}
 					</button>
 				</div>
 			) : (

@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 import { ModelPicker } from "@/components/model-picker";
 import type { ImageData, ModelInfo } from "@/lib/api";
 import { cn, readImageFile } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export function Composer({
 	value,
@@ -68,7 +69,7 @@ export function Composer({
 										/>
 										<button
 											type="button"
-											aria-label="移除图片"
+											aria-label={t("移除图片")}
 											onClick={(event) => {
 												event.stopPropagation();
 												onImages(images.filter((_, cursor) => cursor !== index));
@@ -86,7 +87,7 @@ export function Composer({
 							ref={ref}
 							value={value}
 							rows={1}
-							placeholder="给 NanoPi 发消息…"
+							placeholder={t("给 NanoPi 发消息…")}
 							onChange={(event) => onChange(event.target.value)}
 							onKeyDown={(event) => {
 								if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) {
@@ -120,8 +121,8 @@ export function Composer({
 							/>
 							<button
 								type="button"
-								aria-label="添加图片"
-								title="添加图片"
+								aria-label={t("添加图片")}
+								title={t("添加图片")}
 								onClick={(event) => {
 									event.stopPropagation();
 									fileRef.current?.click();
@@ -134,8 +135,8 @@ export function Composer({
 							{streaming ? (
 								<button
 									type="button"
-									aria-label="停止"
-									title="停止"
+									aria-label={t("停止")}
+									title={t("停止")}
 									onClick={(event) => {
 										event.stopPropagation();
 										onStop();
@@ -147,8 +148,8 @@ export function Composer({
 							) : (
 								<button
 									type="button"
-									aria-label="发送"
-									title="发送"
+									aria-label={t("发送")}
+									title={t("发送")}
 									disabled={!canSend}
 									onClick={(event) => {
 										event.stopPropagation();
@@ -167,7 +168,7 @@ export function Composer({
 						</div>
 					</div>
 					<p className="pt-1.5 text-center text-[10.5px] text-muted-foreground/70 max-md:hidden">
-						NanoPi 可能会出错，请核对重要信息。
+						{t("NanoPi 可能会出错，请核对重要信息。")}
 					</p>
 				</div>
 			</div>

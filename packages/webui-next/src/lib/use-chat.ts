@@ -16,6 +16,7 @@ import {
 	streamChat,
 } from "@/lib/api";
 import { randomId } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 export interface TextBlock {
 	kind: "text";
@@ -453,7 +454,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 								setNotice(event.message);
 								break;
 							case "rate_limited":
-								setNotice(event.message ?? "请求过于频繁，请稍后再试");
+								setNotice(event.message ?? t("请求过于频繁，请稍后再试"));
 								break;
 							case "error":
 								setError(event.message);
@@ -481,7 +482,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 					setError(message);
 					setMessages((current) =>
 						updateLastAssistant(current, (blocks) =>
-							appendStreamBlock(blocks, "text", `\n\n连接中断：${message}`),
+							appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
 						),
 					);
 				}

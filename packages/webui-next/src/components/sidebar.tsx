@@ -23,6 +23,7 @@ import {
 	openWorkspaceFile,
 } from "@/lib/api";
 import { asMs, cn, relativeTime } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 type SidebarView = "sessions" | "files";
 
@@ -43,10 +44,10 @@ function dayGroup(timestamp: number): string {
 	const start = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
 	const value = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
 	const days = Math.round((start - value) / 86_400_000);
-	if (days <= 0) return "今天";
-	if (days === 1) return "昨天";
-	if (days < 7) return "最近 7 天";
-	return "更早";
+	if (days <= 0) return t("今天");
+	if (days === 1) return t("昨天");
+	if (days < 7) return t("最近 7 天");
+	return t("更早");
 }
 
 export function Sidebar({
@@ -136,15 +137,15 @@ export function Sidebar({
 						NanoPi
 					</div>
 					<div className="truncate text-[10.5px] leading-3 text-muted-foreground">
-						{projectName || "本地工作区"}
+						{projectName || t("本地工作区")}
 					</div>
 				</div>
 				{mobile ? (
-					<IconButton label="关闭导航" onClick={onClose}>
+					<IconButton label={t("关闭导航")} onClick={onClose}>
 						<X className="size-[18px]" strokeWidth={1.75} />
 					</IconButton>
 				) : (
-					<IconButton label="新建会话" onClick={onNew}>
+					<IconButton label={t("新建会话")} onClick={onNew}>
 						<Plus className="size-[18px]" strokeWidth={1.75} />
 					</IconButton>
 				)}
@@ -153,19 +154,19 @@ export function Sidebar({
 			<nav className="flex shrink-0 items-center gap-1 py-1.5 pl-3 pr-2">
 				<NavPill
 					active={view === "sessions"}
-					label="会话"
+					label={t("会话")}
 					icon={<MessageCircle className="size-[18px]" strokeWidth={1.75} />}
 					onClick={() => setView("sessions")}
 				/>
 				<NavPill
 					active={view === "files"}
-					label="文件"
+					label={t("文件")}
 					icon={<Folder className="size-[18px]" strokeWidth={1.75} />}
 					onClick={() => setView("files")}
 				/>
 				<div className="flex-1" />
 				<IconButton
-					label="搜索会话"
+					label={t("搜索会话")}
 					active={searchOpen}
 					onClick={() => {
 						setView("sessions");
@@ -182,7 +183,7 @@ export function Sidebar({
 						autoFocus
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
-						placeholder="搜索会话"
+						placeholder={t("搜索会话")}
 						className="h-8 w-full rounded-lg border border-border bg-background px-2.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/25"
 					/>
 				</div>
@@ -197,11 +198,11 @@ export function Sidebar({
 							className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] font-medium md:h-9 text-foreground transition-colors hover:bg-sidebar-accent"
 						>
 							<Plus className="size-4 text-muted-foreground" strokeWidth={2} />
-							新建会话
+							{t("新建会话")}
 						</button>
 						{groups.length === 0 ? (
 							<p className="px-2 py-6 text-center text-[12px] text-muted-foreground">
-								暂无会话
+								{t("暂无会话")}
 							</p>
 						) : (
 							groups.map(([label, items]) => (
@@ -247,7 +248,7 @@ export function Sidebar({
 															className="flex h-full min-w-0 flex-1 items-center gap-2 rounded-lg pl-2 text-left"
 														>
 															<span className="min-w-0 flex-1 truncate text-[13px]">
-																{session.name || "新会话"}
+																{session.name || t("新会话")}
 															</span>
 															<span className="shrink-0 pr-1 text-[10.5px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
 																{relativeTime(session.updated_at)}
@@ -256,8 +257,8 @@ export function Sidebar({
 													)}
 													<button
 														type="button"
-														aria-label="会话操作"
-														title="会话操作"
+														aria-label={t("会话操作")}
+														title={t("会话操作")}
 														onClick={(event) => {
 															event.stopPropagation();
 															setMenuFor(menuFor === session.id ? null : session.id);
@@ -271,7 +272,7 @@ export function Sidebar({
 													<>
 														<button
 															type="button"
-															aria-label="关闭会话菜单"
+															aria-label={t("关闭会话菜单")}
 															onClick={() => setMenuFor(null)}
 															className="fixed inset-0 z-10 cursor-default"
 														/>
@@ -281,12 +282,12 @@ export function Sidebar({
 															onClick={() => {
 																setMenuFor(null);
 																setRenaming(session.id);
-																setRenameValue(session.name || "新会话");
+																setRenameValue(session.name || t("新会话"));
 															}}
 															className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-foreground hover:bg-accent"
 														>
 															<Pencil className="size-3.5 text-muted-foreground" />
-															重命名
+															{t("重命名")}
 														</button>
 														<button
 															type="button"
@@ -297,7 +298,7 @@ export function Sidebar({
 															className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] text-destructive hover:bg-destructive/10"
 														>
 															<Trash2 className="size-3.5" />
-															删除
+															{t("删除")}
 														</button>
 														</div>
 													</>
@@ -313,7 +314,7 @@ export function Sidebar({
 					<div className="space-y-1">
 						<div className="flex items-center gap-1 px-1 pb-1">
 							<IconButton
-								label="上一级"
+								label={t("上一级")}
 								disabled={!dir || dir === "/"}
 								onClick={() => setDir(parentPath(dir))}
 							>
@@ -341,7 +342,7 @@ export function Sidebar({
 							<button
 								key={`file-${name}`}
 								type="button"
-								title="在编辑器中打开"
+								title={t("在编辑器中打开")}
 								onClick={() => {
 									setFilesError(null);
 									void openWorkspaceFile(
@@ -364,9 +365,9 @@ export function Sidebar({
 			{confirmingDelete ? (
 				<div className="absolute inset-0 z-50 flex items-end bg-black/30 p-3">
 					<div className="w-full rounded-xl border border-border bg-card p-3 shadow-lg">
-						<p className="text-[12.5px] font-medium text-foreground">删除会话？</p>
+						<p className="text-[12.5px] font-medium text-foreground">{t('删除会话？')}</p>
 						<p className="mt-1 text-[11.5px] text-muted-foreground">
-							{confirmingDelete.name || "新会话"} 将从本机移除，无法撤销。
+							{confirmingDelete.name || t("新会话")} 将从本机移除，无法撤销。
 						</p>
 						<div className="mt-3 flex justify-end gap-1.5">
 							<button
@@ -374,7 +375,7 @@ export function Sidebar({
 								onClick={() => setConfirmingDelete(null)}
 								className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
 							>
-								取消
+								{t("取消")}
 							</button>
 							<button
 								type="button"
@@ -384,7 +385,7 @@ export function Sidebar({
 								}}
 								className="h-8 rounded-lg bg-destructive px-3 text-[12px] font-medium text-white"
 							>
-								删除
+								{t("删除")}
 							</button>
 						</div>
 					</div>
@@ -398,7 +399,7 @@ export function Sidebar({
 					className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] text-foreground/85 transition-colors hover:bg-sidebar-accent md:h-9"
 				>
 					<Settings className="size-4 text-muted-foreground" strokeWidth={1.75} />
-					<span className="flex-1">设置</span>
+					<span className="flex-1">{t('设置')}</span>
 				</button>
 			</footer>
 		</aside>

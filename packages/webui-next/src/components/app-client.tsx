@@ -25,7 +25,9 @@ import {
 	resolveSession,
 } from "@/lib/api";
 import { useChat } from "@/lib/use-chat";
+import { getLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
 function readNotifications(): boolean {
 	try {
@@ -87,7 +89,7 @@ export function AppClient() {
 		if (!document.hidden) return;
 		if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
 		const notification = new Notification("NanoPi", {
-			body: `${titleRef.current} 已完成`,
+			body: `${titleRef.current} · ${t("已完成")}`,
 			icon: "/icon-192.png",
 		});
 		notification.onclick = () => {
@@ -238,6 +240,10 @@ export function AppClient() {
 	}, []);
 
 	useEffect(() => {
+		document.documentElement.lang = getLocale() === "en" ? "en" : "zh-CN";
+	}, []);
+
+	useEffect(() => {
 		if (!("serviceWorker" in navigator) || !window.isSecureContext) return;
 		void navigator.serviceWorker.register("./sw.js", { scope: "./" }).catch(() => {
 			/* offline shell is optional */
@@ -324,7 +330,7 @@ export function AppClient() {
 	const onWorkspaceChange = useCallback(
 		async (path: string) => {
 			const result = await changeDir(path);
-			if (!result.success) throw new Error(result.message || "切换目录失败");
+			if (!result.success) throw new Error(result.message || t("切换目录失败"));
 			setProject({
 				working_dir: result.current_dir,
 				project_hash: result.project_hash,
@@ -347,12 +353,12 @@ export function AppClient() {
 			return;
 		}
 		if (typeof Notification === "undefined") {
-			setBootError("当前浏览器不支持通知");
+			setBootError(t("当前浏览器不支持通知"));
 			return;
 		}
 		const permission = await Notification.requestPermission();
 		if (permission !== "granted") {
-			setBootError("通知权限被拒绝");
+			setBootError(t("通知权限被拒绝"));
 			return;
 		}
 		setNotifications(true);
@@ -410,7 +416,7 @@ export function AppClient() {
 				{bootError ? (
 					<div className="mx-auto w-full max-w-[840px] px-4 pt-4">
 						<div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
-							连接 nanopi webui 失败：{bootError}
+							{t("连接 nanopi webui 失败：")}{bootError}
 						</div>
 					</div>
 				) : null}
@@ -452,7 +458,7 @@ export function AppClient() {
 			>
 				<button
 					type="button"
-					aria-label="关闭导航"
+					aria-label={t("关闭导航")}
 					onClick={() => setNavOpen(false)}
 					className={cn(
 						"absolute inset-0 bg-black/35 transition-opacity duration-200",

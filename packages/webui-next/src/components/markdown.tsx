@@ -1,53 +1,78 @@
 "use client";
 
 import DOMPurify from "dompurify";
-import hljs from "highlight.js/lib/core";
-import bash from "highlight.js/lib/languages/bash";
-import css from "highlight.js/lib/languages/css";
-import diff from "highlight.js/lib/languages/diff";
-import go from "highlight.js/lib/languages/go";
-import javascript from "highlight.js/lib/languages/javascript";
-import json from "highlight.js/lib/languages/json";
-import markdown from "highlight.js/lib/languages/markdown";
-import python from "highlight.js/lib/languages/python";
-import rust from "highlight.js/lib/languages/rust";
-import sql from "highlight.js/lib/languages/sql";
-import typescript from "highlight.js/lib/languages/typescript";
-import xml from "highlight.js/lib/languages/xml";
-import yaml from "highlight.js/lib/languages/yaml";
 import { marked } from "marked";
 import { useMemo } from "react";
+import { createHighlighterCoreSync } from "shiki/core";
+import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
+import bash from "shiki/langs/bash.mjs";
+import css from "shiki/langs/css.mjs";
+import diff from "shiki/langs/diff.mjs";
+import go from "shiki/langs/go.mjs";
+import html from "shiki/langs/html.mjs";
+import javascript from "shiki/langs/javascript.mjs";
+import json from "shiki/langs/json.mjs";
+import markdown from "shiki/langs/markdown.mjs";
+import python from "shiki/langs/python.mjs";
+import rust from "shiki/langs/rust.mjs";
+import sql from "shiki/langs/sql.mjs";
+import tsx from "shiki/langs/tsx.mjs";
+import typescript from "shiki/langs/typescript.mjs";
+import xml from "shiki/langs/xml.mjs";
+import yaml from "shiki/langs/yaml.mjs";
+import githubDark from "shiki/themes/github-dark.mjs";
+import githubLight from "shiki/themes/github-light.mjs";
 import { cn } from "@/lib/utils";
+import { t } from "@/lib/i18n";
 
-hljs.registerLanguage("bash", bash);
-hljs.registerLanguage("css", css);
-hljs.registerLanguage("diff", diff);
-hljs.registerLanguage("go", go);
-hljs.registerLanguage("javascript", javascript);
-hljs.registerLanguage("json", json);
-hljs.registerLanguage("markdown", markdown);
-hljs.registerLanguage("python", python);
-hljs.registerLanguage("rust", rust);
-hljs.registerLanguage("sql", sql);
-hljs.registerLanguage("typescript", typescript);
-hljs.registerLanguage("xml", xml);
-hljs.registerLanguage("yaml", yaml);
+const shiki = createHighlighterCoreSync({
+	themes: [githubLight, githubDark],
+	langs: [
+		bash,
+		css,
+		diff,
+		go,
+		html,
+		javascript,
+		json,
+		markdown,
+		python,
+		rust,
+		sql,
+		tsx,
+		typescript,
+		xml,
+		yaml,
+	],
+	engine: createJavaScriptRegexEngine(),
+});
 
 const ALIASES: Record<string, string> = {
-	ts: "typescript",
-	tsx: "typescript",
-	js: "javascript",
-	jsx: "javascript",
 	sh: "bash",
 	shell: "bash",
 	zsh: "bash",
+	js: "javascript",
+	jsx: "javascript",
+	ts: "typescript",
 	py: "python",
 	rs: "rust",
 	yml: "yaml",
 	md: "markdown",
-	html: "xml",
 	svg: "xml",
 };
+
+function highlight(code: string, language: string): string {
+	const mapped = ALIASES[language] ?? language;
+	const lang = mapped && shiki.getLoadedLanguages().includes(mapped) ? mapped : "text";
+	try {
+		return shiki.codeToHtml(code, {
+			lang,
+			themes: { light: "github-light", dark: "github-dark" },
+		});
+	} catch {
+		return `<pre><code>${escapeHtml(code)}</code></pre>`;
+	}
+}
 
 function escapeHtml(value: string): string {
 	return value
@@ -55,16 +80,6 @@ function escapeHtml(value: string): string {
 		.replace(/</g, "&lt;")
 		.replace(/>/g, "&gt;")
 		.replace(/"/g, "&quot;");
-}
-
-function highlight(code: string, language: string): string {
-	const mapped = ALIASES[language] ?? language;
-	if (!mapped || !hljs.getLanguage(mapped)) return escapeHtml(code);
-	try {
-		return hljs.highlight(code, { language: mapped, ignoreIllegals: true }).value;
-	} catch {
-		return escapeHtml(code);
-	}
 }
 
 marked.setOptions({ gfm: true, breaks: false });
@@ -77,8 +92,8 @@ renderer.code = function code(source: string, infostring?: string) {
 	return (
 		`<div class="code-block" data-language="${language}">` +
 		`<div class="code-block-head"><span>${language || "code"}</span>` +
-		`<button type="button" data-copy="${encodeURIComponent(text)}">复制</button></div>` +
-		`<pre><code class="hljs">${body}</code></pre>` +
+		`<button type="button" data-copy="${encodeURIComponent(text)}">{t('复制')}</button></div>` +
+		body +
 		`</div>`
 	);
 };
@@ -89,7 +104,7 @@ export function Markdown({ content, className }: { content: string; className?: 
 	const html = useMemo(() => {
 		const raw = marked.parse(content ?? "", { async: false }) as string;
 		return DOMPurify.sanitize(raw, {
-			ADD_ATTR: ["data-copy", "data-language"],
+			ADD_ATTR: ["data-copy", "data-language", "style", "tabindex"],
 		});
 	}, [content]);
 
@@ -100,9 +115,9 @@ export function Markdown({ content, className }: { content: string; className?: 
 		const text = button.dataset.copy;
 		if (!text) return;
 		void navigator.clipboard?.writeText(decodeURIComponent(text));
-		button.textContent = "已复制";
+		button.textContent = t("已复制");
 		window.setTimeout(() => {
-			if (button.isConnected) button.textContent = "复制";
+			if (button.isConnected) button.textContent = t("复制");
 		}, 1200);
 	}
 
