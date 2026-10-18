@@ -21,6 +21,7 @@ import { META_CLASSIFIER_MODELS, META_IMAGE_MODELS, META_MODELS } from "./provid
 import { MINIMAX_CLASSIFIER_MODELS, MINIMAX_IMAGE_MODELS, MINIMAX_MODELS } from "./providers/minimax.models.ts";
 import { MINIMAX_CN_CLASSIFIER_MODELS, MINIMAX_CN_IMAGE_MODELS, MINIMAX_CN_MODELS } from "./providers/minimax-cn.models.ts";
 import { MISTRAL_CLASSIFIER_MODELS, MISTRAL_IMAGE_MODELS, MISTRAL_MODELS } from "./providers/mistral.models.ts";
+import { MODAL_CLASSIFIER_MODELS, MODAL_IMAGE_MODELS, MODAL_MODELS } from "./providers/modal.models.ts";
 import { MOONSHOTAI_CLASSIFIER_MODELS, MOONSHOTAI_IMAGE_MODELS, MOONSHOTAI_MODELS } from "./providers/moonshotai.models.ts";
 import { MOONSHOTAI_CN_CLASSIFIER_MODELS, MOONSHOTAI_CN_IMAGE_MODELS, MOONSHOTAI_CN_MODELS } from "./providers/moonshotai-cn.models.ts";
 import { NVIDIA_CLASSIFIER_MODELS, NVIDIA_IMAGE_MODELS, NVIDIA_MODELS } from "./providers/nvidia.models.ts";
@@ -32,6 +33,9 @@ import { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODEL
 import { QWEN_TOKEN_PLAN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_IMAGE_MODELS, QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
 import { QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_CN_IMAGE_MODELS, QWEN_TOKEN_PLAN_CN_MODELS } from "./providers/qwen-token-plan-cn.models.ts";
 import { QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS } from "./providers/qwen-token-plan-individual.models.ts";
+import { SENSENOVA_CLASSIFIER_MODELS, SENSENOVA_IMAGE_MODELS, SENSENOVA_MODELS } from "./providers/sensenova.models.ts";
+import { STEPFUN_CLASSIFIER_MODELS, STEPFUN_IMAGE_MODELS, STEPFUN_MODELS } from "./providers/stepfun.models.ts";
+import { STEPFUN_AI_CLASSIFIER_MODELS, STEPFUN_AI_IMAGE_MODELS, STEPFUN_AI_MODELS } from "./providers/stepfun-ai.models.ts";
 import { TOGETHER_CLASSIFIER_MODELS, TOGETHER_IMAGE_MODELS, TOGETHER_MODELS } from "./providers/together.models.ts";
 import { TYPESAFE_CLASSIFIER_MODELS, TYPESAFE_IMAGE_MODELS, TYPESAFE_MODELS } from "./providers/typesafe.models.ts";
 import { VERCEL_AI_GATEWAY_CLASSIFIER_MODELS, VERCEL_AI_GATEWAY_IMAGE_MODELS, VERCEL_AI_GATEWAY_MODELS } from "./providers/vercel-ai-gateway.models.ts";
@@ -64,6 +68,7 @@ export const MODELS: {
 	readonly "minimax": typeof MINIMAX_MODELS;
 	readonly "minimax-cn": typeof MINIMAX_CN_MODELS;
 	readonly "mistral": typeof MISTRAL_MODELS;
+	readonly "modal": typeof MODAL_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_MODELS;
 	readonly "nvidia": typeof NVIDIA_MODELS;
@@ -75,6 +80,9 @@ export const MODELS: {
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS;
+	readonly "sensenova": typeof SENSENOVA_MODELS;
+	readonly "stepfun": typeof STEPFUN_MODELS;
+	readonly "stepfun-ai": typeof STEPFUN_AI_MODELS;
 	readonly "together": typeof TOGETHER_MODELS;
 	readonly "typesafe": typeof TYPESAFE_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_MODELS;
@@ -106,6 +114,7 @@ export const MODELS: {
 	"minimax": MINIMAX_MODELS,
 	"minimax-cn": MINIMAX_CN_MODELS,
 	"mistral": MISTRAL_MODELS,
+	"modal": MODAL_MODELS,
 	"moonshotai": MOONSHOTAI_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_MODELS,
 	"nvidia": NVIDIA_MODELS,
@@ -117,6 +126,9 @@ export const MODELS: {
 	"qwen-token-plan": QWEN_TOKEN_PLAN_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS,
+	"sensenova": SENSENOVA_MODELS,
+	"stepfun": STEPFUN_MODELS,
+	"stepfun-ai": STEPFUN_AI_MODELS,
 	"together": TOGETHER_MODELS,
 	"typesafe": TYPESAFE_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_MODELS,
@@ -150,6 +162,7 @@ export const IMAGE_MODELS: {
 	readonly "minimax": typeof MINIMAX_IMAGE_MODELS;
 	readonly "minimax-cn": typeof MINIMAX_CN_IMAGE_MODELS;
 	readonly "mistral": typeof MISTRAL_IMAGE_MODELS;
+	readonly "modal": typeof MODAL_IMAGE_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_IMAGE_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_IMAGE_MODELS;
 	readonly "nvidia": typeof NVIDIA_IMAGE_MODELS;
@@ -161,6 +174,9 @@ export const IMAGE_MODELS: {
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_IMAGE_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_IMAGE_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS;
+	readonly "sensenova": typeof SENSENOVA_IMAGE_MODELS;
+	readonly "stepfun": typeof STEPFUN_IMAGE_MODELS;
+	readonly "stepfun-ai": typeof STEPFUN_AI_IMAGE_MODELS;
 	readonly "together": typeof TOGETHER_IMAGE_MODELS;
 	readonly "typesafe": typeof TYPESAFE_IMAGE_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_IMAGE_MODELS;
@@ -192,6 +208,7 @@ export const IMAGE_MODELS: {
 	"minimax": MINIMAX_IMAGE_MODELS,
 	"minimax-cn": MINIMAX_CN_IMAGE_MODELS,
 	"mistral": MISTRAL_IMAGE_MODELS,
+	"modal": MODAL_IMAGE_MODELS,
 	"moonshotai": MOONSHOTAI_IMAGE_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_IMAGE_MODELS,
 	"nvidia": NVIDIA_IMAGE_MODELS,
@@ -203,6 +220,9 @@ export const IMAGE_MODELS: {
 	"qwen-token-plan": QWEN_TOKEN_PLAN_IMAGE_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_IMAGE_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS,
+	"sensenova": SENSENOVA_IMAGE_MODELS,
+	"stepfun": STEPFUN_IMAGE_MODELS,
+	"stepfun-ai": STEPFUN_AI_IMAGE_MODELS,
 	"together": TOGETHER_IMAGE_MODELS,
 	"typesafe": TYPESAFE_IMAGE_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_IMAGE_MODELS,
@@ -236,6 +256,7 @@ export const CLASSIFIER_MODELS: {
 	readonly "minimax": typeof MINIMAX_CLASSIFIER_MODELS;
 	readonly "minimax-cn": typeof MINIMAX_CN_CLASSIFIER_MODELS;
 	readonly "mistral": typeof MISTRAL_CLASSIFIER_MODELS;
+	readonly "modal": typeof MODAL_CLASSIFIER_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_CLASSIFIER_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_CLASSIFIER_MODELS;
 	readonly "nvidia": typeof NVIDIA_CLASSIFIER_MODELS;
@@ -247,6 +268,9 @@ export const CLASSIFIER_MODELS: {
 	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_CLASSIFIER_MODELS;
 	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
 	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS;
+	readonly "sensenova": typeof SENSENOVA_CLASSIFIER_MODELS;
+	readonly "stepfun": typeof STEPFUN_CLASSIFIER_MODELS;
+	readonly "stepfun-ai": typeof STEPFUN_AI_CLASSIFIER_MODELS;
 	readonly "together": typeof TOGETHER_CLASSIFIER_MODELS;
 	readonly "typesafe": typeof TYPESAFE_CLASSIFIER_MODELS;
 	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
@@ -278,6 +302,7 @@ export const CLASSIFIER_MODELS: {
 	"minimax": MINIMAX_CLASSIFIER_MODELS,
 	"minimax-cn": MINIMAX_CN_CLASSIFIER_MODELS,
 	"mistral": MISTRAL_CLASSIFIER_MODELS,
+	"modal": MODAL_CLASSIFIER_MODELS,
 	"moonshotai": MOONSHOTAI_CLASSIFIER_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_CLASSIFIER_MODELS,
 	"nvidia": NVIDIA_CLASSIFIER_MODELS,
@@ -289,6 +314,9 @@ export const CLASSIFIER_MODELS: {
 	"qwen-token-plan": QWEN_TOKEN_PLAN_CLASSIFIER_MODELS,
 	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
 	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS,
+	"sensenova": SENSENOVA_CLASSIFIER_MODELS,
+	"stepfun": STEPFUN_CLASSIFIER_MODELS,
+	"stepfun-ai": STEPFUN_AI_CLASSIFIER_MODELS,
 	"together": TOGETHER_CLASSIFIER_MODELS,
 	"typesafe": TYPESAFE_CLASSIFIER_MODELS,
 	"vercel-ai-gateway": VERCEL_AI_GATEWAY_CLASSIFIER_MODELS,
