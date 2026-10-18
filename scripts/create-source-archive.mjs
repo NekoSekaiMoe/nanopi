@@ -126,6 +126,7 @@ const requiredPaths = [
 	"packages/tui/native/napi.h",
 	"packages/tui/native/clipboard.h",
 	"packages/tui/native/darwin/src/darwin-platform.m",
+	"packages/tui/native/darwin/build.mjs",
 	"packages/tui/native/darwin/prebuilds/darwin-arm64/darwin-platform.node",
 	"packages/tui/native/darwin/prebuilds/darwin-x64/darwin-platform.node",
 	"packages/tui/native/linux/build.mjs",

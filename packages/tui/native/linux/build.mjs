@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Builds the linux native prebuild for the host architecture. `CC` overrides
-// the compiler; the default is `cc`.
+// the compiler; the default is `cc`. The prebuild is committed, so this is
+// also the only record of what produced it: it prints the compiler version,
+// libxcb header version, and sha256 of the output.
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const temporaryDirectory = mkdtempSync(join(tmpdir(), "pi-tui-linux-"));
@@ -33,6 +36,12 @@ if (!arch) fail(`Unsupported Linux architecture: ${machine}`);
 
 const compiler = process.env.CC || "cc";
 if (capture(compiler, ["--version"]) === undefined) fail(`Linux C compiler not found: ${compiler}`);
+
+// The xcb headers can be absent even when a compiler is installed; without
+// them a real rebuild silently falls back to a stale prebuild.
+if (spawnSync("pkg-config", ["--exists", "xcb"], { stdio: "ignore" }).status !== 0) {
+	fail("xcb development headers not found (install libxcb1-dev / libxcb-devel)");
+}
 
 const flags = [
 	"-std=c11",
@@ -73,3 +82,6 @@ mkdirSync(outputDirectory, { recursive: true });
 copyFileSync(temporaryOutput, output);
 chmodSync(output, 0o755);
 process.stdout.write(`Built ${output}\n`);
+process.stdout.write(`compiler: ${capture(compiler, ["--version"])?.split("\n")[0]}\n`);
+process.stdout.write(`xcb headers: ${capture("pkg-config", ["--modversion", "xcb"])}\n`);
+process.stdout.write(`sha256: ${createHash("sha256").update(readFileSync(output)).digest("hex")}\n`);

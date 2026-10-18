@@ -1,13 +1,16 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // Builds the darwin native prebuilds (arm64 + x64) that ship with @nanopi/pi-tui.
 // `CC` overrides the compiler; otherwise `xcrun --find clang` on macOS, else clang.
+// The prebuilds are committed, so this is also the only record of what produced
+// them: it prints the compiler version, SDK path, and sha256 of each output.
 
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const sourceFile = join(scriptDirectory, "src", "darwin-platform.m");
@@ -103,4 +106,7 @@ for (const target of targets) {
 	copyFileSync(temporaryOutput, output);
 	chmodSync(output, 0o755);
 	process.stdout.write(`Built ${output}\n`);
+	process.stdout.write(`  compiler: ${capture(compiler, ["--version"])?.split("\n")[0]}\n`);
+	if (sdkFlags.length > 0) process.stdout.write(`  sdk: ${sdkFlags[1]}\n`);
+	process.stdout.write(`  sha256: ${createHash("sha256").update(readFileSync(output)).digest("hex")}\n`);
 }
