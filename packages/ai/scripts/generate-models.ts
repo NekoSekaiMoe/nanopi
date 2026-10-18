@@ -7,6 +7,13 @@ import { getEffortThinkingLevelMap, type ModelsDevReasoningOption } from "./mode
 import { type AiGatewayPricing, getAiGatewayCost } from "./ai-gateway-pricing.ts";
 import { buildOpenRouterCatalog, type OpenRouterCatalog, type OpenRouterModelListItem } from "./openrouter-catalog.ts";
 import {
+	ALL_PROVIDERS,
+	BUILD_CONFIG_FILENAME,
+	BUILD_FLAVOR_ENV,
+	loadBuildConfig,
+	resolveBuildFlavor,
+} from "../../../scripts/buildconfig.mjs";
+import {
 	CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
 	CLOUDFLARE_AI_GATEWAY_COMPAT_BASE_URL,
 	CLOUDFLARE_AI_GATEWAY_OPENAI_BASE_URL,
@@ -50,12 +57,15 @@ function readGeneratorOptions(args: string[]): {
 	jsonOnly: boolean;
 	jsonOutputDir: string | undefined;
 	pretty: boolean;
+	/** Provider ids the build's provider component carries, or undefined for all. */
+	providers: ReadonlySet<string> | undefined;
 } {
 	let strict = false;
 	let dataOnly = false;
 	let jsonOnly = false;
 	let jsonOutputDir: string | undefined;
 	let pretty = false;
+	let providers: ReadonlySet<string> | undefined;
 
 	for (let index = 0; index < args.length; index++) {
 		const arg = args[index];
@@ -81,15 +91,88 @@ function readGeneratorOptions(args: string[]): {
 			jsonOutputDir = resolve(value);
 			continue;
 		}
+		if (arg === "--providers") {
+			const value = args[++index];
+			if (!value) throw new Error("--providers requires a comma-separated provider id list");
+			providers = new Set(
+				value
+					.split(",")
+					.map((entry) => entry.trim())
+					.filter((entry) => entry.length > 0),
+			);
+			if (providers.size === 0) throw new Error("--providers requires at least one provider id");
+			continue;
+		}
 		throw new Error(`Unknown argument: ${arg}`);
 	}
 
 	if (jsonOnly && !jsonOutputDir) throw new Error("--json-only requires --json-output");
 	if (dataOnly && (jsonOnly || jsonOutputDir)) throw new Error("--data-only cannot be combined with JSON catalog output");
-	return { strict, dataOnly, jsonOnly, jsonOutputDir, pretty };
+	return { strict, dataOnly, jsonOnly, jsonOutputDir, pretty, providers };
 }
 
+const repoRoot = join(packageRoot, "..", "..");
 const generatorOptions = readGeneratorOptions(process.argv.slice(2));
+generatorOptions.providers = flavorProviderSelection();
+
+/**
+ * Providers this run writes: the catalogs, every shard, and the data the shards
+ * import. A trimmed build takes the set from buildconfig.json's `providers`
+ * component, so it never generates (or commits) catalogs it does not ship, and
+ * the generator writes the concrete list back into the config's full provider
+ * set, which is the record of what the next `pnpm run generate:models` covers.
+ */
+function selectProviderIds(providerIds: readonly string[]): string[] {
+	const selected = generatorOptions.providers;
+	if (selected === undefined) return [...providerIds];
+	const unknown = [...selected].filter((providerId) => !providerIds.includes(providerId));
+	if (unknown.length > 0) {
+		throw new Error(
+			`${BUILD_FLAVOR_ENV}/--providers names providers without a built-in catalog: ${unknown.join(", ")} ` +
+				`(known: ${[...providerIds].sort().join(", ")})`,
+		);
+	}
+	return providerIds.filter((providerId) => selected.has(providerId));
+}
+
+/**
+ * The provider ids the current flavor ships, or undefined to generate all of
+ * them. Only a flavor that is asked for explicitly narrows the run: the default
+ * flavor keeps the generator's historical behavior of writing every catalog.
+ */
+function flavorProviderSelection(): ReadonlySet<string> | undefined {
+	if (generatorOptions.providers !== undefined) return generatorOptions.providers;
+	const hasOverride = process.argv.includes("--flavor") || process.argv.some((arg) => arg.startsWith("--flavor="));
+	const envFlavor = process.env[BUILD_FLAVOR_ENV];
+	if (!hasOverride && (envFlavor === undefined || envFlavor === "")) return undefined;
+	const { flavor, providers } = resolveBuildFlavor(repoRoot);
+	if (providers.includes(ALL_PROVIDERS)) return undefined;
+	console.log(`Flavor ${flavor} ships ${providers.length} providers; generating only those catalogs.`);
+	return new Set(providers);
+}
+
+/**
+ * Replaces the full provider set in buildconfig.json with the catalogs this
+ * run wrote. Another flavor reading the same config must not name a provider
+ * whose catalog no longer exists.
+ */
+function recordFullProviderSet(providerIds: readonly string[]): void {
+	const configPath = join(repoRoot, BUILD_CONFIG_FILENAME);
+	const config = loadBuildConfig(repoRoot);
+	const full = Object.entries(config.providerSets).find(([, set]) => set.providers.includes(ALL_PROVIDERS));
+	if (!full) return;
+	const [name, set] = full;
+	const next = [...providerIds].sort();
+	if (set.providers.length === next.length && set.providers.every((providerId, index) => providerId === next[index])) {
+		return;
+	}
+	const raw = JSON.parse(readFileSync(configPath, "utf8")) as {
+		providerSets: Record<string, { description?: string; providers: string[] }>;
+	};
+	raw.providerSets[name] = { ...set, providers: next };
+	writeFileSync(configPath, `${JSON.stringify(raw, null, "\t")}\n`);
+	console.log(`Recorded ${next.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${name}".`);
+}
 
 interface ModelsDevModel {
 	id: string;
@@ -3816,20 +3899,26 @@ async function generateModels() {
 		providers[model.provider].classifier[model.id] ??= model;
 	}
 
-	const sortedProviderIds = Object.keys(providers).sort();
+	const sortedProviderIds = selectProviderIds(Object.keys(providers).sort());
+	const generatedProviderIds = new Set(sortedProviderIds);
+	// `allModels` and the catalogs above must keep naming every provider, so a
+	// flavored run filters here instead of skipping models earlier.
+	const catalogProviders = Object.fromEntries(
+		Object.entries(providers).filter(([providerId]) => generatedProviderIds.has(providerId)),
+	) as Record<string, ProviderCatalog>;
 	const jsonChatProviders: Record<string, Record<string, Model<Api>>> = {};
 	const jsonImageProviders: Record<string, Record<string, ImageModel<ImageApi>>> = {};
 	const jsonClassifierProviders: Record<string, Record<string, ClassifierModel<ClassifierApi>>> = {};
 	const jsonAllProviders: Record<string, AnyModel[]> = {};
 	for (const providerId of sortedProviderIds) {
 		jsonChatProviders[providerId] = Object.fromEntries(
-			Object.entries(providers[providerId].chat).sort(([left], [right]) => left.localeCompare(right)),
+			Object.entries(catalogProviders[providerId].chat).sort(([left], [right]) => left.localeCompare(right)),
 		);
 		jsonImageProviders[providerId] = Object.fromEntries(
-			Object.entries(providers[providerId].image).sort(([left], [right]) => left.localeCompare(right)),
+			Object.entries(catalogProviders[providerId].image).sort(([left], [right]) => left.localeCompare(right)),
 		);
 		jsonClassifierProviders[providerId] = Object.fromEntries(
-			Object.entries(providers[providerId].classifier).sort(([left], [right]) => left.localeCompare(right)),
+			Object.entries(catalogProviders[providerId].classifier).sort(([left], [right]) => left.localeCompare(right)),
 		);
 		jsonAllProviders[providerId] = [
 			...Object.values(jsonChatProviders[providerId]),
@@ -3840,8 +3929,10 @@ async function generateModels() {
 
 	const serializeJson = (value: unknown) => `${JSON.stringify(value, null, generatorOptions.pretty ? 2 : undefined)}\n`;
 	const writeJson = (path: string, value: unknown) => writeFileSync(path, serializeJson(value));
+	// A data-only run may narrow an existing catalog; the provider set has to be
+	// on disk already, because the shards and the aggregator are left alone.
 	const generatedDataProviderIds = generatorOptions.dataOnly
-		? readModelDataProviderIds(packageRoot)
+		? selectProviderIds(readModelDataProviderIds(packageRoot))
 		: sortedProviderIds;
 	const missingProviderIds = generatedDataProviderIds.filter((providerId) => !jsonAllProviders[providerId]);
 	if (missingProviderIds.length > 0) {
@@ -3962,6 +4053,8 @@ async function generateModels() {
 				}
 				output += `};\n`;
 				writeFileSync(aggregatorPath, output);
+				// The shard set is the catalog set now; keep the config naming it.
+				recordFullProviderSet(sortedProviderIds);
 				console.log("Generated provider catalogs and src/models.generated.ts");
 			}
 

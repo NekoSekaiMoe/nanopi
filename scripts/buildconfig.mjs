@@ -11,17 +11,21 @@
  * NANOPI_BUILD_FLAVOR environment variable (the propagation channel for
  * chained `pnpm run build` invocations), then the config's defaultFlavor.
  *
- * Two components are not switches:
+ * Components that are not plain switches:
  * - `toolset` picks one value from the top-level `toolsetComponents` map
  *   ("standard" or "bash"). It decides which built-in tools the build
  *   registers, so a tool set only ships whole.
+ * - `providers` picks one entry from the top-level `providerSets` map (a named
+ *   list of `@nanopi/pi-ai` provider ids). It decides which provider catalogs
+ *   the model generator writes and the runtime registers, so a provider set
+ *   only ships whole.
  * - `module/<name>` names each built-in module (packages/coding-agent/src/modules).
  *   Every `module/*` entry must match a name in the module list the bundle
  *   script passes to validateFlavorModules, so a new module cannot silently
  *   stay out of a flavor.
  */
 
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 export const BUILD_FLAVOR_ENV = "NANOPI_BUILD_FLAVOR";
@@ -31,8 +35,12 @@ const COMPONENT_NAME_PATTERN = /^[a-z][a-z0-9-.]*(\/[a-z][a-z0-9-.]*)*$/;
 const WILDCARD_KEY = "*";
 /** Component whose value names a tool set instead of switching inclusion on. */
 export const TOOLSET_COMPONENT = "toolset";
+/** Component whose value names a provider set instead of switching inclusion on. */
+export const PROVIDERS_COMPONENT = "providers";
 /** Prefix of the per-module components. */
 export const MODULE_COMPONENT_PREFIX = "module/";
+/** Provider set entry meaning "every built-in catalog", checked at build time. */
+export const ALL_PROVIDERS = "__ALL__";
 
 /** Extracts `--flavor <name>` / `--flavor=<name>` from an argv array. */
 export function parseFlavorArg(argv) {
@@ -56,7 +64,7 @@ export function parseFlavorArg(argv) {
  * Loads and validates buildconfig.json. Throws on structural problems so a
  * typo fails the build instead of silently shipping the wrong components.
  *
- * @returns {{ defaultFlavor: string, componentNames: string[], toolsetComponents: string[], flavors: Record<string, { description?: string, components: Record<string, boolean | string> }> }}
+ * @returns {{ defaultFlavor: string, componentNames: string[], toolsetComponents: string[], providerSets: Record<string, { description?: string, providers: string[] }>, moduleBundles: Record<string, { source: string }>, moduleBundleNames: string[], flavors: Record<string, { description?: string, components: Record<string, boolean | string> }> }}
  */
 export function loadBuildConfig(repoRoot) {
 	const configPath = join(repoRoot, BUILD_CONFIG_FILENAME);
@@ -71,7 +79,8 @@ export function loadBuildConfig(repoRoot) {
 	}
 
 	const unknownKeys = Object.keys(raw).filter(
-		(key) => !["defaultFlavor", "components", "flavors", "toolsetComponents", "moduleBundles"].includes(key),
+		(key) =>
+			!["defaultFlavor", "components", "flavors", "toolsetComponents", "providerSets", "moduleBundles"].includes(key),
 	);
 	if (unknownKeys.length > 0) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} has unknown top-level keys: ${unknownKeys.join(", ")}`);
@@ -148,6 +157,40 @@ export function loadBuildConfig(repoRoot) {
 	}
 	const toolsetNames = toolsetComponents === undefined ? [] : Object.keys(toolsetComponents);
 
+	const providerSets = raw.providerSets;
+	if (providerSets !== undefined) {
+		if (typeof providerSets !== "object" || providerSets === null || Array.isArray(providerSets)) {
+			throw new Error(`${BUILD_CONFIG_FILENAME} "providerSets" must be an object of provider set names`);
+		}
+		if (Object.keys(providerSets).length === 0) throw new Error(`${BUILD_CONFIG_FILENAME} "providerSets" declares no provider sets`);
+		for (const [name, spec] of Object.entries(providerSets)) {
+			if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
+				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} must be an object`);
+			}
+			const unknownProviderSetKeys = Object.keys(spec).filter((key) => key !== "description" && key !== "providers");
+			if (unknownProviderSetKeys.length > 0) {
+				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} has unknown keys: ${unknownProviderSetKeys.join(", ")}`);
+			}
+			if (spec.description !== undefined && typeof spec.description !== "string") {
+				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string description`);
+			}
+			if (!Array.isArray(spec.providers) || spec.providers.length === 0) {
+				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} must list at least one provider id`);
+			}
+			for (const providerId of spec.providers) {
+				if (typeof providerId !== "string" || providerId.length === 0) {
+					throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string provider id`);
+				}
+			}
+			if (new Set(spec.providers).size !== spec.providers.length) {
+				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} lists a provider id twice`);
+			}
+		}
+	} else if (componentNames.includes(PROVIDERS_COMPONENT)) {
+		throw new Error(`${BUILD_CONFIG_FILENAME} declares "${PROVIDERS_COMPONENT}" without a "providerSets" map`);
+	}
+
+	const providerSetNames = providerSets === undefined ? [] : Object.keys(providerSets);
 	const flavorNames = Object.keys(raw.flavors);
 	if (flavorNames.length === 0) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} declares no flavors`);
@@ -184,6 +227,15 @@ export function loadBuildConfig(repoRoot) {
 				}
 				continue;
 			}
+			if (key === PROVIDERS_COMPONENT) {
+				if (typeof value !== "string" || !providerSetNames.includes(value)) {
+					throw new Error(
+						`Flavor "${flavorName}" sets "${PROVIDERS_COMPONENT}" to an unknown provider set ` +
+							`(declared: ${providerSetNames.join(", ") || "none"})`,
+					);
+				}
+				continue;
+			}
 			if (typeof value !== "boolean") {
 				throw new Error(`Flavor "${flavorName}" sets component "${key}" to a non-boolean value`);
 			}
@@ -197,18 +249,13 @@ export function loadBuildConfig(repoRoot) {
 		defaultFlavor: raw.defaultFlavor,
 		componentNames,
 		toolsetComponents: toolsetNames,
+		providerSets: providerSets ?? {},
 		moduleBundles: moduleBundles ?? {},
 		moduleBundleNames,
 		flavors: raw.flavors,
 	};
 }
 
-/**
- * The tool set a flavor selects. A flavor that does not name one gets
- * "standard": a tool set is a choice, never a side effect of the wildcard.
- *
- * @returns {string}
- */
 /** Whether `key` names a declared component group, like "module/*". */
 function isDeclaredGroupKey(key, componentNames) {
 	const slash = key.lastIndexOf("/");
@@ -217,6 +264,12 @@ function isDeclaredGroupKey(key, componentNames) {
 	return componentNames.some((name) => name.startsWith(prefix));
 }
 
+/**
+ * The tool set a flavor selects. A flavor that does not name one gets
+ * "standard": a tool set is a choice, never a side effect of the wildcard.
+ *
+ * @returns {string}
+ */
 export function resolveFlavorToolset(config, flavorName) {
 	const flavor = config.flavors[flavorName];
 	if (!flavor) {
@@ -224,6 +277,27 @@ export function resolveFlavorToolset(config, flavorName) {
 	}
 	const selected = flavor.components[TOOLSET_COMPONENT];
 	return typeof selected === "string" ? selected : "standard";
+}
+
+/**
+ * The provider ids a flavor ships. A flavor that does not name a provider set
+ * gets every built-in provider, so the default stays the full catalog.
+ *
+ * @returns {string[]}
+ */
+export function resolveFlavorProviders(config, flavorName) {
+	const flavor = config.flavors[flavorName];
+	if (!flavor) {
+		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
+	}
+	// A flavor that names no provider set ships every catalog, like the default
+	// of a switch. Which set that is reads from the flavor itself, not from a
+	// hardcoded set name: a flavor may call its full set anything.
+	const selected = flavor.components[PROVIDERS_COMPONENT];
+	if (typeof selected !== "string") return [ALL_PROVIDERS];
+	const providerSet = config.providerSets[selected];
+	if (!providerSet) throw new Error(`Unknown provider set "${selected}" in flavor "${flavorName}"`);
+	return providerSet.providers.includes(ALL_PROVIDERS) ? [ALL_PROVIDERS] : providerSet.providers;
 }
 
 /**
@@ -246,7 +320,9 @@ export function resolveFlavorComponents(config, flavorName) {
 		components[name] =
 			name === TOOLSET_COMPONENT
 				? resolveFlavorToolset(config, flavorName)
-				: (flavor.components[name] ?? (groupValue === undefined ? undefined : flavor.components[groupValue]) ?? flavor.components[WILDCARD_KEY] ?? true);
+				: name === PROVIDERS_COMPONENT
+					? resolveFlavorProviders(config, flavorName)
+					: (flavor.components[name] ?? (groupValue === undefined ? undefined : flavor.components[groupValue]) ?? flavor.components[WILDCARD_KEY] ?? true);
 	}
 	return components;
 }
@@ -282,10 +358,62 @@ export function validateFlavorModules(repoRoot, moduleNames) {
 }
 
 /**
+ * Provider ids with a generated catalog module in packages/ai. Read from the
+ * shard file names (`<artifact>.models.ts`) rather than from the data directory,
+ * because that directory is a gitignored build product that a clean checkout
+ * hydrates later.
+ */
+export function readProviderCatalogIds(repoRoot) {
+	const providersDir = join(repoRoot, "packages", "ai", "src", "providers");
+	const ids = readdirSync(providersDir)
+		.filter((entry) => entry.endsWith(".models.ts"))
+		.map((entry) => entry.slice(0, -".models.ts".length));
+	if (ids.length === 0) throw new Error(`No generated provider catalogs found in ${providersDir}`);
+	return ids.sort();
+}
+
+/**
+ * Cross-checks the providers a flavor ships against the built-in catalogs in
+ * packages/ai. A provider set that names a provider the catalog does not have,
+ * or a catalog the flavors never ship, fails the build instead of producing a
+ * build whose model list silently disagrees with its provider set.
+ */
+export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
+	const config = loadBuildConfig(repoRoot);
+	const known = new Set(providerIds);
+	for (const [name, providerSet] of Object.entries(config.providerSets)) {
+		const unknown = providerSet.providers.filter(
+			(providerId) => providerId !== ALL_PROVIDERS && !known.has(providerId),
+		);
+		if (unknown.length > 0) {
+			throw new Error(
+				`${BUILD_CONFIG_FILENAME} provider set "${name}" names providers without a built-in catalog: ${unknown.join(", ")}`,
+			);
+		}
+	}
+	const shipped = resolveFlavorProviders(config, flavorName);
+	if (shipped.includes(ALL_PROVIDERS)) return;
+	const knownIds = new Set(providerIds);
+	const unreachable = providerIds.filter((providerId) => !shipped.includes(providerId));
+	if (unreachable.length > 0) {
+		throw new Error(
+			`Flavor "${flavorName}" ships no provider set entry for: ${unreachable.join(", ")} ` +
+				`(list it in a provider set, or mark that set "${ALL_PROVIDERS}")`,
+		);
+	}
+	for (const providerId of shipped) {
+		if (!knownIds.has(providerId)) {
+			throw new Error(`Flavor "${flavorName}" ships an unknown provider: ${providerId}`);
+		}
+	}
+}
+
+/**
  * Full selection: CLI flag over NANOPI_BUILD_FLAVOR over defaultFlavor, then
- * resolved against the config. `toolset` is the selected tool set name.
+ * resolved against the config. `toolset` is the selected tool set name and
+ * `providers` the selected provider ids.
  *
- * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string }}
+ * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string, providers: string[] }}
  */
 export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = process.env } = {}) {
 	const config = loadBuildConfig(repoRoot);
@@ -294,5 +422,6 @@ export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = proces
 		flavor,
 		components: resolveFlavorComponents(config, flavor),
 		toolset: resolveFlavorToolset(config, flavor),
+		providers: resolveFlavorProviders(config, flavor),
 	};
 }

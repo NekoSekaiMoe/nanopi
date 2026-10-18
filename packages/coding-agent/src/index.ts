@@ -1,6 +1,6 @@
 // Core session management
 
-export { isBashOnlyBuild, isBuildComponentEnabled, type Toolset } from "./build-components.ts";
+export { isBashOnlyBuild, isBuildComponentEnabled, isProviderIncluded, type Toolset } from "./build-components.ts";
 export { type Args, parseArgs } from "./cli/args.ts";
 
 // Config paths

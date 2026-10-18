@@ -26,7 +26,13 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
-import { loadBuildConfig, resolveBuildFlavor, validateFlavorModules } from "./buildconfig.mjs";
+import {
+	loadBuildConfig,
+	readProviderCatalogIds,
+	resolveBuildFlavor,
+	validateFlavorModules,
+	validateFlavorProviders,
+} from "./buildconfig.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
@@ -43,12 +49,13 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // Build flavors (buildconfig.json) drop peripheral components from the
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
-const { flavor, components, toolset } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
 validateOAuthFlowRegistry({ repoRoot, components });
 // Every built-in module is a `module/<name>` component; a flavor can drop one,
 // in which case its code stays out of the single file (see build-modules.mjs).
 const buildConfig = loadBuildConfig(repoRoot);
 validateFlavorModules(repoRoot, readBuiltinModuleNames(repoRoot));
+validateFlavorProviders(repoRoot, readProviderCatalogIds(repoRoot), flavor);
 const isComponentEnabled = (name) => components[name] !== false;
 
 const outArgs = process.argv.slice(2);
@@ -355,6 +362,7 @@ try {
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
+			NANOPI_BUILD_PROVIDERS: JSON.stringify(providers),
 		},
 		entryPoints: [entryPoint],
 		external: Array.from(allowedExternalPackages),

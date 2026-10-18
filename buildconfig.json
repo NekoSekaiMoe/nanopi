@@ -19,6 +19,9 @@
 		"toolset": {
 			"description": "Built-in tool set the build registers: \"standard\" (read, bash, edit, write plus the optional tools) or \"bash\" (the shell tools alone). Flavors set it as a name, not a switch; group keys like \"module/*\" work here too"
 		},
+		"providers": {
+			"description": "Provider set the build registers: one entry from the top-level \"providerSets\" map. The build's model catalogs are generated for that set only, so a trimmed build carries no code or data for the providers it drops. Flavors set it as a name, not a switch"
+		},
 		"module/extra": {
 			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); a flavor that drops it aliases the module to an inert stub"
 		},
@@ -146,29 +149,12 @@
 		"full": {
 			"description": "Everything included; the only flavor the npm packages are published from",
 			"components": {
-				"*": true
+				"*": true,
+				"providers": "all"
 			}
 		},
 		"base": {
-			"description": "Core CLI with every builtin module but the bundled extras, and only the standard tool set; no webui, export templates, sidecars, or OAuth flows",
-			"components": {
-				"*": false,
-				"module/*": true,
-				"module/ask-lite": false,
-				"module/mcp-lite": false,
-				"module/pi-fake-codex": false,
-				"module/pi-fake-opencode": false,
-				"module/pi-lsp-mini": false,
-				"module/pi-rewind": false,
-				"module/pi-simplify": false,
-				"module/pi-smart-flow": false,
-				"module/pi-subagent-mini": false,
-				"module/pi-ui": false,
-				"module/todo-lite": false
-			}
-		},
-		"minimal": {
-			"description": "base plus the bash tool set: the shell tools are the only tools the build registers, and only that tool set ships",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -183,12 +169,147 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
-				"toolset": "bash"
+				"providers": "presets"
+			}
+		},
+		"minimal": {
+			"description": "base with the bash tool alone: the shell tool is the only tool the build registers, and run modes and permissions (module/extra) are dropped with the extras",
+			"components": {
+				"*": false,
+				"module/*": true,
+				"module/ask-lite": false,
+				"module/mcp-lite": false,
+				"module/pi-fake-codex": false,
+				"module/pi-fake-opencode": false,
+				"module/pi-lsp-mini": false,
+				"module/pi-rewind": false,
+				"module/pi-simplify": false,
+				"module/pi-smart-flow": false,
+				"module/pi-subagent-mini": false,
+				"module/pi-ui": false,
+				"module/todo-lite": false,
+				"toolset": "bash",
+				"providers": "presets",
+				"module/extra": false
 			}
 		}
 	},
 	"toolsetComponents": {
 		"standard": {},
 		"bash": {}
+	},
+	"providerSets": {
+		"all": {
+			"description": "Every built-in provider catalog in packages/ai. The marker is checked against the generated catalogs at build time, and the model generator writes the concrete list back here once it writes more than one catalog, so a build never ships a provider the catalog does not have",
+			"providers": [
+				"alibaba-token-plan",
+				"alibaba-token-plan-cn",
+				"amazon-bedrock",
+				"ant-ling",
+				"anthropic",
+				"azure",
+				"baseten",
+				"cerebras",
+				"cloudflare-ai-gateway",
+				"cloudflare-workers-ai",
+				"deepseek",
+				"fireworks",
+				"github-copilot",
+				"google",
+				"google-vertex",
+				"groq",
+				"huggingface",
+				"kimi-coding",
+				"meta",
+				"minimax",
+				"minimax-cn",
+				"mistral",
+				"modal",
+				"moonshotai",
+				"moonshotai-cn",
+				"nvidia",
+				"ollama-cloud-token-plan",
+				"openai",
+				"openai-codex",
+				"opencode",
+				"opencode-go",
+				"openrouter",
+				"qwen-token-plan",
+				"qwen-token-plan-cn",
+				"qwen-token-plan-individual",
+				"sensenova",
+				"siliconflow",
+				"siliconflow-cn",
+				"stepfun",
+				"stepfun-ai",
+				"together",
+				"typesafe",
+				"vercel-ai-gateway",
+				"xai",
+				"xiaomi",
+				"xiaomi-token-plan-ams",
+				"xiaomi-token-plan-cn",
+				"xiaomi-token-plan-sgp",
+				"zai",
+				"zai-coding-cn",
+				"zhipuai"
+			]
+		},
+		"presets": {
+			"description": "The preset providers a standard deployment configures: one catalog per vendor the CLI can talk to out of the box. The full set has the same members today; the two part ways as soon as the catalog grows an internal or stand-in provider",
+			"providers": [
+				"alibaba-token-plan",
+				"alibaba-token-plan-cn",
+				"amazon-bedrock",
+				"ant-ling",
+				"anthropic",
+				"azure",
+				"baseten",
+				"cerebras",
+				"cloudflare-ai-gateway",
+				"cloudflare-workers-ai",
+				"deepseek",
+				"fireworks",
+				"github-copilot",
+				"google",
+				"google-vertex",
+				"groq",
+				"huggingface",
+				"kimi-coding",
+				"meta",
+				"minimax",
+				"minimax-cn",
+				"mistral",
+				"modal",
+				"moonshotai",
+				"moonshotai-cn",
+				"nvidia",
+				"ollama-cloud-token-plan",
+				"openai",
+				"openai-codex",
+				"opencode",
+				"opencode-go",
+				"openrouter",
+				"qwen-token-plan",
+				"qwen-token-plan-cn",
+				"qwen-token-plan-individual",
+				"sensenova",
+				"siliconflow",
+				"siliconflow-cn",
+				"stepfun",
+				"stepfun-ai",
+				"together",
+				"typesafe",
+				"vercel-ai-gateway",
+				"xai",
+				"xiaomi",
+				"xiaomi-token-plan-ams",
+				"xiaomi-token-plan-cn",
+				"xiaomi-token-plan-sgp",
+				"zai",
+				"zai-coding-cn",
+				"zhipuai"
+			]
+		}
 	}
 }

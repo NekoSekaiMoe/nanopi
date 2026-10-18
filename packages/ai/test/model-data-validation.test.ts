@@ -353,3 +353,28 @@ describe("generated model data validation", () => {
 		expect(() => readModelDataStructure(packageRoot)).toThrow("aggregator and provider shards do not match");
 	});
 });
+
+describe("provider-capped generation", () => {
+	// A flavor ships one provider set (buildconfig.json `providers`), so the
+	// generator writes only those catalogs. Everything downstream reads the
+	// generated aggregator, so the hydration step must not expect the rest.
+	it("hydrates only the providers the generated aggregator names", () => {
+		const { packageRoot, values } = createFixture();
+		const catalogPath = join(packageRoot, "catalog.json");
+		writeFileSync(catalogPath, JSON.stringify({ "test-provider": [values["chat:model-a"]] }));
+
+		hydrateModelCatalog(packageRoot, catalogPath);
+
+		expect(Object.keys(readModelDataStructure(packageRoot))).toEqual(["test-provider"]);
+	});
+
+	it("rejects a catalog that omits the generated provider", () => {
+		const { packageRoot } = createFixture();
+		const catalogPath = join(packageRoot, "catalog.json");
+		writeFileSync(catalogPath, JSON.stringify({ "other-provider": [] }));
+
+		expect(() => hydrateModelCatalog(packageRoot, catalogPath)).toThrow(
+			"Model catalog is missing provider: test-provider",
+		);
+	});
+});

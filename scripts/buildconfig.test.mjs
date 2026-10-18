@@ -4,13 +4,16 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+	ALL_PROVIDERS,
 	BUILD_FLAVOR_ENV,
 	loadBuildConfig,
 	parseFlavorArg,
 	resolveBuildFlavor,
 	resolveFlavorComponents,
+	resolveFlavorProviders,
 	resolveFlavorToolset,
 	validateFlavorModules,
+	validateFlavorProviders,
 } from "./buildconfig.mjs";
 
 const validConfig = {
@@ -211,6 +214,78 @@ describe("toolset components", () => {
 		const dir = writeConfig({ ...config, toolsetComponents: undefined });
 		tempDirs.push(dir);
 		throws(() => loadBuildConfig(dir), /declares "toolset" without a "toolsetComponents" map/);
+	});
+});
+
+describe("providers component", () => {
+	const config = {
+		defaultFlavor: "full",
+		components: { providers: { description: "Provider set" }, webui: {} },
+		providerSets: {
+			all: { description: "Every catalog", providers: ["__ALL__"] },
+			presets: { description: "Presets", providers: ["openai", "anthropic"] },
+		},
+		flavors: {
+			full: { components: { "*": true, providers: "all" } },
+			small: { components: { "*": false, providers: "presets" } },
+			unnamed: { components: { "*": true } },
+		},
+	};
+
+	it("reads the named provider set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		strictEqual(resolveFlavorProviders(loadBuildConfig(dir), "small").join(","), "openai,anthropic");
+		strictEqual(
+			resolveBuildFlavor(dir, { argv: ["--flavor", "small"], env: {} }).providers.join(","),
+			"openai,anthropic",
+		);
+	});
+
+	it("defaults to every provider when a flavor names no provider set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const resolved = resolveBuildFlavor(dir, { argv: ["--flavor", "unnamed"], env: {} });
+		strictEqual(resolved.providers.join(","), ALL_PROVIDERS);
+	});
+
+	it("rejects an undeclared provider set", () => {
+		const dir = writeConfig({
+			...config,
+			flavors: { ...config.flavors, broken: { components: { "*": true, providers: "nope" } } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /sets "providers" to an unknown provider set/);
+	});
+
+	it("rejects a providers component without a providerSets map", () => {
+		const dir = writeConfig({ ...config, providerSets: undefined });
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /declares "providers" without a "providerSets" map/);
+	});
+
+	it("rejects a provider set that names an unknown provider", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		throws(
+			() => validateFlavorProviders(dir, [], "small"),
+			/provider set "presets" names providers without a built-in catalog: openai, anthropic/,
+		);
+	});
+
+	it("rejects a flavor that leaves catalogs out of every provider set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		throws(
+			() => validateFlavorProviders(dir, ["openai", "anthropic", "google"], "small"),
+			/Flavor "small" ships no provider set entry for: google/,
+		);
+	});
+
+	it("accepts a flavor that ships every catalog through the full set marker", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		validateFlavorProviders(dir, ["openai", "anthropic", "google"], "full");
 	});
 });
 

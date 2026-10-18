@@ -13,7 +13,7 @@ Run repository commands from the repo root (two directories above this skill), u
 
 **GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`. The `npm run release:patch|minor` scripts are obsolete; do not use them.
 
-Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, webui, export templates, sidecars, and OAuth flows), `nanopi-minimal.js` (`minimal` flavor: `base` with only the shell tools registered), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
+Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, webui, export templates, sidecars, and OAuth flows, the standard tool set, the preset providers), `nanopi-minimal.js` (`minimal` flavor: `base` with only the bash tool registered and the run-mode/permission module dropped), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
 
 1. **Update CHANGELOGs**: ask the user whether they ran the `/cl` prompt on the latest commit on `main`. If not, they must run `/cl` first to audit and update each package's `[Unreleased]` section before releasing.
 
@@ -45,7 +45,7 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
    /tmp/nanopi-bundles/nanopi-minimal.js --version
    ```
 
-   The minimal bundle registers the shell tools alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup.
+   The minimal bundle registers the bash tool alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup. A flavored build also only registers the providers in its set, so `--list-models` on `nanopi-base.js` / `nanopi-minimal.js` must not name a provider outside `providerSets.presets`.
 
    Verify startup, model/account listing, and at least one real prompt with the intended default provider. Start each bundle bare in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk. Load and follow [interactive-testing.md](interactive-testing.md) for the tmux workflow; start each release binary from `/tmp`, not the repo root.
 
