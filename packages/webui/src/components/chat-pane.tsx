@@ -1,11 +1,21 @@
 "use client";
 
-import { AlertCircle, ChevronRight, Sparkles } from "lucide-react";
+import {
+	AlertCircle,
+	ArrowDown,
+	ChevronRight,
+	Globe,
+	MessageSquare,
+	Monitor,
+	Sparkles,
+	Terminal,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Composer } from "@/components/composer";
 import { MessageItem } from "@/components/message-item";
 import { PermissionCard } from "@/components/permission-card";
 import { UserInputCard } from "@/components/user-input-card";
+import type { ReasoningEffort } from "@/components/model-picker";
 import type { ImageData, ModelInfo, UserInputRequestEvent, UserInputResponse } from "@/lib/api";
 import { type Poem, randomPoem } from "@/lib/greeting";
 import type { PendingPermission, UiMessage } from "@/lib/use-chat";
@@ -17,6 +27,8 @@ const SUGGESTIONS = [
 	t("找到并修复一个 bug"),
 	t("为当前代码补充测试"),
 ];
+
+export type EnvironmentMode = "chat" | "terminal" | "browser" | "desktop";
 
 export function ChatPane({
 	messages,
@@ -42,6 +54,8 @@ export function ChatPane({
 	onImages,
 	sessionName,
 	workspaceName,
+	reasoningEffort = "medium",
+	onReasoningEffort,
 }: {
 	messages: UiMessage[];
 	loading: boolean;
@@ -66,10 +80,16 @@ export function ChatPane({
 	onImages: (images: ImageData[]) => void;
 	sessionName: string;
 	workspaceName: string;
+	reasoningEffort?: ReasoningEffort;
+	onReasoningEffort?: (effort: ReasoningEffort) => void;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
 	const stickRef = useRef(true);
+	const [showScrollDown, setShowScrollDown] = useState(false);
+	const [envMenuOpen, setEnvMenuOpen] = useState(false);
+	const [envMode, setEnvMode] = useState<EnvironmentMode>("chat");
+	const [suggestionsOpen, setSuggestionsOpen] = useState(false);
 
 	useEffect(() => {
 		const element = scrollRef.current;
@@ -77,6 +97,7 @@ export function ChatPane({
 		const onScroll = () => {
 			const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
 			stickRef.current = distance < 120;
+			setShowScrollDown(distance > 240);
 		};
 		element.addEventListener("scroll", onScroll, { passive: true });
 		return () => element.removeEventListener("scroll", onScroll);
@@ -94,24 +115,34 @@ export function ChatPane({
 		return () => cancelAnimationFrame(id);
 	}, [messages.length, lastText, loading]);
 
+	const scrollToBottom = () => {
+		bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+	};
+
 	const welcome = messages.length === 0 && !loading;
 
 	return (
-		<div className="flex min-h-0 flex-1 flex-col">
+		<div className="relative flex min-h-0 flex-1 flex-col">
 			<div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
 				{loading ? (
-					<div className="mx-auto w-full max-w-[760px] space-y-5 px-4 py-8 sm:px-6 lg:px-10">
-						<div className="ml-auto h-12 w-48 animate-pulse rounded-2xl bg-muted" />
+					<div className="mx-auto w-full max-w-[760px] space-y-5 px-4 py-8 sm:px-6 lg:px-8">
+						<div className="ml-auto h-12 w-48 animate-pulse rounded-2xl bg-white/[0.05]" />
 						<div className="space-y-2">
-							<div className="h-3 w-[72%] animate-pulse rounded bg-muted" />
-							<div className="h-3 w-[61%] animate-pulse rounded bg-muted" />
-							<div className="h-3 w-[44%] animate-pulse rounded bg-muted" />
+							<div className="h-3 w-[72%] animate-pulse rounded bg-white/[0.05]" />
+							<div className="h-3 w-[61%] animate-pulse rounded bg-white/[0.05]" />
+							<div className="h-3 w-[44%] animate-pulse rounded bg-white/[0.05]" />
 						</div>
 					</div>
 				) : welcome ? (
-					<Welcome onPick={(text) => onComposer(text)} models={models} onConfigure={onConfigure} />
+					<Welcome
+						onPick={(text) => onComposer(text)}
+						models={models}
+						onConfigure={onConfigure}
+						suggestionsOpen={suggestionsOpen}
+						onToggleSuggestions={() => setSuggestionsOpen((v) => !v)}
+					/>
 				) : (
-					<div className="mx-auto w-full max-w-[760px] space-y-7 px-4 pb-8 pt-5 sm:px-6 lg:px-10">
+					<div className="mx-auto w-full max-w-[760px] space-y-7 px-4 pb-8 pt-5 sm:px-6 lg:px-8">
 						{messages.map((message) => (
 							<MessageItem key={message.id} message={message} />
 						))}
@@ -119,6 +150,58 @@ export function ChatPane({
 					</div>
 				)}
 			</div>
+
+			{/* Floating Scroll Down button matching Screenshot 1 */}
+			{showScrollDown && !welcome ? (
+				<button
+					type="button"
+					aria-label={t("回到底部")}
+					onClick={scrollToBottom}
+					className="absolute bottom-28 left-1/2 z-30 -translate-x-1/2 grid size-10 place-items-center rounded-full border border-white/[0.1] bg-[#1f1f23] text-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+				>
+					<ArrowDown className="size-5" strokeWidth={2} />
+				</button>
+			) : null}
+
+			{/* Environment Popover Menu matching Screenshot 3 */}
+			{envMenuOpen ? (
+				<>
+					<button
+						type="button"
+						aria-label="close menu"
+						onClick={() => setEnvMenuOpen(false)}
+						className="fixed inset-0 z-30 cursor-default"
+					/>
+					<div className="absolute bottom-14 left-4 z-40 w-44 rounded-2xl border border-white/[0.1] bg-[#1a1a1d] p-1.5 shadow-2xl">
+						{(
+							[
+								["chat", t("对话"), <MessageSquare key="chat" className="size-4" />],
+								["terminal", t("终端"), <Terminal key="term" className="size-4" />],
+								["browser", t("浏览器"), <Globe key="browser" className="size-4" />],
+								["desktop", t("桌面"), <Monitor key="desktop" className="size-4" />],
+							] as const
+						).map(([mode, label, icon]) => (
+							<button
+								key={mode}
+								type="button"
+								onClick={() => {
+									setEnvMode(mode);
+									setEnvMenuOpen(false);
+								}}
+								className={cn(
+									"flex h-10 w-full items-center gap-2.5 rounded-xl px-3 text-[14px] transition-colors",
+									envMode === mode
+										? "bg-white/[0.08] font-medium text-foreground"
+										: "text-muted-foreground hover:bg-white/[0.05] hover:text-foreground",
+								)}
+							>
+								{icon}
+								<span>{label}</span>
+							</button>
+						))}
+					</div>
+				</>
+			) : null}
 
 			<div className="shrink-0">
 				{error ? (
@@ -156,10 +239,15 @@ export function ChatPane({
 					provider={provider}
 					onProvider={onProvider}
 					onConfigure={onConfigure}
+					reasoningEffort={reasoningEffort}
+					onReasoningEffort={onReasoningEffort}
 					images={images}
 					onImages={onImages}
 					disabled={models.length === 0}
 					workspaceName={workspaceName}
+					isWelcome={welcome}
+					onOpenSuggestions={() => setSuggestionsOpen((v) => !v)}
+					onOpenEnvironmentMenu={() => setEnvMenuOpen((v) => !v)}
 				/>
 				<span className="sr-only">{sessionName}</span>
 			</div>
@@ -177,7 +265,7 @@ function Banner({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="mx-auto w-full max-w-[840px] px-4 pb-2 sm:px-6 lg:px-10">
+		<div className="mx-auto w-full max-w-[840px] px-4 pb-2 sm:px-6 lg:px-8">
 			<button
 				type="button"
 				onClick={onDismiss}
@@ -195,35 +283,46 @@ function Banner({
 	);
 }
 
+/**
+ * Empty / Welcome State matching Screenshot 4:
+ * - Headline: "来，搞定一件事。"
+ * - Subtitle: Random Chinese Classical Poetry ({poem.text} —— {poem.source})
+ * - Suggestions panel
+ */
 function Welcome({
 	onPick,
 	models,
 	onConfigure,
+	suggestionsOpen,
+	onToggleSuggestions,
 }: {
 	onPick: (text: string) => void;
 	models: ModelInfo[];
 	onConfigure: () => void;
+	suggestionsOpen?: boolean;
+	onToggleSuggestions?: () => void;
 }) {
-	const hour = new Date().getHours();
-	const greeting = hour < 6 ? t("夜深了") : hour < 12 ? t("早上好") : hour < 18 ? t("下午好") : t("晚上好");
-	// Chinese landing shows a random classical poem; English keeps the greeting.
+	// Preserve random classical poetry
 	const [poem] = useState<Poem | null>(() => (getLocale() === "zh" ? randomPoem() : null));
 
 	return (
-		<div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-5 pb-10 pt-16 sm:px-8">
-			<h1 className="text-[28px] font-normal leading-[1.35] tracking-[-0.02em] text-foreground">
-				{poem ? t("想从哪里入手？") : greeting}
+		<div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-6 pb-12 pt-20 sm:px-8">
+			{/* Headline matching Screenshot 4 */}
+			<h1 className="text-[30px] font-semibold leading-[1.3] tracking-[-0.02em] text-foreground">
+				{t("来，搞定一件事。")}
 			</h1>
-			<p className="mt-2 text-[13.5px] leading-6 text-muted-foreground">
-				{poem ? (
-					<>
-						{poem.text}
-						<span className="text-muted-foreground/60"> —— {poem.source}</span>
-					</>
-				) : (
-					t("今天要完成什么？")
-				)}
-			</p>
+
+			{/* Random Classical Poetry subtitle */}
+			{poem ? (
+				<p className="mt-2.5 text-[14px] leading-6 text-muted-foreground/80">
+					{poem.text}
+					<span className="text-muted-foreground/50"> —— {poem.source}</span>
+				</p>
+			) : (
+				<p className="mt-2.5 text-[14px] leading-6 text-muted-foreground/80">
+					{t("今天要完成什么？")}
+				</p>
+			)}
 
 			{models.length === 0 ? (
 				<div className="mt-8 flex flex-col items-start gap-3">
@@ -238,24 +337,25 @@ function Welcome({
 				</div>
 			) : (
 				<div className="mt-10 w-full">
-					<p className="mb-2 px-1 text-[12px] text-muted-foreground/70">{t("试试这些")}</p>
-					<div className="overflow-hidden rounded-2xl bg-white/[0.03]">
-						{SUGGESTIONS.map((suggestion, index) => (
-							<button
-								key={suggestion}
-								type="button"
-								onClick={() => onPick(suggestion)}
-								className={cn(
-									"flex h-12 w-full items-center gap-3 px-3.5 text-left text-[14.5px] text-foreground/85 transition-colors hover:bg-white/[0.04] hover:text-foreground",
-									index < SUGGESTIONS.length - 1 && "border-b border-white/[0.05]",
-								)}
-							>
-								<Sparkles className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-								<span className="min-w-0 flex-1 truncate">{suggestion}</span>
-								<ChevronRight className="size-4 shrink-0 text-muted-foreground/60" strokeWidth={1.75} />
-							</button>
-						))}
-					</div>
+					{suggestionsOpen ? (
+						<div className="overflow-hidden rounded-2xl border border-white/[0.06] bg-[#1a1a1d]">
+							{SUGGESTIONS.map((suggestion, index) => (
+								<button
+									key={suggestion}
+									type="button"
+									onClick={() => onPick(suggestion)}
+									className={cn(
+										"flex h-12 w-full items-center gap-3 px-3.5 text-left text-[14px] text-foreground/85 transition-colors hover:bg-white/[0.04] hover:text-foreground",
+										index < SUGGESTIONS.length - 1 && "border-b border-white/[0.05]",
+									)}
+								>
+									<Sparkles className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+									<span className="min-w-0 flex-1 truncate">{suggestion}</span>
+									<ChevronRight className="size-4 shrink-0 text-muted-foreground/60" strokeWidth={1.75} />
+								</button>
+							))}
+						</div>
+					) : null}
 				</div>
 			)}
 		</div>

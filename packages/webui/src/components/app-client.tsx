@@ -6,6 +6,7 @@ import { ChatPane } from "@/components/chat-pane";
 import { Logo } from "@/components/logo";
 import { MobileBar } from "@/components/mobile-bar";
 import { SettingsOverlay, type ThemeChoice } from "@/components/settings";
+import type { ReasoningEffort } from "@/components/model-picker";
 import { Sidebar } from "@/components/sidebar";
 import {
 	ApiError,
@@ -53,6 +54,7 @@ export function AppClient() {
 	const [models, setModels] = useState<ModelInfo[]>([]);
 	const [config, setConfig] = useState<ConfigInfo | null>(null);
 	const [provider, setProvider] = useState("");
+	const [reasoningEffort, setReasoningEffort] = useState<ReasoningEffort>("medium");
 	const [theme, setTheme] = useState<ThemeChoice>(readStoredTheme);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [navOpen, setNavOpen] = useState(false);
@@ -445,6 +447,8 @@ export function AppClient() {
 					onImages={setImages}
 					sessionName={title}
 					workspaceName={projectName}
+					reasoningEffort={reasoningEffort}
+					onReasoningEffort={setReasoningEffort}
 				/>
 			</main>
 

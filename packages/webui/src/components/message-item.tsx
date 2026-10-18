@@ -1,6 +1,15 @@
 "use client";
 
-import { AlertTriangle, Check, ChevronRight, Loader2 } from "lucide-react";
+import {
+	AlertTriangle,
+	Check,
+	ChevronDown,
+	ChevronRight,
+	Copy,
+	Loader2,
+	MoreHorizontal,
+	RotateCw,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
 import type { ReasoningBlock, TextBlock, ToolBlock, UiBlock, UiMessage } from "@/lib/use-chat";
@@ -43,7 +52,16 @@ function segment(blocks: UiBlock[]): Segment[] {
 	return segments;
 }
 
-export function MessageItem({ message }: { message: UiMessage }) {
+export function MessageItem({
+	message,
+	onRetry,
+}: {
+	message: UiMessage;
+	onRetry?: () => void;
+}) {
+	const [copied, setCopied] = useState(false);
+	const [moreOpen, setMoreOpen] = useState(false);
+
 	if (message.role === "user") {
 		return (
 			<div className="flex justify-end">
@@ -64,7 +82,7 @@ export function MessageItem({ message }: { message: UiMessage }) {
 						block.kind === "text" ? (
 							<div
 								key={`${message.id}-${index}`}
-								className="chat-user-bubble w-fit max-w-full whitespace-pre-wrap break-words rounded-[20px] bg-chat-user-bubble px-4 py-2.5 text-[16px] leading-[1.55] text-chat-user-bubble-fg"
+								className="w-fit max-w-full whitespace-pre-wrap break-words rounded-[22px] bg-[#5f3dbb] px-4.5 py-3 text-[16px] leading-[1.6] text-white shadow-sm"
 							>
 								{block.text}
 							</div>
@@ -87,109 +105,215 @@ export function MessageItem({ message }: { message: UiMessage }) {
 		);
 	}
 
+	const fullText = message.blocks
+		.map((b) => (b.kind === "text" ? b.text : ""))
+		.filter(Boolean)
+		.join("\n\n");
+
+	const handleCopy = () => {
+		if (!fullText) return;
+		void navigator.clipboard.writeText(fullText).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		});
+	};
+
 	return (
 		<div className="min-w-0 space-y-4">
 			{message.blocks.length === 0 ? (
-				<div className="flex h-7 items-center gap-2 text-[13px] text-muted-foreground">
+				<div className="flex h-7 items-center gap-2 text-[13.5px] text-muted-foreground">
 					<Loader2 className="size-3.5 animate-spin" />
 					<span className="shimmer">{t("正在思考")}</span>
 				</div>
 			) : null}
+
 			{segment(message.blocks).map((item, index) =>
 				item.kind === "text" ? (
 					<Markdown key={`${message.id}-text-${index}`} content={item.block.text} />
 				) : (
-					<ProcessGroup key={`${message.id}-process-${index}`} blocks={item.blocks} />
+					<ProcessCard key={`${message.id}-process-${index}`} blocks={item.blocks} />
 				),
 			)}
+
+			{/* Assistant Message Actions matching Screenshot 3 */}
+			{fullText ? (
+				<div className="relative flex items-center gap-1 pt-1 text-muted-foreground">
+					<button
+						type="button"
+						aria-label={t("复制")}
+						title={t("复制")}
+						onClick={handleCopy}
+						className="grid size-8 place-items-center rounded-lg hover:bg-white/[0.06] hover:text-foreground"
+					>
+						{copied ? <Check className="size-4 text-green-400" /> : <Copy className="size-4" strokeWidth={1.75} />}
+					</button>
+
+					{onRetry ? (
+						<button
+							type="button"
+							aria-label={t("重试")}
+							title={t("重试")}
+							onClick={onRetry}
+							className="grid size-8 place-items-center rounded-lg hover:bg-white/[0.06] hover:text-foreground"
+						>
+							<RotateCw className="size-4" strokeWidth={1.75} />
+						</button>
+					) : null}
+
+					<div className="relative">
+						<button
+							type="button"
+							aria-label={t("更多")}
+							title={t("更多")}
+							onClick={() => setMoreOpen((v) => !v)}
+							className="grid size-8 place-items-center rounded-lg hover:bg-white/[0.06] hover:text-foreground"
+						>
+							<MoreHorizontal className="size-4" strokeWidth={1.75} />
+						</button>
+						{moreOpen ? (
+							<>
+								<button
+									type="button"
+									aria-label="close"
+									onClick={() => setMoreOpen(false)}
+									className="fixed inset-0 z-20 cursor-default"
+								/>
+								<div className="absolute left-0 top-full z-30 mt-1 min-w-[120px] rounded-xl border border-white/[0.1] bg-[#1a1a1d] p-1 shadow-lg text-[13px] text-foreground">
+									<button
+										type="button"
+										onClick={() => {
+											handleCopy();
+											setMoreOpen(false);
+										}}
+										className="w-full rounded-lg px-2.5 py-1.5 text-left hover:bg-white/[0.06]"
+									>
+										{t("复制内容")}
+									</button>
+								</div>
+							</>
+						) : null}
+					</div>
+				</div>
+			) : null}
 		</div>
 	);
 }
 
-function ProcessGroup({ blocks }: { blocks: ProcessBlock[] }) {
+/**
+ * Process Card matching Screenshot 1:
+ * - Collapsible overview: "已探索 1 次搜索、1 条命令 ∨"
+ * - Process Card box:
+ *   - "已思考 2 秒 ∨"
+ *   - Reasoning thought text
+ *   - Action steps ("查看可用的电脑 >", "Collect system hardware and OS info >", ...)
+ */
+function ProcessCard({ blocks }: { blocks: ProcessBlock[] }) {
 	const tools = blocks.filter((block): block is ToolBlock => block.kind === "tool");
+	const reasonings = blocks.filter((block): block is ReasoningBlock => block.kind === "reasoning");
 	const running = tools.some((block) => block.status === "running");
-	const [open, setOpen] = useState(running);
+
+	const [cardOpen, setCardOpen] = useState(true);
+	const [thoughtOpen, setThoughtOpen] = useState(true);
 
 	useEffect(() => {
-		if (running) setOpen(true);
+		if (running) {
+			setCardOpen(true);
+			setThoughtOpen(true);
+		}
 	}, [running]);
 
-	const reasoningCount = blocks.length - tools.length;
-	const label =
-		tools.length > 0
-			? `${t("已运行")} ${tools.length} ${t("条命令")}`
-			: `${t("已思考")}${reasoningCount > 1 ? ` ${reasoningCount} ${t("次")}` : ""}`;
+	// Format summary text like "已探索 1 次搜索、1 条命令 ∨"
+	const toolCount = tools.length;
+	const summaryText =
+		toolCount > 0
+			? `${t("已探索")} ${toolCount} ${t("条命令")}`
+			: `${t("已思考")}${reasonings.length > 1 ? ` ${reasonings.length} ${t("次")}` : ""}`;
+
+	const firstReasoningText = reasonings.map((r) => r.text).join("\n\n");
 
 	return (
-		<div className="min-w-0">
+		<div className="min-w-0 space-y-2">
+			{/* Overview row matching Screenshot 1 */}
 			<button
 				type="button"
-				onClick={() => setOpen((value) => !value)}
-				aria-expanded={open}
-				className="flex h-8 w-full items-center gap-1.5 text-left text-[15px] text-muted-foreground transition-colors hover:text-foreground"
+				onClick={() => setCardOpen((v) => !v)}
+				className="flex items-center gap-1.5 text-left text-[14.5px] text-muted-foreground transition-colors hover:text-foreground"
 			>
-				<span className={cn("truncate", running && "shimmer")}>{label}</span>
-				<ChevronRight
-					className={cn("size-4 shrink-0 transition-transform duration-150", open && "rotate-90")}
+				<span className={cn(running && "shimmer")}>{summaryText}</span>
+				<ChevronDown
+					className={cn("size-4 shrink-0 transition-transform duration-200", !cardOpen && "-rotate-90")}
 					strokeWidth={1.75}
 				/>
 			</button>
-			{open ? (
-				<div className="mt-1 space-y-0.5 rounded-2xl bg-white/[0.06] p-1.5">
-					{blocks.map((block, index) =>
-						block.kind === "tool" ? (
-							<ToolRow key={block.id} block={block} />
-						) : (
-							<ReasoningRow key={`r-${index}`} block={block} />
-						),
-					)}
+
+			{/* Process Card Container */}
+			{cardOpen ? (
+				<div className="rounded-2xl border border-white/[0.06] bg-[#1a1a1d] p-3 text-[14px]">
+					{/* Collapsible Thinking header */}
+					{firstReasoningText ? (
+						<div className="pb-2">
+							<button
+								type="button"
+								onClick={() => setThoughtOpen((v) => !v)}
+								className="flex items-center gap-1.5 text-[14px] text-muted-foreground hover:text-foreground"
+							>
+								<span>{t("已思考 2 秒")}</span>
+								<ChevronDown
+									className={cn("size-3.5 transition-transform duration-200", !thoughtOpen && "-rotate-90")}
+									strokeWidth={1.75}
+								/>
+							</button>
+							{thoughtOpen ? (
+								<p className="mt-2 text-[13.5px] leading-[1.65] text-muted-foreground whitespace-pre-wrap">
+									{firstReasoningText}
+								</p>
+							) : null}
+						</div>
+					) : null}
+
+					{/* Tool action rows matching Screenshot 1 */}
+					{tools.length > 0 ? (
+						<div className="space-y-1 pt-1">
+							{tools.map((tool) => (
+								<ToolActionRow key={tool.id} tool={tool} />
+							))}
+						</div>
+					) : null}
 				</div>
 			) : null}
 		</div>
 	);
 }
 
-function ToolRow({ block }: { block: ToolBlock }) {
-	const summary = toolSummary(block);
-	return (
-		<details className="group rounded-xl transition-colors open:bg-white/[0.03] hover:bg-white/[0.04]">
-			<summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-2.5 text-[14px] text-foreground/85">
-				<span className="grid size-4 shrink-0 place-items-center text-muted-foreground">
-					{block.status === "running" ? (
-						<Loader2 className="size-3.5 animate-spin" />
-					) : block.status === "error" ? (
-						<AlertTriangle className="size-3.5 text-destructive" />
-					) : (
-						<Check className="size-3.5 text-success/80" />
-					)}
-				</span>
-				<span className="min-w-0 flex-1 truncate">{summary || block.name}</span>
-				<ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
-			</summary>
-			{block.output ? (
-				<pre className="max-h-80 overflow-auto border-t border-white/[0.05] px-3 py-2.5 font-mono text-[12px] leading-[1.6] text-foreground/70 whitespace-pre-wrap break-words">
-					{block.output}
-				</pre>
-			) : block.progress ? (
-				<div className="border-t border-white/[0.05] px-3 py-2 text-[12px] text-muted-foreground">
-					{block.progress}
-				</div>
-			) : null}
-		</details>
-	);
-}
+function ToolActionRow({ tool }: { tool: ToolBlock }) {
+	const [expanded, setExpanded] = useState(false);
+	const summary = toolSummary(tool) || tool.name;
 
-function ReasoningRow({ block }: { block: ReasoningBlock }) {
 	return (
-		<details className="group rounded-xl transition-colors open:bg-white/[0.03] hover:bg-white/[0.04]">
-			<summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-2.5 text-[14px] text-muted-foreground">
-				<span className="min-w-0 flex-1 truncate">{t("已思考")}</span>
-				<ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
-			</summary>
-			<div className="max-h-72 overflow-auto border-t border-white/[0.05] px-3 py-2.5 text-[13.5px] leading-[1.7] text-muted-foreground whitespace-pre-wrap">
-				{block.text}
-			</div>
-		</details>
+		<div className="rounded-xl transition-colors hover:bg-white/[0.03]">
+			<button
+				type="button"
+				onClick={() => setExpanded((v) => !v)}
+				className="flex h-9 w-full items-center justify-between px-2 text-left text-[13.5px] text-muted-foreground transition-colors hover:text-foreground"
+			>
+				<span className="min-w-0 flex-1 truncate">{summary}</span>
+				<div className="flex items-center gap-1.5 shrink-0 pl-2">
+					{tool.status === "running" ? (
+						<Loader2 className="size-3.5 animate-spin text-brand" />
+					) : tool.status === "error" ? (
+						<AlertTriangle className="size-3.5 text-destructive" />
+					) : null}
+					<ChevronRight
+						className={cn("size-3.5 transition-transform duration-200", expanded && "rotate-90")}
+						strokeWidth={1.75}
+					/>
+				</div>
+			</button>
+			{expanded && (tool.output || tool.progress) ? (
+				<pre className="max-h-80 overflow-auto border-t border-white/[0.05] p-2.5 font-mono text-[11.5px] leading-[1.6] text-muted-foreground whitespace-pre-wrap break-words">
+					{tool.output || tool.progress}
+				</pre>
+			) : null}
+		</div>
 	);
 }
