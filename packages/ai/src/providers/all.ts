@@ -1,6 +1,7 @@
 import { CLASSIFIER_MODELS, IMAGE_MODELS, MODELS } from "../models.generated.ts";
 import { type CreateModelsOptions, createModels, type MutableModels, type Provider } from "../models.ts";
 import type { AnyModel, Api, ClassifierApi, ClassifierModel, ImageApi, ImageModel, Model } from "../types.ts";
+import { alibabaTokenPlanProvider } from "./alibaba-token-plan.ts";
 import { amazonBedrockProvider } from "./amazon-bedrock.ts";
 import { antLingProvider } from "./ant-ling.ts";
 import { anthropicProvider } from "./anthropic.ts";
@@ -26,6 +27,7 @@ import { modalProvider } from "./modal.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
 import { moonshotaiCnProvider } from "./moonshotai-cn.ts";
 import { nvidiaProvider } from "./nvidia.ts";
+import { ollamaCloudTokenPlanProvider } from "./ollama-cloud-token-plan.ts";
 import { openaiProvider } from "./openai.ts";
 import { openaiCodexProvider } from "./openai-codex.ts";
 import { opencodeProvider } from "./opencode.ts";
@@ -35,6 +37,8 @@ import { qwenTokenPlanProvider } from "./qwen-token-plan.ts";
 import { qwenTokenPlanCnProvider } from "./qwen-token-plan-cn.ts";
 import { qwenTokenPlanIndividualProvider } from "./qwen-token-plan-individual.ts";
 import { sensenovaProvider } from "./sensenova.ts";
+import { siliconflowProvider } from "./siliconflow.ts";
+import { siliconflowCnProvider } from "./siliconflow-cn.ts";
 import { stepfunProvider } from "./stepfun.ts";
 import { stepfunAiProvider } from "./stepfun-ai.ts";
 import { togetherProvider } from "./together.ts";
@@ -47,6 +51,7 @@ import { xiaomiTokenPlanCnProvider } from "./xiaomi-token-plan-cn.ts";
 import { xiaomiTokenPlanSgpProvider } from "./xiaomi-token-plan-sgp.ts";
 import { zaiProvider } from "./zai.ts";
 import { zaiCodingCnProvider } from "./zai-coding-cn.ts";
+import { zhipuaiProvider } from "./zhipuai.ts";
 
 /** Providers present in the generated catalog. `KnownProvider` additionally
  * includes purely dynamic providers that have no static catalog entry. */
@@ -136,8 +141,9 @@ export function getAllBuiltinModels<TProvider extends BuiltinProvider>(provider:
 export function builtinProviders(): Provider[] {
 	return [
 		amazonBedrockProvider(),
-		antLingProvider(),
+		alibabaTokenPlanProvider(),
 		anthropicProvider(),
+		antLingProvider(),
 		azureProvider(),
 		basetenProvider(),
 		cerebrasProvider(),
@@ -163,11 +169,14 @@ export function builtinProviders(): Provider[] {
 		openaiCodexProvider(),
 		opencodeProvider(),
 		opencodeGoProvider(),
+		ollamaCloudTokenPlanProvider(),
 		openrouterProvider(),
 		qwenTokenPlanProvider(),
 		qwenTokenPlanCnProvider(),
 		qwenTokenPlanIndividualProvider(),
 		sensenovaProvider(),
+		siliconflowProvider(),
+		siliconflowCnProvider(),
 		stepfunProvider(),
 		stepfunAiProvider(),
 		togetherProvider(),
@@ -180,6 +189,7 @@ export function builtinProviders(): Provider[] {
 		xiaomiTokenPlanSgpProvider(),
 		zaiProvider(),
 		zaiCodingCnProvider(),
+		zhipuaiProvider(),
 	];
 }
 

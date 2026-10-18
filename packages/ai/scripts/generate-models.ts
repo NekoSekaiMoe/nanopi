@@ -34,6 +34,7 @@ import {
 	groupProviderModelData,
 	type ModelDataStructure,
 	MODEL_DATA_MANIFEST_FILE,
+	providerArtifactName,
 	readModelDataProviderIds,
 	validateGeneratedModelData,
 	validateModelDataDirectory,
@@ -223,7 +224,11 @@ const NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
 const SENSENOVA_BASE_URL = "https://token.sensenova.cn/v1";
 const STEPFUN_CN_BASE_URL = "https://api.stepfun.com/v1";
 const STEPFUN_GLOBAL_BASE_URL = "https://api.stepfun.ai/v1";
+// modal.com's OpenAI-compatible inference gateway. Authentication is a Modal
+// proxy token, not a per-vendor API key. https://modal.com/docs/guide/openai-compatibility
 const MODAL_BASE_URL = "https://inference.us-west.modal.direct/v1";
+// Ollama Cloud token plan: same endpoint as `ollama-cloud`, subscription key.
+const OLLAMA_CLOUD_TOKEN_PLAN_BASE_URL = "https://ollama.com/v1";
 const PLAIN_OPENAI_COMPAT: OpenAICompletionsCompat = {
 	supportsStore: false,
 	supportsDeveloperRole: false,
@@ -263,6 +268,20 @@ const NVIDIA_NIM_UNSUPPORTED_MODELS = new Set([
 	"sarvamai/sarvam-m",
 	"upstage/solar-10.7b-instruct",
 ]);
+// Exactly the models.dev providers that ship as built-ins. Adding a vendor here
+// means also adding its key to `KnownProvider`, `env-api-keys.ts`, and
+// `providers/all.ts`. Everything else — including local servers (Ollama, LM
+// Studio, llama.cpp, ...) whose endpoint the user owns — belongs in `models.json`,
+// so a built-in catalog never reports an unconfigured vendor as available.
+const DIRECT_MODELS_DEV_PROVIDERS = [
+	"alibaba-token-plan",
+	"alibaba-token-plan-cn",
+	"siliconflow",
+	"siliconflow-cn",
+	"zai",
+	"zhipuai",
+] as const;
+const OLLAMA_CLOUD_TOKEN_PLAN_SOURCE = "ollama-cloud";
 const ZAI_TOOL_STREAM_UNSUPPORTED_MODELS = new Set(["glm-4.5", "glm-4.5-air", "glm-4.5-flash", "glm-4.5v"]);
 const OPENCODE_GO_GLM52_THINKING_LEVEL_MAP = {
 	off: null,
@@ -2927,6 +2946,60 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
+		// `zai` / `zhipuai` serve the same GLM models as their coding-plan keys over
+		// a different endpoint. `siliconflow-cn` / `siliconflow` and
+		// `alibaba-token-plan` / `alibaba-token-plan-cn` are separate regional keys.
+		// These are the only direct models.dev providers shipped as built-ins.
+		for (const providerId of DIRECT_MODELS_DEV_PROVIDERS) {
+			const provider = data[providerId];
+			if (!provider?.api) continue;
+			for (const [modelId, model] of Object.entries(provider.models ?? {})) {
+				const m = model as ModelsDevModel;
+				if (m.tool_call !== true) continue;
+				if (m.status === "deprecated") continue;
+
+				const thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
+				models.push({
+					id: modelId,
+					name: m.name || modelId,
+					api: "openai-completions",
+					provider: providerId,
+					baseUrl: provider.api,
+					compat: PLAIN_OPENAI_COMPAT,
+					reasoning: m.reasoning === true,
+					...(thinkingLevelMap ? { thinkingLevelMap } : {}),
+					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+					cost: getModelsDevCost(m.cost),
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+				});
+				recordModelsDevReasoningOptions(providerId, modelId, m);
+			}
+		}
+
+		// Ollama Cloud token plan: the subscription entry point to `ollama-cloud`'s
+		// catalog. Same endpoint and models, separate key so both can be configured.
+		for (const [modelId, model] of Object.entries(data[OLLAMA_CLOUD_TOKEN_PLAN_SOURCE]?.models ?? {})) {
+			const m = model as ModelsDevModel;
+			if (m.tool_call !== true) continue;
+			if (m.status === "deprecated") continue;
+
+			models.push({
+				id: modelId,
+				name: m.name || modelId,
+				api: "openai-completions",
+				provider: "ollama-cloud-token-plan",
+				baseUrl: OLLAMA_CLOUD_TOKEN_PLAN_BASE_URL,
+				compat: PLAIN_OPENAI_COMPAT,
+				reasoning: m.reasoning === true,
+				input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
+				cost: getModelsDevCost(m.cost),
+				contextWindow: m.limit?.context || 4096,
+				maxTokens: m.limit?.output || 4096,
+			});
+			recordModelsDevReasoningOptions("ollama-cloud-token-plan", modelId, m);
+		}
+
 		console.log(`Loaded ${models.length} tool-capable models from models.dev`);
 		return models;
 	} catch (error) {
@@ -3798,7 +3871,7 @@ async function generateModels() {
 			mkdirSync(stagedDataDir, { recursive: true });
 			const fileContents: Record<string, string> = {};
 			for (const providerId of generatedDataProviderIds) {
-				const filename = `${providerId}.json`;
+				const filename = `${providerArtifactName(providerId)}.json`;
 				const content = serializeJson(generatedDataProviders[providerId]);
 				fileContents[filename] = content;
 				writeFileSync(join(stagedDataDir, filename), content);
@@ -3840,7 +3913,7 @@ async function generateModels() {
 				const generatedShardFiles = new Set<string>();
 				for (const providerId of sortedProviderIds) {
 					let output = generatedHeader;
-					output += `import values from "./data/${providerId}.json" with { type: "json" };\n`;
+					output += `import values from "./data/${providerArtifactName(providerId)}.json" with { type: "json" };\n`;
 					output += `import { flattenChatModelCatalog, flattenClassifierModelCatalog, flattenImageModelCatalog, type ChatModelCatalog, type ClassifierModelCatalog, type ImageModelCatalog } from "../model-catalog.ts";\n\n`;
 					output += `export const ${catalogConstName(providerId)}: ChatModelCatalog<typeof values, ${JSON.stringify(providerId)}> =\n`;
 					output += `\tflattenChatModelCatalog(${JSON.stringify(providerId)}, values);\n\n`;
@@ -3848,7 +3921,7 @@ async function generateModels() {
 					output += `\tflattenImageModelCatalog(${JSON.stringify(providerId)}, values);\n\n`;
 					output += `export const ${classifierCatalogConstName(providerId)}: ClassifierModelCatalog<typeof values, ${JSON.stringify(providerId)}> =\n`;
 					output += `\tflattenClassifierModelCatalog(${JSON.stringify(providerId)}, values);\n`;
-					const filename = `${providerId}.models.ts`;
+					const filename = `${providerArtifactName(providerId)}.models.ts`;
 					generatedShardFiles.add(filename);
 					writeFileSync(join(providersDir, filename), output);
 				}
@@ -3858,7 +3931,10 @@ async function generateModels() {
 
 				let output = generatedHeader;
 				for (const providerId of sortedProviderIds) {
-					output += `import { ${classifierCatalogConstName(providerId)}, ${imageCatalogConstName(providerId)}, ${catalogConstName(providerId)} } from "./providers/${providerId}.models.ts";\n`;
+					// The module name loses dots (`llama.cpp` → `llama-cpp`), so the id is
+					// recorded here for `model-data.ts`, which reads provider ids back out.
+					output += `// provider-id: ${providerId}\n`;
+					output += `import { ${classifierCatalogConstName(providerId)}, ${imageCatalogConstName(providerId)}, ${catalogConstName(providerId)} } from "./providers/${providerArtifactName(providerId)}.models.ts";\n`;
 				}
 				output += `\nexport const MODELS: {\n`;
 				for (const providerId of sortedProviderIds) {

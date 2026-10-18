@@ -52,6 +52,16 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	"xiaomi-token-plan-cn": "mimo-v2.6-pro",
 	"xiaomi-token-plan-ams": "mimo-v2.6-pro",
 	"xiaomi-token-plan-sgp": "mimo-v2.6-pro",
+	zhipuai: "glm-5.3",
+	modal: "moonshotai/Kimi-K3",
+	sensenova: "sensenova-6.8-flash-lite",
+	stepfun: "step-5-preview",
+	"stepfun-ai": "step-5-preview",
+	"ollama-cloud-token-plan": "kimi-k3",
+	"alibaba-token-plan": "qwen3.8-max",
+	"alibaba-token-plan-cn": "qwen3.8-max",
+	siliconflow: "moonshotai/Kimi-K2.6",
+	"siliconflow-cn": "Pro/moonshotai/Kimi-K2.6",
 };
 
 export interface ScopedModel {
