@@ -16,7 +16,12 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { IconButton } from "@/components/icon-button";
 import { Logo } from "@/components/logo";
-import { type FsListResult, type SessionMetaWithProject, listDir } from "@/lib/api";
+import {
+	type FsListResult,
+	type SessionMetaWithProject,
+	listDir,
+	openWorkspaceFile,
+} from "@/lib/api";
 import { asMs, cn, relativeTime } from "@/lib/utils";
 
 type SidebarView = "sessions" | "files";
@@ -333,13 +338,24 @@ export function Sidebar({
 							</button>
 						))}
 						{(listing?.files ?? []).map((name) => (
-							<div
+							<button
 								key={`file-${name}`}
-								className="flex h-8 items-center gap-2 rounded-lg px-2 text-[12.5px] text-muted-foreground"
+								type="button"
+								title="在编辑器中打开"
+								onClick={() => {
+									setFilesError(null);
+									void openWorkspaceFile(
+										joinPath(listing?.path || dir, name),
+										currentSessionId ?? undefined,
+									).catch((cause) => {
+										setFilesError(cause instanceof Error ? cause.message : String(cause));
+									});
+								}}
+								className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
 							>
 								<File className="size-4 shrink-0" strokeWidth={1.75} />
 								<span className="min-w-0 flex-1 truncate">{name}</span>
-							</div>
+							</button>
 						))}
 					</div>
 				)}

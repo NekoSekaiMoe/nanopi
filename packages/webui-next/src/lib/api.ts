@@ -545,6 +545,15 @@ export async function listDir(path: string): Promise<FsListResult> {
 	return readJson<FsListResult>(response);
 }
 
+export async function openWorkspaceFile(path: string, sessionId?: string): Promise<void> {
+	const response = await fetch("/fs/open", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify({ path, ...(sessionId ? { session_id: sessionId } : {}) }),
+	});
+	if (!response.ok) throw await failure(response);
+}
+
 export interface ProviderInfo {
 	name: string;
 	type: string;
