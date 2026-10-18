@@ -5,10 +5,10 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSy
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseArgs } from "node:util";
-import { installConsumer, packageConsumerDirectoryName, smokeTestNpmConsumer } from "./local-package-install.mjs";
+import { installConsumer, packageConsumerDirectoryName, smokeTestPnpmConsumer } from "./local-package-install.mjs";
 import { produceArtifactSet } from "./package-artifacts.mjs";
 import { codingAgentName, smokeTestCodingAgent } from "./coding-agent-smoke.mjs";
-import { execNpmSync } from "./npm-command.mjs";
+import { execPnpmSync } from "./pnpm-command.mjs";
 
 function printUsage() {
 	console.log(`Usage: node scripts/local-release.mjs [options]
@@ -19,7 +19,7 @@ isolated directories outside the repository for local release testing.
 Options:
   --out <dir>          Output directory. Defaults to a new directory under ${tmpdir()}
   --force              Remove --out first if it already exists
-  --skip-check         Do not run npm run check before building
+  --skip-check         Do not run pnpm run check before building
   --skip-test          Do not run ./test.sh after building
   --skip-install       Only create the artifact set; do not create isolated installs
   --help               Show this help
@@ -76,8 +76,8 @@ const repoRoot = process.cwd();
 const rootPackageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
 if (rootPackageJson.name !== "nanopi-monorepo") throw new Error("Run this script from the repository root");
 
-execNpmSync(["run", "generate:models"], { cwd: repoRoot, stdio: "inherit" });
-if (!options.skipCheck) execNpmSync(["run", "check"], { cwd: repoRoot, stdio: "inherit" });
+execPnpmSync(["run", "generate:models"], { cwd: repoRoot, stdio: "inherit" });
+if (!options.skipCheck) execPnpmSync(["run", "check"], { cwd: repoRoot, stdio: "inherit" });
 
 const artifactSet = produceArtifactSet({
 	build: true,
@@ -100,9 +100,9 @@ if (!options.skipInstall) {
 		for (const pkg of artifactSet.packages) {
 			const directory = pkg.name === codingAgentName
 				? nodeInstallDirectory
-				: join(validationRoot, "npm", packageConsumerDirectoryName(pkg.name));
+				: join(validationRoot, "pnpm", packageConsumerDirectoryName(pkg.name));
 			installConsumer({ artifactSet, directory, packageNames: [pkg.name] });
-			smokeTestNpmConsumer({ artifactSet, directory, packageName: pkg.name });
+			smokeTestPnpmConsumer({ artifactSet, directory, packageName: pkg.name });
 			if (pkg.name === codingAgentName) smokeTestCodingAgent(directory);
 		}
 		createNanoPiShim(nodeInstallDirectory);
@@ -122,8 +122,8 @@ if (!options.skipInstall) {
 	console.log("Run it with Node from outside the repository:");
 	console.log(`  node ${singleFileCliPath} --help`);
 
-	console.log("\nIsolated npm install:");
+	console.log("\nIsolated pnpm install:");
 	console.log(`  ${nodeInstallDirectory}`);
-	console.log("\nRun the locally packed npm CLI from outside the repository:");
+	console.log("\nRun the locally packed CLI from outside the repository:");
 	console.log(`  ${join(nodeInstallDirectory, process.platform === "win32" ? "nanopi.cmd" : "nanopi")} --help`);
 }

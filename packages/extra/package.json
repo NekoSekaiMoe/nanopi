@@ -20,7 +20,7 @@
 		"clean": "shx rm -rf dist",
 		"build": "tsc -p tsconfig.build.json",
 		"test": "vitest --run",
-		"prepublishOnly": "npm run build"
+		"prepublishOnly": "pnpm run build"
 	},
 	"dependencies": {
 		"@nanopi/pi-tui": "^20261013.0.0"

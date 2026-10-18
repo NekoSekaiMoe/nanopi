@@ -4,7 +4,7 @@ import { existsSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { produceArtifactSet } from "./package-artifacts.mjs";
 import { getPublicWorkspacePackages } from "./release-packages.mjs";
-import { execNpmSync } from "./npm-command.mjs";
+import { execPnpmSync } from "./pnpm-command.mjs";
 
 const dryRun = process.argv.includes("--dry-run");
 const unknownArgs = process.argv.slice(2).filter((arg) => arg !== "--dry-run");
@@ -12,7 +12,7 @@ if (unknownArgs.length > 0) throw new Error("Usage: node scripts/publish.mjs [--
 
 function isPublished(name, version) {
 	try {
-		const output = execNpmSync(["view", `${name}@${version}`, "version", "--json"], {
+		const output = execPnpmSync(["view", `${name}@${version}`, "version", "--json"], {
 			encoding: "utf8",
 			stdio: ["inherit", "pipe", "pipe"],
 		});
@@ -34,7 +34,7 @@ const versions = [...new Set(packages.map((pkg) => pkg.version))];
 if (versions.length !== 1) throw new Error(`Publish packages are not lockstep versioned: ${versions.join(", ")}`);
 for (const pkg of packages) {
 	if (!existsSync(join(pkg.directory, "dist"))) {
-		throw new Error(`${pkg.directory}/dist does not exist. Run npm run build before publishing.`);
+		throw new Error(`${pkg.directory}/dist does not exist. Run pnpm run build before publishing.`);
 	}
 }
 
@@ -53,7 +53,7 @@ try {
 		}
 		const args = ["publish", pkg.tarballPath, "--access", "public", "--provenance", "--ignore-scripts"];
 		if (dryRun) args.push("--dry-run");
-		execNpmSync(args, {
+		execPnpmSync(args, {
 			cwd: packageByName.get(pkg.name).directory,
 			stdio: "inherit",
 		});

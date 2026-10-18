@@ -60,10 +60,10 @@
 		"generate-models": "node --import ../../ts-import.mjs scripts/generate-models.ts --strict",
 		"hydrate-model-data": "node --import ../../ts-import.mjs scripts/generate-models.ts --strict --data-only",
 		"check:model-data": "node --import ../../ts-import.mjs scripts/check-model-data.ts",
-		"build": "npm run generate-models && npm run build:offline",
-		"build:offline": "npm run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
+		"build": "pnpm run generate-models && pnpm run build:offline",
+		"build:offline": "pnpm run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
 		"test": "vitest --run",
-		"prepublishOnly": "npm run clean && npm run build"
+		"prepublishOnly": "pnpm run clean && pnpm run build"
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "0.129.0",

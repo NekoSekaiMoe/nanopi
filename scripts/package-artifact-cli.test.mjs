@@ -14,7 +14,7 @@ function runScript(name, args) {
 function assertFailsBeforeWork(result, message) {
 	assert.notEqual(result.status, 0);
 	assert.match(result.stderr, message);
-	assert.doesNotMatch(result.stdout, /generate:models|npm run clean/);
+	assert.doesNotMatch(result.stdout, /generate:models|pnpm run clean/);
 }
 
 test("rejects missing option values before doing work", () => {
@@ -23,9 +23,9 @@ test("rejects missing option values before doing work", () => {
 	assertFailsBeforeWork(runScript("use-local-packages.mjs", ["--manifest", "--consumer", "target"]), /--manifest/);
 });
 
-test("rejects an unsupported package manager before doing work", () => {
+test("rejects the removed package manager option before doing work", () => {
 	assertFailsBeforeWork(
-		runScript("use-local-packages.mjs", ["--manifest", "missing.json", "--consumer", "target", "--package", "example", "--package-manager", "yarn"]),
-		/Unsupported package manager: yarn/,
+		runScript("use-local-packages.mjs", ["--manifest", "missing.json", "--consumer", "target", "--package", "example", "--package-manager", "npm"]),
+		/--package-manager/,
 	);
 });

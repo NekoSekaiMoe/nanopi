@@ -3,7 +3,6 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node
 import { isAbsolute, join, relative, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { parseDocument } from "yaml";
-import { execNpmSync } from "./npm-command.mjs";
 
 const dependencySections = ["dependencies", "devDependencies", "optionalDependencies"];
 
@@ -63,34 +62,37 @@ function assertPackageFile(directory, target, description) {
 	if (!existsSync(path)) throw new Error(`${description} does not exist: ${path}`);
 }
 
-function lockfilePackageName(path) {
-	const marker = "node_modules/";
-	const index = path.lastIndexOf(marker);
-	return index === -1 ? undefined : path.slice(index + marker.length);
+// A lockfile key is either "@scope/name@<specifier>" or "name@<specifier>".
+function lockfilePackageName(key) {
+	const separator = key.lastIndexOf("@");
+	return separator > 0 ? key.slice(0, separator) : undefined;
 }
 
-function verifyLocalResolutions(directory, artifactSet, directPackageName) {
-	const lockPath = join(directory, "package-lock.json");
-	const lock = JSON.parse(readFileSync(lockPath, "utf8"));
-	if (!lock.packages || typeof lock.packages !== "object" || Array.isArray(lock.packages)) {
-		throw new Error(`Invalid npm lockfile: packages object is missing from ${lockPath}`);
+// pnpm lockfiles record a tarball dependency as "<name>@<file: specifier>", so the
+// artifact a package resolved from is visible in its key; there is no resolved field.
+function verifyLocalResolutions(directory, artifactSet) {
+	const lockPath = join(directory, "pnpm-lock.yaml");
+	const lock = parseDocument(readFileSync(lockPath, "utf8"));
+	if (lock.errors.length > 0) {
+		throw new Error(`Invalid pnpm lockfile ${lockPath}: ${lock.errors.map((error) => error.message).join("; ")}`);
 	}
+	const packages = lock.get("packages");
+	if (!packages) throw new Error(`Invalid pnpm lockfile: packages object is missing from ${lockPath}`);
 	const artifacts = new Map(artifactSet.packages.map((pkg) => [pkg.name, pkg]));
 	const resolvedNames = new Set();
-	for (const [path, installed] of Object.entries(lock.packages)) {
-		const name = lockfilePackageName(path);
+	for (const key of packages.items.map((item) => String(item.key))) {
+		const name = lockfilePackageName(key);
 		const artifact = artifacts.get(name);
 		if (!artifact) continue;
-		if (typeof installed.resolved !== "string" || !installed.resolved.startsWith("file:")) {
-			throw new Error(`${name} did not resolve from a local artifact: ${String(installed.resolved)}`);
-		}
-		const resolvedPath = new URL(installed.resolved, pathToFileURL(`${directory}/`));
-		if (resolvedPath.protocol !== "file:" || resolvedPath.pathname !== pathToFileURL(artifact.tarballPath).pathname) {
-			throw new Error(`${name} resolved from the wrong local artifact: ${installed.resolved}`);
+		const specifier = key.slice(name.length + 1);
+		if (!specifier.startsWith("file:")) throw new Error(`${name} did not resolve from a local artifact: ${specifier}`);
+		const resolvedPath = resolve(directory, specifier.slice("file:".length));
+		if (resolvedPath !== resolve(artifact.tarballPath)) {
+			throw new Error(`${name} resolved from the wrong local artifact: ${specifier}`);
 		}
 		resolvedNames.add(name);
 	}
-	if (!resolvedNames.has(directPackageName)) throw new Error(`${directPackageName} is missing from the consumer lockfile`);
+	return resolvedNames;
 }
 
 function preparePnpmWorkspace(consumerDirectory, specifiers) {
@@ -112,8 +114,8 @@ function preparePnpmWorkspace(consumerDirectory, specifiers) {
 	return { contents: String(document), path: workspacePath };
 }
 
-export function wireConsumer({ artifactSet, consumerDirectory, packageNames, packageManager = "npm" }) {
-	if (packageManager !== "npm" && packageManager !== "pnpm") throw new Error(`Unsupported package manager: ${packageManager}`);
+export function wireConsumer({ artifactSet, consumerDirectory, packageNames, packageManager = "pnpm" }) {
+	if (packageManager !== "pnpm") throw new Error(`Unsupported package manager: ${packageManager}`);
 	if (packageNames.length === 0) throw new Error("At least one package is required");
 	const packageJsonPath = join(consumerDirectory, "package.json");
 	if (!existsSync(packageJsonPath)) throw new Error(`Consumer package.json does not exist: ${packageJsonPath}`);
@@ -138,28 +140,22 @@ export function wireConsumer({ artifactSet, consumerDirectory, packageNames, pac
 		}
 		manifest[targetSection] = { ...manifest[targetSection], [name]: specifiers[name] };
 	}
-	if (packageManager === "npm") manifest.overrides = { ...manifest.overrides, ...specifiers };
-	const pnpmWorkspace = packageManager === "pnpm" ? preparePnpmWorkspace(consumerDirectory, specifiers) : undefined;
+	const pnpmWorkspace = preparePnpmWorkspace(consumerDirectory, specifiers);
 	writeFileSync(packageJsonPath, `${JSON.stringify(manifest, null, detectIndentation(contents))}\n`);
-	if (pnpmWorkspace) writeFileSync(pnpmWorkspace.path, pnpmWorkspace.contents);
+	writeFileSync(pnpmWorkspace.path, pnpmWorkspace.contents);
 	return manifest;
 }
 
-export function installConsumer({ artifactSet, directory, packageNames, packageManager = "npm" }) {
-	if (packageManager !== "npm") throw new Error(`Unsupported package manager: ${packageManager}`);
+export function installConsumer({ artifactSet, directory, packageNames }) {
 	if (packageNames.length === 0) throw new Error("At least one package is required");
 	for (const packageName of packageNames) artifactSet.getPackage(packageName);
 	mkdirSync(directory, { recursive: true });
 	writeFileSync(join(directory, "package.json"), '{"private":true,"type":"module"}\n');
 	wireConsumer({ artifactSet, consumerDirectory: directory, packageNames });
-	const installArgs = ["--omit=dev", "--no-audit", "--no-fund"];
-	const args = ["install", "--ignore-scripts", ...installArgs];
-	const options = { cwd: directory, stdio: "inherit", timeout: 300_000 };
-	if (packageManager === "npm") execNpmSync(args, options);
-	else execFileSync(packageManager, args, options);
+	execFileSync("pnpm", ["install", "--prod", "--ignore-scripts"], { cwd: directory, stdio: "inherit", timeout: 300_000 });
 }
 
-export function smokeTestNpmConsumer({ directory, artifactSet, packageName }) {
+export function smokeTestPnpmConsumer({ directory, artifactSet, packageName }) {
 	const artifact = artifactSet.getPackage(packageName);
 	const installedDirectory = packageDirectory(directory, packageName);
 	const manifest = JSON.parse(readFileSync(join(installedDirectory, "package.json"), "utf8"));
@@ -185,8 +181,9 @@ export function smokeTestNpmConsumer({ directory, artifactSet, packageName }) {
 		assertPackageFile(installedDirectory, target.startsWith("./") ? target : `./${target}`, `${packageName} bin ${name}`);
 	}
 
-	if (!existsSync(join(directory, "package-lock.json"))) throw new Error(`npm consumer smoke test requires package-lock.json: ${directory}`);
-	verifyLocalResolutions(directory, artifactSet, packageName);
+	if (!existsSync(join(directory, "pnpm-lock.yaml"))) throw new Error(`pnpm consumer smoke test requires pnpm-lock.yaml: ${directory}`);
+	const resolvedNames = verifyLocalResolutions(directory, artifactSet);
+	if (!resolvedNames.has(packageName)) throw new Error(`${packageName} is missing from the consumer lockfile`);
 	const smokePath = join(directory, "artifact-smoke.mjs");
 	const resolveChecks = runtimeSpecifiers.map((specifier) => `assert.ok(existsSync(fileURLToPath(import.meta.resolve(${JSON.stringify(specifier)}))));`).join("\n");
 	writeFileSync(

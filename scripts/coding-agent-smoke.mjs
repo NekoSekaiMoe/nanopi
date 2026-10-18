@@ -55,7 +55,15 @@ for (const subpath of ["/client", "/experimental/plugin"]) {
 }
 `);
 		execFileSync(runtime, [entry], { cwd: directory, env, stdio: ["inherit", "pipe", "pipe"], timeout: 30_000 });
-		for (const cli of new Set([manifest.bin.nanopi, "dist/cli.js"])) {
+		// `--version` reports the build identity `v<date>[.<commit>]`. The bundled CLI
+		// bakes in the commit at build time, the unbundled one resolves it from the
+		// repository, and the consumer directory is outside any repository.
+		const date = manifest.version.match(/^(\d{8})/)?.[1] ?? manifest.version;
+		const expectedVersions = new Map([
+			[manifest.bin.nanopi, new RegExp(`^v${date}(\\.[0-9a-f]{7})?$`)],
+			["dist/cli.js", new RegExp(`^v${date}$`)],
+		]);
+		for (const [cli, expectedVersion] of expectedVersions) {
 			const output = execFileSync(runtime, [join(packageDir, cli), "--version"], {
 				cwd: directory,
 				encoding: "utf8",
@@ -63,7 +71,7 @@ for (const subpath of ["/client", "/experimental/plugin"]) {
 				stdio: ["inherit", "pipe", "pipe"],
 				timeout: 30_000,
 			});
-			if (output.trim() !== manifest.version) throw new Error(`Unexpected version from ${cli}: ${output}`);
+			if (!expectedVersion.test(output.trim())) throw new Error(`Unexpected version from ${cli}: ${output}`);
 		}
 	} finally {
 		rmSync(entry, { force: true });

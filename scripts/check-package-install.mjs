@@ -3,7 +3,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { installConsumer, packageConsumerDirectoryName, smokeTestNpmConsumer } from "./local-package-install.mjs";
+import { installConsumer, packageConsumerDirectoryName, smokeTestPnpmConsumer } from "./local-package-install.mjs";
 import { produceArtifactSet } from "./package-artifacts.mjs";
 import { codingAgentName, smokeTestCodingAgent } from "./coding-agent-smoke.mjs";
 
@@ -13,7 +13,7 @@ try {
 	for (const pkg of artifactSet.packages) {
 		const directory = join(root, "consumers", packageConsumerDirectoryName(pkg.name));
 		installConsumer({ artifactSet, directory, packageNames: [pkg.name] });
-		smokeTestNpmConsumer({ artifactSet, directory, packageName: pkg.name });
+		smokeTestPnpmConsumer({ artifactSet, directory, packageName: pkg.name });
 		if (pkg.name === codingAgentName) smokeTestCodingAgent(directory);
 	}
 	console.log(`Verified ${artifactSet.packages.length} isolated package consumers.`);
