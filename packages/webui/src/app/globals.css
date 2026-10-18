@@ -48,38 +48,37 @@
 }
 
 .dark {
-	--background: oklch(0.12212 0 0);
-	--background-chrome: oklch(0.16 0 0);
-	--foreground: oklch(0.9 0 0);
-	--card: oklch(0.21 0 0);
-	--card-foreground: oklch(0.9 0 0);
-	--popover: var(--card);
-	--popover-foreground: var(--card-foreground);
-	--muted: oklch(0.26 0 0);
-	--muted-foreground: oklch(0.7 0 0);
-	--accent: oklch(0.26 0 0);
-	--accent-foreground: oklch(0.86 0 0);
-	--border: oklch(1 0 0 / 8%);
-	--border-soft: color-mix(in oklab, var(--border) 60%, transparent);
-	--input: oklch(1 0 0 / 14%);
-	--ring: oklch(0.86 0.005 285);
-	--sidebar: oklch(0.185 0 0);
+	--background: #050506;
+	--background-chrome: #0a0a0c;
+	--foreground: #f2f2f3;
+	--card: #141416;
+	--card-foreground: #f2f2f3;
+	--popover: #17171a;
+	--popover-foreground: #f2f2f3;
+	--muted: #1c1c1f;
+	--muted-foreground: #8b8b93;
+	--accent: #202024;
+	--accent-foreground: #f2f2f3;
+	--border: rgb(255 255 255 / 0.08);
+	--border-soft: rgb(255 255 255 / 0.05);
+	--input: rgb(255 255 255 / 0.14);
+	--ring: rgb(255 255 255 / 0.3);
+	--sidebar: #0a0a0c;
 	--sidebar-accent: rgb(255 255 255 / 0.06);
-	--sidebar-border: oklch(1 0 0 / 8%);
-	--brand: oklch(0.72 0.16 290);
-	--brand-foreground: oklch(0.985 0.001 286);
-	--brand-soft: oklch(0.3 0.07 290 / 0.45);
-	--brand-border: oklch(0.72 0.16 290 / 0.35);
-	--chat-user-bubble: #5b3aa6;
-	--chat-user-bubble-fg: #fff;
-	--chat-user-bubble: oklch(from var(--brand) 0.4 0.15 calc(h + 7));
-	--surface-editor: var(--background);
-	--surface-composer: var(--card);
-	--success: oklch(0.72 0.13 150);
-	--warning: oklch(0.78 0.13 70);
-	--destructive: oklch(0.704 0.191 22.216);
-	--scrollbar-thumb: oklch(1 0 0 / 0.14);
-	--scrollbar-thumb-hover: oklch(1 0 0 / 0.26);
+	--sidebar-border: rgb(255 255 255 / 0.05);
+	--brand: #7b4dff;
+	--brand-foreground: #ffffff;
+	--brand-soft: rgb(123 77 255 / 0.16);
+	--brand-border: rgb(123 77 255 / 0.4);
+	--chat-user-bubble: #7b4dff;
+	--chat-user-bubble-fg: #ffffff;
+	--surface-editor: #141416;
+	--surface-composer: #17171a;
+	--success: #4ade80;
+	--warning: #fbbf24;
+	--destructive: #f87171;
+	--scrollbar-thumb: rgb(255 255 255 / 0.12);
+	--scrollbar-thumb-hover: rgb(255 255 255 / 0.22);
 }
 
 @theme inline {

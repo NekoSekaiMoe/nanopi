@@ -30,6 +30,18 @@ export function setLocale(next: Locale): void {
 
 const EN: Record<string, string> = {
 	"上一级": "Up one level",
+	"对话": "Chats",
+	"常规": "General",
+	"快捷操作": "Quick actions",
+	"新对话": "New chat",
+	"最近": "Recent",
+	"已运行": "Ran",
+	"条命令": "commands",
+	"已思考": "Thought",
+	"次": "times",
+	"想从哪里入手？": "Where do you want to start?",
+	"试试这些": "Try these",
+	"问点什么": "Ask anything",
 	"下午好": "Good afternoon",
 	"为当前代码补充测试": "Add tests for the current code",
 	"今天": "Today",

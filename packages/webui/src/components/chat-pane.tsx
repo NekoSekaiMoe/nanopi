@@ -1,9 +1,8 @@
 "use client";
 
-import { AlertCircle, Sparkles } from "lucide-react";
+import { AlertCircle, ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Composer } from "@/components/composer";
-import { Logo } from "@/components/logo";
 import { MessageItem } from "@/components/message-item";
 import { PermissionCard } from "@/components/permission-card";
 import { UserInputCard } from "@/components/user-input-card";
@@ -42,6 +41,7 @@ export function ChatPane({
 	images,
 	onImages,
 	sessionName,
+	workspaceName,
 }: {
 	messages: UiMessage[];
 	loading: boolean;
@@ -65,6 +65,7 @@ export function ChatPane({
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
 	sessionName: string;
+	workspaceName: string;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
@@ -99,7 +100,7 @@ export function ChatPane({
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
 				{loading ? (
-					<div className="mx-auto w-full max-w-[840px] space-y-5 px-4 py-8 sm:px-6 lg:px-10">
+					<div className="mx-auto w-full max-w-[760px] space-y-5 px-4 py-8 sm:px-6 lg:px-10">
 						<div className="ml-auto h-12 w-48 animate-pulse rounded-2xl bg-muted" />
 						<div className="space-y-2">
 							<div className="h-3 w-[72%] animate-pulse rounded bg-muted" />
@@ -110,7 +111,7 @@ export function ChatPane({
 				) : welcome ? (
 					<Welcome onPick={(text) => onComposer(text)} models={models} onConfigure={onConfigure} />
 				) : (
-					<div className="mx-auto w-full max-w-[840px] space-y-6 px-4 pb-8 pt-6 sm:px-6 lg:px-10">
+					<div className="mx-auto w-full max-w-[760px] space-y-7 px-4 pb-8 pt-5 sm:px-6 lg:px-10">
 						{messages.map((message) => (
 							<MessageItem key={message.id} message={message} />
 						))}
@@ -158,6 +159,7 @@ export function ChatPane({
 					images={images}
 					onImages={onImages}
 					disabled={models.length === 0}
+					workspaceName={workspaceName}
 				/>
 				<span className="sr-only">{sessionName}</span>
 			</div>
@@ -208,48 +210,52 @@ function Welcome({
 	const [poem] = useState<Poem | null>(() => (getLocale() === "zh" ? randomPoem() : null));
 
 	return (
-		<div className="mx-auto flex min-h-full w-full max-w-[840px] flex-col items-center justify-center px-6 py-16 text-center">
-			<Logo size={48} className="shadow-lg" />
-			{poem ? (
-				<>
-					<h1 className="mt-5 max-w-[600px] text-balance text-[19px] font-medium leading-8 tracking-[-0.01em] text-foreground">
+		<div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-5 pb-10 pt-16 sm:px-8">
+			<h1 className="text-[28px] font-normal leading-[1.35] tracking-[-0.02em] text-foreground">
+				{poem ? t("想从哪里入手？") : greeting}
+			</h1>
+			<p className="mt-2 text-[13.5px] leading-6 text-muted-foreground">
+				{poem ? (
+					<>
 						{poem.text}
-					</h1>
-					<p className="mt-2 text-[12px] text-muted-foreground">—— {poem.source}</p>
-				</>
-			) : (
-				<>
-					<h1 className="mt-5 text-[26px] font-semibold tracking-[-0.03em] text-foreground">
-						{greeting}
-					</h1>
-					<p className="mt-1.5 text-[14px] text-muted-foreground">{t("今天要完成什么？")}</p>
-				</>
-			)}
+						<span className="text-muted-foreground/60"> —— {poem.source}</span>
+					</>
+				) : (
+					t("今天要完成什么？")
+				)}
+			</p>
 
 			{models.length === 0 ? (
-				<div className="mt-6 flex flex-col items-center gap-2">
-					<p className="text-[12px] text-muted-foreground">{t('还没有配置模型')}</p>
+				<div className="mt-8 flex flex-col items-start gap-3">
+					<p className="text-[13px] text-muted-foreground">{t("还没有配置模型")}</p>
 					<button
 						type="button"
 						onClick={onConfigure}
-						className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85"
+						className="h-10 rounded-full bg-foreground px-4 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
 					>
 						{t("去设置")}
 					</button>
 				</div>
 			) : (
-				<div className="mt-7 flex flex-wrap justify-center gap-2">
-					{SUGGESTIONS.map((suggestion) => (
-						<button
-							key={suggestion}
-							type="button"
-							onClick={() => onPick(suggestion)}
-							className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border bg-background px-3 text-[12px] text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-						>
-							<Sparkles className="size-3.5 text-muted-foreground" strokeWidth={1.75} />
-							{suggestion}
-						</button>
-					))}
+				<div className="mt-10 w-full">
+					<p className="mb-2 px-1 text-[12px] text-muted-foreground/70">{t("试试这些")}</p>
+					<div className="overflow-hidden rounded-2xl bg-white/[0.03]">
+						{SUGGESTIONS.map((suggestion, index) => (
+							<button
+								key={suggestion}
+								type="button"
+								onClick={() => onPick(suggestion)}
+								className={cn(
+									"flex h-12 w-full items-center gap-3 px-3.5 text-left text-[14.5px] text-foreground/85 transition-colors hover:bg-white/[0.04] hover:text-foreground",
+									index < SUGGESTIONS.length - 1 && "border-b border-white/[0.05]",
+								)}
+							>
+								<Sparkles className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+								<span className="min-w-0 flex-1 truncate">{suggestion}</span>
+								<ChevronRight className="size-4 shrink-0 text-muted-foreground/60" strokeWidth={1.75} />
+							</button>
+						))}
+					</div>
 				</div>
 			)}
 		</div>

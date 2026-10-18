@@ -18,7 +18,7 @@ export const viewport: Viewport = {
 	viewportFit: "cover",
 	themeColor: [
 		{ media: "(prefers-color-scheme: light)", color: "#f7f7f5" },
-		{ media: "(prefers-color-scheme: dark)", color: "#1f1f1f" },
+		{ media: "(prefers-color-scheme: dark)", color: "#050506" },
 	],
 };
 
@@ -26,7 +26,9 @@ const themeScript = `
 (function () {
   try {
     var stored = localStorage.getItem('nanopi.theme');
-    var dark = stored === 'dark' || (stored !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    var dark = stored
+      ? stored === 'dark' || (stored === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      : true;
     if (dark) document.documentElement.classList.add('dark');
     document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
   } catch (e) {}

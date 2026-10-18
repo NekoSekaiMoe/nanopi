@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, Cpu, Info, Monitor, Moon, Network, Palette, Sparkles, Sun, X } from "lucide-react";
+import { ArrowLeft, ChevronRight, Cpu, Info, Monitor, Moon, Network, Palette, Sparkles, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { getMcpStatus, getSkills, type ApprovalMode, type ConfigInfo, type McpStatusInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
 import { ProviderSettings } from "@/components/provider-settings";
@@ -55,6 +55,7 @@ export function SettingsOverlay({
 	onToggleNotifications: () => void;
 }) {
 	const [section, setSection] = useState<Section>("appearance");
+	const [mobileDetail, setMobileDetail] = useState(false);
 	const [dirDraft, setDirDraft] = useState(project?.working_dir ?? "");
 	const [changingDir, setChangingDir] = useState(false);
 	const [dirError, setDirError] = useState<string | null>(null);
@@ -118,18 +119,18 @@ export function SettingsOverlay({
 
 	return (
 		<div className="fixed inset-0 z-50 flex bg-background">
-			<aside className="hidden w-[248px] shrink-0 flex-col border-r border-border bg-sidebar p-2 md:flex">
-				<div className="flex h-11 items-center gap-2 px-2">
-					<span className="text-[13.5px] font-semibold tracking-[-0.01em]">{t('设置')}</span>
+			<aside className="hidden w-[264px] shrink-0 flex-col border-r border-border bg-sidebar p-3 md:flex">
+				<div className="flex h-11 items-center px-2">
+					<span className="text-[15px] font-medium tracking-[-0.01em]">{t("设置")}</span>
 				</div>
-				<nav className="mt-1 space-y-0.5">
+				<nav className="mt-2 space-y-0.5">
 					{SECTIONS.map((item) => (
 						<button
 							key={item.id}
 							type="button"
 							onClick={() => setSection(item.id)}
 							className={cn(
-								"flex h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] transition-colors",
+								"flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-left text-[14px] transition-colors",
 								section === item.id
 									? "bg-sidebar-accent font-medium text-foreground"
 									: "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
@@ -144,7 +145,7 @@ export function SettingsOverlay({
 				<button
 					type="button"
 					onClick={onClose}
-					className="flex h-9 items-center gap-2 rounded-lg px-2 text-[12.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+					className="flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
 				>
 					<ArrowLeft className="size-4" />
 					{t("返回")}
@@ -152,42 +153,69 @@ export function SettingsOverlay({
 			</aside>
 
 			<section className="flex min-w-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
-				<header className="flex h-[calc(2.75rem+env(safe-area-inset-top))] shrink-0 items-center gap-2 border-b border-border px-2 pt-[env(safe-area-inset-top)] md:hidden">
+				<header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center px-1.5 pt-[env(safe-area-inset-top)] md:hidden">
 					<button
 						type="button"
-						aria-label={t("关闭设置")}
-						onClick={onClose}
-						className="grid size-9 place-items-center rounded-full text-muted-foreground hover:bg-accent hover:text-foreground"
+						aria-label={mobileDetail ? t("返回") : t("关闭设置")}
+						onClick={() => {
+							if (mobileDetail) setMobileDetail(false);
+							else onClose();
+						}}
+						className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
 					>
-						<X className="size-[18px]" />
+						{mobileDetail ? (
+							<ArrowLeft className="size-5" strokeWidth={1.75} />
+						) : (
+							<X className="size-5" strokeWidth={1.75} />
+						)}
 					</button>
-					<span className="text-[13px] font-medium">{t('设置')}</span>
+					<span className="min-w-0 flex-1 truncate px-2 text-center text-[15px] font-medium text-foreground">
+						{mobileDetail ? SECTIONS.find((item) => item.id === section)?.label : t("设置")}
+					</span>
+					<span className="size-10 shrink-0" />
 				</header>
 
 				<div className="min-h-0 flex-1 overflow-y-auto">
-					<div className="mx-auto w-full max-w-[680px] px-4 py-6 md:px-8">
-						{/* Mobile section switcher */}
-						<div className="mb-5 flex gap-1 overflow-x-auto pb-1 md:hidden">
-							{SECTIONS.map((item) => (
-								<button
-									key={item.id}
-									type="button"
-									onClick={() => setSection(item.id)}
-									className={cn(
-										"shrink-0 rounded-full border px-3 py-1.5 text-[12px]",
-										section === item.id
-											? "border-foreground bg-foreground text-background"
-											: "border-border text-muted-foreground",
-									)}
-								>
-									{item.label}
-								</button>
-							))}
-						</div>
+					{/* Mobile settings index */}
+					<div className={cn("px-2 pb-8 pt-2 md:hidden", mobileDetail && "hidden")}>
+						<p className="px-3 pb-1 pt-3 text-[12px] text-muted-foreground/70">{t("常规")}</p>
+						{SECTIONS.filter((item) => item.id !== "about").map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => {
+									setSection(item.id);
+									setMobileDetail(true);
+								}}
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+							>
+								<span className="text-muted-foreground">{item.icon}</span>
+								<span className="min-w-0 flex-1 truncate">{item.label}</span>
+								<ChevronRight className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
+							</button>
+						))}
+						<p className="px-3 pb-1 pt-5 text-[12px] text-muted-foreground/70">{t("关于")}</p>
+						{SECTIONS.filter((item) => item.id === "about").map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => {
+									setSection(item.id);
+									setMobileDetail(true);
+								}}
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+							>
+								<span className="text-muted-foreground">{item.icon}</span>
+								<span className="min-w-0 flex-1 truncate">{item.label}</span>
+								<ChevronRight className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
+							</button>
+						))}
+					</div>
 
+					<div className={cn("mx-auto w-full max-w-[680px] px-4 py-5 md:px-8 md:py-8", !mobileDetail && "max-md:hidden")}>
 						{section === "appearance" ? (
 							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">{t('外观')}</h1>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('外观')}</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("选择界面主题。跟随系统会响应操作系统的浅色/深色设置。")}
 								</p>
@@ -240,7 +268,7 @@ export function SettingsOverlay({
 									))}
 								</div>
 
-								<div className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
 									<div>
 										<h2 className="text-[13px] font-medium">{t("语言")}</h2>
 										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -269,7 +297,7 @@ export function SettingsOverlay({
 									</div>
 								</div>
 
-								<div className="mt-8 flex items-center justify-between gap-4 rounded-xl border border-border p-3">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
 									<div>
 										<h2 className="text-[13px] font-medium">{t('完成通知')}</h2>
 										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -304,7 +332,7 @@ export function SettingsOverlay({
 
 						{section === "skills" ? (
 							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">{t('技能')}</h1>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('技能')}</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("选择一个技能会把它插入到输入框，发送后由 agent 执行。")}
 								</p>
@@ -350,7 +378,7 @@ export function SettingsOverlay({
 
 						{section === "mcp" ? (
 							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">MCP</h1>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">MCP</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("当前工作区配置的 MCP 服务器。工具仍由 agent 在会话中调用。")}
 								</p>
@@ -414,11 +442,11 @@ export function SettingsOverlay({
 
 						{section === "workspace" ? (
 							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">{t('工作区')}</h1>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('工作区')}</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("当前会话的工作目录。切换后新会话会使用新的目录。")}
 								</p>
-								<form onSubmit={submitDir} className="mt-4 rounded-xl border border-border p-3">
+								<form onSubmit={submitDir} className="mt-4 rounded-2xl bg-white/[0.03] p-3">
 									<label className="block">
 										<span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
 											{t("当前目录")}
@@ -452,11 +480,11 @@ export function SettingsOverlay({
 
 						{section === "about" ? (
 							<div>
-								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">{t('关于')}</h1>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('关于')}</h1>
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("NanoPi 的浏览器界面，使用 Next.js 重写，视觉参考 Memoh。")}
 								</p>
-								<div className="mt-4 space-y-2 rounded-xl border border-border p-3 text-[12px]">
+								<div className="mt-4 space-y-2 rounded-2xl bg-white/[0.03] p-3 text-[12px]">
 									<Row label={t("前端")} value="Next.js static export" />
 									<Row label={t("设计")} value="Memoh-inspired clean-room" />
 									<Row label={t("后端")} value="nanopi webui" />
@@ -486,10 +514,10 @@ function ThemeCard({
 			type="button"
 			onClick={onClick}
 			className={cn(
-				"flex h-16 flex-col items-start justify-center gap-1 rounded-xl border px-3 text-left transition-colors",
+				"flex h-16 flex-col items-start justify-center gap-1 rounded-2xl px-3 text-left transition-colors",
 				active
-					? "border-brand bg-brand-soft/40 text-foreground"
-					: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+					? "bg-white/[0.08] text-foreground ring-1 ring-white/[0.12]"
+					: "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
 			)}
 		>
 			<span className="flex items-center gap-2 text-[12.5px] font-medium">

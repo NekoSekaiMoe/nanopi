@@ -51,14 +51,17 @@ export function ModelPicker({
 				type="button"
 				onClick={() => setOpen((value) => !value)}
 				className={cn(
-					"inline-flex h-8 max-w-[220px] items-center gap-1.5 rounded-full px-2.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground",
-					open && "bg-accent text-foreground",
+					"inline-flex h-9 max-w-[220px] items-center gap-1.5 rounded-full px-2 text-[14px] text-foreground/85 transition-colors hover:bg-white/[0.06] hover:text-foreground",
+					open && "bg-white/[0.06] text-foreground",
 					compact && "max-w-[150px]",
 				)}
 			>
-				<Cpu className="size-3.5 shrink-0" strokeWidth={1.75} />
+				{compact ? null : <Cpu className="size-3.5 shrink-0" strokeWidth={1.75} />}
 				<span className="min-w-0 truncate">{current?.model ?? t("选择模型")}</span>
-				<ChevronDown className={cn("size-3 shrink-0 transition-transform", open && "rotate-180")} />
+				<ChevronDown
+					className={cn("size-3.5 shrink-0 opacity-70 transition-transform", open && "rotate-180")}
+					strokeWidth={1.75}
+				/>
 			</button>
 			{open ? (
 				<div className="absolute bottom-full left-0 z-50 mb-1.5 w-[280px] overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg max-md:bottom-0 max-md:left-0 max-md:mb-10">
