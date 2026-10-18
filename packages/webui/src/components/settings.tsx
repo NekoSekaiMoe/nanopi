@@ -1,80 +1,23 @@
 "use client";
 
-import {
-	ChevronLeft,
-	ChevronRight,
-	CircleUser,
-	Contrast,
-	CreditCard,
-	Gauge,
-	Info,
-	Keyboard,
-	LayoutGrid,
-	Monitor,
-	Moon,
-	Package,
-	Send,
-	Sparkles,
-	Sun,
-	Users,
-} from "lucide-react";
+import { ArrowLeft, ChevronRight, Cpu, Info, Monitor, Moon, Network, Palette, Sparkles, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import {
-	getMcpStatus,
-	getSkills,
-	type ApprovalMode,
-	type ConfigInfo,
-	type McpStatusInfo,
-	type ModelInfo,
-	type ProjectState,
-	type SkillInfo,
-} from "@/lib/api";
+import { getMcpStatus, getSkills, type ApprovalMode, type ConfigInfo, type McpStatusInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
 import { ProviderSettings } from "@/components/provider-settings";
 import { cn } from "@/lib/utils";
 import { getLocale, setLocale, t } from "@/lib/i18n";
 
+type Section = "appearance" | "models" | "skills" | "mcp" | "workspace" | "about";
 export type ThemeChoice = "system" | "light" | "dark";
 
-export type SettingSection =
-	| "bot"
-	| "providers"
-	| "computer"
-	| "marketplace"
-	| "general"
-	| "usage"
-	| "billing"
-	| "account"
-	| "appearance"
-	| "shortcuts"
-	| "about";
-
-interface SettingItem {
-	id: SettingSection;
-	label: string;
-	icon: React.ReactNode;
-}
-
-const GROUP_1: SettingItem[] = [
-	{ id: "bot", label: t("Bot"), icon: <Send className="size-5" strokeWidth={1.75} /> },
-	{ id: "providers", label: t("服务商"), icon: <Package className="size-5" strokeWidth={1.75} /> },
-	{ id: "computer", label: t("电脑"), icon: <Monitor className="size-5" strokeWidth={1.75} /> },
-	{ id: "marketplace", label: t("应用市场"), icon: <LayoutGrid className="size-5" strokeWidth={1.75} /> },
+const SECTIONS: Array<{ id: Section; label: string; icon: React.ReactNode }> = [
+	{ id: "appearance", label: t("外观"), icon: <Palette className="size-4" strokeWidth={1.75} /> },
+	{ id: "models", label: t("模型"), icon: <Cpu className="size-4" strokeWidth={1.75} /> },
+	{ id: "skills", label: t("技能"), icon: <Sparkles className="size-4" strokeWidth={1.75} /> },
+	{ id: "mcp", label: "MCP", icon: <Network className="size-4" strokeWidth={1.75} /> },
+	{ id: "workspace", label: t("工作区"), icon: <Monitor className="size-4" strokeWidth={1.75} /> },
+	{ id: "about", label: t("关于"), icon: <Info className="size-4" strokeWidth={1.75} /> },
 ];
-
-const GROUP_2: SettingItem[] = [
-	{ id: "general", label: t("常规"), icon: <Users className="size-5" strokeWidth={1.75} /> },
-	{ id: "usage", label: t("用量"), icon: <Gauge className="size-5" strokeWidth={1.75} /> },
-	{ id: "billing", label: t("账单"), icon: <CreditCard className="size-5" strokeWidth={1.75} /> },
-];
-
-const GROUP_3: SettingItem[] = [
-	{ id: "account", label: t("账户"), icon: <CircleUser className="size-5" strokeWidth={1.75} /> },
-	{ id: "appearance", label: t("外观"), icon: <Contrast className="size-5" strokeWidth={1.75} /> },
-	{ id: "shortcuts", label: t("快捷键"), icon: <Keyboard className="size-5" strokeWidth={1.75} /> },
-	{ id: "about", label: t("关于"), icon: <Info className="size-5" strokeWidth={1.75} /> },
-];
-
-const ALL_ITEMS = [...GROUP_1, ...GROUP_2, ...GROUP_3];
 
 export function SettingsOverlay({
 	open,
@@ -111,7 +54,8 @@ export function SettingsOverlay({
 	notifications: boolean;
 	onToggleNotifications: () => void;
 }) {
-	const [activeSection, setActiveSection] = useState<SettingSection | null>(null);
+	const [section, setSection] = useState<Section>("appearance");
+	const [mobileDetail, setMobileDetail] = useState(false);
 	const [dirDraft, setDirDraft] = useState(project?.working_dir ?? "");
 	const [changingDir, setChangingDir] = useState(false);
 	const [dirError, setDirError] = useState<string | null>(null);
@@ -126,7 +70,7 @@ export function SettingsOverlay({
 	}, [project?.working_dir]);
 
 	useEffect(() => {
-		if (activeSection !== "marketplace" || mcp !== null) return;
+		if (section !== "mcp" || mcp !== null) return;
 		let cancelled = false;
 		void getMcpStatus()
 			.then((status) => {
@@ -135,6 +79,14 @@ export function SettingsOverlay({
 			.catch((cause) => {
 				if (!cancelled) setMcpError(cause instanceof Error ? cause.message : String(cause));
 			});
+		return () => {
+			cancelled = true;
+		};
+	}, [section, mcp]);
+
+	useEffect(() => {
+		if (section !== "skills" || skills !== null) return;
+		let cancelled = false;
 		void getSkills()
 			.then((list) => {
 				if (!cancelled) setSkills(list);
@@ -145,7 +97,7 @@ export function SettingsOverlay({
 		return () => {
 			cancelled = true;
 		};
-	}, [activeSection, mcp]);
+	}, [section, skills]);
 
 	if (!open) return null;
 
@@ -165,409 +117,423 @@ export function SettingsOverlay({
 		}
 	}
 
-	const currentItem = ALL_ITEMS.find((it) => it.id === activeSection);
-
 	return (
-		<div className="fixed inset-0 z-50 flex flex-col bg-[#050506] text-foreground">
-			{/* Top Bar matching Screenshot 6 */}
-			<header className="flex h-14 shrink-0 items-center px-3 border-b border-white/[0.05] pt-[env(safe-area-inset-top)]">
+		<div className="fixed inset-0 z-50 flex bg-background">
+			<aside className="hidden w-[264px] shrink-0 flex-col border-r border-border bg-sidebar p-3 md:flex">
+				<div className="flex h-11 items-center px-2">
+					<span className="text-[15px] font-medium tracking-[-0.01em]">{t("设置")}</span>
+				</div>
+				<nav className="mt-2 space-y-0.5">
+					{SECTIONS.map((item) => (
+						<button
+							key={item.id}
+							type="button"
+							onClick={() => setSection(item.id)}
+							className={cn(
+								"flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-left text-[14px] transition-colors",
+								section === item.id
+									? "bg-sidebar-accent font-medium text-foreground"
+									: "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+							)}
+						>
+							{item.icon}
+							{item.label}
+						</button>
+					))}
+				</nav>
+				<div className="flex-1" />
 				<button
 					type="button"
-					aria-label={activeSection ? t("返回") : t("关闭设置")}
-					onClick={() => {
-						if (activeSection) setActiveSection(null);
-						else onClose();
-					}}
-					className="grid size-10 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+					onClick={onClose}
+					className="flex h-10 items-center gap-2 rounded-xl px-2.5 text-[13.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
 				>
-					<ChevronLeft className="size-6" strokeWidth={1.75} />
+					<ArrowLeft className="size-4" />
+					{t("返回")}
 				</button>
-				<h1 className="min-w-0 flex-1 text-center text-[16px] font-medium text-foreground pr-10">
-					{activeSection ? currentItem?.label : t("设置")}
-				</h1>
-			</header>
+			</aside>
 
-			{/* Content Area */}
-			<div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 pb-[max(16px,env(safe-area-inset-bottom))]">
-				<div className="mx-auto max-w-[640px]">
-					{/* Index View matching Screenshot 6 */}
-					{!activeSection ? (
-						<div className="space-y-6 pt-1">
-							{/* Group 1: Bot, 服务商, 电脑, 应用市场 */}
-							<div className="space-y-1">
-								{GROUP_1.map((item) => (
-									<button
-										key={item.id}
-										type="button"
-										onClick={() => setActiveSection(item.id)}
-										className="flex h-14 w-full items-center gap-4 rounded-xl px-3 text-left transition-colors hover:bg-white/[0.05]"
-									>
-										<span className="text-muted-foreground/90">{item.icon}</span>
-										<span className="text-[15.5px] font-normal text-foreground">{item.label}</span>
-									</button>
-								))}
-							</div>
+			<section className="flex min-w-0 flex-1 flex-col pb-[env(safe-area-inset-bottom)]">
+				<header className="flex h-[calc(3rem+env(safe-area-inset-top))] shrink-0 items-center px-1.5 pt-[env(safe-area-inset-top)] md:hidden">
+					<button
+						type="button"
+						aria-label={mobileDetail ? t("返回") : t("关闭设置")}
+						onClick={() => {
+							if (mobileDetail) setMobileDetail(false);
+							else onClose();
+						}}
+						className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+					>
+						{mobileDetail ? (
+							<ArrowLeft className="size-5" strokeWidth={1.75} />
+						) : (
+							<X className="size-5" strokeWidth={1.75} />
+						)}
+					</button>
+					<span className="min-w-0 flex-1 truncate px-2 text-center text-[15px] font-medium text-foreground">
+						{mobileDetail ? SECTIONS.find((item) => item.id === section)?.label : t("设置")}
+					</span>
+					<span className="size-10 shrink-0" />
+				</header>
 
-							{/* Group 2: 团队 -> 常规, 用量, 账单 */}
+				<div className="min-h-0 flex-1 overflow-y-auto">
+					{/* Mobile settings index */}
+					<div className={cn("px-2 pb-8 pt-2 md:hidden", mobileDetail && "hidden")}>
+						<p className="px-3 pb-1 pt-3 text-[12px] text-muted-foreground/70">{t("常规")}</p>
+						{SECTIONS.filter((item) => item.id !== "about").map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => {
+									setSection(item.id);
+									setMobileDetail(true);
+								}}
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+							>
+								<span className="text-muted-foreground">{item.icon}</span>
+								<span className="min-w-0 flex-1 truncate">{item.label}</span>
+								<ChevronRight className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
+							</button>
+						))}
+						<p className="px-3 pb-1 pt-5 text-[12px] text-muted-foreground/70">{t("关于")}</p>
+						{SECTIONS.filter((item) => item.id === "about").map((item) => (
+							<button
+								key={item.id}
+								type="button"
+								onClick={() => {
+									setSection(item.id);
+									setMobileDetail(true);
+								}}
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+							>
+								<span className="text-muted-foreground">{item.icon}</span>
+								<span className="min-w-0 flex-1 truncate">{item.label}</span>
+								<ChevronRight className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
+							</button>
+						))}
+					</div>
+
+					<div className={cn("mx-auto w-full max-w-[680px] px-4 py-5 md:px-8 md:py-8", !mobileDetail && "max-md:hidden")}>
+						{section === "appearance" ? (
 							<div>
-								<p className="px-3 pb-2 text-[13px] text-muted-foreground/60">{t("团队")}</p>
-								<div className="space-y-1">
-									{GROUP_2.map((item) => (
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('外观')}</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									{t("选择界面主题。跟随系统会响应操作系统的浅色/深色设置。")}
+								</p>
+								<div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+									<ThemeCard
+										active={theme === "system"}
+										label={t("跟随系统")}
+										icon={<Monitor className="size-4" />}
+										onClick={() => onTheme("system")}
+									/>
+									<ThemeCard
+										active={theme === "light"}
+										label={t("浅色")}
+										icon={<Sun className="size-4" />}
+										onClick={() => onTheme("light")}
+									/>
+									<ThemeCard
+										active={theme === "dark"}
+										label={t("深色")}
+										icon={<Moon className="size-4" />}
+										onClick={() => onTheme("dark")}
+									/>
+								</div>
+
+								<h2 className="mt-8 text-[13.5px] font-medium">{t('运行模式')}</h2>
+								<p className="mt-1 text-[12px] text-muted-foreground">
+									{t("标准模式允许全部工具；计划模式只读；最小模式只开放 shell 工具。")}
+								</p>
+								<div className="mt-3 flex flex-wrap gap-1.5">
+									{(
+										[
+											["standard", t("标准")],
+											["plan", t("计划")],
+											["minimal", t("最小")],
+										] as const
+									).map(([value, label]) => (
 										<button
-											key={item.id}
+											key={value}
 											type="button"
-											onClick={() => setActiveSection(item.id)}
-											className="flex h-14 w-full items-center gap-4 rounded-xl px-3 text-left transition-colors hover:bg-white/[0.05]"
+											onClick={() => onApprovalMode(value)}
+											className={cn(
+												"h-8 rounded-full border px-3 text-[12px] transition-colors",
+												approvalMode === value
+													? "border-foreground bg-foreground text-background"
+													: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+											)}
 										>
-											<span className="text-muted-foreground/90">{item.icon}</span>
-											<span className="text-[15.5px] font-normal text-foreground">{item.label}</span>
+											{label}
 										</button>
 									))}
 								</div>
-							</div>
 
-							{/* Group 3: 个人 -> 账户, 外观, 快捷键, 关于 */}
-							<div>
-								<p className="px-3 pb-2 text-[13px] text-muted-foreground/60">{t("个人")}</p>
-								<div className="space-y-1">
-									{GROUP_3.map((item) => (
-										<button
-											key={item.id}
-											type="button"
-											onClick={() => setActiveSection(item.id)}
-											className="flex h-14 w-full items-center gap-4 rounded-xl px-3 text-left transition-colors hover:bg-white/[0.05]"
-										>
-											<span className="text-muted-foreground/90">{item.icon}</span>
-											<span className="text-[15.5px] font-normal text-foreground">{item.label}</span>
-										</button>
-									))}
-								</div>
-							</div>
-						</div>
-					) : (
-						/* Detail Views for each section */
-						<div className="pt-2">
-							{activeSection === "bot" ? (
-								<div className="space-y-6">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
 									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("Bot 设置")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("配置智能助手的执行模式与权限。")}
+										<h2 className="text-[13px] font-medium">{t("语言")}</h2>
+										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
+											{t("切换界面语言，页面会刷新。")}
 										</p>
 									</div>
-
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 space-y-4">
-										<div>
-											<label className="text-[13px] font-medium text-foreground">{t("运行模式")}</label>
-											<p className="text-[12px] text-muted-foreground mt-0.5">
-												{t("标准模式允许所有工具执行；计划模式为只读分析；最小模式仅允许基本命令。")}
-											</p>
-											<div className="mt-3 flex gap-2">
-												{(
-													[
-														["standard", t("标准")],
-														["plan", t("计划")],
-														["minimal", t("最小")],
-													] as const
-												).map(([val, lab]) => (
-													<button
-														key={val}
-														type="button"
-														onClick={() => onApprovalMode(val)}
-														className={cn(
-															"h-9 rounded-xl px-4 text-[13px] font-medium transition-colors",
-															approvalMode === val
-																? "bg-white text-black"
-																: "bg-white/[0.06] text-muted-foreground hover:text-foreground",
-														)}
-													>
-														{lab}
-													</button>
-												))}
-											</div>
-										</div>
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "providers" ? (
-								<ProviderSettings
-									config={config}
-									models={models}
-									provider={provider}
-									onProvider={onProvider}
-									onRefresh={onRefreshProviders}
-								/>
-							) : null}
-
-							{activeSection === "computer" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("电脑 / 工作区")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("当前会话的工作目录。切换后新会话会使用该目录。")}
-										</p>
-									</div>
-
-									<form onSubmit={submitDir} className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4">
-										<label className="block text-[12px] text-muted-foreground">{t("当前工作目录")}</label>
-										<input
-											value={dirDraft}
-											onChange={(e) => setDirDraft(e.target.value)}
-											spellCheck={false}
-											className="mt-2 h-10 w-full rounded-xl border border-white/[0.1] bg-black/40 px-3 font-mono text-[13px] text-foreground outline-none focus:border-white/30"
-										/>
-										<div className="mt-3 flex items-center justify-between">
-											{dirNotice ? <span className="text-[12px] text-green-400">{dirNotice}</span> : null}
-											{dirError ? <span className="text-[12px] text-destructive">{dirError}</span> : null}
-											<div className="flex-1" />
+									<div className="flex shrink-0 items-center gap-1">
+										{(["zh", "en"] as const).map((value) => (
 											<button
-												type="submit"
-												disabled={changingDir || !dirDraft.trim()}
-												className="h-9 rounded-xl bg-white px-4 text-[13px] font-medium text-black transition-opacity hover:opacity-90 disabled:opacity-40"
-											>
-												{changingDir ? t("切换中…") : t("切换目录")}
-											</button>
-										</div>
-									</form>
-								</div>
-							) : null}
-
-							{activeSection === "marketplace" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("应用市场 (技能 & MCP)")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("查看可用的 Skills 和 MCP 扩展。")}
-										</p>
-									</div>
-
-									<div className="space-y-3">
-										<h3 className="text-[14px] font-medium text-muted-foreground">{t("技能")}</h3>
-										{skillsError ? (
-											<p className="text-[12px] text-destructive">{skillsError}</p>
-										) : skills?.length ? (
-											<div className="space-y-2">
-												{skills.map((skill) => (
-													<button
-														key={skill.name}
-														type="button"
-														onClick={() => {
-															onUseSkill(skill.name);
-															onClose();
-														}}
-														className="flex w-full items-start gap-3 rounded-2xl border border-white/[0.06] bg-[#141416] p-3 text-left transition-colors hover:bg-white/[0.04]"
-													>
-														<Sparkles className="size-4 shrink-0 text-amber-400 mt-0.5" />
-														<div>
-															<div className="font-mono text-[13px] text-foreground">/{skill.name}</div>
-															<div className="text-[12px] text-muted-foreground mt-0.5">
-																{skill.description}
-															</div>
-														</div>
-													</button>
-												))}
-											</div>
-										) : (
-											<p className="text-[12px] text-muted-foreground/60">{t("暂无技能")}</p>
-										)}
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "general" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("常规设置")}</h2>
-									</div>
-
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 divide-y divide-white/[0.06]">
-										<div className="flex items-center justify-between pb-4">
-											<div>
-												<div className="text-[14px] font-medium text-foreground">{t("语言")}</div>
-												<div className="text-[12px] text-muted-foreground">{t("切换界面语言。")}</div>
-											</div>
-											<div className="flex gap-1.5">
-												{(["zh", "en"] as const).map((lang) => (
-													<button
-														key={lang}
-														type="button"
-														onClick={() => {
-															setLocale(lang);
-															window.location.reload();
-														}}
-														className={cn(
-															"h-8 rounded-lg px-3 text-[12.5px] transition-colors",
-															getLocale() === lang
-																? "bg-white text-black font-medium"
-																: "bg-white/[0.06] text-muted-foreground hover:text-foreground",
-														)}
-													>
-														{lang === "zh" ? "中文" : "English"}
-													</button>
-												))}
-											</div>
-										</div>
-
-										<div className="flex items-center justify-between pt-4">
-											<div>
-												<div className="text-[14px] font-medium text-foreground">{t("后台通知")}</div>
-												<div className="text-[12px] text-muted-foreground">
-													{t("页面在后台时，回合完成发送系统通知。")}
-												</div>
-											</div>
-											<button
+												key={value}
 												type="button"
-												onClick={onToggleNotifications}
+												onClick={() => {
+													setLocale(value);
+													window.location.reload();
+												}}
 												className={cn(
-													"h-8 rounded-lg px-3 text-[12.5px] font-medium transition-colors",
-													notifications
-														? "bg-brand text-white"
-														: "bg-white/[0.06] text-muted-foreground hover:text-foreground",
+													"h-8 rounded-full border px-3 text-[12px] transition-colors",
+													getLocale() === value
+														? "border-foreground bg-foreground text-background"
+														: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
 												)}
 											>
-												{notifications ? t("已开启") : t("开启")}
-											</button>
-										</div>
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "usage" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("用量与统计")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("实时会话与模型调用监控。")}
-										</p>
-									</div>
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 text-[13px] space-y-3">
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("当前上下文占用")}</span>
-											<span className="font-medium text-foreground">2%</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("活跃模型")}</span>
-											<span className="font-medium text-foreground">{provider || "Default"}</span>
-										</div>
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "billing" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("账单与套餐")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("本地运行版无需订阅计费。")}
-										</p>
-									</div>
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 text-[13.5px]">
-										{t("NanoPi 处于本地或自建模式，不收取任何平台服务费用。")}
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "account" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("账户信息")}</h2>
-									</div>
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 text-[13.5px] space-y-2">
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("用户")}</span>
-											<span className="font-medium text-foreground">Ayayoku Togetsu</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("模式")}</span>
-											<span className="font-medium text-foreground">Local Daemon</span>
-										</div>
-									</div>
-								</div>
-							) : null}
-
-							{activeSection === "appearance" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("外观设置")}</h2>
-										<p className="mt-1 text-[13px] text-muted-foreground">
-											{t("选择界面颜色主题。")}
-										</p>
-									</div>
-									<div className="grid grid-cols-3 gap-2">
-										{(
-											[
-												["system", t("跟随系统"), <Monitor key="sys" className="size-4" />],
-												["light", t("浅色"), <Sun key="light" className="size-4" />],
-												["dark", t("深色"), <Moon key="dark" className="size-4" />],
-											] as const
-										).map(([themeMode, label, icon]) => (
-											<button
-												key={themeMode}
-												type="button"
-												onClick={() => onTheme(themeMode)}
-												className={cn(
-													"flex h-16 flex-col items-center justify-center gap-1.5 rounded-2xl border transition-colors",
-													theme === themeMode
-														? "border-white/[0.3] bg-white/[0.08] text-foreground font-medium"
-														: "border-white/[0.06] bg-[#141416] text-muted-foreground hover:text-foreground",
-												)}
-											>
-												{icon}
-												<span className="text-[12.5px]">{label}</span>
+												{value === "zh" ? "中文" : "English"}
 											</button>
 										))}
 									</div>
 								</div>
-							) : null}
 
-							{activeSection === "shortcuts" ? (
-								<div className="space-y-6">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
 									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("快捷键")}</h2>
+										<h2 className="text-[13px] font-medium">{t('完成通知')}</h2>
+										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
+											{t("页面在后台时，回合完成会发送浏览器通知。")}
+										</p>
 									</div>
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 text-[13px] space-y-3">
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">Tab</span>
-											<span className="text-foreground">{t("接受 AI 联想补全")}</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">Enter</span>
-											<span className="text-foreground">{t("发送消息")}</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">Shift + Enter</span>
-											<span className="text-foreground">{t("换行")}</span>
-										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">Escape</span>
-											<span className="text-foreground">{t("关闭弹窗 / 忽略补全")}</span>
-										</div>
-									</div>
+									<button
+										type="button"
+										onClick={onToggleNotifications}
+										className={cn(
+											"h-8 shrink-0 rounded-full border px-3 text-[12px] transition-colors",
+											notifications
+												? "border-brand bg-brand-soft/50 text-brand"
+												: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+										)}
+									>
+										{notifications ? t("已开启") : t("开启")}
+									</button>
 								</div>
-							) : null}
+							</div>
+						) : null}
 
-							{activeSection === "about" ? (
-								<div className="space-y-6">
-									<div>
-										<h2 className="text-[18px] font-medium text-foreground">{t("关于 NanoPi")}</h2>
-									</div>
-									<div className="rounded-2xl border border-white/[0.06] bg-[#141416] p-4 text-[13px] space-y-2">
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("版本")}</span>
-											<span className="text-foreground">0.12.3</span>
+						{section === "models" ? (
+							<ProviderSettings
+								config={config}
+								models={models}
+								provider={provider}
+								onProvider={onProvider}
+								onRefresh={onRefreshProviders}
+							/>
+						) : null}
+
+						{section === "skills" ? (
+							<div>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('技能')}</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									{t("选择一个技能会把它插入到输入框，发送后由 agent 执行。")}
+								</p>
+								<div className="mt-4 space-y-1.5">
+									{skillsError ? (
+										<p className="text-[11.5px] text-destructive">{skillsError}</p>
+									) : skills === null ? (
+										<p className="text-[12px] text-muted-foreground">{t('加载中…')}</p>
+									) : skills.length === 0 ? (
+										<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+											<p className="text-[12.5px] text-muted-foreground">{t('还没有可用技能')}</p>
+											<p className="mt-1 text-[11px] text-muted-foreground/70">
+												{t("把技能放到工作区的 skill 目录后刷新。")}
+											</p>
 										</div>
-										<div className="flex justify-between">
-											<span className="text-muted-foreground">{t("架构")}</span>
-											<span className="text-foreground">Next.js App Router (Memoh Clean-Room)</span>
-										</div>
-									</div>
+									) : (
+										skills.map((skill) => (
+											<button
+												key={skill.name}
+												type="button"
+												onClick={() => onUseSkill(skill.name)}
+												className="flex w-full items-start gap-3 rounded-xl border border-border px-3 py-2.5 text-left transition-colors hover:bg-accent"
+											>
+												<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+													<Sparkles className="size-3.5" strokeWidth={1.75} />
+												</span>
+												<span className="min-w-0 flex-1">
+													<span className="block truncate font-mono text-[12px] text-foreground">
+														/{skill.name}
+													</span>
+													{skill.description ? (
+														<span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+															{skill.description}
+														</span>
+													) : null}
+												</span>
+											</button>
+										))
+									)}
 								</div>
-							) : null}
-						</div>
-					)}
+							</div>
+						) : null}
+
+						{section === "mcp" ? (
+							<div>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">MCP</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									{t("当前工作区配置的 MCP 服务器。工具仍由 agent 在会话中调用。")}
+								</p>
+								{mcpError ? (
+									<p className="mt-4 text-[11.5px] text-destructive">{mcpError}</p>
+								) : mcp === null ? (
+									<p className="mt-4 text-[12px] text-muted-foreground">{t('加载中…')}</p>
+								) : (
+									<>
+										{mcp.trusted === false ? (
+											<p className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11.5px] text-warning">
+												{t("当前项目尚未信任 MCP，服务器可能被隐藏。")}
+											</p>
+										) : null}
+										<div className="mt-3 space-y-1.5">
+											{mcp.servers.length === 0 ? (
+												<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+													<p className="text-[12.5px] text-muted-foreground">{t('还没有 MCP 服务器')}</p>
+													<p className="mt-1 text-[11px] text-muted-foreground/70">
+														{t("在配置文件中添加 MCP server 后刷新。")}
+													</p>
+												</div>
+											) : (
+												mcp.servers.map((server) => (
+													<div
+														key={server.name}
+														className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"
+													>
+														<span
+															className={cn(
+																"size-2 shrink-0 rounded-full",
+																server.status === "connected" || server.status === "ready"
+																	? "bg-success"
+																	: server.status === "error"
+																		? "bg-destructive"
+																		: "bg-muted-foreground/50",
+															)}
+														/>
+														<span className="min-w-0 flex-1">
+															<span className="block truncate font-mono text-[12px] text-foreground">
+																{server.name}
+															</span>
+															<span className="block text-[10.5px] text-muted-foreground">
+																{server.status}
+																{server.tool_count != null ? ` · ${server.tool_count} tools` : ""}
+															</span>
+															{server.error ? (
+																<span className="mt-0.5 block text-[10.5px] text-destructive">
+																	{server.error}
+																</span>
+															) : null}
+														</span>
+													</div>
+												))
+											)}
+										</div>
+									</>
+								)}
+							</div>
+						) : null}
+
+						{section === "workspace" ? (
+							<div>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('工作区')}</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									{t("当前会话的工作目录。切换后新会话会使用新的目录。")}
+								</p>
+								<form onSubmit={submitDir} className="mt-4 rounded-2xl bg-white/[0.03] p-3">
+									<label className="block">
+										<span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+											{t("当前目录")}
+										</span>
+										<input
+											value={dirDraft}
+											onChange={(event) => setDirDraft(event.target.value)}
+											placeholder="/path/to/project"
+											spellCheck={false}
+											className="mt-1.5 h-9 w-full rounded-lg border border-border bg-background px-2.5 font-mono text-[12px] text-foreground outline-none focus:border-foreground/30"
+										/>
+									</label>
+									<div className="mt-2 flex items-center justify-end gap-2">
+										{dirNotice ? (
+											<span className="mr-auto text-[11px] text-success">{dirNotice}</span>
+										) : null}
+										{dirError ? (
+											<span className="mr-auto text-[11px] text-destructive">{dirError}</span>
+										) : null}
+										<button
+											type="submit"
+											disabled={changingDir || !dirDraft.trim()}
+											className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+										>
+											{changingDir ? t("切换中…") : t("切换目录")}
+										</button>
+									</div>
+								</form>
+							</div>
+						) : null}
+
+						{section === "about" ? (
+							<div>
+								<h1 className="text-[24px] font-medium tracking-[-0.02em]">{t('关于')}</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									{t("NanoPi 的浏览器界面，使用 Next.js 重写，视觉参考 Memoh。")}
+								</p>
+								<div className="mt-4 space-y-2 rounded-2xl bg-white/[0.03] p-3 text-[12px]">
+									<Row label={t("前端")} value="Next.js static export" />
+									<Row label={t("设计")} value="Memoh-inspired clean-room" />
+									<Row label={t("后端")} value="nanopi webui" />
+								</div>
+							</div>
+						) : null}
+					</div>
 				</div>
-			</div>
+			</section>
+		</div>
+	);
+}
+
+function ThemeCard({
+	active,
+	label,
+	icon,
+	onClick,
+}: {
+	active: boolean;
+	label: string;
+	icon: React.ReactNode;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className={cn(
+				"flex h-16 flex-col items-start justify-center gap-1 rounded-2xl px-3 text-left transition-colors",
+				active
+					? "bg-white/[0.08] text-foreground ring-1 ring-white/[0.12]"
+					: "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
+			)}
+		>
+			<span className="flex items-center gap-2 text-[12.5px] font-medium">
+				{icon}
+				{label}
+			</span>
+			<span className="text-[10.5px] opacity-70">{active ? t("当前选择") : t("点击切换")}</span>
+		</button>
+	);
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+	return (
+		<div className="flex items-center justify-between gap-4">
+			<span className="text-muted-foreground">{label}</span>
+			<span className="text-right text-foreground">{value}</span>
 		</div>
 	);
 }
