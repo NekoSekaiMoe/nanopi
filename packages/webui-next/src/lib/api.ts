@@ -1,5 +1,6 @@
-// HTTP client for nanopi's local webui daemon. This is a trimmed port of
-// packages/webui/src/api.ts (MIT) so the Next.js UI keeps the same wire contract.
+// HTTP client for nanopi's local webui daemon. This is a trimmed port of the
+// previous Preact webui API client (MIT) so the Next.js UI keeps the same wire
+// contract.
 
 const SESSION_KEY = "nanopi.webuiToken";
 

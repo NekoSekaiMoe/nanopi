@@ -1,5 +1,5 @@
 /**
- * WebUI mode: serves the browser UI from packages/webui-next (legacy packages/webui fallback) and bridges its HTTP/SSE
+ * WebUI mode: serves the browser UI from packages/webui-next and bridges its HTTP/SSE
  * API onto a headless AgentSession.
  *
  * Frontend contract ported from AtomCode's webui (MIT). The default `/chat`
@@ -137,10 +137,8 @@ interface OAuthFlowState {
 /** Locate the built webui assets: source checkout first, then installed dist. */
 function getWebuiDistDir(): string {
 	const packageDir = getPackageDir();
-	const nextDist = normalize(join(packageDir, "..", "webui-next", "dist"));
-	if (existsSync(nextDist)) return nextDist;
-	const legacyDist = normalize(join(packageDir, "..", "webui", "dist"));
-	if (existsSync(legacyDist)) return legacyDist;
+	const sourceDist = normalize(join(packageDir, "..", "webui-next", "dist"));
+	if (existsSync(sourceDist)) return sourceDist;
 	const installedDist = join(packageDir, "dist", "webui");
 	if (existsSync(installedDist)) return installedDist;
 	return installedDist;

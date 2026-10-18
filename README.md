@@ -28,5 +28,4 @@ WIP
 ## Acknowledgements
 
 - **[Pi Coding Agent](https://github.com/...)**: Upstream base runtime and original minimalist philosophy.
-- **Arkloop Agent**: Visual design parameters and layout aesthetics for the legacy WebUI (clean-room reimplementation).
 - **Memoh**: Visual design reference for the Next.js WebUI rewrite (clean-room reimplementation).
