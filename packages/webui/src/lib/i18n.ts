@@ -1,0 +1,185 @@
+export type Locale = "zh" | "en";
+
+const STORAGE_KEY = "nanopi.locale";
+
+let locale: Locale = "zh";
+try {
+	const stored = localStorage.getItem(STORAGE_KEY);
+	if (stored === "en" || stored === "zh") locale = stored;
+} catch {
+	/* storage unavailable */
+}
+
+export function getLocale(): Locale {
+	return locale;
+}
+
+export function setLocale(next: Locale): void {
+	locale = next;
+	try {
+		localStorage.setItem(STORAGE_KEY, next);
+	} catch {
+		/* ignore */
+	}
+	try {
+		document.documentElement.lang = next === "en" ? "en" : "zh-CN";
+	} catch {
+		/* ignore */
+	}
+}
+
+const EN: Record<string, string> = {
+	"上一级": "Up one level",
+	"下午好": "Good afternoon",
+	"为当前代码补充测试": "Add tests for the current code",
+	"今天": "Today",
+	"今天要完成什么？": "What do you want to get done?",
+	"会话": "Chats",
+	"会话操作": "Chat actions",
+	"例如 claude-sonnet-4": "e.g. claude-sonnet-4",
+	"保存": "Save",
+	"保存中…": "Saving…",
+	"保存修改": "Save changes",
+	"停止": "Stop",
+	"允许": "Allow",
+	"关于": "About",
+	"关闭会话菜单": "Close chat menu",
+	"关闭导航": "Close navigation",
+	"关闭设置": "Close settings",
+	"切换中…": "Switching…",
+	"切换目录": "Switch directory",
+	"切换目录失败": "Could not switch directory",
+	"刚刚": "just now",
+	"删除": "Delete",
+	"删除会话？": "Delete chat?",
+	"前端": "Frontend",
+	"加载中…": "Loading…",
+	"去设置": "Open settings",
+	"发送": "Send",
+	"取消": "Cancel",
+	"受管理": "Managed",
+	"可选": "Optional",
+	"可选，例如“公司网关”": "Optional, e.g. Company gateway",
+	"名称": "Name",
+	"后端": "Backend",
+	"在编辑器中打开": "Open in editor",
+	"在运行": "Open the terminal running",
+	"在配置文件中添加 MCP server 后刷新。": "Add an MCP server to the config file, then refresh.",
+	"复制": "Copy",
+	"外观": "Appearance",
+	"夜深了": "Late night",
+	"完成通知": "Completion notifications",
+	"尚未设置": "Not set",
+	"工作区": "Workspace",
+	"工作目录已切换；新会话会使用该目录。": "Working directory switched. New chats will use it.",
+	"已保存密钥": "Key saved",
+	"已保存；留空保持不变": "Saved; leave blank to keep it",
+	"已复制": "Copied",
+	"已开启": "On",
+	"开启": "Turn on",
+	"当前会话的工作目录。切换后新会话会使用新的目录。": "Working directory for this chat. New chats use the new directory.",
+	"当前使用": "In use",
+	"当前工作区配置的 MCP 服务器。工具仍由 agent 在会话中调用。": "MCP servers configured for this workspace. Tools are still called by the agent during a chat.",
+	"当前浏览器不支持通知": "This browser does not support notifications",
+	"当前目录": "Current directory",
+	"当前选择": "Selected",
+	"当前项目尚未信任 MCP，服务器可能被隐藏。": "This project does not trust MCP yet; servers may be hidden.",
+	"必填": "Required",
+	"思考过程": "Thought process",
+	"或输入自定义回答": "Or type your own answer",
+	"打开导航": "Open navigation",
+	"找到并修复一个 bug": "Find and fix a bug",
+	"技能": "Skills",
+	"把技能放到工作区的 skill 目录后刷新。": "Add skills to the workspace skill directory, then refresh.",
+	"拒绝": "Deny",
+	"提交": "Submit",
+	"搜索会话": "Search chats",
+	"文件": "Files",
+	"新会话": "New chat",
+	"新建会话": "New chat",
+	"无密钥": "No key",
+	"早上好": "Good morning",
+	"昨天": "Yesterday",
+	"显示名": "Display name",
+	"晚上好": "Good evening",
+	"暂无会话": "No chats yet",
+	"暂无模型": "No models yet",
+	"更早": "Earlier",
+	"最小": "Minimal",
+	"最近 7 天": "Last 7 days",
+	"服务商": "Provider",
+	"本地工作区": "Local workspace",
+	"本次会话允许": "Allow for this chat",
+	"标准": "Standard",
+	"标准模式允许全部工具；计划模式只读；最小模式只开放 shell 工具。": "Standard allows every tool; Plan is read-only; Minimal exposes only shell tools.",
+	"模型": "Models",
+	"模型 ID": "Model ID",
+	"模型显示名": "Model display name",
+	"正在思考": "Thinking",
+	"正在连接…": "Connecting…",
+	"浅色": "Light",
+	"深色": "Dark",
+	"添加": "Add",
+	"添加 Provider": "Add provider",
+	"添加一个 provider 和模型后即可开始对话。": "Add a provider and a model to start chatting.",
+	"添加图片": "Add image",
+	"添加模型": "Add model",
+	"点击切换": "Click to switch",
+	"留空使用服务商默认地址": "Leave blank for the provider default",
+	"留空保持不变": "Leave blank to keep it",
+	"移除图片": "Remove image",
+	"管理模型 provider 和 API key。保存后立即出现在 composer 的模型选择器中。": "Manage model providers and API keys. New models appear in the composer immediately.",
+	"给 NanoPi 发消息…": "Message NanoPi…",
+	"编辑": "Edit",
+	"解释一下这个项目的结构": "Explain this project's structure",
+	"计划": "Plan",
+	"设置": "Settings",
+	"设计": "Design",
+	"请求过于频繁，请稍后再试": "Too many requests. Try again in a moment.",
+	"跟随系统": "System",
+	"跳过": "Skip",
+	"输入回答": "Type an answer",
+	"运行模式": "Run mode",
+	"返回": "Back",
+	"还没有 MCP 服务器": "No MCP servers yet",
+	"还没有 Provider": "No providers yet",
+	"还没有可用技能": "No skills available",
+	"还没有模型": "No models yet",
+	"还没有配置模型": "No model configured",
+	"连接": "Connect",
+	"选择一个技能会把它插入到输入框，发送后由 agent 执行。": "Selecting a skill inserts it into the composer; the agent runs it when sent.",
+	"选择模型": "Select model",
+	"选择界面主题。跟随系统会响应操作系统的浅色/深色设置。": "Choose a theme. System follows the OS light/dark setting.",
+	"通知权限被拒绝": "Notification permission was denied",
+	"配对码": "Pairing code",
+	"配对这台设备": "Pair this device",
+	"配置模型": "Configure model",
+	"重命名": "Rename",
+	"需要你的输入": "Input needed",
+	"需要确认": "Approval needed",
+	"页面在后台时，回合完成会发送浏览器通知。": "Send a browser notification when a turn finishes while the page is in the background.",
+	"默认地址": "Default address",
+	"NanoPi 可能会出错，请核对重要信息。": "NanoPi can make mistakes. Check important information.",
+	"NanoPi 的浏览器界面，使用 Next.js 重写，视觉参考 Memoh。": "NanoPi's browser UI, rewritten with Next.js and visually inspired by Memoh.",
+	"← 返回": "← Back",
+	"在运行 nanopi webui 的终端里找到配对码。": "Find the pairing code in the terminal running nanopi webui.",
+	"配对码区分大小写。": "Pairing codes are case-sensitive.",
+	"会话已完成": "Chat finished",
+	"新建会话失败": "Could not create chat",
+	"删除会话失败": "Could not delete chat",
+	"重命名会话失败": "Could not rename chat",
+	"连接 nanopi webui 失败": "Could not connect to nanopi webui",
+	"连接 nanopi webui 失败：": "Could not connect to nanopi webui: ",
+	"配对失败": "Pairing failed",
+	"连接中断：": "Connection lost: ",
+	"已完成": "finished",
+	"语言": "Language",
+	"切换界面语言，页面会刷新。": "Switch the interface language. The page will reload.",
+	"的终端里找到配对码。": "to find the pairing code.",
+	"及其全部模型？": " and all its models?",
+	"删除模型": "Delete model",
+};
+
+export function t(zh: string): string {
+	return locale === "zh" ? zh : (EN[zh] ?? zh);
+}

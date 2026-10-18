@@ -4,9 +4,9 @@
  * The tool renders itself with `ctx.ui.custom()` in the TUI, which the webui
  * (a headless session, no dialog-capable UI) cannot do — so in a webui session
  * every ask_user_question call used to fail with "UI not available". The webui
- * already ships a card for exactly this payload (packages/webui/src/components/
- * UserInputCard.tsx, fed by `user_input_request` SSE and answered at
- * `/chat/user-input`); only the daemon-side half was missing.
+ * already ships a card for exactly this payload (the webui UserInputCard,
+ * fed by `user_input_request` SSE and answered at `/chat/user-input`); only the
+ * daemon-side half was missing.
  *
  * Same shape as PermissionBroker: one outstanding request, answers matched by
  * request id, session shutdown drops the queue.

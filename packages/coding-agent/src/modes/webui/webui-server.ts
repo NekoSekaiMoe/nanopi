@@ -59,7 +59,7 @@ const MIME: Record<string, string> = {
 	".map": "application/json",
 };
 
-/** Wire types from the webui frontend (see packages/webui/src/api.ts). */
+/** Wire types from the webui frontend (see packages/webui/src/lib/api.ts). */
 interface WebuiModelInfo {
 	provider: string;
 	model: string;
