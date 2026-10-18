@@ -16,6 +16,7 @@ export interface ModelDataManifest {
 
 const MODEL_DATA_IMPORT_PATTERN =
 	/^import \{ [A-Z][A-Z0-9_]*_CLASSIFIER_MODELS, [A-Z][A-Z0-9_]*_IMAGE_MODELS, [A-Z][A-Z0-9_]*_MODELS \} from "\.\/providers\/([^"/]+)\.models\.ts";$/gm;
+const MODEL_DATA_PROVIDER_ID_PATTERN = /^\/\/ provider-id: (.+)$/gm;
 
 function sha256(value: string): string {
 	return createHash("sha256").update(value).digest("hex");
@@ -69,6 +70,14 @@ function readJsonObject(path: string, description: string, errors: string[]): Re
 	return parsed;
 }
 
+/**
+ * Provider ids may contain dots (`llama.cpp`), but their generated module and
+ * data file names replace them with dashes so they stay importable.
+ */
+export function providerArtifactName(providerId: string): string {
+	return providerId.replace(/\./g, "-");
+}
+
 function readProviderStructure(path: string, providerId: string): Record<string, string> {
 	const errors: string[] = [];
 	const groups = readJsonObject(path, `${providerId}.json`, errors);
@@ -89,7 +98,13 @@ function readProviderStructure(path: string, providerId: string): Record<string,
 export function readModelDataProviderIds(packageRoot: string): string[] {
 	const aggregatorPath = join(packageRoot, "src", "models.generated.ts");
 	const aggregator = readFileSync(aggregatorPath, "utf8");
-	const providerIds = Array.from(aggregator.matchAll(MODEL_DATA_IMPORT_PATTERN), (match) => match[1]).sort();
+	// Module names lose dots (`llama.cpp` → `llama-cpp`), so prefer the ids the
+	// generator recorded next to each import.
+	const recordedIds = Array.from(aggregator.matchAll(MODEL_DATA_PROVIDER_ID_PATTERN), (match) => match[1]);
+	const providerIds = (recordedIds.length > 0
+		? recordedIds
+		: Array.from(aggregator.matchAll(MODEL_DATA_IMPORT_PATTERN), (match) => match[1])
+	).sort();
 	if (providerIds.length === 0) throw new Error(`No generated provider imports found in ${aggregatorPath}`);
 	if (new Set(providerIds).size !== providerIds.length) {
 		throw new Error(`Generated model aggregator contains duplicate provider imports: ${aggregatorPath}`);
@@ -101,7 +116,9 @@ export function readModelDataStructure(packageRoot: string): ModelDataStructure 
 	const providersDir = join(packageRoot, "src", "providers");
 	const dataDir = join(providersDir, "data");
 	const providerIds = readModelDataProviderIds(packageRoot);
-	const expectedShards = providerIds.map((providerId) => `${providerId}.models.ts`).sort();
+	const expectedShards = providerIds
+		.map((providerId) => `${providerArtifactName(providerId)}.models.ts`)
+		.sort();
 	const actualShards = readdirSync(providersDir)
 		.filter((entry) => entry.endsWith(".models.ts"))
 		.sort();
@@ -114,7 +131,7 @@ export function readModelDataStructure(packageRoot: string): ModelDataStructure 
 	return sortedRecord(
 		providerIds.map((providerId) => [
 			providerId,
-			readProviderStructure(join(dataDir, `${providerId}.json`), providerId),
+			readProviderStructure(join(dataDir, `${providerArtifactName(providerId)}.json`), providerId),
 		]),
 	);
 }
@@ -143,19 +160,20 @@ export function createModelDataManifest(
 
 function validateModelValue(
 	value: unknown,
-	providerId: string,
+	dataFileProviderId: string,
+	expectedProviderId: string,
 	modelId: string,
 	expectedApi: string,
 	errors: string[],
 ): void {
-	const label = `${providerId}/${modelId}`;
+	const label = `${dataFileProviderId}/${modelId}`;
 	if (!isRecord(value)) {
 		errors.push(`${label} must be an object`);
 		return;
 	}
 	if (value.id !== modelId) errors.push(`${label} has id ${JSON.stringify(value.id)}, expected ${JSON.stringify(modelId)}`);
-	if (value.provider !== providerId) {
-		errors.push(`${label} has provider ${JSON.stringify(value.provider)}, expected ${JSON.stringify(providerId)}`);
+	if (value.provider !== expectedProviderId) {
+		errors.push(`${label} has provider ${JSON.stringify(value.provider)}, expected ${JSON.stringify(expectedProviderId)}`);
 	}
 	if (value.api !== expectedApi) {
 		errors.push(`${label} has api ${JSON.stringify(value.api)}, expected ${JSON.stringify(expectedApi)}`);
@@ -218,7 +236,7 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 
 	const errors: string[] = [];
 	const expectedFiles = Object.keys(structure)
-		.map((providerId) => `${providerId}.json`)
+		.map((providerId) => `${providerArtifactName(providerId)}.json`)
 		.sort();
 	const actualFiles = readdirSync(dataDir)
 		.filter((entry) => entry.endsWith(".json") && entry !== MODEL_DATA_MANIFEST_FILE)
@@ -251,7 +269,7 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 	}
 
 	for (const [providerId, expectedModels] of Object.entries(structure)) {
-		const filename = `${providerId}.json`;
+		const filename = `${providerArtifactName(providerId)}.json`;
 		const path = join(dataDir, filename);
 		if (!existsSync(path)) continue;
 		const content = readFileSync(path, "utf8");
@@ -275,7 +293,7 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 				actualModels.set(modelKey, api);
 				const separator = modelKey.indexOf(":");
 				const modelId = separator >= 0 ? modelKey.slice(separator + 1) : modelKey;
-				validateModelValue(model, providerId, modelId, api, errors);
+				validateModelValue(model, providerArtifactName(providerId), providerId, modelId, api, errors);
 				if (isRecord(model) && modelKey !== `${String(model.type)}:${String(model.id)}`) {
 					errors.push(`${providerId}/${modelKey} has mismatched type/id identity`);
 				}
