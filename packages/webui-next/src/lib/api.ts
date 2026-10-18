@@ -504,6 +504,16 @@ export async function postChatUserInput(
 	return result;
 }
 
+export interface SkillInfo {
+	name: string;
+	description: string;
+}
+
+export async function getSkills(): Promise<SkillInfo[]> {
+	const response = await fetch("/skills", { headers: authHeaders() });
+	return readJson<SkillInfo[]>(response);
+}
+
 export interface FsListResult {
 	path: string;
 	dirs: string[];

@@ -302,6 +302,11 @@ export function AppClient() {
 		[chat],
 	);
 
+	const useSkill = useCallback((name: string) => {
+		setComposer(`/${name} `);
+		setSettingsOpen(false);
+	}, []);
+
 	const openSettings = useCallback(() => {
 		setSettingsOpen(true);
 		setNavOpen(false);
@@ -429,6 +434,7 @@ export function AppClient() {
 				config={config}
 				onRefreshProviders={refreshProviders}
 				onChangeDir={onWorkspaceChange}
+				onUseSkill={useSkill}
 			/>
 		</div>
 	);

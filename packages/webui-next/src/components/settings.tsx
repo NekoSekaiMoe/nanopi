@@ -1,17 +1,18 @@
 "use client";
 
-import { ArrowLeft, Cpu, Info, Monitor, Moon, Palette, Sun, X } from "lucide-react";
+import { ArrowLeft, Cpu, Info, Monitor, Moon, Palette, Sparkles, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ApprovalMode, ConfigInfo, ModelInfo, ProjectState } from "@/lib/api";
+import { getSkills, type ApprovalMode, type ConfigInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
 import { ProviderSettings } from "@/components/provider-settings";
 import { cn } from "@/lib/utils";
 
-type Section = "appearance" | "models" | "workspace" | "about";
+type Section = "appearance" | "models" | "skills" | "workspace" | "about";
 export type ThemeChoice = "system" | "light" | "dark";
 
 const SECTIONS: Array<{ id: Section; label: string; icon: React.ReactNode }> = [
 	{ id: "appearance", label: "外观", icon: <Palette className="size-4" strokeWidth={1.75} /> },
 	{ id: "models", label: "模型", icon: <Cpu className="size-4" strokeWidth={1.75} /> },
+	{ id: "skills", label: "技能", icon: <Sparkles className="size-4" strokeWidth={1.75} /> },
 	{ id: "workspace", label: "工作区", icon: <Monitor className="size-4" strokeWidth={1.75} /> },
 	{ id: "about", label: "关于", icon: <Info className="size-4" strokeWidth={1.75} /> },
 ];
@@ -30,6 +31,7 @@ export function SettingsOverlay({
 	config,
 	onRefreshProviders,
 	onChangeDir,
+	onUseSkill,
 }: {
 	open: boolean;
 	onClose: () => void;
@@ -44,16 +46,34 @@ export function SettingsOverlay({
 	config: ConfigInfo | null;
 	onRefreshProviders: () => Promise<void>;
 	onChangeDir: (path: string) => Promise<void>;
+	onUseSkill: (name: string) => void;
 }) {
 	const [section, setSection] = useState<Section>("appearance");
 	const [dirDraft, setDirDraft] = useState(project?.working_dir ?? "");
 	const [changingDir, setChangingDir] = useState(false);
 	const [dirError, setDirError] = useState<string | null>(null);
 	const [dirNotice, setDirNotice] = useState<string | null>(null);
+	const [skills, setSkills] = useState<SkillInfo[] | null>(null);
+	const [skillsError, setSkillsError] = useState<string | null>(null);
 
 	useEffect(() => {
 		setDirDraft(project?.working_dir ?? "");
 	}, [project?.working_dir]);
+
+	useEffect(() => {
+		if (section !== "skills" || skills !== null) return;
+		let cancelled = false;
+		void getSkills()
+			.then((list) => {
+				if (!cancelled) setSkills(list);
+			})
+			.catch((cause) => {
+				if (!cancelled) setSkillsError(cause instanceof Error ? cause.message : String(cause));
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [section, skills]);
 
 	if (!open) return null;
 
@@ -207,6 +227,52 @@ export function SettingsOverlay({
 								onProvider={onProvider}
 								onRefresh={onRefreshProviders}
 							/>
+						) : null}
+
+						{section === "skills" ? (
+							<div>
+								<h1 className="text-[18px] font-semibold tracking-[-0.02em]">技能</h1>
+								<p className="mt-1 text-[12.5px] text-muted-foreground">
+									选择一个技能会把它插入到输入框，发送后由 agent 执行。
+								</p>
+								<div className="mt-4 space-y-1.5">
+									{skillsError ? (
+										<p className="text-[11.5px] text-destructive">{skillsError}</p>
+									) : skills === null ? (
+										<p className="text-[12px] text-muted-foreground">加载中…</p>
+									) : skills.length === 0 ? (
+										<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+											<p className="text-[12.5px] text-muted-foreground">还没有可用技能</p>
+											<p className="mt-1 text-[11px] text-muted-foreground/70">
+												把技能放到工作区的 skill 目录后刷新。
+											</p>
+										</div>
+									) : (
+										skills.map((skill) => (
+											<button
+												key={skill.name}
+												type="button"
+												onClick={() => onUseSkill(skill.name)}
+												className="flex w-full items-start gap-3 rounded-xl border border-border px-3 py-2.5 text-left transition-colors hover:bg-accent"
+											>
+												<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+													<Sparkles className="size-3.5" strokeWidth={1.75} />
+												</span>
+												<span className="min-w-0 flex-1">
+													<span className="block truncate font-mono text-[12px] text-foreground">
+														/{skill.name}
+													</span>
+													{skill.description ? (
+														<span className="mt-0.5 block line-clamp-2 text-[11px] text-muted-foreground">
+															{skill.description}
+														</span>
+													) : null}
+												</span>
+											</button>
+										))
+									)}
+								</div>
+							</div>
 						) : null}
 
 						{section === "workspace" ? (
