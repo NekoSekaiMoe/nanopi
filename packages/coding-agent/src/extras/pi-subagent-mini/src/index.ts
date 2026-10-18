@@ -497,6 +497,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		promptGuidelines: [
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) to subagent spawn with read-only tools; keep only the final report in this conversation. Add write/edit to tools only when the subagent should modify files.",
 			"Write every spawn brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess.",
+			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time. To write in parallel, give each one its own tree — `git worktree add <dir> -b <branch>` — and pass `cwd` to spawn; merge the branches yourself once the reports are in.",
 		],
 		// The tool list is a contract, not a free-form string: a listed tool that
 		// does not exist in this loadout is dropped instead of silently failing in

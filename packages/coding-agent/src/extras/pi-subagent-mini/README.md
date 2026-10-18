@@ -33,9 +33,12 @@ follow-up questions are handled by spawning a new subagent with context from
 the previous report (stated in the tool description so the model knows).
 Max 4 concurrent subagents, and only one of them may write at a time: `bash`
 makes any child writable in practice, so writers are serialized rather than
-told apart file by file. Recursion is prevented at the execution layer (the
-child's module set has no subagent tool) and at the prompt layer (the
-description opens by saying the subagent is not the main agent).
+told apart file by file. To write in parallel, give each subagent its own tree
+with `git worktree add <dir> -b <branch>` and pass `cwd` to spawn, then merge
+the branches yourself — a prompt guideline, not a mechanism, so nothing
+enforces it. Recursion is prevented at the execution layer (the child's module
+set has no subagent tool) and at the prompt layer (the description opens by
+saying the subagent is not the main agent).
 
 ## Notes
 
