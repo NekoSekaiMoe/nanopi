@@ -31,7 +31,7 @@
 
 - After code changes (not docs): `pnpm run check` (full output, no tail). Fix all errors, warnings, and infos before committing. Does not run tests.
 - Never run `pnpm run build` or `pnpm test` unless requested by the user.
-- Never run the full vitest suite directly: it includes e2e tests that activate when endpoint/auth env vars are present. For all non-e2e tests, run `./test.sh` from the repo root. Otherwise run specific tests from the package root:
+- Never run the full vitest suite directly: it includes e2e tests that activate when endpoint/auth env vars are present. For all non-e2e tests, run `node ./test.mjs` from the repo root. Otherwise run specific tests from the package root:
   - Vitest: `pnpm exec vitest --run test/specific.test.ts` from the package root
   - `packages/tui` (`node:test`): `node --test test/specific.test.ts`
 - If you create or modify a test file, run it and iterate on test or implementation until it passes.

@@ -9,7 +9,7 @@ Run repository commands from the repo root (two directories above this skill), u
 
 **Tag mirroring**: `.cnb.yml` (`push tags`) and `.github/workflows/sync-to-cnb.yml` (`Push tags to CNB`) mirror annotated tags in both directions. Tag on the **GitHub** side: `build-binaries.yml` fires on a tag push and exists only there, and `.cnb.yml` has no tag trigger, so a tag cut on CNB would publish nothing. The next push to `main` carries the tag over to CNB for clones there. Use an **annotated** tag (`git tag -a`): the mirror passes only annotated tags, since a lightweight and an annotated tag on the same commit are different objects. Neither mirror force-pushes: a tag name already pointing to a different commit on the other side fails the run and needs human judgement.
 
-**Date versioning**: every release is tagged `vYYYYMMDD` (release day, e.g. `v20261013`). All packages stay in lockstep at `<YYYYMMDD>.0.0` in package.json (so `nanopi --version`, the sidecars tarball name, and `create-source-archive.sh`'s tag/package version check all line up); a same-day follow-up release bumps to `<YYYYMMDD>.1.0` with tag `v<YYYYMMDD>.1.0`. Changelog headings use the bare date (`## [20261013]`, `## [20261013.1.0]` for follow-ups) because `scripts/release-notes.mjs extract` matches that form.
+**Date versioning**: every release is tagged `vYYYYMMDD` (release day, e.g. `v20261013`). All packages stay in lockstep at `<YYYYMMDD>.0.0` in package.json (so `nanopi --version`, the sidecars tarball name, and `create-source-archive.mjs`'s tag/package version check all line up); a same-day follow-up release bumps to `<YYYYMMDD>.1.0` with tag `v<YYYYMMDD>.1.0`. Changelog headings use the bare date (`## [20261013]`, `## [20261013.1.0]` for follow-ups) because `scripts/release-notes.mjs extract` matches that form.
 
 **GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`. The `npm run release:patch|minor` scripts are obsolete; do not use them.
 
@@ -30,7 +30,7 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
 3. **Local smoke test** (optional but recommended before tagging): build both flavors from the repo and smoke test from outside the repo:
 
    ```bash
-   ./scripts/build-single-file.sh --out /tmp/nanopi-bundles
+   node scripts/build-single-file.mjs --out /tmp/nanopi-bundles
    NANOPI_BUILD_FLAVOR=minimal node scripts/build-coding-agent-single-file.mjs --out /tmp/nanopi-bundles/nanopi-minimal.js
 
    cd /tmp

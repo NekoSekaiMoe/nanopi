@@ -7,7 +7,7 @@ Status: implemented
 两侧镜像（`.cnb.yml` 的 `mirror-to-github`、`.github/workflows/sync-to-cnb.yml`）都只推
 `HEAD:refs/heads/main`，tag 从来不进同步范围。实测 GitHub 329 个 tag、CNB 328 个，唯一差异是
 `v20261013` 只在 GitHub 一侧；CNB 上没有 GitHub 没有的 tag。从 CNB clone 的人拿不到 release tag，
-`git describe` 和 `create-source-archive.sh` 的 tag/package 版本校验在 CNB 侧都失效。
+`git describe` 和 `create-source-archive.mjs` 的 tag/package 版本校验在 CNB 侧都失效。
 
 `v20261013` 的落点不是偶然：`build-binaries.yml` 由 tag push 触发，而它只存在于 GitHub 侧
 （`.cnb.yml` 没有 tag 触发）。release 只能在 GitHub 打 tag，CNB 永远收不到这个事件。

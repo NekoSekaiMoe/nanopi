@@ -20,14 +20,14 @@ Options:
   --out <dir>          Output directory. Defaults to a new directory under ${tmpdir()}
   --force              Remove --out first if it already exists
   --skip-check         Do not run pnpm run check before building
-  --skip-test          Do not run ./test.sh after building
+  --skip-test          Do not run test.mjs after building
   --skip-install       Only create the artifact set; do not create isolated installs
   --help               Show this help
 `);
 }
 
 function buildSingleFileRelease(targetDirectory) {
-	execFileSync("bash", ["./scripts/build-single-file.sh", "--skip-install", "--skip-build", "--out", targetDirectory], {
+	execFileSync(process.execPath, ["./scripts/build-single-file.mjs", "--skip-install", "--skip-build", "--out", targetDirectory], {
 		stdio: "inherit",
 	});
 	const cliPath = join(targetDirectory, "nanopi.js");
@@ -90,7 +90,7 @@ const outDir = artifactSet.artifactDirectory;
 const singleFileDirectory = join(outDir, "single-file");
 const nodeInstallDirectory = join(outDir, "node");
 
-if (!options.skipTest) execFileSync("bash", ["./test.sh"], { cwd: repoRoot, stdio: "inherit" });
+if (!options.skipTest) execFileSync(process.execPath, ["./test.mjs"], { cwd: repoRoot, stdio: "inherit" });
 
 let singleFileCliPath;
 if (!options.skipInstall) {
