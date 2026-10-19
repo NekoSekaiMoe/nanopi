@@ -4,6 +4,11 @@ import { join } from "node:path";
 
 export const MODEL_DATA_SCHEMA_VERSION = 6;
 export const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
+/**
+ * Aggregator comment a no-provider build writes, so an empty catalog is a
+ * recorded decision rather than a truncated file.
+ */
+export const EMPTY_CATALOG_MARKER = "// no-builtin-providers";
 
 export type ModelDataStructure = Record<string, Record<string, string>>;
 
@@ -91,7 +96,9 @@ function readProviderStructure(path: string, providerId: string): Record<string,
 			models.set(modelKey, api);
 		}
 	}
-	if (models.size === 0) throw new Error(`${path} contains no generated model data`);
+	// An empty object is the valid shape of a provider with no model of that
+	// kind; a file without any group is the one that cannot have been generated.
+	if (Object.keys(groups).length === 0) throw new Error(`${path} contains no API group`);
 	return sortedRecord(models);
 }
 
@@ -105,7 +112,15 @@ export function readModelDataProviderIds(packageRoot: string): string[] {
 		? recordedIds
 		: Array.from(aggregator.matchAll(MODEL_DATA_IMPORT_PATTERN), (match) => match[1])
 	).sort();
-	if (providerIds.length === 0) throw new Error(`No generated provider imports found in ${aggregatorPath}`);
+	if (providerIds.length === 0) {
+		// A flavor with no provider builds an empty catalog on purpose, so zero
+		// imports are valid when the aggregator says so: the structure is empty,
+		// and the shards and data files must be gone too.
+		if (!readFileSync(aggregatorPath, "utf8").includes(EMPTY_CATALOG_MARKER)) {
+			throw new Error(`No generated provider imports found in ${aggregatorPath}`);
+		}
+		return [];
+	}
 	if (new Set(providerIds).size !== providerIds.length) {
 		throw new Error(`Generated model aggregator contains duplicate provider imports: ${aggregatorPath}`);
 	}

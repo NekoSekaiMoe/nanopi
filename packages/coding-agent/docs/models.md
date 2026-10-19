@@ -46,6 +46,8 @@ For Ollama, LM Studio, vLLM, SGLang, and other compatible servers, [configure a 
 
 Use [`models.json`](configuration.md#agent-directory) when an endpoint speaks an API nanopi already supports. This includes most Ollama, LM Studio, vLLM, SGLang, and proxy deployments.
 
+The `minimal` build flavor ships no built-in provider: every model comes from `models.json`, and this section is its first step rather than a fallback. Such a build names the file and the two fields it needs (`baseUrl` and `apiKey`) in its no-models message.
+
 ```json
 {
   "$schema": "https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/packages/coding-agent/schemas/models.schema.json",

@@ -173,7 +173,7 @@
 			}
 		},
 		"minimal": {
-			"description": "base with the bash tool alone: the shell tool is the only tool the build registers, and run modes and permissions (module/extra) are dropped with the extras",
+			"description": "base with the bash tool alone and no built-in provider: the shell tool is the only tool the build registers, run modes and permissions (module/extra) are dropped with the extras, and the endpoint and key come from models.json instead of a shipped catalog",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -189,7 +189,7 @@
 				"module/pi-ui": false,
 				"module/todo-lite": false,
 				"toolset": "bash",
-				"providers": "presets",
+				"providers": "none",
 				"module/extra": false
 			}
 		}
@@ -253,6 +253,12 @@
 				"zai",
 				"zai-coding-cn",
 				"zhipuai"
+			]
+		},
+		"none": {
+			"description": "No built-in provider at all: the model generator writes an empty catalog, the runtime registers no built-in provider, and the endpoint and key come from models.json. This is the minimal SKU, which is why the set is a value and not a switch",
+			"providers": [
+				"__NONE__"
 			]
 		},
 		"presets": {

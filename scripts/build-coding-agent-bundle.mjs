@@ -11,6 +11,7 @@ import {
 	loadBuildConfig,
 	readProviderCatalogIds,
 	resolveBuildFlavor,
+	resolveBuiltinProviderIds,
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
@@ -29,6 +30,9 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
 const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
+// A provider set that ships every catalog has no runtime filter; a set that
+// ships none resolves to an empty list and the build keeps no built-in provider.
+const builtinProviderIds = resolveBuiltinProviderIds(providers);
 validateOAuthFlowRegistry({ repoRoot, components });
 // Every built-in module is a `module/<name>` component; validateFlavorModules
 // fails the build when the module list and buildconfig.json disagree.
@@ -139,7 +143,7 @@ function commonBuildOptions() {
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
-			NANOPI_BUILD_PROVIDERS: JSON.stringify(providers),
+			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
 		},
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",

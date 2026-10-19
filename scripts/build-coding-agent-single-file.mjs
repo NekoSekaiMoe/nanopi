@@ -30,6 +30,7 @@ import {
 	loadBuildConfig,
 	readProviderCatalogIds,
 	resolveBuildFlavor,
+	resolveBuiltinProviderIds,
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
@@ -50,6 +51,9 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
 const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
+// A provider set that ships every catalog has no runtime filter; a set that
+// ships none resolves to an empty list and the build keeps no built-in provider.
+const builtinProviderIds = resolveBuiltinProviderIds(providers);
 validateOAuthFlowRegistry({ repoRoot, components });
 // Every built-in module is a `module/<name>` component; a flavor can drop one,
 // in which case its code stays out of the single file (see build-modules.mjs).
@@ -362,7 +366,7 @@ try {
 			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
-			NANOPI_BUILD_PROVIDERS: JSON.stringify(providers),
+			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
 		},
 		entryPoints: [entryPoint],
 		external: Array.from(allowedExternalPackages),

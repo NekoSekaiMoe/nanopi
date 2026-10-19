@@ -16,9 +16,9 @@
  *   ("standard" or "bash"). It decides which built-in tools the build
  *   registers, so a tool set only ships whole.
  * - `providers` picks one entry from the top-level `providerSets` map (a named
- *   list of `@nanopi/pi-ai` provider ids). It decides which provider catalogs
- *   the model generator writes and the runtime registers, so a provider set
- *   only ships whole.
+ *   list of `@nanopi/pi-ai` provider ids, or the `__NONE__` marker for a build
+ *   that ships none). It decides which provider catalogs the model generator
+ *   writes and the runtime registers, so a provider set only ships whole.
  * - `module/<name>` names each built-in module (packages/coding-agent/src/modules).
  *   Every `module/*` entry must match a name in the module list the bundle
  *   script passes to validateFlavorModules, so a new module cannot silently
@@ -41,6 +41,8 @@ export const PROVIDERS_COMPONENT = "providers";
 export const MODULE_COMPONENT_PREFIX = "module/";
 /** Provider set entry meaning "every built-in catalog", checked at build time. */
 export const ALL_PROVIDERS = "__ALL__";
+/** Provider set entry meaning "no built-in catalog", checked at build time. */
+export const NO_PROVIDERS = "__NONE__";
 
 /** Extracts `--flavor <name>` / `--flavor=<name>` from an argv array. */
 export function parseFlavorArg(argv) {
@@ -175,7 +177,10 @@ export function loadBuildConfig(repoRoot) {
 				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string description`);
 			}
 			if (!Array.isArray(spec.providers) || spec.providers.length === 0) {
-				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} must list at least one provider id`);
+				throw new Error(
+					`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} needs a provider id list, ` +
+						`or ["${NO_PROVIDERS}"] for a build with no built-in provider`,
+				);
 			}
 			for (const providerId of spec.providers) {
 				if (typeof providerId !== "string" || providerId.length === 0) {
@@ -184,6 +189,15 @@ export function loadBuildConfig(repoRoot) {
 			}
 			if (new Set(spec.providers).size !== spec.providers.length) {
 				throw new Error(`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} lists a provider id twice`);
+			}
+			// The markers describe the whole set, so they cannot sit next to ids: a
+			// set that lists a provider ids itself, and a set that lists none must not
+			// be mistaken for a partial list the build then complains about.
+			const marker = spec.providers.find((providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS);
+			if (marker !== undefined && spec.providers.length > 1) {
+				throw new Error(
+					`Provider set "${name}" in ${BUILD_CONFIG_FILENAME} uses "${marker}" alongside concrete provider ids`,
+				);
 			}
 		}
 	} else if (componentNames.includes(PROVIDERS_COMPONENT)) {
@@ -281,7 +295,10 @@ export function resolveFlavorToolset(config, flavorName) {
 
 /**
  * The provider ids a flavor ships. A flavor that does not name a provider set
- * gets every built-in provider, so the default stays the full catalog.
+ * gets every built-in provider, so the default stays the full catalog; a set
+ * that lists `__NONE__` ships none. Both markers expand to themselves, so the
+ * callers keep one place that turns a set into the concrete ids (the model
+ * generator) and one that turns it into a runtime filter (`[]` for none).
  *
  * @returns {string[]}
  */
@@ -297,7 +314,8 @@ export function resolveFlavorProviders(config, flavorName) {
 	if (typeof selected !== "string") return [ALL_PROVIDERS];
 	const providerSet = config.providerSets[selected];
 	if (!providerSet) throw new Error(`Unknown provider set "${selected}" in flavor "${flavorName}"`);
-	return providerSet.providers.includes(ALL_PROVIDERS) ? [ALL_PROVIDERS] : providerSet.providers;
+	const marker = providerSet.providers.find((providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS);
+	return marker === undefined ? providerSet.providers : [marker];
 }
 
 /**
@@ -373,6 +391,18 @@ export function readProviderCatalogIds(repoRoot) {
 }
 
 /**
+ * The concrete provider ids a build registers, or undefined when it ships every
+ * catalog. The `__NONE__` marker resolves to an empty list: the build keeps no
+ * built-in provider, and the model generator writes an empty catalog for it.
+ *
+ * @returns {string[] | undefined}
+ */
+export function resolveBuiltinProviderIds(providers) {
+	if (providers.includes(ALL_PROVIDERS)) return undefined;
+	return providers.includes(NO_PROVIDERS) ? [] : [...providers];
+}
+
+/**
  * Cross-checks the providers a flavor ships against the built-in catalogs in
  * packages/ai. A provider set that names a provider the catalog does not have,
  * or a catalog the flavors never ship, fails the build instead of producing a
@@ -381,10 +411,9 @@ export function readProviderCatalogIds(repoRoot) {
 export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 	const config = loadBuildConfig(repoRoot);
 	const known = new Set(providerIds);
+	const isMarker = (providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS;
 	for (const [name, providerSet] of Object.entries(config.providerSets)) {
-		const unknown = providerSet.providers.filter(
-			(providerId) => providerId !== ALL_PROVIDERS && !known.has(providerId),
-		);
+		const unknown = providerSet.providers.filter((providerId) => !isMarker(providerId) && !known.has(providerId));
 		if (unknown.length > 0) {
 			throw new Error(
 				`${BUILD_CONFIG_FILENAME} provider set "${name}" names providers without a built-in catalog: ${unknown.join(", ")}`,
@@ -392,7 +421,9 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 		}
 	}
 	const shipped = resolveFlavorProviders(config, flavorName);
-	if (shipped.includes(ALL_PROVIDERS)) return;
+	// A flavor that ships every catalog, or no catalog at all, has nothing to
+	// cross-check: one names no provider, the other names nothing but a marker.
+	if (shipped.includes(ALL_PROVIDERS) || shipped.includes(NO_PROVIDERS)) return;
 	const knownIds = new Set(providerIds);
 	const unreachable = providerIds.filter((providerId) => !shipped.includes(providerId));
 	if (unreachable.length > 0) {
