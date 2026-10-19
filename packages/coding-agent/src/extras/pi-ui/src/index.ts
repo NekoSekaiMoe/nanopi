@@ -48,7 +48,7 @@ import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
 import { skinSubagentWidget } from "./subagent-widget.ts";
 import { installThinkingDisplay } from "./thinking.ts";
-import { installWorking } from "./working.ts";
+import { captureTerminalWidth, installWorking } from "./working.ts";
 
 const patchedThemes = new WeakSet<Theme>();
 const PI_THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
@@ -144,6 +144,9 @@ export default function (pi: ModuleApi) {
     restoreShellRenderer();
     restoreShellRenderer = installShellRenderer(ctx.ui.theme);
     installFooter(ctx);
+    // The working row is one line inside the editor frame, so it needs the
+    // width to fold its own label instead of wrapping onto a second line.
+    captureTerminalWidth(process.stdout.columns || 0);
   });
 
   pi.on("session_shutdown", () => {

@@ -142,10 +142,14 @@ describe("welcome box", () => {
 		expect(visibleWidth(directoryRow ?? "")).toBeLessThanOrEqual(62);
 	});
 
-	it("truncates the tip to the terminal width", () => {
-		const tip = stripAnsi(renderWelcomeTip(40));
-		expect(tip.length).toBeLessThanOrEqual(40);
-		expect(tip.endsWith("…")).toBe(true);
+	it("wraps the tip to the terminal width instead of truncating it", () => {
+		const lines = stripAnsi(renderWelcomeTip(40)).split("\n");
+		expect(lines.length).toBeGreaterThan(1);
+		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
+		// Every word survives the wrap; nothing is dropped.
+		expect(lines.join(" ")).toBe(
+			"Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.",
+		);
 	});
 
 	it("folds the middle of a long directory path, keeping both ends", () => {
