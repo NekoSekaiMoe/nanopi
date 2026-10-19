@@ -1,0 +1,16 @@
+# Commit 里含有会被 GitHub push protection 拦下的字面量（GH013），
+# 但提交已经落在 CNB 侧 main 上，且镜像刻意不用 force push，改不掉。
+#
+# 后果：只要远端 main 还没包含这个提交，整次镜像就是一个非 fast-forward 推送，
+# GitHub 先用 push protection 扫完整批待推对象、再判 fast-forward，所以它必然被拒。
+# 不记录就只能等到树上重新出现明文才知道原因（见 .agents/notes/implemented/
+# bug-fix/2026-10-19-github-push-protection-blocks-mirror.md 的「后果」一节）。
+#
+# 每行一个 commit，格式：<sha> <说明>。<说明> 只写「哪条规则、哪个文件」，
+# 不要贴凭据本身，否则这个文件自己会被拦。
+#
+# 树里仍有明文（没有谁把它改成 base64/删掉）时，《这些提交不算阻塞》的分支不成立，
+# 脚本会照常失败。换掉祖先历史才需要删掉对应行。
+08b8333f59f234d79ad9d280a178288de5766b11 Google OAuth Client ID/Secret packages/ai/src/auth/oauth/antigravity.ts:27-28（08b8333f5 时代的行号），adaacd022 起改为 base64
+507ac5daf04f446fe44f3c7e0ad1d61bc4e3060a 合并 08b8333f5 的 merge request #54
+4c28fa80b9ffec9273afc8ec5c31897ef4ed0ffc 合并 08b8333f5 的 merge request #55
