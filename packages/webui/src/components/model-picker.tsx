@@ -50,6 +50,13 @@ function effortChoices(model: ModelInfo | undefined): string[] {
  * page the dropdown covered the greeting. The sheet is edge-to-edge on mobile,
  * a centered card above the bottom edge on desktop, and lists a `模型` section
  * and a `思考强度` section in one scroll — picking either closes it.
+ *
+ * `思考强度` is a flat list of rows, one level each, checkmark on the current
+ * one, the way Memoh draws its reasoning submenu. The chip row it replaced
+ * wrapped onto a second line past four levels, so `极高` and `最高` sat
+ * somewhere else on the sheet than the rest, and the pill used `bg-foreground`
+ * for the active level, the same weight as a primary button, which read as
+ * "nothing selected" on the dark surface.
  */
 export function ModelSheet({
 	open,
@@ -196,25 +203,29 @@ export function ModelSheet({
 							<div className="pt-3">
 								<SheetLabel>{t("思考强度")}</SheetLabel>
 							</div>
-							<div className="flex flex-wrap gap-1.5 px-2.5 py-1">
-								{levels.map((level) => (
-									<button
-										key={level}
-										type="button"
-										onClick={() => {
-											onEffort?.(level);
-											onClose();
-										}}
-										className={cn(
-											"h-8 rounded-full border px-3 text-label transition-colors",
-											level === activeEffort || (!activeEffort && level === levels[0])
-												? "border-foreground bg-foreground text-background"
-												: "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
-										)}
-									>
-										{effortLabel(level)}
-									</button>
-								))}
+							<div className="py-0.5">
+								{levels.map((level) => {
+									const active = level === activeEffort;
+									return (
+										<button
+											key={level}
+											type="button"
+											aria-pressed={active}
+											onClick={() => {
+												onEffort?.(level);
+												onClose();
+											}}
+											className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover"
+										>
+											<span className="grid size-4 shrink-0 place-items-center">
+												{active ? <Check className="size-3.5 text-brand" strokeWidth={2.25} /> : null}
+											</span>
+											<span className="min-w-0 flex-1 truncate text-control text-foreground">
+												{effortLabel(level)}
+											</span>
+										</button>
+									);
+								})}
 							</div>
 						</>
 					) : null}

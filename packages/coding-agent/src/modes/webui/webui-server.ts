@@ -458,6 +458,22 @@ function sessionMeta(info: SessionInfo): WebuiSessionMeta & { project_hash: stri
 }
 
 /**
+ * Thinking level for one model, or undefined when it was never set. The active
+ * model answers from the live session level: the model sheet changes it through
+ * `setThinkingLevel`, which writes the transcript, not the per-model setting,
+ * so reading the setting would report the previous choice.
+ */
+export function reasoningEffortOf(
+	model: { provider: string; id: string },
+	sessionModel: { provider: string; id: string } | undefined,
+	sessionLevel: string,
+	storedLevel: (provider: string, modelId: string) => string | undefined,
+): string | undefined {
+	if (sessionModel && sessionModel.provider === model.provider && sessionModel.id === model.id) return sessionLevel;
+	return storedLevel(model.provider, model.id);
+}
+
+/**
  * Run the webui: serve static assets plus the API bridge on a loopback port.
  * Resolves only on server error or shutdown.
  */
@@ -1038,6 +1054,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return models;
 		}
 
+		/**
+		 * The model object the picker keys on. A catalog refresh replaces model
+		 * objects, so the active model's entry can lose its `compat`/thinking
+		 * map; the session's own object stays authoritative.
+		 */
+		function resolveModel(models: Model<any>[], key: string): Model<any> | undefined {
+			const current = session.model;
+			if (current && key === modelKey(current)) return current;
+			return models.find((candidate) => modelKey(candidate) === key);
+		}
+
 		// --- Models ---
 		if (path === "/models" && req.method === "GET") {
 			const models = await chatModels(true);
@@ -1045,14 +1072,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, modelInfos(models, defaultKey));
 			return;
 		}
-		// Reasoning effort for one model. The composer's effort control writes
-		// here; the value is stored both as the session's thinking level and as
-		// the per-model setting so a switch away and back keeps the choice.
+		// Reasoning effort for one model. The model sheet writes here; the value
+		// is stored as the per-model setting so a switch away and back keeps the
+		// choice, and applied to the session when that model is the active one.
 		if (path === "/models/reasoning-effort" && req.method === "POST") {
 			const body = await readBody(req);
 			const key = typeof body.provider === "string" ? body.provider : "";
-			const models = await chatModels();
-			const model = models.find((candidate) => modelKey(candidate) === key);
+			const model = resolveModel(await chatModels(), key);
 			if (!model) {
 				json(res, 404, { error: `unknown model ${key}` });
 				return;
@@ -1070,9 +1096,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		/**
 		 * Wire shape for one model. `effort_levels` mirrors the levels the model
 		 * really supports (a non-reasoning model gets `["off"]`), and
-		 * `reasoning_effort` is the stored value for that model, else the live
-		 * session level when it is the active model. `available` marks the models
-		 * the CLI would also list; the rest are catalog rows without credentials.
+		 * `reasoning_effort` is whatever the next turn will send: the live
+		 * session level for the active model, the stored setting for the rest, and
+		 * null when nothing was picked yet. `available` marks the models the CLI
+		 * would also list; the rest are catalog rows without credentials.
 		 */
 		function modelInfos(models: Model<any>[], defaultKey: string): WebuiModelInfo[] {
 			const current = session.model;
@@ -1080,9 +1107,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return models.map((model) => {
 				const key = modelKey(model);
 				const levels = getSupportedThinkingLevels(model).filter((level) => level !== "off");
-				const stored = session.settingsManager.getModelThinkingLevel(model.provider, model.id);
+				const effective = reasoningEffortOf(model, current, session.thinkingLevel, (provider, modelId) =>
+					session.settingsManager.getModelThinkingLevel(provider, modelId),
+				);
 				const active = current?.provider === model.provider && current?.id === model.id;
-				const effective = active ? session.thinkingLevel : stored;
 				return {
 					provider: key,
 					model: model.id,
