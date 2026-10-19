@@ -79,6 +79,38 @@ describe("model selector", () => {
 		expect(saveDefault).toHaveBeenCalledWith(currentModel);
 	});
 
+	it("re-checks credentials when an empty list is told to", async () => {
+		setKeybindings(new KeybindingsManager({ "app.models.refreshCredentials": "ctrl+r" }));
+		harness = await createHarness();
+		const runtime = harness.session.modelRuntime;
+		// The picker opens before the catalog refresh lands, so the list starts empty.
+		runtime.getAvailableSnapshot = () => [];
+		vi.spyOn(runtime, "refresh").mockResolvedValue({ aborted: false, errors: new Map() });
+		const refreshAvailability = vi.fn(async () => {
+			await runtime.refresh({ allowNetwork: false });
+		});
+
+		const selector = new ModelSelectorComponent(
+			createFakeTui(),
+			undefined,
+			runtime,
+			[],
+			() => {},
+			() => {},
+			undefined,
+			undefined,
+			undefined,
+			refreshAvailability,
+		);
+
+		expect(stripAnsi(selector.render(120).join("\n"))).toContain("No models from a configured provider");
+		expect(stripAnsi(selector.render(120).join("\n"))).toContain("ctrl+r re-check credentials");
+
+		selector.handleInput("\x12");
+		await vi.waitFor(() => expect(refreshAvailability).toHaveBeenCalledOnce());
+		selector.dispose();
+	});
+
 	it("lists every catalog that failed to refresh", async () => {
 		harness = await createHarness();
 		vi.spyOn(harness.session.modelRuntime, "refresh").mockResolvedValue({
