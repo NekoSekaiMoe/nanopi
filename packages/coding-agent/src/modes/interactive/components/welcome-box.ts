@@ -1,5 +1,5 @@
 import type { Component } from "@nanopi/pi-tui";
-import { sliceByColumn, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { sliceByColumn, truncateToWidth, visibleWidth, wrapTextWithAnsi } from "@nanopi/pi-tui";
 import { theme } from "../theme/theme.ts";
 
 export interface WelcomeBoxData {
@@ -91,10 +91,14 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 	];
 }
 
-/** Startup tip, truncated to the terminal width so narrow terminals do not crash the renderer. */
+/** Startup tip, wrapped to the terminal width so the sentence stays readable. */
 export function renderWelcomeTip(width: number): string {
 	const tip = "Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.";
-	return theme.fg("dim", truncateToWidth(tip, Math.max(0, width), "…"));
+	if (width <= 0) return "";
+	// A wrapped line must never exceed the terminal width, so the continuation
+	// hangs under the text instead of under "Tip: ".
+	const lines = wrapTextWithAnsi(tip, width);
+	return theme.fg("dim", lines.map((line) => truncateToWidth(line, width, "…")).join("\n"));
 }
 
 /** Static Codex-style welcome header: box + tip line. Rebuilds colors on theme change. */
@@ -109,6 +113,6 @@ export class WelcomeHeader implements Component {
 
 	render(width: number): string[] {
 		if (width <= 0) return [];
-		return [...renderWelcomeBox(this.getData(), width), "", renderWelcomeTip(width)];
+		return [...renderWelcomeBox(this.getData(), width), "", ...renderWelcomeTip(width).split("\n")];
 	}
 }
