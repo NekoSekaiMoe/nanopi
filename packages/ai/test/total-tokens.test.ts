@@ -438,52 +438,6 @@ describe("totalTokens field", () => {
 	});
 
 	// =========================================================================
-	// Mistral
-	// =========================================================================
-
-	describe.skipIf(!process.env.MISTRAL_API_KEY)("Mistral", () => {
-		it(
-			"devstral-medium-latest - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
-			async () => {
-				const llm = getModel("mistral", "devstral-medium-latest");
-
-				console.log(`\nMistral / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: process.env.MISTRAL_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-		);
-	});
-
-	// =========================================================================
-	// MiniMax
-	// =========================================================================
-
-	describe.skipIf(!process.env.MINIMAX_API_KEY)("MiniMax", () => {
-		it(
-			"MiniMax-M2.7 - should return totalTokens equal to sum of components",
-			{ retry: 3, timeout: 60000 },
-			async () => {
-				const llm = getModel("minimax", "MiniMax-M2.7");
-
-				console.log(`\nMiniMax / ${llm.id}:`);
-				const { first, second } = await testTotalTokensWithCache(llm, { apiKey: process.env.MINIMAX_API_KEY });
-
-				logUsage("First request", first);
-				logUsage("Second request", second);
-
-				assertTotalTokensEqualsComponents(first);
-				assertTotalTokensEqualsComponents(second);
-			},
-		);
-	});
-
-	// =========================================================================
 	// Xiaomi MiMo
 	// =========================================================================
 

@@ -503,15 +503,6 @@ const KIMI_CODING_IMPLIED_COSTS: Record<string, Model<Api>["cost"]> = {
 };
 const OPENROUTER_KIMI_K3_MODEL_IDS = new Set(["moonshotai/kimi-k3", "~moonshotai/kimi-latest"]);
 
-const ANT_LING_RING_THINKING_LEVEL_MAP = {
-	off: null,
-	minimal: null,
-	low: null,
-	medium: null,
-	high: "high",
-	xhigh: "xhigh",
-} as const;
-
 const BEDROCK_INFERENCE_PROFILE_ONLY_MODEL_IDS = new Set(["anthropic.claude-opus-5"]);
 // Bedrock Mantle/OpenAI Responses routing is based on AWS's model-card endpoint/API support metadata.
 // Sources checked:
@@ -894,7 +885,6 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
 	const isCloudflareAiGateway = provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
 	const isNvidia = provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com");
-	const isAntLing = provider === "ant-ling" || baseUrl.includes("api.ant-ling.com");
 	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isTogetherReasoningOnly = isTogether && TOGETHER_REASONING_ONLY_MODELS.has(model.id);
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
@@ -912,8 +902,7 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		provider === "opencode" ||
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
-		isCloudflareAiGateway ||
-		isAntLing;
+		isCloudflareAiGateway;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -922,7 +911,6 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		isCloudflareAiGateway ||
 		isTogether ||
 		isNvidia ||
-		isAntLing ||
 		isZai;
 
 	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
@@ -935,7 +923,7 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
 		supportsReasoningEffort:
-			!isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia && !isAntLing,
+			!isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
 		supportsUsageInStreaming: true,
 		supportsFinishReason: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
@@ -949,11 +937,9 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 				? "zai"
 				: isTogether && !isTogetherReasoningOnly
 					? "together"
-					: isAntLing
-						? "ant-ling"
-						: isOpenRouter
-							? "openrouter"
-							: "openai",
+					: isOpenRouter
+						? "openrouter"
+						: "openai",
 		openRouterRouting: {},
 		vercelGatewayRouting: {},
 		chatTemplateKwargs: {},
@@ -966,13 +952,7 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		supportsMidConvoToolAdditions: false,
 		...(cacheControlFormat ? { cacheControlFormat } : {}),
 		sendSessionAffinityHeaders: isOpenRouter,
-		supportsLongCacheRetention: !(
-			isTogether ||
-			isCloudflareWorkersAI ||
-			isCloudflareAiGateway ||
-			isNvidia ||
-			isAntLing
-		),
+		supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia),
 	};
 }
 
@@ -1441,10 +1421,6 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 	if (model.provider === "opencode" && model.id === "grok-build-0.1") {
 		// OpenCode Zen Grok Build reasons by default but rejects explicit reasoningEffort.
 		mergeThinkingLevelMap(model, { off: null, minimal: null, low: null, medium: null });
-	}
-	if (model.provider === "ant-ling" && model.reasoning) {
-		// Ring reasons by default. Only high/xhigh have documented explicit effort controls.
-		mergeThinkingLevelMap(model, ANT_LING_RING_THINKING_LEVEL_MAP);
 	}
 	if (model.provider === "github-copilot") {
 		const override = GITHUB_COPILOT_THINKING_LEVEL_OVERRIDES[model.id];
@@ -2446,37 +2422,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
 		models.push(...processZaiModels(data));
 
-		// Process Mistral models
-		if (data.mistral?.models) {
-			for (const [modelId, model] of Object.entries(data.mistral.models)) {
-				const m = model as ModelsDevModel;
-				if (m.tool_call !== true) continue;
-
-				// Models with effort values use `reasoning_effort` with these levels.
-				// Reasoning models without them (Magistral) use `prompt_mode`.
-				const thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
-
-				models.push({
-					id: modelId,
-					name: m.name || modelId,
-					api: "mistral-conversations",
-					provider: "mistral",
-					baseUrl: "https://api.mistral.ai",
-					reasoning: m.reasoning === true,
-					...(thinkingLevelMap ? { thinkingLevelMap } : {}),
-					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-					cost: {
-						input: m.cost?.input || 0,
-						output: m.cost?.output || 0,
-						cacheRead: m.cost?.cache_read ?? (m.cost?.input ? roundCost(m.cost.input * 0.1) : 0),
-						cacheWrite: m.cost?.cache_write || 0,
-					},
-					contextWindow: m.limit?.context || 4096,
-					maxTokens: m.limit?.output || 4096,
-				});
-			}
-		}
-
 		// Process Hugging Face models
 		if (data.huggingface?.models) {
 			for (const [modelId, model] of Object.entries(data.huggingface.models)) {
@@ -2809,36 +2754,6 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 
 				models.push(copilotModel);
 				recordModelsDevReasoningOptions("github-copilot", modelId, m);
-			}
-		}
-
-		// Process MiniMax models
-		const minimaxVariants = [
-			{ key: "minimax", provider: "minimax", baseUrl: "https://api.minimax.io/anthropic" },
-			{ key: "minimax-cn", provider: "minimax-cn", baseUrl: "https://api.minimaxi.com/anthropic" },
-		] as const;
-
-		for (const { key, provider, baseUrl } of minimaxVariants) {
-			if (data[key]?.models) {
-				for (const [modelId, model] of Object.entries(data[key].models)) {
-					const m = model as ModelsDevModel;
-					if (m.tool_call !== true) continue;
-
-					models.push({
-						id: modelId,
-						name: m.name || modelId,
-						api: "anthropic-messages",
-						provider,
-						// MiniMax's Anthropic-compatible API - SDK appends /v1/messages
-						baseUrl,
-						reasoning: m.reasoning === true,
-						input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
-						cost: getModelsDevCost(m.cost),
-						contextWindow: m.limit?.context || 4096,
-						maxTokens: m.limit?.output || 4096,
-					});
-					recordModelsDevReasoningOptions(provider, modelId, m);
-				}
 			}
 		}
 
@@ -3622,56 +3537,6 @@ async function generateModels() {
 	];
 	allModels.push(...deepseekModels);
 
-	const antLingCompat: OpenAICompletionsCompat = {
-		supportsStore: false,
-		supportsDeveloperRole: false,
-		supportsReasoningEffort: false,
-		maxTokensField: "max_tokens",
-		supportsLongCacheRetention: false,
-	};
-	const antLingModels: Model<"openai-completions">[] = [
-		{
-			id: "Ling-2.6-flash",
-			name: "Ling 2.6 Flash",
-			api: "openai-completions",
-			baseUrl: "https://api.ant-ling.com/v1",
-			provider: "ant-ling",
-			reasoning: false,
-			input: ["text"],
-			cost: { input: 0.01, output: 0.02, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 262144,
-			maxTokens: 65536,
-			compat: antLingCompat,
-		},
-		{
-			id: "Ling-2.6-1T",
-			name: "Ling 2.6 1T",
-			api: "openai-completions",
-			baseUrl: "https://api.ant-ling.com/v1",
-			provider: "ant-ling",
-			reasoning: false,
-			input: ["text"],
-			cost: { input: 0.06, output: 0.25, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 262144,
-			maxTokens: 65536,
-			compat: antLingCompat,
-		},
-		{
-			id: "Ring-2.6-1T",
-			name: "Ring 2.6 1T",
-			api: "openai-completions",
-			baseUrl: "https://api.ant-ling.com/v1",
-			provider: "ant-ling",
-			reasoning: true,
-			input: ["text"],
-			cost: { input: 0.06, output: 0.25, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 262144,
-			maxTokens: 65536,
-			compat: { ...antLingCompat, thinkingFormat: "ant-ling" },
-		},
-	];
-	allModels.push(...antLingModels);
-
 	for (const candidate of allModels) {
 		if (
 			candidate.api === "openai-completions" &&
@@ -3688,18 +3553,6 @@ async function generateModels() {
 						}
 					: deepseekCompat),
 			};
-		}
-	}
-
-	const minimaxDirectSupportedIds = new Set(["MiniMax-M2.7", "MiniMax-M2.7-highspeed", "MiniMax-M3"]);
-
-	for (let i = allModels.length - 1; i >= 0; i--) {
-		const candidate = allModels[i];
-		if (
-			(candidate.provider === "minimax" || candidate.provider === "minimax-cn") &&
-			!minimaxDirectSupportedIds.has(candidate.id)
-		) {
-			allModels.splice(i, 1);
 		}
 	}
 
@@ -3824,28 +3677,6 @@ async function generateModels() {
 	allModels.push(...codexModels);
 
 	allModels.push(...antigravityModels());
-
-	// Add missing Mistral Medium 3.5 model until models.dev includes it
-	if (!allModels.some(m => m.provider === "mistral" && m.id === "mistral-medium-3.5")) {
-		allModels.push({
-			id: "mistral-medium-3.5",
-			name: "Mistral Medium 3.5",
-			api: "mistral-conversations",
-			provider: "mistral",
-			baseUrl: "https://api.mistral.ai",
-			reasoning: true,
-			thinkingLevelMap: getEffortThinkingLevelMap([{ type: "effort", values: ["none", "high"] }]),
-			input: ["text", "image"],
-			cost: {
-				input: 1.5,
-				output: 7.5,
-				cacheRead: 0,
-				cacheWrite: 0,
-			},
-			contextWindow: 262144, // 256k tokens
-			maxTokens: 262144,
-		});
-	}
 
 	// Add "auto" alias for openrouter/auto
 	if (!allModels.some(m => m.provider === "openrouter" && m.id === "auto")) {

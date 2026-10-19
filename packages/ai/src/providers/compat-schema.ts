@@ -254,11 +254,10 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 					Type.Literal("chat-template"),
 					Type.Literal("qwen-chat-template"),
 					Type.Literal("string-thinking"),
-					Type.Literal("ant-ling"),
 				],
 				{
 					description:
-						'Format for reasoning or thinking parameters. When omitted, nanopi auto-detects the format from the provider URL. "openai" uses reasoning_effort, "openrouter" uses reasoning.effort, "deepseek" uses thinking.type plus reasoning_effort when supported, "together" uses reasoning.enabled plus reasoning_effort when supported, "baseten" uses configurable chat_template_args plus reasoning_effort when supported, "zai" uses thinking.type, "qwen" uses top-level enable_thinking, "qwen-chat-template" uses chat_template_kwargs.enable_thinking and preserve_thinking, "chat-template" uses configurable chat_template_kwargs, "string-thinking" uses top-level thinking, and "ant-ling" uses reasoning.effort only when the mapped effort is non-null.',
+						'Format for reasoning or thinking parameters. When omitted, nanopi auto-detects the format from the provider URL. "openai" uses reasoning_effort, "openrouter" uses reasoning.effort, "deepseek" uses thinking.type plus reasoning_effort when supported, "together" uses reasoning.enabled plus reasoning_effort when supported, "baseten" uses configurable chat_template_args plus reasoning_effort when supported, "zai" uses thinking.type, "qwen" uses top-level enable_thinking, "qwen-chat-template" uses chat_template_kwargs.enable_thinking and preserve_thinking, "chat-template" uses configurable chat_template_kwargs, "string-thinking" uses top-level thinking.',
 				},
 			),
 		),
@@ -518,17 +517,6 @@ export const BedrockCompatSchema = Type.Object(
 	{ description: "Compatibility settings for Amazon Bedrock models.", additionalProperties: true },
 );
 
-export const MistralConversationsCompatSchema = Type.Object(
-	{
-		supportsMidConvoSystemMessages: optionalCompatBoolean({
-			description:
-				"Whether the exact model accepts system messages after the conversation has started. When false, later system messages are folded into the leading system message.",
-			default: false,
-		}),
-	},
-	{ description: "Compatibility settings for the Mistral chat API.", additionalProperties: true },
-);
-
 const ProviderCompatPropertyOverrides = {
 	supportsDeveloperRole: optionalCompatBoolean({
 		description: "Whether the provider supports the developer role instead of system. Defaults are API-specific.",
@@ -613,7 +601,6 @@ const CompatSchemasByApi = {
 	"openai-responses": OpenAIResponsesCompatSchema,
 	"anthropic-messages": AnthropicMessagesCompatSchema,
 	"bedrock-converse-stream": BedrockCompatSchema,
-	"mistral-conversations": MistralConversationsCompatSchema,
 } as const;
 
 const ProviderCompatProperties = mergeCompatProperties(
@@ -645,5 +632,3 @@ export interface OpenAIResponsesCompat extends Static<typeof OpenAIResponsesComp
 export interface AnthropicMessagesCompat extends Static<typeof AnthropicMessagesCompatSchema> {}
 /** Compatibility settings for Amazon Bedrock models. */
 export interface BedrockCompat extends Static<typeof BedrockCompatSchema> {}
-/** Compatibility settings for the Mistral chat API. */
-export interface MistralConversationsCompat extends Static<typeof MistralConversationsCompatSchema> {}

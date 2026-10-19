@@ -7,8 +7,6 @@ import { ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS, ALIBABA_TOKEN_PLAN_IMAGE_MODELS, 
 import { ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS, ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS, ALIBABA_TOKEN_PLAN_CN_MODELS } from "./providers/alibaba-token-plan-cn.models.ts";
 // provider-id: amazon-bedrock
 import { AMAZON_BEDROCK_CLASSIFIER_MODELS, AMAZON_BEDROCK_IMAGE_MODELS, AMAZON_BEDROCK_MODELS } from "./providers/amazon-bedrock.models.ts";
-// provider-id: ant-ling
-import { ANT_LING_CLASSIFIER_MODELS, ANT_LING_IMAGE_MODELS, ANT_LING_MODELS } from "./providers/ant-ling.models.ts";
 // provider-id: anthropic
 import { ANTHROPIC_CLASSIFIER_MODELS, ANTHROPIC_IMAGE_MODELS, ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
 // provider-id: antigravity
@@ -41,12 +39,6 @@ import { HUGGINGFACE_CLASSIFIER_MODELS, HUGGINGFACE_IMAGE_MODELS, HUGGINGFACE_MO
 import { KIMI_CODING_CLASSIFIER_MODELS, KIMI_CODING_IMAGE_MODELS, KIMI_CODING_MODELS } from "./providers/kimi-coding.models.ts";
 // provider-id: meta
 import { META_CLASSIFIER_MODELS, META_IMAGE_MODELS, META_MODELS } from "./providers/meta.models.ts";
-// provider-id: minimax
-import { MINIMAX_CLASSIFIER_MODELS, MINIMAX_IMAGE_MODELS, MINIMAX_MODELS } from "./providers/minimax.models.ts";
-// provider-id: minimax-cn
-import { MINIMAX_CN_CLASSIFIER_MODELS, MINIMAX_CN_IMAGE_MODELS, MINIMAX_CN_MODELS } from "./providers/minimax-cn.models.ts";
-// provider-id: mistral
-import { MISTRAL_CLASSIFIER_MODELS, MISTRAL_IMAGE_MODELS, MISTRAL_MODELS } from "./providers/mistral.models.ts";
 // provider-id: modal
 import { MODAL_CLASSIFIER_MODELS, MODAL_IMAGE_MODELS, MODAL_MODELS } from "./providers/modal.models.ts";
 // provider-id: moonshotai
@@ -110,7 +102,6 @@ export const MODELS: {
 	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_MODELS;
 	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_MODELS;
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_MODELS;
-	readonly "ant-ling": typeof ANT_LING_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_MODELS;
 	readonly "antigravity": typeof ANTIGRAVITY_MODELS;
 	readonly "azure": typeof AZURE_MODELS;
@@ -127,9 +118,6 @@ export const MODELS: {
 	readonly "huggingface": typeof HUGGINGFACE_MODELS;
 	readonly "kimi-coding": typeof KIMI_CODING_MODELS;
 	readonly "meta": typeof META_MODELS;
-	readonly "minimax": typeof MINIMAX_MODELS;
-	readonly "minimax-cn": typeof MINIMAX_CN_MODELS;
-	readonly "mistral": typeof MISTRAL_MODELS;
 	readonly "modal": typeof MODAL_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_MODELS;
@@ -163,7 +151,6 @@ export const MODELS: {
 	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_MODELS,
 	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_MODELS,
 	"amazon-bedrock": AMAZON_BEDROCK_MODELS,
-	"ant-ling": ANT_LING_MODELS,
 	"anthropic": ANTHROPIC_MODELS,
 	"antigravity": ANTIGRAVITY_MODELS,
 	"azure": AZURE_MODELS,
@@ -180,9 +167,6 @@ export const MODELS: {
 	"huggingface": HUGGINGFACE_MODELS,
 	"kimi-coding": KIMI_CODING_MODELS,
 	"meta": META_MODELS,
-	"minimax": MINIMAX_MODELS,
-	"minimax-cn": MINIMAX_CN_MODELS,
-	"mistral": MISTRAL_MODELS,
 	"modal": MODAL_MODELS,
 	"moonshotai": MOONSHOTAI_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_MODELS,
@@ -218,7 +202,6 @@ export const IMAGE_MODELS: {
 	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_IMAGE_MODELS;
 	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS;
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_IMAGE_MODELS;
-	readonly "ant-ling": typeof ANT_LING_IMAGE_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_IMAGE_MODELS;
 	readonly "antigravity": typeof ANTIGRAVITY_IMAGE_MODELS;
 	readonly "azure": typeof AZURE_IMAGE_MODELS;
@@ -235,9 +218,6 @@ export const IMAGE_MODELS: {
 	readonly "huggingface": typeof HUGGINGFACE_IMAGE_MODELS;
 	readonly "kimi-coding": typeof KIMI_CODING_IMAGE_MODELS;
 	readonly "meta": typeof META_IMAGE_MODELS;
-	readonly "minimax": typeof MINIMAX_IMAGE_MODELS;
-	readonly "minimax-cn": typeof MINIMAX_CN_IMAGE_MODELS;
-	readonly "mistral": typeof MISTRAL_IMAGE_MODELS;
 	readonly "modal": typeof MODAL_IMAGE_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_IMAGE_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_IMAGE_MODELS;
@@ -271,7 +251,6 @@ export const IMAGE_MODELS: {
 	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_IMAGE_MODELS,
 	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS,
 	"amazon-bedrock": AMAZON_BEDROCK_IMAGE_MODELS,
-	"ant-ling": ANT_LING_IMAGE_MODELS,
 	"anthropic": ANTHROPIC_IMAGE_MODELS,
 	"antigravity": ANTIGRAVITY_IMAGE_MODELS,
 	"azure": AZURE_IMAGE_MODELS,
@@ -288,9 +267,6 @@ export const IMAGE_MODELS: {
 	"huggingface": HUGGINGFACE_IMAGE_MODELS,
 	"kimi-coding": KIMI_CODING_IMAGE_MODELS,
 	"meta": META_IMAGE_MODELS,
-	"minimax": MINIMAX_IMAGE_MODELS,
-	"minimax-cn": MINIMAX_CN_IMAGE_MODELS,
-	"mistral": MISTRAL_IMAGE_MODELS,
 	"modal": MODAL_IMAGE_MODELS,
 	"moonshotai": MOONSHOTAI_IMAGE_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_IMAGE_MODELS,
@@ -326,7 +302,6 @@ export const CLASSIFIER_MODELS: {
 	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS;
 	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_CLASSIFIER_MODELS;
-	readonly "ant-ling": typeof ANT_LING_CLASSIFIER_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_CLASSIFIER_MODELS;
 	readonly "antigravity": typeof ANTIGRAVITY_CLASSIFIER_MODELS;
 	readonly "azure": typeof AZURE_CLASSIFIER_MODELS;
@@ -343,9 +318,6 @@ export const CLASSIFIER_MODELS: {
 	readonly "huggingface": typeof HUGGINGFACE_CLASSIFIER_MODELS;
 	readonly "kimi-coding": typeof KIMI_CODING_CLASSIFIER_MODELS;
 	readonly "meta": typeof META_CLASSIFIER_MODELS;
-	readonly "minimax": typeof MINIMAX_CLASSIFIER_MODELS;
-	readonly "minimax-cn": typeof MINIMAX_CN_CLASSIFIER_MODELS;
-	readonly "mistral": typeof MISTRAL_CLASSIFIER_MODELS;
 	readonly "modal": typeof MODAL_CLASSIFIER_MODELS;
 	readonly "moonshotai": typeof MOONSHOTAI_CLASSIFIER_MODELS;
 	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_CLASSIFIER_MODELS;
@@ -379,7 +351,6 @@ export const CLASSIFIER_MODELS: {
 	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS,
 	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
 	"amazon-bedrock": AMAZON_BEDROCK_CLASSIFIER_MODELS,
-	"ant-ling": ANT_LING_CLASSIFIER_MODELS,
 	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
 	"antigravity": ANTIGRAVITY_CLASSIFIER_MODELS,
 	"azure": AZURE_CLASSIFIER_MODELS,
@@ -396,9 +367,6 @@ export const CLASSIFIER_MODELS: {
 	"huggingface": HUGGINGFACE_CLASSIFIER_MODELS,
 	"kimi-coding": KIMI_CODING_CLASSIFIER_MODELS,
 	"meta": META_CLASSIFIER_MODELS,
-	"minimax": MINIMAX_CLASSIFIER_MODELS,
-	"minimax-cn": MINIMAX_CN_CLASSIFIER_MODELS,
-	"mistral": MISTRAL_CLASSIFIER_MODELS,
 	"modal": MODAL_CLASSIFIER_MODELS,
 	"moonshotai": MOONSHOTAI_CLASSIFIER_MODELS,
 	"moonshotai-cn": MOONSHOTAI_CN_CLASSIFIER_MODELS,

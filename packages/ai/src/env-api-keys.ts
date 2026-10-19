@@ -86,7 +86,6 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 	}
 
 	const envMap: Record<string, string> = {
-		"ant-ling": "ANT_LING_API_KEY",
 		"qwen-token-plan": "QWEN_TOKEN_PLAN_API_KEY",
 		"qwen-token-plan-cn": "QWEN_TOKEN_PLAN_CN_API_KEY",
 		"qwen-token-plan-individual": "QWEN_TOKEN_PLAN_API_KEY",
@@ -110,9 +109,6 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 		siliconflow: "SILICONFLOW_API_KEY",
 		"siliconflow-cn": "SILICONFLOW_CN_API_KEY",
 		"ollama-cloud-token-plan": "OLLAMA_CLOUD_TOKEN_PLAN_API_KEY",
-		mistral: "MISTRAL_API_KEY",
-		minimax: "MINIMAX_API_KEY",
-		"minimax-cn": "MINIMAX_CN_API_KEY",
 		moonshotai: "MOONSHOT_API_KEY",
 		"moonshotai-cn": "MOONSHOT_API_KEY",
 		huggingface: "HF_TOKEN",

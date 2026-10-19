@@ -31,13 +31,11 @@ This table covers providers with a single primary API-key variable. Providers th
 | Provider | Environment variable |
 |---|---|
 | Anthropic | `ANTHROPIC_API_KEY` |
-| Ant Ling | `ANT_LING_API_KEY` |
 | OpenAI | `OPENAI_API_KEY` |
 | DeepSeek | `DEEPSEEK_API_KEY` |
 | NVIDIA NIM | `NVIDIA_API_KEY` |
 | Google Gemini | `GEMINI_API_KEY` |
 | GitHub Copilot | `COPILOT_GITHUB_TOKEN` |
-| Mistral | `MISTRAL_API_KEY` |
 | Groq | `GROQ_API_KEY` |
 | Cerebras | `CEREBRAS_API_KEY` |
 | xAI | `XAI_API_KEY` |
@@ -54,8 +52,6 @@ This table covers providers with a single primary API-key variable. Providers th
 | Kimi For Coding | `KIMI_API_KEY` |
 | Google Antigravity (unofficial) | `ANTIGRAVITY_ACCESS_TOKEN` |
 | Meta | `META_API_KEY` |
-| MiniMax | `MINIMAX_API_KEY` |
-| MiniMax (China) | `MINIMAX_CN_API_KEY` |
 | Moonshot AI (Global and China) | `MOONSHOT_API_KEY` |
 | Qwen Token Plan and Individual | `QWEN_TOKEN_PLAN_API_KEY` |
 | Qwen Token Plan (China) | `QWEN_TOKEN_PLAN_CN_API_KEY` |

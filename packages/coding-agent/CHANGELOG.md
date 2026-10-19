@@ -99,6 +99,7 @@
 - Fixed `serializeConversation()` (compaction, branch summaries, bug reports) including thinking blocks; replayed thinking is often not in the live context, so including it could make a summarization request larger than the context it summarizes and fail. Visible text, tool calls, and tool results record what happened
 ### Removed
 
+- Removed the Ant Ling, Mistral, MiniMax, and MiniMax (China) providers with their `defaultModelPerProvider` entries and `--help` environment-variable rows. `ant-ling`, `mistral`, `minimax`, and `minimax-cn` are no longer selectable in `/model`; the vendors remain reachable as custom providers in `models.json` over `openai-completions` or `anthropic-messages`
 - Removed the `extra/pi-extra-cmd` and `extra/pi-codex-compact` build flavor components and their vendored sources; their functionality is built in (bundled extras drop from eleven to nine).
 - Removed the Earendil announcement component, the hidden `/dementedelves` command, and the Earendil attribution from the Radius login intro and docs.
 - Removed the `nanopi update` command, self-update planning, the managed-install updater, install telemetry, the startup version check, and package update notifications; nanopi no longer connects to pi.dev.

@@ -711,13 +711,10 @@ describe("default model selection", () => {
 		expect(defaultModelPerProvider["openai-codex"]).toBe("gpt-6.1-sol");
 	});
 
-	test("zai, minimax, cerebras, and ant-ling defaults track current models", () => {
+	test("zai and cerebras defaults track current models", () => {
 		expect(defaultModelPerProvider.zai).toBe("glm-5.3");
 		expect(defaultModelPerProvider["zai-coding-cn"]).toBe("glm-5.3");
-		expect(defaultModelPerProvider.minimax).toBe("MiniMax-M2.7");
-		expect(defaultModelPerProvider["minimax-cn"]).toBe("MiniMax-M2.7");
 		expect(defaultModelPerProvider.cerebras).toBe("gpt-oss-120b");
-		expect(defaultModelPerProvider["ant-ling"]).toBe("Ring-2.6-1T");
 	});
 
 	test("built-in chat providers have defaults in their generated catalogs", () => {

@@ -3,7 +3,6 @@ import { type CreateModelsOptions, createModels, type MutableModels, type Provid
 import type { AnyModel, Api, ClassifierApi, ClassifierModel, ImageApi, ImageModel, Model } from "../types.ts";
 import { alibabaTokenPlanProvider } from "./alibaba-token-plan.ts";
 import { amazonBedrockProvider } from "./amazon-bedrock.ts";
-import { antLingProvider } from "./ant-ling.ts";
 import { anthropicProvider } from "./anthropic.ts";
 import { antigravityProvider } from "./antigravity.ts";
 import { azureProvider } from "./azure.ts";
@@ -21,9 +20,6 @@ import { groqProvider } from "./groq.ts";
 import { huggingfaceProvider } from "./huggingface.ts";
 import { kimiCodingProvider } from "./kimi-coding.ts";
 import { metaProvider } from "./meta.ts";
-import { minimaxProvider } from "./minimax.ts";
-import { minimaxCnProvider } from "./minimax-cn.ts";
-import { mistralProvider } from "./mistral.ts";
 import { modalProvider } from "./modal.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
 import { moonshotaiCnProvider } from "./moonshotai-cn.ts";
@@ -145,7 +141,6 @@ export function builtinProviders(): Provider[] {
 		alibabaTokenPlanProvider(),
 		anthropicProvider(),
 		antigravityProvider(),
-		antLingProvider(),
 		azureProvider(),
 		basetenProvider(),
 		cerebrasProvider(),
@@ -160,9 +155,6 @@ export function builtinProviders(): Provider[] {
 		huggingfaceProvider(),
 		kimiCodingProvider(),
 		metaProvider(),
-		minimaxProvider(),
-		minimaxCnProvider(),
-		mistralProvider(),
 		modalProvider(),
 		moonshotaiProvider(),
 		moonshotaiCnProvider(),
