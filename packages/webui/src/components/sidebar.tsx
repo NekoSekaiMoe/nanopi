@@ -173,8 +173,10 @@ export function Sidebar({
 		<aside
 			className={cn(
 				"relative flex h-full w-[268px] shrink-0 flex-col overflow-hidden bg-sidebar",
-				mobile &&
-					"w-[88vw] max-w-[360px] rounded-r-3xl pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
+				// Square edges: the sheet is a sliding panel, not a floating card,
+				// so no radius survives on any corner (including the bottom, which
+				// a rounded panel shows once its column ends short of the edge).
+				mobile && "w-[88vw] max-w-[360px] pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
 			)}
 			style={{
 				borderRight: mobile ? undefined : "var(--workspace-divider-width) solid var(--workspace-divider-color)",

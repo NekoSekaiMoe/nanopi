@@ -12,6 +12,16 @@ import type { PendingPermission, TurnError, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
 import { getLocale, t } from "@/lib/i18n";
 
+const EFFORT_LABELS: Record<string, string> = {
+	off: t("关闭"),
+	minimal: t("极低"),
+	low: t("低"),
+	medium: t("中"),
+	high: t("高"),
+	xhigh: t("极高"),
+	max: t("最高"),
+};
+
 const SUGGESTIONS = [
 	t("解释一下这个项目的结构"),
 	t("找到并修复一个 bug"),
@@ -32,7 +42,6 @@ export function ChatPane({
 	effort,
 	onEffort,
 	onConfigure,
-	onModelsOpen,
 	onDismissError,
 	onDismissNotice,
 	onSend,
@@ -44,8 +53,8 @@ export function ChatPane({
 	images,
 	onImages,
 	sessionName,
-	workspaceName,
-	branch,
+	modelSheetOpen,
+	onModelSheet,
 }: {
 	messages: UiMessage[];
 	loading: boolean;
@@ -60,7 +69,6 @@ export function ChatPane({
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
-	onModelsOpen?: () => void;
 	onDismissError: () => void;
 	onDismissNotice: () => void;
 	onSend: () => void;
@@ -72,8 +80,9 @@ export function ChatPane({
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
 	sessionName: string;
-	workspaceName: string;
-	branch?: string;
+	/** The model sheet is collapsed into the bottom dock, below the composer. */
+	modelSheetOpen: boolean;
+	onModelSheet: (open: boolean) => void;
 }) {
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const bottomRef = useRef<HTMLDivElement>(null);
@@ -103,6 +112,15 @@ export function ChatPane({
 	}, [messages.length, lastText, loading]);
 
 	const welcome = messages.length === 0 && !loading;
+	const currentModel = models.find((model) => model.provider === provider) ?? models[0];
+	// Same rule as the sheet: only a real level earns a slot on the readout.
+	const effortReadout =
+		currentModel?.effort_applicable && effort && effort !== "off"
+			? EFFORT_LABELS[effort] ?? effort
+			: null;
+	const modelLabel = currentModel
+		? `${currentModel.model}${effortReadout ? ` · ${effortReadout}` : ""}`
+		: t("选择模型");
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
@@ -183,12 +201,12 @@ export function ChatPane({
 							effort={effort}
 							onEffort={onEffort}
 							onConfigure={onConfigure}
-							onModelsOpen={onModelsOpen}
 							images={images}
 							onImages={onImages}
 							disabled={models.length === 0}
-							workspaceName={workspaceName}
-							branch={branch}
+							modelLabel={modelLabel}
+							sheetOpen={modelSheetOpen}
+							onSheetOpen={() => onModelSheet(!modelSheetOpen)}
 							docked={!welcome}
 						/>
 						<p className="pt-1.5 pb-[max(8px,env(safe-area-inset-bottom))] text-center text-caption text-muted-foreground max-md:hidden">
