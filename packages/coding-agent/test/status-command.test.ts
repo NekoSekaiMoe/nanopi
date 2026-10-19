@@ -53,7 +53,7 @@ describe("welcome box", () => {
 		expect(text).toContain("thinking: high");
 		expect(text).toContain("directory: ~");
 		expect(stripAnsi(renderWelcomeTip(200))).toContain("/status");
-		expect(stripAnsi(renderWelcomeTip(200))).toContain("loaded extensions and skills");
+		expect(stripAnsi(renderWelcomeTip(200))).toContain("model, token usage, and context");
 
 		const prefixed = renderWelcomeBox(
 			{
@@ -147,9 +147,7 @@ describe("welcome box", () => {
 		expect(lines.length).toBeGreaterThan(1);
 		for (const line of lines) expect(visibleWidth(line)).toBeLessThanOrEqual(40);
 		// Every word survives the wrap; nothing is dropped.
-		expect(lines.join(" ")).toBe(
-			"Tip: Use /status to see the model, token usage, context, and loaded extensions and skills.",
-		);
+		expect(lines.join(" ")).toBe("Tip: Use /status to see the model, token usage, and context.");
 	});
 
 	it("folds the middle of a long directory path, keeping both ends", () => {

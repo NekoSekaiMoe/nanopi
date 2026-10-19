@@ -93,7 +93,7 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 
 /** Startup tip, wrapped to the terminal width so the sentence stays readable. */
 export function renderWelcomeTip(width: number): string {
-	const tip = "Tip: Use /status to see the more info.";
+	const tip = "Tip: Use /status to see the model, token usage, and context.";
 	if (width <= 0) return "";
 	// A wrapped line must never exceed the terminal width, so the continuation
 	// hangs under the text instead of under "Tip: ".
