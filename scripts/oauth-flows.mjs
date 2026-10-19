@@ -18,6 +18,7 @@ import { join } from "node:path";
 /** @type {ReadonlyArray<{ module: string, loader: string, exportName: string }>} */
 export const OAUTH_FLOWS = [
 	{ module: "anthropic", loader: "anthropic", exportName: "anthropicOAuth" },
+	{ module: "antigravity", loader: "antigravity", exportName: "antigravityOAuth" },
 	{ module: "github-copilot", loader: "githubCopilot", exportName: "githubCopilotOAuth" },
 	{ module: "kimi-coding", loader: "kimiCoding", exportName: "kimiCodingOAuth" },
 	{ module: "meta", loader: "meta", exportName: "metaOAuth" },
