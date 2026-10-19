@@ -316,6 +316,23 @@ export interface UserInputRequestEvent {
 	custom?: boolean;
 }
 
+export interface ReasoningEffortResponse {
+	provider: string;
+	reasoning_effort: string;
+}
+
+export async function setReasoningEffort(
+	provider: string,
+	effort: string | null,
+): Promise<ReasoningEffortResponse> {
+	const response = await fetch("/models/reasoning-effort", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify({ provider, reasoning_effort: effort }),
+	});
+	return readJson<ReasoningEffortResponse>(response);
+}
+
 export type SSEEvent =
 	| { type: "runtime_info"; provider: string; model: string }
 	| { type: "session_assigned"; session_id: string }
@@ -351,9 +368,11 @@ export type SSEEvent =
 			stats?: TurnStats;
 			stop_reason?: string;
 			message?: string;
+			code?: number;
 	  }
 	| { type: "stopped" }
-	| { type: "error"; message: string }
+	| { type: "error"; message: string; code?: number; retrying?: boolean }
+	| { type: "retry"; attempt: number; max_attempts: number; delay_ms: number; message: string }
 	| { type: "warning"; message: string }
 	| { type: "persistence_warning"; message: string }
 	| { type: "rate_limited"; message?: string }
@@ -522,13 +541,40 @@ export async function listDir(path: string): Promise<FsListResult> {
 	return readJson<FsListResult>(response);
 }
 
-export async function openWorkspaceFile(path: string, sessionId?: string): Promise<void> {
-	const response = await fetch("/fs/open", {
+export interface FileContent {
+	path: string;
+	size: number;
+	binary: boolean;
+	content: string;
+	truncated: boolean;
+}
+
+export async function readFile(path: string): Promise<FileContent> {
+	const response = await fetch(`/fs/read?path=${encodeURIComponent(path)}`, {
+		headers: authHeaders(),
+	});
+	return readJson<FileContent>(response);
+}
+
+/** Current git branch for a directory, or "" outside a repository. */
+export async function readBranch(path: string): Promise<string> {
+	try {
+		const content = await readFile(`${path}/.git/HEAD`);
+		const line = content.content.trim();
+		const prefix = "ref: refs/heads/";
+		return line.startsWith(prefix) ? line.slice(prefix.length) : line.slice(0, 7);
+	} catch {
+		return "";
+	}
+}
+
+export async function writeFile(path: string, content: string): Promise<{ path: string; size: number }> {
+	const response = await fetch("/fs/write", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", ...authHeaders() },
-		body: JSON.stringify({ path, ...(sessionId ? { session_id: sessionId } : {}) }),
+		body: JSON.stringify({ path, content }),
 	});
-	if (!response.ok) throw await failure(response);
+	return readJson<{ path: string; size: number }>(response);
 }
 
 export interface ProviderInfo {

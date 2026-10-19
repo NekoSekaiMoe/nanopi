@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AuthGate } from "@/components/auth-gate";
 import { ChatPane } from "@/components/chat-pane";
+import { FileViewer } from "@/components/file-viewer";
 import { Logo } from "@/components/logo";
 import { MobileBar } from "@/components/mobile-bar";
 import { SettingsOverlay, type ThemeChoice } from "@/components/settings";
 import { Sidebar } from "@/components/sidebar";
+import { TerminalPane } from "@/components/terminal-pane";
 import {
 	ApiError,
 	type ConfigInfo,
@@ -21,8 +23,10 @@ import {
 	getProject,
 	getToken,
 	listProjectSessions,
+	readBranch,
 	renameSession,
 	resolveSession,
+	setReasoningEffort,
 } from "@/lib/api";
 import { useChat } from "@/lib/use-chat";
 import { getLocale } from "@/lib/i18n";
@@ -63,6 +67,10 @@ export function AppClient() {
 	const [authRequired, setAuthRequired] = useState(false);
 	const [pendingSession, setPendingSession] = useState<string | null>(null);
 	const [notifications, setNotifications] = useState(readNotifications);
+	const [effort, setEffort] = useState<string | null>(null);
+	const [branch, setBranch] = useState("");
+	const [openFile, setOpenFile] = useState<string | null>(null);
+	const [terminalOpen, setTerminalOpen] = useState(false);
 	const restoredRef = useRef(false);
 	const titleRef = useRef("NanoPi");
 	const notificationsRef = useRef(notifications);
@@ -161,6 +169,28 @@ export function AppClient() {
 		});
 	}, []);
 
+	const onChangeEffort = useCallback(
+		async (level: string | null) => {
+			const previous = effort;
+			setEffort(level);
+			if (!provider) return;
+			try {
+				const result = await setReasoningEffort(provider, level);
+				// Reflect the clamped level the runtime actually accepted.
+				setEffort(result.reasoning_effort);
+				setModels((current) =>
+					current.map((model) =>
+						model.provider === provider ? { ...model, reasoning_effort: result.reasoning_effort } : model,
+					),
+				);
+			} catch (cause) {
+				setEffort(previous);
+				setBootError(cause instanceof Error ? cause.message : String(cause));
+			}
+		},
+		[effort, provider],
+	);
+
 	// Restore a session from the short id in the URL, inside the current project.
 	useEffect(() => {
 		if (!projectHash || restoredRef.current) return;
@@ -228,6 +258,13 @@ export function AppClient() {
 		}
 	}, [provider]);
 
+	// The effort shown belongs to the active model; switching models must not
+	// keep the previous model's level on screen.
+	useEffect(() => {
+		const current = models.find((model) => model.provider === provider);
+		setEffort(current?.reasoning_effort ?? null);
+	}, [provider, models]);
+
 	useEffect(() => {
 		try {
 			const url = new URL(window.location.href);
@@ -262,6 +299,23 @@ export function AppClient() {
 	}, [navOpen, settingsOpen]);
 
 	const usableModels = models.filter((model) => model.provider_type !== "unknown");
+
+	// Branch label next to the folder icon. Best-effort: the sidebar still works
+	// when git is missing or the directory is not a repository.
+	useEffect(() => {
+		if (!workingDir) return;
+		let cancelled = false;
+		void readBranch(workingDir)
+			.then((name) => {
+				if (!cancelled) setBranch(name);
+			})
+			.catch(() => {
+				if (!cancelled) setBranch("");
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [workingDir]);
 
 	const currentSession = chat.sessionId
 		? sessions.find((session) => session.id === chat.sessionId) ?? null
@@ -374,6 +428,18 @@ export function AppClient() {
 		setSettingsOpen(false);
 	}, []);
 
+	const onOpenFile = useCallback((path: string) => {
+		setTerminalOpen(false);
+		setOpenFile(path);
+		setNavOpen(false);
+	}, []);
+
+	const onOpenTerminal = useCallback(() => {
+		setOpenFile(null);
+		setTerminalOpen(true);
+		setNavOpen(false);
+	}, []);
+
 	const openSettings = useCallback(() => {
 		setSettingsOpen(true);
 		setNavOpen(false);
@@ -407,6 +473,10 @@ export function AppClient() {
 					onOpenSettings={openSettings}
 					onRename={onRenameSession}
 					onDelete={onDeleteSession}
+					onOpenFile={onOpenFile}
+					activeFile={openFile}
+					branch={branch}
+					onOpenTerminal={onOpenTerminal}
 				/>
 			</div>
 
@@ -421,31 +491,40 @@ export function AppClient() {
 					</div>
 				) : null}
 
-				<ChatPane
-					messages={chat.messages}
-					loading={chat.loading}
-					streaming={chat.streaming}
-					error={chat.error}
-					notice={chat.notice}
-					permission={chat.permission}
-					userInput={chat.userInput}
-					models={usableModels}
-					provider={provider}
-					onProvider={setProvider}
-					onConfigure={openSettings}
-					onDismissError={() => chat.setError(null)}
-					onDismissNotice={() => chat.setNotice(null)}
-					onSend={onSend}
-					onStop={() => void chat.stop()}
-					onAnswerPermission={(decision) => void chat.answerPermission(decision)}
-					onAnswerUserInput={(answer) => void chat.answerUserInput(answer)}
-					composer={composer}
-					onComposer={setComposer}
-					images={images}
-					onImages={setImages}
-					sessionName={title}
-					workspaceName={projectName}
-				/>
+				{terminalOpen ? (
+					<TerminalPane cwd={workingDir} />
+				) : openFile ? (
+					<FileViewer path={openFile} onClose={() => setOpenFile(null)} />
+				) : (
+					<ChatPane
+						messages={chat.messages}
+						loading={chat.loading}
+						streaming={chat.streaming}
+						error={chat.error}
+						notice={chat.notice}
+						permission={chat.permission}
+						userInput={chat.userInput}
+						models={usableModels}
+						provider={provider}
+						onProvider={setProvider}
+						effort={effort}
+						onEffort={(level) => void onChangeEffort(level)}
+						onConfigure={openSettings}
+						onDismissError={() => chat.setError(null)}
+						onDismissNotice={() => chat.setNotice(null)}
+						onSend={onSend}
+						onStop={() => void chat.stop()}
+						onAnswerPermission={(decision) => void chat.answerPermission(decision)}
+						onAnswerUserInput={(answer) => void chat.answerUserInput(answer)}
+						composer={composer}
+						onComposer={setComposer}
+						images={images}
+						onImages={setImages}
+						sessionName={title}
+						workspaceName={projectName}
+						branch={branch}
+					/>
+				)}
 			</main>
 
 			{/* Mobile navigation sheet */}
@@ -484,6 +563,10 @@ export function AppClient() {
 						onClose={() => setNavOpen(false)}
 						onRename={onRenameSession}
 						onDelete={onDeleteSession}
+						onOpenFile={onOpenFile}
+						activeFile={openFile}
+						branch={branch}
+						onOpenTerminal={onOpenTerminal}
 					/>
 				</div>
 			</div>

@@ -50,6 +50,13 @@ export interface UiMessage {
 	createdAt?: number;
 }
 
+/** A turn failure the UI can show verbatim, including the provider status. */
+export interface TurnError {
+	message: string;
+	code?: number;
+	retrying: boolean;
+}
+
 export interface PendingPermission {
 	sessionId: string;
 	toolName: string;
@@ -200,12 +207,22 @@ function finishTool(
 	return copy;
 }
 
+/** Normalize a thrown transport/HTTP failure into the banner shape. */
+function turnErrorFrom(cause: unknown): TurnError {
+	const message = cause instanceof Error ? cause.message : String(cause);
+	const code =
+		typeof (cause as { status?: unknown })?.status === "number"
+			? ((cause as { status: number }).status as number)
+			: undefined;
+	return { message, code, retrying: false };
+}
+
 export function useChat({ projectHash, workingDir, provider, onSessionsChanged, onTurnDone }: UseChatOptions) {
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [messages, setMessages] = useState<UiMessage[]>([]);
 	const [streaming, setStreaming] = useState(false);
 	const [loading, setLoading] = useState(false);
-	const [error, setError] = useState<string | null>(null);
+	const [error, setError] = useState<TurnError | null>(null);
 	const [notice, setNotice] = useState<string | null>(null);
 	const [permission, setPermission] = useState<PendingPermission | null>(null);
 	const [userInput, setUserInput] = useState<UserInputRequestEvent | null>(null);
@@ -252,7 +269,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 				window.history.replaceState(null, "", url.toString());
 			} catch (cause) {
 				if (generationRef.current === generation) {
-					setError(cause instanceof Error ? cause.message : String(cause));
+					setError(turnErrorFrom(cause));
 				}
 			} finally {
 				if (generationRef.current === generation) setLoading(false);
@@ -302,7 +319,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 					window.history.replaceState(null, "", url.toString());
 					onSessionsChanged();
 				} catch (cause) {
-					setError(cause instanceof Error ? cause.message : String(cause));
+					setError(turnErrorFrom(cause));
 					return;
 				}
 			}
@@ -457,7 +474,19 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 								setNotice(event.message ?? t("请求过于频繁，请稍后再试"));
 								break;
 							case "error":
-								setError(event.message);
+								// The backend forwards the provider status; show it as is.
+								// `retrying` means the runtime may recover, which the
+								// composer reflects instead of a stuck "thinking" state.
+								setError({
+									message: event.message,
+									code: event.code,
+									retrying: event.retrying === true,
+								});
+								break;
+							case "retry":
+								setNotice(
+									`${t("重试中")} (${event.attempt}/${event.max_attempts}) · ${event.message}`,
+								);
 								break;
 							case "stopped":
 								setStreaming(false);
@@ -467,6 +496,9 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 								setPermission(null);
 								setUserInput(null);
 								window.setTimeout(onSessionsChanged, 250);
+								if (event.stop_reason === "error" && event.message) {
+									setError({ message: event.message, code: event.code, retrying: false });
+								}
 								onTurnDone?.();
 								break;
 							default:
@@ -479,7 +511,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 				const aborted = cause instanceof Error && cause.name === "AbortError";
 				if (!aborted && generationRef.current === generation) {
 					const message = cause instanceof Error ? cause.message : String(cause);
-					setError(message);
+					setError(turnErrorFrom(cause));
 					setMessages((current) =>
 						updateLastAssistant(current, (blocks) =>
 							appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
@@ -534,7 +566,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 					pending.callId,
 				);
 			} catch (cause) {
-				setError(cause instanceof Error ? cause.message : String(cause));
+				setError(turnErrorFrom(cause));
 			}
 		},
 		[permission],
@@ -552,7 +584,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 						: { request_id: pending.request_id, ...answer };
 				await postChatUserInput(pending.session_id || sessionIdRef.current || "", body);
 			} catch (cause) {
-				setError(cause instanceof Error ? cause.message : String(cause));
+				setError(turnErrorFrom(cause));
 			}
 		},
 		[userInput],
