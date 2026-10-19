@@ -167,15 +167,15 @@ export function AppClient() {
 		void refreshSessions();
 	}, [refreshSessions]);
 
+	// Runs before the model sheet opens, so the catalog is fresh. It must not
+	// touch `provider`: the effect below refills `effort` from the new rows, and
+	// /models reports the level for a model that is not the active one as null
+	// (nothing picked yet); that null then replaced the level the user just
+	// chose, because the refill effect wrote it straight into `effort`.
 	const refreshProviders = useCallback(async () => {
 		const [nextConfig, nextModels] = await Promise.all([getConfig(), getModels()]);
 		setConfig(nextConfig);
 		setModels(nextModels);
-		const runnable = nextModels.filter((model) => model.available);
-		setProvider((current) => {
-			if (current && runnable.some((model) => model.provider === current)) return current;
-			return runnable.find((model) => model.is_default)?.provider ?? runnable[0]?.provider ?? "";
-		});
 	}, []);
 
 	const onChangeEffort = useCallback(
@@ -267,11 +267,13 @@ export function AppClient() {
 		}
 	}, [provider]);
 
-	// The effort shown belongs to the active model; switching models must not
-	// keep the previous model's level on screen.
+	// The effort shown belongs to the active model: switching models must not
+	// keep the previous model's level on screen, and a refreshed catalog must not
+	// drop it either. A model with no stored level (`null`) keeps whatever is
+	// local, which is the level the runtime will actually send.
 	useEffect(() => {
 		const current = models.find((model) => model.provider === provider);
-		setEffort(current?.reasoning_effort ?? null);
+		if (current?.reasoning_effort) setEffort(current.reasoning_effort);
 	}, [provider, models]);
 
 	useEffect(() => {

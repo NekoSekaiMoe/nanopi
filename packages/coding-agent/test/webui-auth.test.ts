@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { bearerTokenMatches } from "../src/modes/webui/webui-server.ts";
+import { bearerTokenMatches, describeProviderError, reasoningEffortOf } from "../src/modes/webui/webui-server.ts";
 
 describe("webui bearerTokenMatches", () => {
 	const token = "a".repeat(48);
@@ -22,8 +22,6 @@ describe("webui bearerTokenMatches", () => {
 	});
 });
 
-import { describeProviderError } from "../src/modes/webui/webui-server.ts";
-
 describe("describeProviderError", () => {
 	test("keeps the provider status as a numeric code", () => {
 		expect(describeProviderError("401: invalid api key")).toEqual({
@@ -39,5 +37,26 @@ describe("describeProviderError", () => {
 	test("leaves messages without a status untouched", () => {
 		expect(describeProviderError("socket hang up")).toEqual({ message: "socket hang up" });
 		expect(describeProviderError(undefined).code).toBeUndefined();
+	});
+});
+
+describe("webui reasoningEffortOf", () => {
+	const session = { provider: "anthropic", id: "claude-haiku-5-5" };
+	const stored = (provider: string, id: string) =>
+		provider === "anthropic" && id === "claude-haiku-5-5" ? "low" : undefined;
+
+	// Issue #82: the sheet writes through setThinkingLevel (transcript), so
+	// reading the per-model setting reported the level from before the pick.
+	test("reports the live session level for the active model", () => {
+		expect(reasoningEffortOf(session, session, "high", stored)).toBe("high");
+	});
+
+	test("falls back to the stored setting for other models", () => {
+		expect(reasoningEffortOf(session, { provider: "google", id: "gemini-3-flash" }, "high", stored)).toBe("low");
+		expect(reasoningEffortOf(session, undefined, "high", stored)).toBe("low");
+	});
+
+	test("stays undefined when nothing was ever picked", () => {
+		expect(reasoningEffortOf({ provider: "x", id: "y" }, session, "high", stored)).toBeUndefined();
 	});
 });
