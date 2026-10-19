@@ -60,7 +60,18 @@ The child is launched from the running process's own module registry:
   mcp subsystem switch is on, matching the `mcp__*` tools added to the child's
   default tool list.
 - The launcher is `process.execPath <packageDir>/<bin entry>`, reading the
-  manifest's `bin` map under `APP_NAME` with a first-entry fallback.
+  manifest's `bin` map under `APP_NAME` with a first-entry fallback. The
+  candidate must exist before it is used: a path that is wrong is invisible to
+  the parent (the child dies with its own Node stack) while a fallback to
+  `PATH` at least says `spawn <name> ENOENT`.
+- In the single-file distribution the launcher is `process.execPath
+  <argv[1]>` (`isSingleNodeFileRuntime()`): there `getPackageDir()` is the
+  extracted asset cache under `~/.cache/nanopi/standalone/<version>`, whose
+  `package.json` carries no `bin` entry -- `bin` is a property of a package
+  install, and the manifest only exists to answer asset paths. Everything runs
+  under node, so `argv[1]` is the `nanopi.js` that is already executing; reusing
+  it also keeps the child on the same build as its parent, which a `PATH`
+  fallback would not (that would run whatever `nanopi` happens to be installed).
 - The task is the final argv element. Anything that appends a flag after it
   would swallow it, and an unrecognized flag before it would resurface as the
   prompt.
@@ -81,6 +92,11 @@ Would remove the argv surface entirely, but children need their own model,
 tool set, and context window, and an in-process child shares the parent's
 abort signal and event loop -- the isolation is the feature.
 
+**Detect the single-file build instead of checking the candidate exists.**
+`isSingleNodeFileRuntime()` alone does not cover the bundled npm layout, whose
+`getPackageDir()` is real but whose `bin` entry can still be missing after a
+partial build; `existsSync` covers both with one check and needs no new signal.
+
 ## Consequences
 
 - Subagents work again on every install layout, verified end to end against a
@@ -97,6 +113,10 @@ abort signal and event loop -- the isolation is the feature.
   into a hard failure.
 - `--modules` is a general CLI flag, not subagent plumbing, so any caller can
   pin a module set.
+- A failed child that produced no event names the command it launched
+  (`exit 1, no assistant output (launched: node /path/to/nanopi.js ...)`).
+  Without it the parent only saw a `MODULE_NOT_FOUND` stack it could not
+  attribute to a launch decision; the one thing it needed was the path.
 
 ## Testing
 
@@ -106,5 +126,8 @@ abort signal and event loop -- the isolation is the feature.
   flags are still rejected rather than silently ignored.
 - `packages/coding-agent/test/args.test.ts` covers `--modules` parsing including
   the empty list.
+- Manually, in a single-file build: `subagent spawn` in `nanopi.js` runs
+  `node <argv[1]> --mode json ...`; no `dist/bundle/cli.js` path appears in the
+  failure text.
 - End-to-end against a local OpenAI-compatible server: subagent spawn -> wait ->
   completed report, and the captured child request body showing the task text.
