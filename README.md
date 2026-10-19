@@ -19,7 +19,7 @@ In an era where coding agent frameworks are blindly bloating into complex micros
 
 ## Installation
 
-WIP
+Download bundle js in release.
 
 ## License
 
