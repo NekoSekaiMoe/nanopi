@@ -67,6 +67,7 @@ export type KnownApi =
 	| "bedrock-converse-stream"
 	| "google-generative-ai"
 	| "google-vertex"
+	| "antigravity"
 	| "nanopi-messages";
 
 export type Api = KnownApi | (string & {});
@@ -86,6 +87,7 @@ export type ClassifierApi = KnownClassifierApi | (string & {});
 export type KnownProvider =
 	| "amazon-bedrock"
 	| "ant-ling"
+	| "antigravity"
 	| "anthropic"
 	| "google"
 	| "google-vertex"
@@ -295,6 +297,7 @@ export interface ApiOptionsMap {
 	"azure-openai-responses": AzureOpenAIResponsesOptions;
 	"google-generative-ai": GoogleOptions;
 	"google-vertex": GoogleVertexOptions;
+	antigravity: GoogleOptions;
 	"mistral-conversations": MistralOptions;
 	"bedrock-converse-stream": BedrockOptions;
 	"nanopi-messages": NanoPiMessagesOptions;

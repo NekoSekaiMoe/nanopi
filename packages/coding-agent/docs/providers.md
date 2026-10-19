@@ -52,6 +52,7 @@ This table covers providers with a single primary API-key variable. Providers th
 | Together AI | `TOGETHER_API_KEY` |
 | Baseten | `BASETEN_API_KEY` |
 | Kimi For Coding | `KIMI_API_KEY` |
+| Google Antigravity (unofficial) | `ANTIGRAVITY_ACCESS_TOKEN` |
 | Meta | `META_API_KEY` |
 | MiniMax | `MINIMAX_API_KEY` |
 | MiniMax (China) | `MINIMAX_CN_API_KEY` |
@@ -208,6 +209,25 @@ export CLOUDFLARE_ACCOUNT_ID=...
 ```
 
 The account ID can also be stored in the credential's `env` object.
+
+### Google Antigravity (unofficial)
+
+> **Warning: this can get your Google account suspended.** Antigravity's backend is covered by Google's terms for the Antigravity IDE, not by a public API. Using it from nanopi is a third-party client, and accounts have been suspended for exactly that. Google can also change or close the endpoint at any time. Use an account you can afford to lose, and prefer a real API key or a supported subscription for anything that matters.
+
+`/login antigravity` signs in with a Google account and talks to the same Cloud Code Assist backend the Antigravity IDE uses. The flow is the one CLIProxyAPI and Antigravity-Manager implement: Google OAuth with the desktop client, then `loadCodeAssist` / `onboardUser` to find or provision the Cloud Code project bound to the account.
+
+The project id is stored with the credential, so re-login is only needed when the refresh token dies. Requests go to `daily-cloudcode-pa.googleapis.com`, fall back to the sandbox and prod hosts on 403/404, and carry an Antigravity User-Agent. Model availability and quota are whatever the account's Antigravity entitlement allows.
+
+For scripted use, set a short-lived access token instead:
+
+```bash
+export ANTIGRAVITY_ACCESS_TOKEN="$(gcloud auth print-access-token)"
+export ANTIGRAVITY_PROJECT_ID=your-cloud-code-project
+```
+
+The token does not refresh itself, so it suits one-off runs rather than a long session.
+
+If login reports no Cloud Code project, open Antigravity once with the same account so Google provisions one, then log in again.
 
 ### Google Vertex AI
 

@@ -46,11 +46,14 @@ async function forwardStream(
 export function lazyStream(
 	model: Model<Api>,
 	setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
+	wrapSetup?: (
+		setup: () => Promise<AsyncIterable<AssistantMessageEvent>>,
+	) => Promise<AsyncIterable<AssistantMessageEvent>>,
 ): AssistantMessageEventStream {
 	const startedAt = Date.now();
 	const outer = new AssistantMessageEventStream();
 
-	setup()
+	(wrapSetup ?? ((run) => run()))(setup)
 		.then((inner) => forwardStream(outer, inner))
 		.catch((error) => {
 			const message = createSetupErrorMessage(model, error, startedAt);
