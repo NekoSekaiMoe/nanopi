@@ -624,6 +624,8 @@ export interface ConfigInfo {
 	provider_presets?: ProviderPresetInfo[];
 	provider_protocols?: ProviderPresetInfo[];
 	reasoning_effort_levels?: string[];
+	/** Patterns from the CLI's `enabledModels` setting; empty means every model is offered. */
+	enabled_models?: string[];
 }
 
 export async function getConfig(): Promise<ConfigInfo> {
