@@ -106,18 +106,20 @@ export function ChatPane({
 		<div className="flex min-h-0 flex-1 flex-col">
 			<div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto">
 				{loading ? (
-					<div className="mx-auto w-full max-w-[760px] space-y-5 px-4 py-8 sm:px-6 lg:px-10">
-						<div className="ml-auto h-12 w-48 animate-pulse rounded-2xl bg-muted" />
-						<div className="space-y-2">
+					<div className="mx-auto w-full max-w-[840px] space-y-6 px-4 pt-6 sm:px-6 lg:px-10">
+						<div className="flex justify-end">
+							<div className="h-12 w-48 animate-pulse rounded-2xl bg-muted" />
+						</div>
+						<div className="flex flex-col gap-3">
 							<div className="h-3 w-[72%] animate-pulse rounded bg-muted" />
 							<div className="h-3 w-[61%] animate-pulse rounded bg-muted" />
 							<div className="h-3 w-[44%] animate-pulse rounded bg-muted" />
 						</div>
 					</div>
 				) : welcome ? (
-					<Welcome onPick={(text) => onComposer(text)} models={models} onConfigure={onConfigure} />
+					<Welcome onPick={onComposer} models={models} onConfigure={onConfigure} />
 				) : (
-					<div className="mx-auto w-full max-w-[760px] space-y-7 px-4 pb-8 pt-5 sm:px-6 lg:px-10">
+					<div className="mx-auto w-full max-w-[840px] space-y-6 px-4 pb-8 pt-6 sm:px-6 lg:px-10">
 						{messages.map((message) => (
 							<MessageItem key={message.id} message={message} />
 						))}
@@ -126,58 +128,71 @@ export function ChatPane({
 				)}
 			</div>
 
-			<div className="shrink-0">
-				{error ? (
-					<Banner tone="error" onDismiss={onDismissError}>
-						{error.code ? (
-							<span className="mr-1.5 rounded bg-destructive/15 px-1 font-mono text-[11px]">
-								{error.code}
-							</span>
+			{/* The dock: capsules stacked on the composer (errors, approvals,
+			    follow-up questions) then the composer itself. Welcome mode uses
+			    a narrower measure under the greeting; once a conversation
+			    exists the composer widens to the message column. Both share the
+			    same responsive gutters, so their inner edges never diverge. */}
+			<div className={cn("shrink-0", welcome && "pb-[max(16px,env(safe-area-inset-bottom))]")}>
+				<div className="mx-auto w-full px-4 sm:px-6 lg:px-10 md:-translate-x-0.5" data-composer-dock>
+					<div className={cn("mx-auto w-full", welcome ? "max-w-[44rem]" : "max-w-[840px]")}>
+						{error ? (
+							<Banner tone="error" onDismiss={onDismissError}>
+								{error.code ? (
+									<span className="mr-1.5 rounded bg-destructive/15 px-1 font-mono text-caption">
+										{error.code}
+									</span>
+								) : null}
+								{error.message}
+								{error.retrying ? (
+									<span className="ml-1 text-muted-foreground">· {t("正在重试")}</span>
+								) : null}
+							</Banner>
+						) : notice ? (
+							<Banner tone="notice" onDismiss={onDismissNotice}>
+								{notice}
+							</Banner>
 						) : null}
-						{error.message}
-						{error.retrying ? (
-							<span className="ml-1 text-muted-foreground">· {t("正在重试")}</span>
+
+						{permission ? (
+							<PermissionCard
+								key={`${permission.callId}-${permission.toolName}`}
+								pending={permission}
+								onAnswer={onAnswerPermission}
+							/>
 						) : null}
-					</Banner>
-				) : notice ? (
-					<Banner tone="notice" onDismiss={onDismissNotice}>
-						{notice}
-					</Banner>
-				) : null}
+						{userInput ? (
+							<UserInputCard
+								key={userInput.request_id}
+								request={userInput}
+								onAnswer={onAnswerUserInput}
+							/>
+						) : null}
 
-				{permission ? (
-					<PermissionCard
-						key={`${permission.callId}-${permission.toolName}`}
-						pending={permission}
-						onAnswer={onAnswerPermission}
-					/>
-				) : null}
-				{userInput ? (
-					<UserInputCard
-						key={userInput.request_id}
-						request={userInput}
-						onAnswer={onAnswerUserInput}
-					/>
-				) : null}
-
-				<Composer
-					value={composer}
-					onChange={onComposer}
-					onSend={onSend}
-					onStop={onStop}
-					streaming={streaming}
-					models={models}
-					provider={provider}
-					onProvider={onProvider}
-					effort={effort}
-					onEffort={onEffort}
-					onConfigure={onConfigure}
-					images={images}
-					onImages={onImages}
-					disabled={models.length === 0}
-					workspaceName={workspaceName}
-					branch={branch}
-				/>
+						<Composer
+							value={composer}
+							onChange={onComposer}
+							onSend={onSend}
+							onStop={onStop}
+							streaming={streaming}
+							models={models}
+							provider={provider}
+							onProvider={onProvider}
+							effort={effort}
+							onEffort={onEffort}
+							onConfigure={onConfigure}
+							images={images}
+							onImages={onImages}
+							disabled={models.length === 0}
+							workspaceName={workspaceName}
+							branch={branch}
+							docked={!welcome}
+						/>
+						<p className="pt-1.5 pb-[max(8px,env(safe-area-inset-bottom))] text-center text-caption text-muted-foreground max-md:hidden">
+							{t("NanoPi 可能会出错，请核对重要信息。")}
+						</p>
+					</div>
+				</div>
 				<span className="sr-only">{sessionName}</span>
 			</div>
 		</div>
@@ -194,21 +209,19 @@ function Banner({
 	children: React.ReactNode;
 }) {
 	return (
-		<div className="mx-auto w-full max-w-[840px] px-4 pb-2 sm:px-6 lg:px-10">
-			<button
-				type="button"
-				onClick={onDismiss}
-				className={cn(
-					"flex w-full items-start gap-2 rounded-xl border px-3 py-2 text-left text-[12px] leading-5",
-					tone === "error"
-						? "border-destructive/30 bg-destructive/5 text-destructive"
-						: "border-border bg-muted/40 text-muted-foreground",
-				)}
-			>
-				<AlertCircle className="mt-0.5 size-3.5 shrink-0" />
-				<span className="min-w-0 flex-1">{children}</span>
-			</button>
-		</div>
+		<button
+			type="button"
+			onClick={onDismiss}
+			className={cn(
+				"flex w-full items-start gap-2 rounded-xl px-3 py-2 text-left text-label leading-5",
+				tone === "error"
+					? "bg-destructive/12 text-destructive"
+					: "bg-muted text-muted-foreground",
+			)}
+		>
+			<AlertCircle className="mt-0.5 size-3.5 shrink-0" />
+			<span className="min-w-0 flex-1">{children}</span>
+		</button>
 	);
 }
 
@@ -227,52 +240,48 @@ function Welcome({
 	const [poem] = useState<Poem | null>(() => (getLocale() === "zh" ? randomPoem() : null));
 
 	return (
-		<div className="mx-auto flex min-h-full w-full max-w-[720px] flex-col justify-center px-5 pb-10 pt-16 sm:px-8">
-			<h1 className="text-[28px] font-normal leading-[1.35] tracking-[-0.02em] text-foreground">
+		<div className="mx-auto flex min-h-full w-full max-w-[44rem] flex-col px-4 pb-8 pt-10 sm:px-6 lg:px-10">
+			<h1 className="welcome-heading px-4 text-balance text-foreground">
 				{poem ? t("想从哪里入手？") : greeting}
 			</h1>
-			<p className="mt-2 text-[13.5px] leading-6 text-muted-foreground">
-				{poem ? (
-					<>
-						{poem.text}
-						<span className="text-muted-foreground/60"> —— {poem.source}</span>
-					</>
-				) : (
-					t("今天要完成什么？")
-				)}
-			</p>
+			{poem ? (
+				<p className="mt-1.5 px-4 text-label leading-6 text-muted-foreground">
+					{poem.text}
+					<span className="text-muted-foreground/60"> —— {poem.source}</span>
+				</p>
+			) : (
+				<p className="mt-1.5 px-4 text-label leading-6 text-muted-foreground">{t("今天要完成什么？")}</p>
+			)}
 
 			{models.length === 0 ? (
-				<div className="mt-8 flex flex-col items-start gap-3">
-					<p className="text-[13px] text-muted-foreground">{t("还没有配置模型")}</p>
+				<div className="mt-8 flex flex-col items-start gap-3 px-4">
+					<p className="text-control text-muted-foreground">{t("还没有配置模型")}</p>
 					<button
 						type="button"
 						onClick={onConfigure}
-						className="h-10 rounded-full bg-foreground px-4 text-[13px] font-medium text-background transition-opacity hover:opacity-85"
+						className="press press-fill h-10 rounded-full px-4 text-label text-background"
 					>
 						{t("去设置")}
 					</button>
 				</div>
 			) : (
-				<div className="mt-10 w-full">
-					<p className="mb-2 px-1 text-[12px] text-muted-foreground/70">{t("试试这些")}</p>
-					<div className="overflow-hidden rounded-2xl bg-white/[0.03]">
-						{SUGGESTIONS.map((suggestion, index) => (
-							<button
-								key={suggestion}
-								type="button"
-								onClick={() => onPick(suggestion)}
-								className={cn(
-									"flex h-12 w-full items-center gap-3 px-3.5 text-left text-[14.5px] text-foreground/85 transition-colors hover:bg-white/[0.04] hover:text-foreground",
-									index < SUGGESTIONS.length - 1 && "border-b border-white/[0.05]",
-								)}
-							>
-								<Sparkles className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
-								<span className="min-w-0 flex-1 truncate">{suggestion}</span>
-								<ChevronRight className="size-4 shrink-0 text-muted-foreground/60" strokeWidth={1.75} />
-							</button>
-						))}
-					</div>
+				<div className="mt-8 w-full px-4">
+					<p className="pb-1 text-caption text-muted-foreground">{t("试试这些")}</p>
+					{SUGGESTIONS.map((suggestion, index) => (
+						<button
+							key={suggestion}
+							type="button"
+							onClick={() => onPick(suggestion)}
+							className={cn(
+								"group flex min-h-11 w-full items-center gap-2.5 px-1 text-left text-control text-muted-foreground transition-colors hover:text-foreground",
+								index < SUGGESTIONS.length - 1 && "border-b border-border-soft",
+							)}
+						>
+							<Sparkles className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+							<span className="min-w-0 flex-1 truncate">{suggestion}</span>
+							<ChevronRight className="size-4 shrink-0 text-muted-foreground/50" strokeWidth={1.75} />
+						</button>
+					))}
 				</div>
 			)}
 		</div>

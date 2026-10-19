@@ -161,7 +161,7 @@ export function SettingsOverlay({
 							if (mobileDetail) setMobileDetail(false);
 							else onClose();
 						}}
-						className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-white/[0.06] hover:text-foreground"
+						className="grid size-10 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 					>
 						{mobileDetail ? (
 							<ArrowLeft className="size-5" strokeWidth={1.75} />
@@ -187,7 +187,7 @@ export function SettingsOverlay({
 									setSection(item.id);
 									setMobileDetail(true);
 								}}
-								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-overlay-hover-light"
 							>
 								<span className="text-muted-foreground">{item.icon}</span>
 								<span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -203,7 +203,7 @@ export function SettingsOverlay({
 									setSection(item.id);
 									setMobileDetail(true);
 								}}
-								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-white/[0.05]"
+								className="flex h-14 w-full items-center gap-3.5 rounded-xl px-3 text-left text-[15px] text-foreground transition-colors hover:bg-overlay-hover-light"
 							>
 								<span className="text-muted-foreground">{item.icon}</span>
 								<span className="min-w-0 flex-1 truncate">{item.label}</span>
@@ -260,7 +260,7 @@ export function SettingsOverlay({
 												"h-8 rounded-full border px-3 text-[12px] transition-colors",
 												approvalMode === value
 													? "border-foreground bg-foreground text-background"
-													: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+													: "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
 											)}
 										>
 											{label}
@@ -268,7 +268,7 @@ export function SettingsOverlay({
 									))}
 								</div>
 
-								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-border-soft py-4">
 									<div>
 										<h2 className="text-[13px] font-medium">{t("语言")}</h2>
 										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -288,7 +288,7 @@ export function SettingsOverlay({
 													"h-8 rounded-full border px-3 text-[12px] transition-colors",
 													getLocale() === value
 														? "border-foreground bg-foreground text-background"
-														: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+														: "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
 												)}
 											>
 												{value === "zh" ? "中文" : "English"}
@@ -297,7 +297,7 @@ export function SettingsOverlay({
 									</div>
 								</div>
 
-								<div className="mt-2 flex items-center justify-between gap-4 border-b border-white/[0.05] py-4">
+								<div className="mt-2 flex items-center justify-between gap-4 border-b border-border-soft py-4">
 									<div>
 										<h2 className="text-[13px] font-medium">{t('完成通知')}</h2>
 										<p className="mt-0.5 text-[11.5px] text-muted-foreground">
@@ -311,7 +311,7 @@ export function SettingsOverlay({
 											"h-8 shrink-0 rounded-full border px-3 text-[12px] transition-colors",
 											notifications
 												? "border-brand bg-brand-soft/50 text-brand"
-												: "border-border text-muted-foreground hover:bg-accent hover:text-foreground",
+												: "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
 										)}
 									>
 										{notifications ? t("已开启") : t("开启")}
@@ -354,7 +354,7 @@ export function SettingsOverlay({
 												key={skill.name}
 												type="button"
 												onClick={() => onUseSkill(skill.name)}
-												className="flex w-full items-start gap-3 rounded-xl border border-border px-3 py-2.5 text-left transition-colors hover:bg-accent"
+												className="flex w-full items-start gap-3 rounded-xl border border-border px-3 py-2.5 text-left transition-colors hover:bg-overlay-hover"
 											>
 												<span className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
 													<Sparkles className="size-3.5" strokeWidth={1.75} />
@@ -446,7 +446,7 @@ export function SettingsOverlay({
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("当前会话的工作目录。切换后新会话会使用新的目录。")}
 								</p>
-								<form onSubmit={submitDir} className="mt-4 rounded-2xl bg-white/[0.03] p-3">
+								<form onSubmit={submitDir} className="mt-4 rounded-2xl bg-muted p-3">
 									<label className="block">
 										<span className="text-[10.5px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
 											{t("当前目录")}
@@ -484,7 +484,7 @@ export function SettingsOverlay({
 								<p className="mt-1 text-[12.5px] text-muted-foreground">
 									{t("NanoPi 的浏览器界面，使用 Next.js 重写，视觉参考 Memoh。")}
 								</p>
-								<div className="mt-4 space-y-2 rounded-2xl bg-white/[0.03] p-3 text-[12px]">
+								<div className="mt-4 space-y-2 rounded-2xl bg-muted p-3 text-[12px]">
 									<Row label={t("前端")} value="Next.js static export" />
 									<Row label={t("设计")} value="Memoh-inspired clean-room" />
 									<Row label={t("后端")} value="nanopi webui" />
@@ -516,8 +516,8 @@ function ThemeCard({
 			className={cn(
 				"flex h-16 flex-col items-start justify-center gap-1 rounded-2xl px-3 text-left transition-colors",
 				active
-					? "bg-white/[0.08] text-foreground ring-1 ring-white/[0.12]"
-					: "bg-white/[0.04] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground",
+					? "bg-overlay-hover-strong text-foreground ring-1 ring-border-menu"
+					: "bg-overlay-hover-light text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
 			)}
 		>
 			<span className="flex items-center gap-2 text-[12.5px] font-medium">

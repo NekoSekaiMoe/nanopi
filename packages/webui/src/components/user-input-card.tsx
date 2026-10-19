@@ -48,21 +48,21 @@ export function UserInputCard({
 
 	return (
 		<div className="mx-auto w-full max-w-[840px] px-4 pb-2 sm:px-6 lg:px-10">
-			<div className="rounded-2xl border border-brand-border bg-brand-soft/50 p-3">
+			<div className="rounded-2xl border border-brand-border bg-brand-soft p-3.5">
 				<div className="space-y-3">
 					{questions.map((question, index) => (
 						<div key={index}>
 							<div className="flex items-baseline gap-2">
-								<span className="text-[11px] font-medium uppercase tracking-[0.06em] text-brand">
+								<span className="text-caption font-medium uppercase tracking-[0.06em] text-brand">
 									{question.header || t("需要你的输入")}
 								</span>
 								{questions.length > 1 ? (
-									<span className="text-[10.5px] text-muted-foreground">
+									<span className="text-caption text-muted-foreground">
 										{index + 1}/{questions.length}
 									</span>
 								) : null}
 							</div>
-							<p className="mt-0.5 text-[13px] leading-5 text-foreground">{question.question}</p>
+							<p className="mt-0.5 text-control leading-5 text-foreground">{question.question}</p>
 							{question.options.length > 0 ? (
 								<div className="mt-2 flex flex-wrap gap-1.5">
 									{question.options.map((option) => {
@@ -88,7 +88,7 @@ export function UserInputCard({
 													"rounded-full border px-2.5 py-1 text-[12px] transition-colors",
 													selected
 														? "border-brand bg-brand text-brand-foreground"
-														: "border-border bg-background text-foreground hover:bg-accent",
+														: "border-border bg-background text-foreground hover:bg-overlay-hover",
 												)}
 											>
 												{option.label}
@@ -112,7 +112,7 @@ export function UserInputCard({
 					<button
 						type="button"
 						onClick={() => onAnswer({ declined: true, selected: [], text: null })}
-						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 					>
 						{t("跳过")}
 					</button>
