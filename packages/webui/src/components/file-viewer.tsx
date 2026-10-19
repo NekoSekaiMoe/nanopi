@@ -88,7 +88,7 @@ export function FileViewer({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-				<span className="min-w-0 flex-1 truncate font-mono text-[12px] text-muted-foreground" title={path}>
+				<span className="min-w-0 flex-1 truncate font-mono text-label text-muted-foreground" title={path}>
 					{path}
 				</span>
 				{dirty ? (
@@ -96,7 +96,7 @@ export function FileViewer({
 						type="button"
 						onClick={() => void save()}
 						disabled={saving}
-						className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-foreground px-2.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+						className="press press-fill inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-label font-medium text-background disabled:opacity-40"
 					>
 						<Save className="size-3.5" />
 						{saving ? t("保存中…") : t("保存")}
@@ -106,7 +106,7 @@ export function FileViewer({
 					type="button"
 					aria-label={t("关闭文件")}
 					onClick={onClose}
-					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 				>
 					<X className="size-4" strokeWidth={1.75} />
 				</button>
@@ -114,16 +114,16 @@ export function FileViewer({
 
 			<div className="min-h-0 flex-1 overflow-auto px-4 py-4">
 				{error ? (
-					<div className="rounded-xl border border-destructive/30 bg-destructive/5 px-3 py-2 text-[12px] text-destructive">
+					<div className="rounded-xl bg-destructive/12 px-3 py-2 text-label text-destructive">
 						{error}
 					</div>
 				) : file === null ? (
-					<div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+					<div className="flex items-center gap-2 text-control text-muted-foreground">
 						<Loader2 className="size-3.5 animate-spin" />
 						{t("加载中…")}
 					</div>
 				) : file.binary || file.truncated ? (
-					<div className="flex items-center gap-2 rounded-xl border border-border px-3 py-3 text-[12.5px] text-muted-foreground">
+					<div className="flex items-center gap-2 rounded-xl border border-border px-3 py-3 text-label text-muted-foreground">
 						<FileWarning className="size-4 shrink-0" />
 						{file.truncated ? t("文件过大，无法预览") : t("二进制文件，无法预览")}
 						<span className="text-muted-foreground/60">({file.size} B)</span>
@@ -139,7 +139,7 @@ export function FileViewer({
 								onChange={(event) => setDraft(event.target.value)}
 								className={cn(
 									"min-h-[60vh] w-full resize-none rounded-xl border border-border bg-surface-editor p-3",
-									"font-mono text-[12.5px] leading-[1.6] text-foreground outline-none focus:border-foreground/25",
+									"font-mono text-label leading-[1.6] text-foreground outline-none focus:border-input",
 								)}
 							/>
 						)}
@@ -147,12 +147,12 @@ export function FileViewer({
 							<button
 								type="button"
 								onClick={() => setDraft(file.content)}
-								className="mt-3 h-8 rounded-lg border border-border px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+								className="mt-3 h-8 rounded-lg border border-border px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("编辑")}
 							</button>
 						) : null}
-						<p className="pb-3 pt-2 text-[10.5px] text-muted-foreground/60">
+						<p className="pb-3 pt-2 text-caption text-muted-foreground">
 							{file.size} B · {language || "text"}
 						</p>
 					</div>

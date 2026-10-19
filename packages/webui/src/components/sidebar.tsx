@@ -12,9 +12,9 @@ import {
 	MessageCircle,
 	MoreHorizontal,
 	Pencil,
-	Plus,
 	Search,
 	Settings,
+	SquarePen,
 	Terminal,
 	Trash2,
 	X,
@@ -172,23 +172,26 @@ export function Sidebar({
 	return (
 		<aside
 			className={cn(
-				"relative flex h-full w-[268px] shrink-0 flex-col overflow-hidden border-r border-sidebar-border bg-sidebar",
+				"relative flex h-full w-[268px] shrink-0 flex-col overflow-hidden bg-sidebar",
 				mobile &&
-					"w-[88vw] max-w-[360px] rounded-r-3xl border-r-0 pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
+					"w-[88vw] max-w-[360px] rounded-r-3xl pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]",
 			)}
+			style={{
+				borderRight: mobile ? undefined : "var(--workspace-divider-width) solid var(--workspace-divider-color)",
+			}}
 		>
-			<header className="shrink-0 p-3">
+			<header className="flex h-12 shrink-0 items-center pl-3 pr-2">
 				<button
 					type="button"
 					onClick={onOpenSettings}
 					title={workingDir || "NanoPi"}
-					className="flex h-12 w-full items-center gap-2.5 rounded-xl px-2 text-left transition-colors hover:bg-sidebar-accent"
+					className="flex min-w-0 flex-1 items-center gap-2 rounded-lg py-1 pl-1.5 pr-1 text-left transition-colors hover:bg-sidebar-hover"
 				>
 					<span className="min-w-0 flex-1">
-						<span className="block truncate text-[14px] font-medium text-foreground">
+						<span className="block truncate text-control font-medium text-sidebar-foreground">
 							{projectName || t("本地工作区")}
 						</span>
-						<span className="flex min-w-0 items-center gap-1 text-[11px] text-muted-foreground">
+						<span className="flex min-w-0 items-center gap-1 text-caption text-muted-foreground">
 							<GitBranch className="size-3 shrink-0" strokeWidth={1.75} />
 							<span className="min-w-0 truncate">{branch || workingDir || "NanoPi"}</span>
 						</span>
@@ -197,69 +200,68 @@ export function Sidebar({
 				</button>
 			</header>
 
-			<div className="shrink-0 space-y-0.5 px-3">
-				<NavRow
+			<nav className="flex min-w-0 shrink-0 items-center gap-1 py-1.5 pl-3 pr-2">
+				<NavTab
 					active={view === "sessions"}
 					label={t("对话")}
-					icon={<MessageCircle className="size-[19px]" strokeWidth={1.7} />}
+					icon={<MessageCircle className="size-[18px]" strokeWidth={1.75} />}
 					onClick={() => setView("sessions")}
 				/>
-				<NavRow
+				<NavTab
 					active={view === "files"}
 					label={t("文件")}
-					icon={<Folder className="size-[19px]" strokeWidth={1.7} />}
+					icon={<Folder className="size-[18px]" strokeWidth={1.75} />}
 					onClick={() => setView("files")}
 				/>
-				<NavRow
+				<NavTab
 					active={view === "terminal"}
 					label={t("终端")}
-					icon={<Terminal className="size-[19px]" strokeWidth={1.7} />}
+					icon={<Terminal className="size-[18px]" strokeWidth={1.75} />}
 					onClick={() => {
 						setView("terminal");
 						onOpenTerminal();
 					}}
 				/>
+				<div className="flex-1" />
+				<IconButton
+					label={t("搜索会话")}
+					active={searchOpen}
+					onClick={() => {
+						setView("sessions");
+						setSearchOpen((open) => !open);
+					}}
+					className="size-8"
+				>
+					<Search className="size-[17px]" strokeWidth={1.7} />
+				</IconButton>
+				{mobile ? (
+					<IconButton label={t("关闭导航")} onClick={onClose} className="size-8">
+						<X className="size-[17px]" strokeWidth={1.7} />
+					</IconButton>
+				) : null}
+			</nav>
+
+			{/* Action rows share the sidebar icon column: px-2 container +
+			    px-[11px] row + an 18px icon puts the glyph at x=19 and the label
+			    at x=45, matching the nav tabs, session rows and files tree. */}
+			<div className="flex shrink-0 flex-col px-2 pb-0.5">
+				<SidebarAction
+					label={t("新对话")}
+					icon={<SquarePen className="size-[18px]" strokeWidth={1.75} />}
+					onClick={onNew}
+				/>
+				<SidebarAction
+					label={t("设置")}
+					icon={<Settings className="size-[18px]" strokeWidth={1.75} />}
+					onClick={onOpenSettings}
+				/>
 			</div>
 
-			<div className="shrink-0 px-3 pt-5">
-				<p className="px-2 pb-1 text-[12px] text-muted-foreground/70">{t("快捷操作")}</p>
-				<div className="space-y-0.5">
-					<NavRow
-						label={t("新对话")}
-						icon={<Plus className="size-[19px]" strokeWidth={1.7} />}
-						onClick={onNew}
-					/>
-					<NavRow
-						label={t("设置")}
-						icon={<Settings className="size-[19px]" strokeWidth={1.7} />}
-						onClick={onOpenSettings}
-					/>
-				</div>
-			</div>
-
-			<div className="mt-5 flex min-h-0 flex-1 flex-col px-3">
-				<div className="flex h-8 shrink-0 items-center justify-between pl-2 pr-0.5">
-					<span className="text-[12px] text-muted-foreground/70">
+			<div className="mt-2 flex min-h-0 flex-1 flex-col px-2">
+				<div className="flex h-[26px] shrink-0 items-center pl-[11px] pr-0.5">
+					<span className="min-w-0 flex-1 truncate text-xs font-[550] tracking-[-0.02em] text-muted-foreground/80">
 						{view === "sessions" ? t("最近") : view === "files" ? t("文件") : t("终端")}
 					</span>
-					<div className="flex items-center">
-						<IconButton
-							label={t("搜索会话")}
-							active={searchOpen}
-							onClick={() => {
-								setView("sessions");
-								setSearchOpen((open) => !open);
-							}}
-							className="size-8"
-						>
-							<Search className="size-[17px]" strokeWidth={1.7} />
-						</IconButton>
-						{mobile ? (
-							<IconButton label={t("关闭导航")} onClick={onClose} className="size-8">
-								<X className="size-[17px]" strokeWidth={1.7} />
-							</IconButton>
-						) : null}
-					</div>
 				</div>
 
 				{searchOpen && view === "sessions" ? (
@@ -269,7 +271,7 @@ export function Sidebar({
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
 							placeholder={t("搜索会话")}
-							className="h-9 w-full rounded-xl bg-white/[0.05] px-3 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:bg-white/[0.07]"
+							className="h-9 w-full rounded-lg bg-overlay-hover-light px-3 text-control text-foreground outline-none placeholder:text-muted-foreground focus:bg-overlay-hover"
 						/>
 					</div>
 				) : null}
@@ -287,23 +289,25 @@ export function Sidebar({
 				>
 					{view === "sessions" ? (
 						groups.length === 0 ? (
-							<p className="px-2 py-6 text-center text-[12.5px] text-muted-foreground">
+							<p className="px-2 py-6 text-center text-label text-muted-foreground">
 								{t("暂无会话")}
 							</p>
 						) : (
-							<div className="space-y-4">
+							<div className="space-y-1">
 								{groups.map(([label, items]) => (
 									<section key={label}>
-										<h2 className="px-2 pb-1 text-[11px] text-muted-foreground/60">{label}</h2>
+										<h2 className="px-[11px] pb-1 pt-0.5 text-xs font-[550] tracking-[-0.02em] text-muted-foreground/80">
+											{label}
+										</h2>
 										<ul className="space-y-px">
 											{items.map((session) => (
 												<li key={session.id} className="relative">
 													<div
 														className={cn(
-															"group flex h-10 w-full items-center gap-1 rounded-xl pr-1 transition-colors",
+															"group flex min-h-[2.125rem] w-full items-center rounded-[9px] px-[11px] transition-colors",
 															session.id === currentSessionId
-																? "bg-sidebar-accent text-foreground"
-																: "text-foreground/80 hover:bg-sidebar-accent",
+																? "bg-sidebar-accent text-sidebar-foreground"
+																: "text-sidebar-foreground/90 hover:bg-sidebar-hover",
 														)}
 													>
 														{renaming === session.id ? (
@@ -321,7 +325,7 @@ export function Sidebar({
 																	}
 																	if (event.key === "Escape") setRenaming(null);
 																}}
-																className="mx-1 h-7 min-w-0 flex-1 rounded-lg bg-white/[0.06] px-2 text-[13px] text-foreground outline-none focus:bg-white/[0.09]"
+																className="mx-1 h-7 min-w-0 flex-1 rounded-lg bg-overlay-hover px-2 text-control text-foreground outline-none"
 															/>
 														) : (
 															<button
@@ -330,12 +334,12 @@ export function Sidebar({
 																	setRenaming(null);
 																	onSelectSession(session);
 																}}
-																className="flex h-full min-w-0 flex-1 items-center rounded-xl pl-2.5 text-left"
+																className="flex min-h-8 min-w-0 flex-1 items-center text-left"
 															>
-																<span className="min-w-0 flex-1 truncate text-[13.5px]">
+																<span className="min-w-0 flex-1 truncate text-control">
 																	{session.name || t("新会话")}
 																</span>
-																<span className="shrink-0 pr-1 text-[10.5px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+																<span className="shrink-0 pl-2 text-caption text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
 																	{relativeTime(session.updated_at)}
 																</span>
 															</button>
@@ -348,7 +352,7 @@ export function Sidebar({
 																event.stopPropagation();
 																setMenuFor(menuFor === session.id ? null : session.id);
 															}}
-															className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-0 transition-opacity hover:bg-white/[0.06] hover:text-foreground group-hover:opacity-100"
+															className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-0 transition-colors hover:bg-overlay-hover hover:text-foreground group-hover:opacity-100"
 														>
 															<MoreHorizontal className="size-3.5" />
 														</button>
@@ -361,7 +365,7 @@ export function Sidebar({
 																onClick={() => setMenuFor(null)}
 																className="fixed inset-0 z-10 cursor-default"
 															/>
-															<div className="absolute right-1 top-9 z-20 w-32 overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-xl">
+															<div className="absolute right-1 top-9 z-20 w-32 overflow-hidden rounded-xl border border-border-menu bg-popover p-1 shadow-xl">
 																<button
 																	type="button"
 																	onClick={() => {
@@ -369,7 +373,7 @@ export function Sidebar({
 																		setRenaming(session.id);
 																		setRenameValue(session.name || t("新会话"));
 																	}}
-																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] text-foreground hover:bg-accent"
+																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-foreground hover:bg-overlay-hover"
 																>
 																	<Pencil className="size-3.5 text-muted-foreground" />
 																	{t("重命名")}
@@ -380,7 +384,7 @@ export function Sidebar({
 																		setMenuFor(null);
 																		setConfirmingDelete(session);
 																	}}
-																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] text-destructive hover:bg-destructive/10"
+																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-destructive hover:bg-destructive/12"
 																>
 																	<Trash2 className="size-3.5" />
 																	{t("删除")}
@@ -397,8 +401,8 @@ export function Sidebar({
 						)
 					) : view === "terminal" ? (
 						<div className="px-2 py-4">
-							<p className="text-[12.5px] text-muted-foreground">{t("终端已在右侧打开。")}</p>
-							<p className="mt-1 text-[11.5px] text-muted-foreground/70">
+							<p className="text-label text-muted-foreground">{t("终端已在右侧打开。")}</p>
+							<p className="mt-1 text-caption text-muted-foreground">
 								{t("命令只在本机执行，不进入对话上下文。")}
 							</p>
 						</div>
@@ -416,15 +420,15 @@ export function Sidebar({
 								>
 									<ChevronLeft className="size-4" />
 								</IconButton>
-								<div className="min-w-0 flex-1 truncate text-[11.5px] text-muted-foreground" title={dir}>
+								<div className="min-w-0 flex-1 truncate text-label text-muted-foreground" title={dir}>
 									{dir || workingDir}
 								</div>
 							</div>
 							{filesError ? (
-								<p className="px-2 py-4 text-[12px] text-destructive">{filesError}</p>
+								<p className="px-2 py-4 text-label text-destructive">{filesError}</p>
 							) : null}
 							{listing === null && !filesError ? (
-								<p className="px-2 py-4 text-[12px] text-muted-foreground">{t("加载中…")}</p>
+								<p className="px-2 py-4 text-label text-muted-foreground">{t("加载中…")}</p>
 							) : null}
 							{(listing?.dirs ?? []).map((name) => {
 								const path = joinPath(listing?.path || dir, name);
@@ -435,7 +439,7 @@ export function Sidebar({
 											type="button"
 											onClick={() => toggleDir(path)}
 											aria-expanded={Boolean(open)}
-											className="flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13.5px] text-foreground/85 transition-colors hover:bg-sidebar-accent"
+											className="flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control text-sidebar-foreground/90 transition-colors hover:bg-sidebar-hover"
 										>
 											{open ? (
 												<FolderOpen className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
@@ -451,13 +455,13 @@ export function Sidebar({
 											/>
 										</button>
 										{open ? (
-											<div className="ml-4 space-y-px border-l border-sidebar-border pl-1">
+											<div className="ml-[18px] space-y-px border-l border-sidebar-border pl-1">
 												{open.dirs.map((child) => (
 													<button
 														key={`sub-${child}`}
 														type="button"
 														onClick={() => setDir(joinPath(path, child))}
-														className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-foreground"
+														className="flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label text-muted-foreground transition-colors hover:bg-sidebar-hover hover:text-foreground"
 													>
 														<Folder className="size-3.5 shrink-0" strokeWidth={1.7} />
 														<span className="min-w-0 flex-1 truncate">{child}</span>
@@ -471,10 +475,10 @@ export function Sidebar({
 															type="button"
 															onClick={() => onOpenFile(childPath)}
 															className={cn(
-																"flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-[12.5px] transition-colors",
+																"flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label transition-colors",
 																childPath === activeFile
-																	? "bg-sidebar-accent text-foreground"
-																	: "text-foreground/75 hover:bg-sidebar-accent hover:text-foreground",
+																	? "bg-sidebar-accent text-sidebar-foreground"
+																	: "text-sidebar-foreground/80 hover:bg-sidebar-hover hover:text-foreground",
 															)}
 														>
 															{fileIcon(child)}
@@ -483,7 +487,7 @@ export function Sidebar({
 													);
 												})}
 												{open.dirs.length === 0 && open.files.length === 0 ? (
-													<p className="px-2 py-1 text-[11.5px] text-muted-foreground/60">
+													<p className="px-2 py-1 text-caption text-muted-foreground">
 														{t("空目录")}
 													</p>
 												) : null}
@@ -500,10 +504,10 @@ export function Sidebar({
 										type="button"
 										onClick={() => onOpenFile(path)}
 										className={cn(
-											"flex h-9 w-full items-center gap-2 rounded-xl px-2 text-left text-[13px] transition-colors",
+											"flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control transition-colors",
 											path === activeFile
-												? "bg-sidebar-accent text-foreground"
-												: "text-muted-foreground hover:bg-sidebar-accent hover:text-foreground",
+												? "bg-sidebar-accent text-sidebar-foreground"
+												: "text-muted-foreground hover:bg-sidebar-hover hover:text-foreground",
 										)}
 									>
 										{fileIcon(name)}
@@ -516,18 +520,32 @@ export function Sidebar({
 				</div>
 			</div>
 
+			<footer className="shrink-0 bg-sidebar px-2.5 pt-1 pb-2.5">
+				<div className="flex min-h-10 items-center gap-2.5 rounded-lg px-1.5">
+					<span className="grid size-7 shrink-0 place-items-center rounded-full bg-overlay-hover-strong text-caption font-medium text-sidebar-foreground">
+						N
+					</span>
+					<span className="min-w-0 flex-1">
+						<span className="block truncate text-label text-sidebar-foreground">NanoPi</span>
+						<span className="block truncate text-caption text-muted-foreground">
+							{workingDir ? workingDir.split("/").filter(Boolean).pop() : t("本地工作区")}
+						</span>
+					</span>
+				</div>
+			</footer>
+
 			{confirmingDelete ? (
 				<div className="absolute inset-0 z-50 flex items-end bg-black/50 p-3">
 					<div className="w-full rounded-2xl bg-card p-3">
-						<p className="text-[13px] font-medium text-foreground">{t("删除会话？")}</p>
-						<p className="mt-1 text-[12px] text-muted-foreground">
+						<p className="text-control font-medium text-foreground">{t("删除会话？")}</p>
+						<p className="mt-1 text-label text-muted-foreground">
 							{confirmingDelete.name || t("新会话")} 将从本机移除，无法撤销。
 						</p>
 						<div className="mt-3 flex justify-end gap-1.5">
 							<button
 								type="button"
 								onClick={() => setConfirmingDelete(null)}
-								className="h-8 rounded-full px-3 text-[12.5px] text-muted-foreground hover:bg-white/[0.06] hover:text-foreground"
+								className="h-8 rounded-full px-3 text-label text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("取消")}
 							</button>
@@ -537,7 +555,7 @@ export function Sidebar({
 									onDelete(confirmingDelete);
 									setConfirmingDelete(null);
 								}}
-								className="h-8 rounded-full bg-destructive px-3 text-[12.5px] font-medium text-white"
+								className="h-8 rounded-full bg-destructive px-3 text-label font-medium text-destructive-foreground"
 							>
 								{t("删除")}
 							</button>
@@ -545,25 +563,43 @@ export function Sidebar({
 					</div>
 				</div>
 			) : null}
-
-			<footer className="shrink-0 p-3">
-				<div className="flex h-12 items-center gap-2.5 rounded-xl px-2">
-					<span className="grid size-8 shrink-0 place-items-center rounded-full bg-white/[0.08] text-[12px] font-medium text-foreground">
-						N
-					</span>
-					<span className="min-w-0 flex-1">
-						<span className="block truncate text-[13.5px] text-foreground">NanoPi</span>
-						<span className="block truncate text-[11px] text-muted-foreground">
-							{workingDir ? workingDir.split("/").filter(Boolean).pop() : t("本地工作区")}
-						</span>
-					</span>
-				</div>
-			</footer>
 		</aside>
 	);
 }
 
-function NavRow({
+/**
+ * Sidebar action row. Container px-2 + row px-[11px] + an 18px icon puts the
+ * glyph at x=19 and the label at x=45, so icons line up vertically across the
+ * nav tabs, these actions and the session rows.
+ */
+function SidebarAction({
+	label,
+	icon,
+	onClick,
+}: {
+	label: string;
+	icon: React.ReactNode;
+	onClick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			onClick={onClick}
+			className="flex h-9 w-full items-center gap-[9px] rounded-lg px-[11px] text-left text-control font-medium text-sidebar-foreground/90 transition-colors select-none hover:bg-sidebar-hover hover:text-foreground"
+		>
+			<span className="shrink-0 text-muted-foreground">{icon}</span>
+			<span className="min-w-0 flex-1 truncate">{label}</span>
+		</button>
+	);
+}
+
+/**
+ * Icon tab. Anchored on the ICON: the glyph never moves between states —
+ * hovering an inactive tab shows a circle centered on the icon, activating it
+ * grows the pill to the right (label) and bleeds 3px left so ml+pl stays
+ * constant.
+ */
+function NavTab({
 	active,
 	label,
 	icon,
@@ -579,15 +615,26 @@ function NavRow({
 			type="button"
 			onClick={onClick}
 			aria-pressed={active}
+			aria-label={label}
+			title={label}
 			className={cn(
-				"flex h-11 w-full items-center gap-3 rounded-xl px-2.5 text-left text-[14.5px] transition-colors",
-				active
-					? "bg-sidebar-accent font-medium text-foreground"
-					: "text-foreground/80 hover:bg-sidebar-accent hover:text-foreground",
+				"inline-flex h-8 min-w-0 shrink-0 cursor-pointer items-center justify-start rounded-full px-2 text-muted-foreground outline-none",
+				"transition-[margin,padding,color,background-color] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]",
+				"hover:bg-sidebar-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
+				active && "-ml-[3px] bg-sidebar-accent pl-2.5 pr-3.5 text-sidebar-foreground/90",
 			)}
 		>
-			<span className={cn("shrink-0", active ? "text-foreground" : "text-muted-foreground")}>{icon}</span>
-			<span className="min-w-0 flex-1 truncate">{label}</span>
+			<span className="relative shrink-0">{icon}</span>
+			<span
+				className={cn(
+					"grid min-w-0 transition-[grid-template-columns] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]",
+					active ? "grid-cols-[1fr]" : "grid-cols-[0fr]",
+				)}
+			>
+				<span className="min-w-0 overflow-hidden">
+					<span className="block whitespace-nowrap pl-2 text-control font-[550]">{label}</span>
+				</span>
+			</span>
 		</button>
 	);
 }

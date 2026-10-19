@@ -43,8 +43,31 @@ function segment(blocks: UiBlock[]): Segment[] {
 	return segments;
 }
 
+/**
+ * Splits a message into CJK / Latin runs so each script takes its paired
+ * weight: MiSans reads heavier than Inter at the same numeric weight, so one
+ * element-level font-weight can never be right for a mixed string.
+ */
+function MessageText({ text }: { text: string }) {
+	const runs = text.match(/[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]+|[^\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef]+/g);
+	if (!runs) return <>{text}</>;
+	return (
+		<>
+			{runs.map((run, index) => (
+				<span key={index} className={/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/.test(run) ? "chat-cjk" : "chat-latin"}>
+					{run}
+				</span>
+			))}
+		</>
+	);
+}
+
 export function MessageItem({ message }: { message: UiMessage }) {
 	if (message.role === "user") {
+		const text = message.blocks
+			.map((block) => (block.kind === "text" ? block.text : ""))
+			.join("")
+			.trim();
 		return (
 			<div className="flex justify-end">
 				<div className="flex w-full max-w-[85%] flex-col items-end gap-2">
@@ -60,16 +83,15 @@ export function MessageItem({ message }: { message: UiMessage }) {
 							))}
 						</div>
 					) : null}
-					{message.blocks.map((block, index) =>
-						block.kind === "text" ? (
-							<div
-								key={`${message.id}-${index}`}
-								className="chat-user-bubble w-fit max-w-full whitespace-pre-wrap break-words rounded-[20px] bg-chat-user-bubble px-4 py-2.5 text-[16px] leading-[1.55] text-chat-user-bubble-fg"
-							>
-								{block.text}
-							</div>
-						) : null,
-					)}
+					{text ? (
+						<div
+							data-chat-content
+							className="chat-user-bubble w-fit max-w-full bg-chat-user-bubble px-4 py-3 text-chat-user-bubble-fg whitespace-pre-wrap break-words"
+							style={{ borderRadius: "var(--radius-2xl)" }}
+						>
+							<MessageText text={text} />
+						</div>
+					) : null}
 				</div>
 			</div>
 		);
@@ -78,7 +100,7 @@ export function MessageItem({ message }: { message: UiMessage }) {
 	if (message.role === "system") {
 		return (
 			<div className="flex justify-center">
-				<div className="max-w-[80%] rounded-xl bg-white/[0.04] px-3 py-1.5 text-center text-[12px] leading-5 text-muted-foreground">
+				<div className="max-w-[80%] rounded-xl bg-muted px-3 py-1.5 text-center text-label leading-5 text-muted-foreground">
 					{message.blocks.map((block, index) =>
 						block.kind === "text" ? <span key={index}>{block.text}</span> : null,
 					)}
@@ -90,7 +112,7 @@ export function MessageItem({ message }: { message: UiMessage }) {
 	return (
 		<div className="min-w-0 space-y-4">
 			{message.blocks.length === 0 ? (
-				<div className="flex h-7 items-center gap-2 text-[13px] text-muted-foreground">
+				<div className="flex h-7 items-center gap-2 text-label text-muted-foreground">
 					<Loader2 className="size-3.5 animate-spin" />
 					<span className="shimmer">{t("正在思考")}</span>
 				</div>
@@ -127,7 +149,7 @@ function ProcessGroup({ blocks }: { blocks: ProcessBlock[] }) {
 				type="button"
 				onClick={() => setOpen((value) => !value)}
 				aria-expanded={open}
-				className="flex h-8 w-full items-center gap-1.5 text-left text-[15px] text-muted-foreground transition-colors hover:text-foreground"
+				className="flex w-full items-center gap-1.5 py-px text-left text-control text-cop-title transition-colors duration-75 hover:text-foreground"
 			>
 				<span className={cn("truncate", running && "shimmer")}>{label}</span>
 				<ChevronRight
@@ -136,7 +158,7 @@ function ProcessGroup({ blocks }: { blocks: ProcessBlock[] }) {
 				/>
 			</button>
 			{open ? (
-				<div className="mt-1 space-y-0.5 rounded-2xl bg-white/[0.06] p-1.5">
+				<div className="mt-1 space-y-0.5 rounded-xl bg-muted p-1.5">
 					{blocks.map((block, index) =>
 						block.kind === "tool" ? (
 							<ToolRow key={block.id} block={block} />
@@ -153,8 +175,8 @@ function ProcessGroup({ blocks }: { blocks: ProcessBlock[] }) {
 function ToolRow({ block }: { block: ToolBlock }) {
 	const summary = toolSummary(block);
 	return (
-		<details className="group rounded-xl transition-colors open:bg-white/[0.03] hover:bg-white/[0.04]">
-			<summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-2.5 text-[14px] text-foreground/85">
+		<details className="group rounded-lg transition-colors hover:bg-overlay-hover open:bg-overlay-hover-light">
+			<summary className="flex h-9 cursor-pointer list-none items-center gap-2 px-2.5 text-control text-foreground">
 				<span className="grid size-4 shrink-0 place-items-center text-muted-foreground">
 					{block.status === "running" ? (
 						<Loader2 className="size-3.5 animate-spin" />
@@ -168,11 +190,11 @@ function ToolRow({ block }: { block: ToolBlock }) {
 				<ChevronRight className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-90" />
 			</summary>
 			{block.output ? (
-				<pre className="max-h-80 overflow-auto border-t border-white/[0.05] px-3 py-2.5 font-mono text-[12px] leading-[1.6] text-foreground/70 whitespace-pre-wrap break-words">
+				<pre className="max-h-80 overflow-auto border-t border-border-soft px-3 py-2.5 font-mono text-caption leading-[1.6] text-muted-foreground whitespace-pre-wrap break-words">
 					{block.output}
 				</pre>
 			) : block.progress ? (
-				<div className="border-t border-white/[0.05] px-3 py-2 text-[12px] text-muted-foreground">
+				<div className="border-t border-border-soft px-3 py-2 text-label text-muted-foreground">
 					{block.progress}
 				</div>
 			) : null}
@@ -182,12 +204,12 @@ function ToolRow({ block }: { block: ToolBlock }) {
 
 function ReasoningRow({ block }: { block: ReasoningBlock }) {
 	return (
-		<details className="group rounded-xl transition-colors open:bg-white/[0.03] hover:bg-white/[0.04]">
-			<summary className="flex h-10 cursor-pointer list-none items-center gap-2 px-2.5 text-[14px] text-muted-foreground">
+		<details className="group rounded-lg transition-colors hover:bg-overlay-hover open:bg-overlay-hover-light">
+			<summary className="flex h-9 cursor-pointer list-none items-center gap-2 px-2.5 text-control text-muted-foreground">
 				<span className="min-w-0 flex-1 truncate">{t("已思考")}</span>
 				<ChevronRight className="size-3.5 shrink-0 transition-transform group-open:rotate-90" />
 			</summary>
-			<div className="max-h-72 overflow-auto border-t border-white/[0.05] px-3 py-2.5 text-[13.5px] leading-[1.7] text-muted-foreground whitespace-pre-wrap">
+			<div className="max-h-72 overflow-auto border-t border-border-soft px-3 py-2.5 text-control leading-relaxed text-muted-foreground whitespace-pre-wrap">
 				{block.text}
 			</div>
 		</details>

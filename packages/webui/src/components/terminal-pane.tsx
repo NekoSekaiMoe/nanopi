@@ -34,7 +34,7 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
 			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-				<span className="min-w-0 flex-1 truncate font-mono text-[11.5px] text-muted-foreground" title={cwd}>
+				<span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground" title={cwd}>
 					{cwd || t("本地工作区")}
 				</span>
 				<span
@@ -49,16 +49,16 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 					aria-label={t("清空终端")}
 					title={t("清空终端")}
 					onClick={clear}
-					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 				>
 					<Trash2 className="size-3.5" strokeWidth={1.75} />
 				</button>
 			</header>
 
-			<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 font-mono text-[12px] leading-[1.55]">
+			<div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 font-mono text-body leading-[1.55]">
 				{error ? <p className="pb-2 text-destructive">{error}</p> : null}
 				{entries.length === 0 ? (
-					<p className="text-muted-foreground/70">{t("命令只在本机执行，不进入对话上下文。")}</p>
+					<p className="text-muted-foreground">{t("命令只在本机执行，不进入对话上下文。")}</p>
 				) : null}
 				{entries.map((entry) => (
 					<div key={entry.id} className="pb-2">
@@ -79,7 +79,7 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 						) : entry.error ? (
 							<span className="text-destructive">{entry.error}</span>
 						) : (
-							<span className={cn("text-[11px]", entry.code === 0 ? "text-muted-foreground/60" : "text-destructive/80")}>
+							<span className={cn("text-caption", entry.code === 0 ? "text-muted-foreground" : "text-destructive")}>
 								{t("退出码")} {entry.code ?? "?"}
 							</span>
 						)}
@@ -89,8 +89,8 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 			</div>
 
 			<div className="shrink-0 border-t border-border p-2">
-				<div className="flex items-center gap-1.5 rounded-xl bg-muted/60 px-2.5">
-					<span className="shrink-0 font-mono text-[12px] text-brand">$</span>
+				<div className="flex items-center gap-1.5 rounded-xl bg-muted px-2.5">
+					<span className="shrink-0 font-mono text-label text-brand">$</span>
 					<input
 						value={command}
 						spellCheck={false}
@@ -121,7 +121,7 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 								}
 							}
 						}}
-						className="h-10 min-w-0 flex-1 bg-transparent font-mono text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground/70"
+						className="h-10 min-w-0 flex-1 bg-transparent font-mono text-label text-foreground outline-none placeholder:text-muted-foreground"
 					/>
 				</div>
 			</div>

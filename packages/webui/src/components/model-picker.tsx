@@ -63,7 +63,7 @@ export function ModelPicker({
 			<button
 				type="button"
 				onClick={onConfigure}
-				className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-2.5 text-[11.5px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+				className="inline-flex h-8 items-center gap-1.5 rounded-full border border-border px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 			>
 				<Cpu className="size-3.5" />
 				{t("配置模型")}
@@ -72,31 +72,30 @@ export function ModelPicker({
 	}
 
 	return (
-		<div ref={ref} className="relative">
+		<div ref={ref} className="relative min-w-0">
 			<button
 				type="button"
 				onClick={() => setOpen((value) => !value)}
+				data-open={open}
 				className={cn(
-					"inline-flex h-9 max-w-[240px] items-center gap-1.5 rounded-full px-2 text-[14px] text-foreground/85 transition-colors hover:bg-white/[0.06] hover:text-foreground",
-					open && "bg-white/[0.06] text-foreground",
-					compact && "max-w-[180px]",
+					"press composer-pill inline-flex min-w-0 shrink items-center gap-1.5 rounded-full px-2 text-label",
+					"text-control-label hover:text-control-label-hover max-md:h-11",
+					compact ? "h-8 max-w-[180px]" : "h-9 max-w-[240px]",
 				)}
 			>
-				{compact ? null : <Cpu className="size-3.5 shrink-0" strokeWidth={1.75} />}
-				<span className="min-w-0 truncate">{current?.model ?? t("选择模型")}</span>
-				{levels.length > 0 ? (
-					<span className="shrink-0 rounded-full bg-white/[0.08] px-1.5 text-[10.5px] text-muted-foreground">
-						{effortLabel(activeEffort)}
-					</span>
-				) : null}
-				<ChevronDown
-					className={cn("size-3.5 shrink-0 opacity-70 transition-transform", open && "rotate-180")}
-					strokeWidth={1.75}
-				/>
+				<span className="inline-flex min-w-0 items-center gap-1.5">
+					<span className="min-w-0 truncate">{current?.model ?? t("选择模型")}</span>
+					<ChevronDown className="size-3.5 shrink-0" strokeWidth={1.5} />
+				</span>
 			</button>
 			{open ? (
-				<div className="absolute bottom-full left-0 z-50 mb-1.5 w-[300px] overflow-hidden rounded-xl border border-border bg-popover p-1 shadow-lg max-md:bottom-0 max-md:left-0 max-md:mb-10">
-					<p className="px-2 pb-1 pt-1 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/70">
+				<div
+					className={cn(
+						"absolute bottom-full right-0 z-50 mb-1.5 w-72 max-w-[calc(100vw-2rem)] overflow-hidden",
+						"rounded-xl border border-border-menu bg-popover p-1 shadow-lg",
+					)}
+				>
+					<p className="px-2 pb-1 pt-1 text-caption uppercase tracking-[0.06em] text-muted-foreground">
 						{t("模型")}
 					</p>
 					<div className="max-h-64 overflow-y-auto">
@@ -107,14 +106,14 @@ export function ModelPicker({
 								onClick={() => {
 									onChange(model.provider);
 								}}
-								className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent"
+								className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-overlay-hover"
 							>
 								<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
 									{model.provider === provider ? <Check className="size-3.5 text-brand" /> : null}
 								</span>
 								<span className="min-w-0 flex-1">
-									<span className="block truncate text-[12.5px] text-foreground">{model.model}</span>
-									<span className="block truncate text-[10.5px] text-muted-foreground">
+									<span className="block truncate text-label text-foreground">{model.model}</span>
+									<span className="block truncate text-caption text-muted-foreground">
 										{model.provider} · {model.provider_type}
 									</span>
 								</span>
@@ -123,7 +122,7 @@ export function ModelPicker({
 					</div>
 					{levels.length > 0 && onEffort ? (
 						<>
-							<p className="border-t border-border-soft px-2 pb-1 pt-2 text-[10.5px] uppercase tracking-[0.06em] text-muted-foreground/70">
+							<p className="border-t border-border-soft px-2 pb-1 pt-2 text-caption uppercase tracking-[0.06em] text-muted-foreground">
 								{t("思考强度")}
 							</p>
 							<div className="grid grid-cols-3 gap-1 p-1">
@@ -135,10 +134,10 @@ export function ModelPicker({
 											onEffort(level);
 										}}
 										className={cn(
-											"h-8 rounded-lg text-[12px] transition-colors",
+											"h-8 rounded-lg text-label transition-colors",
 											level === activeEffort
-												? "bg-foreground font-medium text-background"
-												: "text-muted-foreground hover:bg-accent hover:text-foreground",
+												? "bg-btn-primary text-background"
+												: "text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
 										)}
 									>
 										{effortLabel(level)}

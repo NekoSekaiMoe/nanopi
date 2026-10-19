@@ -151,7 +151,7 @@ export function ProviderSettings({
 								type="button"
 								onClick={() => onProvider(model.provider)}
 								className={cn(
-									"flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-accent",
+									"flex w-full items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-overlay-hover",
 									index > 0 && "border-t border-border-soft",
 								)}
 							>
@@ -266,7 +266,7 @@ function AccountCard({
 						type="button"
 						onClick={onEdit}
 						disabled={busy}
-						className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40"
+						className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground disabled:opacity-40"
 						aria-label={t("编辑")}
 						title={t("编辑")}
 					>
@@ -294,7 +294,7 @@ function AccountCard({
 						<button
 							type="button"
 							onClick={() => setConfirming(false)}
-							className="h-7 rounded-md px-2 text-[11.5px] text-muted-foreground hover:bg-accent hover:text-foreground"
+							className="h-7 rounded-md px-2 text-[11.5px] text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
 						>
 							{t("取消")}
 						</button>
@@ -428,7 +428,7 @@ function AddProviderForm({
 					<button
 						type="button"
 						onClick={onCancel}
-						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground hover:bg-accent hover:text-foreground"
+						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
 					>
 						{t("取消")}
 					</button>
@@ -582,7 +582,7 @@ function EditProviderForm({
 							setNewModel("");
 							setNewModelName("");
 						}}
-						className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-[12px] text-foreground transition-colors hover:bg-accent disabled:opacity-40"
+						className="h-9 shrink-0 rounded-lg border border-border px-2.5 text-[12px] text-foreground transition-colors hover:bg-overlay-hover disabled:opacity-40"
 					>
 						{t("添加")}
 					</button>
