@@ -33,6 +33,7 @@ export function ModelPicker({
 	effort,
 	onEffort,
 	onConfigure,
+	onOpen,
 	compact,
 }: {
 	models: ModelInfo[];
@@ -41,6 +42,8 @@ export function ModelPicker({
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
+	/** Called when the list opens, so the caller can reload the catalog first. */
+	onOpen?: () => void;
 	compact?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
@@ -75,7 +78,10 @@ export function ModelPicker({
 		<div ref={ref} className="relative min-w-0">
 			<button
 				type="button"
-				onClick={() => setOpen((value) => !value)}
+				onClick={() => {
+					if (!open) onOpen?.();
+					setOpen((value) => !value);
+				}}
 				data-open={open}
 				className={cn(
 					"press composer-pill inline-flex min-w-0 shrink items-center gap-1.5 rounded-full px-2 text-label",
