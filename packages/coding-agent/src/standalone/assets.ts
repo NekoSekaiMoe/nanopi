@@ -32,6 +32,7 @@ export const ASSETS_COMPLETE_MARKER = ".complete";
 /** Marker recording the payload hash of the last extraction. Same-version rebuilds change the payload without changing the version directory, so the hash is what detects stale trees. */
 export const ASSETS_HASH_MARKER = ".assets-sha256";
 
+/** True only in single-file bundles; false everywhere else (npm, source checkout). */
 export function isSingleNodeFileRuntime(): boolean {
 	return typeof NANOPI_SINGLE_FILE !== "undefined" && NANOPI_SINGLE_FILE;
 }

@@ -1,9 +1,10 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ModuleApi, ModuleContext, SessionStartEvent, ToolLoadout } from "../../../core/modules/types.ts";
 import { APP_NAME, getPackageDir } from "../../../config.ts";
+import { isSingleNodeFileRuntime } from "../../../standalone/assets.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
 /**
@@ -97,20 +98,27 @@ function textResult(text: string) {
 /**
  * The command that launches a child session.
  *
- * Reads the running package's own `bin` map rather than assuming a name: the
- * manifest exposes `nanopi` (this fork) where upstream pi exposed `pi`, and the
- * old `bin.pi` lookup silently returned undefined, so every spawn fell through
- * to a bare `pi` on PATH and died with "spawn pi ENOENT" wherever that command
- * does not exist — which is everywhere in a nanopi-only install.
+ * The single-file distribution (nanopi.js) must run itself: `getPackageDir()`
+ * points at the extracted asset cache there, whose package.json has no `bin`
+ * entry for a child to run through node. Anything this process runs was
+ * started by node, so `argv[1]` is the entry that is actually executing.
  */
 function resolveChildCommand(): { cmd: string; args: string[] } {
+	const entryPoint = process.argv[1];
+	if (isSingleNodeFileRuntime() && entryPoint) return { cmd: process.execPath, args: [entryPoint] };
 	try {
 		const dir = getPackageDir();
 		const bin = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")).bin as
 			| Record<string, string>
 			| undefined;
 		const entry = bin?.[APP_NAME] ?? Object.values(bin ?? {})[0];
-		if (typeof entry === "string") return { cmd: process.execPath, args: [path.join(dir, entry)] };
+		// Resolve against the package dir and refuse a path that is not there: a
+		// guess that does not exist only turns into a MODULE_NOT_FOUND crash
+		// inside the child, where the reason is invisible to the parent.
+		if (typeof entry === "string") {
+			const candidate = path.join(dir, entry);
+			if (existsSync(candidate)) return { cmd: process.execPath, args: [candidate] };
+		}
 	} catch {
 		// fall through
 	}
@@ -421,7 +429,12 @@ export default function subagentMini(pi: ModuleApi): void {
 				if (code === 0 || code === null) finish("completed");
 				else finish("failed", `exit ${code}${lastAssistant.errorMessage ? `: ${lastAssistant.errorMessage}` : ""}`);
 			} else {
-				finish("failed", `exit ${code}, no assistant output${stderrTail ? `: ${stderrTail.trim()}` : ""}`);
+				// Name the command: a child that died before producing any event
+				// (missing entry point, wrong resolution) is otherwise reported as a
+				// bare exit code with a Node stack the parent cannot attribute.
+				const launched = [childCommand.cmd, ...childCommand.args].join(" ");
+				const why = stderrTail ? `: ${stderrTail.trim()}` : "";
+				finish("failed", `exit ${code}, no assistant output (launched: ${launched})${why}`);
 			}
 		});
 
