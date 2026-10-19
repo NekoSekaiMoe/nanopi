@@ -191,6 +191,7 @@ const EN: Record<string, string> = {
 	"命令只在本机执行，不进入对话上下文。": "Commands run locally and stay out of the chat context.",
 	"已连接": "Connected",
 	"未连接": "Not connected",
+	"CLI 的 enabledModels 已限定模型范围，选择器只列出匹配的模型。": "The CLI's enabledModels setting limits the model list; the picker shows only matching models.",
 	"终端连接失败": "Could not connect the terminal",
 	"清空终端": "Clear terminal",
 	"输入命令，回车执行": "Type a command, press Enter",

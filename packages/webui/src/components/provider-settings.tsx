@@ -48,6 +48,7 @@ export function ProviderSettings({
 	const [error, setError] = useState<string | null>(null);
 
 	const accounts = config?.provider_accounts ?? [];
+	const enabledPatterns = config?.enabled_models ?? [];
 	const presets = useMemo(() => {
 		const list = [...(config?.provider_presets ?? []), ...(config?.provider_protocols ?? [])];
 		return list.length > 0 ? list : FALLBACK_PRESETS;
@@ -144,6 +145,11 @@ export function ProviderSettings({
 			{models.length > 0 ? (
 				<div className="mt-4">
 					<h2 className="text-[12px] font-medium text-muted-foreground">{t('当前使用')}</h2>
+					{enabledPatterns.length > 0 ? (
+						<p className="mt-1 text-[11px] text-muted-foreground">
+							{t("CLI 的 enabledModels 已限定模型范围，选择器只列出匹配的模型。")}
+						</p>
+					) : null}
 					<div className="mt-1.5 overflow-hidden rounded-xl border border-border">
 						{models.map((model, index) => (
 							<button

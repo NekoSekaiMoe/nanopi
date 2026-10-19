@@ -32,6 +32,7 @@ import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import { parseSessionEntries, type SessionInfo, SessionManager } from "../../core/session-manager.ts";
+import { mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
 	addAccountModels,
 	createAccount,
@@ -1005,17 +1006,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const services = runtime.services;
 
 		/**
-		 * Dedupe by `provider/id`, keeping the first entry: the availability
-		 * snapshot is authoritative, later sources only fill gaps.
-		 */
-		function mergeModels(models: Model<any>[], extra: readonly Model<any>[]): void {
-			for (const model of extra) {
-				if ("type" in model) continue;
-				if (!models.some((entry) => entry.provider === model.provider && entry.id === model.id)) models.push(model);
-			}
-		}
-
-		/**
 		 * Providers known to authenticate, from stored credentials, the
 		 * environment, or a models.json key. A provider missing here (a models.json
 		 * entry with no key, say) keeps its models in the catalog but cannot run
@@ -1027,10 +1017,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		/**
 		 * Chat models to expose: the availability snapshot, the active session
-		 * model, and the configured catalog. `refresh` runs the same availability
-		 * pass the CLI's `--list-models` runs through `getAvailable()`, so both
-		 * sides agree on what is authenticated (a models.json provider with no key
-		 * resolves nothing there and stays out).
+		 * model, and the configured catalog, narrowed to the CLI's allowlist.
+		 * `refresh` runs the same availability pass the CLI's `--list-models` runs
+		 * through `getAvailable()`, so both sides agree on what is authenticated
+		 * (a models.json provider with no key resolves nothing there and stays out).
 		 *
 		 * The catalog still contributes rows: the snapshot only holds providers
 		 * that passed an auth check, while a provider can expose credentials
@@ -1042,15 +1032,23 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const models: Model<any>[] = [];
 			if (refresh) {
 				try {
-					mergeModels(models, await services.modelRuntime.getAvailable());
+					mergeModelLists(models, await services.modelRuntime.getAvailable());
 				} catch {
 					// Availability pass failed; the snapshot and catalog still serve.
 				}
 			}
-			mergeModels(models, services.modelRuntime.getAvailableSnapshot());
-			const current = session.model;
-			if (current) mergeModels(models, [current]);
-			mergeModels(models, services.modelRuntime.getModels());
+			mergeModelLists(models, services.modelRuntime.getAvailableSnapshot());
+			mergeModelLists(models, [session.model]);
+			mergeModelLists(models, services.modelRuntime.getModels());
+			return modelsWithinAllowlist(models, services.settingsManager.getEnabledModels(), session.model);
+		}
+
+		/** The catalog `chatModels` starts from, before the settings allowlist narrows it. */
+		async function catalogModels(): Promise<Model<any>[]> {
+			const models: Model<any>[] = [];
+			mergeModelLists(models, services.modelRuntime.getAvailableSnapshot());
+			mergeModelLists(models, [session.model]);
+			mergeModelLists(models, services.modelRuntime.getModels());
 			return models;
 		}
 
@@ -1078,7 +1076,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		if (path === "/models/reasoning-effort" && req.method === "POST") {
 			const body = await readBody(req);
 			const key = typeof body.provider === "string" ? body.provider : "";
-			const model = resolveModel(await chatModels(), key);
+			// The catalog, not the allowlisted picker list: a model hidden by
+			// `enabledModels` still keeps its level for when it comes back.
+			const model = resolveModel(await chatModels(), key) ?? resolveModel(await catalogModels(), key);
 			if (!model) {
 				json(res, 404, { error: `unknown model ${key}` });
 				return;
@@ -1142,6 +1142,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				provider_accounts: await listAccounts(providerAccountsPath()),
 				provider_presets: PROVIDER_PRESETS,
 				provider_protocols: PROVIDER_PROTOCOLS,
+				// The `/models` allowlist the CLI applies. The settings page marks
+				// the rows outside it instead of implying they reach the picker.
+				enabled_models: services.settingsManager.getEnabledModels() ?? [],
 			};
 		}
 
