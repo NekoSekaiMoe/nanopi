@@ -160,24 +160,12 @@ export function ModelPicker({
 							</p>
 							<div className="max-h-64 overflow-y-auto">
 								{models.map((model) => (
-									<button
+									<ModelRow
 										key={model.provider}
-										type="button"
-										onClick={() => {
-											onChange(model.provider);
-										}}
-										className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-overlay-hover"
-									>
-										<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
-											{model.provider === provider ? <Check className="size-3.5 text-brand" /> : null}
-										</span>
-										<span className="min-w-0 flex-1">
-											<span className="block truncate text-label text-foreground">{model.model}</span>
-											<span className="block truncate text-caption text-muted-foreground">
-												{model.provider} · {model.provider_type}
-											</span>
-										</span>
-									</button>
+										model={model}
+										active={model.provider === provider}
+										onPick={() => onChange(model.provider)}
+									/>
 								))}
 							</div>
 							{levels.length > 0 && onEffort ? (
@@ -202,5 +190,46 @@ export function ModelPicker({
 				</div>
 			) : null}
 		</div>
+	);
+}
+
+/**
+ * One model row. A model whose provider resolves no credential (a models.json
+ * entry with no key, say) stays visible but cannot be picked: the CLI drops
+ * such models from `--list-models`, so selecting one here would only fail at
+ * send time.
+ */
+function ModelRow({
+	model,
+	active,
+	onPick,
+}: {
+	model: ModelInfo;
+	active: boolean;
+	onPick: () => void;
+}) {
+	return (
+		<button
+			type="button"
+			disabled={!model.available}
+			title={model.available ? undefined : t("未配置凭证，补上 API Key 后可用")}
+			onClick={onPick}
+			className={cn(
+				"flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors",
+				!model.available && "opacity-45",
+				"hover:bg-overlay-hover",
+			)}
+		>
+			<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
+				{active ? <Check className="size-3.5 text-brand" /> : null}
+			</span>
+			<span className="min-w-0 flex-1">
+				<span className="block truncate text-label text-foreground">{model.model}</span>
+				<span className="block truncate text-caption text-muted-foreground">
+					{model.provider} · {model.provider_type}
+					{model.available ? "" : ` · ${t("未配置凭证")}`}
+				</span>
+			</span>
+		</button>
 	);
 }

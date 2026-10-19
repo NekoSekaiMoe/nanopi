@@ -892,6 +892,17 @@ describe("Models runtime", () => {
 		expect((await models.getAvailable("ambient")).map((model) => model.provider)).toEqual(["ambient"]);
 	});
 
+	// The webui used to list catalog models whose provider resolves no credential
+	// (a models.json entry with no key, issue #75), while the CLI dropped them.
+	it("excludes a provider that resolves no credential from the available list", async () => {
+		const models = createModels();
+		models.setProvider(testProvider({ id: "keyless", auth: { apiKey: envKeyAuth(undefined) } }));
+		models.setProvider(testProvider({ id: "keyed", auth: { apiKey: envKeyAuth("key") } }));
+
+		expect(models.getModels().map((model) => model.provider)).toEqual(["keyless", "keyed"]);
+		expect((await models.getAvailable()).map((model) => model.provider)).toEqual(["keyed"]);
+	});
+
 	it("runs provider login and logout through the credential store", async () => {
 		const credentials = new InMemoryCredentialStore();
 		const apiKey = envKeyAuth(undefined);
