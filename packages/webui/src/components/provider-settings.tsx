@@ -184,6 +184,7 @@ export function ProviderSettings({
 						<AccountCard
 							key={account.id}
 							account={account}
+							models={models}
 							busy={busy}
 							onEdit={() => {
 								setError(null);
@@ -202,18 +203,33 @@ export function ProviderSettings({
 	);
 }
 
+/**
+ * Models of this account the runtime will not offer, i.e. unavailable entries
+ * reported for the same provider id. The CLI drops them too when the provider
+ * resolves no credential, so the card marks them instead of implying they chat.
+ */
+function unusableModels(account: ProviderAccountInfo, models: ModelInfo[]): string[] {
+	const usable = new Set(
+		models.filter((model) => model.provider_type === account.id && model.available).map((model) => model.model),
+	);
+	return account.model_ids.filter((model) => !usable.has(model));
+}
+
 function AccountCard({
 	account,
+	models,
 	busy,
 	onEdit,
 	onDelete,
 }: {
 	account: ProviderAccountInfo;
+	models: ModelInfo[];
 	busy: boolean;
 	onEdit: () => void;
 	onDelete: () => void;
 }) {
 	const [confirming, setConfirming] = useState(false);
+	const unusable = unusableModels(account, models);
 
 	return (
 		<div className="rounded-xl border border-border p-3">
@@ -240,6 +256,9 @@ function AccountCard({
 						{account.managed ? (
 							<span className="text-[10px] text-muted-foreground">{t('受管理')}</span>
 						) : null}
+						{unusable.length > 0 ? (
+							<span className="text-[10px] text-muted-foreground">{t("未配置凭证")}</span>
+						) : null}
 					</div>
 					{account.base_url ? (
 						<p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
@@ -253,7 +272,10 @@ function AccountCard({
 							account.model_ids.map((model) => (
 								<span
 									key={model}
-									className="rounded-full border border-border-soft bg-muted/40 px-2 py-0.5 font-mono text-[10.5px] text-foreground/75"
+									className={cn(
+										"rounded-full border border-border-soft bg-muted/40 px-2 py-0.5 font-mono text-[10.5px] text-foreground/75",
+										unusable.includes(model) && "text-muted-foreground line-through",
+									)}
 								>
 									{model}
 								</span>
@@ -469,6 +491,7 @@ function EditProviderForm({
 	const [displayName, setDisplayName] = useState(account.display_name ?? "");
 	const [baseUrl, setBaseUrl] = useState(account.base_url ?? "");
 	const [apiKey, setApiKey] = useState("");
+	const unusable = unusableModels(account, models);
 	const [newModel, setNewModel] = useState("");
 	const [newModelName, setNewModelName] = useState("");
 
@@ -526,6 +549,11 @@ function EditProviderForm({
 
 			<div className="mt-6">
 				<h3 className="text-[12.5px] font-medium">{t('模型')}</h3>
+				{unusable.length > 0 ? (
+					<p className="mt-1 text-[11px] text-muted-foreground">
+						{t("划掉的模型未配置凭证，不会出现在模型选择器里。")}
+					</p>
+				) : null}
 				<div className="mt-2 space-y-1">
 					{account.model_ids.length === 0 ? (
 						<p className="text-[11.5px] text-muted-foreground">{t('还没有模型')}</p>
@@ -535,7 +563,14 @@ function EditProviderForm({
 								key={modelId}
 								className="flex items-center gap-2 rounded-lg border border-border-soft px-2.5 py-1.5"
 							>
-								<span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">{modelId}</span>
+								<span
+									className={cn(
+										"min-w-0 flex-1 truncate font-mono text-[11.5px]",
+										unusable.includes(modelId) && "text-muted-foreground line-through",
+									)}
+								>
+									{modelId}
+								</span>
 								<button
 									type="button"
 									onClick={() => onDeleteModel(modelId)}

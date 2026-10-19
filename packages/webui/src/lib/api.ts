@@ -95,6 +95,8 @@ export interface ModelInfo {
 	effort_applicable: boolean;
 	reasoning_effort: string | null;
 	effort_levels: string[];
+	/** False for a catalog model whose provider has no credential, so it cannot run. */
+	available: boolean;
 }
 
 export async function getModels(): Promise<ModelInfo[]> {

@@ -78,6 +78,8 @@ interface WebuiModelInfo {
 	effort_applicable: boolean;
 	reasoning_effort: string | null;
 	effort_levels: string[];
+	/** False for a catalog model whose provider has no usable credential, e.g. a models.json entry with no key. */
+	available: boolean;
 }
 
 interface WebuiSessionMeta {
@@ -998,30 +1000,41 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		/**
+		 * Providers known to authenticate, from stored credentials, the
+		 * environment, or a models.json key. A provider missing here (a models.json
+		 * entry with no key, say) keeps its models in the catalog but cannot run
+		 * them, which is what `available: false` reports.
+		 */
+		function authenticatedProviders(): ReadonlySet<string> {
+			return new Set(services.modelRuntime.getAvailableSnapshot().map((model) => model.provider));
+		}
+
+		/**
 		 * Chat models to expose: the availability snapshot, the active session
-		 * model, the configured catalog, plus (when `refresh`) the authenticated
-		 * model lists of every provider.
+		 * model, and the configured catalog. `refresh` runs the same availability
+		 * pass the CLI's `--list-models` runs through `getAvailable()`, so both
+		 * sides agree on what is authenticated (a models.json provider with no key
+		 * resolves nothing there and stays out).
 		 *
-		 * The snapshot only holds providers that passed an auth check, while the
-		 * CLI's `--list-models` asks `getAvailable()`, which also returns models
-		 * whose provider exposes credentials without a declared auth check (for
-		 * example a models.json provider relying on a stored API key or on a
-		 * credential type the provider does not advertise). Those models are
-		 * usable, so the webui must offer them too.
+		 * The catalog still contributes rows: the snapshot only holds providers
+		 * that passed an auth check, while a provider can expose credentials
+		 * without a declared one (a stored key, or a credential type it does not
+		 * advertise). Those models are usable, so the webui shows them; `available`
+		 * on the wire separates the two cases.
 		 */
 		async function chatModels(refresh = false): Promise<Model<any>[]> {
 			const models: Model<any>[] = [];
-			mergeModels(models, services.modelRuntime.getAvailableSnapshot());
-			const current = session.model;
-			if (current) mergeModels(models, [current]);
-			mergeModels(models, services.modelRuntime.getModels());
 			if (refresh) {
 				try {
 					mergeModels(models, await services.modelRuntime.getAvailable());
 				} catch {
-					// Availability pass failed; the snapshot and catalog above are still served.
+					// Availability pass failed; the snapshot and catalog still serve.
 				}
 			}
+			mergeModels(models, services.modelRuntime.getAvailableSnapshot());
+			const current = session.model;
+			if (current) mergeModels(models, [current]);
+			mergeModels(models, services.modelRuntime.getModels());
 			return models;
 		}
 
@@ -1058,10 +1071,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		 * Wire shape for one model. `effort_levels` mirrors the levels the model
 		 * really supports (a non-reasoning model gets `["off"]`), and
 		 * `reasoning_effort` is the stored value for that model, else the live
-		 * session level when it is the active model.
+		 * session level when it is the active model. `available` marks the models
+		 * the CLI would also list; the rest are catalog rows without credentials.
 		 */
 		function modelInfos(models: Model<any>[], defaultKey: string): WebuiModelInfo[] {
 			const current = session.model;
+			const authenticated = authenticatedProviders();
 			return models.map((model) => {
 				const key = modelKey(model);
 				const levels = getSupportedThinkingLevels(model).filter((level) => level !== "off");
@@ -1076,6 +1091,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					effort_applicable: levels.length > 0,
 					reasoning_effort: effective ?? (levels.length > 0 ? null : "off"),
 					effort_levels: levels,
+					available: active || authenticated.has(model.provider),
 				};
 			});
 		}
