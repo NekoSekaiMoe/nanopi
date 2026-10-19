@@ -184,6 +184,37 @@ function recordFullProviderSet(providerIds: readonly string[]): void {
 	console.log(`Recorded ${next.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${name}".`);
 }
 
+/**
+ * Antigravity is not a models.dev provider. The catalog is the set of models the
+ * Cloud Code Assist backend serves to the native client, kept in sync by hand.
+ * Subscription access bills nothing per token, so every cost is zero.
+ */
+function antigravityModels(): Model<"antigravity">[] {
+	const cost: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	const baseUrl = "https://daily-cloudcode-pa.googleapis.com";
+	const entries: { id: string; name: string; contextWindow: number; maxTokens: number }[] = [
+		{ id: "gemini-3.1-pro", name: "Gemini 3.1 Pro (Antigravity)", contextWindow: 1048576, maxTokens: 65536 },
+		{ id: "gemini-3.1-flash", name: "Gemini 3.1 Flash (Antigravity)", contextWindow: 1048576, maxTokens: 65536 },
+		{ id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6 (Antigravity)", contextWindow: 262144, maxTokens: 64000 },
+		{
+			id: "claude-opus-4-5-thinking",
+			name: "Claude Opus 4.5 Thinking (Antigravity)",
+			contextWindow: 262144,
+			maxTokens: 64000,
+		},
+		{ id: "gpt-oss-120b-medium", name: "GPT-OSS 120B (Antigravity)", contextWindow: 131072, maxTokens: 32768 },
+	];
+	return entries.map((entry) => ({
+		...entry,
+		api: "antigravity",
+		provider: "antigravity",
+		baseUrl,
+		reasoning: true,
+		input: ["text", "image"],
+		cost,
+	}));
+}
+
 interface ModelsDevModel {
 	id: string;
 	name: string;
@@ -3791,6 +3822,8 @@ async function generateModels() {
 		},
 	];
 	allModels.push(...codexModels);
+
+	allModels.push(...antigravityModels());
 
 	// Add missing Mistral Medium 3.5 model until models.dev includes it
 	if (!allModels.some(m => m.provider === "mistral" && m.id === "mistral-medium-3.5")) {

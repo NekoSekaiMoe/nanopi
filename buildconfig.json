@@ -76,6 +76,9 @@
 		"oauth/anthropic": {
 			"description": "Anthropic OAuth login flow"
 		},
+		"oauth/antigravity": {
+			"description": "Google Antigravity OAuth login flow"
+		},
 		"oauth/github-copilot": {
 			"description": "GitHub Copilot OAuth login flow"
 		},
@@ -206,6 +209,7 @@
 				"alibaba-token-plan-cn",
 				"amazon-bedrock",
 				"ant-ling",
+				"antigravity",
 				"anthropic",
 				"azure",
 				"baseten",
@@ -268,6 +272,7 @@
 				"alibaba-token-plan-cn",
 				"amazon-bedrock",
 				"ant-ling",
+				"antigravity",
 				"anthropic",
 				"azure",
 				"baseten",

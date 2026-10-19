@@ -71,6 +71,7 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - **Anthropic**
 - **Google**
 - **Vertex AI** (Gemini via Vertex AI)
+- **Google Antigravity** (unofficial Cloud Code Assist endpoint, OAuth with a Google account)
 - **Mistral**
 - **Groq**
 - **Cerebras**
@@ -485,6 +486,7 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
 | MiniMax (Global) | `MINIMAX_API_KEY` |
 | MiniMax (China) | `MINIMAX_CN_API_KEY` |
+| Google Antigravity (unofficial) | `ANTIGRAVITY_ACCESS_TOKEN` |
 | Moonshot AI / Moonshot AI (China) | `MOONSHOT_API_KEY` |
 | Hugging Face | `HF_TOKEN` |
 | OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY` |

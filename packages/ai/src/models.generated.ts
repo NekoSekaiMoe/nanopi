@@ -11,6 +11,8 @@ import { AMAZON_BEDROCK_CLASSIFIER_MODELS, AMAZON_BEDROCK_IMAGE_MODELS, AMAZON_B
 import { ANT_LING_CLASSIFIER_MODELS, ANT_LING_IMAGE_MODELS, ANT_LING_MODELS } from "./providers/ant-ling.models.ts";
 // provider-id: anthropic
 import { ANTHROPIC_CLASSIFIER_MODELS, ANTHROPIC_IMAGE_MODELS, ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
+// provider-id: antigravity
+import { ANTIGRAVITY_CLASSIFIER_MODELS, ANTIGRAVITY_IMAGE_MODELS, ANTIGRAVITY_MODELS } from "./providers/antigravity.models.ts";
 // provider-id: azure
 import { AZURE_CLASSIFIER_MODELS, AZURE_IMAGE_MODELS, AZURE_MODELS } from "./providers/azure.models.ts";
 // provider-id: baseten
@@ -110,6 +112,7 @@ export const MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_MODELS;
 	readonly "ant-ling": typeof ANT_LING_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_MODELS;
+	readonly "antigravity": typeof ANTIGRAVITY_MODELS;
 	readonly "azure": typeof AZURE_MODELS;
 	readonly "baseten": typeof BASETEN_MODELS;
 	readonly "cerebras": typeof CEREBRAS_MODELS;
@@ -162,6 +165,7 @@ export const MODELS: {
 	"amazon-bedrock": AMAZON_BEDROCK_MODELS,
 	"ant-ling": ANT_LING_MODELS,
 	"anthropic": ANTHROPIC_MODELS,
+	"antigravity": ANTIGRAVITY_MODELS,
 	"azure": AZURE_MODELS,
 	"baseten": BASETEN_MODELS,
 	"cerebras": CEREBRAS_MODELS,
@@ -216,6 +220,7 @@ export const IMAGE_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_IMAGE_MODELS;
 	readonly "ant-ling": typeof ANT_LING_IMAGE_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_IMAGE_MODELS;
+	readonly "antigravity": typeof ANTIGRAVITY_IMAGE_MODELS;
 	readonly "azure": typeof AZURE_IMAGE_MODELS;
 	readonly "baseten": typeof BASETEN_IMAGE_MODELS;
 	readonly "cerebras": typeof CEREBRAS_IMAGE_MODELS;
@@ -268,6 +273,7 @@ export const IMAGE_MODELS: {
 	"amazon-bedrock": AMAZON_BEDROCK_IMAGE_MODELS,
 	"ant-ling": ANT_LING_IMAGE_MODELS,
 	"anthropic": ANTHROPIC_IMAGE_MODELS,
+	"antigravity": ANTIGRAVITY_IMAGE_MODELS,
 	"azure": AZURE_IMAGE_MODELS,
 	"baseten": BASETEN_IMAGE_MODELS,
 	"cerebras": CEREBRAS_IMAGE_MODELS,
@@ -322,6 +328,7 @@ export const CLASSIFIER_MODELS: {
 	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_CLASSIFIER_MODELS;
 	readonly "ant-ling": typeof ANT_LING_CLASSIFIER_MODELS;
 	readonly "anthropic": typeof ANTHROPIC_CLASSIFIER_MODELS;
+	readonly "antigravity": typeof ANTIGRAVITY_CLASSIFIER_MODELS;
 	readonly "azure": typeof AZURE_CLASSIFIER_MODELS;
 	readonly "baseten": typeof BASETEN_CLASSIFIER_MODELS;
 	readonly "cerebras": typeof CEREBRAS_CLASSIFIER_MODELS;
@@ -374,6 +381,7 @@ export const CLASSIFIER_MODELS: {
 	"amazon-bedrock": AMAZON_BEDROCK_CLASSIFIER_MODELS,
 	"ant-ling": ANT_LING_CLASSIFIER_MODELS,
 	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
+	"antigravity": ANTIGRAVITY_CLASSIFIER_MODELS,
 	"azure": AZURE_CLASSIFIER_MODELS,
 	"baseten": BASETEN_CLASSIFIER_MODELS,
 	"cerebras": CEREBRAS_CLASSIFIER_MODELS,

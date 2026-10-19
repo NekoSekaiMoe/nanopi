@@ -28,9 +28,10 @@ export interface OAuthCredentials {
 	[key: string]: unknown;
 }
 
-/** Stored canonical OAuth credential. */
+/** Stored canonical OAuth credential. `env` holds provider-scoped values the credential vouches for, such as the Cloud Code project bound to an account. */
 export interface OAuthCredential extends OAuthCredentials {
 	type: "oauth";
+	env?: ProviderEnv;
 }
 
 /** One type-tagged credential per provider — the shape of today's auth.json. */
