@@ -180,6 +180,10 @@ export function Sidebar({
 				borderRight: mobile ? undefined : "var(--workspace-divider-width) solid var(--workspace-divider-color)",
 			}}
 		>
+			{/* Workspace / branch switcher. No bottom divider: the header
+			    blends into the nav below, and its own vertical padding keeps
+			    the hover fill clear of the window's top edge (Memoh's
+			    sidebar header). */}
 			<header className="flex h-12 shrink-0 items-center pl-3 pr-2">
 				<button
 					type="button"
@@ -241,31 +245,43 @@ export function Sidebar({
 				) : null}
 			</nav>
 
-			{/* Action rows share the sidebar icon column: px-2 container +
-			    px-[11px] row + an 18px icon puts the glyph at x=19 and the label
-			    at x=45, matching the nav tabs, session rows and files tree. */}
-			<div className="flex shrink-0 flex-col px-2 pb-0.5">
-				<SidebarAction
-					label={t("新对话")}
-					icon={<SquarePen className="size-[18px]" strokeWidth={1.75} />}
-					onClick={onNew}
-				/>
-				<SidebarAction
-					label={t("设置")}
-					icon={<Settings className="size-[18px]" strokeWidth={1.75} />}
-					onClick={onOpenSettings}
-				/>
+			{/* Memoh's sessions panel leads with a section label, then the
+			    action rows. Without the label the actions read as peers of the
+			    nav tab above (both are medium-weight rows at the same x), which
+			    is why the reference keeps that structural break.
+			    Action rows share the sidebar icon column: px-2 container +
+			    px-[11px] row + an 18px icon puts the glyph at x=19 and the
+			    label at x=45, matching the nav tabs, session rows and files
+			    tree. */}
+			<div className="flex shrink-0 flex-col px-2 pt-2">
+				<SidebarGroupLabel>{t("快捷操作")}</SidebarGroupLabel>
+				<div className="flex flex-col pb-0.5">
+					<SidebarAction
+						label={t("新对话")}
+						icon={<SquarePen className="size-[18px]" strokeWidth={1.75} />}
+						onClick={onNew}
+					/>
+					<SidebarAction
+						label={t("设置")}
+						icon={<Settings className="size-[18px]" strokeWidth={1.75} />}
+						onClick={onOpenSettings}
+					/>
+				</div>
 			</div>
 
-			<div className="mt-2 flex min-h-0 flex-1 flex-col px-2">
-				<div className="flex h-[26px] shrink-0 items-center pl-[11px] pr-0.5">
-					<span className="min-w-0 flex-1 truncate text-xs font-[550] tracking-[-0.02em] text-muted-foreground/80">
+			{/* The panel: one label, one scrollport. The list dissolves into
+			    the rail at the bottom instead of ending on a hard rule — the
+			    nav above has no divider of its own, so a rule here reads
+			    lopsided. */}
+			<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
+				<div className="flex min-w-0 shrink-0 flex-col px-2 pt-1">
+					<SidebarGroupLabel>
 						{view === "sessions" ? t("最近") : view === "files" ? t("文件") : t("终端")}
-					</span>
+					</SidebarGroupLabel>
 				</div>
 
 				{searchOpen && view === "sessions" ? (
-					<div className="shrink-0 pb-2">
+					<div className="shrink-0 px-2 pb-2">
 						<input
 							autoFocus
 							value={query}
@@ -277,7 +293,7 @@ export function Sidebar({
 				) : null}
 
 				<div
-					className="min-h-0 flex-1 overflow-y-auto pb-2"
+					className="min-h-0 flex-1 overflow-y-auto px-2 pb-2"
 					onClick={(event) => {
 						// Clicking blank space in the list (never a row or control) collapses
 						// the secondary view back to the session list.
@@ -296,9 +312,7 @@ export function Sidebar({
 							<div className="space-y-1">
 								{groups.map(([label, items]) => (
 									<section key={label}>
-										<h2 className="px-[11px] pb-1 pt-0.5 text-xs font-[550] tracking-[-0.02em] text-muted-foreground/80">
-											{label}
-										</h2>
+										<SidebarGroupLabel>{label}</SidebarGroupLabel>
 										<ul className="space-y-px">
 											{items.map((session) => (
 												<li key={session.id} className="relative">
@@ -518,21 +532,12 @@ export function Sidebar({
 						</div>
 					)}
 				</div>
-			</div>
 
-			<footer className="shrink-0 bg-sidebar px-2.5 pt-1 pb-2.5">
-				<div className="flex min-h-10 items-center gap-2.5 rounded-lg px-1.5">
-					<span className="grid size-7 shrink-0 place-items-center rounded-full bg-overlay-hover-strong text-caption font-medium text-sidebar-foreground">
-						N
-					</span>
-					<span className="min-w-0 flex-1">
-						<span className="block truncate text-label text-sidebar-foreground">NanoPi</span>
-						<span className="block truncate text-caption text-muted-foreground">
-							{workingDir ? workingDir.split("/").filter(Boolean).pop() : t("本地工作区")}
-						</span>
-					</span>
-				</div>
-			</footer>
+				{/* Bottom fade: the list dissolves into the rail instead of
+				    ending on a hard rule, so the panel reads as one surface
+				    with no footer to sit under. */}
+				<div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
+			</div>
 
 			{confirmingDelete ? (
 				<div className="absolute inset-0 z-50 flex items-end bg-black/50 p-3">
@@ -564,6 +569,22 @@ export function Sidebar({
 				</div>
 			) : null}
 		</aside>
+	);
+}
+
+/**
+ * Section label. Memoh's panel-header.vue owns the label type once —
+ * text-xs font-[550] tracking-[-0.02em] at muted-foreground/80 — so the
+ * "Quick actions" and "Recent" labels can't drift apart, and every one of
+ * them shares the panel's 11px label column.
+ */
+function SidebarGroupLabel({ children }: { children: React.ReactNode }) {
+	return (
+		<div className="flex h-[26px] shrink-0 select-none items-center pl-[11px] pr-0.5">
+			<span className="min-w-0 flex-1 truncate text-xs font-[550] tracking-[-0.02em] text-muted-foreground/80">
+				{children}
+			</span>
+		</div>
 	);
 }
 

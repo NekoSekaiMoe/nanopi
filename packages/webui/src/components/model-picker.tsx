@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, ChevronDown, Cpu } from "lucide-react";
+import { Brain, Check, ChevronDown, ChevronRight, Cpu } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ModelInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -16,15 +16,25 @@ const EFFORT_LABELS: Record<string, string> = {
 	max: t("最高"),
 };
 
-export function effortLabel(level: string | null): string {
+function effortLabel(level: string | null): string {
 	if (!level) return t("默认");
 	return EFFORT_LABELS[level] ?? level;
 }
 
 /**
- * Model picker for the composer. The reasoning-effort rows live in the same
- * list as the models: preferring one dropdown over a second control keeps the
- * composer short and matches how the settings editor exposes the value.
+ * Model picker for the composer.
+ *
+ * Memoh's composer-model-menu.vue hangs thinking effort off the SAME menu as a
+ * second submenu row, instead of a second control or a second list inside the
+ * first. Two things the flat 3-column grid under the model list got wrong:
+ * reaching a level meant scrolling past every model row (and the model list
+ * had to stay short so both fit, which capped the catalog on screen), and the
+ * active level was invisible until the menu was opened.
+ *
+ * So: the menu's first row is the model list, the second row is `思考强度` with
+ * the CURRENT level on its right edge and a chevron, and opening that row
+ * swaps the panel to the level list. The pill itself carries `模型 · 强度` the
+ * way Memoh's modelTriggerLabel does, so the state reads at rest.
  */
 export function ModelPicker({
 	models,
@@ -47,10 +57,16 @@ export function ModelPicker({
 	compact?: boolean;
 }) {
 	const [open, setOpen] = useState(false);
+	const [effortOpen, setEffortOpen] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
 	const current = models.find((model) => model.provider === provider) ?? models[0];
 	const levels = current?.effort_applicable ? current.effort_levels : [];
 	const activeEffort = effort ?? current?.reasoning_effort ?? null;
+	const modelLabel = current?.model ?? t("选择模型");
+	// Same rule as Memoh's reasoningActive: only a real level (not "off") earns
+	// a slot on the pill, so a model with thinking disabled reads as bare.
+	const effortActive = Boolean(activeEffort) && activeEffort !== "off";
+	const triggerLabel = effortActive ? `${modelLabel} · ${effortLabel(activeEffort)}` : modelLabel;
 
 	useEffect(() => {
 		if (!open) return;
@@ -59,6 +75,12 @@ export function ModelPicker({
 		};
 		document.addEventListener("mousedown", onPointerDown);
 		return () => document.removeEventListener("mousedown", onPointerDown);
+	}, [open]);
+
+	// Closing the menu resets the submenu, so reopening always lands on the
+	// model list rather than a stale level list.
+	useEffect(() => {
+		if (!open) setEffortOpen(false);
 	}, [open]);
 
 	if (models.length === 0) {
@@ -86,11 +108,11 @@ export function ModelPicker({
 				className={cn(
 					"press composer-pill inline-flex min-w-0 shrink items-center gap-1.5 rounded-full px-2 text-label",
 					"text-control-label hover:text-control-label-hover max-md:h-11",
-					compact ? "h-8 max-w-[180px]" : "h-9 max-w-[240px]",
+					compact ? "h-8 max-w-[200px]" : "h-9 max-w-[260px]",
 				)}
 			>
 				<span className="inline-flex min-w-0 items-center gap-1.5">
-					<span className="min-w-0 truncate">{current?.model ?? t("选择模型")}</span>
+					<span className="min-w-0 truncate">{triggerLabel}</span>
 					<ChevronDown className="size-3.5 shrink-0" strokeWidth={1.5} />
 				</span>
 			</button>
@@ -101,57 +123,82 @@ export function ModelPicker({
 						"rounded-xl border border-border-menu bg-popover p-1 shadow-lg",
 					)}
 				>
-					<p className="px-2 pb-1 pt-1 text-caption uppercase tracking-[0.06em] text-muted-foreground">
-						{t("模型")}
-					</p>
-					<div className="max-h-64 overflow-y-auto">
-						{models.map((model) => (
-							<button
-								key={model.provider}
-								type="button"
-								onClick={() => {
-									onChange(model.provider);
-								}}
-								className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-overlay-hover"
-							>
-								<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
-									{model.provider === provider ? <Check className="size-3.5 text-brand" /> : null}
-								</span>
-								<span className="min-w-0 flex-1">
-									<span className="block truncate text-label text-foreground">{model.model}</span>
-									<span className="block truncate text-caption text-muted-foreground">
-										{model.provider} · {model.provider_type}
-									</span>
-								</span>
-							</button>
-						))}
-					</div>
-					{levels.length > 0 && onEffort ? (
+					{effortOpen ? (
 						<>
-							<p className="border-t border-border-soft px-2 pb-1 pt-2 text-caption uppercase tracking-[0.06em] text-muted-foreground">
-								{t("思考强度")}
-							</p>
-							<div className="grid grid-cols-3 gap-1 p-1">
+							<button
+								type="button"
+								onClick={() => setEffortOpen(false)}
+								className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-label text-foreground transition-colors hover:bg-overlay-hover"
+							>
+								<ChevronDown className="size-3.5 shrink-0 rotate-90 text-muted-foreground" strokeWidth={1.75} />
+								<span className="min-w-0 flex-1 truncate">{t("思考强度")}</span>
+							</button>
+							<div className="max-h-64 overflow-y-auto">
 								{levels.map((level) => (
 									<button
 										key={level}
 										type="button"
 										onClick={() => {
-											onEffort(level);
+											onEffort?.(level);
+											setEffortOpen(false);
+											setOpen(false);
 										}}
-										className={cn(
-											"h-8 rounded-lg text-label transition-colors",
-											level === activeEffort
-												? "bg-btn-primary text-background"
-												: "text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
-										)}
+										className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-label text-foreground transition-colors hover:bg-overlay-hover"
 									>
-										{effortLabel(level)}
+										<span className="grid size-4 shrink-0 place-items-center">
+											{level === activeEffort ? <Check className="size-3.5 text-brand" /> : null}
+										</span>
+										<span className="min-w-0 flex-1 truncate">{effortLabel(level)}</span>
 									</button>
 								))}
 							</div>
 						</>
-					) : null}
+					) : (
+						<>
+							<p className="px-2 pb-1 pt-1 text-caption uppercase tracking-[0.06em] text-muted-foreground">
+								{t("模型")}
+							</p>
+							<div className="max-h-64 overflow-y-auto">
+								{models.map((model) => (
+									<button
+										key={model.provider}
+										type="button"
+										onClick={() => {
+											onChange(model.provider);
+										}}
+										className="flex w-full items-start gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-overlay-hover"
+									>
+										<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
+											{model.provider === provider ? <Check className="size-3.5 text-brand" /> : null}
+										</span>
+										<span className="min-w-0 flex-1">
+											<span className="block truncate text-label text-foreground">{model.model}</span>
+											<span className="block truncate text-caption text-muted-foreground">
+												{model.provider} · {model.provider_type}
+											</span>
+										</span>
+									</button>
+								))}
+							</div>
+							{levels.length > 0 && onEffort ? (
+								<button
+									type="button"
+									onClick={() => setEffortOpen(true)}
+									className={cn(
+										"mt-1 flex w-full items-center gap-2 rounded-lg border-t border-border-soft px-2 py-2",
+										"text-left text-label text-foreground transition-colors hover:bg-overlay-hover",
+									)}
+								>
+									<Brain className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+									<span className="min-w-0 flex-1 truncate">{t("思考强度")}</span>
+									<span className="shrink-0 truncate text-caption text-muted-foreground">
+										{effortLabel(activeEffort)}
+									</span>
+									<ChevronRight className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={1.75} />
+								</button>
+							) : null}
+						</>
+					)}
 				</div>
 			) : null}
 		</div>
