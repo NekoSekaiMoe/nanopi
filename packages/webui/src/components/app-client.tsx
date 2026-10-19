@@ -71,6 +71,7 @@ export function AppClient() {
 	const [branch, setBranch] = useState("");
 	const [openFile, setOpenFile] = useState<string | null>(null);
 	const [terminalOpen, setTerminalOpen] = useState(false);
+	const [modelSheetOpen, setModelSheetOpen] = useState(false);
 	const restoredRef = useRef(false);
 	const titleRef = useRef("NanoPi");
 	const notificationsRef = useRef(notifications);
@@ -137,7 +138,15 @@ export function AppClient() {
 				} catch {
 					/* ignore */
 				}
-				setProvider(saved && usable.some((model) => model.provider === saved) ? saved : fallback);
+				// Stored credentials can arrive or disappear between runs; never
+				// restore a model whose provider has no key.
+				const runnable = usable.filter((model) => model.available);
+				const storedUsable = saved && runnable.some((model) => model.provider === saved);
+				setProvider(
+					storedUsable
+						? saved
+						: (runnable.find((model) => model.is_default)?.provider ?? runnable[0]?.provider ?? ""),
+				);
 				setBooted(true);
 			})
 			.catch((cause) => {
@@ -162,10 +171,10 @@ export function AppClient() {
 		const [nextConfig, nextModels] = await Promise.all([getConfig(), getModels()]);
 		setConfig(nextConfig);
 		setModels(nextModels);
-		const usable = nextModels.filter((model) => model.provider_type !== "unknown");
+		const runnable = nextModels.filter((model) => model.available);
 		setProvider((current) => {
-			if (current && usable.some((model) => model.provider === current)) return current;
-			return usable.find((model) => model.is_default)?.provider ?? usable[0]?.provider ?? "";
+			if (current && runnable.some((model) => model.provider === current)) return current;
+			return runnable.find((model) => model.is_default)?.provider ?? runnable[0]?.provider ?? "";
 		});
 	}, []);
 
@@ -510,7 +519,6 @@ export function AppClient() {
 						effort={effort}
 						onEffort={(level) => void onChangeEffort(level)}
 						onConfigure={openSettings}
-						onModelsOpen={() => void refreshProviders()}
 						onDismissError={() => chat.setError(null)}
 						onDismissNotice={() => chat.setNotice(null)}
 						onSend={onSend}
@@ -522,8 +530,11 @@ export function AppClient() {
 						images={images}
 						onImages={setImages}
 						sessionName={title}
-						workspaceName={projectName}
-						branch={branch}
+						modelSheetOpen={modelSheetOpen}
+						onModelSheet={(open) => {
+							if (open) void refreshProviders();
+							setModelSheetOpen(open);
+						}}
 					/>
 				)}
 			</main>
@@ -537,12 +548,16 @@ export function AppClient() {
 				aria-hidden={!navOpen}
 				inert={!navOpen}
 			>
+				{/* Scrim. Kept as its own full-bleed button (a 0.5-opacity surface
+				    reads as decoration otherwise) so tapping the dimmed area always
+				    dismisses, and `touch-action: manipulation` kills the double-tap
+				    zoom delay that made the tap feel ignored on a phone. */}
 				<button
 					type="button"
 					aria-label={t("关闭导航")}
 					onClick={() => setNavOpen(false)}
 					className={cn(
-						"absolute inset-0 bg-black/50 transition-opacity duration-200",
+						"absolute inset-0 cursor-default touch-manipulation bg-black/50 transition-opacity duration-200",
 						navOpen ? "opacity-100" : "opacity-0",
 					)}
 				/>
