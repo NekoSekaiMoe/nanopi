@@ -510,6 +510,7 @@ export function AppClient() {
 						effort={effort}
 						onEffort={(level) => void onChangeEffort(level)}
 						onConfigure={openSettings}
+						onModelsOpen={() => void refreshProviders()}
 						onDismissError={() => chat.setError(null)}
 						onDismissNotice={() => chat.setNotice(null)}
 						onSend={onSend}

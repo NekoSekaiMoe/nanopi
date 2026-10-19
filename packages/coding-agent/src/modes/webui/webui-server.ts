@@ -986,30 +986,48 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const session = currentSession();
 		const services = runtime.services;
 
-		/** Chat models to expose: the availability snapshot plus the active session model. */
-		async function chatModels(): Promise<Model<any>[]> {
-			const snapshot = services.modelRuntime.getAvailableSnapshot();
-			const models: Model<any>[] = snapshot.filter((model): model is Model<any> => !("type" in model));
-			const current = session.model;
-			if (current && !models.some((model) => model.provider === current.provider && model.id === current.id)) {
-				models.push(current);
+		/**
+		 * Dedupe by `provider/id`, keeping the first entry: the availability
+		 * snapshot is authoritative, later sources only fill gaps.
+		 */
+		function mergeModels(models: Model<any>[], extra: readonly Model<any>[]): void {
+			for (const model of extra) {
+				if ("type" in model) continue;
+				if (!models.some((entry) => entry.provider === model.provider && entry.id === model.id)) models.push(model);
 			}
-			try {
-				const all = await services.modelRuntime.getAllAvailable();
-				for (const model of all) {
-					if (!("type" in model) && !models.some((m) => m.provider === model.provider && m.id === model.id)) {
-						models.push(model);
-					}
+		}
+
+		/**
+		 * Chat models to expose: the availability snapshot, the active session
+		 * model, the configured catalog, plus (when `refresh`) the authenticated
+		 * model lists of every provider.
+		 *
+		 * The snapshot only holds providers that passed an auth check, while the
+		 * CLI's `--list-models` asks `getAvailable()`, which also returns models
+		 * whose provider exposes credentials without a declared auth check (for
+		 * example a models.json provider relying on a stored API key or on a
+		 * credential type the provider does not advertise). Those models are
+		 * usable, so the webui must offer them too.
+		 */
+		async function chatModels(refresh = false): Promise<Model<any>[]> {
+			const models: Model<any>[] = [];
+			mergeModels(models, services.modelRuntime.getAvailableSnapshot());
+			const current = session.model;
+			if (current) mergeModels(models, [current]);
+			mergeModels(models, services.modelRuntime.getModels());
+			if (refresh) {
+				try {
+					mergeModels(models, await services.modelRuntime.getAvailable());
+				} catch {
+					// Availability pass failed; the snapshot and catalog above are still served.
 				}
-			} catch {
-				// Availability pass failed; the snapshot above is still served.
 			}
 			return models;
 		}
 
 		// --- Models ---
 		if (path === "/models" && req.method === "GET") {
-			const models = await chatModels();
+			const models = await chatModels(true);
 			const defaultKey = defaultModelKey();
 			json(res, 200, modelInfos(models, defaultKey));
 			return;
@@ -1769,6 +1787,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		json(res, 404, { error: `no such endpoint: ${req.method} ${path}` });
+	}
+
+	// Warm the catalog the way the CLI does at startup, so the first page load
+	// sees the same model list `nanopi --list-models` prints. Interactive mode
+	// runs this only its own way; the webui has no catalog refresh otherwise,
+	// and the frontend asks for /models as soon as it mounts.
+	if (!process.env.NANOPI_OFFLINE) {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 15_000);
+		void runtime.services.modelRuntime
+			.refresh({ signal: controller.signal })
+			.catch(() => {})
+			.finally(() => clearTimeout(timeout));
 	}
 
 	await new Promise<void>((_resolve, reject) => {

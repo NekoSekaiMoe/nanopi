@@ -25,6 +25,7 @@ export function Composer({
 	effort,
 	onEffort,
 	onConfigure,
+	onModelsOpen,
 	images,
 	onImages,
 	disabled,
@@ -43,6 +44,7 @@ export function Composer({
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
+	onModelsOpen?: () => void;
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
 	disabled?: boolean;
@@ -150,6 +152,7 @@ export function Composer({
 							effort={effort}
 							onEffort={onEffort}
 							onConfigure={onConfigure}
+							onOpen={onModelsOpen}
 							compact
 						/>
 						{/* Send and stop are one circle: the surface never changes

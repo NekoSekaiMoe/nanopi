@@ -32,6 +32,7 @@ export function ChatPane({
 	effort,
 	onEffort,
 	onConfigure,
+	onModelsOpen,
 	onDismissError,
 	onDismissNotice,
 	onSend,
@@ -59,6 +60,7 @@ export function ChatPane({
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
 	onConfigure: () => void;
+	onModelsOpen?: () => void;
 	onDismissError: () => void;
 	onDismissNotice: () => void;
 	onSend: () => void;
@@ -181,6 +183,7 @@ export function ChatPane({
 							effort={effort}
 							onEffort={onEffort}
 							onConfigure={onConfigure}
+							onModelsOpen={onModelsOpen}
 							images={images}
 							onImages={onImages}
 							disabled={models.length === 0}
