@@ -46,6 +46,8 @@ export interface UiMessage {
 	id: string;
 	role: "user" | "assistant" | "system";
 	blocks: UiBlock[];
+	/** `provider/model` that produced an assistant reply, when the transcript knows it. */
+	provider?: string;
 	images?: ImageData[];
 	createdAt?: number;
 }
@@ -72,6 +74,8 @@ interface UseChatOptions {
 	provider: string;
 	onSessionsChanged: () => void;
 	onTurnDone?: () => void;
+	/** Thinking level recorded in a loaded transcript; the picker adopts it. */
+	onThinkingLevel?: (level: string | undefined) => void;
 }
 
 function fromSessionMessages(messages: SessionMessage[]): UiMessage[] {
@@ -101,7 +105,13 @@ function fromSessionMessages(messages: SessionMessage[]): UiMessage[] {
 					status: "done",
 				});
 			}
-			out.push({ id: randomId(), role: "assistant", blocks, createdAt: message.created_at });
+			out.push({
+				id: randomId(),
+				role: "assistant",
+				blocks,
+				provider: message.provider,
+				createdAt: message.created_at,
+			});
 			continue;
 		}
 		if (message.role === "tool") {
@@ -217,7 +227,14 @@ function turnErrorFrom(cause: unknown): TurnError {
 	return { message, code, retrying: false };
 }
 
-export function useChat({ projectHash, workingDir, provider, onSessionsChanged, onTurnDone }: UseChatOptions) {
+export function useChat({
+	projectHash,
+	workingDir,
+	provider,
+	onSessionsChanged,
+	onTurnDone,
+	onThinkingLevel,
+}: UseChatOptions) {
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const [messages, setMessages] = useState<UiMessage[]>([]);
 	const [streaming, setStreaming] = useState(false);
@@ -264,6 +281,9 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 				const detail = await getSession(projectHash, id);
 				if (generationRef.current !== generation) return;
 				setMessages(fromSessionMessages(detail.messages));
+				// A transcript carries its own thinking level; show the one the
+				// resumed session will actually use instead of the previous model's.
+				onThinkingLevel?.(detail.thinking_level);
 				const url = new URL(window.location.href);
 				url.searchParams.set("session", id.slice(0, 8));
 				window.history.replaceState(null, "", url.toString());
@@ -275,7 +295,7 @@ export function useChat({ projectHash, workingDir, provider, onSessionsChanged, 
 				if (generationRef.current === generation) setLoading(false);
 			}
 		},
-		[projectHash, setCurrentSession, detachStream],
+		[projectHash, setCurrentSession, detachStream, onThinkingLevel],
 	);
 
 	const newSession = useCallback(() => {
