@@ -1,6 +1,7 @@
 # Agent Note: 历史里的 push protection 命中让镜像永久卡死，改用合成提交让远端接管
 
-Status: implemented
+Status: superseded by
+[按内容判定 main 镜像](2026-10-19-mirror-main-by-content-not-ancestry.md)
 
 ## Problem
 
@@ -25,6 +26,10 @@ remote:       - commit: 08b8333f5  path: packages/ai/src/auth/oauth/antigravity.
 要么让远端 main 变成一个**不含这些提交**的新提交。
 
 ## Decision
+
+> 本文的名单方案已废弃：分支 1 推的合成提交会在下一次镜像被分支 2「接回」成以 `HEAD` 为父的
+> 合并提交，`08b8333f5` 又回到待推区间，GH013 每次都重来。改为按树内容判定，见
+> [按内容判定 main 镜像](2026-10-19-mirror-main-by-content-not-ancestry.md)。
 
 `.cnb.yml` 的 `push main` 里加一个「已知被拦提交」名单 `scripts/github-push-protection-blocked.txt`，
 推送前判断这三件事，据此选推送对象：

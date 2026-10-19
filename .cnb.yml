@@ -31,75 +31,37 @@ main:
             remote=https://github.com/NekoSekaiMoe/nanopi.git
             git fetch --quiet "$remote" main
 
-            # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
-            # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
-            # HEAD 在后；写反了就变成「远端是否领先于我们」，那恰好是推送
-            # 会被拒绝的情形，等于把 guard 钉死在反面。
+            local_tree=$(git rev-parse "HEAD^{tree}")
+
+            # 两侧 main 的 sha 早已分叉（远端收到的是「GitHub tip 上的合成提交」，
+            # 本地仍是 CNB 的 merge commit），远端 tip 一般不是 HEAD 的祖先，ancestor
+            # 断言在这条链路上恒假。所以判定按内容做，和推送后回读用的是同一个标准：
+            # 远端树与本地树相同就没有可推的，不同就推本地这份覆盖远端。
+            if [ "$(git rev-parse "FETCH_HEAD^{tree}")" = "$local_tree" ]; then
+              echo "GitHub main already has this tree: $local_tree"
+              exit 0
+            fi
+
+            # 远端 tip 是 HEAD 的祖先时走普通推送（快进，历史连贯）。否则用一个不含
+            # 待推区间的合成提交把树落上去：单父提交，父是远端 tip，树取本地 HEAD 的。
+            #
+            # 不能推合并提交（-p HEAD -p FETCH_HEAD）：GitHub 的 push protection 扫的是
+            # 「响应里通告的提交减去对方已有的对象」，单看 GIT_PROTOCOL 里有没有多一个
+            # commit。合并提交的父是 HEAD，它会把 08b8333f5 一路带进通告，等于白做。
+            # 历史因此分成两条：两侧 sha 不同、内容相同，靠上面这条内容判定收敛。
             if git merge-base --is-ancestor FETCH_HEAD HEAD; then
               echo "fast-forward: $CNB_COMMIT is ahead of $remote main"
+              git push --quiet "$remote" HEAD:refs/heads/main
             else
-              echo "not a fast-forward of $remote main; push will be rejected" >&2
-              exit 1
-            fi
-
-            # 快照本地 HEAD 的树，push 后再回来比一次内容。单看 push 的退出码
-            # 不够：CNB 的 merge request 会把每个提交重放到 base 上，重放出的树
-            # 可能与当前 main 的树相同而与上游内容无关，replay 之后再合并就会
-            # 「干净合并」成一个把我们的改动回退掉的树，GitHub 侧却显示成功。
-            local_tree=$(git rev-parse HEAD^{tree})
-
-            # push protection 扫的是待推的整个提交区间，不是推送后的树：历史里留着明文
-            # （后来在树上改成 base64 也一样），每次推 main 都是非 fast-forward，
-            # 都会被 GH013 拒掉。这类祖先提交登记在文件里，等远端自己收下它们之后就不再
-            # 阻塞。只绕过它们，别的原因被拦照样失败（下面没有任何 || true）。
-            push_protection_blocked=scripts/github-push-protection-blocked.txt
-            blocked=$(sed -e 's/#.*//' "$push_protection_blocked" | awk 'NF { print $1 }')
-            secret_patterns='GOCSPX-[A-Za-z0-9_-]{20,}|[0-9]{10,}-[a-z0-9]{20,}\.apps\.googleusercontent\.com'
-
-            # 登记只对「这些提交已不在树上」成立。树里重新出现明文，登记就不该再放行。
-            # shellcheck disable=SC2086
-            blocked_in_tree=$(git grep -lE "$secret_patterns" HEAD -- . | head -n 1)
-            if [ -n "$blocked" ] && [ -z "$blocked_in_tree" ]; then
-              # shellcheck disable=SC2086
-              pending=$(git rev-list --no-walk $blocked | git rev-list --stdin --not FETCH_HEAD | head -n 1)
-            else
-              [ -z "$blocked_in_tree" ] || echo "tree still carries push-protection literals in $blocked_in_tree" >&2
-              # 没有登记就是空串：下面直接普通 push，别让 git rev-list 收到空参数。
-              pending=""
-            fi
-
-            if [ -z "$pending" ]; then
-              # 上一次推的是合成提交，远端 main 因此不在本地历史里：在远端 tip 上现造一个
-              # 合并提交把它接回来，两侧谁也不丢，也不用 force。树取本地 HEAD 的，
-              # 所以内容仍是 CNB 这份。
-              if git cat-file -e FETCH_HEAD^{commit} 2>/dev/null && ! git merge-base --is-ancestor FETCH_HEAD HEAD; then
-                merge=$(git commit-tree "$local_tree" -p HEAD -p FETCH_HEAD -m "Merge GitHub main into $CNB_COMMIT")
-                echo "diverged histories; pushing merge $merge of $CNB_COMMIT and the GitHub tip" >&2
-                git push --quiet "$remote" "$merge:refs/heads/main"
-              else
-                git push --quiet "$remote" HEAD:refs/heads/main
-              fi
-            else
-              if [ "$(git rev-parse HEAD)" = "$pending" ]; then
-                echo "HEAD is recorded as blocked and the remote has not taken it yet; refusing to mirror" >&2
-                exit 1
-              fi
-              echo "pending commits flagged by GitHub push protection:" >&2
-              # shellcheck disable=SC2086
-              git rev-list --no-walk $blocked | git rev-list --stdin --not FETCH_HEAD | while read -r sha; do
-                echo "  $sha $(git log -1 --format=%s "$sha")" >&2
-              done
-              # 这些提交已在 CNB main 上、远端还没有。推 HEAD 的树、父提交取远端 tip：
-              # 远端拿到同样的内容。代价是两侧 sha 分叉，下一次镜像由上面的分支做合并。
               merge=$(git commit-tree "$local_tree" -p FETCH_HEAD -m "Merge CNB main $CNB_COMMIT")
-              echo "pushing $merge (tree of $CNB_COMMIT on top of the GitHub tip)" >&2
+              echo "diverged histories; pushing $merge (tree of $CNB_COMMIT on the GitHub tip)" >&2
               git push --quiet "$remote" "$merge:refs/heads/main"
             fi
 
-            # 远端树必须与本地树逐字节一致。不一致说明落上去的不是我们这份
-            # 内容（replay 造成的静默丢失就长这样），此时不能算镜像成功。
+            # 远端树必须与本地树逐字节一致。不一致说明落上去的不是我们这份内容，
+            # 此时不能算镜像成功。
             git fetch --quiet "$remote" main
-            remote_tree=$(git rev-parse FETCH_HEAD^{tree})
+            remote_tree=$(git rev-parse "FETCH_HEAD^{tree}")
             if [ "$local_tree" != "$remote_tree" ]; then
               echo "tree mismatch after push:" >&2
               echo "  local  $local_tree" >&2
@@ -108,9 +70,7 @@ main:
               exit 1
             fi
             echo "mirrored $CNB_COMMIT: $remote_tree"
-        # tag 同步与 main 是两件事：main 用 fast-forward 断言加推送后树比对，
-        # tag 是「已存在且指向同一 commit 就跳过、指向不同 commit 就报错」。
-        # 两个方向都不 force，所以 tag 一旦在两侧分叉就会永久卡住，需人介入。
+
         - name: push tags
           script: |
             set -eu

@@ -44,20 +44,25 @@ jobs:
 
           git fetch --quiet "$authed" main
 
+          # 快照本地 HEAD 的树，push 后再回来比一次内容，与 .cnb.yml 的
+          # mirror-to-github 用同一个标准：内容相同就是镜像成功。
+          local_tree=$(git rev-parse HEAD^{tree})
+
           # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
           # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
           # HEAD 在后；写反了就变成「远端是否领先于我们」，那恰好是推送
           # 会被拒绝的情形，等于把 guard 钉死在反面。
           if git merge-base --is-ancestor FETCH_HEAD HEAD; then
             echo "fast-forward: $(git rev-parse HEAD) is ahead of $public main"
+          elif [ "$(git rev-parse "FETCH_HEAD^{tree}")" = "$local_tree" ]; then
+            # CNB 的 push main 在历史分叉时推的是「CNB 树 + GitHub tip 父」的合成
+            # 提交，两侧 sha 因此不同、内容相同。这里再遇到同一棵树就没有可推的。
+            echo "CNB main already has this tree: $local_tree"
+            exit 0
           else
             echo "not a fast-forward of $public main; push will be rejected" >&2
             exit 1
           fi
-
-          # 快照本地 HEAD 的树，push 后再回来比一次内容，逻辑与 .cnb.yml
-          # 的 mirror-to-github 相同。
-          local_tree=$(git rev-parse HEAD^{tree})
 
           git push --quiet "$authed" HEAD:refs/heads/main
 
