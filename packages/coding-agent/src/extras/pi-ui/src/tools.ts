@@ -109,6 +109,10 @@ const ROWS: Record<string, RowConfig> = {
       return first && typeof first === "object" ? str((first as Record<string, unknown>).question) : "";
     },
   },
+  // The live row is suppressed entirely while the call is in flight: its
+  // work shows up in the "• Exploring" group (see EXPLORE_TOOLS below), and
+  // the call leaves no row behind once it settles — same as Codex, where an
+  // exploration group collapses into the calls it grouped.
   subagent: { running: "Exploring", done: "Explored", primary: () => "", showPrimary: false },
   // @zhushanwen/pi-todo: only plan creation earns a transcript row
   // ("Plan created · N steps"); updates/deletes/clears hide their component
@@ -581,6 +585,80 @@ function isPiUiBuiltinTool(name: unknown): boolean {
   return typeof name === "string" && PI_UI_BUILTIN_TOOLS.has(name);
 }
 
+/**
+ * Tools that only ever look at the repository. Every call of these groups into
+ * one "• Exploring" run in the transcript, mirroring Codex's exploring cell:
+ * read facts are combined into a single `Read a, b` row, and a running subagent
+ * keeps the group open because its output is not in this transcript.
+ */
+const EXPLORE_TOOLS = new Set(["read", "ls", "grep", "find", "ffgrep", "fffind", "subagent"]);
+
+export interface ExploreCall {
+  action: string;
+  detail: string;
+}
+
+function isExploreTool(name: string): boolean {
+  return EXPLORE_TOOLS.has(name);
+}
+
+/**
+ * Everything a subagent call contributes to the Exploring group: one action
+ * per tool call the child made, read from the call's own `details.results`
+ * (toolCalls or raw assistant messages, whichever the child runner emitted).
+ */
+export function exploringCalls(result: AgentToolResult<unknown>, expanded: boolean): ExploreCall[] {
+  const details = result.details;
+  if (!details || typeof details !== "object") return [];
+  const raw = details as Record<string, unknown>;
+  const runs = Array.isArray(raw.results) ? raw.results : [];
+  const calls: ExploreCall[] = [];
+  for (const run of runs) {
+    if (!run || typeof run !== "object") continue;
+    const data = run as Record<string, unknown>;
+    if (Array.isArray(data.toolCalls) && data.toolCalls.length > 0) {
+      for (const call of data.toolCalls) {
+        if (!call || typeof call !== "object") continue;
+        const item = call as Record<string, unknown>;
+        const text = expanded ? str(item.expandedText) || str(item.text) : str(item.text) || str(item.expandedText);
+        if (text) calls.push(classifyExploredCall(text));
+      }
+      continue;
+    }
+    if (!Array.isArray(data.messages)) continue;
+    for (const message of data.messages) {
+      if (!message || typeof message !== "object") continue;
+      const content = (message as Record<string, unknown>).content;
+      if (!Array.isArray(content)) continue;
+      for (const part of content) {
+        if (!part || typeof part !== "object") continue;
+        const item = part as Record<string, unknown>;
+        if (item.type !== "toolCall" || typeof item.name !== "string") continue;
+        const args = item.arguments && typeof item.arguments === "object" && !Array.isArray(item.arguments)
+          ? (item.arguments as Record<string, unknown>)
+          : {};
+        calls.push(classifyExploredCall(formatRawSubagentTool(item.name, args)));
+      }
+    }
+  }
+  return calls;
+}
+
+/**
+ * One executed exploration call as the single action row it contributes to the
+ * group. Read/List/Search mirror Codex's own action vocabulary; anything else
+ * falls back to its classification. The subagent's own actions go through
+ * `exploringCalls` instead — they are already classified.
+ */
+export function exploreCallFor(name: string, detail: string): ExploreCall {
+  if (name === "read") return { action: "Read", detail };
+  if (name === "ls") return { action: "List", detail: detail || "." };
+  if (name === "grep" || name === "find" || name === "ffgrep" || name === "fffind") {
+    return { action: "Search", detail };
+  }
+  return classifyExploredCall(detail);
+}
+
 /** Result body for renderer-redirected tools: flat output preview, no diff handling. */
 function renderRedirectedResultText(
   name: string,
@@ -593,6 +671,7 @@ function renderRedirectedResultText(
   // The plan already lives in pi-todo's own status/widget; keep the transcript
   // to the single "Plan created/updated" row. Errors still surface.
   if (name === "todo" && !isError) return "";
+  if (isExploreTool(name) && !isError) return "";
   const output = textOutput(result);
   // Image-only results would otherwise print a misleading "(no output)" row
   // above the image block the component renders separately.
@@ -642,6 +721,12 @@ export function installExternalToolRenderers(): () => void {
         // the new step. updateDisplay resets this flag before each pass, and
         // the result renderer re-shows the row when the call failed.
         if (name === "todo" && record.action !== "add") this.hideComponent = true;
+        // An exploration call owns no row of its own: the tool_result joins it
+        // to the "• Exploring" group. Its result body is suppressed the same
+        // way (see renderRedirectedResultText), so the resolved call keeps
+        // rendering as an empty group. An exploration call that fails has
+        // nothing to join, so it falls back to a plain row.
+        if (isExploreTool(name) && !context.isError) this.hideComponent = true;
         const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
         text.setText(renderTitle(rowConfigFor(name), record, context, theme));
         return text;

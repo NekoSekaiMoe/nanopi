@@ -10,8 +10,9 @@
  *   - flat Codex-style tool-call rows (`● Ran <cmd>` / `└ <output>`) for the
  *     built-in tools, and automatically for every other tool via a renderer
  *     lookup redirect on ToolExecutionComponent.
- *   - subagent-widget.ts -> ctx.ui.setWidget() wrap that re-renders
- *     pi-subagents' async-jobs widget as flat Codex-style rows
+ *   - subagent-widget.ts -> the "• Exploring" group: read/ls/grep/find and
+ *     subagent calls drop their own rows (see tools.ts) and render as one
+ *     block over their actions
  *   - thinking.ts -> Codex-style thinking rows styled like tool rows
  *     (`• Thinking Ns` live tail, `• Thought for Ns` + model-written summary,
  *     ctrl+t to expand) and removal of the now-superseded "Hide thinking"
@@ -46,7 +47,7 @@ import type { ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-c
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
-import { skinSubagentWidget } from "./subagent-widget.ts";
+import { installExploringBlock, skinSubagentWidget } from "./subagent-widget.ts";
 import { installThinkingDisplay } from "./thinking.ts";
 import { captureTerminalWidth, installWorking } from "./working.ts";
 
@@ -114,6 +115,10 @@ export default function (pi: ModuleApi) {
   // as the renderer redirect above; the theme and the TUI render trigger are
   // refreshed per session_start below.
   installThinkingDisplay(pi);
+
+  // The read/list/search group: rows land in the chat in finish order and the
+  // live header under the editor closes when a turn stops exploring.
+  installExploringBlock(pi);
 
   let restoreShellRenderer = () => {};
 
