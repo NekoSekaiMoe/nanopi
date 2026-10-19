@@ -3,7 +3,6 @@ import type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.t
 import type { BedrockOptions } from "./api/bedrock-converse-stream.ts";
 import type { GoogleOptions } from "./api/google-generative-ai.ts";
 import type { GoogleVertexOptions } from "./api/google-vertex.ts";
-import type { MistralOptions } from "./api/mistral-conversations.ts";
 import type { NanoPiMessagesOptions } from "./api/nanopi-messages.ts";
 import type { OpenAICodexResponsesOptions } from "./api/openai-codex-responses.ts";
 import type { OpenAICompletionsOptions } from "./api/openai-completions.ts";
@@ -11,7 +10,6 @@ import type { OpenAIResponsesOptions } from "./api/openai-responses.ts";
 import type {
 	AnthropicMessagesCompat,
 	BedrockCompat,
-	MistralConversationsCompat,
 	OpenAICompletionsCompat,
 	OpenAIResponsesCompat,
 } from "./providers/compat-schema.ts";
@@ -33,7 +31,6 @@ export type {
 	AnthropicMessagesCompat,
 	BedrockCompat,
 	ChatTemplateKwargValue,
-	MistralConversationsCompat,
 	OpenAICompletionsCompat,
 	OpenAIResponsesCompat,
 	OpenRouterRouting,
@@ -59,7 +56,6 @@ export type { AssistantMessageEventStream } from "./utils/event-stream.ts";
 
 export type KnownApi =
 	| "openai-completions"
-	| "mistral-conversations"
 	| "openai-responses"
 	| "azure-openai-responses"
 	| "openai-codex-responses"
@@ -86,7 +82,6 @@ export type ClassifierApi = KnownClassifierApi | (string & {});
 
 export type KnownProvider =
 	| "amazon-bedrock"
-	| "ant-ling"
 	| "antigravity"
 	| "anthropic"
 	| "google"
@@ -106,9 +101,6 @@ export type KnownProvider =
 	| "zai"
 	| "zai-coding-cn"
 	| "zhipuai"
-	| "mistral"
-	| "minimax"
-	| "minimax-cn"
 	| "moonshotai"
 	| "moonshotai-cn"
 	| "huggingface"
@@ -298,7 +290,6 @@ export interface ApiOptionsMap {
 	"google-generative-ai": GoogleOptions;
 	"google-vertex": GoogleVertexOptions;
 	antigravity: GoogleOptions;
-	"mistral-conversations": MistralOptions;
 	"bedrock-converse-stream": BedrockOptions;
 	"nanopi-messages": NanoPiMessagesOptions;
 }
@@ -877,9 +868,7 @@ export interface Model<TApi extends Api> extends BaseModel<TApi> {
 				? AnthropicMessagesCompat
 				: TApi extends "bedrock-converse-stream"
 					? BedrockCompat
-					: TApi extends "mistral-conversations"
-						? MistralConversationsCompat
-						: never;
+					: never;
 }
 
 /** Image-generation model: usable with `generateImages()` only. */

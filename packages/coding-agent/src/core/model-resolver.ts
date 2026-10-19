@@ -13,7 +13,6 @@ import type { ModelRuntime } from "./model-runtime.ts";
 /** Default chat model IDs for providers with built-in chat models. */
 export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
-	"ant-ling": "Ring-2.6-1T",
 	antigravity: "gemini-3.1-pro",
 	anthropic: "claude-opus-4-8",
 	openai: "gpt-5.5",
@@ -31,9 +30,6 @@ export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	cerebras: "gpt-oss-120b",
 	zai: "glm-5.3",
 	"zai-coding-cn": "glm-5.3",
-	mistral: "devstral-medium-latest",
-	minimax: "MiniMax-M2.7",
-	"minimax-cn": "MiniMax-M2.7",
 	moonshotai: "kimi-k2.6",
 	"moonshotai-cn": "kimi-k2.6",
 	huggingface: "moonshotai/Kimi-K2.6",

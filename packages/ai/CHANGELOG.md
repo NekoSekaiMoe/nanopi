@@ -27,6 +27,7 @@
 
 ### Removed
 
+- Removed the `ant-ling`, `mistral`, `minimax`, and `minimax-cn` providers: their factories, generated model catalogs, `defaultModelPerProvider` entries, and `ANT_LING_API_KEY` / `MISTRAL_API_KEY` / `MINIMAX_API_KEY` / `MINIMAX_CN_API_KEY` lookups. `mistral` owned the only `mistral-conversations` API, so that adapter (`api/mistral-conversations.ts`, `MistralOptions`, `MistralConversationsCompat`, `streamMistral` / `streamSimpleMistral`) is gone too. `ant-ling` owned the only `thinkingFormat: "ant-ling"` variant and the `api.ant-ling.com` URL branch in `detectCompat()`, so both are gone. Endpoints for these vendors still work as custom `models.json` providers over `openai-completions` or `anthropic-messages`
 - Removed the `radius` provider: `radiusProvider()`, the `radius-config` exports, the Radius OAuth flow, and the bundled `radius` model catalog.
 
 ### Fixed

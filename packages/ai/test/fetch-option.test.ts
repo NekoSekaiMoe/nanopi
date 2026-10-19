@@ -3,7 +3,6 @@ import { streamSimple as streamAnthropic } from "../src/api/anthropic-messages.t
 import { streamSimple as streamAzureOpenAIResponses } from "../src/api/azure-openai-responses.ts";
 import { streamSimple as streamGoogleGenerativeAI } from "../src/api/google-generative-ai.ts";
 import { streamSimple as streamGoogleVertex } from "../src/api/google-vertex.ts";
-import { streamSimple as streamMistral } from "../src/api/mistral-conversations.ts";
 import { streamSimple as streamNanoPiMessages } from "../src/api/nanopi-messages.ts";
 import { streamSimple as streamOpenAICodexResponses } from "../src/api/openai-codex-responses.ts";
 import { streamSimple as streamOpenAICompletions } from "../src/api/openai-completions.ts";
@@ -100,12 +99,8 @@ describe("fetch stream option", () => {
 		expect(globalThis.fetch).toBe(fallback);
 	});
 
-	it("uses fetch for Mistral, Codex SSE, and nanopi-messages HTTP requests", async () => {
+	it("uses fetch for Codex SSE and nanopi-messages HTTP requests", async () => {
 		const { custom, fallback } = mockFetches();
-		await streamMistral(createModel("mistral-conversations"), context, {
-			apiKey: "test-key",
-			fetch: custom,
-		}).result();
 		await streamOpenAICodexResponses(createModel("openai-codex-responses"), context, {
 			apiKey: `header.${btoa(JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: "account" } }))}.signature`,
 			fetch: custom,
@@ -116,7 +111,7 @@ describe("fetch stream option", () => {
 			apiKey: "test-key",
 			fetch: custom,
 		}).result();
-		expect(custom).toHaveBeenCalledTimes(3);
+		expect(custom).toHaveBeenCalledTimes(2);
 		expect(fallback).not.toHaveBeenCalled();
 		expect(globalThis.fetch).toBe(fallback);
 	});
