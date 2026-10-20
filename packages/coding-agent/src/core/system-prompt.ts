@@ -3,7 +3,7 @@
  */
 
 import { getSystemMessageText } from "@nanopi/pi-ai";
-import { isBuildComponentEnabled } from "../build-components.ts";
+import { isBashOnlyBuild, isBuildComponentEnabled } from "../build-components.ts";
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
@@ -152,6 +152,21 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 	const promptSections: Record<string, string> = {};
 	if (customPrompt) {
 		promptSections.preamble = customPrompt;
+	} else if (isBashOnlyBuild()) {
+		// A shell-only build declares one tool per platform, and the declaration
+		// already carries the description and schema. Listing it again, restating
+		// the truncation behavior, and pointing at docs and examples the build does
+		// not ship would cost more prompt than the tool itself.
+		promptSections.preamble =
+			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You work through the shell tool.";
+		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
+		if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;
+		if (contextFiles.length > 0) promptSections.project_context = renderProjectContext(contextFiles);
+		promptSections.cwd = cwd.replace(/\\/g, "/");
+		for (const [name, content] of Object.entries(customSections)) {
+			if (content) promptSections[name] = content;
+		}
+		return tagSections(promptSections);
 	} else {
 		promptSections.preamble =
 			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
@@ -187,6 +202,10 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		if (content) promptSections[name] = content;
 	}
 
+	return tagSections(promptSections);
+}
+
+function tagSections(promptSections: Record<string, string>): SystemPromptSections {
 	const sections: SystemPromptSections = { preamble: promptSections.preamble };
 	for (const [name, content] of Object.entries(promptSections)) {
 		if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
