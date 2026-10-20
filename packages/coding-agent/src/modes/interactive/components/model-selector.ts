@@ -53,10 +53,13 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
 	private refreshStatusMessage = "Refreshing model catalogs…";
-	private refreshStatusSuccess = false;
+	private refreshStatusKind: "muted" | "success" | "warning" = "muted";
+	private credentialsCheckMessage: string | undefined;
+	private credentialsChecking = false;
 	private tui: TUI;
 	private scopedModels: ReadonlyArray<ScopedModelItem>;
 	private defaultModel?: DefaultModelReference;
+	private readonly onRefreshAvailability?: () => Promise<void>;
 	private scope: ModelScope = "all";
 	private scopeText?: Text;
 	private scopeHintText?: Text;
@@ -74,6 +77,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		initialSearchInput?: string,
 		onSelectAsDefault?: (model: Model<any>) => void,
 		defaultModel?: DefaultModelReference,
+		/** Re-check provider credentials, for a list emptied by credentials added after startup. */
+		onRefreshAvailability?: () => Promise<void>,
 	) {
 		super();
 
@@ -82,6 +87,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.modelRuntime = modelRuntime;
 		this.scopedModels = scopedModels;
 		this.defaultModel = defaultModel;
+		this.onRefreshAvailability = onRefreshAvailability;
 		this.scope = scopedModels.length > 0 ? "scoped" : "all";
 		this.onSelectCallback = onSelect;
 		this.onSelectAsDefaultCallback = onSelectAsDefault;
@@ -193,7 +199,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.errorMessage = this.modelRuntime.getError();
 				if (!this.errorMessage) {
 					this.refreshStatusMessage = "Model catalogs refreshed.";
-					this.refreshStatusSuccess = true;
+					this.refreshStatusKind = "success";
 				}
 			}
 			this.loadModelsFromSnapshot();
@@ -336,22 +342,47 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.listContainer.addChild(new Text(theme.fg("error", line), 0, 0));
 			}
 		} else if (this.filteredModels.length === 0) {
-			this.listContainer.addChild(new Text(theme.fg("muted", "  No matching models"), 0, 0));
+			// No rows to search at all means no provider passed its auth check, which a
+			// login in another process can change; a search miss cannot.
+			if (this.activeModels.length === 0) {
+				this.listContainer.addChild(new Text(theme.fg("muted", "  No models from a configured provider"), 0, 0));
+				if (!this.credentialsChecking) {
+					this.listContainer.addChild(
+						new Text(
+							theme.fg("muted", `  ${keyHint("app.models.refreshCredentials", "re-check credentials")}`),
+							0,
+							0,
+						),
+					);
+				}
+			} else {
+				this.listContainer.addChild(new Text(theme.fg("muted", "  No matching models"), 0, 0));
+			}
 		} else {
 			const selected = this.filteredModels[this.selectedIndex];
 			this.listContainer.addChild(new Spacer(1));
 			this.listContainer.addChild(new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0));
 		}
+		if (this.credentialsCheckMessage) {
+			this.listContainer.addChild(new Text(theme.fg("muted", `  ${this.credentialsCheckMessage}`), 0, 0));
+		}
 		if (this.refreshStatusMessage) {
 			this.listContainer.addChild(new Spacer(1));
 			this.listContainer.addChild(
-				new Text(theme.fg(this.refreshStatusSuccess ? "success" : "muted", `  ${this.refreshStatusMessage}`), 0, 0),
+				new Text(theme.fg(this.refreshStatusKind, `  ${this.refreshStatusMessage}`), 0, 0),
 			);
 		}
 	}
 
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
+		// A provider authenticated after this list was built (a `login` run in another
+		// process, an exported key) stays invisible until the next snapshot. Re-check on
+		// demand, without refetching catalogs.
+		if (this.activeModels.length === 0 && kb.matches(keyData, "app.models.refreshCredentials")) {
+			void this.retryCredentials();
+			return;
+		}
 		if (kb.matches(keyData, "tui.input.tab")) {
 			if (this.scopedModelItems.length > 0) {
 				const nextScope: ModelScope = this.scope === "all" ? "scoped" : "all";
@@ -399,6 +430,32 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			this.searchInput.handleInput(keyData);
 			this.filterModels(this.searchInput.getValue());
 		}
+	}
+
+	/** Re-run the provider auth checks behind an empty list; picks up credentials added after it opened. */
+	private async retryCredentials(): Promise<void> {
+		if (this.credentialsChecking) return;
+		this.credentialsChecking = true;
+		this.credentialsCheckMessage = "Re-checking provider credentials…";
+		this.updateList();
+		this.tui.requestRender();
+		let nextMessage: string;
+		try {
+			if (this.onRefreshAvailability) await this.onRefreshAvailability();
+			else await this.modelRuntime.refreshAvailability();
+			if (this.closed) return;
+			this.loadModelsFromSnapshot();
+			this.filterModels(this.searchInput.getValue());
+			nextMessage = this.activeModels.length > 0 ? "Credentials re-checked." : "Still no configured provider.";
+		} catch (error) {
+			if (this.closed) return;
+			nextMessage = `Could not check provider credentials: ${error instanceof Error ? error.message : String(error)}`;
+		} finally {
+			this.credentialsChecking = false;
+		}
+		this.credentialsCheckMessage = nextMessage;
+		this.updateList();
+		this.tui.requestRender();
 	}
 
 	private handleSelect(model: Model<any>): void {

@@ -120,6 +120,10 @@ const APP_KEYBINDINGS = {
 		defaultKeys: "ctrl+s",
 		description: "Save model selection",
 	},
+	"app.models.refreshCredentials": {
+		defaultKeys: "ctrl+r",
+		description: "Re-check provider credentials",
+	},
 	"app.models.enableAll": {
 		defaultKeys: "ctrl+a",
 		description: "Enable all models",

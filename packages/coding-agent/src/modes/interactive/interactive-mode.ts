@@ -968,6 +968,11 @@ export class InteractiveMode {
 				.then(() => this.updateAvailableProviderCount())
 				.catch(() => {})
 				.finally(() => clearTimeout(timeout));
+		} else {
+			// Offline, the catalogs come from the local cache, but provider auth is local
+			// too: a credential stored after startup (`nanopi login` in another terminal)
+			// stays invisible until the snapshot is re-checked.
+			void this.refreshAvailability();
 		}
 
 		// Check tmux keyboard setup asynchronously
@@ -4480,6 +4485,28 @@ export class InteractiveMode {
 		return findExactModelReferenceMatch(searchTerm, [...this.session.modelRuntime.getAvailableSnapshot()]);
 	}
 
+	/**
+	 * Re-check provider auth without fetching catalogs and repaint the models the picker
+	 * and footer read. Used where a refresh already in flight may have missed a credential
+	 * written after startup.
+	 */
+	private async refreshAvailability(providerIds?: readonly string[]): Promise<void> {
+		const controller = new AbortController();
+		const timeout = setTimeout(() => controller.abort(), 15_000);
+		try {
+			await this.session.modelRuntime.refreshAvailability(providerIds, { signal: controller.signal });
+			if (!this.isInitialized) return;
+			this.updateAvailableProviderCount();
+			this.footer.invalidate();
+			this.ui.invalidate();
+			this.ui.requestRender();
+		} catch {
+			// A failed pass keeps the previous snapshot; the footer and picker stay usable.
+		} finally {
+			clearTimeout(timeout);
+		}
+	}
+
 	/** Update the footer's available provider count from the current snapshot without refreshing catalogs. */
 	private updateAvailableProviderCount(): void {
 		const models =
@@ -4602,6 +4629,7 @@ export class InteractiveMode {
 				initialSearchInput,
 				(model) => selectModel(model, true),
 				defaultProvider && defaultModel ? { provider: defaultProvider, id: defaultModel } : undefined,
+				() => this.refreshAvailability(),
 			);
 			return { component: selector, focus: selector, dispose: () => selector.dispose() };
 		});
