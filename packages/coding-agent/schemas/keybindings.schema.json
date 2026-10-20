@@ -319,6 +319,10 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Save model selection"
     },
+    "app.models.refreshCredentials": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Re-check provider credentials"
+    },
     "app.models.enableAll": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Enable all models"
