@@ -12,3 +12,15 @@ export const SILICONFLOW_IMAGE_MODELS: ImageModelCatalog<typeof values, "silicon
 
 export const SILICONFLOW_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "siliconflow"> =
 	flattenClassifierModelCatalog("siliconflow", values);
+
+export const value = {
+	get SILICONFLOW_MODELS() {
+		return SILICONFLOW_MODELS;
+	},
+	get SILICONFLOW_IMAGE_MODELS() {
+		return SILICONFLOW_IMAGE_MODELS;
+	},
+	get SILICONFLOW_CLASSIFIER_MODELS() {
+		return SILICONFLOW_CLASSIFIER_MODELS;
+	},
+};

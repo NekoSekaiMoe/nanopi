@@ -12,3 +12,15 @@ export const TYPESAFE_IMAGE_MODELS: ImageModelCatalog<typeof values, "typesafe">
 
 export const TYPESAFE_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "typesafe"> =
 	flattenClassifierModelCatalog("typesafe", values);
+
+export const value = {
+	get TYPESAFE_MODELS() {
+		return TYPESAFE_MODELS;
+	},
+	get TYPESAFE_IMAGE_MODELS() {
+		return TYPESAFE_IMAGE_MODELS;
+	},
+	get TYPESAFE_CLASSIFIER_MODELS() {
+		return TYPESAFE_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const META_IMAGE_MODELS: ImageModelCatalog<typeof values, "meta"> =
 
 export const META_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "meta"> =
 	flattenClassifierModelCatalog("meta", values);
+
+export const value = {
+	get META_MODELS() {
+		return META_MODELS;
+	},
+	get META_IMAGE_MODELS() {
+		return META_IMAGE_MODELS;
+	},
+	get META_CLASSIFIER_MODELS() {
+		return META_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const ZHIPUAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "zhipuai"> =
 
 export const ZHIPUAI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "zhipuai"> =
 	flattenClassifierModelCatalog("zhipuai", values);
+
+export const value = {
+	get ZHIPUAI_MODELS() {
+		return ZHIPUAI_MODELS;
+	},
+	get ZHIPUAI_IMAGE_MODELS() {
+		return ZHIPUAI_IMAGE_MODELS;
+	},
+	get ZHIPUAI_CLASSIFIER_MODELS() {
+		return ZHIPUAI_CLASSIFIER_MODELS;
+	},
+};

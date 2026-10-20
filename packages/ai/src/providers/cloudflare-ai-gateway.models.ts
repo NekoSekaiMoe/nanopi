@@ -12,3 +12,15 @@ export const CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS: ImageModelCatalog<typeof values
 
 export const CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "cloudflare-ai-gateway"> =
 	flattenClassifierModelCatalog("cloudflare-ai-gateway", values);
+
+export const value = {
+	get CLOUDFLARE_AI_GATEWAY_MODELS() {
+		return CLOUDFLARE_AI_GATEWAY_MODELS;
+	},
+	get CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS() {
+		return CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS;
+	},
+	get CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS() {
+		return CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const HUGGINGFACE_IMAGE_MODELS: ImageModelCatalog<typeof values, "hugging
 
 export const HUGGINGFACE_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "huggingface"> =
 	flattenClassifierModelCatalog("huggingface", values);
+
+export const value = {
+	get HUGGINGFACE_MODELS() {
+		return HUGGINGFACE_MODELS;
+	},
+	get HUGGINGFACE_IMAGE_MODELS() {
+		return HUGGINGFACE_IMAGE_MODELS;
+	},
+	get HUGGINGFACE_CLASSIFIER_MODELS() {
+		return HUGGINGFACE_CLASSIFIER_MODELS;
+	},
+};

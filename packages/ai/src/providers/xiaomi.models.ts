@@ -12,3 +12,15 @@ export const XIAOMI_IMAGE_MODELS: ImageModelCatalog<typeof values, "xiaomi"> =
 
 export const XIAOMI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "xiaomi"> =
 	flattenClassifierModelCatalog("xiaomi", values);
+
+export const value = {
+	get XIAOMI_MODELS() {
+		return XIAOMI_MODELS;
+	},
+	get XIAOMI_IMAGE_MODELS() {
+		return XIAOMI_IMAGE_MODELS;
+	},
+	get XIAOMI_CLASSIFIER_MODELS() {
+		return XIAOMI_CLASSIFIER_MODELS;
+	},
+};

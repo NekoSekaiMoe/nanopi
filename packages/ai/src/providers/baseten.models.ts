@@ -12,3 +12,15 @@ export const BASETEN_IMAGE_MODELS: ImageModelCatalog<typeof values, "baseten"> =
 
 export const BASETEN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "baseten"> =
 	flattenClassifierModelCatalog("baseten", values);
+
+export const value = {
+	get BASETEN_MODELS() {
+		return BASETEN_MODELS;
+	},
+	get BASETEN_IMAGE_MODELS() {
+		return BASETEN_IMAGE_MODELS;
+	},
+	get BASETEN_CLASSIFIER_MODELS() {
+		return BASETEN_CLASSIFIER_MODELS;
+	},
+};

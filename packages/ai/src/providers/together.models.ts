@@ -12,3 +12,15 @@ export const TOGETHER_IMAGE_MODELS: ImageModelCatalog<typeof values, "together">
 
 export const TOGETHER_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "together"> =
 	flattenClassifierModelCatalog("together", values);
+
+export const value = {
+	get TOGETHER_MODELS() {
+		return TOGETHER_MODELS;
+	},
+	get TOGETHER_IMAGE_MODELS() {
+		return TOGETHER_IMAGE_MODELS;
+	},
+	get TOGETHER_CLASSIFIER_MODELS() {
+		return TOGETHER_CLASSIFIER_MODELS;
+	},
+};

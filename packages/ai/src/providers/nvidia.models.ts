@@ -12,3 +12,15 @@ export const NVIDIA_IMAGE_MODELS: ImageModelCatalog<typeof values, "nvidia"> =
 
 export const NVIDIA_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "nvidia"> =
 	flattenClassifierModelCatalog("nvidia", values);
+
+export const value = {
+	get NVIDIA_MODELS() {
+		return NVIDIA_MODELS;
+	},
+	get NVIDIA_IMAGE_MODELS() {
+		return NVIDIA_IMAGE_MODELS;
+	},
+	get NVIDIA_CLASSIFIER_MODELS() {
+		return NVIDIA_CLASSIFIER_MODELS;
+	},
+};

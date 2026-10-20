@@ -12,3 +12,15 @@ export const ANTHROPIC_IMAGE_MODELS: ImageModelCatalog<typeof values, "anthropic
 
 export const ANTHROPIC_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "anthropic"> =
 	flattenClassifierModelCatalog("anthropic", values);
+
+export const value = {
+	get ANTHROPIC_MODELS() {
+		return ANTHROPIC_MODELS;
+	},
+	get ANTHROPIC_IMAGE_MODELS() {
+		return ANTHROPIC_IMAGE_MODELS;
+	},
+	get ANTHROPIC_CLASSIFIER_MODELS() {
+		return ANTHROPIC_CLASSIFIER_MODELS;
+	},
+};

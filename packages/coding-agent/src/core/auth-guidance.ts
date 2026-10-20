@@ -1,23 +1,8 @@
 import { join } from "node:path";
-import { isBuildComponentEnabled, isNoBuiltinProviderBuild } from "../build-components.ts";
+import { hasOAuthFlows, isNoBuiltinProviderBuild } from "../build-components.ts";
 import { getDocsPath, getModelsPath } from "../config.ts";
 
 const UNKNOWN_PROVIDER = "unknown";
-
-/** Whether this build ships OAuth login flows (buildconfig.json `oauth/*`). */
-function hasOAuthFlows(): boolean {
-	return (
-		isBuildComponentEnabled("oauth/anthropic") ||
-		isBuildComponentEnabled("oauth/antigravity") ||
-		isBuildComponentEnabled("oauth/github-copilot") ||
-		isBuildComponentEnabled("oauth/kimi-coding") ||
-		isBuildComponentEnabled("oauth/meta") ||
-		isBuildComponentEnabled("oauth/openai-chatgpt") ||
-		isBuildComponentEnabled("oauth/openai-codex") ||
-		isBuildComponentEnabled("oauth/openrouter") ||
-		isBuildComponentEnabled("oauth/xai")
-	);
-}
 
 export function getProviderLoginHelp(): string {
 	return [

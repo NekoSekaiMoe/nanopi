@@ -12,3 +12,15 @@ export const XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS: ImageModelCatalog<typeof values
 
 export const XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "xiaomi-token-plan-sgp"> =
 	flattenClassifierModelCatalog("xiaomi-token-plan-sgp", values);
+
+export const value = {
+	get XIAOMI_TOKEN_PLAN_SGP_MODELS() {
+		return XIAOMI_TOKEN_PLAN_SGP_MODELS;
+	},
+	get XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS() {
+		return XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS;
+	},
+	get XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS() {
+		return XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS;
+	},
+};

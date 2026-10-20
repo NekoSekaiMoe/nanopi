@@ -12,3 +12,15 @@ export const GOOGLE_IMAGE_MODELS: ImageModelCatalog<typeof values, "google"> =
 
 export const GOOGLE_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "google"> =
 	flattenClassifierModelCatalog("google", values);
+
+export const value = {
+	get GOOGLE_MODELS() {
+		return GOOGLE_MODELS;
+	},
+	get GOOGLE_IMAGE_MODELS() {
+		return GOOGLE_IMAGE_MODELS;
+	},
+	get GOOGLE_CLASSIFIER_MODELS() {
+		return GOOGLE_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const ZAI_CODING_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "zai-c
 
 export const ZAI_CODING_CN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "zai-coding-cn"> =
 	flattenClassifierModelCatalog("zai-coding-cn", values);
+
+export const value = {
+	get ZAI_CODING_CN_MODELS() {
+		return ZAI_CODING_CN_MODELS;
+	},
+	get ZAI_CODING_CN_IMAGE_MODELS() {
+		return ZAI_CODING_CN_IMAGE_MODELS;
+	},
+	get ZAI_CODING_CN_CLASSIFIER_MODELS() {
+		return ZAI_CODING_CN_CLASSIFIER_MODELS;
+	},
+};

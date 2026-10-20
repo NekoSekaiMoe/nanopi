@@ -27,8 +27,33 @@ export function isBuildComponentEnabled(component: string): boolean {
  */
 export type Toolset = "standard" | "bash";
 
+/** The tool set this build registers, or undefined outside bundled builds. */
+export function buildToolset(): string | undefined {
+	return typeof NANOPI_BUILD_TOOLSET === "undefined" ? undefined : NANOPI_BUILD_TOOLSET;
+}
+
+/**
+ * Whether the build's tool set carries nothing but the shell tools.
+ *
+ * Read from the tool names, not from the set's name: a tool set is a list of
+ * tools in buildconfig.json, and a third set that also names only shell tools
+ * does not have to be spelled "bash" to get the shell-only prompt and the
+ * bash-only guard.
+ */
 export function isBashOnlyBuild(): boolean {
-	return typeof NANOPI_BUILD_TOOLSET !== "undefined" && NANOPI_BUILD_TOOLSET === "bash";
+	const names = builtinToolNames();
+	return names?.every((name) => isShellToolName(name)) ?? false;
+}
+
+/**
+ * Tool names that are shell tools: the tool set ships them on every platform
+ * the build targets, and everything else (read, edit, write, grep, find, ls)
+ * is a file tool whose absence changes the system prompt.
+ */
+const SHELL_TOOL_NAMES = ["bash", "powershell"];
+
+export function isShellToolName(name: string): boolean {
+	return SHELL_TOOL_NAMES.includes(name);
 }
 
 /**
@@ -40,7 +65,10 @@ export function isBashOnlyBuild(): boolean {
  * install has no define and ships every provider.
  */
 export function builtinProviderIds(): readonly string[] | undefined {
-	return typeof NANOPI_BUILD_PROVIDERS === "undefined" ? undefined : NANOPI_BUILD_PROVIDERS;
+	// A full set arrives as the string "undefined", like builtinApiIds() above.
+	if (typeof NANOPI_BUILD_PROVIDERS === "undefined" || (NANOPI_BUILD_PROVIDERS as unknown) === "undefined")
+		return undefined;
+	return NANOPI_BUILD_PROVIDERS;
 }
 
 /** Whether this build carries a provider's catalog. */
@@ -65,7 +93,10 @@ export function isNoBuiltinProviderBuild(): boolean {
  * it drops, so `models.json` can only reference the ids its set carries.
  */
 export function builtinApiIds(): readonly string[] | undefined {
-	return typeof NANOPI_BUILD_APIS === "undefined" ? undefined : NANOPI_BUILD_APIS;
+	// The define map spells a full set as the string "undefined" (esbuild rejects
+	// an undefined define value), which reads the same as an absent define here.
+	if (typeof NANOPI_BUILD_APIS === "undefined" || (NANOPI_BUILD_APIS as unknown) === "undefined") return undefined;
+	return NANOPI_BUILD_APIS;
 }
 
 /** Whether this build registers a provider API implementation. */
@@ -89,4 +120,41 @@ export function formatIncludedApis(): string {
 export function builtinToolNames(): readonly string[] | undefined {
 	const included = typeof NANOPI_BUILD_TOOLS === "undefined" ? undefined : NANOPI_BUILD_TOOLS;
 	return included === undefined || included.length === 0 ? undefined : included;
+}
+
+/**
+ * OAuth login flows this build carries, by flow id (buildconfig.json
+ * `oauth/<flow>` components). The flow ids match `scripts/oauth-flows.mjs`
+ * and the `importOAuthModule` calls in `@nanopi/pi-ai`'s `auth/oauth/load.ts`;
+ * `validateOAuthFlowRegistry()` keeps the three in lockstep at build time.
+ */
+export const OAUTH_FLOW_IDS: readonly string[] = [
+	"anthropic",
+	"antigravity",
+	"github-copilot",
+	"kimi-coding",
+	"meta",
+	"openai-chatgpt",
+	"openai-codex",
+	"openrouter",
+	"xai",
+];
+
+/** Whether this build carries a single OAuth flow. */
+export function isOAuthFlowEnabled(flow: string): boolean {
+	return isBuildComponentEnabled(`oauth/${flow}`);
+}
+
+/** OAuth flows this build carries, in registry order. Empty means the build logs in with API keys only. */
+export function enabledOAuthFlows(): readonly string[] {
+	return OAUTH_FLOW_IDS.filter((flow) => isOAuthFlowEnabled(flow));
+}
+
+/**
+ * Whether this build ships any OAuth login flow at all. Any enabled flow is
+ * enough: the flag describes the build, not one provider, so a build carrying
+ * only `oauth/github-copilot` still shows the OAuth entry points.
+ */
+export function hasOAuthFlows(): boolean {
+	return enabledOAuthFlows().length > 0;
 }

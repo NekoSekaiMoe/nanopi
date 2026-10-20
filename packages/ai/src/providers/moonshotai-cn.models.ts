@@ -12,3 +12,15 @@ export const MOONSHOTAI_CN_IMAGE_MODELS: ImageModelCatalog<typeof values, "moons
 
 export const MOONSHOTAI_CN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "moonshotai-cn"> =
 	flattenClassifierModelCatalog("moonshotai-cn", values);
+
+export const value = {
+	get MOONSHOTAI_CN_MODELS() {
+		return MOONSHOTAI_CN_MODELS;
+	},
+	get MOONSHOTAI_CN_IMAGE_MODELS() {
+		return MOONSHOTAI_CN_IMAGE_MODELS;
+	},
+	get MOONSHOTAI_CN_CLASSIFIER_MODELS() {
+		return MOONSHOTAI_CN_CLASSIFIER_MODELS;
+	},
+};

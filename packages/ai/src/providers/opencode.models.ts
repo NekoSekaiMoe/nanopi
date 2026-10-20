@@ -12,3 +12,15 @@ export const OPENCODE_IMAGE_MODELS: ImageModelCatalog<typeof values, "opencode">
 
 export const OPENCODE_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "opencode"> =
 	flattenClassifierModelCatalog("opencode", values);
+
+export const value = {
+	get OPENCODE_MODELS() {
+		return OPENCODE_MODELS;
+	},
+	get OPENCODE_IMAGE_MODELS() {
+		return OPENCODE_IMAGE_MODELS;
+	},
+	get OPENCODE_CLASSIFIER_MODELS() {
+		return OPENCODE_CLASSIFIER_MODELS;
+	},
+};

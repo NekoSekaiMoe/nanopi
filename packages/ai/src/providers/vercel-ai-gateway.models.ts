@@ -12,3 +12,15 @@ export const VERCEL_AI_GATEWAY_IMAGE_MODELS: ImageModelCatalog<typeof values, "v
 
 export const VERCEL_AI_GATEWAY_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "vercel-ai-gateway"> =
 	flattenClassifierModelCatalog("vercel-ai-gateway", values);
+
+export const value = {
+	get VERCEL_AI_GATEWAY_MODELS() {
+		return VERCEL_AI_GATEWAY_MODELS;
+	},
+	get VERCEL_AI_GATEWAY_IMAGE_MODELS() {
+		return VERCEL_AI_GATEWAY_IMAGE_MODELS;
+	},
+	get VERCEL_AI_GATEWAY_CLASSIFIER_MODELS() {
+		return VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
+	},
+};

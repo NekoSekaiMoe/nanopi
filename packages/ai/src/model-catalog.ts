@@ -9,6 +9,20 @@ import type {
 	ProviderId,
 } from "./types.ts";
 
+/**
+ * Catalog type a build whose provider set leaves a provider out. Every key maps
+ * to `never`, so the entry names still resolve and any read of one is a type
+ * error rather than a runtime `undefined`:
+ *
+ *   getBuiltinModel("openai", "gpt-4o")   // OK in a build that ships openai
+ *   getBuiltinModel("openai", "gpt-4o")   // `never` in a build that drops it
+ *
+ * The shape is a mapped object with `never` values, not `{}`: an empty object
+ * type would make every model id collapse into the index signature and lose the
+ * narrowing that makes the full catalog useful.
+ */
+export type DisabledModelCatalog = { readonly [modelId: string]: never };
+
 export type ModelGroups = Record<string, Record<string, object>>;
 
 type ModelKey<TGroups extends ModelGroups> = {

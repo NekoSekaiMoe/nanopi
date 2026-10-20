@@ -279,8 +279,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const toolListError = options.tools ? getToolListError(options.tools) : undefined;
 	if (toolListError) throw new Error(`Invalid tools option: ${toolListError}`);
-	// A bash-only build (buildconfig.json `toolset: "bash"`) has no other built-in
-	// tools, so its default selection is the shell tools the tool set names.
+	// A shell-only build (a tool set that names only shell tools) has no other
+	// built-in tools, so its default selection is the ones the set names.
 	const shellToolNames = isBashOnlyBuild() ? (builtinToolNames() ?? ["bash", "powershell"]) : DEFAULT_TOOL_NAMES;
 	const defaultToolNames = options.noTools ? [] : (settingsManager.getDefaultTools() ?? shellToolNames);
 	// A `tools` list of only `+name`/`-name` entries changes the default selection instead of

@@ -178,18 +178,27 @@ export function registerFauxProvider(options: RegisterFauxProviderOptions = {}):
 }
 
 /**
- * API ids this build registers, injected by the bundle/single-file build
- * scripts from buildconfig.json flavors. Absent in source checkouts and npm
+ * API ids this build carries, injected by the bundle and single-file build
+ * scripts from buildconfig.json `apiSets`. Absent (or the string "undefined",
+ * which is how the define map spells a full set) in source checkouts and npm
  * installs, which ship every implementation.
+ *
+ * The build also aliases the `.lazy` module of every API outside its set to a
+ * stand-in (scripts/build-apis.mjs), so this filter is what keeps the registry
+ * truthful rather than what keeps the code out.
  */
 declare const NANOPI_BUILD_APIS: string[] | undefined;
 
-function isApiIncluded(api: Api): boolean {
-	return (
-		typeof NANOPI_BUILD_APIS === "undefined" ||
-		NANOPI_BUILD_APIS.includes("__ALL__") ||
-		NANOPI_BUILD_APIS.includes(api)
-	);
+/** The API ids this build registers, or undefined when it registers every one. */
+export function builtinApiIds(): readonly string[] | undefined {
+	if (typeof NANOPI_BUILD_APIS === "undefined" || (NANOPI_BUILD_APIS as unknown) === "undefined") return undefined;
+	return NANOPI_BUILD_APIS;
+}
+
+/** Whether this build carries an API implementation. */
+export function isApiIncluded(api: Api): boolean {
+	const included = builtinApiIds();
+	return included === undefined || included.includes("__ALL__") || included.includes(api);
 }
 
 const BUILTIN_APIS: [Api, ProviderStreams][] = [

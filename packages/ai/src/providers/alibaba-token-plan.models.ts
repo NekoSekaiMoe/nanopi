@@ -12,3 +12,15 @@ export const ALIBABA_TOKEN_PLAN_IMAGE_MODELS: ImageModelCatalog<typeof values, "
 
 export const ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "alibaba-token-plan"> =
 	flattenClassifierModelCatalog("alibaba-token-plan", values);
+
+export const value = {
+	get ALIBABA_TOKEN_PLAN_MODELS() {
+		return ALIBABA_TOKEN_PLAN_MODELS;
+	},
+	get ALIBABA_TOKEN_PLAN_IMAGE_MODELS() {
+		return ALIBABA_TOKEN_PLAN_IMAGE_MODELS;
+	},
+	get ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS() {
+		return ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS;
+	},
+};

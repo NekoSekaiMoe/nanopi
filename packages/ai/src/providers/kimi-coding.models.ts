@@ -12,3 +12,15 @@ export const KIMI_CODING_IMAGE_MODELS: ImageModelCatalog<typeof values, "kimi-co
 
 export const KIMI_CODING_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "kimi-coding"> =
 	flattenClassifierModelCatalog("kimi-coding", values);
+
+export const value = {
+	get KIMI_CODING_MODELS() {
+		return KIMI_CODING_MODELS;
+	},
+	get KIMI_CODING_IMAGE_MODELS() {
+		return KIMI_CODING_IMAGE_MODELS;
+	},
+	get KIMI_CODING_CLASSIFIER_MODELS() {
+		return KIMI_CODING_CLASSIFIER_MODELS;
+	},
+};

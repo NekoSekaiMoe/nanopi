@@ -12,3 +12,15 @@ export const FIREWORKS_IMAGE_MODELS: ImageModelCatalog<typeof values, "fireworks
 
 export const FIREWORKS_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "fireworks"> =
 	flattenClassifierModelCatalog("fireworks", values);
+
+export const value = {
+	get FIREWORKS_MODELS() {
+		return FIREWORKS_MODELS;
+	},
+	get FIREWORKS_IMAGE_MODELS() {
+		return FIREWORKS_IMAGE_MODELS;
+	},
+	get FIREWORKS_CLASSIFIER_MODELS() {
+		return FIREWORKS_CLASSIFIER_MODELS;
+	},
+};

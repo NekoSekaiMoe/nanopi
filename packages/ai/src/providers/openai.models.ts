@@ -12,3 +12,15 @@ export const OPENAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "openai"> =
 
 export const OPENAI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "openai"> =
 	flattenClassifierModelCatalog("openai", values);
+
+export const value = {
+	get OPENAI_MODELS() {
+		return OPENAI_MODELS;
+	},
+	get OPENAI_IMAGE_MODELS() {
+		return OPENAI_IMAGE_MODELS;
+	},
+	get OPENAI_CLASSIFIER_MODELS() {
+		return OPENAI_CLASSIFIER_MODELS;
+	},
+};

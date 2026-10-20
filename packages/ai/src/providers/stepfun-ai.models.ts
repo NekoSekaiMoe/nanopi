@@ -12,3 +12,15 @@ export const STEPFUN_AI_IMAGE_MODELS: ImageModelCatalog<typeof values, "stepfun-
 
 export const STEPFUN_AI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "stepfun-ai"> =
 	flattenClassifierModelCatalog("stepfun-ai", values);
+
+export const value = {
+	get STEPFUN_AI_MODELS() {
+		return STEPFUN_AI_MODELS;
+	},
+	get STEPFUN_AI_IMAGE_MODELS() {
+		return STEPFUN_AI_IMAGE_MODELS;
+	},
+	get STEPFUN_AI_CLASSIFIER_MODELS() {
+		return STEPFUN_AI_CLASSIFIER_MODELS;
+	},
+};

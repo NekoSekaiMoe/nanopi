@@ -12,3 +12,15 @@ export const QWEN_TOKEN_PLAN_IMAGE_MODELS: ImageModelCatalog<typeof values, "qwe
 
 export const QWEN_TOKEN_PLAN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "qwen-token-plan"> =
 	flattenClassifierModelCatalog("qwen-token-plan", values);
+
+export const value = {
+	get QWEN_TOKEN_PLAN_MODELS() {
+		return QWEN_TOKEN_PLAN_MODELS;
+	},
+	get QWEN_TOKEN_PLAN_IMAGE_MODELS() {
+		return QWEN_TOKEN_PLAN_IMAGE_MODELS;
+	},
+	get QWEN_TOKEN_PLAN_CLASSIFIER_MODELS() {
+		return QWEN_TOKEN_PLAN_CLASSIFIER_MODELS;
+	},
+};

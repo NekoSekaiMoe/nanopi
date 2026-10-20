@@ -367,18 +367,91 @@ function isDeclaredGroupKey(key, componentNames) {
 }
 
 /**
- * The tool set a flavor selects. A flavor that does not name one gets
- * "standard": a tool set is a choice, never a side effect of the wildcard.
- *
- * @returns {string}
+ * The flavor entry of the config, or a throw naming the flavors that exist.
+ * Every resolver below starts here, so an unknown flavor fails once, in one
+ * message, instead of five copies of the same check.
  */
-export function resolveFlavorToolset(config, flavorName) {
+function requireFlavor(config, flavorName) {
 	const flavor = config.flavors[flavorName];
 	if (!flavor) {
 		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
 	}
-	const selected = flavor.components[TOOLSET_COMPONENT];
-	return typeof selected === "string" ? selected : "standard";
+	return flavor;
+}
+
+/**
+ * One resolution pass over a flavor. The five public resolvers are thin reads
+ * of this object, so the parts share the work: a component map needs the tool
+ * set name, the tool names, the provider set and the API set, and the old code
+ * re-derived each of them (and re-checked the flavor) at every entry point.
+ *
+ * @returns {{ flavor: Record<string, unknown>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[], components: Record<string, boolean | string> }}
+ */
+function resolveFlavor(config, flavorName) {
+	const flavor = requireFlavor(config, flavorName);
+
+	// A tool set is a choice, never a side effect of the wildcard: a flavor that
+	// does not name one gets "standard".
+	const toolsetValue = flavor.components[TOOLSET_COMPONENT];
+	const toolset = typeof toolsetValue === "string" ? toolsetValue : "standard";
+	// Undefined means the set lists no tools, i.e. it ships every definition and
+	// filters at runtime.
+	const listedTools = config.toolsetTools?.[toolset];
+	const toolNames = listedTools === undefined || listedTools.length === 0 ? undefined : [...listedTools];
+
+	// A flavor that names no provider set ships every catalog, like the default of
+	// a switch. Which set that is reads from the flavor itself, not from a
+	// hardcoded set name: a flavor may call its full set anything.
+	const providersValue = flavor.components[PROVIDERS_COMPONENT];
+	let providers = [ALL_PROVIDERS];
+	if (typeof providersValue === "string") {
+		const providerSet = config.providerSets[providersValue];
+		if (!providerSet) throw new Error(`Unknown provider set "${providersValue}" in flavor "${flavorName}"`);
+		const marker = providerSet.providers.find(
+			(providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS,
+		);
+		providers = marker === undefined ? [...providerSet.providers] : [marker];
+	}
+
+	// Same shape for APIs: no named set means every implementation, and the
+	// `__ALL__` marker stays a marker the build resolves against the registry.
+	const apisValue = flavor.components[APIS_COMPONENT];
+	let apis = [ALL_APIS];
+	if (typeof apisValue === "string") {
+		const apiSet = config.apiSets[apisValue];
+		if (!apiSet) throw new Error(`Unknown API set "${apisValue}" in flavor "${flavorName}"`);
+		apis = apiSet.apis.includes(ALL_APIS) ? [ALL_APIS] : [...apiSet.apis];
+	}
+
+	const groupKeys = Object.keys(flavor.components).filter((key) => isDeclaredGroupKey(key, config.componentNames));
+	const components = {};
+	for (const name of config.componentNames) {
+		const groupValue = groupKeys.find((key) => name.startsWith(key.slice(0, -1)));
+		components[name] =
+			name === TOOLSET_COMPONENT
+				? toolset
+				: name === PROVIDERS_COMPONENT
+					? providers
+					: name === APIS_COMPONENT
+						? apis
+						: name.startsWith(TOOLS_COMPONENT_PREFIX) && toolNames !== undefined
+							? toolNames.includes(name.slice(TOOLS_COMPONENT_PREFIX.length))
+							: (flavor.components[name] ??
+								(groupValue === undefined ? undefined : flavor.components[groupValue]) ??
+								flavor.components[WILDCARD_KEY] ??
+								true);
+	}
+
+	return { toolset, toolNames, providers, apis, components };
+}
+
+/**
+ * The tool set a flavor selects (`standard` when it names none).
+ *
+ * @returns {string}
+ */
+export function resolveFlavorToolset(config, flavorName) {
+	return resolveFlavor(config, flavorName).toolset;
 }
 
 /**
@@ -388,54 +461,44 @@ export function resolveFlavorToolset(config, flavorName) {
  * @returns {string[] | undefined}
  */
 export function resolveFlavorToolNames(config, flavorName) {
-	const toolset = resolveFlavorToolset(config, flavorName);
-	const tools = config.toolsetTools?.[toolset];
-	return tools === undefined || tools.length === 0 ? undefined : [...tools];
+	return resolveFlavor(config, flavorName).toolNames;
 }
 
 /**
- * The provider ids a flavor ships. A flavor that does not name a provider set
- * gets every built-in provider, so the default stays the full catalog; a set
- * that lists `__NONE__` ships none. Both markers expand to themselves, so the
- * callers keep one place that turns a set into the concrete ids (the model
- * generator) and one that turns it into a runtime filter (`[]` for none).
+ * The provider ids a flavor ships: a concrete list, or the `__ALL__` /
+ * `__NONE__` marker for a build that ships every catalog or none. Markers
+ * expand to themselves so the callers keep one place that turns a set into
+ * concrete ids (the model generator) and one that turns it into a runtime
+ * filter (`[]` for none).
  *
  * @returns {string[]}
  */
 export function resolveFlavorProviders(config, flavorName) {
-	const flavor = config.flavors[flavorName];
-	if (!flavor) {
-		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
-	}
-	// A flavor that names no provider set ships every catalog, like the default
-	// of a switch. Which set that is reads from the flavor itself, not from a
-	// hardcoded set name: a flavor may call its full set anything.
-	const selected = flavor.components[PROVIDERS_COMPONENT];
-	if (typeof selected !== "string") return [ALL_PROVIDERS];
-	const providerSet = config.providerSets[selected];
-	if (!providerSet) throw new Error(`Unknown provider set "${selected}" in flavor "${flavorName}"`);
-	const marker = providerSet.providers.find((providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS);
-	return marker === undefined ? providerSet.providers : [marker];
+	return resolveFlavor(config, flavorName).providers;
 }
 
 /**
- * The API ids a flavor ships. A flavor that does not name an API set ships
- * every implementation, so the runtime registers everything it carries; a set
- * that lists `__ALL__` expands to the marker the build resolves against the
- * registered implementations.
+ * The API ids a flavor ships: a concrete list or the `__ALL__` marker.
  *
  * @returns {string[]}
  */
 export function resolveFlavorApis(config, flavorName) {
-	const flavor = config.flavors[flavorName];
-	if (!flavor) {
-		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
-	}
-	const selected = flavor.components[APIS_COMPONENT];
-	if (typeof selected !== "string") return [ALL_APIS];
-	const apiSet = config.apiSets[selected];
-	if (!apiSet) throw new Error(`Unknown API set "${selected}" in flavor "${flavorName}"`);
-	return apiSet.apis.includes(ALL_APIS) ? [ALL_APIS] : [...apiSet.apis];
+	return resolveFlavor(config, flavorName).apis;
+}
+
+/**
+ * Resolves a flavor to its component map. Unlisted components fall back to
+ * the flavor's "*" entry, then to enabled (safe default: a component added to
+ * buildconfig.json but forgotten in a flavor stays bundled). The `toolset`,
+ * `providers` and `apis` values are the selected names rather than switches,
+ * and the `tools/<name>` components are a view of the tool set the flavor
+ * picked: a set that lists its tools ships exactly those, and a set that lists
+ * none leaves the group key to the flavor.
+ *
+ * @returns {Record<string, boolean | string>}
+ */
+export function resolveFlavorComponents(config, flavorName) {
+	return resolveFlavor(config, flavorName).components;
 }
 
 /**
@@ -449,41 +512,6 @@ export function resolveBuiltinApiIds(apis) {
 	// Always a list: esbuild rejects an undefined define value, and an empty
 	// list is not a state this config produces.
 	return apis.includes(ALL_APIS) ? [ALL_APIS] : [...apis];
-}
-
-/**
- * Resolves a flavor to its component map. Unlisted components fall back to
- * the flavor's "*" entry, then to enabled (safe default: a component added to
- * buildconfig.json but forgotten in a flavor stays bundled). The `toolset`
- * value is the selected tool set name rather than a switch. The `tools/<name>`
- * components are a view of the tool set the flavor picked: a set that lists
- * its tools ships exactly those, and a set that lists none leaves the group
- * key to the flavor.
- *
- * @returns {Record<string, boolean | string>}
- */
-export function resolveFlavorComponents(config, flavorName) {
-	const flavor = config.flavors[flavorName];
-	if (!flavor) {
-		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
-	}
-	const groupKeys = Object.keys(flavor.components).filter((key) => isDeclaredGroupKey(key, config.componentNames));
-	const toolNames = resolveFlavorToolNames(config, flavorName);
-	const components = {};
-	for (const name of config.componentNames) {
-		const groupValue = groupKeys.find((key) => name.startsWith(key.slice(0, -1)));
-		components[name] =
-			name === TOOLSET_COMPONENT
-				? resolveFlavorToolset(config, flavorName)
-				: name === PROVIDERS_COMPONENT
-					? resolveFlavorProviders(config, flavorName)
-					: name === APIS_COMPONENT
-						? resolveFlavorApis(config, flavorName)
-						: name.startsWith(TOOLS_COMPONENT_PREFIX) && toolNames !== undefined
-							? toolNames.includes(name.slice(TOOLS_COMPONENT_PREFIX.length))
-							: (flavor.components[name] ?? (groupValue === undefined ? undefined : flavor.components[groupValue]) ?? flavor.components[WILDCARD_KEY] ?? true);
-	}
-	return components;
 }
 
 /**
@@ -589,13 +617,7 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
  */
 export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = process.env } = {}) {
 	const config = loadBuildConfig(repoRoot);
-	const flavor = parseFlavorArg(argv) ?? env[BUILD_FLAVOR_ENV] ?? config.defaultFlavor;
-	return {
-		flavor,
-		components: resolveFlavorComponents(config, flavor),
-		toolset: resolveFlavorToolset(config, flavor),
-		toolNames: resolveFlavorToolNames(config, flavor),
-		providers: resolveFlavorProviders(config, flavor),
-		apis: resolveFlavorApis(config, flavor),
-	};
+	const flavorName = parseFlavorArg(argv) ?? env[BUILD_FLAVOR_ENV] ?? config.defaultFlavor;
+	const { toolset, toolNames, providers, apis, components } = resolveFlavor(config, flavorName);
+	return { flavor: flavorName, toolset, toolNames, providers, apis, components };
 }

@@ -1,4 +1,4 @@
-import { isBuildComponentEnabled } from "../build-components.ts";
+import { hasOAuthFlows } from "../build-components.ts";
 import { APP_NAME } from "../config.ts";
 import type { SourceInfo } from "./source-info.ts";
 
@@ -52,6 +52,6 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
  * the conflict list. Their handlers stay reachable for API-key logins.
  */
 export function builtinSlashCommands(): ReadonlyArray<BuiltinSlashCommand> {
-	if (isBuildComponentEnabled("oauth/anthropic")) return ALL_BUILTIN_SLASH_COMMANDS;
+	if (hasOAuthFlows()) return ALL_BUILTIN_SLASH_COMMANDS;
 	return ALL_BUILTIN_SLASH_COMMANDS.filter((command) => command.name !== "login" && command.name !== "logout");
 }

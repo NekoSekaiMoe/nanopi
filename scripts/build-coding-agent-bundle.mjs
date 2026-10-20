@@ -3,10 +3,17 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createRequire, isBuiltin } from "node:module";
+import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
+import {
+	BUNDLE_EXTERNAL_PACKAGES,
+	buildDefines,
+	NODE_ESM_BANNER,
+	resolveBuildCommit,
+	validateExternalImports,
+} from "./esbuild-shared.mjs";
 import {
 	loadBuildConfig,
 	readProviderCatalogIds,
@@ -16,6 +23,7 @@ import {
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
+import { httpsProxyAgentNamedExportPlugin } from "./proxy-agent-plugin.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
@@ -60,35 +68,8 @@ const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin
 	toolNames,
 });
 
-const banner = {
-	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
-};
-
-/**
- * Commit the bundle is built from, baked in as the NANOPI_BUILD_COMMIT define.
- * `core/build-version.ts` prefers the define over spawning git at runtime, so
- * the version a user sees matches the source they can inspect. Archives built
- * by CI carry no .git directory, hence the explicit HEAD lookup here.
- */
-function resolveBuildCommit() {
-	try {
-		return execFileSync("git", ["rev-parse", "HEAD"], { cwd: repoRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }).trim();
-	} catch {
-		return "";
-	}
-}
-const buildCommit = resolveBuildCommit();
-const allowedExternalPackages = new Set([
-	"@silvia-odwyer/photon-node",
-	"jiti",
-	// Optional native accelerators. Their callers fall back to JavaScript when absent.
-	"bufferutil",
-	"utf-8-validate",
-	// Optional native proxy authentication. Its caller reports an install hint when absent.
-	"kerberos",
-	// Optional debug output coloring.
-	"supports-color",
-]);
+const buildCommit = resolveBuildCommit(repoRoot);
+const allowedExternalPackages = new Set(BUNDLE_EXTERNAL_PACKAGES);
 
 const lazyJitiPlugin = {
 	name: "lazy-jiti-transform",
@@ -114,54 +95,20 @@ export function createJiti(...args) {
 	},
 };
 
-const httpsProxyAgentNamedExportPlugin = {
-	name: "https-proxy-agent-named-export",
-	setup(build) {
-		const resolveFromImporter = createRequire(import.meta.url).resolve;
-		build.onResolve({ filter: /^https-proxy-agent$/ }, (args) => {
-			if (args.kind !== "dynamic-import") return undefined;
-			// Resolve from the importing module so pnpm's isolated layout serves the
-			// version the importer depends on. A bare specifier resolved from the
-			// repository root cannot find the package because no root package
-			// declares it, so the bundle build fails on a clean install.
-			const fromDir = args.importer && args.importer !== "<stdin>" ? dirname(args.importer) : repoRoot;
-			const resolved = resolveFromImporter("https-proxy-agent", { paths: [fromDir] });
-			return {
-				namespace: "https-proxy-agent-named-export",
-				path: resolved,
-			};
-		});
-		build.onLoad(
-			{
-				filter: /.*/,
-				namespace: "https-proxy-agent-named-export",
-			},
-			(args) => ({
-				contents: `export { HttpsProxyAgent } from ${JSON.stringify(args.path)};`,
-				loader: "js",
-				resolveDir: dirname(args.path),
-			}),
-		);
-	},
-};
-
 function commonBuildOptions() {
 	return {
 		absWorkingDir: repoRoot,
-		banner,
+		banner: NODE_ESM_BANNER,
 		bundle: true,
-		define: {
-			NANOPI_BUNDLED_NODE: "true",
-			NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
-			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
-			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
-			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
-			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
-			NANOPI_BUILD_APIS: JSON.stringify(builtinApiIds),
-			// esbuild rejects an undefined define value, so a tool set that names
-			// no tools injects the empty list the runtime reads as "every tool".
-			NANOPI_BUILD_TOOLS: JSON.stringify(toolNames ?? []),
-		},
+		define: buildDefines({
+			flavor,
+			components,
+			toolset,
+			toolNames,
+			builtinProviderIds,
+			builtinApiIds,
+			buildCommit,
+		}),
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",
 		legalComments: "none",
@@ -179,7 +126,7 @@ function commonBuildOptions() {
 			moduleStubPlugin,
 			toolStubPlugin,
 			lazyJitiPlugin,
-			httpsProxyAgentNamedExportPlugin,
+			httpsProxyAgentNamedExportPlugin(repoRoot),
 		],
 		sourcemap: false,
 		target: "node22.19",
@@ -188,30 +135,6 @@ function commonBuildOptions() {
 		// an installed npm package.
 		tsconfigRaw: { compilerOptions: {} },
 	};
-}
-
-function validateExternalImports(metafiles) {
-	const unexpected = new Set();
-	for (const metafile of metafiles) {
-		for (const input of Object.values(metafile.inputs)) {
-			for (const imported of input.imports) {
-				if (
-					!imported.external ||
-					// esbuild reports references to object-valued defines as pseudo
-					// imports (<define:name>); they are build-time substitutions.
-					imported.path.startsWith("<define:") ||
-					isBuiltin(imported.path) ||
-					allowedExternalPackages.has(imported.path)
-				) {
-					continue;
-				}
-				unexpected.add(imported.path);
-			}
-		}
-	}
-	if (unexpected.size > 0) {
-		throw new Error(`Bundle left unexpected external imports: ${Array.from(unexpected).sort().join(", ")}`);
-	}
 }
 
 function findContainingOutput(metafile, inputSuffix) {
@@ -302,7 +225,7 @@ if (dirname(imageResizeOutput) !== dirname(imageResizeWorkerOutput)) {
 	throw new Error("Image resize implementation and worker were emitted into different directories");
 }
 const metafiles = [mainResult.metafile, lazyResult.metafile];
-validateExternalImports(metafiles);
+validateExternalImports(metafiles, allowedExternalPackages);
 const cliLauncher = `#!/usr/bin/env node
 import { createRequire, enableCompileCache } from "node:module";
 

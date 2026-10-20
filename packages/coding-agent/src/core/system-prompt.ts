@@ -160,13 +160,9 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		promptSections.preamble =
 			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You work through the shell tool.";
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-		if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;
-		if (contextFiles.length > 0) promptSections.project_context = renderProjectContext(contextFiles);
-		promptSections.cwd = cwd.replace(/\\/g, "/");
-		for (const [name, content] of Object.entries(customSections)) {
-			if (content) promptSections[name] = content;
-		}
-		return tagSections(promptSections);
+		// The sections filled below (addendum, project context, skills, cwd, custom
+		// sections) apply to both preambles, so the shell-only branch only differs in
+		// what it leaves out: the tool list and the docs section.
 	} else {
 		promptSections.preamble =
 			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";

@@ -56,7 +56,7 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@nanopi/pi-ai/compat";
-import { builtinToolNames, isBashOnlyBuild } from "../build-components.ts";
+import { builtinToolNames, isBashOnlyBuild, isShellToolName } from "../build-components.ts";
 import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -308,11 +308,11 @@ export interface RuntimeReloadCallbacks {
 }
 
 /**
- * Tools a bash-only build registers: the shell tools, nothing else. A tool set
+ * Tools a shell-only build registers: the shell tools, nothing else. A tool set
  * that names its tools ships exactly that list (injected as a build define);
  * the constant is the fallback for a source checkout that only sets the flavor.
  */
-const BASH_ONLY_TOOL_NAMES: readonly string[] = builtinToolNames() ?? ["bash", "powershell"];
+const SHELL_ONLY_TOOL_NAMES: readonly string[] = builtinToolNames() ?? ["bash", "powershell"];
 
 /** System-prompt guideline telling the model what a bash-only build provides. */
 const BASH_ONLY_GUIDELINE =
@@ -775,11 +775,11 @@ export class AgentSession {
 	}
 
 	/**
-	 * Whether the call may run. A bash-only build registers and declares only
+	 * Whether the call may run. A shell-only build registers and declares only
 	 * the shell tools, so this backstop only fires for a call another tool issued.
 	 */
 	private _isBashOnlyTool(toolName: string): boolean {
-		return !isBashOnlyBuild() || BASH_ONLY_TOOL_NAMES.includes(toolName);
+		return !isBashOnlyBuild() || isShellToolName(toolName);
 	}
 
 	/** `tool_result` handlers and image normalization. `parentToolCallId` is set for calls another tool made. */
@@ -3956,7 +3956,7 @@ export class AgentSession {
 					// registers the shell tools alone, so the rest cannot be activated by
 					// settings, `--tools`, a resumed transcript, or a module. The list
 					// filters before construction: the other definitions are stubs.
-					isBashOnlyBuild() ? BASH_ONLY_TOOL_NAMES : undefined,
+					isBashOnlyBuild() ? SHELL_ONLY_TOOL_NAMES : undefined,
 				);
 
 		this._baseToolDefinitions = new Map(
@@ -4005,7 +4005,7 @@ export class AgentSession {
 		beforeSessionStart: RuntimeReloadCallbacks["beforeSessionStart"],
 		onInvalidated: () => void,
 	): Promise<void> {
-		const builtinToolNames = isBashOnlyBuild() ? BASH_ONLY_TOOL_NAMES : DEFAULT_TOOL_NAMES;
+		const builtinToolNames = isBashOnlyBuild() ? SHELL_ONLY_TOOL_NAMES : DEFAULT_TOOL_NAMES;
 		const getDefaultTools = () =>
 			this._usesDefaultTools
 				? applyToolModifiers(this.settingsManager.getDefaultTools() ?? builtinToolNames, this._defaultToolModifiers)

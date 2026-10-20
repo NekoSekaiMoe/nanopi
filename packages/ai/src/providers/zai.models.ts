@@ -12,3 +12,15 @@ export const ZAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "zai"> =
 
 export const ZAI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "zai"> =
 	flattenClassifierModelCatalog("zai", values);
+
+export const value = {
+	get ZAI_MODELS() {
+		return ZAI_MODELS;
+	},
+	get ZAI_IMAGE_MODELS() {
+		return ZAI_IMAGE_MODELS;
+	},
+	get ZAI_CLASSIFIER_MODELS() {
+		return ZAI_CLASSIFIER_MODELS;
+	},
+};

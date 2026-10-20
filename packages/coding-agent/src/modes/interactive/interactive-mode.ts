@@ -47,7 +47,7 @@ import {
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
 import { spawn } from "child_process";
-import { isBuildComponentEnabled } from "../../build-components.ts";
+import { hasOAuthFlows } from "../../build-components.ts";
 import {
 	APP_NAME,
 	APP_TITLE,
@@ -321,26 +321,6 @@ type LoginProviderCompletionOption = {
 };
 
 const AUTH_TYPE_ORDER = { oauth: 0, api_key: 1 } satisfies Record<AuthSelectorProvider["authType"], number>;
-
-/**
- * Whether this build logs in through OAuth flows. A flavor that disables the
- * `oauth/*` components (buildconfig.json) ships no flow code, so the login
- * selectors must not offer one and `modelRuntime.login` has nothing to load.
- * Any enabled flow is enough: the flag describes the build, not a provider.
- */
-function oauthLoginEnabled(): boolean {
-	return (
-		isBuildComponentEnabled("oauth/anthropic") ||
-		isBuildComponentEnabled("oauth/antigravity") ||
-		isBuildComponentEnabled("oauth/github-copilot") ||
-		isBuildComponentEnabled("oauth/kimi-coding") ||
-		isBuildComponentEnabled("oauth/meta") ||
-		isBuildComponentEnabled("oauth/openai-chatgpt") ||
-		isBuildComponentEnabled("oauth/openai-codex") ||
-		isBuildComponentEnabled("oauth/openrouter") ||
-		isBuildComponentEnabled("oauth/xai")
-	);
-}
 
 function createFuzzyAutocompleteItems<T>(
 	items: T[],
@@ -2613,7 +2593,7 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/logout") {
-				if (!oauthLoginEnabled()) {
+				if (!hasOAuthFlows()) {
 					this.showStatus(`This build does not include OAuth login. Credentials are not managed by ${APP_NAME}.`);
 					this.editor.setText("");
 					return;
@@ -5084,7 +5064,7 @@ export class InteractiveMode {
 			const subscription = provider.auth.oauth?.isSubscription === true;
 			// A build without OAuth flows (buildconfig.json `oauth/*` off, the minimal
 			// flavor) ships none of the flow code, so it never offers one.
-			if ((!authType || authType === "oauth") && provider.auth.oauth && oauthLoginEnabled()) {
+			if ((!authType || authType === "oauth") && provider.auth.oauth && hasOAuthFlows()) {
 				options.push({
 					id: provider.id,
 					name: provider.name,
@@ -5161,7 +5141,7 @@ export class InteractiveMode {
 
 	/** `onBack` reopens the selector the login was started from when the user cancels it. */
 	private async startProviderLogin(providerOption: AuthSelectorProvider, onBack?: () => void): Promise<void> {
-		if (providerOption.authType === "oauth" && !oauthLoginEnabled()) {
+		if (providerOption.authType === "oauth" && !hasOAuthFlows()) {
 			this.showStatus("This build has no OAuth login flows. Use an API key or models.json instead.");
 			return;
 		}
@@ -5180,7 +5160,7 @@ export class InteractiveMode {
 			oauthProvider?.method && "loginLabel" in oauthProvider.method ? oauthProvider.method.loginLabel : undefined;
 		const subscriptionLabel = oauthLoginLabel ?? "Sign in with an account";
 		const apiKeyLabel = "Sign in with an API key";
-		const oauthAvailable = oauthLoginEnabled();
+		const oauthAvailable = hasOAuthFlows();
 		const availableAuthTypes = providerOptions
 			? new Set(providerOptions.map((provider) => provider.authType))
 			: new Set<AuthSelectorProvider["authType"]>(oauthAvailable ? ["oauth", "api_key"] : ["api_key"]);

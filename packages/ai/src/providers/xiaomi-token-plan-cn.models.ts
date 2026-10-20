@@ -12,3 +12,15 @@ export const XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS: ImageModelCatalog<typeof values,
 
 export const XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "xiaomi-token-plan-cn"> =
 	flattenClassifierModelCatalog("xiaomi-token-plan-cn", values);
+
+export const value = {
+	get XIAOMI_TOKEN_PLAN_CN_MODELS() {
+		return XIAOMI_TOKEN_PLAN_CN_MODELS;
+	},
+	get XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS() {
+		return XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS;
+	},
+	get XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS() {
+		return XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
+	},
+};

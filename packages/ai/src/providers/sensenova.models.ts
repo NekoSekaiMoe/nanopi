@@ -12,3 +12,15 @@ export const SENSENOVA_IMAGE_MODELS: ImageModelCatalog<typeof values, "sensenova
 
 export const SENSENOVA_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "sensenova"> =
 	flattenClassifierModelCatalog("sensenova", values);
+
+export const value = {
+	get SENSENOVA_MODELS() {
+		return SENSENOVA_MODELS;
+	},
+	get SENSENOVA_IMAGE_MODELS() {
+		return SENSENOVA_IMAGE_MODELS;
+	},
+	get SENSENOVA_CLASSIFIER_MODELS() {
+		return SENSENOVA_CLASSIFIER_MODELS;
+	},
+};

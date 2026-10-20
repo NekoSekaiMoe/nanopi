@@ -12,3 +12,15 @@ export const DEEPSEEK_IMAGE_MODELS: ImageModelCatalog<typeof values, "deepseek">
 
 export const DEEPSEEK_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "deepseek"> =
 	flattenClassifierModelCatalog("deepseek", values);
+
+export const value = {
+	get DEEPSEEK_MODELS() {
+		return DEEPSEEK_MODELS;
+	},
+	get DEEPSEEK_IMAGE_MODELS() {
+		return DEEPSEEK_IMAGE_MODELS;
+	},
+	get DEEPSEEK_CLASSIFIER_MODELS() {
+		return DEEPSEEK_CLASSIFIER_MODELS;
+	},
+};

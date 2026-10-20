@@ -12,3 +12,15 @@ export const AMAZON_BEDROCK_IMAGE_MODELS: ImageModelCatalog<typeof values, "amaz
 
 export const AMAZON_BEDROCK_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "amazon-bedrock"> =
 	flattenClassifierModelCatalog("amazon-bedrock", values);
+
+export const value = {
+	get AMAZON_BEDROCK_MODELS() {
+		return AMAZON_BEDROCK_MODELS;
+	},
+	get AMAZON_BEDROCK_IMAGE_MODELS() {
+		return AMAZON_BEDROCK_IMAGE_MODELS;
+	},
+	get AMAZON_BEDROCK_CLASSIFIER_MODELS() {
+		return AMAZON_BEDROCK_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS: ImageModelCatalog<typeof valu
 
 export const OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "ollama-cloud-token-plan"> =
 	flattenClassifierModelCatalog("ollama-cloud-token-plan", values);
+
+export const value = {
+	get OLLAMA_CLOUD_TOKEN_PLAN_MODELS() {
+		return OLLAMA_CLOUD_TOKEN_PLAN_MODELS;
+	},
+	get OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS() {
+		return OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS;
+	},
+	get OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS() {
+		return OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS;
+	},
+};

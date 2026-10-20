@@ -20,7 +20,7 @@
 import { execFileSync } from "node:child_process";
 import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { createRequire, isBuiltin } from "node:module";
+import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -35,7 +35,17 @@ import {
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
+import {
+	buildDefines,
+	resolveBuildCommit,
+	SINGLE_FILE_EXTERNAL_PACKAGES,
+	SINGLE_FILE_BANNER,
+	validateExternalImports,
+} from "./esbuild-shared.mjs";
+import { createApiStubPlugin, validateStubs } from "./build-apis.mjs";
+import { createComponentStubPlugin, validateComponentStubExports } from "./build-components.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
+import { httpsProxyAgentNamedExportPlugin } from "./proxy-agent-plugin.mjs";
 import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
@@ -76,46 +86,9 @@ const outputFilePath = outIndex !== -1 && outArgs[outIndex + 1] ? resolve(outArg
 
 const requireFromCodingAgent = createRequire(join(codingAgentDir, "package.json"));
 
-const banner = {
-	js: `import { createRequire as __piCreateRequire, enableCompileCache } from "node:module";
-const require = __piCreateRequire(import.meta.url);
-const __filename = import.meta.filename;
-const __dirname = require("node:path").dirname(__filename);
-try { enableCompileCache(); } catch {}`,
-};
-
 // Optional native accelerators stay external: callers fall back to JavaScript
 // when they are absent, which they always are in the single-file distribution.
-const allowedExternalPackages = new Set(["bufferutil", "utf-8-validate", "kerberos", "supports-color"]);
-
-const httpsProxyAgentNamedExportPlugin = {
-	name: "https-proxy-agent-named-export",
-	setup(build) {
-		const resolveFromImporter = createRequire(import.meta.url).resolve;
-		build.onResolve({ filter: /^https-proxy-agent$/ }, (args) => {
-			if (args.kind !== "dynamic-import") return undefined;
-			// Resolve from the importing module so pnpm's isolated layout serves
-			// the version the importer depends on (see build-coding-agent-bundle.mjs).
-			const fromDir = args.importer && args.importer !== "<stdin>" ? dirname(args.importer) : repoRoot;
-			const resolved = resolveFromImporter("https-proxy-agent", { paths: [fromDir] });
-			return {
-				namespace: "https-proxy-agent-named-export",
-				path: resolved,
-			};
-		});
-		build.onLoad(
-			{
-				filter: /.*/,
-				namespace: "https-proxy-agent-named-export",
-			},
-			(args) => ({
-				contents: `export { HttpsProxyAgent } from ${JSON.stringify(args.path)};`,
-				loader: "js",
-				resolveDir: dirname(args.path),
-			}),
-		);
-	},
-};
+const allowedExternalPackages = new Set(SINGLE_FILE_EXTERNAL_PACKAGES);
 
 function fail(message) {
 	throw new Error(message);
@@ -315,11 +288,7 @@ const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
 const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
 // Same contract as the npm bundle: the single-file artifact has no .git directory
 // at runtime, so the commit is baked in at build time.
-const buildCommit = execFileSync("git", ["rev-parse", "HEAD"], {
-	cwd: repoRoot,
-	encoding: "utf8",
-	stdio: ["ignore", "pipe", "ignore"],
-}).trim();
+const buildCommit = resolveBuildCommit(repoRoot);
 
 // OAuth flows disabled by the flavor must not be statically imported either:
 // alias the bundled-oauth registration module to a shim registering only the
@@ -337,7 +306,32 @@ const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin
 	toolsSrcDir: join(codingAgentDir, "src", "core", "tools"),
 	toolNames,
 });
-const plugins = [moduleStubPlugin, toolStubPlugin, httpsProxyAgentNamedExportPlugin];
+// Components whose module is swapped at resolve time instead of folded at
+// runtime: the component's data is a static import, so a dead branch keeps it.
+validateComponentStubExports(codingAgentDir);
+const { plugin: componentStubPlugin, disabledModules: disabledComponentModules } = createComponentStubPlugin({
+	components,
+	codingAgentDir,
+});
+// API implementations and provider catalogs outside the flavor's sets are swapped
+// at resolve time: the runtime filters that used to guard them left the lazy
+// `import()` of every client SDK and every static catalog import in the graph,
+// which is what kept `@google/genai`, the AWS SDK and ~1 MiB of model data in a
+// single-endpoint build.
+const aiDir = join(repoRoot, "packages", "ai");
+validateStubs(aiDir);
+const { plugin: apiStubPlugin, disabledApis, disabledProviders } = createApiStubPlugin({
+	aiDir,
+	apis,
+	builtinProviderIds,
+});
+const plugins = [
+	apiStubPlugin,
+	componentStubPlugin,
+	moduleStubPlugin,
+	toolStubPlugin,
+	httpsProxyAgentNamedExportPlugin(repoRoot),
+];
 let shimDir;
 if (enabledFlows.length < OAUTH_FLOWS.length) {
 	shimDir = mkdtempSync(join(tmpdir(), "nanopi-bundled-oauth-"));
@@ -364,27 +358,25 @@ if (enabledFlows.length < OAUTH_FLOWS.length) {
 }
 
 let result;
+// NANOPI_BUILD_METAFILE_DIR: diagnostics hook for size work. When set, the build
+// writes its esbuild metafile next to the given directory so per-package and
+// per-dependency byte counts can be attributed without another build variant.
+const metafileOutDir = process.env.NANOPI_BUILD_METAFILE_DIR;
 try {
 	result = await build({
 		absWorkingDir: repoRoot,
-		banner,
+		banner: SINGLE_FILE_BANNER,
 		bundle: true,
 		define: {
-			NANOPI_BUNDLED_NODE: "true",
+			...buildDefines({ flavor, components, toolset, toolNames, builtinProviderIds, builtinApiIds, buildCommit }),
+			// Single-file specifics: the embedded assets and sidecars, the version
+			// of the artifact, and the flag that tells the runtime it is the
+			// standalone build.
 			NANOPI_SINGLE_FILE: "true",
 			NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
-			NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
 			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
 			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
 			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),
-			NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
-			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
-			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
-			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
-			NANOPI_BUILD_APIS: JSON.stringify(builtinApiIds),
-			// esbuild rejects an undefined define value, so a tool set that names
-			// no tools injects the empty list the runtime reads as "every tool".
-			NANOPI_BUILD_TOOLS: JSON.stringify(toolNames ?? []),
 		},
 		entryPoints: [entryPoint],
 		external: Array.from(allowedExternalPackages),
@@ -411,24 +403,21 @@ try {
 	rmSync(toolStubDir, { recursive: true, force: true });
 }
 
-const unexpected = new Set();
-for (const input of Object.values(result.metafile.inputs)) {
-	for (const imported of input.imports) {
-		// <define:name> entries are esbuild's object-valued defines, not imports.
-		if (
-			!imported.external ||
-			imported.path.startsWith("<define:") ||
-			isBuiltin(imported.path) ||
-			allowedExternalPackages.has(imported.path)
-		) {
-			continue;
-		}
-		unexpected.add(imported.path);
+if (metafileOutDir) {
+	mkdirSync(metafileOutDir, { recursive: true });
+	writeFileSync(join(metafileOutDir, `${flavor}.metafile.json`), JSON.stringify(result.metafile));
+	const meta = result.metafile;
+	const byPackage = new Map();
+	for (const [input, info] of Object.entries(meta.inputs)) {
+		const match = /node_modules\/\.pnpm\/([^/]+)\//.exec(input) ?? /node_modules\/([^/]+)\//.exec(input);
+		const key = match ? match[1] : input.startsWith("packages/") ? input.split("/").slice(0, 2).join("/") : "(repo)";
+		byPackage.set(key, (byPackage.get(key) ?? 0) + (info.bytes ?? 0));
 	}
+	const top = [...byPackage.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+	for (const [name, bytes] of top) console.log(`  input ${name}: ${(bytes / 1024).toFixed(0)} KiB`);
 }
-if (unexpected.size > 0) {
-	fail(`Bundle left unexpected external imports: ${Array.from(unexpected).sort().join(", ")}`);
-}
+
+validateExternalImports([result.metafile], allowedExternalPackages);
 
 // esbuild hoists the entry's shebang to the first line; verify it survived.
 const bundlePath = resolve(repoRoot, Object.keys(result.metafile.outputs)[0]);
@@ -443,6 +432,9 @@ console.log(
 	`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
 		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
 		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
+		(disabledComponentModules.length > 0 ? `, stubbed: ${disabledComponentModules.join(", ")}` : "") +
+		(disabledApis.length > 0 ? `, stubbed APIs: ${disabledApis.length}` : "") +
+		(disabledProviders.length > 0 ? `, stubbed catalogs: ${disabledProviders.length}` : "") +
 		")",
 );
 console.log(

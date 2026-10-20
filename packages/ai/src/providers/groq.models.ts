@@ -12,3 +12,15 @@ export const GROQ_IMAGE_MODELS: ImageModelCatalog<typeof values, "groq"> =
 
 export const GROQ_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "groq"> =
 	flattenClassifierModelCatalog("groq", values);
+
+export const value = {
+	get GROQ_MODELS() {
+		return GROQ_MODELS;
+	},
+	get GROQ_IMAGE_MODELS() {
+		return GROQ_IMAGE_MODELS;
+	},
+	get GROQ_CLASSIFIER_MODELS() {
+		return GROQ_CLASSIFIER_MODELS;
+	},
+};

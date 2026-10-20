@@ -12,3 +12,15 @@ export const OPENROUTER_IMAGE_MODELS: ImageModelCatalog<typeof values, "openrout
 
 export const OPENROUTER_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "openrouter"> =
 	flattenClassifierModelCatalog("openrouter", values);
+
+export const value = {
+	get OPENROUTER_MODELS() {
+		return OPENROUTER_MODELS;
+	},
+	get OPENROUTER_IMAGE_MODELS() {
+		return OPENROUTER_IMAGE_MODELS;
+	},
+	get OPENROUTER_CLASSIFIER_MODELS() {
+		return OPENROUTER_CLASSIFIER_MODELS;
+	},
+};

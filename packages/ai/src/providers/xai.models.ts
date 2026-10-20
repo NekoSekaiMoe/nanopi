@@ -12,3 +12,15 @@ export const XAI_IMAGE_MODELS: ImageModelCatalog<typeof values, "xai"> =
 
 export const XAI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "xai"> =
 	flattenClassifierModelCatalog("xai", values);
+
+export const value = {
+	get XAI_MODELS() {
+		return XAI_MODELS;
+	},
+	get XAI_IMAGE_MODELS() {
+		return XAI_IMAGE_MODELS;
+	},
+	get XAI_CLASSIFIER_MODELS() {
+		return XAI_CLASSIFIER_MODELS;
+	},
+};

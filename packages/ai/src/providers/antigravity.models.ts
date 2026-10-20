@@ -12,3 +12,15 @@ export const ANTIGRAVITY_IMAGE_MODELS: ImageModelCatalog<typeof values, "antigra
 
 export const ANTIGRAVITY_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "antigravity"> =
 	flattenClassifierModelCatalog("antigravity", values);
+
+export const value = {
+	get ANTIGRAVITY_MODELS() {
+		return ANTIGRAVITY_MODELS;
+	},
+	get ANTIGRAVITY_IMAGE_MODELS() {
+		return ANTIGRAVITY_IMAGE_MODELS;
+	},
+	get ANTIGRAVITY_CLASSIFIER_MODELS() {
+		return ANTIGRAVITY_CLASSIFIER_MODELS;
+	},
+};

@@ -12,3 +12,15 @@ export const GITHUB_COPILOT_IMAGE_MODELS: ImageModelCatalog<typeof values, "gith
 
 export const GITHUB_COPILOT_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "github-copilot"> =
 	flattenClassifierModelCatalog("github-copilot", values);
+
+export const value = {
+	get GITHUB_COPILOT_MODELS() {
+		return GITHUB_COPILOT_MODELS;
+	},
+	get GITHUB_COPILOT_IMAGE_MODELS() {
+		return GITHUB_COPILOT_IMAGE_MODELS;
+	},
+	get GITHUB_COPILOT_CLASSIFIER_MODELS() {
+		return GITHUB_COPILOT_CLASSIFIER_MODELS;
+	},
+};

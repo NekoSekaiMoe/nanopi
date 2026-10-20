@@ -1,6 +1,26 @@
 // Core session management
 
-export { isBashOnlyBuild, isBuildComponentEnabled, isProviderIncluded, type Toolset } from "./build-components.ts";
+// Build flavor surface: what a flavor (buildconfig.json) turned on for this
+// build. SDK users ask these before offering a feature whose code the build may
+// not carry.
+export {
+	buildToolset,
+	builtinApiIds,
+	builtinProviderIds,
+	builtinToolNames,
+	enabledOAuthFlows,
+	formatIncludedApis,
+	hasOAuthFlows,
+	isApiIncluded,
+	isBashOnlyBuild,
+	isBuildComponentEnabled,
+	isNoBuiltinProviderBuild,
+	isOAuthFlowEnabled,
+	isProviderIncluded,
+	isShellToolName,
+	OAUTH_FLOW_IDS,
+	type Toolset,
+} from "./build-components.ts";
 export { type Args, parseArgs } from "./cli/args.ts";
 
 // Config paths

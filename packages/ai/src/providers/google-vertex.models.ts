@@ -12,3 +12,15 @@ export const GOOGLE_VERTEX_IMAGE_MODELS: ImageModelCatalog<typeof values, "googl
 
 export const GOOGLE_VERTEX_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "google-vertex"> =
 	flattenClassifierModelCatalog("google-vertex", values);
+
+export const value = {
+	get GOOGLE_VERTEX_MODELS() {
+		return GOOGLE_VERTEX_MODELS;
+	},
+	get GOOGLE_VERTEX_IMAGE_MODELS() {
+		return GOOGLE_VERTEX_IMAGE_MODELS;
+	},
+	get GOOGLE_VERTEX_CLASSIFIER_MODELS() {
+		return GOOGLE_VERTEX_CLASSIFIER_MODELS;
+	},
+};

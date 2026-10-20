@@ -20,52 +20,48 @@ import rust from "highlight.js/lib/languages/rust.js";
 import scala from "highlight.js/lib/languages/scala.js";
 import swift from "highlight.js/lib/languages/swift.js";
 import typescript from "highlight.js/lib/languages/typescript.js";
-import { isBuildComponentEnabled } from "../build-components.ts";
 import { decodeHtmlEntityAt } from "./html.ts";
 
 /**
- * Whether the build carries syntax highlighting (buildconfig.json
- * `syntax-highlight`). A build that drops it registers no grammar at all, so
- * the grammars fall out of the bundle, and renders every code block in the
- * plain output color: `highlight()` returns its input and `supportsLanguage()`
- * answers false.
+ * Grammars every build registers, in table order. The build's
+ * `syntax-highlight` component decides whether this table is registered at
+ * all: a build that drops the component aliases this module to
+ * `syntax-highlight-disabled.ts` (see scripts/build-components.mjs), so the
+ * grammars and highlight.js itself never reach the bundle. A source checkout
+ * and npm install always carry them.
  */
-const HIGHLIGHTING_ENABLED = isBuildComponentEnabled("syntax-highlight");
+const EAGER_LANGUAGES = {
+	python,
+	java,
+	go,
+	javascript,
+	json,
+	cpp,
+	typescript,
+	php,
+	ruby,
+	c,
+	csharp,
+	nix,
+	bash,
+	rust,
+	scala,
+	kotlin,
+	swift,
+	dart,
+	groovy,
+	perl,
+	lua,
+};
 
-const eagerLanguages = HIGHLIGHTING_ENABLED
-	? {
-			python,
-			java,
-			go,
-			javascript,
-			json,
-			cpp,
-			typescript,
-			php,
-			ruby,
-			c,
-			csharp,
-			nix,
-			bash,
-			rust,
-			scala,
-			kotlin,
-			swift,
-			dart,
-			groovy,
-			perl,
-			lua,
-		}
-	: {};
-
-for (const [name, language] of Object.entries(eagerLanguages)) {
+for (const [name, language] of Object.entries(EAGER_LANGUAGES)) {
 	hljs.registerLanguage(name, language);
 }
 
 let allLanguagesPromise: Promise<void> | undefined;
 
+/** Loads the grammars outside `EAGER_LANGUAGES` on demand. A no-op in most sessions. */
 export function loadAllHighlightLanguages(): Promise<void> {
-	if (!HIGHLIGHTING_ENABLED) return Promise.resolve();
 	if (!allLanguagesPromise) {
 		allLanguagesPromise = new Promise((resolve) => {
 			setImmediate(() => {
@@ -218,7 +214,6 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 }
 
 export function highlight(code: string, options: HighlightOptions = {}): string {
-	if (!HIGHLIGHTING_ENABLED) return code;
 	const html = options.language
 		? hljs.highlight(code, {
 				language: options.language,
@@ -229,5 +224,5 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
 }
 
 export function supportsLanguage(name: string): boolean {
-	return HIGHLIGHTING_ENABLED && hljs.getLanguage(name) !== undefined;
+	return hljs.getLanguage(name) !== undefined;
 }

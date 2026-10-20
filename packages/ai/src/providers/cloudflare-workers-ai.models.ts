@@ -12,3 +12,15 @@ export const CLOUDFLARE_WORKERS_AI_IMAGE_MODELS: ImageModelCatalog<typeof values
 
 export const CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "cloudflare-workers-ai"> =
 	flattenClassifierModelCatalog("cloudflare-workers-ai", values);
+
+export const value = {
+	get CLOUDFLARE_WORKERS_AI_MODELS() {
+		return CLOUDFLARE_WORKERS_AI_MODELS;
+	},
+	get CLOUDFLARE_WORKERS_AI_IMAGE_MODELS() {
+		return CLOUDFLARE_WORKERS_AI_IMAGE_MODELS;
+	},
+	get CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS() {
+		return CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS;
+	},
+};

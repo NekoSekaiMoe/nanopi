@@ -2,398 +2,398 @@
 // Do not edit manually - run 'npm run generate-models' to update
 
 // provider-id: alibaba-token-plan
-import { ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS, ALIBABA_TOKEN_PLAN_IMAGE_MODELS, ALIBABA_TOKEN_PLAN_MODELS } from "./providers/alibaba-token-plan.models.ts";
+import * as IMPORT_ALIBABA_TOKEN_PLAN from "./providers/alibaba-token-plan.models.ts";
 // provider-id: alibaba-token-plan-cn
-import { ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS, ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS, ALIBABA_TOKEN_PLAN_CN_MODELS } from "./providers/alibaba-token-plan-cn.models.ts";
+import * as IMPORT_ALIBABA_TOKEN_PLAN_CN from "./providers/alibaba-token-plan-cn.models.ts";
 // provider-id: amazon-bedrock
-import { AMAZON_BEDROCK_CLASSIFIER_MODELS, AMAZON_BEDROCK_IMAGE_MODELS, AMAZON_BEDROCK_MODELS } from "./providers/amazon-bedrock.models.ts";
+import * as IMPORT_AMAZON_BEDROCK from "./providers/amazon-bedrock.models.ts";
 // provider-id: anthropic
-import { ANTHROPIC_CLASSIFIER_MODELS, ANTHROPIC_IMAGE_MODELS, ANTHROPIC_MODELS } from "./providers/anthropic.models.ts";
+import * as IMPORT_ANTHROPIC from "./providers/anthropic.models.ts";
 // provider-id: antigravity
-import { ANTIGRAVITY_CLASSIFIER_MODELS, ANTIGRAVITY_IMAGE_MODELS, ANTIGRAVITY_MODELS } from "./providers/antigravity.models.ts";
+import * as IMPORT_ANTIGRAVITY from "./providers/antigravity.models.ts";
 // provider-id: azure
-import { AZURE_CLASSIFIER_MODELS, AZURE_IMAGE_MODELS, AZURE_MODELS } from "./providers/azure.models.ts";
+import * as IMPORT_AZURE from "./providers/azure.models.ts";
 // provider-id: baseten
-import { BASETEN_CLASSIFIER_MODELS, BASETEN_IMAGE_MODELS, BASETEN_MODELS } from "./providers/baseten.models.ts";
+import * as IMPORT_BASETEN from "./providers/baseten.models.ts";
 // provider-id: cerebras
-import { CEREBRAS_CLASSIFIER_MODELS, CEREBRAS_IMAGE_MODELS, CEREBRAS_MODELS } from "./providers/cerebras.models.ts";
+import * as IMPORT_CEREBRAS from "./providers/cerebras.models.ts";
 // provider-id: cloudflare-ai-gateway
-import { CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS, CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS, CLOUDFLARE_AI_GATEWAY_MODELS } from "./providers/cloudflare-ai-gateway.models.ts";
+import * as IMPORT_CLOUDFLARE_AI_GATEWAY from "./providers/cloudflare-ai-gateway.models.ts";
 // provider-id: cloudflare-workers-ai
-import { CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS, CLOUDFLARE_WORKERS_AI_IMAGE_MODELS, CLOUDFLARE_WORKERS_AI_MODELS } from "./providers/cloudflare-workers-ai.models.ts";
+import * as IMPORT_CLOUDFLARE_WORKERS_AI from "./providers/cloudflare-workers-ai.models.ts";
 // provider-id: deepseek
-import { DEEPSEEK_CLASSIFIER_MODELS, DEEPSEEK_IMAGE_MODELS, DEEPSEEK_MODELS } from "./providers/deepseek.models.ts";
+import * as IMPORT_DEEPSEEK from "./providers/deepseek.models.ts";
 // provider-id: fireworks
-import { FIREWORKS_CLASSIFIER_MODELS, FIREWORKS_IMAGE_MODELS, FIREWORKS_MODELS } from "./providers/fireworks.models.ts";
+import * as IMPORT_FIREWORKS from "./providers/fireworks.models.ts";
 // provider-id: github-copilot
-import { GITHUB_COPILOT_CLASSIFIER_MODELS, GITHUB_COPILOT_IMAGE_MODELS, GITHUB_COPILOT_MODELS } from "./providers/github-copilot.models.ts";
+import * as IMPORT_GITHUB_COPILOT from "./providers/github-copilot.models.ts";
 // provider-id: google
-import { GOOGLE_CLASSIFIER_MODELS, GOOGLE_IMAGE_MODELS, GOOGLE_MODELS } from "./providers/google.models.ts";
+import * as IMPORT_GOOGLE from "./providers/google.models.ts";
 // provider-id: google-vertex
-import { GOOGLE_VERTEX_CLASSIFIER_MODELS, GOOGLE_VERTEX_IMAGE_MODELS, GOOGLE_VERTEX_MODELS } from "./providers/google-vertex.models.ts";
+import * as IMPORT_GOOGLE_VERTEX from "./providers/google-vertex.models.ts";
 // provider-id: groq
-import { GROQ_CLASSIFIER_MODELS, GROQ_IMAGE_MODELS, GROQ_MODELS } from "./providers/groq.models.ts";
+import * as IMPORT_GROQ from "./providers/groq.models.ts";
 // provider-id: huggingface
-import { HUGGINGFACE_CLASSIFIER_MODELS, HUGGINGFACE_IMAGE_MODELS, HUGGINGFACE_MODELS } from "./providers/huggingface.models.ts";
+import * as IMPORT_HUGGINGFACE from "./providers/huggingface.models.ts";
 // provider-id: kimi-coding
-import { KIMI_CODING_CLASSIFIER_MODELS, KIMI_CODING_IMAGE_MODELS, KIMI_CODING_MODELS } from "./providers/kimi-coding.models.ts";
+import * as IMPORT_KIMI_CODING from "./providers/kimi-coding.models.ts";
 // provider-id: meta
-import { META_CLASSIFIER_MODELS, META_IMAGE_MODELS, META_MODELS } from "./providers/meta.models.ts";
+import * as IMPORT_META from "./providers/meta.models.ts";
 // provider-id: modal
-import { MODAL_CLASSIFIER_MODELS, MODAL_IMAGE_MODELS, MODAL_MODELS } from "./providers/modal.models.ts";
+import * as IMPORT_MODAL from "./providers/modal.models.ts";
 // provider-id: moonshotai
-import { MOONSHOTAI_CLASSIFIER_MODELS, MOONSHOTAI_IMAGE_MODELS, MOONSHOTAI_MODELS } from "./providers/moonshotai.models.ts";
+import * as IMPORT_MOONSHOTAI from "./providers/moonshotai.models.ts";
 // provider-id: moonshotai-cn
-import { MOONSHOTAI_CN_CLASSIFIER_MODELS, MOONSHOTAI_CN_IMAGE_MODELS, MOONSHOTAI_CN_MODELS } from "./providers/moonshotai-cn.models.ts";
+import * as IMPORT_MOONSHOTAI_CN from "./providers/moonshotai-cn.models.ts";
 // provider-id: nvidia
-import { NVIDIA_CLASSIFIER_MODELS, NVIDIA_IMAGE_MODELS, NVIDIA_MODELS } from "./providers/nvidia.models.ts";
+import * as IMPORT_NVIDIA from "./providers/nvidia.models.ts";
 // provider-id: ollama-cloud-token-plan
-import { OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS, OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS, OLLAMA_CLOUD_TOKEN_PLAN_MODELS } from "./providers/ollama-cloud-token-plan.models.ts";
+import * as IMPORT_OLLAMA_CLOUD_TOKEN_PLAN from "./providers/ollama-cloud-token-plan.models.ts";
 // provider-id: openai
-import { OPENAI_CLASSIFIER_MODELS, OPENAI_IMAGE_MODELS, OPENAI_MODELS } from "./providers/openai.models.ts";
+import * as IMPORT_OPENAI from "./providers/openai.models.ts";
 // provider-id: openai-codex
-import { OPENAI_CODEX_CLASSIFIER_MODELS, OPENAI_CODEX_IMAGE_MODELS, OPENAI_CODEX_MODELS } from "./providers/openai-codex.models.ts";
+import * as IMPORT_OPENAI_CODEX from "./providers/openai-codex.models.ts";
 // provider-id: opencode
-import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_IMAGE_MODELS, OPENCODE_MODELS } from "./providers/opencode.models.ts";
+import * as IMPORT_OPENCODE from "./providers/opencode.models.ts";
 // provider-id: opencode-go
-import { OPENCODE_GO_CLASSIFIER_MODELS, OPENCODE_GO_IMAGE_MODELS, OPENCODE_GO_MODELS } from "./providers/opencode-go.models.ts";
+import * as IMPORT_OPENCODE_GO from "./providers/opencode-go.models.ts";
 // provider-id: openrouter
-import { OPENROUTER_CLASSIFIER_MODELS, OPENROUTER_IMAGE_MODELS, OPENROUTER_MODELS } from "./providers/openrouter.models.ts";
+import * as IMPORT_OPENROUTER from "./providers/openrouter.models.ts";
 // provider-id: qwen-token-plan
-import { QWEN_TOKEN_PLAN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_IMAGE_MODELS, QWEN_TOKEN_PLAN_MODELS } from "./providers/qwen-token-plan.models.ts";
+import * as IMPORT_QWEN_TOKEN_PLAN from "./providers/qwen-token-plan.models.ts";
 // provider-id: qwen-token-plan-cn
-import { QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_CN_IMAGE_MODELS, QWEN_TOKEN_PLAN_CN_MODELS } from "./providers/qwen-token-plan-cn.models.ts";
+import * as IMPORT_QWEN_TOKEN_PLAN_CN from "./providers/qwen-token-plan-cn.models.ts";
 // provider-id: qwen-token-plan-individual
-import { QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS, QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS } from "./providers/qwen-token-plan-individual.models.ts";
+import * as IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL from "./providers/qwen-token-plan-individual.models.ts";
 // provider-id: sensenova
-import { SENSENOVA_CLASSIFIER_MODELS, SENSENOVA_IMAGE_MODELS, SENSENOVA_MODELS } from "./providers/sensenova.models.ts";
+import * as IMPORT_SENSENOVA from "./providers/sensenova.models.ts";
 // provider-id: siliconflow
-import { SILICONFLOW_CLASSIFIER_MODELS, SILICONFLOW_IMAGE_MODELS, SILICONFLOW_MODELS } from "./providers/siliconflow.models.ts";
+import * as IMPORT_SILICONFLOW from "./providers/siliconflow.models.ts";
 // provider-id: siliconflow-cn
-import { SILICONFLOW_CN_CLASSIFIER_MODELS, SILICONFLOW_CN_IMAGE_MODELS, SILICONFLOW_CN_MODELS } from "./providers/siliconflow-cn.models.ts";
+import * as IMPORT_SILICONFLOW_CN from "./providers/siliconflow-cn.models.ts";
 // provider-id: stepfun
-import { STEPFUN_CLASSIFIER_MODELS, STEPFUN_IMAGE_MODELS, STEPFUN_MODELS } from "./providers/stepfun.models.ts";
+import * as IMPORT_STEPFUN from "./providers/stepfun.models.ts";
 // provider-id: stepfun-ai
-import { STEPFUN_AI_CLASSIFIER_MODELS, STEPFUN_AI_IMAGE_MODELS, STEPFUN_AI_MODELS } from "./providers/stepfun-ai.models.ts";
+import * as IMPORT_STEPFUN_AI from "./providers/stepfun-ai.models.ts";
 // provider-id: together
-import { TOGETHER_CLASSIFIER_MODELS, TOGETHER_IMAGE_MODELS, TOGETHER_MODELS } from "./providers/together.models.ts";
+import * as IMPORT_TOGETHER from "./providers/together.models.ts";
 // provider-id: typesafe
-import { TYPESAFE_CLASSIFIER_MODELS, TYPESAFE_IMAGE_MODELS, TYPESAFE_MODELS } from "./providers/typesafe.models.ts";
+import * as IMPORT_TYPESAFE from "./providers/typesafe.models.ts";
 // provider-id: vercel-ai-gateway
-import { VERCEL_AI_GATEWAY_CLASSIFIER_MODELS, VERCEL_AI_GATEWAY_IMAGE_MODELS, VERCEL_AI_GATEWAY_MODELS } from "./providers/vercel-ai-gateway.models.ts";
+import * as IMPORT_VERCEL_AI_GATEWAY from "./providers/vercel-ai-gateway.models.ts";
 // provider-id: xai
-import { XAI_CLASSIFIER_MODELS, XAI_IMAGE_MODELS, XAI_MODELS } from "./providers/xai.models.ts";
+import * as IMPORT_XAI from "./providers/xai.models.ts";
 // provider-id: xiaomi
-import { XIAOMI_CLASSIFIER_MODELS, XIAOMI_IMAGE_MODELS, XIAOMI_MODELS } from "./providers/xiaomi.models.ts";
+import * as IMPORT_XIAOMI from "./providers/xiaomi.models.ts";
 // provider-id: xiaomi-token-plan-ams
-import { XIAOMI_TOKEN_PLAN_AMS_CLASSIFIER_MODELS, XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS, XIAOMI_TOKEN_PLAN_AMS_MODELS } from "./providers/xiaomi-token-plan-ams.models.ts";
+import * as IMPORT_XIAOMI_TOKEN_PLAN_AMS from "./providers/xiaomi-token-plan-ams.models.ts";
 // provider-id: xiaomi-token-plan-cn
-import { XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS, XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS, XIAOMI_TOKEN_PLAN_CN_MODELS } from "./providers/xiaomi-token-plan-cn.models.ts";
+import * as IMPORT_XIAOMI_TOKEN_PLAN_CN from "./providers/xiaomi-token-plan-cn.models.ts";
 // provider-id: xiaomi-token-plan-sgp
-import { XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS, XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS, XIAOMI_TOKEN_PLAN_SGP_MODELS } from "./providers/xiaomi-token-plan-sgp.models.ts";
+import * as IMPORT_XIAOMI_TOKEN_PLAN_SGP from "./providers/xiaomi-token-plan-sgp.models.ts";
 // provider-id: zai
-import { ZAI_CLASSIFIER_MODELS, ZAI_IMAGE_MODELS, ZAI_MODELS } from "./providers/zai.models.ts";
+import * as IMPORT_ZAI from "./providers/zai.models.ts";
 // provider-id: zai-coding-cn
-import { ZAI_CODING_CN_CLASSIFIER_MODELS, ZAI_CODING_CN_IMAGE_MODELS, ZAI_CODING_CN_MODELS } from "./providers/zai-coding-cn.models.ts";
+import * as IMPORT_ZAI_CODING_CN from "./providers/zai-coding-cn.models.ts";
 // provider-id: zhipuai
-import { ZHIPUAI_CLASSIFIER_MODELS, ZHIPUAI_IMAGE_MODELS, ZHIPUAI_MODELS } from "./providers/zhipuai.models.ts";
+import * as IMPORT_ZHIPUAI from "./providers/zhipuai.models.ts";
 
 export const MODELS: {
-	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_MODELS;
-	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_MODELS;
-	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_MODELS;
-	readonly "anthropic": typeof ANTHROPIC_MODELS;
-	readonly "antigravity": typeof ANTIGRAVITY_MODELS;
-	readonly "azure": typeof AZURE_MODELS;
-	readonly "baseten": typeof BASETEN_MODELS;
-	readonly "cerebras": typeof CEREBRAS_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_MODELS;
-	readonly "deepseek": typeof DEEPSEEK_MODELS;
-	readonly "fireworks": typeof FIREWORKS_MODELS;
-	readonly "github-copilot": typeof GITHUB_COPILOT_MODELS;
-	readonly "google": typeof GOOGLE_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_MODELS;
-	readonly "groq": typeof GROQ_MODELS;
-	readonly "huggingface": typeof HUGGINGFACE_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_MODELS;
-	readonly "meta": typeof META_MODELS;
-	readonly "modal": typeof MODAL_MODELS;
-	readonly "moonshotai": typeof MOONSHOTAI_MODELS;
-	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_MODELS;
-	readonly "nvidia": typeof NVIDIA_MODELS;
-	readonly "ollama-cloud-token-plan": typeof OLLAMA_CLOUD_TOKEN_PLAN_MODELS;
-	readonly "openai": typeof OPENAI_MODELS;
-	readonly "openai-codex": typeof OPENAI_CODEX_MODELS;
-	readonly "opencode": typeof OPENCODE_MODELS;
-	readonly "opencode-go": typeof OPENCODE_GO_MODELS;
-	readonly "openrouter": typeof OPENROUTER_MODELS;
-	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_MODELS;
-	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_MODELS;
-	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS;
-	readonly "sensenova": typeof SENSENOVA_MODELS;
-	readonly "siliconflow": typeof SILICONFLOW_MODELS;
-	readonly "siliconflow-cn": typeof SILICONFLOW_CN_MODELS;
-	readonly "stepfun": typeof STEPFUN_MODELS;
-	readonly "stepfun-ai": typeof STEPFUN_AI_MODELS;
-	readonly "together": typeof TOGETHER_MODELS;
-	readonly "typesafe": typeof TYPESAFE_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_MODELS;
-	readonly "xai": typeof XAI_MODELS;
-	readonly "xiaomi": typeof XIAOMI_MODELS;
-	readonly "xiaomi-token-plan-ams": typeof XIAOMI_TOKEN_PLAN_AMS_MODELS;
-	readonly "xiaomi-token-plan-cn": typeof XIAOMI_TOKEN_PLAN_CN_MODELS;
-	readonly "xiaomi-token-plan-sgp": typeof XIAOMI_TOKEN_PLAN_SGP_MODELS;
-	readonly "zai": typeof ZAI_MODELS;
-	readonly "zai-coding-cn": typeof ZAI_CODING_CN_MODELS;
-	readonly "zhipuai": typeof ZHIPUAI_MODELS;
+	readonly "alibaba-token-plan": typeof IMPORT_ALIBABA_TOKEN_PLAN["ALIBABA_TOKEN_PLAN_MODELS"];
+	readonly "alibaba-token-plan-cn": typeof IMPORT_ALIBABA_TOKEN_PLAN_CN["ALIBABA_TOKEN_PLAN_CN_MODELS"];
+	readonly "amazon-bedrock": typeof IMPORT_AMAZON_BEDROCK["AMAZON_BEDROCK_MODELS"];
+	readonly "anthropic": typeof IMPORT_ANTHROPIC["ANTHROPIC_MODELS"];
+	readonly "antigravity": typeof IMPORT_ANTIGRAVITY["ANTIGRAVITY_MODELS"];
+	readonly "azure": typeof IMPORT_AZURE["AZURE_MODELS"];
+	readonly "baseten": typeof IMPORT_BASETEN["BASETEN_MODELS"];
+	readonly "cerebras": typeof IMPORT_CEREBRAS["CEREBRAS_MODELS"];
+	readonly "cloudflare-ai-gateway": typeof IMPORT_CLOUDFLARE_AI_GATEWAY["CLOUDFLARE_AI_GATEWAY_MODELS"];
+	readonly "cloudflare-workers-ai": typeof IMPORT_CLOUDFLARE_WORKERS_AI["CLOUDFLARE_WORKERS_AI_MODELS"];
+	readonly "deepseek": typeof IMPORT_DEEPSEEK["DEEPSEEK_MODELS"];
+	readonly "fireworks": typeof IMPORT_FIREWORKS["FIREWORKS_MODELS"];
+	readonly "github-copilot": typeof IMPORT_GITHUB_COPILOT["GITHUB_COPILOT_MODELS"];
+	readonly "google": typeof IMPORT_GOOGLE["GOOGLE_MODELS"];
+	readonly "google-vertex": typeof IMPORT_GOOGLE_VERTEX["GOOGLE_VERTEX_MODELS"];
+	readonly "groq": typeof IMPORT_GROQ["GROQ_MODELS"];
+	readonly "huggingface": typeof IMPORT_HUGGINGFACE["HUGGINGFACE_MODELS"];
+	readonly "kimi-coding": typeof IMPORT_KIMI_CODING["KIMI_CODING_MODELS"];
+	readonly "meta": typeof IMPORT_META["META_MODELS"];
+	readonly "modal": typeof IMPORT_MODAL["MODAL_MODELS"];
+	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_MODELS"];
+	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_MODELS"];
+	readonly "nvidia": typeof IMPORT_NVIDIA["NVIDIA_MODELS"];
+	readonly "ollama-cloud-token-plan": typeof IMPORT_OLLAMA_CLOUD_TOKEN_PLAN["OLLAMA_CLOUD_TOKEN_PLAN_MODELS"];
+	readonly "openai": typeof IMPORT_OPENAI["OPENAI_MODELS"];
+	readonly "openai-codex": typeof IMPORT_OPENAI_CODEX["OPENAI_CODEX_MODELS"];
+	readonly "opencode": typeof IMPORT_OPENCODE["OPENCODE_MODELS"];
+	readonly "opencode-go": typeof IMPORT_OPENCODE_GO["OPENCODE_GO_MODELS"];
+	readonly "openrouter": typeof IMPORT_OPENROUTER["OPENROUTER_MODELS"];
+	readonly "qwen-token-plan": typeof IMPORT_QWEN_TOKEN_PLAN["QWEN_TOKEN_PLAN_MODELS"];
+	readonly "qwen-token-plan-cn": typeof IMPORT_QWEN_TOKEN_PLAN_CN["QWEN_TOKEN_PLAN_CN_MODELS"];
+	readonly "qwen-token-plan-individual": typeof IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL["QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS"];
+	readonly "sensenova": typeof IMPORT_SENSENOVA["SENSENOVA_MODELS"];
+	readonly "siliconflow": typeof IMPORT_SILICONFLOW["SILICONFLOW_MODELS"];
+	readonly "siliconflow-cn": typeof IMPORT_SILICONFLOW_CN["SILICONFLOW_CN_MODELS"];
+	readonly "stepfun": typeof IMPORT_STEPFUN["STEPFUN_MODELS"];
+	readonly "stepfun-ai": typeof IMPORT_STEPFUN_AI["STEPFUN_AI_MODELS"];
+	readonly "together": typeof IMPORT_TOGETHER["TOGETHER_MODELS"];
+	readonly "typesafe": typeof IMPORT_TYPESAFE["TYPESAFE_MODELS"];
+	readonly "vercel-ai-gateway": typeof IMPORT_VERCEL_AI_GATEWAY["VERCEL_AI_GATEWAY_MODELS"];
+	readonly "xai": typeof IMPORT_XAI["XAI_MODELS"];
+	readonly "xiaomi": typeof IMPORT_XIAOMI["XIAOMI_MODELS"];
+	readonly "xiaomi-token-plan-ams": typeof IMPORT_XIAOMI_TOKEN_PLAN_AMS["XIAOMI_TOKEN_PLAN_AMS_MODELS"];
+	readonly "xiaomi-token-plan-cn": typeof IMPORT_XIAOMI_TOKEN_PLAN_CN["XIAOMI_TOKEN_PLAN_CN_MODELS"];
+	readonly "xiaomi-token-plan-sgp": typeof IMPORT_XIAOMI_TOKEN_PLAN_SGP["XIAOMI_TOKEN_PLAN_SGP_MODELS"];
+	readonly "zai": typeof IMPORT_ZAI["ZAI_MODELS"];
+	readonly "zai-coding-cn": typeof IMPORT_ZAI_CODING_CN["ZAI_CODING_CN_MODELS"];
+	readonly "zhipuai": typeof IMPORT_ZHIPUAI["ZHIPUAI_MODELS"];
 } = {
-	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_MODELS,
-	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_MODELS,
-	"amazon-bedrock": AMAZON_BEDROCK_MODELS,
-	"anthropic": ANTHROPIC_MODELS,
-	"antigravity": ANTIGRAVITY_MODELS,
-	"azure": AZURE_MODELS,
-	"baseten": BASETEN_MODELS,
-	"cerebras": CEREBRAS_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_MODELS,
-	"deepseek": DEEPSEEK_MODELS,
-	"fireworks": FIREWORKS_MODELS,
-	"github-copilot": GITHUB_COPILOT_MODELS,
-	"google": GOOGLE_MODELS,
-	"google-vertex": GOOGLE_VERTEX_MODELS,
-	"groq": GROQ_MODELS,
-	"huggingface": HUGGINGFACE_MODELS,
-	"kimi-coding": KIMI_CODING_MODELS,
-	"meta": META_MODELS,
-	"modal": MODAL_MODELS,
-	"moonshotai": MOONSHOTAI_MODELS,
-	"moonshotai-cn": MOONSHOTAI_CN_MODELS,
-	"nvidia": NVIDIA_MODELS,
-	"ollama-cloud-token-plan": OLLAMA_CLOUD_TOKEN_PLAN_MODELS,
-	"openai": OPENAI_MODELS,
-	"openai-codex": OPENAI_CODEX_MODELS,
-	"opencode": OPENCODE_MODELS,
-	"opencode-go": OPENCODE_GO_MODELS,
-	"openrouter": OPENROUTER_MODELS,
-	"qwen-token-plan": QWEN_TOKEN_PLAN_MODELS,
-	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_MODELS,
-	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS,
-	"sensenova": SENSENOVA_MODELS,
-	"siliconflow": SILICONFLOW_MODELS,
-	"siliconflow-cn": SILICONFLOW_CN_MODELS,
-	"stepfun": STEPFUN_MODELS,
-	"stepfun-ai": STEPFUN_AI_MODELS,
-	"together": TOGETHER_MODELS,
-	"typesafe": TYPESAFE_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_MODELS,
-	"xai": XAI_MODELS,
-	"xiaomi": XIAOMI_MODELS,
-	"xiaomi-token-plan-ams": XIAOMI_TOKEN_PLAN_AMS_MODELS,
-	"xiaomi-token-plan-cn": XIAOMI_TOKEN_PLAN_CN_MODELS,
-	"xiaomi-token-plan-sgp": XIAOMI_TOKEN_PLAN_SGP_MODELS,
-	"zai": ZAI_MODELS,
-	"zai-coding-cn": ZAI_CODING_CN_MODELS,
-	"zhipuai": ZHIPUAI_MODELS,
+	"alibaba-token-plan": IMPORT_ALIBABA_TOKEN_PLAN.value["ALIBABA_TOKEN_PLAN_MODELS"],
+	"alibaba-token-plan-cn": IMPORT_ALIBABA_TOKEN_PLAN_CN.value["ALIBABA_TOKEN_PLAN_CN_MODELS"],
+	"amazon-bedrock": IMPORT_AMAZON_BEDROCK.value["AMAZON_BEDROCK_MODELS"],
+	"anthropic": IMPORT_ANTHROPIC.value["ANTHROPIC_MODELS"],
+	"antigravity": IMPORT_ANTIGRAVITY.value["ANTIGRAVITY_MODELS"],
+	"azure": IMPORT_AZURE.value["AZURE_MODELS"],
+	"baseten": IMPORT_BASETEN.value["BASETEN_MODELS"],
+	"cerebras": IMPORT_CEREBRAS.value["CEREBRAS_MODELS"],
+	"cloudflare-ai-gateway": IMPORT_CLOUDFLARE_AI_GATEWAY.value["CLOUDFLARE_AI_GATEWAY_MODELS"],
+	"cloudflare-workers-ai": IMPORT_CLOUDFLARE_WORKERS_AI.value["CLOUDFLARE_WORKERS_AI_MODELS"],
+	"deepseek": IMPORT_DEEPSEEK.value["DEEPSEEK_MODELS"],
+	"fireworks": IMPORT_FIREWORKS.value["FIREWORKS_MODELS"],
+	"github-copilot": IMPORT_GITHUB_COPILOT.value["GITHUB_COPILOT_MODELS"],
+	"google": IMPORT_GOOGLE.value["GOOGLE_MODELS"],
+	"google-vertex": IMPORT_GOOGLE_VERTEX.value["GOOGLE_VERTEX_MODELS"],
+	"groq": IMPORT_GROQ.value["GROQ_MODELS"],
+	"huggingface": IMPORT_HUGGINGFACE.value["HUGGINGFACE_MODELS"],
+	"kimi-coding": IMPORT_KIMI_CODING.value["KIMI_CODING_MODELS"],
+	"meta": IMPORT_META.value["META_MODELS"],
+	"modal": IMPORT_MODAL.value["MODAL_MODELS"],
+	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_MODELS"],
+	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_MODELS"],
+	"nvidia": IMPORT_NVIDIA.value["NVIDIA_MODELS"],
+	"ollama-cloud-token-plan": IMPORT_OLLAMA_CLOUD_TOKEN_PLAN.value["OLLAMA_CLOUD_TOKEN_PLAN_MODELS"],
+	"openai": IMPORT_OPENAI.value["OPENAI_MODELS"],
+	"openai-codex": IMPORT_OPENAI_CODEX.value["OPENAI_CODEX_MODELS"],
+	"opencode": IMPORT_OPENCODE.value["OPENCODE_MODELS"],
+	"opencode-go": IMPORT_OPENCODE_GO.value["OPENCODE_GO_MODELS"],
+	"openrouter": IMPORT_OPENROUTER.value["OPENROUTER_MODELS"],
+	"qwen-token-plan": IMPORT_QWEN_TOKEN_PLAN.value["QWEN_TOKEN_PLAN_MODELS"],
+	"qwen-token-plan-cn": IMPORT_QWEN_TOKEN_PLAN_CN.value["QWEN_TOKEN_PLAN_CN_MODELS"],
+	"qwen-token-plan-individual": IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL.value["QWEN_TOKEN_PLAN_INDIVIDUAL_MODELS"],
+	"sensenova": IMPORT_SENSENOVA.value["SENSENOVA_MODELS"],
+	"siliconflow": IMPORT_SILICONFLOW.value["SILICONFLOW_MODELS"],
+	"siliconflow-cn": IMPORT_SILICONFLOW_CN.value["SILICONFLOW_CN_MODELS"],
+	"stepfun": IMPORT_STEPFUN.value["STEPFUN_MODELS"],
+	"stepfun-ai": IMPORT_STEPFUN_AI.value["STEPFUN_AI_MODELS"],
+	"together": IMPORT_TOGETHER.value["TOGETHER_MODELS"],
+	"typesafe": IMPORT_TYPESAFE.value["TYPESAFE_MODELS"],
+	"vercel-ai-gateway": IMPORT_VERCEL_AI_GATEWAY.value["VERCEL_AI_GATEWAY_MODELS"],
+	"xai": IMPORT_XAI.value["XAI_MODELS"],
+	"xiaomi": IMPORT_XIAOMI.value["XIAOMI_MODELS"],
+	"xiaomi-token-plan-ams": IMPORT_XIAOMI_TOKEN_PLAN_AMS.value["XIAOMI_TOKEN_PLAN_AMS_MODELS"],
+	"xiaomi-token-plan-cn": IMPORT_XIAOMI_TOKEN_PLAN_CN.value["XIAOMI_TOKEN_PLAN_CN_MODELS"],
+	"xiaomi-token-plan-sgp": IMPORT_XIAOMI_TOKEN_PLAN_SGP.value["XIAOMI_TOKEN_PLAN_SGP_MODELS"],
+	"zai": IMPORT_ZAI.value["ZAI_MODELS"],
+	"zai-coding-cn": IMPORT_ZAI_CODING_CN.value["ZAI_CODING_CN_MODELS"],
+	"zhipuai": IMPORT_ZHIPUAI.value["ZHIPUAI_MODELS"],
 };
 
 export const IMAGE_MODELS: {
-	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_IMAGE_MODELS;
-	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS;
-	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_IMAGE_MODELS;
-	readonly "anthropic": typeof ANTHROPIC_IMAGE_MODELS;
-	readonly "antigravity": typeof ANTIGRAVITY_IMAGE_MODELS;
-	readonly "azure": typeof AZURE_IMAGE_MODELS;
-	readonly "baseten": typeof BASETEN_IMAGE_MODELS;
-	readonly "cerebras": typeof CEREBRAS_IMAGE_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_IMAGE_MODELS;
-	readonly "deepseek": typeof DEEPSEEK_IMAGE_MODELS;
-	readonly "fireworks": typeof FIREWORKS_IMAGE_MODELS;
-	readonly "github-copilot": typeof GITHUB_COPILOT_IMAGE_MODELS;
-	readonly "google": typeof GOOGLE_IMAGE_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_IMAGE_MODELS;
-	readonly "groq": typeof GROQ_IMAGE_MODELS;
-	readonly "huggingface": typeof HUGGINGFACE_IMAGE_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_IMAGE_MODELS;
-	readonly "meta": typeof META_IMAGE_MODELS;
-	readonly "modal": typeof MODAL_IMAGE_MODELS;
-	readonly "moonshotai": typeof MOONSHOTAI_IMAGE_MODELS;
-	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_IMAGE_MODELS;
-	readonly "nvidia": typeof NVIDIA_IMAGE_MODELS;
-	readonly "ollama-cloud-token-plan": typeof OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS;
-	readonly "openai": typeof OPENAI_IMAGE_MODELS;
-	readonly "openai-codex": typeof OPENAI_CODEX_IMAGE_MODELS;
-	readonly "opencode": typeof OPENCODE_IMAGE_MODELS;
-	readonly "opencode-go": typeof OPENCODE_GO_IMAGE_MODELS;
-	readonly "openrouter": typeof OPENROUTER_IMAGE_MODELS;
-	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_IMAGE_MODELS;
-	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_IMAGE_MODELS;
-	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS;
-	readonly "sensenova": typeof SENSENOVA_IMAGE_MODELS;
-	readonly "siliconflow": typeof SILICONFLOW_IMAGE_MODELS;
-	readonly "siliconflow-cn": typeof SILICONFLOW_CN_IMAGE_MODELS;
-	readonly "stepfun": typeof STEPFUN_IMAGE_MODELS;
-	readonly "stepfun-ai": typeof STEPFUN_AI_IMAGE_MODELS;
-	readonly "together": typeof TOGETHER_IMAGE_MODELS;
-	readonly "typesafe": typeof TYPESAFE_IMAGE_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_IMAGE_MODELS;
-	readonly "xai": typeof XAI_IMAGE_MODELS;
-	readonly "xiaomi": typeof XIAOMI_IMAGE_MODELS;
-	readonly "xiaomi-token-plan-ams": typeof XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS;
-	readonly "xiaomi-token-plan-cn": typeof XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS;
-	readonly "xiaomi-token-plan-sgp": typeof XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS;
-	readonly "zai": typeof ZAI_IMAGE_MODELS;
-	readonly "zai-coding-cn": typeof ZAI_CODING_CN_IMAGE_MODELS;
-	readonly "zhipuai": typeof ZHIPUAI_IMAGE_MODELS;
+	readonly "alibaba-token-plan": typeof IMPORT_ALIBABA_TOKEN_PLAN["ALIBABA_TOKEN_PLAN_IMAGE_MODELS"];
+	readonly "alibaba-token-plan-cn": typeof IMPORT_ALIBABA_TOKEN_PLAN_CN["ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS"];
+	readonly "amazon-bedrock": typeof IMPORT_AMAZON_BEDROCK["AMAZON_BEDROCK_IMAGE_MODELS"];
+	readonly "anthropic": typeof IMPORT_ANTHROPIC["ANTHROPIC_IMAGE_MODELS"];
+	readonly "antigravity": typeof IMPORT_ANTIGRAVITY["ANTIGRAVITY_IMAGE_MODELS"];
+	readonly "azure": typeof IMPORT_AZURE["AZURE_IMAGE_MODELS"];
+	readonly "baseten": typeof IMPORT_BASETEN["BASETEN_IMAGE_MODELS"];
+	readonly "cerebras": typeof IMPORT_CEREBRAS["CEREBRAS_IMAGE_MODELS"];
+	readonly "cloudflare-ai-gateway": typeof IMPORT_CLOUDFLARE_AI_GATEWAY["CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS"];
+	readonly "cloudflare-workers-ai": typeof IMPORT_CLOUDFLARE_WORKERS_AI["CLOUDFLARE_WORKERS_AI_IMAGE_MODELS"];
+	readonly "deepseek": typeof IMPORT_DEEPSEEK["DEEPSEEK_IMAGE_MODELS"];
+	readonly "fireworks": typeof IMPORT_FIREWORKS["FIREWORKS_IMAGE_MODELS"];
+	readonly "github-copilot": typeof IMPORT_GITHUB_COPILOT["GITHUB_COPILOT_IMAGE_MODELS"];
+	readonly "google": typeof IMPORT_GOOGLE["GOOGLE_IMAGE_MODELS"];
+	readonly "google-vertex": typeof IMPORT_GOOGLE_VERTEX["GOOGLE_VERTEX_IMAGE_MODELS"];
+	readonly "groq": typeof IMPORT_GROQ["GROQ_IMAGE_MODELS"];
+	readonly "huggingface": typeof IMPORT_HUGGINGFACE["HUGGINGFACE_IMAGE_MODELS"];
+	readonly "kimi-coding": typeof IMPORT_KIMI_CODING["KIMI_CODING_IMAGE_MODELS"];
+	readonly "meta": typeof IMPORT_META["META_IMAGE_MODELS"];
+	readonly "modal": typeof IMPORT_MODAL["MODAL_IMAGE_MODELS"];
+	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_IMAGE_MODELS"];
+	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_IMAGE_MODELS"];
+	readonly "nvidia": typeof IMPORT_NVIDIA["NVIDIA_IMAGE_MODELS"];
+	readonly "ollama-cloud-token-plan": typeof IMPORT_OLLAMA_CLOUD_TOKEN_PLAN["OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS"];
+	readonly "openai": typeof IMPORT_OPENAI["OPENAI_IMAGE_MODELS"];
+	readonly "openai-codex": typeof IMPORT_OPENAI_CODEX["OPENAI_CODEX_IMAGE_MODELS"];
+	readonly "opencode": typeof IMPORT_OPENCODE["OPENCODE_IMAGE_MODELS"];
+	readonly "opencode-go": typeof IMPORT_OPENCODE_GO["OPENCODE_GO_IMAGE_MODELS"];
+	readonly "openrouter": typeof IMPORT_OPENROUTER["OPENROUTER_IMAGE_MODELS"];
+	readonly "qwen-token-plan": typeof IMPORT_QWEN_TOKEN_PLAN["QWEN_TOKEN_PLAN_IMAGE_MODELS"];
+	readonly "qwen-token-plan-cn": typeof IMPORT_QWEN_TOKEN_PLAN_CN["QWEN_TOKEN_PLAN_CN_IMAGE_MODELS"];
+	readonly "qwen-token-plan-individual": typeof IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL["QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS"];
+	readonly "sensenova": typeof IMPORT_SENSENOVA["SENSENOVA_IMAGE_MODELS"];
+	readonly "siliconflow": typeof IMPORT_SILICONFLOW["SILICONFLOW_IMAGE_MODELS"];
+	readonly "siliconflow-cn": typeof IMPORT_SILICONFLOW_CN["SILICONFLOW_CN_IMAGE_MODELS"];
+	readonly "stepfun": typeof IMPORT_STEPFUN["STEPFUN_IMAGE_MODELS"];
+	readonly "stepfun-ai": typeof IMPORT_STEPFUN_AI["STEPFUN_AI_IMAGE_MODELS"];
+	readonly "together": typeof IMPORT_TOGETHER["TOGETHER_IMAGE_MODELS"];
+	readonly "typesafe": typeof IMPORT_TYPESAFE["TYPESAFE_IMAGE_MODELS"];
+	readonly "vercel-ai-gateway": typeof IMPORT_VERCEL_AI_GATEWAY["VERCEL_AI_GATEWAY_IMAGE_MODELS"];
+	readonly "xai": typeof IMPORT_XAI["XAI_IMAGE_MODELS"];
+	readonly "xiaomi": typeof IMPORT_XIAOMI["XIAOMI_IMAGE_MODELS"];
+	readonly "xiaomi-token-plan-ams": typeof IMPORT_XIAOMI_TOKEN_PLAN_AMS["XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS"];
+	readonly "xiaomi-token-plan-cn": typeof IMPORT_XIAOMI_TOKEN_PLAN_CN["XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS"];
+	readonly "xiaomi-token-plan-sgp": typeof IMPORT_XIAOMI_TOKEN_PLAN_SGP["XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS"];
+	readonly "zai": typeof IMPORT_ZAI["ZAI_IMAGE_MODELS"];
+	readonly "zai-coding-cn": typeof IMPORT_ZAI_CODING_CN["ZAI_CODING_CN_IMAGE_MODELS"];
+	readonly "zhipuai": typeof IMPORT_ZHIPUAI["ZHIPUAI_IMAGE_MODELS"];
 } = {
-	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_IMAGE_MODELS,
-	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS,
-	"amazon-bedrock": AMAZON_BEDROCK_IMAGE_MODELS,
-	"anthropic": ANTHROPIC_IMAGE_MODELS,
-	"antigravity": ANTIGRAVITY_IMAGE_MODELS,
-	"azure": AZURE_IMAGE_MODELS,
-	"baseten": BASETEN_IMAGE_MODELS,
-	"cerebras": CEREBRAS_IMAGE_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_IMAGE_MODELS,
-	"deepseek": DEEPSEEK_IMAGE_MODELS,
-	"fireworks": FIREWORKS_IMAGE_MODELS,
-	"github-copilot": GITHUB_COPILOT_IMAGE_MODELS,
-	"google": GOOGLE_IMAGE_MODELS,
-	"google-vertex": GOOGLE_VERTEX_IMAGE_MODELS,
-	"groq": GROQ_IMAGE_MODELS,
-	"huggingface": HUGGINGFACE_IMAGE_MODELS,
-	"kimi-coding": KIMI_CODING_IMAGE_MODELS,
-	"meta": META_IMAGE_MODELS,
-	"modal": MODAL_IMAGE_MODELS,
-	"moonshotai": MOONSHOTAI_IMAGE_MODELS,
-	"moonshotai-cn": MOONSHOTAI_CN_IMAGE_MODELS,
-	"nvidia": NVIDIA_IMAGE_MODELS,
-	"ollama-cloud-token-plan": OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS,
-	"openai": OPENAI_IMAGE_MODELS,
-	"openai-codex": OPENAI_CODEX_IMAGE_MODELS,
-	"opencode": OPENCODE_IMAGE_MODELS,
-	"opencode-go": OPENCODE_GO_IMAGE_MODELS,
-	"openrouter": OPENROUTER_IMAGE_MODELS,
-	"qwen-token-plan": QWEN_TOKEN_PLAN_IMAGE_MODELS,
-	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_IMAGE_MODELS,
-	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS,
-	"sensenova": SENSENOVA_IMAGE_MODELS,
-	"siliconflow": SILICONFLOW_IMAGE_MODELS,
-	"siliconflow-cn": SILICONFLOW_CN_IMAGE_MODELS,
-	"stepfun": STEPFUN_IMAGE_MODELS,
-	"stepfun-ai": STEPFUN_AI_IMAGE_MODELS,
-	"together": TOGETHER_IMAGE_MODELS,
-	"typesafe": TYPESAFE_IMAGE_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_IMAGE_MODELS,
-	"xai": XAI_IMAGE_MODELS,
-	"xiaomi": XIAOMI_IMAGE_MODELS,
-	"xiaomi-token-plan-ams": XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS,
-	"xiaomi-token-plan-cn": XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS,
-	"xiaomi-token-plan-sgp": XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS,
-	"zai": ZAI_IMAGE_MODELS,
-	"zai-coding-cn": ZAI_CODING_CN_IMAGE_MODELS,
-	"zhipuai": ZHIPUAI_IMAGE_MODELS,
+	"alibaba-token-plan": IMPORT_ALIBABA_TOKEN_PLAN.value["ALIBABA_TOKEN_PLAN_IMAGE_MODELS"],
+	"alibaba-token-plan-cn": IMPORT_ALIBABA_TOKEN_PLAN_CN.value["ALIBABA_TOKEN_PLAN_CN_IMAGE_MODELS"],
+	"amazon-bedrock": IMPORT_AMAZON_BEDROCK.value["AMAZON_BEDROCK_IMAGE_MODELS"],
+	"anthropic": IMPORT_ANTHROPIC.value["ANTHROPIC_IMAGE_MODELS"],
+	"antigravity": IMPORT_ANTIGRAVITY.value["ANTIGRAVITY_IMAGE_MODELS"],
+	"azure": IMPORT_AZURE.value["AZURE_IMAGE_MODELS"],
+	"baseten": IMPORT_BASETEN.value["BASETEN_IMAGE_MODELS"],
+	"cerebras": IMPORT_CEREBRAS.value["CEREBRAS_IMAGE_MODELS"],
+	"cloudflare-ai-gateway": IMPORT_CLOUDFLARE_AI_GATEWAY.value["CLOUDFLARE_AI_GATEWAY_IMAGE_MODELS"],
+	"cloudflare-workers-ai": IMPORT_CLOUDFLARE_WORKERS_AI.value["CLOUDFLARE_WORKERS_AI_IMAGE_MODELS"],
+	"deepseek": IMPORT_DEEPSEEK.value["DEEPSEEK_IMAGE_MODELS"],
+	"fireworks": IMPORT_FIREWORKS.value["FIREWORKS_IMAGE_MODELS"],
+	"github-copilot": IMPORT_GITHUB_COPILOT.value["GITHUB_COPILOT_IMAGE_MODELS"],
+	"google": IMPORT_GOOGLE.value["GOOGLE_IMAGE_MODELS"],
+	"google-vertex": IMPORT_GOOGLE_VERTEX.value["GOOGLE_VERTEX_IMAGE_MODELS"],
+	"groq": IMPORT_GROQ.value["GROQ_IMAGE_MODELS"],
+	"huggingface": IMPORT_HUGGINGFACE.value["HUGGINGFACE_IMAGE_MODELS"],
+	"kimi-coding": IMPORT_KIMI_CODING.value["KIMI_CODING_IMAGE_MODELS"],
+	"meta": IMPORT_META.value["META_IMAGE_MODELS"],
+	"modal": IMPORT_MODAL.value["MODAL_IMAGE_MODELS"],
+	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_IMAGE_MODELS"],
+	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_IMAGE_MODELS"],
+	"nvidia": IMPORT_NVIDIA.value["NVIDIA_IMAGE_MODELS"],
+	"ollama-cloud-token-plan": IMPORT_OLLAMA_CLOUD_TOKEN_PLAN.value["OLLAMA_CLOUD_TOKEN_PLAN_IMAGE_MODELS"],
+	"openai": IMPORT_OPENAI.value["OPENAI_IMAGE_MODELS"],
+	"openai-codex": IMPORT_OPENAI_CODEX.value["OPENAI_CODEX_IMAGE_MODELS"],
+	"opencode": IMPORT_OPENCODE.value["OPENCODE_IMAGE_MODELS"],
+	"opencode-go": IMPORT_OPENCODE_GO.value["OPENCODE_GO_IMAGE_MODELS"],
+	"openrouter": IMPORT_OPENROUTER.value["OPENROUTER_IMAGE_MODELS"],
+	"qwen-token-plan": IMPORT_QWEN_TOKEN_PLAN.value["QWEN_TOKEN_PLAN_IMAGE_MODELS"],
+	"qwen-token-plan-cn": IMPORT_QWEN_TOKEN_PLAN_CN.value["QWEN_TOKEN_PLAN_CN_IMAGE_MODELS"],
+	"qwen-token-plan-individual": IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL.value["QWEN_TOKEN_PLAN_INDIVIDUAL_IMAGE_MODELS"],
+	"sensenova": IMPORT_SENSENOVA.value["SENSENOVA_IMAGE_MODELS"],
+	"siliconflow": IMPORT_SILICONFLOW.value["SILICONFLOW_IMAGE_MODELS"],
+	"siliconflow-cn": IMPORT_SILICONFLOW_CN.value["SILICONFLOW_CN_IMAGE_MODELS"],
+	"stepfun": IMPORT_STEPFUN.value["STEPFUN_IMAGE_MODELS"],
+	"stepfun-ai": IMPORT_STEPFUN_AI.value["STEPFUN_AI_IMAGE_MODELS"],
+	"together": IMPORT_TOGETHER.value["TOGETHER_IMAGE_MODELS"],
+	"typesafe": IMPORT_TYPESAFE.value["TYPESAFE_IMAGE_MODELS"],
+	"vercel-ai-gateway": IMPORT_VERCEL_AI_GATEWAY.value["VERCEL_AI_GATEWAY_IMAGE_MODELS"],
+	"xai": IMPORT_XAI.value["XAI_IMAGE_MODELS"],
+	"xiaomi": IMPORT_XIAOMI.value["XIAOMI_IMAGE_MODELS"],
+	"xiaomi-token-plan-ams": IMPORT_XIAOMI_TOKEN_PLAN_AMS.value["XIAOMI_TOKEN_PLAN_AMS_IMAGE_MODELS"],
+	"xiaomi-token-plan-cn": IMPORT_XIAOMI_TOKEN_PLAN_CN.value["XIAOMI_TOKEN_PLAN_CN_IMAGE_MODELS"],
+	"xiaomi-token-plan-sgp": IMPORT_XIAOMI_TOKEN_PLAN_SGP.value["XIAOMI_TOKEN_PLAN_SGP_IMAGE_MODELS"],
+	"zai": IMPORT_ZAI.value["ZAI_IMAGE_MODELS"],
+	"zai-coding-cn": IMPORT_ZAI_CODING_CN.value["ZAI_CODING_CN_IMAGE_MODELS"],
+	"zhipuai": IMPORT_ZHIPUAI.value["ZHIPUAI_IMAGE_MODELS"],
 };
 
 export const CLASSIFIER_MODELS: {
-	readonly "alibaba-token-plan": typeof ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS;
-	readonly "alibaba-token-plan-cn": typeof ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
-	readonly "amazon-bedrock": typeof AMAZON_BEDROCK_CLASSIFIER_MODELS;
-	readonly "anthropic": typeof ANTHROPIC_CLASSIFIER_MODELS;
-	readonly "antigravity": typeof ANTIGRAVITY_CLASSIFIER_MODELS;
-	readonly "azure": typeof AZURE_CLASSIFIER_MODELS;
-	readonly "baseten": typeof BASETEN_CLASSIFIER_MODELS;
-	readonly "cerebras": typeof CEREBRAS_CLASSIFIER_MODELS;
-	readonly "cloudflare-ai-gateway": typeof CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS;
-	readonly "cloudflare-workers-ai": typeof CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS;
-	readonly "deepseek": typeof DEEPSEEK_CLASSIFIER_MODELS;
-	readonly "fireworks": typeof FIREWORKS_CLASSIFIER_MODELS;
-	readonly "github-copilot": typeof GITHUB_COPILOT_CLASSIFIER_MODELS;
-	readonly "google": typeof GOOGLE_CLASSIFIER_MODELS;
-	readonly "google-vertex": typeof GOOGLE_VERTEX_CLASSIFIER_MODELS;
-	readonly "groq": typeof GROQ_CLASSIFIER_MODELS;
-	readonly "huggingface": typeof HUGGINGFACE_CLASSIFIER_MODELS;
-	readonly "kimi-coding": typeof KIMI_CODING_CLASSIFIER_MODELS;
-	readonly "meta": typeof META_CLASSIFIER_MODELS;
-	readonly "modal": typeof MODAL_CLASSIFIER_MODELS;
-	readonly "moonshotai": typeof MOONSHOTAI_CLASSIFIER_MODELS;
-	readonly "moonshotai-cn": typeof MOONSHOTAI_CN_CLASSIFIER_MODELS;
-	readonly "nvidia": typeof NVIDIA_CLASSIFIER_MODELS;
-	readonly "ollama-cloud-token-plan": typeof OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS;
-	readonly "openai": typeof OPENAI_CLASSIFIER_MODELS;
-	readonly "openai-codex": typeof OPENAI_CODEX_CLASSIFIER_MODELS;
-	readonly "opencode": typeof OPENCODE_CLASSIFIER_MODELS;
-	readonly "opencode-go": typeof OPENCODE_GO_CLASSIFIER_MODELS;
-	readonly "openrouter": typeof OPENROUTER_CLASSIFIER_MODELS;
-	readonly "qwen-token-plan": typeof QWEN_TOKEN_PLAN_CLASSIFIER_MODELS;
-	readonly "qwen-token-plan-cn": typeof QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
-	readonly "qwen-token-plan-individual": typeof QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS;
-	readonly "sensenova": typeof SENSENOVA_CLASSIFIER_MODELS;
-	readonly "siliconflow": typeof SILICONFLOW_CLASSIFIER_MODELS;
-	readonly "siliconflow-cn": typeof SILICONFLOW_CN_CLASSIFIER_MODELS;
-	readonly "stepfun": typeof STEPFUN_CLASSIFIER_MODELS;
-	readonly "stepfun-ai": typeof STEPFUN_AI_CLASSIFIER_MODELS;
-	readonly "together": typeof TOGETHER_CLASSIFIER_MODELS;
-	readonly "typesafe": typeof TYPESAFE_CLASSIFIER_MODELS;
-	readonly "vercel-ai-gateway": typeof VERCEL_AI_GATEWAY_CLASSIFIER_MODELS;
-	readonly "xai": typeof XAI_CLASSIFIER_MODELS;
-	readonly "xiaomi": typeof XIAOMI_CLASSIFIER_MODELS;
-	readonly "xiaomi-token-plan-ams": typeof XIAOMI_TOKEN_PLAN_AMS_CLASSIFIER_MODELS;
-	readonly "xiaomi-token-plan-cn": typeof XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS;
-	readonly "xiaomi-token-plan-sgp": typeof XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS;
-	readonly "zai": typeof ZAI_CLASSIFIER_MODELS;
-	readonly "zai-coding-cn": typeof ZAI_CODING_CN_CLASSIFIER_MODELS;
-	readonly "zhipuai": typeof ZHIPUAI_CLASSIFIER_MODELS;
+	readonly "alibaba-token-plan": typeof IMPORT_ALIBABA_TOKEN_PLAN["ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS"];
+	readonly "alibaba-token-plan-cn": typeof IMPORT_ALIBABA_TOKEN_PLAN_CN["ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS"];
+	readonly "amazon-bedrock": typeof IMPORT_AMAZON_BEDROCK["AMAZON_BEDROCK_CLASSIFIER_MODELS"];
+	readonly "anthropic": typeof IMPORT_ANTHROPIC["ANTHROPIC_CLASSIFIER_MODELS"];
+	readonly "antigravity": typeof IMPORT_ANTIGRAVITY["ANTIGRAVITY_CLASSIFIER_MODELS"];
+	readonly "azure": typeof IMPORT_AZURE["AZURE_CLASSIFIER_MODELS"];
+	readonly "baseten": typeof IMPORT_BASETEN["BASETEN_CLASSIFIER_MODELS"];
+	readonly "cerebras": typeof IMPORT_CEREBRAS["CEREBRAS_CLASSIFIER_MODELS"];
+	readonly "cloudflare-ai-gateway": typeof IMPORT_CLOUDFLARE_AI_GATEWAY["CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS"];
+	readonly "cloudflare-workers-ai": typeof IMPORT_CLOUDFLARE_WORKERS_AI["CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS"];
+	readonly "deepseek": typeof IMPORT_DEEPSEEK["DEEPSEEK_CLASSIFIER_MODELS"];
+	readonly "fireworks": typeof IMPORT_FIREWORKS["FIREWORKS_CLASSIFIER_MODELS"];
+	readonly "github-copilot": typeof IMPORT_GITHUB_COPILOT["GITHUB_COPILOT_CLASSIFIER_MODELS"];
+	readonly "google": typeof IMPORT_GOOGLE["GOOGLE_CLASSIFIER_MODELS"];
+	readonly "google-vertex": typeof IMPORT_GOOGLE_VERTEX["GOOGLE_VERTEX_CLASSIFIER_MODELS"];
+	readonly "groq": typeof IMPORT_GROQ["GROQ_CLASSIFIER_MODELS"];
+	readonly "huggingface": typeof IMPORT_HUGGINGFACE["HUGGINGFACE_CLASSIFIER_MODELS"];
+	readonly "kimi-coding": typeof IMPORT_KIMI_CODING["KIMI_CODING_CLASSIFIER_MODELS"];
+	readonly "meta": typeof IMPORT_META["META_CLASSIFIER_MODELS"];
+	readonly "modal": typeof IMPORT_MODAL["MODAL_CLASSIFIER_MODELS"];
+	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_CLASSIFIER_MODELS"];
+	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_CLASSIFIER_MODELS"];
+	readonly "nvidia": typeof IMPORT_NVIDIA["NVIDIA_CLASSIFIER_MODELS"];
+	readonly "ollama-cloud-token-plan": typeof IMPORT_OLLAMA_CLOUD_TOKEN_PLAN["OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS"];
+	readonly "openai": typeof IMPORT_OPENAI["OPENAI_CLASSIFIER_MODELS"];
+	readonly "openai-codex": typeof IMPORT_OPENAI_CODEX["OPENAI_CODEX_CLASSIFIER_MODELS"];
+	readonly "opencode": typeof IMPORT_OPENCODE["OPENCODE_CLASSIFIER_MODELS"];
+	readonly "opencode-go": typeof IMPORT_OPENCODE_GO["OPENCODE_GO_CLASSIFIER_MODELS"];
+	readonly "openrouter": typeof IMPORT_OPENROUTER["OPENROUTER_CLASSIFIER_MODELS"];
+	readonly "qwen-token-plan": typeof IMPORT_QWEN_TOKEN_PLAN["QWEN_TOKEN_PLAN_CLASSIFIER_MODELS"];
+	readonly "qwen-token-plan-cn": typeof IMPORT_QWEN_TOKEN_PLAN_CN["QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS"];
+	readonly "qwen-token-plan-individual": typeof IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL["QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS"];
+	readonly "sensenova": typeof IMPORT_SENSENOVA["SENSENOVA_CLASSIFIER_MODELS"];
+	readonly "siliconflow": typeof IMPORT_SILICONFLOW["SILICONFLOW_CLASSIFIER_MODELS"];
+	readonly "siliconflow-cn": typeof IMPORT_SILICONFLOW_CN["SILICONFLOW_CN_CLASSIFIER_MODELS"];
+	readonly "stepfun": typeof IMPORT_STEPFUN["STEPFUN_CLASSIFIER_MODELS"];
+	readonly "stepfun-ai": typeof IMPORT_STEPFUN_AI["STEPFUN_AI_CLASSIFIER_MODELS"];
+	readonly "together": typeof IMPORT_TOGETHER["TOGETHER_CLASSIFIER_MODELS"];
+	readonly "typesafe": typeof IMPORT_TYPESAFE["TYPESAFE_CLASSIFIER_MODELS"];
+	readonly "vercel-ai-gateway": typeof IMPORT_VERCEL_AI_GATEWAY["VERCEL_AI_GATEWAY_CLASSIFIER_MODELS"];
+	readonly "xai": typeof IMPORT_XAI["XAI_CLASSIFIER_MODELS"];
+	readonly "xiaomi": typeof IMPORT_XIAOMI["XIAOMI_CLASSIFIER_MODELS"];
+	readonly "xiaomi-token-plan-ams": typeof IMPORT_XIAOMI_TOKEN_PLAN_AMS["XIAOMI_TOKEN_PLAN_AMS_CLASSIFIER_MODELS"];
+	readonly "xiaomi-token-plan-cn": typeof IMPORT_XIAOMI_TOKEN_PLAN_CN["XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS"];
+	readonly "xiaomi-token-plan-sgp": typeof IMPORT_XIAOMI_TOKEN_PLAN_SGP["XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS"];
+	readonly "zai": typeof IMPORT_ZAI["ZAI_CLASSIFIER_MODELS"];
+	readonly "zai-coding-cn": typeof IMPORT_ZAI_CODING_CN["ZAI_CODING_CN_CLASSIFIER_MODELS"];
+	readonly "zhipuai": typeof IMPORT_ZHIPUAI["ZHIPUAI_CLASSIFIER_MODELS"];
 } = {
-	"alibaba-token-plan": ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS,
-	"alibaba-token-plan-cn": ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
-	"amazon-bedrock": AMAZON_BEDROCK_CLASSIFIER_MODELS,
-	"anthropic": ANTHROPIC_CLASSIFIER_MODELS,
-	"antigravity": ANTIGRAVITY_CLASSIFIER_MODELS,
-	"azure": AZURE_CLASSIFIER_MODELS,
-	"baseten": BASETEN_CLASSIFIER_MODELS,
-	"cerebras": CEREBRAS_CLASSIFIER_MODELS,
-	"cloudflare-ai-gateway": CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS,
-	"cloudflare-workers-ai": CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS,
-	"deepseek": DEEPSEEK_CLASSIFIER_MODELS,
-	"fireworks": FIREWORKS_CLASSIFIER_MODELS,
-	"github-copilot": GITHUB_COPILOT_CLASSIFIER_MODELS,
-	"google": GOOGLE_CLASSIFIER_MODELS,
-	"google-vertex": GOOGLE_VERTEX_CLASSIFIER_MODELS,
-	"groq": GROQ_CLASSIFIER_MODELS,
-	"huggingface": HUGGINGFACE_CLASSIFIER_MODELS,
-	"kimi-coding": KIMI_CODING_CLASSIFIER_MODELS,
-	"meta": META_CLASSIFIER_MODELS,
-	"modal": MODAL_CLASSIFIER_MODELS,
-	"moonshotai": MOONSHOTAI_CLASSIFIER_MODELS,
-	"moonshotai-cn": MOONSHOTAI_CN_CLASSIFIER_MODELS,
-	"nvidia": NVIDIA_CLASSIFIER_MODELS,
-	"ollama-cloud-token-plan": OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS,
-	"openai": OPENAI_CLASSIFIER_MODELS,
-	"openai-codex": OPENAI_CODEX_CLASSIFIER_MODELS,
-	"opencode": OPENCODE_CLASSIFIER_MODELS,
-	"opencode-go": OPENCODE_GO_CLASSIFIER_MODELS,
-	"openrouter": OPENROUTER_CLASSIFIER_MODELS,
-	"qwen-token-plan": QWEN_TOKEN_PLAN_CLASSIFIER_MODELS,
-	"qwen-token-plan-cn": QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
-	"qwen-token-plan-individual": QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS,
-	"sensenova": SENSENOVA_CLASSIFIER_MODELS,
-	"siliconflow": SILICONFLOW_CLASSIFIER_MODELS,
-	"siliconflow-cn": SILICONFLOW_CN_CLASSIFIER_MODELS,
-	"stepfun": STEPFUN_CLASSIFIER_MODELS,
-	"stepfun-ai": STEPFUN_AI_CLASSIFIER_MODELS,
-	"together": TOGETHER_CLASSIFIER_MODELS,
-	"typesafe": TYPESAFE_CLASSIFIER_MODELS,
-	"vercel-ai-gateway": VERCEL_AI_GATEWAY_CLASSIFIER_MODELS,
-	"xai": XAI_CLASSIFIER_MODELS,
-	"xiaomi": XIAOMI_CLASSIFIER_MODELS,
-	"xiaomi-token-plan-ams": XIAOMI_TOKEN_PLAN_AMS_CLASSIFIER_MODELS,
-	"xiaomi-token-plan-cn": XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS,
-	"xiaomi-token-plan-sgp": XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS,
-	"zai": ZAI_CLASSIFIER_MODELS,
-	"zai-coding-cn": ZAI_CODING_CN_CLASSIFIER_MODELS,
-	"zhipuai": ZHIPUAI_CLASSIFIER_MODELS,
+	"alibaba-token-plan": IMPORT_ALIBABA_TOKEN_PLAN.value["ALIBABA_TOKEN_PLAN_CLASSIFIER_MODELS"],
+	"alibaba-token-plan-cn": IMPORT_ALIBABA_TOKEN_PLAN_CN.value["ALIBABA_TOKEN_PLAN_CN_CLASSIFIER_MODELS"],
+	"amazon-bedrock": IMPORT_AMAZON_BEDROCK.value["AMAZON_BEDROCK_CLASSIFIER_MODELS"],
+	"anthropic": IMPORT_ANTHROPIC.value["ANTHROPIC_CLASSIFIER_MODELS"],
+	"antigravity": IMPORT_ANTIGRAVITY.value["ANTIGRAVITY_CLASSIFIER_MODELS"],
+	"azure": IMPORT_AZURE.value["AZURE_CLASSIFIER_MODELS"],
+	"baseten": IMPORT_BASETEN.value["BASETEN_CLASSIFIER_MODELS"],
+	"cerebras": IMPORT_CEREBRAS.value["CEREBRAS_CLASSIFIER_MODELS"],
+	"cloudflare-ai-gateway": IMPORT_CLOUDFLARE_AI_GATEWAY.value["CLOUDFLARE_AI_GATEWAY_CLASSIFIER_MODELS"],
+	"cloudflare-workers-ai": IMPORT_CLOUDFLARE_WORKERS_AI.value["CLOUDFLARE_WORKERS_AI_CLASSIFIER_MODELS"],
+	"deepseek": IMPORT_DEEPSEEK.value["DEEPSEEK_CLASSIFIER_MODELS"],
+	"fireworks": IMPORT_FIREWORKS.value["FIREWORKS_CLASSIFIER_MODELS"],
+	"github-copilot": IMPORT_GITHUB_COPILOT.value["GITHUB_COPILOT_CLASSIFIER_MODELS"],
+	"google": IMPORT_GOOGLE.value["GOOGLE_CLASSIFIER_MODELS"],
+	"google-vertex": IMPORT_GOOGLE_VERTEX.value["GOOGLE_VERTEX_CLASSIFIER_MODELS"],
+	"groq": IMPORT_GROQ.value["GROQ_CLASSIFIER_MODELS"],
+	"huggingface": IMPORT_HUGGINGFACE.value["HUGGINGFACE_CLASSIFIER_MODELS"],
+	"kimi-coding": IMPORT_KIMI_CODING.value["KIMI_CODING_CLASSIFIER_MODELS"],
+	"meta": IMPORT_META.value["META_CLASSIFIER_MODELS"],
+	"modal": IMPORT_MODAL.value["MODAL_CLASSIFIER_MODELS"],
+	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_CLASSIFIER_MODELS"],
+	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_CLASSIFIER_MODELS"],
+	"nvidia": IMPORT_NVIDIA.value["NVIDIA_CLASSIFIER_MODELS"],
+	"ollama-cloud-token-plan": IMPORT_OLLAMA_CLOUD_TOKEN_PLAN.value["OLLAMA_CLOUD_TOKEN_PLAN_CLASSIFIER_MODELS"],
+	"openai": IMPORT_OPENAI.value["OPENAI_CLASSIFIER_MODELS"],
+	"openai-codex": IMPORT_OPENAI_CODEX.value["OPENAI_CODEX_CLASSIFIER_MODELS"],
+	"opencode": IMPORT_OPENCODE.value["OPENCODE_CLASSIFIER_MODELS"],
+	"opencode-go": IMPORT_OPENCODE_GO.value["OPENCODE_GO_CLASSIFIER_MODELS"],
+	"openrouter": IMPORT_OPENROUTER.value["OPENROUTER_CLASSIFIER_MODELS"],
+	"qwen-token-plan": IMPORT_QWEN_TOKEN_PLAN.value["QWEN_TOKEN_PLAN_CLASSIFIER_MODELS"],
+	"qwen-token-plan-cn": IMPORT_QWEN_TOKEN_PLAN_CN.value["QWEN_TOKEN_PLAN_CN_CLASSIFIER_MODELS"],
+	"qwen-token-plan-individual": IMPORT_QWEN_TOKEN_PLAN_INDIVIDUAL.value["QWEN_TOKEN_PLAN_INDIVIDUAL_CLASSIFIER_MODELS"],
+	"sensenova": IMPORT_SENSENOVA.value["SENSENOVA_CLASSIFIER_MODELS"],
+	"siliconflow": IMPORT_SILICONFLOW.value["SILICONFLOW_CLASSIFIER_MODELS"],
+	"siliconflow-cn": IMPORT_SILICONFLOW_CN.value["SILICONFLOW_CN_CLASSIFIER_MODELS"],
+	"stepfun": IMPORT_STEPFUN.value["STEPFUN_CLASSIFIER_MODELS"],
+	"stepfun-ai": IMPORT_STEPFUN_AI.value["STEPFUN_AI_CLASSIFIER_MODELS"],
+	"together": IMPORT_TOGETHER.value["TOGETHER_CLASSIFIER_MODELS"],
+	"typesafe": IMPORT_TYPESAFE.value["TYPESAFE_CLASSIFIER_MODELS"],
+	"vercel-ai-gateway": IMPORT_VERCEL_AI_GATEWAY.value["VERCEL_AI_GATEWAY_CLASSIFIER_MODELS"],
+	"xai": IMPORT_XAI.value["XAI_CLASSIFIER_MODELS"],
+	"xiaomi": IMPORT_XIAOMI.value["XIAOMI_CLASSIFIER_MODELS"],
+	"xiaomi-token-plan-ams": IMPORT_XIAOMI_TOKEN_PLAN_AMS.value["XIAOMI_TOKEN_PLAN_AMS_CLASSIFIER_MODELS"],
+	"xiaomi-token-plan-cn": IMPORT_XIAOMI_TOKEN_PLAN_CN.value["XIAOMI_TOKEN_PLAN_CN_CLASSIFIER_MODELS"],
+	"xiaomi-token-plan-sgp": IMPORT_XIAOMI_TOKEN_PLAN_SGP.value["XIAOMI_TOKEN_PLAN_SGP_CLASSIFIER_MODELS"],
+	"zai": IMPORT_ZAI.value["ZAI_CLASSIFIER_MODELS"],
+	"zai-coding-cn": IMPORT_ZAI_CODING_CN.value["ZAI_CODING_CN_CLASSIFIER_MODELS"],
+	"zhipuai": IMPORT_ZHIPUAI.value["ZHIPUAI_CLASSIFIER_MODELS"],
 };

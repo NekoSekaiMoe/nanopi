@@ -12,3 +12,15 @@ export const MODAL_IMAGE_MODELS: ImageModelCatalog<typeof values, "modal"> =
 
 export const MODAL_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "modal"> =
 	flattenClassifierModelCatalog("modal", values);
+
+export const value = {
+	get MODAL_MODELS() {
+		return MODAL_MODELS;
+	},
+	get MODAL_IMAGE_MODELS() {
+		return MODAL_IMAGE_MODELS;
+	},
+	get MODAL_CLASSIFIER_MODELS() {
+		return MODAL_CLASSIFIER_MODELS;
+	},
+};

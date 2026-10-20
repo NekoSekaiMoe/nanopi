@@ -12,3 +12,15 @@ export const AZURE_IMAGE_MODELS: ImageModelCatalog<typeof values, "azure"> =
 
 export const AZURE_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "azure"> =
 	flattenClassifierModelCatalog("azure", values);
+
+export const value = {
+	get AZURE_MODELS() {
+		return AZURE_MODELS;
+	},
+	get AZURE_IMAGE_MODELS() {
+		return AZURE_IMAGE_MODELS;
+	},
+	get AZURE_CLASSIFIER_MODELS() {
+		return AZURE_CLASSIFIER_MODELS;
+	},
+};

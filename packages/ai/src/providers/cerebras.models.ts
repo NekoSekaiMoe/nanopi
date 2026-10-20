@@ -12,3 +12,15 @@ export const CEREBRAS_IMAGE_MODELS: ImageModelCatalog<typeof values, "cerebras">
 
 export const CEREBRAS_CLASSIFIER_MODELS: ClassifierModelCatalog<typeof values, "cerebras"> =
 	flattenClassifierModelCatalog("cerebras", values);
+
+export const value = {
+	get CEREBRAS_MODELS() {
+		return CEREBRAS_MODELS;
+	},
+	get CEREBRAS_IMAGE_MODELS() {
+		return CEREBRAS_IMAGE_MODELS;
+	},
+	get CEREBRAS_CLASSIFIER_MODELS() {
+		return CEREBRAS_CLASSIFIER_MODELS;
+	},
+};
