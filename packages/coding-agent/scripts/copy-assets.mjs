@@ -3,9 +3,14 @@
  * Copies package assets into dist/ (replaces the former shx one-liner).
  *
  * The export-html templates and the webui build are peripheral components
- * controlled by buildconfig.json flavors (--flavor / NANOPI_BUILD_FLAVOR); a
- * flavor that disables them ships dist/ without them and the runtime reports
- * them as not included.
+ * controlled by buildconfig.json flavors; a flavor that disables them ships
+ * dist/ without them and the runtime reports them as not included.
+ *
+ * The flavor is read from `--flavor` only. NANOPI_BUILD_FLAVOR is ignored on
+ * purpose: `pnpm run build` reaches this script through npm/pnpm, which put the
+ * variable back into child processes, so an exported flavor would strip the
+ * shared dist/ of assets a later unflavored build expects. The variable stays
+ * the channel for the bundle and single-file builds, which read it themselves.
  */
 
 import { copyFileSync, cpSync, existsSync, mkdirSync } from "node:fs";
@@ -18,10 +23,7 @@ const packageDir = join(scriptDir, "..");
 const repoRoot = join(packageDir, "..", "..");
 const distDir = join(packageDir, "dist");
 
-const { flavor, components } = resolveBuildFlavor(repoRoot, {
-	argv: process.argv,
-	env: process.env,
-});
+const { flavor, components } = resolveBuildFlavor(repoRoot, { env: {} });
 
 function copyTree(sourceDir, targetDir) {
 	mkdirSync(targetDir, { recursive: true });

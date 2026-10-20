@@ -8,8 +8,10 @@
  * runtime can report clean errors instead of module-not-found crashes.
  *
  * Flavor selection order: `--flavor <name>` CLI argument, then the
- * NANOPI_BUILD_FLAVOR environment variable (the propagation channel for
- * chained `pnpm run build` invocations), then the config's defaultFlavor.
+ * NANOPI_BUILD_FLAVOR environment variable, then the config's defaultFlavor.
+ * A caller for whom the environment is not the right channel passes its own
+ * `env` (copy-assets does, so a build script's exported flavor cannot leak into
+ * the shared dist/).
  *
  * Components that are not plain switches:
  * - `toolset` picks one value from the top-level `toolsetComponents` map

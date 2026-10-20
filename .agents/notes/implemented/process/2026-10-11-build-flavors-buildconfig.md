@@ -20,9 +20,9 @@ description) and `flavors` (component maps with `*` fallback; unlisted
 components default to enabled so a new component forgotten in a flavor stays
 bundled). `scripts/buildconfig.mjs` loads, validates, and resolves it;
 selection order is `--flavor <name>` CLI argument over the
-`NANOPI_BUILD_FLAVOR` environment variable (the propagation channel for
-chained `pnpm run build` runs, used by `packages/coding-agent/scripts/copy-assets.mjs`)
-over `defaultFlavor`.
+`NANOPI_BUILD_FLAVOR` environment variable over `defaultFlavor`. The variable
+only reaches the scripts that read it themselves (bundle, single-file); asset
+copying takes it from `--flavor` alone.
 
 Build wiring:
 
@@ -35,6 +35,12 @@ Build wiring:
   the enabled flows.
 - `copy-assets` became `packages/coding-agent/scripts/copy-assets.mjs`
   (previously a shx one-liner) so export-html and webui copies are conditional.
+  It resolves its flavor from `--flavor` only: `pnpm run build` invokes it as a
+  child process, and npm/pnpm put `NANOPI_BUILD_FLAVOR` back into that process,
+  so an exported flavor would delete `dist/webui` and `dist/core/export-html`
+  for every later build that expects them. The release workflow is unaffected —
+  it builds `base`/`minimal` with the single-file script, which reads its own
+  flavor and writes one file.
 
 Runtime contract: builds inject `NANOPI_BUILD_COMPONENTS` (object literal) and
 `NANOPI_BUILD_FLAVOR`. Guards follow the existing `NANOPI_SINGLE_FILE` pattern
