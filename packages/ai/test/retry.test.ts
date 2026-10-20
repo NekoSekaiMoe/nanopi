@@ -132,6 +132,32 @@ describe("provider retry classification", () => {
 		).toBe(true);
 		expect(isRetryableAssistantError(fauxAssistantMessage("not an error"))).toBe(false);
 	});
+
+	it("fails fast on caller-supplied non-retryable patterns", () => {
+		const message = fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "Gateway: 503 monthly allowance exhausted",
+		});
+		expect(isRetryableAssistantError(message)).toBe(true);
+		expect(isRetryableAssistantError(message, { nonRetryableErrorPatterns: ["allowance exhausted"] })).toBe(false);
+		// Case-insensitive, trimmed, and empty entries are ignored.
+		expect(isRetryableAssistantError(message, { nonRetryableErrorPatterns: ["  MONTHLY Allowance "] })).toBe(false);
+		expect(isRetryableAssistantError(message, { nonRetryableErrorPatterns: ["", "  "] })).toBe(true);
+	});
+
+	it("uses policy patterns when retrying a call", async () => {
+		const calls: number[] = [];
+		const response = await retryAssistantCall(
+			async () => {
+				calls.push(1);
+				return fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminal gateway quota" });
+			},
+			{ enabled: true, maxRetries: 3, baseDelayMs: 0, nonRetryableErrorPatterns: ["gateway quota"] },
+			undefined,
+		);
+		expect(calls).toHaveLength(1);
+		expect(response.stopReason).toBe("error");
+	});
 });
 
 describe("retryDelayMs", () => {

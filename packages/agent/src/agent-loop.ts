@@ -109,19 +109,21 @@ export async function runAgentLoop(
 	signal: AbortSignal | undefined,
 	streamFn: StreamFn,
 ): Promise<AgentMessage[]> {
-	const initialMessages = declareToolChanges(context, prompts);
-	const newMessages: AgentMessage[] = [...initialMessages];
-	const currentContext: AgentContext = {
-		...context,
-		messages: [...context.messages, ...initialMessages],
-	};
+	let currentContext: AgentContext = { ...context, messages: [...context.messages] };
+	const newMessages: AgentMessage[] = [];
 
 	await emit({ type: "agent_start" });
 	await emit({ type: "turn_start" });
-	for (const message of initialMessages) {
-		await emit({ type: "message_start", message });
-		await emit({ type: "message_end", message });
-	}
+	const prepared = await prepareInput(
+		currentContext,
+		declareToolChanges(currentContext, prompts),
+		config,
+		signal,
+		newMessages,
+		emit,
+	);
+	currentContext = prepared.context;
+	config = prepared.config;
 
 	await runLoop(currentContext, newMessages, config, signal, emit, streamFn ?? getDefaultStreamFn());
 	return newMessages;
@@ -160,6 +162,69 @@ function createAgentStream(): EventStream<AgentEvent, AgentMessage[]> {
 }
 
 /**
+ * Take over replacement context from a preparation hook while keeping this run's live
+ * message array. The loop keeps appending to it, so adopting a hook's snapshot array would
+ * drop the rest of the run into a stale copy.
+ */
+function mergeContext(current: AgentContext, replacement: AgentContext | undefined): AgentContext {
+	if (!replacement) return current;
+	return { ...replacement, messages: replacement.messages ?? current.messages };
+}
+
+/**
+ * Prepare one input batch, then deliver it: `prepareInput` sees the batch before any
+ * `message_start`/`message_end` or context append, so preparation that depends on the
+ * pending input (threshold compaction) runs before the input becomes history.
+ *
+ * A preparation failure or abort still delivers the batch: persistence and retries must
+ * see the same input tail a `prepareRequest` failure would leave behind.
+ */
+async function prepareInput(
+	context: AgentContext,
+	messages: AgentMessage[],
+	config: AgentLoopConfig,
+	signal: AbortSignal | undefined,
+	newMessages: AgentMessage[],
+	emit: AgentEventSink,
+): Promise<{ context: AgentContext; config: AgentLoopConfig }> {
+	let preparationFailure: { error: unknown } | undefined;
+	try {
+		// An aborted run still commits accepted input: it is already queued as delivered, and
+		// dropping it would lose the caller's message instead of the request it belonged to.
+		if (messages.length > 0 && config.prepareInput && !signal?.aborted) {
+			const update = await config.prepareInput(
+				{ context, messages, model: config.model, thinkingLevel: config.reasoning ?? "off" },
+				signal,
+			);
+			signal?.throwIfAborted();
+			context = update?.context ?? context;
+			config = {
+				...config,
+				model: update?.model ?? config.model,
+				reasoning:
+					update?.thinkingLevel === undefined
+						? config.reasoning
+						: update.thinkingLevel === "off"
+							? undefined
+							: update.thinkingLevel,
+			};
+		}
+	} catch (error) {
+		preparationFailure = { error };
+	}
+	// Deliver outside the preparation try: a listener failure must never replay input. An
+	// input-preparation abort still delivers, like terminal tool results.
+	for (const message of messages) {
+		await emit({ type: "message_start", message });
+		await emit({ type: "message_end", message });
+		context.messages.push(message);
+		newMessages.push(message);
+	}
+	if (preparationFailure) throw preparationFailure.error;
+	return { context, config };
+}
+
+/**
  * Main loop logic shared by agentLoop and agentLoopContinue.
  */
 async function runLoop(
@@ -188,7 +253,7 @@ async function runLoop(
 			if (lastCompletedTurn) {
 				const nextTurnSnapshot = await config.prepareNextTurn?.(lastCompletedTurn);
 				if (nextTurnSnapshot) {
-					currentContext = nextTurnSnapshot.context ?? currentContext;
+					currentContext = mergeContext(currentContext, nextTurnSnapshot.context);
 					preparedMessages = nextTurnSnapshot.messages ?? [];
 					config = {
 						...config,
@@ -211,12 +276,10 @@ async function runLoop(
 			}
 
 			// Process prepared and queued messages before the next assistant response.
-			for (const message of declareToolChanges(currentContext, [...preparedMessages, ...pendingMessages])) {
-				await emit({ type: "message_start", message });
-				await emit({ type: "message_end", message });
-				currentContext.messages.push(message);
-				newMessages.push(message);
-			}
+			const input = declareToolChanges(currentContext, [...preparedMessages, ...pendingMessages]);
+			const prepared = await prepareInput(currentContext, input, config, signal, newMessages, emit);
+			currentContext = prepared.context;
+			config = prepared.config;
 			pendingMessages = [];
 
 			const requestUpdate = await config.prepareRequest?.(
@@ -228,7 +291,19 @@ async function runLoop(
 				signal,
 			);
 			if (requestUpdate) {
-				currentContext = requestUpdate.context ?? currentContext;
+				if (requestUpdate.context) {
+					// A hook may rebuild the transcript for this request. The loop keeps appending to
+					// its own array, so take the rebuilt transcript for this request only.
+					const rebuilt = requestUpdate.context.messages;
+					currentContext = {
+						...currentContext,
+						...requestUpdate.context,
+						messages:
+							rebuilt === undefined || rebuilt === currentContext.messages
+								? currentContext.messages
+								: [...rebuilt],
+					};
+				}
 				requestHeaders = requestUpdate.headers;
 				config = {
 					...config,

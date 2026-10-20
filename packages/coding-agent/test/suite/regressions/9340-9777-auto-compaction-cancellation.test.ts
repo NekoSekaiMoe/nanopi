@@ -47,7 +47,7 @@ describe("automatic compaction cancellation regressions", () => {
 	// Regression test for #9340.
 	it("does not start post-run auto-compaction after abort", async () => {
 		const harness = await createHarness({
-			models: [{ id: "faux-1", contextWindow: 200, maxTokens: 50 }],
+			models: [{ id: "faux-1", contextWindow: 4000, maxTokens: 50 }],
 			settings: {
 				compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1 },
 				retry: { enabled: false },
@@ -64,7 +64,9 @@ describe("automatic compaction cancellation regressions", () => {
 		harnesses.push(harness);
 		seedCompactableSession(harness);
 		harness.setResponses([
-			fauxAssistantMessage("", { stopReason: "error", errorMessage: "Synthetic network failure" }),
+			// Overflow recovery is the only compaction that still runs after a run ends; a threshold
+			// crossing waits for the next request.
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: "prompt is too long" }),
 		]);
 		harness.session.subscribe((event) => {
 			if (event.type === "message_end" && event.message.role === "assistant") {

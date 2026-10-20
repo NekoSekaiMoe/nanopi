@@ -62,29 +62,10 @@ describe("branch summarization", () => {
 			streamFn,
 		});
 
-		expect(requestOptions?.maxTokens).toBe(4096);
+		// The provider layer sizes summary output from the request (#9512).
+		expect(requestOptions?.maxTokens).toBeUndefined();
 		expect(requestOptions?.toolChoice).toBeUndefined();
 		expect(getRequestIdentityMetadata(requestOptions?.metadata)?.requestKind).toBe("compaction");
-	});
-
-	it("clamps the branch summary output cap to the model limit", async () => {
-		let requestOptions: SimpleStreamOptions | undefined;
-		const streamFn: StreamFn = (_model, _context, options) => {
-			requestOptions = options;
-			const stream = createAssistantMessageEventStream();
-			queueMicrotask(() =>
-				stream.push({ type: "done", reason: "stop", message: response([{ type: "text", text: "summary" }]) }),
-			);
-			return stream;
-		};
-
-		await generateBranchSummary(entries, {
-			model: { ...model, maxTokens: 1024 },
-			signal: new AbortController().signal,
-			streamFn,
-		});
-
-		expect(requestOptions?.maxTokens).toBe(1024);
 	});
 
 	it("rejects tool calls from branch summaries", async () => {

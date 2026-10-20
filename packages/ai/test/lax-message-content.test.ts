@@ -8,7 +8,7 @@
 
 import { describe, expect, it } from "vitest";
 import { transformMessages } from "../src/api/transform-messages.ts";
-import type { Message, Model } from "../src/types.ts";
+import type { AssistantMessage, Message, Model } from "../src/types.ts";
 
 // Text-only model so the image downgrade path (replaceImagesWithPlaceholder) runs,
 // which was the primary crash site for null tool result content.
@@ -59,9 +59,140 @@ describe("lax message content handling", () => {
 
 		const result = transformMessages(messages, makeTextOnlyModel());
 
+		// Normalizing no longer crashes; the empty user and assistant messages are then
+		// dropped by the empty-content filter, while the toolResult must be kept.
+		expect(result).toHaveLength(1);
+		expect(result[0].role).toBe("toolResult");
+		expect(result[0].content).toEqual([]);
+	});
+});
+
+function makeAssistant(content: AssistantMessage["content"]): AssistantMessage {
+	return {
+		role: "assistant",
+		content,
+		api: "openai-completions",
+		provider: "openai",
+		model: "test-model",
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "stop",
+		timestamp: Date.now(),
+	};
+}
+
+describe("empty message filtering", () => {
+	it("drops user messages with empty or whitespace-only content", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "", timestamp: Date.now() },
+			{ role: "user", content: "   \n\t ", timestamp: Date.now() },
+			{ role: "user", content: [], timestamp: Date.now() },
+			{ role: "user", content: [{ type: "text", text: "" }], timestamp: Date.now() },
+			{ role: "user", content: [{ type: "text", text: "  " }], timestamp: Date.now() },
+			{ role: "user", content: "hello", timestamp: Date.now() },
+		];
+
+		const result = transformMessages(messages, makeTextOnlyModel());
+
+		expect(result).toHaveLength(1);
+		expect(result[0].content).toBe("hello");
+	});
+
+	it("keeps user messages that contain an image even with empty text", () => {
+		const messages: Message[] = [
+			{
+				role: "user",
+				content: [
+					{ type: "text", text: "" },
+					{ type: "image", mimeType: "image/png", data: "aGVsbG8=" },
+				],
+				timestamp: Date.now(),
+			},
+		];
+		const model = makeTextOnlyModel();
+		model.input = ["text", "image"];
+
+		expect(transformMessages(messages, model)).toHaveLength(1);
+	});
+
+	it("keeps system messages without content", () => {
+		const messages: Message[] = [
+			{ role: "system", content: "", timestamp: Date.now() },
+			{ role: "user", content: "hi", timestamp: Date.now() },
+		];
+
+		expect(transformMessages(messages, makeTextOnlyModel())).toHaveLength(2);
+	});
+
+	it("drops empty assistant messages without tool calls", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "hi", timestamp: Date.now() },
+			makeAssistant([]),
+			makeAssistant([{ type: "text", text: "" }]),
+			makeAssistant([{ type: "thinking", thinking: "  " }]),
+			makeAssistant([{ type: "text", text: "answer" }]),
+		];
+
+		const result = transformMessages(messages, makeTextOnlyModel());
+
+		expect(result).toHaveLength(2);
+		expect(result[1].content).toEqual([{ type: "text", text: "answer" }]);
+	});
+
+	it("keeps assistant messages with tool calls even when their text is empty", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "hi", timestamp: Date.now() },
+			makeAssistant([
+				{ type: "text", text: "" },
+				{ type: "toolCall", id: "call_1", name: "web_search", arguments: {} },
+			]),
+			{
+				role: "toolResult",
+				toolCallId: "call_1",
+				toolName: "web_search",
+				content: [{ type: "text", text: "result" }],
+				isError: false,
+				timestamp: Date.now(),
+			},
+		];
+
+		const result = transformMessages(messages, makeTextOnlyModel());
+
 		expect(result).toHaveLength(3);
-		for (const msg of result) {
-			expect(msg.content).toEqual([]);
-		}
+		expect(result[1].role).toBe("assistant");
+	});
+
+	it("keeps empty blocks that carry signatures", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "hi", timestamp: Date.now() },
+			makeAssistant([{ type: "thinking", thinking: "", thinkingSignature: "sig" }]),
+		];
+
+		expect(transformMessages(messages, makeTextOnlyModel())).toHaveLength(2);
+	});
+
+	it("keeps empty tool results", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "hi", timestamp: Date.now() },
+			{
+				role: "toolResult",
+				toolCallId: "call_1",
+				toolName: "web_search",
+				content: [],
+				isError: false,
+				timestamp: Date.now(),
+			},
+		];
+
+		const result = transformMessages(messages, makeTextOnlyModel());
+
+		expect(result).toHaveLength(2);
+		expect(result[1].role).toBe("toolResult");
 	});
 });

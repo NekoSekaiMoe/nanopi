@@ -320,6 +320,17 @@ describe("SettingsManager", () => {
 				}).getRetrySettings(),
 			).toEqual({ enabled: true, maxRetries: 10, baseDelayMs: 500, maxAgentDelayMs: 5000 });
 		});
+
+		it("normalizes non-retryable error patterns", () => {
+			expect(
+				SettingsManager.inMemory({
+					retry: { nonRetryableErrorPatterns: [" quota ", "", 42] as unknown as string[] },
+				}).getRetrySettings().nonRetryableErrorPatterns,
+			).toEqual(["quota"]);
+			expect(
+				SettingsManager.inMemory({ retry: { nonRetryableErrorPatterns: ["  "] } }).getRetrySettings(),
+			).not.toHaveProperty("nonRetryableErrorPatterns");
+		});
 	});
 
 	describe("httpIdleTimeoutMs", () => {

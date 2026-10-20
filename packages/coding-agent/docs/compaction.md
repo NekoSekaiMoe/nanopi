@@ -32,9 +32,11 @@ Auto-compaction triggers when:
 contextTokens > contextWindow - reserveTokens
 ```
 
-By default, `reserveTokens` is 16384 tokens (configurable in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanopi/settings.json`). This leaves room for the LLM's response.
+By default, `reserveTokens` is 16384 tokens (configurable in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanopi/settings.json`). It only decides when compaction starts: summary requests use the model's output limit, reduced when needed so input and output fit the context window.
 
-During a multi-turn agent run, nanopi checks the canonical projected context after tools finish and their results are appended, before starting the next assistant response. If the threshold is crossed, nanopi compacts during `prepareNextTurn`, then performs the existing catch-up steering poll before `turn_start`. It skips this between-turn check when the completed tool batch terminates the run and no queued message requires another response. nanopi also checks before a new user prompt and performs final-attempt overflow recovery after the low-level run ends.
+During a multi-turn agent run, nanopi checks the canonical projected context after tools finish and their results are appended, before starting the next assistant response. If the threshold is crossed, nanopi compacts during `prepareNextTurn`, then performs the existing catch-up steering poll before `turn_start`. It skips this between-turn check when the completed tool batch terminates the run and no queued message requires another response. nanopi also performs final-attempt overflow recovery after the low-level run ends.
+
+A threshold crossed by a finished answer is compacted only when another request needs the context: nanopi checks the projection plus the pending input in `prepareInput`, before that input becomes session history. Stopping after an answer therefore costs no summary nobody would read.
 
 A provider context-overflow error or an early final `stopReason: "length"` can select one compact-and-retry recovery attempt. Length responses with tool calls retain their synthetic failed tool results and follow the ordinary tool/queue scheduler rather than forcing the run to end.
 
@@ -454,7 +456,7 @@ Configure compaction in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanop
 | Setting | Default | Description |
 |---------|---------|-------------|
 | `enabled` | `true` | Enable auto-compaction |
-| `reserveTokens` | `16384` | Tokens to reserve for LLM response |
+| `reserveTokens` | `16384` | Free context tokens below which auto-compaction starts |
 | `keepRecentTokens` | `20000` | Recent tokens to keep (not summarized) |
 | `inContext` | `false` | Generate the summary inside the cached conversation when that is cheaper. See [In-context compaction](#in-context-compaction) |
 
@@ -478,7 +480,7 @@ Use `compaction.modelOverrides` to tune token budgets for different models:
 }
 ```
 
-For a model with a 1M context window, this override triggers compaction above 600K tokens and keeps the ordinary 20000 recent tokens. Other models retain the ordinary 16384-token reserve. `reserveTokens` also influences summarization output limits, capped by the model's maximum output tokens; it is not solely a trigger threshold.
+For a model with a 1M context window, this override triggers compaction above 600K tokens and keeps the ordinary 20000 recent tokens. Other models retain the ordinary 16384-token reserve.
 
 Keys are exact, case-sensitive `provider/modelId` values, including any slashes within the model ID. Each `reserveTokens` and `keepRecentTokens` value falls back independently from the model override to the ordinary setting to the built-in default. Values must be non-negative safe integers. Invalid values in the matching model override produce an error when read; only omitted fields fall back to the ordinary setting. Model override entries must be objects. Invalid ordinary token settings produce an error when read, even if the active model has a valid override. Only omitted ordinary values use built-in defaults. `enabled` remains global, not model-specific.
 

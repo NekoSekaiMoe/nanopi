@@ -63,10 +63,9 @@ describe("issue #9178: tree navigation during manual compaction", () => {
 		}
 		await compactionPromise;
 
-		expect(harness.sessionManager.getEntries().at(-1)).toMatchObject({
-			type: "compaction",
-			parentId: originalLeafId,
-		});
+		// The summary sits at its kept boundary, so it is written last but does not move the leaf.
+		expect(harness.sessionManager.getEntries().at(-1)).toMatchObject({ type: "compaction" });
+		expect(harness.sessionManager.getLeafId()).toBe(originalLeafId);
 		expect(harness.session.messages.map(getMessageText)).toContain("second assistant");
 	});
 

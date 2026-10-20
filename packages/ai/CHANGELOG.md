@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added `RetryPolicy.nonRetryableErrorPatterns` and the `options` argument of `isRetryableAssistantError(message, options)`: extra case-insensitive substrings that classify an error as terminal without widening the built-in retry classifier, for gateways whose quota or limit wording the built-in patterns do not cover
 - Added the `antigravity` provider and its `/login antigravity` OAuth flow: Google sign-in against the Cloud Code Assist backend the Antigravity IDE uses, plus `loadCodeAssist`/`onboardUser` project resolution, the `v1internal:*` request envelope, endpoint cascade, and per-conversation session ids. **Third-party use of this backend violates Google's terms and can get an account suspended**; `ANTIGRAVITY_ACCESS_TOKEN` is supported for short-lived scripted access
 - Added the Copilot Auto model-selection protocol client (`fetchCopilotAutoSession`, `fetchCopilotAutoRouterDecision`): opens a Copilot model session (`POST /models/session`) and asks Copilot's router to classify a prompt (`POST /models/session/intent`), the flow Copilot Free/Student accounts require because they reject direct model requests with `400 model_not_supported`
 
@@ -12,6 +13,7 @@
 
 ### Fixed
 
+- Fixed empty extension-injected messages reaching providers: `transformMessages` now drops user and assistant messages whose content is empty or whitespace-only at the choke point every converter shares (Gemini rejected them with `contents.parts must not be empty`). Tool results, assistant messages with tool calls, signed blocks, and system messages are always kept
 - Fixed tool-call argument parsing dropping fields when a string contains an invalid `\u` escape such as `\usepackage` ([#10868](https://github.com/earendil-works/pi/issues/10868))
 - Fixed tool calls whose finished arguments text is not valid JSON silently running with only the fields parsed before the error; `arguments` is now `{}`, the new `ToolCall.argumentsError` holds the reason and the raw text, and tool argument validation reports it back to the model ([#10897](https://github.com/earendil-works/pi/issues/10897))
 - Fixed Anthropic and Bedrock Claude requests failing with a 400 when an error tool result contains images; the images are now sent after the tool results of the turn, so the model still sees them ([#10794](https://github.com/earendil-works/pi/issues/10794))

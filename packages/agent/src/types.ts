@@ -199,6 +199,24 @@ export type PrepareRequest = (
 
 export interface PrepareNextTurnContext extends AgentTurnContext {}
 
+/** An input batch available before its message lifecycle events or context append. */
+export interface PrepareInputContext extends PrepareRequestContext {
+	messages: AgentMessage[];
+}
+
+/**
+ * Called once for each non-empty input batch, before `message_start`/`message_end` and the
+ * append to the context. Preparation that must see the pending input, such as a threshold
+ * compaction, belongs here rather than in `prepareRequest`.
+ *
+ * The hook must honor the abort signal. A failure or abort still delivers the batch, so
+ * persistence and retries see the same input tail.
+ */
+export type PrepareInput = (
+	input: PrepareInputContext,
+	signal?: AbortSignal,
+) => AgentRequestUpdate | void | Promise<AgentRequestUpdate | undefined> | Promise<void>;
+
 export interface AgentLoopConfig extends SimpleStreamOptions {
 	model: Model<any>;
 
@@ -271,6 +289,13 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * hard exits.
 	 */
 	finishTurn?: FinishTurn;
+
+	/**
+	 * Called once for each non-empty input batch, before its message events and context append.
+	 * The returned context, model, and thinking level replace the runtime values for the loop.
+	 * A failure or abort still delivers the batch.
+	 */
+	prepareInput?: PrepareInput;
 
 	/**
 	 * Called immediately before every conversational provider request, including the first.
