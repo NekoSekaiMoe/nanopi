@@ -16,7 +16,9 @@ describe("getEffortThinkingLevelMap", () => {
 		});
 	});
 
-	it("does not infer thinking-off from an effort list", () => {
+	it("marks thinking-off unsupported when a verified effort list omits none", () => {
+		// Kimi Coding K3 and Grok 4.5-4.7 report effort lists without "none", so
+		// those routes never send a thinking-off effort.
 		expect(getEffortThinkingLevelMap([{ type: "effort", values: ["low", "high", "max"] }])).toEqual({
 			off: null,
 			minimal: null,
