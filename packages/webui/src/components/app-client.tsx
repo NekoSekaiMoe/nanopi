@@ -113,6 +113,9 @@ export function AppClient() {
 		provider,
 		onSessionsChanged: refreshSessions,
 		onTurnDone: notifyTurnDone,
+		onThinkingLevel: (level) => {
+			if (level) setEffort(level);
+		},
 	});
 
 	// Boot: project + model catalog.
