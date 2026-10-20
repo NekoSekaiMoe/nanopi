@@ -68,7 +68,7 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `compaction.enabled` | boolean | `true` | Enable automatic compaction. |
-| `compaction.reserveTokens` | number | `16384` | Tokens reserved for the model response. |
+| `compaction.reserveTokens` | number | `16384` | Free context tokens below which auto-compaction starts. |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens retained without summarization. |
 | `compaction.inContext` | boolean | `false` | Generate summaries inside the cached conversation on verified models when that is cheaper. See [In-context compaction](compaction.md#in-context-compaction). |
 | `compaction.modelOverrides` | object | None | Per-model token settings keyed by exact `provider/modelId`. |
@@ -121,11 +121,14 @@ See [Terminal Setup](terminal-setup.md) for platform details.
 | `retry.maxRetries` | number | `3` | Maximum agent-level retry attempts. |
 | `retry.baseDelayMs` | number | `2000` | Initial exponential-backoff delay in milliseconds. |
 | `retry.maxAgentDelayMs` | number | `60000` | Maximum agent-level retry delay in milliseconds. |
+| `retry.nonRetryableErrorPatterns` | string[] | None | Extra case-insensitive `errorMessage` substrings that skip auto-retry, in addition to the built-in quota/billing patterns. |
 | `retry.provider.timeoutMs` | number | `httpIdleTimeoutMs` | Provider request timeout in milliseconds. |
 | `retry.provider.maxRetries` | number | `0` | Provider-level retry attempts. |
 | `retry.provider.maxRetryDelayMs` | number | `60000` | Maximum server-requested delay in milliseconds. Set to `0` to disable the limit. |
 
 Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay nanopi from handling quota and usage-limit errors itself.
+
+`retry.nonRetryableErrorPatterns` is for gateways that return a terminal quota or limit error which still looks retryable, for example a plain HTTP 429 whose body the built-in patterns do not cover. Each entry is a case-insensitive substring of the provider error message.
 
 ## Shell
 

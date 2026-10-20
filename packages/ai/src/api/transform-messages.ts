@@ -84,6 +84,34 @@ function downgradeUnsupportedImages<TApi extends Api>(messages: Message[], model
 }
 
 /**
+ * True when a message carries no content a provider could accept. Extension-injected
+ * custom messages can legitimately be empty, and `convertToLlm` turns them into empty user
+ * messages that some providers reject (Gemini: `contents.parts must not be empty`).
+ *
+ * Kept regardless of emptiness:
+ * - `system` and `toolResult` messages: they carry roles other messages depend on
+ * - assistant messages with tool calls: dropping one orphans its tool results
+ * - blocks carrying signatures (`textSignature`/`thinkingSignature`, including redacted
+ *   thinking): providers require them echoed back
+ * Unknown block types are kept for the provider converters to decide.
+ */
+function isEmptyContent(msg: Message): boolean {
+	if (msg.role === "system" || msg.role === "toolResult") return false;
+	if (msg.role === "user") {
+		if (typeof msg.content === "string") return msg.content.trim().length === 0;
+		return msg.content.every((block) => block.type === "text" && block.text.trim().length === 0);
+	}
+	if (msg.role !== "assistant") return false;
+	const assistantMsg = msg as AssistantMessage;
+	return assistantMsg.content.every((block) => {
+		if (block.type === "toolCall") return false;
+		if (block.type === "text") return !block.textSignature && block.text.trim().length === 0;
+		if (block.type === "thinking") return !block.thinkingSignature && !block.redacted && block.thinking.trim() === "";
+		return false;
+	});
+}
+
+/**
  * Normalize tool call ID for cross-provider compatibility.
  * OpenAI Responses API generates IDs that are 450+ chars with special characters like `|`.
  * Anthropic APIs require IDs matching ^[a-zA-Z0-9_-]+$ (max 64 chars).
@@ -252,5 +280,6 @@ export function transformMessages<TApi extends Api>(
 	// If the conversation ends with unresolved tool calls, synthesize results now.
 	closePendingToolCalls();
 
-	return result;
+	// Final pass: drop messages that would only cause provider errors.
+	return result.filter((msg) => !isEmptyContent(msg));
 }

@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### Added
+- Added the `prepareInput` loop hook: it sees each non-empty input batch before that batch's `message_start`/`message_end` events and before the context append, so preparation that depends on the pending input can run first. A failure or abort still delivers the batch
 - `prepareRequest` updates may carry `headers` that merge into exactly the next provider request, so virtual-model routers can attach request-scoped credentials such as GitHub Copilot Auto's `Copilot-Session-Token`
 
 ## [20261013]

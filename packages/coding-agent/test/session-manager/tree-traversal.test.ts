@@ -86,7 +86,8 @@ describe("SessionManager append and tree traversal", () => {
 			const compactionEntry = entries.find((e) => e.type === "compaction");
 			expect(compactionEntry).toBeDefined();
 			expect(compactionEntry?.id).toBe(compactionId);
-			expect(compactionEntry?.parentId).toBe(id2);
+			// The summary is inserted as the parent of the kept boundary, not appended at the leaf.
+			expect(compactionEntry?.parentId).toBeNull();
 			if (compactionEntry?.type === "compaction") {
 				expect(compactionEntry.summary).toBe("summary");
 				expect(compactionEntry.firstKeptEntryId).toBe(id1);
@@ -94,7 +95,11 @@ describe("SessionManager append and tree traversal", () => {
 				expect(compactionEntry.usage).toEqual(usage);
 			}
 
-			expect(entries[3].parentId).toBe(compactionId);
+			expect(entries.find((e) => e.id === id1)?.parentId).toBe(compactionId);
+			expect(entries.find((e) => e.id === id2)?.parentId).toBe(id1);
+			expect(entries.at(-1)?.parentId).toBe(id2);
+			// The leaf does not move, so the next append still follows the previous leaf.
+			expect(session.getLeafId()).toBe(_id3);
 		});
 
 		it("appendCustomEntry integrates into tree", () => {

@@ -34,7 +34,7 @@ describe("AgentSession compaction model overrides", () => {
 		while (harnesses.length) harnesses.pop()?.cleanup();
 	});
 
-	it.each(["manual", "pre-prompt", "post-run", "overflow"] as const)(
+	it.each(["manual", "pre-prompt", "next-prompt", "queued-message", "overflow"] as const)(
 		"uses model token settings for %s compaction and extension preparation",
 		async (path) => {
 			const preparations: SessionBeforeCompactEvent[] = [];
@@ -73,15 +73,37 @@ describe("AgentSession compaction model overrides", () => {
 			if (path === "manual") {
 				await harness.session.compact();
 			} else {
+				if (path === "queued-message") {
+					harness.session.subscribe((event) => {
+						if (event.type === "agent_end" && harness.faux.state.callCount === 1) {
+							expect(preparations).toHaveLength(0);
+							harness.session.agent.followUp({
+								role: "custom",
+								customType: "test",
+								content: "next",
+								display: false,
+								timestamp: Date.now(),
+							});
+						}
+					});
+				}
 				harness.setResponses(
 					path === "overflow"
 						? [
 								fauxAssistantMessage("", { stopReason: "error", errorMessage: "prompt is too long" }),
 								fauxAssistantMessage("recovered"),
 							]
-						: [fauxAssistantMessage(path === "post-run" ? "z".repeat(8000) : "done")],
+						: path === "next-prompt" || path === "queued-message"
+							? [fauxAssistantMessage("z".repeat(8000)), fauxAssistantMessage("done")]
+							: [fauxAssistantMessage("done")],
 				);
 				await harness.session.prompt("continue");
+				if (path === "next-prompt") {
+					// Ending above the threshold is idle; compact only when another request needs it.
+					expect(preparations).toHaveLength(0);
+					expect(harness.session.isIdle).toBe(true);
+					await harness.session.prompt("next");
+				}
 			}
 
 			expect(preparations).toHaveLength(1);
@@ -93,7 +115,7 @@ describe("AgentSession compaction model overrides", () => {
 			expect(preparations[0]?.reason).toBe(
 				path === "manual" ? "manual" : path === "overflow" ? "overflow" : "threshold",
 			);
-			if (path === "manual" || path === "pre-prompt") {
+			if (path === "manual") {
 				expect(preparations[0]?.preparation.firstKeptEntryId).toBe(recentUserId);
 			}
 			expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
@@ -106,7 +128,7 @@ describe("AgentSession compaction model overrides", () => {
 		},
 	);
 
-	it.each(["manual", "automatic"] as const)("passes resolved budgets to built-in %s summarization", async (path) => {
+	it.each(["manual", "automatic"] as const)("leaves %s summary output sizing to the provider layer", async (path) => {
 		const harness = await createHarness({
 			models: [{ id: "faux-1", contextWindow: 4000, maxTokens: 3000 }],
 			tools: [],
@@ -129,11 +151,13 @@ describe("AgentSession compaction model overrides", () => {
 		]);
 		if (path === "manual") await harness.session.compact();
 		else await harness.session.prompt("continue");
-		expect(budgets).toEqual([1600]);
-		expect(harness.sessionManager.getEntries().find((entry) => entry.type === "compaction")).toMatchObject({
-			firstKeptEntryId: recentUserId,
-			summary: "built-in summary",
-		});
+		// Upstream #9512: summary requests carry no fixed cap, so reasoning cannot eat it.
+		expect(budgets).toEqual([undefined]);
+		const compaction = harness.sessionManager.getEntries().find((entry) => entry.type === "compaction");
+		expect(compaction).toMatchObject({ summary: "built-in summary" });
+		// The automatic path compacts before the pending prompt is delivered, so the kept
+		// boundary moves to the retained recent history rather than the manual seed entry.
+		if (path === "manual") expect(compaction).toMatchObject({ firstKeptEntryId: recentUserId });
 		expect(harness.getPendingResponseCount()).toBe(0);
 	});
 
@@ -200,14 +224,14 @@ describe("AgentSession compaction model overrides", () => {
 			harness.session.agent.state.model = harness.getModel("second")!;
 			return getAuth(model, ...args);
 		});
-		const requests: Array<{ id: string; maxTokens: number | undefined }> = [];
+		const requests: string[] = [];
 		harness.setResponses([
-			(_context, options, _state, model) => {
-				requests.push({ id: model.id, maxTokens: options?.maxTokens });
+			(_context, _options, _state, model) => {
+				requests.push(model.id);
 				return fauxAssistantMessage("summary");
 			},
 		]);
 		await harness.session.compact();
-		expect(requests).toEqual([{ id: "first", maxTokens: 1600 }]);
+		expect(requests).toEqual(["first"]);
 	});
 });

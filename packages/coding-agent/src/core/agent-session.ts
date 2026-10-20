@@ -133,6 +133,7 @@ import {
 	type BranchSummaryEntry,
 	type CompactionEntry,
 	type ContextEditEntry,
+	getEntriesAfterLatestCompaction,
 	getLatestCompactionEntry,
 	type SessionEntry,
 	SessionManager,
@@ -451,6 +452,7 @@ function estimateMessagesTokens(messages: AgentMessage[]): number {
 	return tokens;
 }
 
+/** Message content without the bookkeeping fields persistence rewrites. */
 /** Replace every system message with one leading forced prompt that keeps the current tool declarations. */
 function withForcedSystemPrompt(messages: AgentMessage[], forced: string): AgentMessage[] {
 	const current = getCurrentSystemMessage(messages);
@@ -873,25 +875,36 @@ export class AgentSession {
 		return this._nestedToolCalls.execute(parentToolCallId, name, args, options);
 	}
 
-	/** Whether `projection`, the current session projection, exceeds the compaction threshold of `model`. */
-	private _exceedsCompactionThreshold(model: Model<any>, projection: SessionProjection): boolean {
+	/**
+	 * Whether `projection`, the current session projection plus `additionalTokens` of input that is
+	 * not recorded yet, exceeds the compaction threshold of `model`.
+	 */
+	private _exceedsCompactionThreshold(
+		model: Model<any>,
+		projection: SessionProjection,
+		additionalTokens = 0,
+	): boolean {
 		if (model.contextWindow <= 0) return false;
 		return shouldCompact(
-			estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens,
+			estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens + additionalTokens,
 			model.contextWindow,
 			this.settingsManager.getCompactionSettings(this.model),
 		);
 	}
 
-	private async _compactBeforeNextAssistantResponse(context: AgentContext): Promise<AgentContext> {
+	private async _compactBeforeNextAssistantResponse(turn: PrepareNextTurnContext): Promise<AgentContext> {
 		const projection = this.sessionManager.buildSessionProjection();
 		// A virtual selection is checked in prepareRequest, against the model the request is routed to.
 		const model = this.model;
-		if (!model || isVirtualModel(model) || !this._exceedsCompactionThreshold(model, projection)) {
-			return { ...context, messages: projection.messages };
+		if (!model || isVirtualModel(model)) {
+			return { ...turn.context, messages: projection.messages };
+		}
+		const pending = turn.newMessages.slice(turn.context.messages.length);
+		if (!this._exceedsCompactionThreshold(model, projection, estimateMessagesTokens(pending))) {
+			return { ...turn.context, messages: projection.messages };
 		}
 		await this._runAutoCompaction("threshold", false);
-		return { ...context, messages: this.sessionManager.buildSessionProjection().messages };
+		return { ...turn.context, messages: this.sessionManager.buildSessionProjection().messages };
 	}
 
 	private _installAgentRequestProjection(): void {
@@ -921,7 +934,17 @@ export class AgentSession {
 			let { previous, context, projection } = await prepare();
 			const model = previous?.model ?? this.agent.state.model;
 			const thinkingLevel = previous?.thinkingLevel ?? this.agent.state.thinkingLevel;
-			if (!isVirtualModel(model)) return { ...previous, context, model, thinkingLevel };
+			if (!isVirtualModel(model)) {
+				const growth = Math.max(
+					0,
+					estimateMessagesTokens(context.messages) - estimateMessagesTokens(projection.messages),
+				);
+				if (this._exceedsCompactionThreshold(model, projection, growth)) {
+					await this._runAutoCompaction("threshold", false);
+					({ previous, context } = await prepare());
+				}
+				return { ...previous, context, model, thinkingLevel };
+			}
 
 			// The selection stays in agent state; only this request uses the routed model. A routing
 			// failure rejects, which ends the run with an error response. Only messages the user wrote
@@ -1018,7 +1041,7 @@ export class AgentSession {
 				? async (_turn: PrepareNextTurnContext, signal?: AbortSignal) => await this.agent.prepareNextTurn?.(signal)
 				: undefined);
 		this.agent.prepareNextTurnWithContext = async (turn, signal) => {
-			const context = await this._compactBeforeNextAssistantResponse(turn.context);
+			const context = await this._compactBeforeNextAssistantResponse(turn);
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.({ ...turn, context }, signal);
 			const nextContext = previousSnapshot?.context ?? context;
 			const runOptions = this._runSystemPromptOptions ?? this._baseSystemPromptOptions;
@@ -2079,11 +2102,12 @@ export class AgentSession {
 	 * system patch first when the prompt changed.
 	 */
 	private async _prepareRun(trigger: BeforeAgentStartTrigger): Promise<AgentMessage[]> {
-		// Check if we need to compact before sending (catches aborted responses).
+		// Check overflow recovery before sending (including aborted responses). The threshold is
+		// checked in prepareInput instead, where the pending input and the routed model are known.
 		// The starting message is sent below, so do not call agent.continue() here.
 		const lastAssistant = this._findLastAssistantMessage();
 		if (lastAssistant) {
-			await this._checkCompaction(lastAssistant, false);
+			await this._checkCompaction(lastAssistant, false, [], false, false);
 		}
 
 		const selectedToolsBefore = this._baseSystemPromptOptions.selectedTools;
@@ -2168,7 +2192,7 @@ export class AgentSession {
 			this._retryAttempt = 0;
 		}
 
-		if (await this._checkCompaction(message, true, toolResults)) {
+		if (await this._checkCompaction(message, true, toolResults, true)) {
 			return !this._agentRunAbortRequested;
 		}
 
@@ -3130,8 +3154,7 @@ export class AgentSession {
 			const preparation = prepareCompaction(pathEntries, settings);
 			if (!preparation) {
 				// Check why we can't compact
-				const lastEntry = pathEntries[pathEntries.length - 1];
-				if (lastEntry?.type === "compaction") {
+				if (getEntriesAfterLatestCompaction(pathEntries)?.length === 0) {
 					throw new Error("Already compacted");
 				}
 				throw new Error("Nothing to compact (session too small)");
@@ -3269,16 +3292,17 @@ export class AgentSession {
 	}
 
 	/**
-	 * Dispatch automatic compaction after `agent_end` or before prompt submission.
+	 * Dispatch automatic compaction after `agent_end` (retry cases only), before prompt
+	 * submission, and from `prepareInput`.
 	 * Manual compaction does not call this method; it enters through `compact()`.
 	 *
 	 * Automatic cases:
 	 * 1. Overflow with retry: a context-overflow error or recoverable length stop;
 	 *    remove the failed assistant message, compact, and retry the turn once.
 	 * 2. Overflow without retry: a successful response exceeded the configured
-	 *    context window; compact but preserve the completed response.
+	 *    context window; compact before the next request, preserving the response.
 	 * 3. Threshold without retry: valid or estimated context usage crossed the
-	 *    configured threshold; compact without retrying the completed response.
+	 *    configured threshold; compact before the next request needs the context.
 	 *
 	 * Each case calls `_runAutoCompaction()`. After preparation and the
 	 * `session_before_compact` hook, that method calls the lower-level `compact()`
@@ -3287,12 +3311,17 @@ export class AgentSession {
 	 *
 	 * @param assistantMessage The assistant message to check
 	 * @param skipAbortedCheck If false, include aborted messages (for pre-prompt check). Default: true
+	 * @param toolResults The tool results of the completing turn
+	 * @param deferIdle Whether to leave cases 2 and 3 to the next request instead of compacting now
+	 * @param checkThreshold Whether to check case 3 at all
 	 * @returns Whether the post-run loop should call `agent.continue()` for overflow recovery or queued messages
 	 */
 	private async _checkCompaction(
 		assistantMessage: AssistantMessage,
 		skipAbortedCheck = true,
 		toolResults: AgentMessage[] = [],
+		deferIdle = false,
+		checkThreshold = true,
 	): Promise<boolean> {
 		const settings = this.settingsManager.getCompactionSettings(this.model);
 		if (!settings.enabled) return false;
@@ -3340,10 +3369,14 @@ export class AgentSession {
 				(entry): entry is ContextEditEntry => entry.type === "context_edit" && entry.targetId === assistantEntryId,
 			)
 			.at(-1);
+		const assistantEntry = assistantIndex >= 0 ? branch[assistantIndex] : undefined;
+		// A compaction precedes the entries it keeps in the tree; compare recording times instead.
+		const compactedAfterAssistant =
+			compactionEntry !== null &&
+			assistantEntry !== undefined &&
+			Date.parse(compactionEntry.timestamp) > Date.parse(assistantEntry.timestamp);
 		const assistantRetainedForExplicitRecovery =
-			assistantEntryId === undefined ||
-			(!entriesAfterAssistant.some((entry) => entry.type === "compaction") &&
-				latestAssistantEdit?.replacement !== null);
+			assistantEntryId === undefined || (!compactedAfterAssistant && latestAssistantEdit?.replacement !== null);
 		const assistantUsageMatchesProjection = assistantIsProjected && !hasPostAssistantContextEdit;
 		const explicitOverflow = assistantMessage.stopReason === "error" && isContextOverflow(assistantMessage);
 		const contextOverflow =
@@ -3358,7 +3391,7 @@ export class AgentSession {
 			// Case 2: the response completed successfully. Compact, but do not retry because
 			// agent.continue() cannot continue from a completed assistant response.
 			if (!willRetry) {
-				return await this._runAutoCompaction("overflow", false);
+				return deferIdle ? false : await this._runAutoCompaction("overflow", false);
 			}
 
 			if (this._overflowRecoveryAttempted) {
@@ -3384,7 +3417,9 @@ export class AgentSession {
 			return retry;
 		}
 
-		// Case 3: threshold compaction without retry.
+		// Case 3: threshold compaction without retry. prepareInput runs it before the next
+		// request instead, so an idle session pays for no summary nobody reads.
+		if (deferIdle || !checkThreshold) return false;
 		// For error messages or all-zero usage messages, estimate from the last valid response.
 		// This ensures sessions that hit persistent API errors (e.g. 529) or malformed zero-usage
 		// responses can still compact and do not reset context accounting.
@@ -4073,7 +4108,8 @@ export class AgentSession {
 	private _isRetryableError(message: AssistantMessage): boolean {
 		// Context overflow is handled by compaction, not retry.
 		if (isContextOverflow(message, (this._modelForMessage(message) ?? this.model)?.contextWindow ?? 0)) return false;
-		return isRetryableAssistantError(message);
+		const { nonRetryableErrorPatterns } = this.settingsManager.getRetrySettings();
+		return isRetryableAssistantError(message, { nonRetryableErrorPatterns });
 	}
 
 	/**
@@ -4630,10 +4666,9 @@ export class AgentSession {
 						: [],
 				),
 			);
-			const compactionIndex = branch.findIndex((entry) => entry.id === latestCompaction.id);
-			const hasPostCompactionUsage = branch
-				.slice(compactionIndex + 1)
-				.some((entry) => projectedAssistants.has(entry.id));
+			const hasPostCompactionUsage = (getEntriesAfterLatestCompaction(branch) ?? []).some((entry) =>
+				projectedAssistants.has(entry.id),
+			);
 			if (!hasPostCompactionUsage) return { tokens: null, contextWindow, percent: null };
 		}
 

@@ -228,18 +228,27 @@ describe("AgentSession compaction characterization", () => {
 		harness.sessionManager.appendCompaction("compacted", firstKeptEntryId, 100);
 
 		const messages = harness.sessionManager.buildSessionContext().messages;
-		expect(messages.map((message) => message.role)).toEqual(["system", "compactionSummary", "user", "user"]);
+		// The checkpoint is taken at the insertion point, so the retained system patch replays
+		// after the summary instead of being folded into it.
+		expect(messages.map((message) => message.role)).toEqual([
+			"system",
+			"compactionSummary",
+			"user",
+			"system",
+			"user",
+		]);
 		const checkpoint = messages[0];
 		if (checkpoint?.role !== "system") throw new Error("expected checkpoint system message");
-		expect(checkpoint.content).toBe("summarized instruction\n\nretained instruction");
-		expect(checkpoint.sections).toEqual({
-			...declared.sections,
-			early: "<early>1</early>",
-			extra: "<extra>late</extra>",
-		});
+		expect(checkpoint.content).toBe("summarized instruction");
+		expect(checkpoint.sections).toEqual({ ...declared.sections, early: "<early>1</early>" });
+		// The checkpoint predates the retained `read` removal, so that tool is still declared in it.
 		expect(checkpoint.toolsAdded?.map((tool) => tool.name)).toEqual(
-			harness.session.getActiveToolNames().filter((name) => name !== "read" && name !== "bash"),
+			harness.session.getActiveToolNames().filter((name) => name !== "bash"),
 		);
+		const retained = messages[3];
+		if (retained?.role !== "system") throw new Error("expected retained system message");
+		expect(retained.content).toBe("retained instruction");
+		expect(retained.sections).toEqual({ extra: "<extra>late</extra>" });
 	});
 
 	it("allows a queued prompt to start when manual compaction ends", async () => {
@@ -812,10 +821,10 @@ describe("AgentSession compaction characterization", () => {
 		);
 	});
 
-	it("compacts successful overflow responses without retrying", async () => {
+	it("defers successful overflow compaction to the next prompt without retrying", async () => {
 		const harness = await createHarness({
 			settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
-			models: [{ id: "faux-1", contextWindow: 1, maxTokens: 100 }],
+			models: [{ id: "faux-1", contextWindow: 4000, maxTokens: 100 }],
 			modules: [
 				{
 					name: "test-module-1",
@@ -833,17 +842,40 @@ describe("AgentSession compaction characterization", () => {
 			],
 		});
 		harnesses.push(harness);
-		harness.setResponses([fauxAssistantMessage("completed answer")]);
+		let callCount = 0;
+		harness.session.agent.streamFunction = (model) => {
+			callCount++;
+			const stream = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message: AssistantMessage = {
+					...fauxAssistantMessage(callCount === 1 ? "completed answer" : "next answer"),
+					api: model.api,
+					provider: model.provider,
+					model: model.id,
+					// Simulate a provider accepting more input than its advertised context window.
+					usage: createUsage(callCount === 1 ? 5000 : 10),
+				};
+				stream.push({ type: "done", reason: "stop", message });
+			});
+			return stream;
+		};
 
 		await expect(harness.session.prompt("hello")).resolves.toBeUndefined();
+		expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
+		expect(harness.session.isIdle).toBe(true);
+		expect(callCount).toBe(1);
 
-		const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
-		expect(compactionEnd).toMatchObject({
+		await expect(harness.session.prompt("next")).resolves.toBeUndefined();
+
+		// The overflow-triggered case is deferred like a threshold crossing: it runs before the
+		// next request, and the completed response is kept.
+		expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
+		expect(harness.eventsOfType("compaction_end")[0]).toMatchObject({
 			reason: "overflow",
 			aborted: false,
 			willRetry: false,
 		});
-		expect(harness.faux.state.callCount).toBe(1);
+		expect(callCount).toBe(2);
 	});
 
 	it("ignores stale pre-compaction assistant usage on pre-prompt checks", async () => {
