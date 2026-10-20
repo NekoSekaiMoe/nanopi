@@ -168,6 +168,8 @@ export interface ToolResultInfo {
 export interface SessionMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string;
+	/** `provider/model` that produced an assistant reply. */
+	provider?: string;
 	synthetic?: boolean;
 	internal_origin?: string;
 	internalOrigin?: string;
@@ -185,6 +187,8 @@ export interface SessionDetail {
 	created_at: number;
 	updated_at: number;
 	message_count: number;
+	/** Thinking level recorded in the transcript; resumes with the session. */
+	thinking_level?: string;
 	messages: SessionMessage[];
 }
 
