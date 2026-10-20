@@ -32,6 +32,8 @@ describe("issue #7829 invalid settings warning", () => {
 				ui: { requestRender: vi.fn() },
 				version: "test",
 				showWarning: (InteractiveMode.prototype as unknown as { showWarning(message: string): void }).showWarning,
+				// Offline startup re-checks provider auth; keep it off the network for this render-only test.
+				refreshAvailability: vi.fn(async () => {}),
 				session: harness.session,
 				checkForPackageUpdates: vi.fn().mockResolvedValue([]),
 				checkTmuxKeyboardSetup: vi.fn().mockResolvedValue(undefined),
