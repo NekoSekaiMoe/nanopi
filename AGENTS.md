@@ -61,6 +61,7 @@ Committing:
 - `packages/ai/src/models.generated.ts` may always be included alongside your files.
 - Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
 - Commit with `git commit -s`, or rely on the `.husky/commit-msg` hook: every commit carries a `Change-Id` and `Signed-off-by` trailer. CI cannot add them after the fact (CNB exposes no API to amend commit messages, and the GitHub mirror is fast-forward only), so a commit pushed without them stays without them.
+- The hooks only become active after `pnpm install` (the `prepare` script runs `husky`, which sets `core.hooksPath`). Without it, `.git/hooks/` holds only samples and commits silently land without trailers. Fix before your first commit in a fresh checkout: `cp .husky/commit-msg .git/hooks/commit-msg && chmod +x .git/hooks/commit-msg`. Copy only `commit-msg`; `.husky/pre-commit` runs `pnpm run check` and will fail in a checkout with no runtime deps.
 
 Never run (destroys other agents' work or bypasses checks):
 
