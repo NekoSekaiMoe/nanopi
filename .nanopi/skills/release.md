@@ -47,6 +47,17 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
 
    The minimal bundle registers the bash tool alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup. A flavored build also only registers the providers in its set, so `--list-models` on `nanopi-base.js` / `nanopi-minimal.js` must not name a provider outside `providerSets.presets`.
 
+   Flavor propagation, and why the smoke test keeps the flavor on one command
+   line: the single-file and bundle scripts read `NANOPI_BUILD_FLAVOR` from the
+   environment and add no child build step, so `base`/`minimal` builds do not
+   touch `dist/`. `pnpm run build` does: `packages/coding-agent` runs
+   `copy-assets`, which only honors `--flavor` and deliberately ignores the
+   environment variable, because npm/pnpm hand the variable to the child
+   process again and an exported flavor would strip `dist/webui` and
+   `dist/core/export-html` for later unflavored builds. Do not export
+   `NANOPI_BUILD_FLAVOR` in a shell that also runs `pnpm run build`; pass the
+   flavor on the command line of the build you mean, as the steps above do.
+
    Verify startup, model/account listing, and at least one real prompt with the intended default provider. Start each bundle bare in tmux, submit a prompt, and wait for the model reply before considering the interactive smoke test passed. Failures are release blockers unless the user explicitly accepts the risk. Load and follow [interactive-testing.md](interactive-testing.md) for the tmux workflow; start each release binary from `/tmp`, not the repo root.
 
 4. **CI builds and publishes**: pushing the `vYYYYMMDD` tag triggers `.github/workflows/build-binaries.yml`. It archives the tagged source, builds the single-file bundles from that archive, smoke tests them on Linux/macOS/Windows, stages a draft GitHub Release with the assets above, then publishes it. No npm step runs. Do not rerun the pipeline after the release published.

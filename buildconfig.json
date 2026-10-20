@@ -200,7 +200,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers and every API implementation, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers and every API implementation, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows, so a login that needs a flow has to use an API key",
 			"components": {
 				"*": false,
 				"module/*": true,
