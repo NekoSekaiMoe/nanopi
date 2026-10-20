@@ -47,6 +47,7 @@ import {
 } from "@nanopi/pi-tui";
 import chalk from "chalk";
 import { spawn } from "child_process";
+import { isBuildComponentEnabled } from "../../build-components.ts";
 import {
 	APP_NAME,
 	APP_TITLE,
@@ -109,7 +110,7 @@ import {
 	sessionEntryToContextMessages,
 	type UsageEntry,
 } from "../../core/session-manager.ts";
-import { BUILTIN_SLASH_COMMANDS } from "../../core/slash-commands.ts";
+import { builtinSlashCommands } from "../../core/slash-commands.ts";
 import type { SourceInfo } from "../../core/source-info.ts";
 import { withBuiltInRenderers } from "../../core/tools/renderers/index.ts";
 import type { TruncationResult } from "../../core/tools/truncate.ts";
@@ -320,6 +321,26 @@ type LoginProviderCompletionOption = {
 };
 
 const AUTH_TYPE_ORDER = { oauth: 0, api_key: 1 } satisfies Record<AuthSelectorProvider["authType"], number>;
+
+/**
+ * Whether this build logs in through OAuth flows. A flavor that disables the
+ * `oauth/*` components (buildconfig.json) ships no flow code, so the login
+ * selectors must not offer one and `modelRuntime.login` has nothing to load.
+ * Any enabled flow is enough: the flag describes the build, not a provider.
+ */
+function oauthLoginEnabled(): boolean {
+	return (
+		isBuildComponentEnabled("oauth/anthropic") ||
+		isBuildComponentEnabled("oauth/antigravity") ||
+		isBuildComponentEnabled("oauth/github-copilot") ||
+		isBuildComponentEnabled("oauth/kimi-coding") ||
+		isBuildComponentEnabled("oauth/meta") ||
+		isBuildComponentEnabled("oauth/openai-chatgpt") ||
+		isBuildComponentEnabled("oauth/openai-codex") ||
+		isBuildComponentEnabled("oauth/openrouter") ||
+		isBuildComponentEnabled("oauth/xai")
+	);
+}
 
 function createFuzzyAutocompleteItems<T>(
 	items: T[],
@@ -647,12 +668,12 @@ export class InteractiveMode {
 	}
 
 	private getBuiltInCommandConflictDiagnostics(moduleRegistry: ModuleRegistry): ResourceDiagnostic[] {
-		const builtinNames = new Set(BUILTIN_SLASH_COMMANDS.map((command) => command.name));
+		const builtinNames = new Set(builtinSlashCommands().map((command) => command.name));
 		return (
 			moduleRegistry
 				.getRegisteredCommands()
 				// Built-in extension commands (e.g. /status from builtin-commands) are listed in
-				// BUILTIN_SLASH_COMMANDS on purpose; only third-party commands with a matching name conflict.
+				// builtinSlashCommands() on purpose; only third-party commands with a matching name conflict.
 				.filter((command) => builtinNames.has(command.name) && command.sourceInfo.source !== "builtin")
 				.map((command) => ({
 					type: "warning" as const,
@@ -667,7 +688,7 @@ export class InteractiveMode {
 
 	private createBaseAutocompleteProvider(): AutocompleteProvider {
 		// Define commands for autocomplete
-		const slashCommands: SlashCommand[] = BUILTIN_SLASH_COMMANDS.map((command) => ({
+		const slashCommands: SlashCommand[] = builtinSlashCommands().map((command) => ({
 			name: command.name,
 			description: command.description,
 			...(command.argumentHint && { argumentHint: command.argumentHint }),
@@ -2592,6 +2613,11 @@ export class InteractiveMode {
 				return;
 			}
 			if (text === "/logout") {
+				if (!oauthLoginEnabled()) {
+					this.showStatus(`This build does not include OAuth login. Credentials are not managed by ${APP_NAME}.`);
+					this.editor.setText("");
+					return;
+				}
 				this.showOAuthSelector("logout");
 				this.editor.setText("");
 				return;
@@ -5056,7 +5082,9 @@ export class InteractiveMode {
 					}
 				: undefined;
 			const subscription = provider.auth.oauth?.isSubscription === true;
-			if ((!authType || authType === "oauth") && provider.auth.oauth) {
+			// A build without OAuth flows (buildconfig.json `oauth/*` off, the minimal
+			// flavor) ships none of the flow code, so it never offers one.
+			if ((!authType || authType === "oauth") && provider.auth.oauth && oauthLoginEnabled()) {
 				options.push({
 					id: provider.id,
 					name: provider.name,
@@ -5133,6 +5161,10 @@ export class InteractiveMode {
 
 	/** `onBack` reopens the selector the login was started from when the user cancels it. */
 	private async startProviderLogin(providerOption: AuthSelectorProvider, onBack?: () => void): Promise<void> {
+		if (providerOption.authType === "oauth" && !oauthLoginEnabled()) {
+			this.showStatus("This build has no OAuth login flows. Use an API key or models.json instead.");
+			return;
+		}
 		if (providerOption.authType === "oauth") {
 			await this.showLoginDialog(providerOption.id, providerOption.name, onBack);
 		} else if (providerOption.method?.login) {
@@ -5148,9 +5180,10 @@ export class InteractiveMode {
 			oauthProvider?.method && "loginLabel" in oauthProvider.method ? oauthProvider.method.loginLabel : undefined;
 		const subscriptionLabel = oauthLoginLabel ?? "Sign in with an account";
 		const apiKeyLabel = "Sign in with an API key";
+		const oauthAvailable = oauthLoginEnabled();
 		const availableAuthTypes = providerOptions
 			? new Set(providerOptions.map((provider) => provider.authType))
-			: new Set<AuthSelectorProvider["authType"]>(["oauth", "api_key"]);
+			: new Set<AuthSelectorProvider["authType"]>(oauthAvailable ? ["oauth", "api_key"] : ["api_key"]);
 		const options: string[] = [];
 		if (availableAuthTypes.has("oauth")) {
 			options.push(subscriptionLabel);

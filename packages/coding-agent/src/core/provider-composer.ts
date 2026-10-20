@@ -27,6 +27,7 @@ import {
 } from "@nanopi/pi-ai";
 import { getApiProvider } from "@nanopi/pi-ai/compat";
 import { classifierErrorResult, imageErrorResult } from "@nanopi/pi-ai/utils/model-operations";
+import { formatIncludedApis, isApiIncluded } from "../build-components.ts";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
 import {
 	clearConfigValueCache,
@@ -217,6 +218,15 @@ function modelFromJson(
 	if (!api) {
 		throw new Error(
 			`Provider ${providerId}, model ${definition.id}: no "api" specified. Set at provider or model level.`,
+		);
+	}
+	// A trimmed build registers a subset of the API implementations (buildconfig.json
+	// `apis`), so a models.json entry naming a dropped one would fail on the first
+	// request instead of at load time.
+	if (!isApiIncluded(api)) {
+		throw new Error(
+			`Provider ${providerId}, model ${definition.id}: api "${api}" is not included in this build ` +
+				`(included: ${formatIncludedApis()})`,
 		);
 	}
 	const baseUrl = definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl;

@@ -30,11 +30,13 @@ import {
 	loadBuildConfig,
 	readProviderCatalogIds,
 	resolveBuildFlavor,
+	resolveBuiltinApiIds,
 	resolveBuiltinProviderIds,
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
+import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
@@ -50,11 +52,17 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // Build flavors (buildconfig.json) drop peripheral components from the
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
-const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset, toolNames, providers, apis } = resolveBuildFlavor(repoRoot);
 // A provider set that ships every catalog has no runtime filter; a set that
 // ships none resolves to an empty list and the build keeps no built-in provider.
 const builtinProviderIds = resolveBuiltinProviderIds(providers);
+// A flavor that names an API set ships only those implementations: models.json
+// can reference nothing else, and the other lazy clients stay out of the bundle.
+const builtinApiIds = resolveBuiltinApiIds(apis);
 validateOAuthFlowRegistry({ repoRoot, components });
+// A tool set that names its tools drops the rest of the tool implementations
+// from the bundle instead of only filtering them at runtime.
+validateToolSet(toolNames);
 // Every built-in module is a `module/<name>` component; a flavor can drop one,
 // in which case its code stays out of the single file (see build-modules.mjs).
 const buildConfig = loadBuildConfig(repoRoot);
@@ -323,7 +331,13 @@ const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStub
 	modules: resolveModuleBundles(repoRoot, buildConfig),
 	components,
 });
-const plugins = [moduleStubPlugin, httpsProxyAgentNamedExportPlugin];
+const toolStubDir = mkdtempSync(join(tmpdir(), "nanopi-tool-stubs-"));
+const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin({
+	stubDir: toolStubDir,
+	toolsSrcDir: join(codingAgentDir, "src", "core", "tools"),
+	toolNames,
+});
+const plugins = [moduleStubPlugin, toolStubPlugin, httpsProxyAgentNamedExportPlugin];
 let shimDir;
 if (enabledFlows.length < OAUTH_FLOWS.length) {
 	shimDir = mkdtempSync(join(tmpdir(), "nanopi-bundled-oauth-"));
@@ -367,6 +381,10 @@ try {
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
 			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
+			NANOPI_BUILD_APIS: JSON.stringify(builtinApiIds),
+			// esbuild rejects an undefined define value, so a tool set that names
+			// no tools injects the empty list the runtime reads as "every tool".
+			NANOPI_BUILD_TOOLS: JSON.stringify(toolNames ?? []),
 		},
 		entryPoints: [entryPoint],
 		external: Array.from(allowedExternalPackages),
@@ -374,6 +392,7 @@ try {
 		legalComments: "none",
 		logLevel: "warning",
 		metafile: true,
+		minifyIdentifiers: true,
 		minifySyntax: true,
 		minifyWhitespace: true,
 		outfile: outputFilePath,
@@ -389,6 +408,7 @@ try {
 } finally {
 	if (shimDir) rmSync(shimDir, { recursive: true, force: true });
 	rmSync(moduleStubDir, { recursive: true, force: true });
+	rmSync(toolStubDir, { recursive: true, force: true });
 }
 
 const unexpected = new Set();
@@ -421,6 +441,7 @@ const outputBytes = statSync(outputFilePath).size;
 const sidecarCount = sidecarManifest.sources.reduce((total, source) => total + source.files.length, 0);
 console.log(
 	`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
+		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
 		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
 		")",
 );

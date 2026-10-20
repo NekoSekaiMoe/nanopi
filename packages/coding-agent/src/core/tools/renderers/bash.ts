@@ -16,7 +16,7 @@ import {
 	type Theme,
 	theme,
 } from "../../../modes/interactive/theme/theme.ts";
-import { splitShellCommand } from "../../../utils/shell-embedded-code.ts";
+import { EMBEDDED_CODE_ENABLED, splitShellCommand } from "../../../utils/shell-embedded-code.ts";
 import type { ToolDefinition, ToolRenderResultOptions } from "../../modules/types.ts";
 import type { BashToolDetails } from "../bash.ts";
 import {
@@ -223,6 +223,9 @@ export function createShellRenderers(
 	prompt: string,
 	options: { embeddedCode: boolean },
 ): Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> {
+	// A build that drops embedded-code detection (buildconfig.json
+	// `embedded-code`) renders the command as one shell block.
+	const embeddedCode = options.embeddedCode && EMBEDDED_CODE_ENABLED;
 	return {
 		renderCall(args, _theme, context) {
 			const state = context.state;
@@ -235,7 +238,7 @@ export function createShellRenderers(
 			const previous = component.rendered;
 			const text = formatShellCall(component, args as { command?: string; timeout?: number } | undefined, prompt, {
 				expanded: context.expanded,
-				embeddedCode: options.embeddedCode,
+				embeddedCode,
 				argsComplete: context.argsComplete,
 			});
 			// setText drops the wrapped-line cache, so skip it when output updates leave the call unchanged.
