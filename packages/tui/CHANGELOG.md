@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Rex terminal detection (`TERM_PROGRAM=rex`): OSC 8 hyperlinks and truecolor are enabled, images stay off because Rex only partially implements the Kitty graphics protocol ([#11131](https://github.com/earendil-works/pi/issues/11131))
+
 ## [20261013]
 
 ### Breaking Changes
