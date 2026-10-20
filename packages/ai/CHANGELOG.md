@@ -6,6 +6,10 @@
 - Added the `antigravity` provider and its `/login antigravity` OAuth flow: Google sign-in against the Cloud Code Assist backend the Antigravity IDE uses, plus `loadCodeAssist`/`onboardUser` project resolution, the `v1internal:*` request envelope, endpoint cascade, and per-conversation session ids. **Third-party use of this backend violates Google's terms and can get an account suspended**; `ANTIGRAVITY_ACCESS_TOKEN` is supported for short-lived scripted access
 - Added the Copilot Auto model-selection protocol client (`fetchCopilotAutoSession`, `fetchCopilotAutoRouterDecision`): opens a Copilot model session (`POST /models/session`) and asks Copilot's router to classify a prompt (`POST /models/session/intent`), the flow Copilot Free/Student accounts require because they reject direct model requests with `400 model_not_supported`
 
+### Changed
+
+- `registerBuiltInApiProviders` honors the `NANOPI_BUILD_APIS` define, which the coding-agent's build scripts fill from the new `apis` build component: a build that names an API subset registers only those implementations, so a lazy client for an API it drops is never reached and the bundler removes it. The define is absent in source checkouts and npm installs, which keep registering every built-in API
+
 ### Fixed
 
 - Fixed tool-call argument parsing dropping fields when a string contains an invalid `\u` escape such as `\usepackage` ([#10868](https://github.com/earendil-works/pi/issues/10868))

@@ -117,6 +117,11 @@ export function MessageItem({ message }: { message: UiMessage }) {
 					<span className="shimmer">{t("正在思考")}</span>
 				</div>
 			) : null}
+			{message.provider ? (
+				// A session can span models; name the one behind this reply so the
+				// transcript never disagrees with the picker.
+				<p className="select-none text-caption text-muted-foreground/70">{message.provider}</p>
+			) : null}
 			{segment(message.blocks).map((item, index) =>
 				item.kind === "text" ? (
 					<Markdown key={`${message.id}-text-${index}`} content={item.block.text} />

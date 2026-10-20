@@ -96,6 +96,8 @@ interface WebuiSessionMeta {
 interface WebuiSessionMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string;
+	/** `provider/model` that produced an assistant reply. */
+	provider?: string;
 	synthetic?: boolean;
 	tool_calls?: { id: string; name: string; arguments: string; display: string }[];
 	tool_result?: { call_id: string; success: boolean; summary: string; line_count: number };
@@ -415,6 +417,9 @@ function toWebuiMessage(message: AgentMessage): WebuiSessionMessage | null {
 				.filter((part) => part.type === "text")
 				.map((part) => (part as { text: string }).text)
 				.join(""),
+			// A conversation can span several models; each reply names the one that
+			// produced it, so the transcript and the model list agree.
+			...(assistant.provider && assistant.model ? { provider: `${assistant.provider}/${assistant.model}` } : {}),
 			...(toolCalls.length ? { tool_calls: toolCalls } : {}),
 		};
 	}
@@ -436,14 +441,18 @@ function toWebuiMessage(message: AgentMessage): WebuiSessionMessage | null {
 }
 
 /** Read a session file and map its message entries for GET session detail. */
-function readSessionMessages(content: string): WebuiSessionMessage[] {
+export function readSessionMessages(content: string): { messages: WebuiSessionMessage[]; thinking_level?: string } {
 	const messages: WebuiSessionMessage[] = [];
+	let thinkingLevel: string | undefined;
 	for (const entry of parseSessionEntries(content)) {
-		if (entry.type !== "message") continue;
-		const mapped = toWebuiMessage(entry.message);
-		if (mapped) messages.push(mapped);
+		if (entry.type === "message") {
+			const mapped = toWebuiMessage(entry.message);
+			if (mapped) messages.push(mapped);
+		} else if (entry.type === "thinking_level_change") {
+			thinkingLevel = entry.thinkingLevel;
+		}
 	}
-	return messages;
+	return { messages, thinking_level: thinkingLevel };
 }
 
 function sessionMeta(info: SessionInfo): WebuiSessionMeta & { project_hash: string } {
@@ -472,6 +481,26 @@ export function reasoningEffortOf(
 ): string | undefined {
 	if (sessionModel && sessionModel.provider === model.provider && sessionModel.id === model.id) return sessionLevel;
 	return storedLevel(model.provider, model.id);
+}
+
+/**
+ * Re-apply the thinking level stored for the session's model, if it has one.
+ *
+ * A model switch (`setModel`, `/chat`, session restore) resolves its level from
+ * the per-model setting, the global default, or the session's current level, in
+ * that order, and only the first keeps a level the user picked for *this* model.
+ * A picker row like `faux/beta · 低` therefore came back as the global default
+ * (`off` when unset) the moment the turn switched models, so the reasoning
+ * effort the sheet had just written was gone before the request was built.
+ *
+ * Clamped by `setThinkingLevel`, so a level the model no longer supports falls
+ * back to the nearest one it does support instead of failing the turn.
+ */
+async function restoreStoredThinkingLevel(session: AgentSession): Promise<void> {
+	const model = session.model;
+	if (!model) return;
+	const stored = session.settingsManager.getModelThinkingLevel(model.provider, model.id);
+	if (stored && stored !== session.thinkingLevel) session.setThinkingLevel(stored);
 }
 
 /**
@@ -727,6 +756,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			res.write(`data: ${JSON.stringify(event)}\n\n`);
 		};
 		let settled = false;
+		// Set once the turn is over, so the request closing afterwards (the normal
+		// end of a stream) does not abort the run like a real disconnect does.
+		let finished = false;
 		const startedAt = Date.now();
 		let toolCalls = 0;
 		let promptTokens = 0;
@@ -916,6 +948,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				})
 			: undefined;
 		const finish = () => {
+			finished = true;
 			if (!settled) {
 				settled = true;
 				send({ type: "done", tokens: null, tool_calls: null, session_id: session.sessionId });
@@ -946,8 +979,11 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				finish();
 			});
 
+		// Only a client that leaves mid-turn aborts the run. The request closing
+		// after the terminal event is the normal end of a turn: aborting there
+		// killed the run that had just finished (and the next queued one with it).
 		req.on("close", () => {
-			// Client disconnected: abort the turn so tools stop.
+			if (finished) return;
 			void session.abort().finally(() => {
 				eventUnsubscribe?.();
 				unsubscribeBroker?.();
@@ -1094,6 +1130,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		/**
+		 * Thinking level the next turn will use for `model`: the stored per-model
+		 * setting, else the session level already meant for it. A switch keeps the
+		 * target model's last stored level (`restoreStoredThinkingLevel` on
+		 * `/chat`), so the sheet never reads back the global default it did not
+		 * pick.
+		 */
+		function effortFor(model: Model<any>): string | undefined {
+			const stored = session.settingsManager.getModelThinkingLevel(model.provider, model.id);
+			if (stored) return stored;
+			return reasoningEffortOf(model, session.model, session.thinkingLevel, () => undefined);
+		}
+
+		/**
 		 * Wire shape for one model. `effort_levels` mirrors the levels the model
 		 * really supports (a non-reasoning model gets `["off"]`), and
 		 * `reasoning_effort` is whatever the next turn will send: the live
@@ -1107,9 +1156,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return models.map((model) => {
 				const key = modelKey(model);
 				const levels = getSupportedThinkingLevels(model).filter((level) => level !== "off");
-				const effective = reasoningEffortOf(model, current, session.thinkingLevel, (provider, modelId) =>
-					session.settingsManager.getModelThinkingLevel(provider, modelId),
-				);
+				const effective = effortFor(model);
 				const active = current?.provider === model.provider && current?.id === model.id;
 				return {
 					provider: key,
@@ -1255,7 +1302,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					return;
 				}
 				const content = await readFile(info.path, "utf8");
-				const messages = readSessionMessages(content);
+				const { messages, thinking_level } = readSessionMessages(content);
+				const active = runtime.session.sessionId === info.id;
+				// The transcript records the thinking level per session; resuming this
+				// session (the open one included) restores it, so the picker reports
+				// the level the next turn will actually use.
+				const level = active ? runtime.session.thinkingLevel : thinking_level;
 				json(res, 200, {
 					id: info.id,
 					name: info.name ?? "",
@@ -1263,6 +1315,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					created_at: info.created.getTime(),
 					updated_at: info.modified.getTime(),
 					message_count: info.messageCount,
+					thinking_level: level,
 					messages,
 				});
 				return;
@@ -1348,6 +1401,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				const model = models.find((candidate) => modelKey(candidate) === chatBody.provider);
 				if (model) {
 					await runtime.session.setModel(model, { persist: true });
+					// `setModel` only applies the per-model level when this provider has
+					// one stored; otherwise it falls back to the global default and
+					// overwrites the level this model's sheet wrote earlier (with "off"
+					// when there is no default). The picker the user just closed asked
+					// for a model *and* a level, so the stored level wins here.
+					await restoreStoredThinkingLevel(runtime.session);
 				}
 			}
 			turnActive = true;
@@ -1856,12 +1915,15 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const bound = server.address();
 			const actualPort = typeof bound === "object" && bound ? bound.port : port;
 			const url = `http://${host}:${actualPort}`;
-			console.log(`nanopi webui listening on ${url}`);
+			// One write: the URL is the only way into a token-protected server, and
+			// separate lines can interleave with a host that redirects stdout.
+			const lines = [`nanopi webui listening on ${url}`];
 			if (!distExists) {
-				console.log("webui assets are missing; run `pnpm --filter @nanopi/webui run build` and restart.");
+				lines.push("webui assets are missing; run `pnpm --filter @nanopi/webui run build` and restart.");
 			}
-			console.log(`Open: ${url}/?token=${token}`);
-			console.log("Press Ctrl+C to stop.");
+			lines.push(`Open: ${url}/?token=${token}`);
+			lines.push("Press Ctrl+C to stop.");
+			console.log(lines.join("\n"));
 		});
 		// Keep running until the process is killed.
 	});

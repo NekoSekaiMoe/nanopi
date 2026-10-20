@@ -1214,9 +1214,8 @@
               let html = `<div class="skill-user-entry" id="${entryDomId}">${copyBtnHtml}${tsHtml}`;
 
               // Skill invocation (collapsed by default, click to expand)
-              html += `<div class="skill-invocation" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
-                <div class="skill-invocation-label">[skill] ${escapeHtml(skillBlock.name)}</div>
-                <div class="skill-invocation-collapsed">${escapeHtml(skillBlock.name)} (click to expand)</div>
+              html += `<div class="tool-execution success skill-invocation" onclick="if(window.getSelection().toString())return;this.classList.toggle('expanded')">
+                <div class="tool-header"><span class="tool-name">read skill</span> <span class="tool-path">${escapeHtml(skillBlock.name)}</span><span class="skill-invocation-hint"> (click to expand)</span></div>
                 <div class="skill-invocation-content markdown-content">${safeMarkedParse(skillBlock.content)}</div>
               </div>`;
 

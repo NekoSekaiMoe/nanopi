@@ -13,6 +13,39 @@
 		"examples": {
 			"description": "In-package examples (embedded in single-file builds; the npm package always ships them)"
 		},
+		"tools": {
+			"description": "Built-in tool set the build registers, as a group key over the per-tool components: every \"tools/<name>\" was a switch in older configs and is derived from the flavor's tool set instead"
+		},
+		"tools/read": {
+			"description": "The read tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/bash": {
+			"description": "The bash tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/powershell": {
+			"description": "The powershell tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/edit": {
+			"description": "The edit tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/write": {
+			"description": "The write tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/grep": {
+			"description": "The grep tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/find": {
+			"description": "The find tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"tools/ls": {
+			"description": "The ls tool definition; a flavor whose tool set lists its tools keeps only the listed ones (see scripts/build-tools.mjs)"
+		},
+		"embedded-code": {
+			"description": "Embedded-code detection for shell call display (heredoc bodies and interpreter inline scripts); dropping it renders shell commands as one block"
+		},
+		"syntax-highlight": {
+			"description": "highlight.js grammars and the code highlighting the TUI uses; dropping it renders code blocks in the plain output color and takes ~1.4 MiB of grammars out of the bundle"
+		},
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
@@ -21,6 +54,9 @@
 		},
 		"providers": {
 			"description": "Provider set the build registers: one entry from the top-level \"providerSets\" map. The build's model catalogs are generated for that set only, so a trimmed build carries no code or data for the providers it drops. Flavors set it as a name, not a switch"
+		},
+		"apis": {
+			"description": "API implementations the build registers: one entry from the top-level \"apiSets\" map. A trimmed build ships no client for the APIs it drops, so models.json can only name the APIs its set carries. Flavors set it as a name, not a switch"
 		},
 		"module/extra": {
 			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); a flavor that drops it aliases the module to an inert stub"
@@ -66,6 +102,9 @@
 		},
 		"module/todo-lite": {
 			"description": "todo tool and its rendering"
+		},
+		"module/websearch": {
+			"description": "web_search and read_page tools with the keyless engine chain"
 		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand)"
@@ -146,6 +185,9 @@
 		},
 		"todo-lite": {
 			"source": "packages/coding-agent/src/extras/todo-lite/index.ts"
+		},
+		"websearch": {
+			"source": "packages/coding-agent/src/extras/websearch/src/index.ts"
 		}
 	},
 	"flavors": {
@@ -153,11 +195,12 @@
 			"description": "Everything included; the only flavor the npm packages are published from",
 			"components": {
 				"*": true,
-				"providers": "all"
+				"providers": "all",
+				"apis": "all"
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers and every API implementation, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -172,11 +215,13 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
-				"providers": "presets"
+				"module/websearch": false,
+				"providers": "presets",
+				"apis": "all"
 			}
 		},
 		"minimal": {
-			"description": "base with the bash tool alone and no built-in provider: the shell tool is the only tool the build registers, run modes and permissions (module/extra) are dropped with the extras, and the endpoint and key come from models.json instead of a shipped catalog",
+			"description": "base with the bash tool alone, one endpoint shape, and no peripheral code: the shell tool is the only tool the build registers (the other tool definitions are stubbed out), endpoint API implementations are cut to openai-completions, the syntax-highlight grammars and embedded-code detection are dropped, run modes and permissions (module/extra) fall away with the extras, and the endpoint and key come from models.json instead of a shipped catalog",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -191,15 +236,39 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/websearch": false,
 				"toolset": "bash",
 				"providers": "none",
-				"module/extra": false
+				"apis": "openai",
+				"module/extra": false,
+				"oauth/*": false,
+				"syntax-highlight": false,
+				"embedded-code": false
 			}
 		}
 	},
 	"toolsetComponents": {
 		"standard": {},
-		"bash": {}
+		"bash": {
+			"tools": [
+				"bash",
+				"powershell"
+			]
+		}
+	},
+	"apiSets": {
+		"all": {
+			"description": "Every API implementation in packages/ai. The marker is checked against the registered API ids at build time, and the runtime registers everything it ships",
+			"apis": [
+				"__ALL__"
+			]
+		},
+		"openai": {
+			"description": "The OpenAI-compatible chat completions API alone: the smallest build talks to one endpoint shape, which is everything models.json needs to point at a local or self-hosted server",
+			"apis": [
+				"openai-completions"
+			]
+		}
 	},
 	"providerSets": {
 		"all": {

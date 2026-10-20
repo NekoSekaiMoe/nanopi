@@ -177,6 +177,21 @@ export function registerFauxProvider(options: RegisterFauxProviderOptions = {}):
 	};
 }
 
+/**
+ * API ids this build registers, injected by the bundle/single-file build
+ * scripts from buildconfig.json flavors. Absent in source checkouts and npm
+ * installs, which ship every implementation.
+ */
+declare const NANOPI_BUILD_APIS: string[] | undefined;
+
+function isApiIncluded(api: Api): boolean {
+	return (
+		typeof NANOPI_BUILD_APIS === "undefined" ||
+		NANOPI_BUILD_APIS.includes("__ALL__") ||
+		NANOPI_BUILD_APIS.includes(api)
+	);
+}
+
 const BUILTIN_APIS: [Api, ProviderStreams][] = [
 	["anthropic-messages", anthropicMessagesApi()],
 	["openai-completions", openAICompletionsApi()],
@@ -198,6 +213,10 @@ const builtinApiProviderInstances = new Map<Api, ReturnType<typeof getApiProvide
  */
 export function registerBuiltInApiProviders(): void {
 	for (const [api, streams] of BUILTIN_APIS) {
+		// A build that ships an API subset registers only that subset: models.json
+		// can reference nothing else, and the other clients' lazy imports are
+		// dead code the bundler drops.
+		if (!isApiIncluded(api)) continue;
 		if (!getApiProvider(api)) {
 			registerApiProvider({ api, stream: streams.stream, streamSimple: streams.streamSimple });
 		}

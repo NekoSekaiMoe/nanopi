@@ -14,7 +14,9 @@
  * Components that are not plain switches:
  * - `toolset` picks one value from the top-level `toolsetComponents` map
  *   ("standard" or "bash"). It decides which built-in tools the build
- *   registers, so a tool set only ships whole.
+ *   registers, so a tool set only ships whole. A tool set that lists `tools`
+ *   also names the tools themselves, and the bundle script drops the tool
+ *   definitions it leaves out (see scripts/build-tools.mjs).
  * - `providers` picks one entry from the top-level `providerSets` map (a named
  *   list of `@nanopi/pi-ai` provider ids, or the `__NONE__` marker for a build
  *   that ships none). It decides which provider catalogs the model generator
@@ -37,6 +39,25 @@ const WILDCARD_KEY = "*";
 export const TOOLSET_COMPONENT = "toolset";
 /** Component whose value names a provider set instead of switching inclusion on. */
 export const PROVIDERS_COMPONENT = "providers";
+/** Component whose value names an API set instead of switching inclusion on. */
+export const APIS_COMPONENT = "apis";
+/** API set entry meaning "every API implementation in packages/ai". */
+export const ALL_APIS = "__ALL__";
+/**
+ * Built-in tool names the session knows. A tool set that lists its tools is
+ * cross-checked against this list (see scripts/build-tools.mjs), so a renamed
+ * tool fails the build instead of leaving its implementation bundled.
+ */
+export const ALL_TOOL_NAMES = ["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"];
+/** Prefix of the per-tool components. */
+export const TOOLS_COMPONENT_PREFIX = "tools/";
+
+/**
+ * Key of a tool set entry that lists the built-in tool names it ships. A set
+ * without it ships every tool definition; the build then filters at runtime
+ * only, which keeps the code of the other tools in the bundle.
+ */
+export const TOOLSET_TOOLS_KEY = "tools";
 /** Prefix of the per-module components. */
 export const MODULE_COMPONENT_PREFIX = "module/";
 /** Provider set entry meaning "every built-in catalog", checked at build time. */
@@ -82,7 +103,9 @@ export function loadBuildConfig(repoRoot) {
 
 	const unknownKeys = Object.keys(raw).filter(
 		(key) =>
-			!["defaultFlavor", "components", "flavors", "toolsetComponents", "providerSets", "moduleBundles"].includes(key),
+			!["defaultFlavor", "components", "flavors", "toolsetComponents", "providerSets", "apiSets", "moduleBundles"].includes(
+				key,
+			),
 	);
 	if (unknownKeys.length > 0) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} has unknown top-level keys: ${unknownKeys.join(", ")}`);
@@ -149,15 +172,31 @@ export function loadBuildConfig(repoRoot) {
 			if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
 				throw new Error(`Tool set "${name}" in ${BUILD_CONFIG_FILENAME} must be an object`);
 			}
-			const unknownToolsetKeys = Object.keys(spec).filter((key) => key !== "description");
+			const unknownToolsetKeys = Object.keys(spec).filter((key) => key !== "description" && key !== TOOLSET_TOOLS_KEY);
 			if (unknownToolsetKeys.length > 0) {
 				throw new Error(`Tool set "${name}" in ${BUILD_CONFIG_FILENAME} has unknown keys: ${unknownToolsetKeys.join(", ")}`);
+			}
+			const tools = spec[TOOLSET_TOOLS_KEY];
+			if (tools === undefined) continue;
+			if (!Array.isArray(tools) || tools.length === 0) {
+				throw new Error(`Tool set "${name}" in ${BUILD_CONFIG_FILENAME} must list its "tools" as a non-empty array`);
+			}
+			for (const tool of tools) {
+				if (typeof tool !== "string" || tool.length === 0) {
+					throw new Error(`Tool set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string tool name`);
+				}
+			}
+			if (new Set(tools).size !== tools.length) {
+				throw new Error(`Tool set "${name}" in ${BUILD_CONFIG_FILENAME} lists a tool name twice`);
 			}
 		}
 	} else if (componentNames.includes(TOOLSET_COMPONENT)) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} declares "${TOOLSET_COMPONENT}" without a "toolsetComponents" map`);
 	}
 	const toolsetNames = toolsetComponents === undefined ? [] : Object.keys(toolsetComponents);
+	const toolsetTools = Object.fromEntries(
+		Object.entries(toolsetComponents ?? {}).map(([name, spec]) => [name, spec[TOOLSET_TOOLS_KEY] ?? []]),
+	);
 
 	const providerSets = raw.providerSets;
 	if (providerSets !== undefined) {
@@ -205,6 +244,44 @@ export function loadBuildConfig(repoRoot) {
 	}
 
 	const providerSetNames = providerSets === undefined ? [] : Object.keys(providerSets);
+
+	const apiSets = raw.apiSets;
+	if (apiSets !== undefined) {
+		if (typeof apiSets !== "object" || apiSets === null || Array.isArray(apiSets)) {
+			throw new Error(`${BUILD_CONFIG_FILENAME} "apiSets" must be an object of API set names`);
+		}
+		if (Object.keys(apiSets).length === 0) throw new Error(`${BUILD_CONFIG_FILENAME} "apiSets" declares no API sets`);
+		for (const [name, spec] of Object.entries(apiSets)) {
+			if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} must be an object`);
+			}
+			const unknownApiSetKeys = Object.keys(spec).filter((key) => key !== "description" && key !== "apis");
+			if (unknownApiSetKeys.length > 0) {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} has unknown keys: ${unknownApiSetKeys.join(", ")}`);
+			}
+			if (spec.description !== undefined && typeof spec.description !== "string") {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string description`);
+			}
+			if (!Array.isArray(spec.apis) || spec.apis.length === 0) {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} needs an API id list, or ["${ALL_APIS}"]`);
+			}
+			for (const apiId of spec.apis) {
+				if (typeof apiId !== "string" || apiId.length === 0) {
+					throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string API id`);
+				}
+			}
+			if (new Set(spec.apis).size !== spec.apis.length) {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} lists an API id twice`);
+			}
+			if (spec.apis.includes(ALL_APIS) && spec.apis.length > 1) {
+				throw new Error(`API set "${name}" in ${BUILD_CONFIG_FILENAME} uses "${ALL_APIS}" alongside concrete API ids`);
+			}
+		}
+	} else if (componentNames.includes(APIS_COMPONENT)) {
+		throw new Error(`${BUILD_CONFIG_FILENAME} declares "${APIS_COMPONENT}" without an "apiSets" map`);
+	}
+	const apiSetNames = apiSets === undefined ? [] : Object.keys(apiSets);
+
 	const flavorNames = Object.keys(raw.flavors);
 	if (flavorNames.length === 0) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} declares no flavors`);
@@ -241,6 +318,15 @@ export function loadBuildConfig(repoRoot) {
 				}
 				continue;
 			}
+			if (key === APIS_COMPONENT) {
+				if (typeof value !== "string" || !apiSetNames.includes(value)) {
+					throw new Error(
+						`Flavor "${flavorName}" sets "${APIS_COMPONENT}" to an unknown API set ` +
+							`(declared: ${apiSetNames.join(", ") || "none"})`,
+					);
+				}
+				continue;
+			}
 			if (key === PROVIDERS_COMPONENT) {
 				if (typeof value !== "string" || !providerSetNames.includes(value)) {
 					throw new Error(
@@ -263,7 +349,9 @@ export function loadBuildConfig(repoRoot) {
 		defaultFlavor: raw.defaultFlavor,
 		componentNames,
 		toolsetComponents: toolsetNames,
+		toolsetTools,
 		providerSets: providerSets ?? {},
+		apiSets: apiSets ?? {},
 		moduleBundles: moduleBundles ?? {},
 		moduleBundleNames,
 		flavors: raw.flavors,
@@ -294,6 +382,18 @@ export function resolveFlavorToolset(config, flavorName) {
 }
 
 /**
+ * The built-in tool names a flavor's tool set lists, or undefined when it
+ * lists none (the set ships every tool definition and filters at runtime).
+ *
+ * @returns {string[] | undefined}
+ */
+export function resolveFlavorToolNames(config, flavorName) {
+	const toolset = resolveFlavorToolset(config, flavorName);
+	const tools = config.toolsetTools?.[toolset];
+	return tools === undefined || tools.length === 0 ? undefined : [...tools];
+}
+
+/**
  * The provider ids a flavor ships. A flavor that does not name a provider set
  * gets every built-in provider, so the default stays the full catalog; a set
  * that lists `__NONE__` ships none. Both markers expand to themselves, so the
@@ -319,10 +419,46 @@ export function resolveFlavorProviders(config, flavorName) {
 }
 
 /**
+ * The API ids a flavor ships. A flavor that does not name an API set ships
+ * every implementation, so the runtime registers everything it carries; a set
+ * that lists `__ALL__` expands to the marker the build resolves against the
+ * registered implementations.
+ *
+ * @returns {string[]}
+ */
+export function resolveFlavorApis(config, flavorName) {
+	const flavor = config.flavors[flavorName];
+	if (!flavor) {
+		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
+	}
+	const selected = flavor.components[APIS_COMPONENT];
+	if (typeof selected !== "string") return [ALL_APIS];
+	const apiSet = config.apiSets[selected];
+	if (!apiSet) throw new Error(`Unknown API set "${selected}" in flavor "${flavorName}"`);
+	return apiSet.apis.includes(ALL_APIS) ? [ALL_APIS] : [...apiSet.apis];
+}
+
+/**
+ * The API ids a build registers. The `__ALL__` marker stays as it is: the
+ * runtime reads it as "every implementation", which keeps the registry whole
+ * and filters nothing.
+ *
+ * @returns {string[]}
+ */
+export function resolveBuiltinApiIds(apis) {
+	// Always a list: esbuild rejects an undefined define value, and an empty
+	// list is not a state this config produces.
+	return apis.includes(ALL_APIS) ? [ALL_APIS] : [...apis];
+}
+
+/**
  * Resolves a flavor to its component map. Unlisted components fall back to
  * the flavor's "*" entry, then to enabled (safe default: a component added to
  * buildconfig.json but forgotten in a flavor stays bundled). The `toolset`
- * value is the selected tool set name rather than a switch.
+ * value is the selected tool set name rather than a switch. The `tools/<name>`
+ * components are a view of the tool set the flavor picked: a set that lists
+ * its tools ships exactly those, and a set that lists none leaves the group
+ * key to the flavor.
  *
  * @returns {Record<string, boolean | string>}
  */
@@ -332,6 +468,7 @@ export function resolveFlavorComponents(config, flavorName) {
 		throw new Error(`Unknown build flavor "${flavorName}" (declared: ${Object.keys(config.flavors).join(", ")})`);
 	}
 	const groupKeys = Object.keys(flavor.components).filter((key) => isDeclaredGroupKey(key, config.componentNames));
+	const toolNames = resolveFlavorToolNames(config, flavorName);
 	const components = {};
 	for (const name of config.componentNames) {
 		const groupValue = groupKeys.find((key) => name.startsWith(key.slice(0, -1)));
@@ -340,7 +477,11 @@ export function resolveFlavorComponents(config, flavorName) {
 				? resolveFlavorToolset(config, flavorName)
 				: name === PROVIDERS_COMPONENT
 					? resolveFlavorProviders(config, flavorName)
-					: (flavor.components[name] ?? (groupValue === undefined ? undefined : flavor.components[groupValue]) ?? flavor.components[WILDCARD_KEY] ?? true);
+					: name === APIS_COMPONENT
+						? resolveFlavorApis(config, flavorName)
+						: name.startsWith(TOOLS_COMPONENT_PREFIX) && toolNames !== undefined
+							? toolNames.includes(name.slice(TOOLS_COMPONENT_PREFIX.length))
+							: (flavor.components[name] ?? (groupValue === undefined ? undefined : flavor.components[groupValue]) ?? flavor.components[WILDCARD_KEY] ?? true);
 	}
 	return components;
 }
@@ -444,7 +585,7 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
  * resolved against the config. `toolset` is the selected tool set name and
  * `providers` the selected provider ids.
  *
- * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string, providers: string[] }}
+ * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[] }}
  */
 export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = process.env } = {}) {
 	const config = loadBuildConfig(repoRoot);
@@ -453,6 +594,8 @@ export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = proces
 		flavor,
 		components: resolveFlavorComponents(config, flavor),
 		toolset: resolveFlavorToolset(config, flavor),
+		toolNames: resolveFlavorToolNames(config, flavor),
 		providers: resolveFlavorProviders(config, flavor),
+		apis: resolveFlavorApis(config, flavor),
 	};
 }

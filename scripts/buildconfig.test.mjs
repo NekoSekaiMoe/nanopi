@@ -1,18 +1,22 @@
-import assert, { strictEqual, throws } from "node:assert";
+import assert, { deepStrictEqual, strictEqual, throws } from "node:assert";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import {
+	ALL_APIS,
 	ALL_PROVIDERS,
 	BUILD_FLAVOR_ENV,
 	NO_PROVIDERS,
 	loadBuildConfig,
 	parseFlavorArg,
 	resolveBuildFlavor,
+	resolveBuiltinApiIds,
 	resolveBuiltinProviderIds,
+	resolveFlavorApis,
 	resolveFlavorComponents,
 	resolveFlavorProviders,
+	resolveFlavorToolNames,
 	resolveFlavorToolset,
 	validateFlavorModules,
 	validateFlavorProviders,
@@ -379,5 +383,118 @@ describe("module components", () => {
 		throws(() => validateFlavorModules(dir, ["alpha"]), /"moduleBundles" does not list every builtin module/);
 		throws(() => validateFlavorModules(dir, ["alpha", "beta", "gamma"]), /modules without a "module\/" component: gamma/);
 		assert.doesNotThrow(() => validateFlavorModules(dir, modules));
+	});
+});
+
+describe("tool set tools", () => {
+	const config = {
+		defaultFlavor: "full",
+		components: { toolset: { description: "Tool set" }, "tools/read": {}, "tools/bash": {} },
+		toolsetComponents: {
+			standard: {},
+			bash: { tools: ["bash", "powershell"] },
+		},
+		flavors: {
+			full: { components: { "*": true } },
+			shell: { components: { "*": true, toolset: "bash" } },
+		},
+	};
+
+	it("reports no tool list for a set that does not name its tools", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		strictEqual(resolveFlavorToolNames(loadBuildConfig(dir), "full"), undefined);
+		strictEqual(resolveBuildFlavor(dir, { argv: ["--flavor", "full"], env: {} }).toolNames, undefined);
+	});
+
+	it("reports the tools of a set that names them", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		deepStrictEqual(resolveFlavorToolNames(loadBuildConfig(dir), "shell"), ["bash", "powershell"]);
+	});
+
+	it("derives the per-tool components from the selected tool set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		const components = resolveFlavorComponents(loadBuildConfig(dir), "shell");
+		strictEqual(components["tools/bash"], true);
+		strictEqual(components["tools/read"], false);
+	});
+
+	it("rejects a tool set with a malformed tools list", () => {
+		const dir = writeConfig({
+			...config,
+			toolsetComponents: { ...config.toolsetComponents, bash: { tools: "bash" } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /must list its "tools" as a non-empty array/);
+	});
+
+	it("rejects a tool set that lists a tool twice", () => {
+		const dir = writeConfig({
+			...config,
+			toolsetComponents: { ...config.toolsetComponents, bash: { tools: ["bash", "bash"] } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /lists a tool name twice/);
+	});
+});
+
+describe("apis component", () => {
+	const config = {
+		defaultFlavor: "full",
+		components: { apis: { description: "API set" }, webui: {} },
+		apiSets: {
+			all: { description: "Every implementation", apis: [ALL_APIS] },
+			openai: { description: "Completions alone", apis: ["openai-completions"] },
+		},
+		flavors: {
+			full: { components: { "*": true, apis: "all" } },
+			small: { components: { "*": false, apis: "openai" } },
+			unnamed: { components: { "*": true } },
+		},
+	};
+
+	it("reads the named API set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		deepStrictEqual(resolveFlavorApis(loadBuildConfig(dir), "small"), ["openai-completions"]);
+		deepStrictEqual(resolveBuildFlavor(dir, { argv: ["--flavor", "small"], env: {} }).apis, ["openai-completions"]);
+	});
+
+	it("defaults to every implementation when a flavor names no API set", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		deepStrictEqual(resolveFlavorApis(loadBuildConfig(dir), "unnamed"), [ALL_APIS]);
+	});
+
+	it("keeps the full marker for the runtime to read as every implementation", () => {
+		const dir = writeConfig(config);
+		tempDirs.push(dir);
+		deepStrictEqual(resolveBuiltinApiIds(resolveFlavorApis(loadBuildConfig(dir), "full")), [ALL_APIS]);
+	});
+
+	it("rejects an undeclared API set", () => {
+		const dir = writeConfig({
+			...config,
+			flavors: { ...config.flavors, broken: { components: { "*": true, apis: "nope" } } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /sets "apis" to an unknown API set/);
+	});
+
+	it("rejects an apis component without an apiSets map", () => {
+		const dir = writeConfig({ ...config, apiSets: undefined });
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /declares "apis" without an "apiSets" map/);
+	});
+
+	it("rejects the full marker next to concrete ids", () => {
+		const dir = writeConfig({
+			...config,
+			apiSets: { mixed: { apis: [ALL_APIS, "openai-completions"] } },
+		});
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /uses "__ALL__" alongside concrete API ids/);
 	});
 });

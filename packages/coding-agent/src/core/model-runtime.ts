@@ -508,6 +508,19 @@ export class ModelRuntime implements Models {
 		return this.snapshot.available;
 	}
 
+	/**
+	 * Re-check provider auth so `getAvailableSnapshot()` reflects credentials added or removed
+	 * outside this runtime: a `login` run in another process, an exported API key, or a token
+	 * refreshed on disk. Never fetches catalogs. Resolves with the providers whose check failed;
+	 * their previous entry is kept.
+	 */
+	async refreshAvailability(
+		providerIds?: readonly string[],
+		options?: AuthOperationOptions,
+	): Promise<Map<string, Error>> {
+		return new Map(await this.requestAvailabilityPass(providerIds, options?.signal));
+	}
+
 	getError(): string | undefined {
 		const errors: string[] = [];
 		const configError = this.config.getError();

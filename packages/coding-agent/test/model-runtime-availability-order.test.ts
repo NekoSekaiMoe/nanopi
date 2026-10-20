@@ -138,6 +138,42 @@ describe("availability passes", () => {
 		expect(running.calls()).toBe(2);
 	});
 
+	// Regression for shinytale/nanopi#90: `--list-models` and the /model picker showed only the
+	// models of a provider authenticated before startup, because nothing re-checked auth after
+	// a credential appeared on disk.
+	it("exposes a provider whose credential appears after the first pass", async () => {
+		const credentials = AuthStorage.inMemory();
+		const runtime = await createRuntime(credentials);
+		let configured = false;
+		runtime.registerNativeProvider(testProvider("late", () => configured));
+		await runtime.refresh({ allowNetwork: false });
+		expect(runtime.getAvailableSnapshot()).toHaveLength(0);
+
+		await credentials.modify("late", async () => ({ type: "api_key", key: "sk-late" }));
+		configured = true;
+		expect(runtime.getAvailableSnapshot()).toHaveLength(0);
+
+		await runtime.refreshAvailability();
+		expect(runtime.getAvailableSnapshot().map((model) => model.id)).toEqual(["late-model"]);
+	});
+
+	it("keeps the previous entry of a provider whose re-check fails", async () => {
+		const credentials = AuthStorage.inMemory({ flaky: { type: "api_key", key: "sk-flaky" } });
+		const runtime = await createRuntime(credentials);
+		let fail = false;
+		runtime.registerNativeProvider(testProvider("flaky", () => true));
+		await runtime.refresh({ allowNetwork: false });
+		expect(runtime.getAvailableSnapshot()).toHaveLength(1);
+
+		const check = runtime.getProvider("flaky")!.auth.apiKey!.check!;
+		runtime.getProvider("flaky")!.auth.apiKey!.check = async (options) =>
+			fail ? Promise.reject(new Error("check exploded")) : check(options);
+		fail = true;
+		const errors = await runtime.refreshAvailability(["flaky"]);
+		expect([...errors.keys()]).toEqual(["flaky"]);
+		expect(runtime.getAvailableSnapshot()).toHaveLength(1);
+	});
+
 	it("keeps a registration's provisional entry when a pass that started earlier finishes", async () => {
 		const credentials = AuthStorage.inMemory({ dynamic: { type: "api_key", key: "stored" } });
 		const runtime = await createRuntime(credentials);

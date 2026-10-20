@@ -56,7 +56,7 @@ import {
 	resetApiProviders,
 	streamSimple,
 } from "@nanopi/pi-ai/compat";
-import { isBashOnlyBuild } from "../build-components.ts";
+import { builtinToolNames, isBashOnlyBuild } from "../build-components.ts";
 import { theme } from "../modes/interactive/theme/theme.ts";
 import { stripFrontmatter } from "../utils/frontmatter.ts";
 import { processImage } from "../utils/image-process.ts";
@@ -155,7 +155,7 @@ import {
 } from "./system-prompt.ts";
 import { createToolNameMatcher } from "./tool-patterns.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
-import { createAllToolDefinitions, filterToolDefinitions } from "./tools/index.ts";
+import { createAllToolDefinitions } from "./tools/index.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, combineUsage, createUsageTotals } from "./usage-totals.ts";
 import {
@@ -307,8 +307,12 @@ export interface RuntimeReloadCallbacks {
 	reloadFailed?(error: unknown): void | Promise<void>;
 }
 
-/** Tools a bash-only build registers: the shell tools, nothing else. */
-const BASH_ONLY_TOOL_NAMES: readonly string[] = ["bash", "powershell"];
+/**
+ * Tools a bash-only build registers: the shell tools, nothing else. A tool set
+ * that names its tools ships exactly that list (injected as a build define);
+ * the constant is the fallback for a source checkout that only sets the flavor.
+ */
+const BASH_ONLY_TOOL_NAMES: readonly string[] = builtinToolNames() ?? ["bash", "powershell"];
 
 /** System-prompt guideline telling the model what a bash-only build provides. */
 const BASH_ONLY_GUIDELINE =
@@ -3937,8 +3941,9 @@ export class AgentSession {
 						createToolDefinitionFromAgentTool(tool),
 					]),
 				)
-			: filterToolDefinitions(
-					createAllToolDefinitions(this._cwd, {
+			: createAllToolDefinitions(
+					this._cwd,
+					{
 						read: { autoResizeImages },
 						bash: {
 							commandPrefix: shellCommandPrefix,
@@ -3946,10 +3951,11 @@ export class AgentSession {
 							operationsProviders: () => Object.fromEntries(this._bashOperationsBackends),
 							operationsProvider: () => this._activeBashOperations,
 						},
-					}),
+					},
 					// A bash-only build (the buildconfig.json `toolset: "bash"` component)
 					// registers the shell tools alone, so the rest cannot be activated by
-					// settings, `--tools`, a resumed transcript, or a module.
+					// settings, `--tools`, a resumed transcript, or a module. The list
+					// filters before construction: the other definitions are stubs.
 					isBashOnlyBuild() ? BASH_ONLY_TOOL_NAMES : undefined,
 				);
 
