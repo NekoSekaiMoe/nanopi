@@ -27,7 +27,7 @@ import type {
 import { appendAssistantMessageDiagnostic, createAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
-import { parseStreamingJson } from "../utils/json-parse.ts";
+import { parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
 import { getProviderEnvValue } from "../utils/provider-env.ts";
 
 export interface NanoPiMessagesOptions extends StreamOptions {
@@ -258,15 +258,24 @@ function createEventConverter(model: Model<"nanopi-messages">) {
 					parseStreamingJson<ToolCall["arguments"]>(json);
 				break;
 			}
-			case "toolcall_end":
-				Object.assign(partial.content[event.contentIndex]!, event.toolCall);
+			case "toolcall_end": {
+				// The wire `arguments` come from the backend's own incremental parse and keep a
+				// partially parsed prefix when the tail is malformed. Re-parse the accumulated
+				// deltas so a truncated call fails argument validation instead of executing.
+				const block = partial.content[event.contentIndex] as ToolCall;
+				const json = toolJson.get(event.contentIndex) ?? "";
+				block.id = event.toolCall.id;
+				block.name = event.toolCall.name;
+				delete block.argumentsError;
+				Object.assign(block, parseToolCallArguments(json || undefined));
 				toolJson.delete(event.contentIndex);
 				return {
 					type: "toolcall_end",
 					contentIndex: event.contentIndex,
-					toolCall: partial.content[event.contentIndex] as ToolCall,
+					toolCall: block,
 					partial,
 				};
+			}
 		}
 
 		return { ...event, partial } as AssistantMessageEvent;

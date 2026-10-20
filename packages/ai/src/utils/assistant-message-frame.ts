@@ -1,5 +1,5 @@
 import type { AssistantMessage, AssistantMessageEvent, TextContent, ThinkingContent, ToolCall } from "../types.ts";
-import { parseStreamingJson } from "./json-parse.ts";
+import { parseStreamingJson, parseToolCallArguments } from "./json-parse.ts";
 
 /**
  * Compact, replayable assistant-message progress. Terminal settlement is
@@ -483,7 +483,10 @@ export function reduceAssistantMessageFrames(frames: Iterable<AssistantMessageFr
 		if (state.kind !== "toolCall" || state.ended || state.json.length === 0) continue;
 		const block = message.content[contentIndex];
 		if (block?.type !== "toolCall") throw new Error("Unreachable tool-call frame state");
-		block.arguments = parseStreamingJson<ToolCall["arguments"]>(state.json);
+		// A call without an end frame is settled here, so the same rule as a finished call
+		// applies: keep the parsed prefix out of execution and report the malformed tail.
+		delete block.argumentsError;
+		Object.assign(block, parseToolCallArguments(state.json));
 	}
 
 	return message;

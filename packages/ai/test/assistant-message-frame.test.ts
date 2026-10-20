@@ -105,7 +105,7 @@ describe("assistant message frames", () => {
 		});
 	});
 
-	it("parses unfinished tool JSON once and uses authoritative completed arguments", () => {
+	it("settles unfinished tool JSON strictly and uses authoritative completed arguments", () => {
 		const initialFrames: AssistantMessageFrame[] = [
 			{ type: "start", partial: seed() },
 			{
@@ -116,9 +116,12 @@ describe("assistant message frames", () => {
 			{ type: "toolcall_delta", contentIndex: 0, delta: '{"path":"READ' },
 		];
 
+		// The call never gets an end frame, so it is settled here and the truncated
+		// text must not reach execution as a plausible-looking prefix.
 		expect(reduceAssistantMessageFrames(initialFrames)?.content[0]).toMatchObject({
 			type: "toolCall",
-			arguments: { path: "READ" },
+			arguments: {},
+			argumentsError: expect.stringContaining(`Received arguments:\n{"path":"READ`),
 		});
 
 		const completeFrames: AssistantMessageFrame[] = [
@@ -508,6 +511,47 @@ describe("assistant message frames", () => {
 			{ type: "text", text: "answer" },
 			{ type: "toolCall", id: "call", name: "lookup", arguments: { query: "nanopi" } },
 			{ type: "thinking", thinking: "check" },
+		]);
+	});
+
+	it("marks truncated arguments when an unfinished tool call is settled", () => {
+		const truncated = '{"command":"rm -rf /tmp/build","timeout":30000,"confir';
+		const frames: AssistantMessageFrame[] = [
+			{ type: "start", partial: seed() },
+			{
+				type: "toolcall_start",
+				contentIndex: 0,
+				toolCall: { type: "toolCall", id: "call", name: "bash", arguments: {} },
+			},
+			{ type: "toolcall_delta", contentIndex: 0, delta: truncated.slice(0, 20) },
+			{ type: "toolcall_delta", contentIndex: 0, delta: truncated.slice(20) },
+		];
+
+		const content = reduceAssistantMessageFrames(frames)?.content;
+		expect(content).toEqual([
+			{
+				type: "toolCall",
+				id: "call",
+				name: "bash",
+				arguments: {},
+				argumentsError: expect.stringContaining(`Received arguments:\n${truncated}`),
+			},
+		]);
+	});
+
+	it("keeps complete arguments when an unfinished tool call is settled", () => {
+		const frames: AssistantMessageFrame[] = [
+			{ type: "start", partial: seed() },
+			{
+				type: "toolcall_start",
+				contentIndex: 0,
+				toolCall: { type: "toolCall", id: "call", name: "bash", arguments: {} },
+			},
+			{ type: "toolcall_delta", contentIndex: 0, delta: '{"command":"ls -la"}' },
+		];
+
+		expect(reduceAssistantMessageFrames(frames)?.content).toEqual([
+			{ type: "toolCall", id: "call", name: "bash", arguments: { command: "ls -la" } },
 		]);
 	});
 

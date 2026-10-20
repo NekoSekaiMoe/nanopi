@@ -165,6 +165,73 @@ describe("nanopi-messages", () => {
 		});
 	});
 
+	it("marks truncated tool-call arguments at toolcall_end instead of keeping the parsed prefix", async () => {
+		const truncated = '{"command": "rm -rf /tmp/build", "timeout": 30000, "confir';
+		const { baseUrl } = await startServer({
+			events: [
+				{ type: "start" },
+				{ type: "toolcall_start", contentIndex: 0, id: "call_1", toolName: "bash" },
+				{ type: "toolcall_delta", contentIndex: 0, delta: truncated.slice(0, 20) },
+				{ type: "toolcall_delta", contentIndex: 0, delta: truncated.slice(20) },
+				{
+					type: "toolcall_end",
+					contentIndex: 0,
+					// The backend hands back its own partial parse of the truncated text.
+					toolCall: {
+						type: "toolCall",
+						id: "call_1",
+						name: "bash",
+						arguments: { command: "rm -rf /tmp/build" },
+					},
+				},
+				{ type: "done", reason: "length", usage },
+			],
+		});
+		const model = createModel(baseUrl);
+
+		const events: AssistantMessageEvent[] = [];
+		const eventStream = stream(model, normalizeContext(context), { apiKey: "test-key" });
+		for await (const event of eventStream) {
+			events.push(event);
+		}
+		const message = await eventStream.result();
+
+		const toolCall = message.content[0];
+		if (toolCall?.type !== "toolCall") throw new Error("Expected toolCall block");
+		expect(toolCall.name).toBe("bash");
+		expect(toolCall.id).toBe("call_1");
+		expect(toolCall.arguments).toEqual({});
+		expect(toolCall.argumentsError?.endsWith(`Received arguments:\n${truncated}`)).toBe(true);
+
+		const toolcallEnd = events.find((event) => event.type === "toolcall_end");
+		if (toolcallEnd?.type !== "toolcall_end") throw new Error("Expected toolcall_end event");
+		expect(toolcallEnd.toolCall).toBe(toolCall);
+	});
+
+	it("keeps tool-call arguments that parse cleanly", async () => {
+		const { baseUrl } = await startServer({
+			events: [
+				{ type: "start" },
+				{ type: "toolcall_start", contentIndex: 0, id: "call_1", toolName: "bash" },
+				{ type: "toolcall_delta", contentIndex: 0, delta: '{"command": "ls -la"}' },
+				{
+					type: "toolcall_end",
+					contentIndex: 0,
+					toolCall: { type: "toolCall", id: "call_1", name: "bash", arguments: {} },
+				},
+				{ type: "done", reason: "toolUse", usage },
+			],
+		});
+		const model = createModel(baseUrl);
+
+		const message = await stream(model, normalizeContext(context), { apiKey: "test-key" }).result();
+
+		const toolCall = message.content[0];
+		if (toolCall?.type !== "toolCall") throw new Error("Expected toolCall block");
+		expect(toolCall.arguments).toEqual({ command: "ls -la" });
+		expect(toolCall.argumentsError).toBeUndefined();
+	});
+
 	it("forwards parsed wire events in order before converting them", async () => {
 		const wireEvents = [
 			{ type: "start" },
