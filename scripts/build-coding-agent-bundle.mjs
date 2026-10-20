@@ -11,11 +11,13 @@ import {
 	loadBuildConfig,
 	readProviderCatalogIds,
 	resolveBuildFlavor,
+	resolveBuiltinApiIds,
 	resolveBuiltinProviderIds,
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
+import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
 import { OAUTH_FLOWS, oauthComponentName, validateOAuthFlowRegistry } from "./oauth-flows.mjs";
 
@@ -29,11 +31,15 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // Build flavors (buildconfig.json) control peripheral components. The
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
-const { flavor, components, toolset, providers } = resolveBuildFlavor(repoRoot);
+const { flavor, components, toolset, toolNames, providers, apis } = resolveBuildFlavor(repoRoot);
 // A provider set that ships every catalog has no runtime filter; a set that
 // ships none resolves to an empty list and the build keeps no built-in provider.
 const builtinProviderIds = resolveBuiltinProviderIds(providers);
+// A flavor that names an API set ships only those implementations: models.json
+// can reference nothing else, and the other lazy clients stay out of the bundle.
+const builtinApiIds = resolveBuiltinApiIds(apis);
 validateOAuthFlowRegistry({ repoRoot, components });
+validateToolSet(toolNames);
 // Every built-in module is a `module/<name>` component; validateFlavorModules
 // fails the build when the module list and buildconfig.json disagree.
 const buildConfig = loadBuildConfig(repoRoot);
@@ -47,6 +53,13 @@ const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStub
 	modules: resolveModuleBundles(repoRoot, buildConfig),
 	components,
 });
+const toolStubDir = mkdtempSync(join(tmpdir(), "nanopi-tool-stubs-"));
+const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin({
+	stubDir: toolStubDir,
+	toolsSrcDir: join(codingAgentDir, "src", "core", "tools"),
+	toolNames,
+});
+
 const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
@@ -144,12 +157,17 @@ function commonBuildOptions() {
 			NANOPI_BUILD_FLAVOR: JSON.stringify(flavor),
 			NANOPI_BUILD_TOOLSET: JSON.stringify(toolset),
 			NANOPI_BUILD_PROVIDERS: JSON.stringify(builtinProviderIds),
+			NANOPI_BUILD_APIS: JSON.stringify(builtinApiIds),
+			// esbuild rejects an undefined define value, so a tool set that names
+			// no tools injects the empty list the runtime reads as "every tool".
+			NANOPI_BUILD_TOOLS: JSON.stringify(toolNames ?? []),
 		},
 		external: ["@silvia-odwyer/photon-node"],
 		format: "esm",
 		legalComments: "none",
 		logLevel: "warning",
 		metafile: true,
+		minifyIdentifiers: true,
 		minifySyntax: true,
 		minifyWhitespace: true,
 		platform: "node",
@@ -159,6 +177,7 @@ function commonBuildOptions() {
 		// needs transformation.
 		plugins: [
 			moduleStubPlugin,
+			toolStubPlugin,
 			lazyJitiPlugin,
 			httpsProxyAgentNamedExportPlugin,
 		],
@@ -295,12 +314,14 @@ chmodSync(join(bundleDir, "cli.js"), 0o755);
 chmodSync(join(bundleDir, "rpc-entry.js"), 0o755);
 
 rmSync(moduleStubDir, { force: true, recursive: true });
+rmSync(toolStubDir, { force: true, recursive: true });
 
 const files = new Set(metafiles.flatMap((metafile) => Object.keys(metafile.outputs))).size + 1;
 const mib = (outputBytes(metafiles) + cliLauncher.length) / (1024 * 1024);
 console.log(
 	`Built ${relative(repoRoot, bundleDir)} (${files} files, ${mib.toFixed(1)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
 		(excludedFlows.length > 0 ? `, excluded OAuth: ${excludedFlows.join(", ")}` : "") +
+		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
 		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
 		")",
 );

@@ -2,7 +2,7 @@ import { join } from "node:path";
 import { Agent, type AgentMessage, setDefaultStreamFn, type ThinkingLevel } from "@nanopi/pi-agent-core";
 import type { ModelsSimpleStreamOptions } from "@nanopi/pi-ai";
 import { clampThinkingLevel, type Message, type Model, streamSimple } from "@nanopi/pi-ai/compat";
-import { isBashOnlyBuild } from "../build-components.ts";
+import { builtinToolNames, isBashOnlyBuild } from "../build-components.ts";
 import { getAgentDir } from "../config.ts";
 import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
@@ -280,10 +280,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const toolListError = options.tools ? getToolListError(options.tools) : undefined;
 	if (toolListError) throw new Error(`Invalid tools option: ${toolListError}`);
 	// A bash-only build (buildconfig.json `toolset: "bash"`) has no other built-in
-	// tools, so its default selection is the shell tools. Duplicated from the
-	// session because this runs before one exists; both spell the same list.
-	const builtinToolNames = isBashOnlyBuild() ? ["bash", "powershell"] : DEFAULT_TOOL_NAMES;
-	const defaultToolNames = options.noTools ? [] : (settingsManager.getDefaultTools() ?? builtinToolNames);
+	// tools, so its default selection is the shell tools the tool set names.
+	const shellToolNames = isBashOnlyBuild() ? (builtinToolNames() ?? ["bash", "powershell"]) : DEFAULT_TOOL_NAMES;
+	const defaultToolNames = options.noTools ? [] : (settingsManager.getDefaultTools() ?? shellToolNames);
 	// A `tools` list of only `+name`/`-name` entries changes the default selection instead of
 	// replacing it, like the `defaultTools` setting.
 	const toolModifiers = options.tools?.some(isToolModifier) ? options.tools : undefined;

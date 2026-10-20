@@ -17,6 +17,15 @@
  * redirects, and `$(...)` nesting well enough for the commands models write, and never throws.
  */
 
+import { isBuildComponentEnabled } from "../build-components.ts";
+
+/**
+ * Whether the build carries embedded-code detection (buildconfig.json
+ * `embedded-code`). A build that drops it renders a shell command as one
+ * block, which also drops the language inference and its path table.
+ */
+export const EMBEDDED_CODE_ENABLED = isBuildComponentEnabled("embedded-code");
+
 export interface ShellSegment {
 	/** Exact source text. Concatenating all segment texts yields the original command. */
 	text: string;
@@ -335,6 +344,9 @@ function inlineScriptLanguage(command: ShellCommand): string | undefined {
 
 /** Split a shell command into shell text, heredoc bodies, and inline scripts. */
 export function splitShellCommand(command: string, options: SplitShellCommandOptions = {}): ShellSegment[] {
+	// A build without embedded-code detection renders the command as one shell
+	// block, which keeps the scanner and the path table out of the bundle.
+	if (!EMBEDDED_CODE_ENABLED) return [{ text: command, embedded: false }];
 	const segments: ShellSegment[] = [];
 	const variables = new Map<string, string>();
 	const frames: Frame[] = [{ kind: "shell", command: newCommand(), parenDepth: 0, substitution: false }];

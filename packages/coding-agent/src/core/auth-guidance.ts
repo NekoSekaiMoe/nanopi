@@ -1,12 +1,29 @@
 import { join } from "node:path";
-import { isNoBuiltinProviderBuild } from "../build-components.ts";
+import { isBuildComponentEnabled, isNoBuiltinProviderBuild } from "../build-components.ts";
 import { getDocsPath, getModelsPath } from "../config.ts";
 
 const UNKNOWN_PROVIDER = "unknown";
 
+/** Whether this build ships OAuth login flows (buildconfig.json `oauth/*`). */
+function hasOAuthFlows(): boolean {
+	return (
+		isBuildComponentEnabled("oauth/anthropic") ||
+		isBuildComponentEnabled("oauth/antigravity") ||
+		isBuildComponentEnabled("oauth/github-copilot") ||
+		isBuildComponentEnabled("oauth/kimi-coding") ||
+		isBuildComponentEnabled("oauth/meta") ||
+		isBuildComponentEnabled("oauth/openai-chatgpt") ||
+		isBuildComponentEnabled("oauth/openai-codex") ||
+		isBuildComponentEnabled("oauth/openrouter") ||
+		isBuildComponentEnabled("oauth/xai")
+	);
+}
+
 export function getProviderLoginHelp(): string {
 	return [
-		"Use /login to log into a provider via OAuth or API key. See:",
+		hasOAuthFlows()
+			? "Use /login to log into a provider via OAuth or API key. See:"
+			: "Use /login to store a provider API key, or add one to models.json. See:",
 		`  ${join(getDocsPath(), "providers.md")}`,
 		`  ${join(getDocsPath(), "models.md")}`,
 	].join("\n");

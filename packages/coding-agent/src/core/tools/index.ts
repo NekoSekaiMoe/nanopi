@@ -181,17 +181,38 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
 	];
 }
 
-export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef> {
-	return {
-		read: createReadToolDefinition(cwd, options?.read),
-		bash: createBashToolDefinition(cwd, options?.bash),
-		powershell: createPowerShellToolDefinition(cwd, options?.powershell),
-		edit: createEditToolDefinition(cwd, options?.edit),
-		write: createWriteToolDefinition(cwd, options?.write),
-		grep: createGrepToolDefinition(cwd, options?.grep),
-		find: createFindToolDefinition(cwd, options?.find),
-		ls: createLsToolDefinition(cwd, options?.ls),
+/**
+ * Every built-in tool definition. `names` filters before construction, because
+ * a build whose tool set leaves a tool out ships a stub that throws when called
+ * (`scripts/build-tools.mjs`); the result then holds only those names.
+ */
+/** Every built-in tool definition; `names` narrows which ones get constructed. */
+export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef>;
+export function createAllToolDefinitions(
+	cwd: string,
+	options: ToolsOptions | undefined,
+	names: readonly string[] | undefined,
+): Record<ToolName, ToolDef> | Partial<Record<ToolName, ToolDef>>;
+export function createAllToolDefinitions(
+	cwd: string,
+	options?: ToolsOptions,
+	names?: readonly string[],
+): Record<ToolName, ToolDef> | Partial<Record<ToolName, ToolDef>> {
+	const definitions: Record<ToolName, () => ToolDef> = {
+		read: () => createReadToolDefinition(cwd, options?.read),
+		bash: () => createBashToolDefinition(cwd, options?.bash),
+		powershell: () => createPowerShellToolDefinition(cwd, options?.powershell),
+		edit: () => createEditToolDefinition(cwd, options?.edit),
+		write: () => createWriteToolDefinition(cwd, options?.write),
+		grep: () => createGrepToolDefinition(cwd, options?.grep),
+		find: () => createFindToolDefinition(cwd, options?.find),
+		ls: () => createLsToolDefinition(cwd, options?.ls),
 	};
+	return Object.fromEntries(
+		Object.entries(definitions)
+			.filter(([name]) => names === undefined || names.includes(name))
+			.map(([name, create]) => [name, create()]),
+	);
 }
 
 /**

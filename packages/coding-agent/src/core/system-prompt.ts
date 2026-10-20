@@ -3,6 +3,7 @@
  */
 
 import { getSystemMessageText } from "@nanopi/pi-ai";
+import { isBuildComponentEnabled } from "../build-components.ts";
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
@@ -159,11 +160,15 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
 		promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-		promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI):
+		// A flavor that drops the docs and examples trees has no files to point
+		// at, so the section would be dead weight in every prompt.
+		if (isBuildComponentEnabled("docs")) {
+			promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI):
 - Main documentation: ${getReadmePath()} (overview) and ${getDocsPath()}/index.md (topic index)
 - Examples: ${getExamplesPath()}
 - Resolve docs/... and examples/... against ${getDocsPath()} and ${getExamplesPath()}, not the current working directory
 - Follow .md cross-references and read referenced files completely before implementing`;
+		}
 	}
 
 	if (appendSystemPrompt) promptSections.addendum = appendSystemPrompt;

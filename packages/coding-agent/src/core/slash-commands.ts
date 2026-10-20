@@ -1,3 +1,4 @@
+import { isBuildComponentEnabled } from "../build-components.ts";
 import { APP_NAME } from "../config.ts";
 import type { SourceInfo } from "./source-info.ts";
 
@@ -16,7 +17,7 @@ export interface BuiltinSlashCommand {
 	argumentHint?: string;
 }
 
-export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "settings", description: "Open settings menu" },
 	{ name: "model", description: "Select model (opens selector UI)", argumentHint: "<provider/model>" },
 	{ name: "tree", description: "Navigate session tree (switch branches)" },
@@ -42,3 +43,15 @@ export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "exit", description: `Quit ${APP_NAME}` },
 ];
+
+/**
+ * Commands this build offers. A build without OAuth flows (buildconfig.json
+ * `oauth/*` off, the minimal flavor) has no flow code to log in with, so
+ * `/login` and `/logout` only reach an API key dialog at best and report that
+ * nothing is stored at worst; the build drops them from autocomplete and from
+ * the conflict list. Their handlers stay reachable for API-key logins.
+ */
+export function builtinSlashCommands(): ReadonlyArray<BuiltinSlashCommand> {
+	if (isBuildComponentEnabled("oauth/anthropic")) return ALL_BUILTIN_SLASH_COMMANDS;
+	return ALL_BUILTIN_SLASH_COMMANDS.filter((command) => command.name !== "login" && command.name !== "logout");
+}

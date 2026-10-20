@@ -20,31 +20,43 @@ import rust from "highlight.js/lib/languages/rust.js";
 import scala from "highlight.js/lib/languages/scala.js";
 import swift from "highlight.js/lib/languages/swift.js";
 import typescript from "highlight.js/lib/languages/typescript.js";
+import { isBuildComponentEnabled } from "../build-components.ts";
 import { decodeHtmlEntityAt } from "./html.ts";
 
-const eagerLanguages = {
-	python,
-	java,
-	go,
-	javascript,
-	json,
-	cpp,
-	typescript,
-	php,
-	ruby,
-	c,
-	csharp,
-	nix,
-	bash,
-	rust,
-	scala,
-	kotlin,
-	swift,
-	dart,
-	groovy,
-	perl,
-	lua,
-};
+/**
+ * Whether the build carries syntax highlighting (buildconfig.json
+ * `syntax-highlight`). A build that drops it registers no grammar at all, so
+ * the grammars fall out of the bundle, and renders every code block in the
+ * plain output color: `highlight()` returns its input and `supportsLanguage()`
+ * answers false.
+ */
+const HIGHLIGHTING_ENABLED = isBuildComponentEnabled("syntax-highlight");
+
+const eagerLanguages = HIGHLIGHTING_ENABLED
+	? {
+			python,
+			java,
+			go,
+			javascript,
+			json,
+			cpp,
+			typescript,
+			php,
+			ruby,
+			c,
+			csharp,
+			nix,
+			bash,
+			rust,
+			scala,
+			kotlin,
+			swift,
+			dart,
+			groovy,
+			perl,
+			lua,
+		}
+	: {};
 
 for (const [name, language] of Object.entries(eagerLanguages)) {
 	hljs.registerLanguage(name, language);
@@ -53,6 +65,7 @@ for (const [name, language] of Object.entries(eagerLanguages)) {
 let allLanguagesPromise: Promise<void> | undefined;
 
 export function loadAllHighlightLanguages(): Promise<void> {
+	if (!HIGHLIGHTING_ENABLED) return Promise.resolve();
 	if (!allLanguagesPromise) {
 		allLanguagesPromise = new Promise((resolve) => {
 			setImmediate(() => {
@@ -205,6 +218,7 @@ export function renderHighlightedHtml(html: string, theme: HighlightTheme = {}):
 }
 
 export function highlight(code: string, options: HighlightOptions = {}): string {
+	if (!HIGHLIGHTING_ENABLED) return code;
 	const html = options.language
 		? hljs.highlight(code, {
 				language: options.language,
@@ -215,5 +229,5 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
 }
 
 export function supportsLanguage(name: string): boolean {
-	return hljs.getLanguage(name) !== undefined;
+	return HIGHLIGHTING_ENABLED && hljs.getLanguage(name) !== undefined;
 }
