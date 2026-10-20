@@ -279,13 +279,15 @@ describe("AgentSession actionable boundaries", () => {
 		});
 		harnesses.push(harness);
 		harness.session.subscribe((event) => {
-			if (event.type === "entry_appended") snapshots.push(JSON.stringify(harness.session.messages));
+			if (event.type === "entry_appended" && event.entry.type !== "custom") {
+				snapshots.push(JSON.stringify(harness.session.messages));
+			}
 		});
 		harness.setResponses([fauxAssistantMessage("done")]);
 
 		await harness.session.prompt("start");
 
-		expect(snapshots).toHaveLength(2);
+		expect(snapshots).toHaveLength(1);
 		expect(snapshots.every((snapshot) => snapshot.includes("committed context"))).toBe(true);
 	});
 

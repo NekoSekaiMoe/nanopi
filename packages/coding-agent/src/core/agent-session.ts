@@ -130,11 +130,21 @@ import type { BeforeAgentStartTrigger } from "./modules/registry.ts";
 import { NestedToolCallRunner } from "./nested-tool-calls.ts";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.ts";
 import type { ResourceLoader } from "./resource-loader.ts";
+import {
+	findLastRunRecord,
+	findRecoverableRun,
+	getRunRecordData,
+	type RecoverableRun,
+	RUN_RECORD_CUSTOM_TYPE,
+	type RunRecordData,
+	type RunRecordTarget,
+} from "./run-record.ts";
 import { exportSessionToJsonl } from "./session-export.ts";
 import {
 	type BranchSummaryEntry,
 	type CompactionEntry,
 	type ContextEditEntry,
+	type CustomEntry,
 	getEntriesAfterLatestCompaction,
 	getLatestCompactionEntry,
 	type SessionEntry,
@@ -515,6 +525,12 @@ export class AgentSession {
 	 * retry is routed with it as `failed`, since the context no longer contains it.
 	 */
 	private _failedResponse: AssistantMessage | undefined;
+	/** Run record of the active run, rewritten as the run learns its outcome. Undefined while idle. */
+	private _runRecord: RunRecordTarget | undefined;
+	private _runRecordFirstEntryId: string | undefined;
+	private _runRecordTurns = 0;
+	/** Entry ID of the assistant message that ended the most recent run on this branch. */
+	private _lastRunLastEntryId: string | undefined;
 
 	// Bash execution state
 	private readonly _bashAbortControllers = new Set<AbortController>();
@@ -1407,7 +1423,12 @@ export class AgentSession {
 				// Regular LLM message - persist as SessionMessageEntry
 				entryId = this.sessionManager.appendMessage(event.message);
 			}
-			if (entryId) this._entryIdsByMessage.set(event.message, entryId);
+			if (entryId) {
+				this._entryIdsByMessage.set(event.message, entryId);
+				if (event.message.role === "toolResult" && this._runRecordFirstEntryId === undefined) {
+					this._runRecordFirstEntryId = entryId;
+				}
+			}
 			// Other message types (bashExecution, compactionSummary, branchSummary) are persisted elsewhere
 
 			if (event.message.role === "assistant") {
@@ -1437,6 +1458,7 @@ export class AgentSession {
 		// handlers queued.
 		if (event.type === "turn_end") {
 			this._lastAssistantToolResults = event.toolResults;
+			this._runRecordTurns++;
 			this._flushPendingCustomMessages();
 		}
 	};
@@ -1496,6 +1518,81 @@ export class AgentSession {
 			if (entry) this._emit({ type: "entry_appended", entry });
 		}
 		this._refreshFinalizedContext();
+	}
+
+	// =========================================================================
+	// Run Records
+	// =========================================================================
+
+	/**
+	 * Append a run record and make it the current one. A run writes one record per attempt; readers
+	 * only look at the newest, so an earlier record is superseded rather than rewritten.
+	 */
+	private _appendRunRecord(data: RunRecordData): void {
+		const entryId = this.sessionManager.appendCustomEntry(RUN_RECORD_CUSTOM_TYPE, data);
+		const entry = this.sessionManager.getEntry(entryId);
+		if (!entry || entry.type !== "custom") return;
+		this._runRecord = { id: entry.id, timestamp: entry.timestamp };
+		if (data.lastEntryId) this._lastRunLastEntryId = data.lastEntryId;
+		this._emit({ type: "entry_appended", entry });
+		// A record holds no model content, so re-projecting mid-turn would only drop a persisted tool
+		// result the agent loop has not reported yet. Align once the run settles instead.
+		if (this.isIdle) this._refreshFinalizedContext();
+	}
+
+	/** Record how the run ended, so a failure that outlives this process can be replayed. */
+	private _recordRunEnd(message: AssistantMessage): void {
+		this._appendRunRecord({
+			firstEntryId: this._runRecordFirstEntryId,
+			lastEntryId: this._findPersistedMessageEntryId(message),
+			stopReason: message.stopReason,
+			errorMessage: message.errorMessage,
+			turns: this._runRecordTurns,
+			outcome:
+				message.stopReason === "error" ? "failed" : message.stopReason === "aborted" ? "aborted" : "completed",
+			// Attempts are absolute: the budget continues across a replay, not just while the process lives.
+			attempts: this._retryAttempt,
+		});
+	}
+
+	/** Charge a retry attempt to the run record while the backoff runs, in case the process dies. */
+	private _recordRetryAttempt(attempt: number, errorMessage: string): void {
+		if (!this._runRecord) return;
+		this._appendRunRecord({
+			firstEntryId: this._runRecordFirstEntryId,
+			lastEntryId: this._lastRunLastEntryId,
+			stopReason: "error",
+			errorMessage,
+			turns: this._runRecordTurns,
+			outcome: "failed",
+			attempts: attempt,
+		});
+	}
+
+	/** Charge an attempt that was scheduled before this run ended, which `_recordRunEnd` overwrote. */
+	private _recordRunAttempts(attempts: number): void {
+		if (!this._runRecord || attempts === 0) return;
+		const record = this._lastRunRecord();
+		const data = record ? getRunRecordData(record) : undefined;
+		if (!data) return;
+		this._appendRunRecord({ ...data, attempts });
+	}
+
+	private _lastRunRecord(): CustomEntry<RunRecordData> | undefined {
+		return findLastRunRecord(this.sessionManager.getBranch());
+	}
+
+	/**
+	 * Start a run's record bookkeeping. A replay keeps the chat turn it repeats, so the first entry
+	 * and turn count carry over; a fresh prompt starts both over.
+	 */
+	private _beginRunRecord(replay: boolean): void {
+		this._runRecord = undefined;
+		if (!replay) {
+			this._runRecordFirstEntryId = undefined;
+			this._runRecordTurns = 0;
+		}
+		this._lastRunLastEntryId = undefined;
 	}
 
 	/** Find the last assistant message in agent state (including aborted ones) */
@@ -2096,6 +2193,7 @@ export class AgentSession {
 		this._isAgentRunActive = true;
 		this._isAgentPromptPending = true;
 		this._agentRunAbortRequested = false;
+		this._beginRunRecord(trigger.messageType === "continue");
 		let messages: AgentMessage[];
 		try {
 			messages = await this._prepareRun(trigger);
@@ -2113,8 +2211,9 @@ export class AgentSession {
 		this._flushPendingCustomMessages();
 		onStarted?.();
 
-		// Compaction before the prompt may have scheduled a retry; the new prompt replaces it.
-		this._failedResponse = undefined;
+		// Compaction before the prompt may have scheduled a retry; the new prompt replaces it. A replay
+		// keeps the failed response it was started for, which routes and repeats that request.
+		if (trigger.messageType !== "continue") this._failedResponse = undefined;
 		this._recordSelection();
 		// The run records the loadout in the transcript; restored tools that did not register by now
 		// are dropped, so a tool that never registers does not stay pending.
@@ -2150,6 +2249,40 @@ export class AgentSession {
 		}
 	}
 
+	/** Whether the newest run on the branch failed. See {@link recoverableRun}. */
+	get recoverableRun(): RecoverableRun | undefined {
+		return findRecoverableRun(this.sessionManager.getBranch());
+	}
+
+	/**
+	 * Replay the newest failed run.
+	 *
+	 * The failed response is routed as `failed`, which the request projection uses to pick the
+	 * virtual-model route, and the context projection decides what the model sees. Retry attempts the
+	 * failed run already spent are charged to this one, so replaying does not reset the budget.
+	 *
+	 * @throws when the branch holds no replayable failure, for instance because auto-retry already
+	 * omitted the response or a later message superseded it.
+	 */
+	async retryLastRun(): Promise<void> {
+		this.assertRuntimeAvailable();
+		if (this.isStreaming || this.isCompacting) {
+			throw new Error("Cannot retry while the agent or compaction is running.");
+		}
+		const recoverable = this.recoverableRun;
+		if (!recoverable) {
+			throw new Error("No failed response to retry in this session.");
+		}
+		const failed = this.sessionManager.getEntry(recoverable.lastEntryId);
+		if (failed?.type !== "message" || failed.message.role !== "assistant") {
+			throw new Error("No failed response to retry in this session.");
+		}
+		// The run replays the same turn, so it starts from the failed response instead of a message.
+		this._failedResponse = failed.message as AssistantMessage;
+		if (recoverable.attempts > 0) this._retryAttempt = recoverable.attempts;
+		await this._startRun({ messageType: "continue" });
+	}
+
 	/**
 	 * Prepare a run and return its starting messages: compact first when needed, emit
 	 * before_agent_start, apply the run's prompt options and tool loadout, and build the starting
@@ -2182,7 +2315,9 @@ export class AgentSession {
 		}
 
 		const messages: AgentMessage[] = [];
-		if (trigger.messageType === "custom") {
+		if (trigger.messageType === "continue") {
+			// A replay adds no message of its own; the request repeats the failed turn.
+		} else if (trigger.messageType === "custom") {
 			messages.push(trigger.message);
 		} else {
 			// Normalize images after before_agent_start so extension-driven model selection
@@ -2225,20 +2360,24 @@ export class AgentSession {
 		this._lastAssistantToolResults = [];
 		if (this._agentRunAbortRequested) {
 			this._finishCancelledRetry();
+			if (message) this._recordRunEnd(message);
 			return false;
 		}
 		if (!message) return this.agent.hasQueuedMessages();
 
 		if (this._isRetryableError(message) && (await this._prepareRetry(message))) {
 			if (this._agentRunAbortRequested) this._finishCancelledRetry();
+			this._recordRunEnd(message);
 			this._failedResponse = message;
 			return !this._agentRunAbortRequested;
 		}
 		if (this._agentRunAbortRequested) {
 			this._finishCancelledRetry();
+			this._recordRunEnd(message);
 			return false;
 		}
 
+		const failedAttempts = message.stopReason === "error" ? this._retryAttempt : 0;
 		if (message.stopReason === "error" && this._retryAttempt > 0) {
 			this._emit({
 				type: "auto_retry_end",
@@ -2248,6 +2387,9 @@ export class AgentSession {
 			});
 			this._retryAttempt = 0;
 		}
+
+		this._recordRunEnd(message);
+		this._recordRunAttempts(failedAttempts);
 
 		if (await this._checkCompaction(message, true, toolResults, true)) {
 			return !this._agentRunAbortRequested;
@@ -4297,6 +4439,8 @@ export class AgentSession {
 
 		// Keep the failed attempt in raw history while durably omitting it from model projection.
 		this._omitRecoveryAttempt(message);
+		// The attempt is charged before the backoff: a process that dies while waiting keeps the budget.
+		this._recordRetryAttempt(this._retryAttempt, message.errorMessage || "Unknown error");
 
 		// Wait with exponential backoff (abortable)
 		this._retryAbortController = new AbortController();

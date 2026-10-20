@@ -933,8 +933,16 @@ export interface BeforeAgentStartCustomEvent extends BeforeAgentStartEventBase {
 	message: CustomMessage;
 }
 
-/** Fired before a run starts from a user message or an idle custom message with `triggerTurn`. */
-export type BeforeAgentStartEvent = BeforeAgentStartUserEvent | BeforeAgentStartCustomEvent;
+/** A run that replays the last turn, started by `/retry`. */
+export interface BeforeAgentStartContinueEvent extends BeforeAgentStartEventBase {
+	messageType: "continue";
+}
+
+/** Fired before a run starts from a user message, an idle custom message with `triggerTurn`, or a replay. */
+export type BeforeAgentStartEvent =
+	| BeforeAgentStartUserEvent
+	| BeforeAgentStartCustomEvent
+	| BeforeAgentStartContinueEvent;
 
 /** Fired when an agent loop starts */
 export interface AgentStartEvent {

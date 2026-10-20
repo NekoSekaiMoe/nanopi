@@ -41,6 +41,7 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "logout", description: "Remove provider authentication" },
 	{ name: "new", description: "Start a new session" },
 	{ name: "compact", description: "Manually compact the session context" },
+	{ name: "retry", description: "Replay the last failed response" },
 	{ name: "resume", description: "Resume a different session" },
 	{ name: "exit", description: `Quit ${APP_NAME}` },
 ];

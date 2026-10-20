@@ -7,10 +7,12 @@
 import type { ModuleApi } from "../../core/modules/types.ts";
 import { registerContext } from "./context.ts";
 import { registerInit } from "./init.ts";
+import { registerRunRecord } from "./run-record.ts";
 import { registerStatus } from "./status.ts";
 
 export default function builtinCommandsExtension(pi: ModuleApi): void {
 	registerInit(pi);
 	registerContext(pi);
 	registerStatus(pi);
+	registerRunRecord(pi);
 }

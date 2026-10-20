@@ -2663,6 +2663,11 @@ export class InteractiveMode {
 				await this.handleClearCommand();
 				return;
 			}
+			if (text === "/retry") {
+				this.editor.setText("");
+				await this.handleRetryCommand();
+				return;
+			}
 			if (text === "/compact" || text.startsWith("/compact ")) {
 				const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
 				this.editor.setText("");
@@ -6250,6 +6255,22 @@ export class InteractiveMode {
 
 		this.bashComponent = undefined;
 		this.ui.requestRender();
+	}
+
+	private async handleRetryCommand(): Promise<void> {
+		const recoverable = this.session.recoverableRun;
+		if (!recoverable) {
+			this.showError("No failed response to retry in this session.");
+			return;
+		}
+		this.clearStatusIndicator();
+		const attempts = recoverable.attempts > 0 ? ` (attempt ${recoverable.attempts + 1})` : "";
+		this.showStatus(`Retrying the last failed response${attempts}`);
+		try {
+			await this.session.retryLastRun();
+		} catch (error: unknown) {
+			this.showError(error instanceof Error ? error.message : String(error));
+		}
 	}
 
 	private async handleCompactCommand(customInstructions?: string): Promise<void> {

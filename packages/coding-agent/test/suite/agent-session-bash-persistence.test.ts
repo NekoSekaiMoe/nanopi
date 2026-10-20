@@ -222,7 +222,8 @@ describe("AgentSession bash and persistence characterization", () => {
 		});
 		await harness.session.prompt("start");
 
-		const entries = harness.sessionManager.getEntries();
+		// Run records are bookkeeping: they carry no model content and do not change the transcript.
+		const entries = harness.sessionManager.getEntries().filter((entry) => entry.type !== "custom");
 		// The prompt is declared by the first request, after the queued custom message.
 		expect(entries.map((entry) => entry.type)).toEqual([
 			"custom_message",
