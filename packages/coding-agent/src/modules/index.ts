@@ -25,6 +25,7 @@ import piSmartFlow from "../extras/pi-smart-flow/src/index.ts";
 import piSubagentMini from "../extras/pi-subagent-mini/src/index.ts";
 import piUi from "../extras/pi-ui/src/index.ts";
 import todoLite from "../extras/todo-lite/index.ts";
+import websearch from "../extras/websearch/src/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
 import llamaExtension from "./llama/index.ts";
@@ -51,6 +52,7 @@ export const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "pi-subagent-mini", factory: piSubagentMini },
 	{ name: "pi-ui", factory: piUi },
 	{ name: "todo-lite", factory: todoLite },
+	{ name: "websearch", factory: websearch },
 ];
 
 /**
