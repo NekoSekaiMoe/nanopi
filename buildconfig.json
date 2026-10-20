@@ -67,6 +67,9 @@
 		"module/todo-lite": {
 			"description": "todo tool and its rendering"
 		},
+		"module/websearch": {
+			"description": "web_search and read_page tools with the keyless engine chain"
+		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand)"
 		},
@@ -146,6 +149,9 @@
 		},
 		"todo-lite": {
 			"source": "packages/coding-agent/src/extras/todo-lite/index.ts"
+		},
+		"websearch": {
+			"source": "packages/coding-agent/src/extras/websearch/src/index.ts"
 		}
 	},
 	"flavors": {
@@ -172,6 +178,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/websearch": false,
 				"providers": "presets"
 			}
 		},
@@ -191,6 +198,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/websearch": false,
 				"toolset": "bash",
 				"providers": "none",
 				"module/extra": false

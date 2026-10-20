@@ -129,6 +129,10 @@
           "path": "settings.md"
         },
         {
+          "title": "Web Search and Page Reading",
+          "path": "web-search.md"
+        },
+        {
           "title": "Environment Variables",
           "path": "environment-variables.md"
         },
