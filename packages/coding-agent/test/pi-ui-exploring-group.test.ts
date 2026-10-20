@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest";
-import { exploringHeader, exploringRows } from "../src/extras/pi-ui/src/subagent-widget.ts";
+import type { CustomMessage } from "../src/core/messages.ts";
+import {
+	EXPLORING_MESSAGE_TYPE,
+	exploringHeader,
+	exploringHistoryRenderer,
+	exploringRows,
+} from "../src/extras/pi-ui/src/subagent-widget.ts";
 import { exploreCallFor, exploringCalls } from "../src/extras/pi-ui/src/tools.ts";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
@@ -65,5 +71,21 @@ describe("pi-ui exploring group", () => {
 			{ action: "Read", detail: "src/index.ts" },
 			{ action: "Search", detail: "spawn" },
 		]);
+	});
+
+	test("history rows render as flat rows, not the labeled [pi-ui-exploring] panel", () => {
+		const row = stripAnsi(exploringRows([exploreCallFor("read", "AGENTS.md")], theme, 80)[1] ?? "");
+		const message: CustomMessage = {
+			role: "custom",
+			customType: EXPLORING_MESSAGE_TYPE,
+			content: row,
+			display: true,
+			timestamp: 0,
+		};
+		const component = exploringHistoryRenderer(message, { expanded: false, outputPad: 1 }, theme);
+		const lines = (component?.render(60) ?? []).map((line) => stripAnsi(line).trimEnd());
+		// One flat row at the transcript's outputPad: no box, no `[pi-ui-exploring]`
+		// label, no extra blank line around it.
+		expect(lines).toEqual([` ${row}`]);
 	});
 });

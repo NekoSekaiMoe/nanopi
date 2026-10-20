@@ -13,7 +13,9 @@
  * so the group needs both:
  *   - History: read/ls/grep/find/subagent calls keep no row and no body of
  *     their own (see tools.ts). This module appends one `Read …` line per
- *     finished call, so the chat holds the rows in the order the work happened.
+ *     finished call, so the chat holds the rows in the order the work
+ *     happened; exploringHistoryRenderer keeps each row flat instead of the
+ *     default `[pi-ui-exploring]` panel CustomMessageComponent would draw.
  *   - Live: the "• Exploring" header over the rows gathered so far, under the
  *     editor, where the next call is about to land. pi-subagent-mini writes its
  *     running jobs to the shared widget key and those become rows too, so a
@@ -24,15 +26,24 @@
  * shows only the "• Explored" row with nothing under it.
  */
 
-import type { AgentToolResult, ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
+import type {
+	AgentToolResult,
+	MessageRenderer,
+	ModuleApi,
+	ModuleUIContext,
+	Theme,
+	ThemeColor,
+} from "@nanopi/pi-coding-agent";
 import type { Component, TUI } from "@nanopi/pi-tui";
-import { TuiMainScreen, truncateToWidth } from "@nanopi/pi-tui";
+import { Text, TuiMainScreen, truncateToWidth } from "@nanopi/pi-tui";
 import { type ExploreCall, exploreCallFor, exploringCalls } from "./tools.ts";
 
 /** Widget key shared with pi-subagent-mini (src/index.ts: WIDGET_KEY). */
 const SUBAGENT_WIDGET_KEY = "subagent-async";
 /** Session message pi-subagent-mini appends for a subagent report. */
 const SUBAGENT_COMPLETE_TYPE = "subagent-complete";
+/** The history-row message this module appends per finished exploration call. */
+export const EXPLORING_MESSAGE_TYPE = "pi-ui-exploring";
 
 const ANSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 // Braille spinner frames (U+2800–28FF) plus the static status marks used by
@@ -87,6 +98,22 @@ export function exploringRows(calls: readonly ExploreCall[], theme: Theme, width
 function historyRow(call: ExploreCall, theme: Theme, width: number): string {
   return actionRow(call, false, theme, width);
 }
+
+/**
+ * Chat renderer for those rows: the flat action row itself, at the
+ * transcript's outputPad. Without it every row falls back to
+ * CustomMessageComponent's default panel — a `[pi-ui-exploring]` label in a
+ * tinted box — which breaks the row shape every other tool call uses.
+ */
+export const exploringHistoryRenderer: MessageRenderer = (message, options) => {
+  const content = typeof message.content === "string"
+    ? message.content
+    : message.content
+        .filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
+        .map((part) => part.text)
+        .join("\n");
+  return new Text(content, options.outputPad, 0);
+};
 
 /** Job lines pi-subagent-mini writes: one row per running job. */
 function subagentCalls(lines: readonly string[], theme: Theme): ExploreCall[] {
@@ -270,7 +297,7 @@ export function installExploringBlock(pi: ModuleApi): void {
       : [exploreCallFor(name, exploreDetail(name, event.input))];
     for (const call of calls) {
       void pi.sendMessage(
-        { customType: "pi-ui-exploring", content: historyRow(call, theme, width()), display: true },
+        { customType: EXPLORING_MESSAGE_TYPE, content: historyRow(call, theme, width()), display: true },
         { deliverAs: "nextTurn" },
       );
     }

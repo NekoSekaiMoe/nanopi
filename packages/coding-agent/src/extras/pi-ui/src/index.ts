@@ -47,7 +47,12 @@ import type { ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-c
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
-import { installExploringBlock, skinSubagentWidget } from "./subagent-widget.ts";
+import {
+  EXPLORING_MESSAGE_TYPE,
+  exploringHistoryRenderer,
+  installExploringBlock,
+  skinSubagentWidget,
+} from "./subagent-widget.ts";
 import { installThinkingDisplay } from "./thinking.ts";
 import { captureTerminalWidth, installWorking } from "./working.ts";
 
@@ -117,8 +122,11 @@ export default function (pi: ModuleApi) {
   installThinkingDisplay(pi);
 
   // The read/list/search group: rows land in the chat in finish order and the
-  // live header under the editor closes when a turn stops exploring.
+  // live header under the editor closes when a turn stops exploring. The
+  // history rows need an explicit message renderer: the default custom-message
+  // panel would wrap each one in a `[pi-ui-exploring]` box.
   installExploringBlock(pi);
+  pi.registerMessageRenderer(EXPLORING_MESSAGE_TYPE, exploringHistoryRenderer);
 
   let restoreShellRenderer = () => {};
 
