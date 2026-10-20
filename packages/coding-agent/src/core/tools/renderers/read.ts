@@ -92,15 +92,6 @@ function formatCompactReadCall(
 	theme: Theme,
 ): string {
 	const expandHint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
-	if (classification.kind === "skill") {
-		return (
-			theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m `) +
-			theme.fg("customMessageText", classification.label) +
-			formatReadLineRange(args, theme) +
-			expandHint
-		);
-	}
-
 	return (
 		theme.fg("toolTitle", theme.bold(`read ${classification.kind}`)) +
 		" " +

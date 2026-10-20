@@ -801,30 +801,21 @@
       font-weight: bold;
     }
 
-    /* Skill invocation - matches compaction style (clickable, collapsed by default) */
+    /* Skill invocation - same row shape as a tool call (clickable, collapsed by default) */
     .skill-invocation {
-      background: var(--customMessageBg);
-      border-radius: 4px;
-      padding: var(--line-height);
       cursor: pointer;
     }
 
-    .skill-invocation-label {
-      color: var(--customMessageLabel);
-      font-weight: bold;
-    }
-
-    .skill-invocation-collapsed {
-      color: var(--customMessageText);
+    .skill-invocation-hint {
+      color: var(--muted);
     }
 
     .skill-invocation-content {
       display: none;
-      color: var(--customMessageText);
       margin-top: var(--line-height);
     }
 
-    .skill-invocation.expanded .skill-invocation-collapsed {
+    .skill-invocation.expanded .skill-invocation-hint {
       display: none;
     }
 
