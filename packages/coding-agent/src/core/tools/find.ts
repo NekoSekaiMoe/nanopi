@@ -37,6 +37,39 @@ function supportsNoRequireGit(fdPath: string): boolean {
 	return `${result.stdout ?? ""}${result.stderr ?? ""}`.includes("--no-require-git");
 }
 
+/** fd 8.x rejects the whole invocation with this text instead of ignoring one unknown option. */
+function isUnknownFdOptionError(stderr: string): boolean {
+	return stderr.includes("which wasn't expected") || stderr.includes("isn't valid in this context");
+}
+
+function formatFindResult(lines: string[], searchPath: string, effectiveLimit: number) {
+	if (lines.length === 0) {
+		return { content: [{ type: "text" as const, text: "No files found matching pattern" }], details: undefined };
+	}
+	// Relativize paths against the search root for stable output.
+	const relativized = lines.map((line) => relativizeFindResultPath(line, searchPath));
+	const resultLimitReached = relativized.length >= effectiveLimit;
+	const truncation = truncateHead(relativized.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
+	let resultOutput = truncation.content;
+	const details: FindToolDetails = {};
+	const notices: string[] = [];
+	if (resultLimitReached) {
+		notices.push(`${effectiveLimit} results limit reached`);
+		details.resultLimitReached = effectiveLimit;
+	}
+	if (truncation.truncated) {
+		notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+		details.truncation = truncation;
+	}
+	if (notices.length > 0) {
+		resultOutput += `\n\n[${notices.join(". ")}]`;
+	}
+	return {
+		content: [{ type: "text" as const, text: resultOutput }],
+		details: Object.keys(details).length > 0 ? details : undefined,
+	};
+}
+
 export const findToolSystemPromptContribution = {
 	snippet: "Find files by glob pattern (respects .gitignore)",
 	guidelines: [],
@@ -146,31 +179,7 @@ export function createFindToolDefinition(
 								return;
 							}
 
-							// Relativize paths against the search root for stable output.
-							const relativized = results.map((p) => relativizeFindResultPath(p, searchPath));
-							const resultLimitReached = relativized.length >= effectiveLimit;
-							const rawOutput = relativized.join("\n");
-							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-							let resultOutput = truncation.content;
-							const details: FindToolDetails = {};
-							const notices: string[] = [];
-							if (resultLimitReached) {
-								notices.push(`${effectiveLimit} results limit reached`);
-								details.resultLimitReached = effectiveLimit;
-							}
-							if (truncation.truncated) {
-								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-								details.truncation = truncation;
-							}
-							if (notices.length > 0) {
-								resultOutput += `\n\n[${notices.join(". ")}]`;
-							}
-							settle(() =>
-								resolve({
-									content: [{ type: "text", text: resultOutput }],
-									details: Object.keys(details).length > 0 ? details : undefined,
-								}),
-							);
+							settle(() => resolve(formatFindResult(results, searchPath, effectiveLimit)));
 							return;
 						}
 
@@ -185,7 +194,7 @@ export function createFindToolDefinition(
 							return;
 						}
 
-						const args: string[] = ["--glob", "--color=never", "--hidden"];
+						const baseArgs: string[] = ["--glob", "--color=never", "--hidden"];
 
 						// fd normally ignores .gitignore outside git repos, so keep --no-require-git
 						// there. Inside repos, use fd's default git-aware behavior so parent
@@ -201,18 +210,15 @@ export function createFindToolDefinition(
 							if (parent === current) break;
 							current = parent;
 						}
-						// `--no-require-git` exists from fd 9.0; older releases reject the whole
-						// invocation ("Found argument ... wasn't expected"), which turns every search
-						// outside a repo into a hard failure. Ask the binary instead of assuming.
-						if (!insideGitRepo && supportsNoRequireGit(fdPath)) args.push("--no-require-git");
-						args.push("--max-results", String(effectiveLimit));
+						const noRequireGit = !insideGitRepo && supportsNoRequireGit(fdPath);
+						baseArgs.push("--max-results", String(effectiveLimit));
 
 						// fd --glob matches against the basename unless --full-path is set; in --full-path
 						// mode it matches against the absolute candidate path, so a path-containing
 						// pattern like 'src/**/*.spec.ts' needs a leading '**/' to match anything.
 						let effectivePattern = pattern;
 						if (pattern.includes("/")) {
-							args.push("--full-path");
+							baseArgs.push("--full-path");
 							if (!pattern.startsWith("/") && !pattern.startsWith("**/") && pattern !== "**") {
 								effectivePattern = `**/${pattern}`;
 							}
@@ -220,93 +226,67 @@ export function createFindToolDefinition(
 							if (process.platform === "win32")
 								effectivePattern = effectivePattern.replaceAll("/", String.raw`[/\\]`);
 						}
-						args.push("--", effectivePattern, searchPath);
+						baseArgs.push("--", effectivePattern, searchPath);
 
-						const child = spawn(fdPath, args, { stdio: ["ignore", "pipe", "pipe"] });
-						const rl = createInterface({ input: child.stdout });
-						let stderr = "";
-						const lines: string[] = [];
+						const runFd = (args: string[]): Promise<{ code: number | null; stderr: string; lines: string[] }> =>
+							new Promise((resolveFd, rejectFd) => {
+								const child = spawn(fdPath, args, { stdio: ["ignore", "pipe", "pipe"] });
+								const rl = createInterface({ input: child.stdout });
+								let stderr = "";
+								const lines: string[] = [];
+								stopChild = () => {
+									if (!child.killed) {
+										child.kill();
+									}
+								};
+								child.stderr?.on("data", (chunk) => {
+									stderr += chunk.toString();
+								});
+								rl.on("line", (line) => {
+									lines.push(line);
+								});
+								child.on("error", (error) => {
+									rl.close();
+									rejectFd(new Error(`Failed to run fd: ${error.message}`));
+								});
+								child.on("close", (code) => {
+									rl.close();
+									resolveFd({ code, stderr, lines });
+								});
+							});
 
-						stopChild = () => {
-							if (!child.killed) {
-								child.kill();
-							}
-						};
-
-						const cleanup = () => {
-							rl.close();
-						};
-
-						child.stderr?.on("data", (chunk) => {
-							stderr += chunk.toString();
-						});
-
-						rl.on("line", (line) => {
-							lines.push(line);
-						});
-
-						child.on("error", (error) => {
-							cleanup();
-							settle(() => reject(new Error(`Failed to run fd: ${error.message}`)));
-						});
-
-						child.on("close", (code) => {
-							cleanup();
+						const withNoRequireGit = noRequireGit
+							? [baseArgs[0], "--no-require-git", ...baseArgs.slice(1)]
+							: undefined;
+						let result = await runFd(withNoRequireGit ?? baseArgs);
+						if (signal?.aborted) {
+							settle(() => reject(new Error("Operation aborted")));
+							return;
+						}
+						// `--no-require-git` exists from fd 9.0. A binary that still rejects it falls back
+						// to fd's default behaviour, which only honours .gitignore inside a git repo:
+						// hierarchical rules still work there, so retrying is better than failing.
+						if (withNoRequireGit && result.code !== 0 && isUnknownFdOptionError(result.stderr)) {
+							result = await runFd(baseArgs);
 							if (signal?.aborted) {
 								settle(() => reject(new Error("Operation aborted")));
 								return;
 							}
-							const output = lines.join("\n");
-							if (code !== 0) {
-								const errorMsg = stderr.trim() || `fd exited with code ${code}`;
-								if (!output) {
-									settle(() => reject(new Error(errorMsg)));
-									return;
-								}
-							}
-							if (!output) {
-								settle(() =>
-									resolve({
-										content: [{ type: "text", text: "No files found matching pattern" }],
-										details: undefined,
-									}),
-								);
-								return;
-							}
+						}
+						const { code, stderr, lines } = result;
+						const output = lines.join("\n");
+						if (code !== 0 && !output) {
+							settle(() => reject(new Error(stderr.trim() || `fd exited with code ${code}`)));
+							return;
+						}
 
-							const relativized: string[] = [];
-							for (const rawLine of lines) {
-								const line = rawLine.replace(/\r$/, "").trim();
-								if (!line) continue;
-								relativized.push(relativizeFindResultPath(line, searchPath));
-							}
-
-							const resultLimitReached = relativized.length >= effectiveLimit;
-							const rawOutput = relativized.join("\n");
-							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
-							let resultOutput = truncation.content;
-							const details: FindToolDetails = {};
-							const notices: string[] = [];
-							if (resultLimitReached) {
-								notices.push(
-									`${effectiveLimit} results limit reached. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
-								);
-								details.resultLimitReached = effectiveLimit;
-							}
-							if (truncation.truncated) {
-								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
-								details.truncation = truncation;
-							}
-							if (notices.length > 0) {
-								resultOutput += `\n\n[${notices.join(". ")}]`;
-							}
-							settle(() =>
-								resolve({
-									content: [{ type: "text", text: resultOutput }],
-									details: Object.keys(details).length > 0 ? details : undefined,
-								}),
-							);
-						});
+						const paths: string[] = [];
+						for (const rawLine of lines) {
+							const line = rawLine.replace(/\r$/, "").trim();
+							if (!line) continue;
+							paths.push(line);
+						}
+						settle(() => resolve(formatFindResult(paths, searchPath, effectiveLimit)));
 					} catch (e) {
 						if (signal?.aborted) {
 							settle(() => reject(new Error("Operation aborted")));

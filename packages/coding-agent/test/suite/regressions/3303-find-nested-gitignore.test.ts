@@ -1,8 +1,10 @@
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
+import { ensureTool } from "../../../src/utils/tools-manager.ts";
 
 /**
  * Regression test for https://github.com/NekoSekaiMoe/nanopi/issues/3303
@@ -14,7 +16,18 @@ import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
  * hierarchical `.gitignore` handling via `--no-require-git` and drops the
  * manual collection.
  */
-describe("issue #3303 nested .gitignore rules leak into sibling directories", () => {
+/**
+ * The scoping fix relies on fd applying `.gitignore` without a git repo around the
+ * search root, which needs `--no-require-git` (fd 9.0+). fd 8.x ignores the file in
+ * that situation, so the expectations below cannot hold and the cases are skipped
+ * instead of reporting a tool-version difference as a regression.
+ */
+const fdBinary = await ensureTool("fd");
+const fdSupportsNoRequireGit =
+	fdBinary !== undefined &&
+	`${spawnSync(fdBinary, ["--help"], { encoding: "utf8" }).stdout ?? ""}`.includes("--no-require-git");
+
+describe.skipIf(!fdSupportsNoRequireGit)("issue #3303 nested .gitignore rules leak into sibling directories", () => {
 	let tempRoot: string;
 
 	async function runFind(pattern: string): Promise<string[]> {

@@ -1,3 +1,4 @@
+import { spawnSync } from "child_process";
 import { applyPatch } from "diff";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
@@ -35,6 +36,15 @@ const bashTool = createBashTool(process.cwd());
 const grepTool = createGrepTool(process.cwd());
 const findTool = createFindTool(process.cwd());
 const lsTool = createLsTool(process.cwd());
+
+// fd only applies a `.gitignore` outside a git repo with `--no-require-git` (fd 9.0+); 8.x
+// ignores the file there, so the .gitignore expectations below need that binary.
+const fdBinary = spawnSync("fd", ["--help"], { encoding: "utf8" }).error ? "fdfind" : "fd";
+const fdSupportsNoRequireGit = `${spawnSync(fdBinary, ["--help"], { encoding: "utf8" }).stdout ?? ""}`.includes(
+	"--no-require-git",
+);
+// A root process bypasses file permission bits, so a chmod alone never produces EACCES.
+const canTriggerPermissionErrors = !(typeof process.getuid === "function" && process.getuid() === 0);
 
 // Helper to extract text from content blocks
 function getTextOutput(result: any): string {
@@ -440,7 +450,7 @@ describe("Coding Agent Tools", () => {
 			expect(readFileSync(testFile, "utf-8")).toBe(originalContent);
 		});
 
-		it("should include EACCES for read-only files", async () => {
+		it.skipIf(!canTriggerPermissionErrors)("should include EACCES for read-only files", async () => {
 			const testFile = join(testDir, "edit-readonly.txt");
 			writeFileSync(testFile, "hello\n");
 			chmodSync(testFile, 0o444);
@@ -479,7 +489,7 @@ describe("Coding Agent Tools", () => {
 			expect(result).toEqual({ error: `Could not edit file: ${missingFile}. Error code: ENOENT.` });
 		});
 
-		it("should include EACCES in diff preview for unreadable files", async () => {
+		it.skipIf(!canTriggerPermissionErrors)("should include EACCES in diff preview for unreadable files", async () => {
 			const unreadableFile = join(testDir, "unreadable-preview.txt");
 			writeFileSync(unreadableFile, "hello\n");
 			chmodSync(unreadableFile, 0o222);
@@ -947,7 +957,7 @@ describe("Coding Agent Tools", () => {
 			expect(outputLines).toContain(".secret/hidden.txt");
 		});
 
-		it("should respect .gitignore", async () => {
+		it.skipIf(!fdSupportsNoRequireGit)("should respect .gitignore", async () => {
 			writeFileSync(join(testDir, ".gitignore"), "ignored.txt\n");
 			writeFileSync(join(testDir, "ignored.txt"), "ignored");
 			writeFileSync(join(testDir, "kept.txt"), "kept");
