@@ -252,6 +252,22 @@ describe("parseArgs", () => {
 		});
 	});
 
+	describe("--list-models --refresh flag", () => {
+		test("parses --refresh alongside a search pattern", () => {
+			const result = parseArgs(["--list-models", "sonnet", "--refresh"]);
+			expect(result.listModels).toBe("sonnet");
+			expect(result.listModelsRefresh).toBe(true);
+			expect(result.diagnostics).toEqual([]);
+		});
+
+		test("rejects --refresh without --list-models", () => {
+			const result = parseArgs(["--refresh"]);
+			expect(result.diagnostics.map((diagnostic) => diagnostic.message)).toContain(
+				"--refresh only applies to --list-models",
+			);
+		});
+	});
+
 	describe("--skill flag", () => {
 		test("parses single --skill", () => {
 			const result = parseArgs(["--skill", "./skill-dir"]);

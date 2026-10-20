@@ -103,6 +103,12 @@ export interface CreateAgentSessionOptions {
 	settingsManager?: SettingsManager;
 	/** Session start event metadata for extension runtime startup. */
 	sessionStartEvent?: SessionStartEvent;
+	/**
+	 * CLI-provided module flag values, replayed whenever the session re-binds its
+	 * modules. Startup services apply them once; sessions created later in the same
+	 * process need this copy.
+	 */
+	moduleFlagValues?: Map<string, boolean | string>;
 }
 
 /** Result from createAgentSession */
@@ -463,6 +469,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		excludedToolNames,
 		moduleRegistryRef,
 		sessionStartEvent: options.sessionStartEvent,
+		moduleFlagValues: options.moduleFlagValues,
 	});
 
 	const extensionsResult = resourceLoader.getModules();

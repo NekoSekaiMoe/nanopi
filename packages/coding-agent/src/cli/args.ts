@@ -41,6 +41,8 @@ export interface Args {
 	noPromptTemplates?: boolean;
 	noContextFiles?: boolean;
 	listModels?: string | true;
+	/** `--list-models --refresh`: refetch provider catalogs before listing. */
+	listModelsRefresh?: boolean;
 	offline?: boolean;
 	verbose?: boolean;
 	projectTrustOverride?: boolean;
@@ -201,6 +203,10 @@ export function parseArgs(args: string[]): Args {
 			} else {
 				result.listModels = true;
 			}
+		} else if (arg === "--refresh") {
+			// Only meaningful for --list-models in this order; the final validation
+			// rejects it elsewhere so a bare `--refresh` cannot silently do nothing.
+			result.listModelsRefresh = true;
 		} else if (arg === "--verbose") {
 			result.verbose = true;
 		} else if (arg === "--approve" || arg === "-a") {
@@ -235,6 +241,10 @@ export function parseArgs(args: string[]): Args {
 		} else if (!arg.startsWith("-")) {
 			result.messages.push(arg);
 		}
+	}
+
+	if (result.listModelsRefresh && result.listModels === undefined) {
+		result.diagnostics.push({ type: "error", message: "--refresh only applies to --list-models" });
 	}
 
 	return result;
@@ -292,6 +302,7 @@ ${chalk.bold("Options:")}
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models (with optional fuzzy search)
+  --refresh                      Refetch provider catalogs first (with --list-models)
   --verbose                      Force verbose startup (overrides quietStartup setting)
   --approve, -a                  Trust project-local files for this run
   --no-approve, -na              Ignore project-local files for this run

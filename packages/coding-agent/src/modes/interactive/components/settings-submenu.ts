@@ -11,18 +11,28 @@ import {
 	Text,
 } from "@nanopi/pi-tui";
 import { getSelectListTheme, theme } from "../theme/theme.ts";
+import { listRowBudget } from "./list-window.ts";
 
 const SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 	minPrimaryColumnWidth: 12,
 	maxPrimaryColumnWidth: 32,
 };
 
+/** Rows the list may occupy when the terminal height is known. */
 export interface SelectSubmenuOptions {
 	/** Enable type-to-search fuzzy filtering. */
 	searchable?: boolean;
 	/** Override the select list layout (column widths). */
 	layout?: SelectListLayoutOptions;
+	/**
+	 * Terminal height getter. Read every render so a resized terminal gets a
+	 * shorter or taller list. Without it the list keeps a fixed 10-row budget,
+	 * which overflows short terminals.
+	 */
+	getTerminalRows?: () => number;
 }
+
+const PREFERRED_LIST_ROWS = 10;
 
 /**
  * Single-step submenu that shows a titled select list.
@@ -34,6 +44,8 @@ export class SelectSubmenu extends Container {
 	private allOptions: SelectItem[];
 	private listLayout: SelectListLayoutOptions;
 	private searchInput: Input | undefined;
+	private readonly getTerminalRows: (() => number) | undefined;
+	private readonly chromeRows: number;
 	private onSelectCb: (value: string) => void;
 	private onCancelCb: () => void;
 	private onSelectionChangeCb?: (value: string) => void;
@@ -52,6 +64,9 @@ export class SelectSubmenu extends Container {
 
 		this.allOptions = options;
 		this.listLayout = submenuOptions?.layout ?? SUBMENU_SELECT_LIST_LAYOUT;
+		this.getTerminalRows = submenuOptions?.getTerminalRows;
+		// Title, optional description, optional search input, spacer, hint, spacer.
+		this.chromeRows = 3 + (description ? 2 : 0) + (submenuOptions?.searchable ? 2 : 0);
 		this.onSelectCb = onSelect;
 		this.onCancelCb = onCancel;
 		this.onSelectionChangeCb = onSelectionChange;
@@ -91,8 +106,18 @@ export class SelectSubmenu extends Container {
 		this.addChild(new Text(theme.fg("dim", hint), 0, 0));
 	}
 
+	private listRows(): number {
+		const preferred = Math.min(this.allOptions.length, PREFERRED_LIST_ROWS);
+		if (!this.getTerminalRows) return preferred;
+		return listRowBudget({
+			terminalRows: this.getTerminalRows(),
+			chromeRows: this.chromeRows,
+			preferredRows: preferred,
+		});
+	}
+
 	private buildSelectList(options: SelectItem[], preselect: string): SelectList {
-		const list = new SelectList(options, Math.min(options.length, 10), getSelectListTheme(), this.listLayout);
+		const list = new SelectList(options, this.listRows(), getSelectListTheme(), this.listLayout);
 
 		const idx = options.findIndex((o) => o.value === preselect);
 		if (idx !== -1) list.setSelectedIndex(idx);
@@ -115,6 +140,12 @@ export class SelectSubmenu extends Container {
 		const newList = this.buildSelectList(filtered, "");
 		this.children[this.listChildIndex] = newList;
 		this.selectList = newList;
+	}
+
+	render(width: number): string[] {
+		// Terminal height changes while the menu is open; keep the row budget fresh.
+		if (this.getTerminalRows) this.selectList.setMaxVisible(this.listRows());
+		return super.render(width);
 	}
 
 	handleInput(data: string): void {
@@ -166,6 +197,8 @@ interface SteppedSubmenuOptions {
 	initialContext?: Record<string, string>;
 	/** After completing the last step, loop back to step 0 instead of closing. */
 	loop?: boolean;
+	/** Terminal height getter, forwarded to every step's list. */
+	getTerminalRows?: () => number;
 }
 
 /**
@@ -240,7 +273,11 @@ export class SteppedSubmenu extends Container {
 				}
 			},
 			undefined,
-			step.searchable || step.layout ? { searchable: step.searchable, layout: step.layout } : undefined,
+			{
+				searchable: step.searchable,
+				layout: step.layout,
+				getTerminalRows: this.opts.getTerminalRows,
+			},
 		);
 	}
 

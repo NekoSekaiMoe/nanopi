@@ -73,6 +73,8 @@ export interface SettingsConfig {
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
 	warnings: WarningSettings;
+	/** Terminal height getter, so submenu lists fit a short terminal. */
+	getTerminalRows?: () => number;
 }
 
 export interface SettingsCallbacks {
@@ -423,7 +425,7 @@ export class SettingsSelectorComponent extends Container {
 						() => {
 							done(summary());
 						},
-						{ loop: true },
+						{ loop: true, getTerminalRows: config.getTerminalRows },
 					);
 				},
 			},
