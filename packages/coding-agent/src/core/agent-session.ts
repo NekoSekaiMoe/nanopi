@@ -332,6 +332,12 @@ export interface AgentSessionConfig {
 	scopedModels?: Array<{ model: Model<any>; thinkingLevel?: ThinkingLevel }>;
 	/** Resource loader for extensions, skills, prompts, context files, and system prompt */
 	resourceLoader: ResourceLoader;
+	/**
+	 * CLI-provided module flag values, replayed whenever modules are re-bound.
+	 * A fresh session (startup, /new, /fork, session reload) rebuilds the module
+	 * runtime, which drops the values applied to the previous one.
+	 */
+	moduleFlagValues?: Map<string, boolean | string>;
 	/** SDK custom tools registered outside extensions */
 	customTools?: ToolDefinition[];
 	/** Canonical model/auth runtime used by coding-agent internals. */
@@ -518,6 +524,7 @@ export class AgentSession {
 	private readonly _deferredSettledActions: Array<() => Promise<void>> = [];
 
 	private _resourceLoader: ResourceLoader;
+	private _moduleFlagValues?: Map<string, boolean | string>;
 	private _customTools: ToolDefinition[];
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
 	/** Module-registered shell execution backends (sandboxes), keyed by id. */
@@ -577,6 +584,7 @@ export class AgentSession {
 		this.settingsManager = config.settingsManager;
 		this._scopedModels = config.scopedModels ?? [];
 		this._resourceLoader = config.resourceLoader;
+		this._moduleFlagValues = config.moduleFlagValues;
 		this._customTools = config.customTools ?? [];
 		this._cwd = config.cwd;
 		this._modelRuntime = config.modelRuntime;
@@ -3604,9 +3612,33 @@ export class AgentSession {
 
 		this._modulesBound = false;
 		this._applyModuleBindings(this._moduleRegistry);
+		this._replayModuleFlagValues();
 		await this._startRuntime(this._sessionStartEvent);
 		this._modulesBound = true;
 		await this._flushRequestedReload();
+	}
+
+	/**
+	 * Re-apply CLI module flag values to the current module runtime.
+	 *
+	 * `createAgentSessionServices` applies them once at startup; every later
+	 * module runtime (session replacement, resource reload) needs the same pass or
+	 * `flags.get()` starts returning undefined.
+	 */
+	private _replayModuleFlagValues(): void {
+		if (!this._moduleFlagValues || this._moduleFlagValues.size === 0) {
+			return;
+		}
+		const registeredFlags = this._moduleRegistry.getFlags();
+		for (const [name, value] of this._moduleFlagValues) {
+			const flag = registeredFlags.get(name);
+			if (!flag) continue;
+			if (flag.type === "boolean") {
+				this._moduleRegistry.setFlagValue(name, true);
+			} else if (typeof value === "string") {
+				this._moduleRegistry.setFlagValue(name, value);
+			}
+		}
 	}
 
 	private async _startRuntime(

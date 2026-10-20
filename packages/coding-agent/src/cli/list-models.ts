@@ -23,14 +23,38 @@ function formatTokenCount(count: number): string {
 	return count.toString();
 }
 
+export interface ListModelsOptions {
+	/**
+	 * Refetch provider catalogs before listing. Without it the list is the cached
+	 * snapshot built at startup, which `ModelRuntime.create` deliberately builds
+	 * with `allowNetwork: false`.
+	 */
+	refresh?: boolean;
+	signal?: AbortSignal;
+}
+
 /**
  * List available models, optionally filtered by search pattern
  */
 export async function listModels(
 	modelRuntime: ModelRuntime,
 	searchPattern?: string,
-	signal?: AbortSignal,
+	options: ListModelsOptions = {},
 ): Promise<void> {
+	const { refresh = false, signal } = options;
+	if (refresh) {
+		// A provider that fails to refresh keeps its cached catalog, so a partial
+		// failure degrades to the old list instead of an empty one.
+		const result = await modelRuntime.refresh({ allowNetwork: true, force: true, signal });
+		if (result.errors.size > 0) {
+			console.error(
+				chalk.yellow(
+					`Warning: could not refresh ${[...result.errors.keys()].join(", ")}; showing cached models for ${result.errors.size === 1 ? "that provider" : "those providers"}.`,
+				),
+			);
+		}
+	}
+
 	const loadError = modelRuntime.getError();
 	if (loadError) {
 		console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));

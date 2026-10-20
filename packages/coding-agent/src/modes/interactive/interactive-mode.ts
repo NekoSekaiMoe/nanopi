@@ -4224,6 +4224,7 @@ export class InteractiveMode {
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
 					warnings: this.settingsManager.getWarnings(),
+					getTerminalRows: () => this.ui.terminal.rows,
 				},
 				{
 					onAutoCompactChange: (enabled) => {
@@ -4429,6 +4430,7 @@ export class InteractiveMode {
 				},
 				(level) => selectLevel(level, true),
 				this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
+				() => this.ui.terminal.rows,
 			);
 			return { component: selector, focus: selector };
 		});

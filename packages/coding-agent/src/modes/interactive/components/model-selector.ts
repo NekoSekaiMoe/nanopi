@@ -6,6 +6,9 @@ import { getModelSelectorSearchText } from "../model-search.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText, keyHint } from "./keybinding-hints.ts";
+import { listRowBudget } from "./list-window.ts";
+
+const PREFERRED_LIST_ROWS = 10;
 
 interface ModelItem {
 	provider: string;
@@ -299,10 +302,23 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.updateList();
 	}
 
+	/** Visible rows, keeping the list inside a short terminal. */
+	private listRows(): number {
+		// A detached TUI (tests, embedded hosts) has no terminal size; keep the fixed budget.
+		const terminalRows = this.tui.terminal?.rows;
+		if (terminalRows === undefined) return PREFERRED_LIST_ROWS;
+		return listRowBudget({
+			terminalRows,
+			// Border, spacer, scope/hint, spacer, search input, spacer, spacer, hint, border.
+			chromeRows: 10,
+			preferredRows: PREFERRED_LIST_ROWS,
+		});
+	}
+
 	private updateList(): void {
 		this.listContainer.clear();
 
-		const maxVisible = 10;
+		const maxVisible = this.listRows();
 		const startIndex = Math.max(
 			0,
 			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredModels.length - maxVisible),

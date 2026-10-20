@@ -76,10 +76,23 @@ export interface AgentSessionServices {
 	modelRuntime: ModelRuntime;
 	settingsManager: SettingsManager;
 	resourceLoader: ResourceLoader;
+	/**
+	 * CLI flag values parsed for module flags (`--<flag>`), kept so session
+	 * replacement (/new, /resume, /fork, /import) can replay them onto fresh
+	 * module runtimes. Without this replay, `flags.get()` reads empty after the
+	 * first session.
+	 */
+	extensionFlagValues?: Map<string, boolean | string>;
 	diagnostics: AgentSessionRuntimeDiagnostic[];
 }
 
-function applyExtensionFlagValues(
+/**
+ * Apply CLI-provided module flag values to the loader's current runtime.
+ *
+ * Also called after session replacement re-binds the modules, so the values
+ * survive beyond the initial startup pass.
+ */
+export function applyExtensionFlagValues(
 	resourceLoader: ResourceLoader,
 	extensionFlagValues: Map<string, boolean | string> | undefined,
 ): AgentSessionRuntimeDiagnostic[] {
@@ -192,7 +205,8 @@ export async function createAgentSessionServices(
 	}
 	extensionsResult.runtime.pendingVirtualModelRegistrations = [];
 	await modelRuntime.refresh({ allowNetwork: false });
-	diagnostics.push(...applyExtensionFlagValues(resourceLoader, options.extensionFlagValues));
+	const flagDiagnostics = applyExtensionFlagValues(resourceLoader, options.extensionFlagValues);
+	diagnostics.push(...flagDiagnostics);
 
 	return {
 		cwd,
@@ -200,6 +214,7 @@ export async function createAgentSessionServices(
 		modelRuntime,
 		settingsManager,
 		resourceLoader,
+		extensionFlagValues: options.extensionFlagValues,
 		diagnostics,
 	};
 }
@@ -229,5 +244,6 @@ export async function createAgentSessionFromServices(
 		noTools: options.noTools,
 		customTools: options.customTools,
 		sessionStartEvent: options.sessionStartEvent,
+		moduleFlagValues: options.services.extensionFlagValues,
 	});
 }

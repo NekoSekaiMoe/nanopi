@@ -14,6 +14,7 @@ import {
 import { getSelectListTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";
+import { listRowBudget } from "./list-window.ts";
 
 const THINKING_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 	minPrimaryColumnWidth: 12,
@@ -41,6 +42,7 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 	private onSelect: (level: ThinkingLevel) => void;
 	private onCancel: () => void;
 	private onSelectAsDefault?: (level: ThinkingLevel) => void;
+	private readonly getTerminalRows: (() => number) | undefined;
 	private _focused = false;
 
 	get focused(): boolean {
@@ -59,11 +61,14 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 		onCancel: () => void,
 		onSelectAsDefault?: (level: ThinkingLevel) => void,
 		defaultThinkingLevel?: ThinkingLevel,
+		/** Terminal height getter, so the list fits a short terminal. */
+		getTerminalRows?: () => number,
 	) {
 		super();
 		this.onSelect = onSelect;
 		this.onCancel = onCancel;
 		this.onSelectAsDefault = onSelectAsDefault;
+		this.getTerminalRows = getTerminalRows;
 
 		this.allItems = availableLevels.map((level) => ({
 			value: level,
@@ -105,8 +110,15 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 		this.addChild(new DynamicBorder());
 	}
 
+	private listRows(): number {
+		const preferred = Math.max(1, this.allItems.length);
+		if (!this.getTerminalRows) return preferred;
+		// Two borders, two spacers, title, hint, spacer, search input, spacer, hint, spacer.
+		return listRowBudget({ terminalRows: this.getTerminalRows(), chromeRows: 12, preferredRows: preferred });
+	}
+
 	private buildSelectList(items: SelectItem[], preselect?: ThinkingLevel): SelectList {
-		const list = new SelectList(items, Math.max(1, items.length), getSelectListTheme(), THINKING_SELECT_LIST_LAYOUT);
+		const list = new SelectList(items, this.listRows(), getSelectListTheme(), THINKING_SELECT_LIST_LAYOUT);
 		const currentIndex = items.findIndex((item) => item.value === preselect);
 		if (currentIndex !== -1) {
 			list.setSelectedIndex(currentIndex);
@@ -124,6 +136,11 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 		const newList = this.buildSelectList(filtered, selectedValue);
 		this.children[this.selectListChildIndex] = newList;
 		this.selectList = newList;
+	}
+
+	render(width: number): string[] {
+		if (this.getTerminalRows) this.selectList.setMaxVisible(this.listRows());
+		return super.render(width);
 	}
 
 	handleInput(keyData: string): void {
