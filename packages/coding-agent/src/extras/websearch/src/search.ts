@@ -32,6 +32,7 @@ import {
 	type FetchedPage,
 	KeyFailureError,
 	type SearchAttempt,
+	type SearchItem,
 	type SearchOutcome,
 	isKeyless,
 	runFetchOn,
@@ -95,6 +96,8 @@ export interface SearchOptions {
 }
 
 export const DEFAULT_LIMIT = 8;
+/** Ask the engine for more than requested, so dedupe still fills the caller's limit. */
+const OUTBOUND_LIMIT_FACTOR = 2;
 export const MAX_LIMIT = 20;
 
 /** Keys to try for one engine, in order. Keyless engines get a single null key. */
@@ -191,10 +194,10 @@ export async function runSearch(query: string, options: SearchOptions = {}): Pro
 	const limit = clampLimit(options.limit);
 	const signal = options.signal ?? new AbortController().signal;
 	const walked = await walkChain("search", config, signal, options.cooldownPath ?? getCooldownPath(), (engine, key, context) =>
-		runSearchOn(engine, trimmed, limit, key, context),
+		runSearchOn(engine, trimmed, limit * OUTBOUND_LIMIT_FACTOR, key, context),
 	);
 	return {
-		items: walked.value.items,
+		items: dedupeItems(walked.value.items),
 		...(walked.value.answer ? { answer: walked.value.answer } : {}),
 		engine: walked.engine,
 		keyIndex: walked.keyIndex,
@@ -218,6 +221,38 @@ export async function runFetch(url: string, options: SearchOptions = {}): Promis
 		attempts: walked.attempts,
 		...page,
 	};
+}
+
+/**
+ * Drop repeated URLs, keeping the first occurrence. Engine screens can surface
+ * the same page twice with different `?utm_` tails, and a reader that gets the
+ * same link two or three times loses distinct evidence per result slot.
+ */
+export function dedupeItems(items: readonly SearchItem[]): SearchItem[] {
+	const seen = new Set<string>();
+	const kept: SearchItem[] = [];
+	for (const item of items) {
+		const key = canonicalUrl(item.url);
+		if (seen.has(key)) continue;
+		seen.add(key);
+		kept.push(item);
+	}
+	return kept;
+}
+
+/** Lowercase host, path without a trailing slash, and no tracking or fragment. */
+function canonicalUrl(url: string): string {
+	try {
+		const parsed = new URL(url);
+		const params = [...parsed.searchParams]
+			.filter(([name]) => !/^(utm_|ref|fbclid|gclid$)/i.test(name))
+			.sort(([a], [b]) => a.localeCompare(b));
+		const query = params.length > 0 ? `?${new URLSearchParams(params).toString()}` : "";
+		const path = parsed.pathname.replace(/\/+$/, "");
+		return `${parsed.host.toLowerCase()}${path}${query}`;
+	} catch {
+		return url.trim();
+	}
 }
 
 function describeFailure(attempts: SearchAttempt[]): string {

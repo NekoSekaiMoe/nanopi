@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { WebsearchConfig } from "../../src/extras/websearch/src/config.ts";
 import { splitKeys } from "../../src/extras/websearch/src/engines.ts";
-import { orderChain, runSearch } from "../../src/extras/websearch/src/search.ts";
+import { dedupeItems, orderChain, runSearch } from "../../src/extras/websearch/src/search.ts";
 
 interface Call {
 	url: string;
@@ -53,6 +53,30 @@ describe("splitKeys", () => {
 
 	it("returns nothing for an empty value", () => {
 		expect(splitKeys("")).toEqual([]);
+	});
+});
+
+describe("dedupeItems", () => {
+	const item = (url: string) => ({ title: url, url, snippet: "", source: "" });
+
+	it("keeps the first of two identical URLs", () => {
+		const kept = dedupeItems([item("https://a.example/x"), item("https://a.example/x"), item("https://a.example/y")]);
+		expect(kept.map((entry) => entry.url)).toEqual(["https://a.example/x", "https://a.example/y"]);
+	});
+
+	it("treats tracking params, fragments, and a trailing slash as the same page", () => {
+		const kept = dedupeItems([
+			item("https://A.example/docs/"),
+			item("https://a.example/docs?utm_source=newsletter"),
+			item("https://a.example/docs#install"),
+			item("https://example.com/a"),
+		]);
+		expect(kept.map((entry) => entry.url)).toEqual(["https://A.example/docs/", "https://example.com/a"]);
+	});
+
+	it("keeps different paths and different hosts apart", () => {
+		const kept = dedupeItems([item("https://a.example/x"), item("https://a.example/z"), item("https://b.example/x")]);
+		expect(kept).toHaveLength(3);
 	});
 });
 
