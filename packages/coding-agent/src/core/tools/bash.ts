@@ -38,13 +38,16 @@ function resolveTimeoutMs(timeout: number | undefined): number | undefined {
 }
 
 const bashSchema = Type.Object({
-	command: Type.String({ description: "Shell command to execute" }),
-	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (optional, no default timeout)" })),
+	command: Type.String({ description: "Command to execute" }),
+	timeout: Type.Optional(Type.Number({ description: "Timeout in seconds (no default)" })),
 });
 
 export const bashToolSystemPromptContribution = {
 	snippet: "Execute bash commands (ls, grep, find, etc.)",
-	guidelines: ["You can inspect NANOPI_* environment variables for current model and session details."],
+	guidelines: [
+		"You can inspect NANOPI_* environment variables for current model and session details.",
+		"Chain shell commands instead of asking the user to run them",
+	],
 } as const;
 
 export type BashToolInput = Static<typeof bashSchema>;
@@ -285,7 +288,11 @@ export function createShellToolDefinition(
 	return {
 		name: config.name,
 		label: config.label,
-		description: `Execute a ${config.shellName} command in the current working directory. Returns stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+		// The declaration is the only place the model reads the tool's contract in
+		// a shell-only build, which has no tool list in the system prompt. Keep it
+		// to what the call has to know: where it runs, what comes back, and how the
+		// output is bounded.
+		description: `Run a ${config.shellName} command in the cwd. Returns stdout and stderr, truncated to the last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB; the full output is saved to a temp file.`,
 		promptSnippet: config.promptSnippet,
 		promptGuidelines: exposeSessionEnvironment && config.promptGuidelines ? [...config.promptGuidelines] : undefined,
 		parameters: bashSchema,
