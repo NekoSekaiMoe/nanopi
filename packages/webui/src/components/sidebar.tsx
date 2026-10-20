@@ -276,11 +276,11 @@ export function Sidebar({
 			{/* The panel: one label, one scrollport. The list dissolves into
 			    the rail at the bottom instead of ending on a hard rule — the
 			    nav above has no divider of its own, so a rule here reads
-			    lopsided.
-			    On desktop this column paints the surface through to the bottom
-			    edge; on mobile it stays unpainted so the scrollbar gutter shows
-			    the fixed-width layer below instead of the scrolling rows. */}
-			<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden md:bg-sidebar">
+			    lopsided. The column paints the surface itself (the aside's
+			    bg-sidebar already covers mobile), so no overlay layer is needed:
+			    an opaque absolute layer without a negative z-index paints over
+			    the rows and blanks the mobile sheet. */}
+			<div className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-sidebar">
 				<div className="flex min-w-0 shrink-0 flex-col px-2 pt-1">
 					<SidebarGroupLabel>
 						{view === "sessions" ? t("最近") : view === "files" ? t("文件") : t("终端")}
@@ -547,18 +547,6 @@ export function Sidebar({
 				    scrollbar gutter. */}
 				<div className="pointer-events-none absolute inset-x-0 bottom-0 h-6 bg-gradient-to-t from-sidebar to-transparent" />
 			</div>
-
-			{/* The mobile sheet fills the width and the column above stays
-			    transparent (the scrollbar sits over whatever is behind it), so
-			    this layer is what shows along the right edge and below the list:
-			    the panel surface, inset by the 6px gutter kept for the scrollbar.
-			    Desktop drops it and paints the wrapper itself instead. */}
-			{mobile ? (
-				<>
-					<div aria-hidden className="pointer-events-none absolute inset-0 -z-10 bg-black/20" />
-					<div aria-hidden className="pointer-events-none absolute inset-0 right-[6px] bg-sidebar" />
-				</>
-			) : null}
 
 			{confirmingDelete ? (
 				<div className="absolute inset-0 z-50 flex items-end bg-black/50 p-3">
