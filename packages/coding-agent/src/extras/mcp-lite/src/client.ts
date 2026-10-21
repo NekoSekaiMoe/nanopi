@@ -5,6 +5,7 @@
  */
 
 import { spawn, type ChildProcess } from "node:child_process";
+import { launchSpec } from "./executables.ts";
 
 const PROTOCOL_VERSION = "2025-03-26";
 const REQUEST_TIMEOUT_MS = 120_000;
@@ -142,10 +143,14 @@ class StdioTransport extends McpTransport {
 		if (this.proc) return this.proc;
 		const env = { ...process.env, ...this.config.env };
 		delete env.NODE_OPTIONS;
-		this.proc = spawn(this.config.command, this.config.args ?? [], {
+		// Resolve the executable and route Windows `.cmd`/`.bat` shims through
+		// cmd.exe: `spawn("npx")` is ENOENT there, since the shim is `npx.cmd`.
+		const launch = launchSpec(this.config.command, this.config.args ?? []);
+		this.proc = spawn(launch.command, launch.args, {
 			cwd: this.config.cwd,
 			env,
 			stdio: ["pipe", "pipe", "pipe"],
+			windowsHide: true,
 		});
 		this.proc.stdout?.on("data", (chunk: Buffer) => {
 			this.buffer += chunk.toString("utf8");

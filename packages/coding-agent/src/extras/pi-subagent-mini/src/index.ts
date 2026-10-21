@@ -51,7 +51,7 @@ const DESCRIPTION_RESULT =
 const DESCRIPTION_TAIL =
 	"spawn returns a jobId immediately; keep working meanwhile and the report arrives as a subagent-complete notification. " +
 	"wait blocks (default 120s), status shows state, kill stops it. Follow-ups are a new spawn briefed with the previous report. " +
-	"MCP tools (mcp__server__tool) exist only inside subagents — delegate MCP work here; the main agent cannot call them.";
+	"MCP tools (mcp__server__tool) exist only inside subagents; the `mcp` tool wraps that delegation, so use it instead of spawning by hand for a single MCP call.";
 
 /**
  * Built-in modules a child must not load: `pi-ui` renders a TUI footer and

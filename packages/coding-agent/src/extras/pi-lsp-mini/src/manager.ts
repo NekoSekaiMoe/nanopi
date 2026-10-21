@@ -3,6 +3,7 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { loadServers, type LspServerConfig } from "./config.ts";
 import { LspClient } from "./client.ts";
+import { firstWord, isExecutableAvailable, resolveExecutable } from "./executables.ts";
 import type { Diagnostic } from "./lsp-types.ts";
 
 const IGNORED_DIRS = new Set([".git", "node_modules", "vendor", "dist", "build", "target", ".venv", "venv", "__pycache__", ".cache", "out"]);
@@ -18,27 +19,6 @@ export interface Ctx {
 export interface MatchedServer {
   server: LspServerConfig;
   root: string;
-}
-
-export function isExecutableAvailable(bin: string): boolean {
-  const first = bin.split(/\s+/)[0];
-  if (path.isAbsolute(first)) {
-    try {
-      fsSync.accessSync(first, fsSync.constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  }
-  const dirs = (process.env.PATH ?? "").split(path.delimiter).filter(Boolean);
-  return dirs.some((dir) => {
-    try {
-      fsSync.accessSync(path.join(dir, first), fsSync.constants.X_OK);
-      return true;
-    } catch {
-      return false;
-    }
-  });
 }
 
 const BUILD_DIR_PATTERN = /^(build|builddir|out|build-.+|cmake-build-.+)$/;
@@ -62,12 +42,30 @@ export async function probeCompileCommandsDir(root: string): Promise<string | un
   return undefined;
 }
 
+/**
+ * A root marker is a file name, a directory, or a glob (`*.sln`, `*.csproj`) —
+ * a Java or .NET repository has no fixed configuration file name, so an exact
+ * match would walk past the project root and fall back to cwd.
+ */
+async function markerExists(dir: string, marker: string): Promise<boolean> {
+  const candidate = path.join(dir, marker);
+  if (!marker.includes("*")) return fs.stat(candidate).then(() => true, () => false);
+  let entries: import("node:fs").Dirent[];
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+  const pattern = new RegExp(`^${marker.split("*").map((part) => part.replace(/[.+?^${}()|[\]\\]/g, "\\$&")).join(".*")}$`);
+  return entries.some((entry) => pattern.test(entry.name));
+}
+
 export async function findProjectRoot(file: string, markers: string[] | undefined, cwd: string): Promise<string> {
   let dir = path.dirname(file);
   const stop = path.parse(dir).root;
   while (true) {
     for (const marker of markers ?? []) {
-      if (await fs.stat(path.join(dir, marker)).then(() => true, () => false)) return dir;
+      if (await markerExists(dir, marker)) return dir;
     }
     if (dir === stop || dir === path.dirname(dir)) break;
     dir = path.dirname(dir);
@@ -114,13 +112,16 @@ export class LspManager {
     if (!client || client.dead) {
       const candidates = Array.isArray(match.server.command) ? match.server.command : [match.server.command];
       const chosen = candidates.find((candidate) => isExecutableAvailable(candidate)) ?? candidates[0];
-      const parts = chosen.split(/\s+/);
+      const parts = chosen.trim().split(/\s+/);
+      // Spawn the absolute path: on Windows the executable on PATH is a
+      // `name.cmd` shim, which `spawn(name)` cannot start (no shell involved).
+      const bin = resolveExecutable(firstWord(chosen)) ?? parts[0];
       const extraArgs: string[] = [];
       if (match.server.compileCommandsProbe) {
         const cdbDir = await probeCompileCommandsDir(match.root);
         if (cdbDir) extraArgs.push(`--compile-commands-dir=${cdbDir}`);
       }
-      client = new LspClient(match.server, match.root, { bin: parts[0], args: [...parts.slice(1), ...(match.server.args ?? []), ...extraArgs] }, (file, diags) => {
+      client = new LspClient(match.server, match.root, { bin, args: [...parts.slice(1), ...(match.server.args ?? []), ...extraArgs] }, (file, diags) => {
         if (diags.length === 0) this.diagnostics.delete(`${match.server.id}\u0000${file}`);
         else this.diagnostics.set(`${match.server.id}\u0000${file}`, diags);
       });
@@ -210,20 +211,88 @@ export class LspManager {
   }
 }
 
-export function languageIdFor(server: LspServerConfig, file: string): string {
+const LANGUAGE_IDS: Record<string, string> = {
+  ".ts": "typescript",
+  ".tsx": "typescriptreact",
+  ".mts": "typescript",
+  ".cts": "typescript",
+  ".js": "javascript",
+  ".mjs": "javascript",
+  ".cjs": "javascript",
+  ".jsx": "javascriptreact",
+  ".py": "python",
+  ".pyi": "python",
+  ".go": "go",
+  ".rs": "rust",
+  ".c": "c",
+  ".h": "c",
+  ".cpp": "cpp",
+  ".cc": "cpp",
+  ".cxx": "cpp",
+  ".hpp": "cpp",
+  ".hh": "cpp",
+  ".hxx": "cpp",
+  ".rb": "ruby",
+  ".php": "php",
+  ".java": "java",
+  ".kt": "kotlin",
+  ".kts": "kotlin",
+  ".cs": "csharp",
+  ".fs": "fsharp",
+  ".fsx": "fsharp",
+  ".swift": "swift",
+  ".zig": "zig",
+  ".lua": "lua",
+  ".dart": "dart",
+  ".hs": "haskell",
+  ".ex": "elixir",
+  ".exs": "elixir",
+  ".erl": "erlang",
+  ".hrl": "erlang",
+  ".scala": "scala",
+  ".sc": "scala",
+  ".clj": "clojure",
+  ".cljs": "clojure",
+  ".ml": "ocaml",
+  ".mli": "ocaml",
+  ".sml": "sml",
+  ".r": "r",
+  ".jl": "julia",
+  ".pl": "perl",
+  ".pm": "perl",
+  ".sh": "shellscript",
+  ".bash": "shellscript",
+  ".zsh": "shellscript",
+  ".nix": "nix",
+  ".html": "html",
+  ".htm": "html",
+  ".css": "css",
+  ".scss": "scss",
+  ".less": "less",
+  ".json": "json",
+  ".jsonc": "jsonc",
+  ".yaml": "yaml",
+  ".yml": "yaml",
+  ".toml": "toml",
+  ".md": "markdown",
+  ".sql": "sql",
+  ".vue": "vue",
+  ".svelte": "svelte",
+  ".proto": "proto",
+  ".sol": "solidity",
+  ".cu": "cuda",
+  ".cuh": "cuda",
+  ".v": "verilog",
+  ".sv": "systemverilog",
+  ".tf": "terraform",
+  ".cmake": "cmake",
+  ".gd": "gdscript",
+  ".ps1": "powershell",
+};
+
+export function languageIdFor(_server: LspServerConfig, file: string): string {
   const ext = path.extname(file).toLowerCase();
-  switch (ext) {
-    case ".ts": return "typescript";
-    case ".tsx": return "typescriptreact";
-    case ".js": case ".mjs": case ".cjs": return "javascript";
-    case ".jsx": return "javascriptreact";
-    case ".py": case ".pyi": return "python";
-    case ".go": return "go";
-    case ".rs": return "rust";
-    case ".c": case ".h": return "c";
-    case ".cpp": case ".cc": case ".cxx": case ".hpp": case ".hh": return "cpp";
-    default: return ext.replace(".", "") || "plaintext";
-  }
+  return LANGUAGE_IDS[ext] ?? (ext.replace(".", "") || "plaintext");
 }
 
 export function delay(ms: number, signal?: AbortSignal): Promise<void> {
