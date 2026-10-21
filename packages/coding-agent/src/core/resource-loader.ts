@@ -10,6 +10,7 @@ import { canonicalizePath, isLocalPath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { findGitPaths } from "./footer-data-provider.ts";
+import { diskModulesIncluded, loadDiskModules, scanDiskModules } from "./modules/jiti-loader.ts";
 import { createModuleRuntime, loadModules } from "./modules/registry.ts";
 import type { LoadModulesResult, RegisteredModule, SessionModule } from "./modules/types.ts";
 import type { PromptTemplate } from "./prompt-templates.ts";
@@ -198,6 +199,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private appendSystemPromptSource?: string[];
 	private modulesOverride?: (base: LoadModulesResult) => LoadModulesResult;
 	private modulesLoaded = false;
+	private diskModuleErrors: Array<{ path: string; error: string }> = [];
 	private skillsOverride?: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
 		skills: Skill[];
 		diagnostics: ResourceDiagnostic[];
@@ -268,13 +270,35 @@ export class DefaultResourceLoader implements ResourceLoader {
 	}
 
 	/** Run module factories once; later calls reuse the result (modules are static). */
-	private async loadModulesOnce(): Promise<LoadModulesResult> {
+	private async loadModulesOnce(modules: SessionModule[] = this.staticModules): Promise<LoadModulesResult> {
 		if (!this.modulesLoaded) {
-			this.extensionsResult = await loadModules(this.staticModules, this.cwd, this.eventBus);
+			this.extensionsResult = await loadModules(modules, this.cwd, this.eventBus);
+			this.extensionsResult.errors.push(...this.diskModuleErrors);
 			this.addModuleConflictDiagnostics(this.extensionsResult);
 			this.modulesLoaded = true;
 		}
 		return this.extensionsResult;
+	}
+
+	/**
+	 * `staticModules` plus whatever module files are on disk. A build without
+	 * jiti support, or a project nobody trusted, contributes none — the scan
+	 * itself is then a no-op rather than an empty directory walk.
+	 */
+	private async withDiskModules(): Promise<SessionModule[]> {
+		this.diskModuleErrors = [];
+		if (!diskModulesIncluded()) return this.staticModules;
+		const scan = scanDiskModules({
+			cwd: this.cwd,
+			agentDir: this.agentDir,
+			projectTrusted: this.settingsManager.isProjectTrusted(),
+		});
+		for (const path of scan.missing) {
+			this.diskModuleErrors.push({ path, error: "no module file at this path" });
+		}
+		const { modules, errors } = await loadDiskModules(scan.files);
+		this.diskModuleErrors.push(...errors);
+		return modules.length === 0 ? this.staticModules : [...this.staticModules, ...modules];
 	}
 
 	private applyModulesOverride(base: LoadModulesResult): LoadModulesResult {
@@ -352,7 +376,11 @@ export class DefaultResourceLoader implements ResourceLoader {
 		// reload() preserves SettingsManager.projectTrusted and reloads settings for that trust state.
 		await this.settingsManager.reload();
 		if (!this.modulesLoaded) {
-			this.extensionsResult = this.applyModulesOverride(await this.loadModulesOnce());
+			// Disk modules join the load set here, not in the constructor: the
+			// project directory is executable code, so whether it is scanned
+			// depends on the trust decision reload() just recorded.
+			const withDisk = await this.withDiskModules();
+			this.extensionsResult = this.applyModulesOverride(await this.loadModulesOnce(withDisk));
 		}
 		const resolvedPaths = resolveLocalResources({
 			cwd: this.cwd,

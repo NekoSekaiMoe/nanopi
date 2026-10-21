@@ -80,6 +80,7 @@ These variables are read by nanopi itself:
 |----------|-------------|
 | `NANOPI_CODING_AGENT_DIR` | Override the config directory; default is `~/.nanopi/agent` |
 | `NANOPI_CODING_AGENT_SESSION_DIR` | Override session storage; overridden by `--session-dir` |
+| `NANOPI_EXTENSIONS` | Extra module files or directories to load from disk, `:`-separated; ignored by builds without jiti (`minimal`, the single-file `nanopi.js`). See [Modules from disk](modules.md#modules-from-disk) |
 | `NANOPI_PACKAGE_DIR` | Override the package directory, useful for Nix/Guix store paths |
 | `NANOPI_OFFLINE` | Disable automatic network activity, including model catalog refreshes |
 | `NANOPI_TELEMETRY` | Override provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |

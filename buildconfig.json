@@ -43,6 +43,9 @@
 		"embedded-code": {
 			"description": "Embedded-code detection for shell call display (heredoc bodies and interpreter inline scripts); dropping it renders shell commands as one block"
 		},
+		"jiti-modules": {
+			"description": "Loading module files from disk with jiti: .nanopi/extensions/, the agent directory's extensions/, and $NANOPI_EXTENSIONS. Dropping it takes jiti out of the build, which leaves only the compiled-in modules (the single-file build never loads disk modules either way)"
+		},
 		"syntax-highlight": {
 			"description": "highlight.js grammars and the code highlighting the TUI uses; dropping it renders code blocks in the plain output color and takes ~1.4 MiB of grammars out of the bundle"
 		},
@@ -217,7 +220,8 @@
 				"module/todo-lite": false,
 				"module/websearch": false,
 				"providers": "presets",
-				"apis": "all"
+				"apis": "all",
+				"jiti-modules": true
 			}
 		},
 		"minimal": {
@@ -243,7 +247,8 @@
 				"module/extra": false,
 				"oauth/*": false,
 				"syntax-highlight": false,
-				"embedded-code": false
+				"embedded-code": false,
+				"jiti-modules": false
 			}
 		}
 	},
