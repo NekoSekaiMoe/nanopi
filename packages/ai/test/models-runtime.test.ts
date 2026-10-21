@@ -493,6 +493,76 @@ describe("Models runtime", () => {
 		expect(await credentials.read("oauth-dynamic")).toMatchObject({ access: "fresh", refresh: "rotated" });
 	});
 
+	it("re-resolves account model availability before the catalog phase", async () => {
+		const credentials = new InMemoryCredentialStore();
+		await credentials.modify("p1", async () => ({
+			type: "oauth",
+			access: "expired",
+			refresh: "refresh",
+			expires: 0,
+		}));
+		const order: string[] = [];
+		let modelRefreshCredential: unknown;
+		const models = createModels({ credentials });
+		models.setProvider(
+			testProvider({
+				id: "p1",
+				auth: {
+					oauth: testOAuth({
+						refresh: async () => {
+							order.push("refresh");
+							return { type: "oauth", access: "fresh", refresh: "rotated", expires: Date.now() + 60_000 };
+						},
+						refreshAvailability: async (credential) => {
+							order.push("availability");
+							return { ...credential, modelIds: ["model-a"] };
+						},
+					}),
+				},
+				refreshModels: async (context) => {
+					if (context.allowNetwork) modelRefreshCredential = context.credential;
+				},
+			}),
+		);
+
+		expect((await models.refresh()).errors.size).toBe(0);
+		expect(order).toContain("refresh");
+		expect(order.indexOf("refresh")).toBeLessThan(order.indexOf("availability"));
+		expect(modelRefreshCredential).toMatchObject({ access: "fresh", modelIds: ["model-a"] });
+		expect(await credentials.read("p1")).toMatchObject({ access: "fresh", modelIds: ["model-a"] });
+	});
+
+	it("keeps the stored availability when the availability pass fails", async () => {
+		const credentials = new InMemoryCredentialStore();
+		await credentials.modify("p1", async () => ({
+			type: "oauth",
+			access: "valid",
+			refresh: "refresh",
+			expires: Date.now() + 60_000,
+			modelIds: ["model-a"],
+		}));
+		let modelRefreshCredential: unknown;
+		const models = createModels({ credentials });
+		models.setProvider(
+			testProvider({
+				id: "p1",
+				auth: {
+					oauth: testOAuth({
+						refreshAvailability: async () => {
+							throw new Error("catalog unavailable");
+						},
+					}),
+				},
+				refreshModels: async (context) => {
+					if (context.allowNetwork) modelRefreshCredential = context.credential;
+				},
+			}),
+		);
+
+		expect((await models.refresh()).errors.size).toBe(0);
+		expect(modelRefreshCredential).toMatchObject({ access: "valid", modelIds: ["model-a"] });
+	});
+
 	it("persists an OAuth refresh that started before the model refresh was cancelled", async () => {
 		const credentials = new InMemoryCredentialStore();
 		await credentials.modify("p1", async () => ({

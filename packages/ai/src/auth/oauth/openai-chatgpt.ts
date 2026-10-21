@@ -15,6 +15,7 @@ import { randomBytes } from "node:crypto";
 import { createServer, type Server, type ServerResponse } from "node:http";
 import { oauthErrorHtml, oauthSuccessHtml } from "../../utils/oauth-page.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
+import { fetchChatGPTModelIds } from "../chatgpt-models.ts";
 import type { LoginOptions, OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { generatePKCE } from "./pkce.ts";
 
@@ -365,6 +366,15 @@ async function runAuthorizationAttempt(
 	}
 }
 
+/**
+ * Store the account's model catalog on the credential. Best effort: without an answer the picker
+ * keeps the full bundled catalog because the stored list stays absent.
+ */
+async function withChatGPTModelIds(credential: OAuthCredential, signal: AbortSignal): Promise<OAuthCredential> {
+	const modelIds = await fetchChatGPTModelIds(credential.access, signal);
+	return modelIds ? { ...credential, modelIds } : credential;
+}
+
 async function loginOpenAIChatGPT(
 	interaction: ProviderAuthInteraction,
 	options?: LoginOptions,
@@ -380,7 +390,13 @@ async function loginOpenAIChatGPT(
 			});
 			interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
 			try {
-				return await exchangeAuthorizationCode(result.code, result.verifier, result.clientId, interaction.signal);
+				const credential = await exchangeAuthorizationCode(
+					result.code,
+					result.verifier,
+					result.clientId,
+					interaction.signal,
+				);
+				return await withChatGPTModelIds(credential, interaction.signal);
 			} catch (error) {
 				if (isInvalidGrantError(error) && result.clientId !== clientId) {
 					// OpenAI binds the registration to the agent host, so it answers a dynamic
@@ -406,6 +422,9 @@ export const openaiChatGPTOAuth: OAuthAuth = {
 	loginLabel: "Sign in with ChatGPT",
 	login: loginOpenAIChatGPT,
 	refresh: refreshAccessToken,
+	// A plan upgrade or downgrade changes which models the account reaches. Re-reading the catalog
+	// on each model refresh keeps the picker in step with the current plan.
+	refreshAvailability: withChatGPTModelIds,
 	async toAuth(credential) {
 		return { apiKey: credential.access };
 	},
