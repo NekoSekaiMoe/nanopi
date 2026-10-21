@@ -2,7 +2,7 @@
 
 # Command Line
 
-This page documents nanopi's built-in command-line commands and options. Run `nanopi --help` or append `--help` to a command for the exact interface in your installed version. The top-level help also includes options registered by loaded extensions.
+This page documents nanopi's built-in command-line commands and options. Run `nanopi --help` or append `--help` to a command for the exact interface in your installed version. The top-level help also includes options registered by compiled-in modules.
 
 ```sh
 nanopi [options] [--] [@files...] [messages...]
@@ -111,13 +111,13 @@ nanopi --tools read,grep,find,ls --print "Review this project"
 See [Settings](settings.md#tools) for configuring the default tool selection.
 
 - `-t`, `--tools <list>`<br>
-  Replaces the default selection with a comma-separated allowlist of built-in, extension, or custom tools. Entries are tool names or patterns where `*` matches any characters. A list of only `+name` and `-name` entries is not an allowlist; it changes the default selection instead.
+  Replaces the default selection with a comma-separated allowlist of built-in, module, or custom tools. Entries are tool names or patterns where `*` matches any characters. A list of only `+name` and `-name` entries is not an allowlist; it changes the default selection instead.
 - `-xt`, `--exclude-tools <list>`<br>
   Disables comma-separated tool names or patterns after all other selection options.
 - `-nbt`, `--no-builtin-tools`<br>
-  Disables default built-in tools while retaining extension and custom tools.
+  Disables default built-in tools while retaining module and custom tools.
 - `-nt`, `--no-tools`<br>
-  Starts with all built-in, extension, and custom tools disabled.
+  Starts with all built-in, module, and custom tools disabled.
 
 Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTools` changes them. `--tools` with plain names replaces the whole selection, so name every tool you want. Like `defaultTools`, it also accepts a list of only `+name` and `-name` entries, which adds tools to or removes them from the default selection: `nanopi --tools +grep,-write` keeps the other default tools, enables `grep`, and disables `write`. These entries take exact tool names, not `*` patterns; use `--exclude-tools` to disable tools by pattern. Plain names and `+name`/`-name` entries cannot be mixed. A runtime reload enables tools newly added to `defaultTools`, but a tool removed with `-name` stays removed.
 
@@ -137,15 +137,13 @@ Default enabled tools are `read`, `bash`, `edit`, and `write`, unless `defaultTo
 ## Resources
 
 ```sh
-nanopi --extension ./review.ts
+nanopi --skill ./skills/pdf-tools
 ```
 
 See [Configuration](configuration.md) for conventional directories and project trust and [Settings](settings.md#resources) for configured paths.
 
-- `-e`, `--extension <path>`<br>
-  Loads an extension file or directory, or a built-in extension such as `builtin:llama.cpp`, and is repeatable.
-- `-ne`, `--no-extensions`<br>
-  Disables discovered, configured, and built-in extensions. Explicit `-e` paths still load, so `nanopi -ne -e builtin:llama.cpp` keeps only the built-in llama.cpp extension.
+Modules are compiled in and are not resources: `--modules` narrows the built-in set, and it cannot load a file. See [Prompts and process](#prompts-and-process) for `--modules`, and [Modules](modules.md) for adding one in code.
+
 - `--skill <path>`<br>
   Loads a skill file or directory and is repeatable.
 - `-ns`, `--no-skills`<br>
@@ -182,23 +180,17 @@ See [Configuration](configuration.md) for saved configuration, [Security](securi
 - `--offline`<br>
   Disables automatic network activity, including model catalog refreshes. Equivalent to `NANOPI_OFFLINE=1`.
 - `-h`, `--help`<br>
-  Shows help, including flags registered by loaded extensions, then exits.
+  Shows help, including flags registered by compiled-in modules, then exits.
 - `-v`, `--version`<br>
   Shows the nanopi version, then exits.
+- `--modules <names>`<br>
+  Enables only the listed built-in modules for this run, replacing the build's default set. It cannot add a module the build does not carry; see [Modules](modules.md).
 
-Extensions may register additional long-form options. Unknown short options are rejected.
+Modules may register additional long-form options. Unknown short options are rejected.
 
 ## Package commands
 
-```sh
-
-### Common tasks
-
-| Task | Command |
-|---|---|
-| List configured packages | `nanopi list` |
-
-Add `--local` or `-l` to `install`, `remove`, `uninstall`, or `config` to use project settings instead of global settings.
+The `install`, `remove`, and `list` package commands are gone: modules are compiled in, so there is nothing to install. Skills and prompt templates are files, discovered from the agent directory and the project; see [Skills](skills.md) and [Prompt Templates](prompt-templates.md).
 
 ### Aliases and command options
 

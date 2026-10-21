@@ -33,7 +33,7 @@ Type the template command in the editor:
 /review concurrency
 ```
 
-nanopi expands the template before the resulting text enters the agent. Extensions receive the raw input first through the `input` event unless an extension command with the same name handles it.
+nanopi expands the template before the resulting text enters the agent. Modules receive the raw input first through the `input` event unless a module command with the same name handles it.
 
 Templates support these substitutions:
 

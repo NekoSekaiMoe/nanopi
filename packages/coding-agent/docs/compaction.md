@@ -1,13 +1,13 @@
 # Compaction Reference
 
-This reference describes automatic compaction, branch summarization, persisted entries, and extension hooks. For the user workflow, see [Sessions and Context](sessions.md#manage-conversation-context).
+This reference describes automatic compaction, branch summarization, persisted entries, and the module events around them. For the user workflow, see [Sessions and Context](sessions.md#manage-conversation-context).
 
 **Source files** ([nanopi](https://github.com/NekoSekaiMoe/nanopi)):
 - [`packages/coding-agent/src/core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) - Auto-compaction logic
 - [`packages/coding-agent/src/core/compaction/branch-summarization.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts) - Branch summarization
 - [`packages/coding-agent/src/core/compaction/utils.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils.ts) - Shared utilities (file tracking, serialization)
 - [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-manager.ts) - Entry types (`CompactionEntry`, `BranchSummaryEntry`)
-- [`packages/coding-agent/src/core/extensions/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/extensions/types.ts) - Extension event types
+- [`packages/coding-agent/src/core/modules/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/modules/types.ts) - Module event types
 
 For TypeScript definitions in your project, inspect `node_modules/@nanopi/pi-coding-agent/dist/`.
 
@@ -112,14 +112,14 @@ Recovery preserves the existing lifecycle and queue order. The completed attempt
 
 ```text
 persist final assistant response
-→ extension/public turn_end
-→ extension/public agent_end
+→ module turn_end
+→ module agent_end
 → append context_edit omissions for the selected attempt
 → for overflow/length: run session_before_compact and append compaction on success
 → start the retry as a fresh run
 ```
 
-If recovery compaction fails or is cancelled, nanopi keeps the omission edits, appends no compaction, and schedules no internal retry. Existing queued work remains governed by ordinary steering and follow-up rules. `agent_before_settle` sees the repaired projection after recovery processing. Raw transcript history, exports, billing totals, and history-search extensions can still inspect the omitted attempt.
+If recovery compaction fails or is cancelled, nanopi keeps the omission edits, appends no compaction, and schedules no internal retry. Existing queued work remains governed by ordinary steering and follow-up rules. Raw transcript history, exports, and billing totals can still inspect the omitted attempt.
 
 ### Split user-message spans
 
@@ -175,7 +175,7 @@ interface CompactionEntry<T = unknown> {
   firstKeptEntryId: string;
   tokensBefore: number;
   usage?: Usage;       // LLM usage that generated the summary
-  fromHook?: boolean;  // true if provided by extension (legacy field name)
+  fromHook?: boolean;  // true if a module provided it (legacy field name)
   details?: T;         // implementation-specific data
 }
 
@@ -186,7 +186,7 @@ interface CompactionDetails {
 }
 ```
 
-Extensions can store any JSON-serializable data in `details`. The default compaction tracks file operations, but custom extension implementations can use their own structure. Generated and extension-provided summaries store their LLM `usage` when available so session totals include summarization work.
+Modules can store any JSON-serializable data in `details`. The default compaction tracks file operations, but a custom implementation can use its own structure. Generated and module-provided summaries store their LLM `usage` when available so session totals include summarization work.
 
 See [`prepareCompaction()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) and [`compact()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) for the implementation. For direct programmatic summarization, `generateSummary()` returns the summary text and `generateSummaryWithUsage()` returns `{ text, usage }`.
 
@@ -225,7 +225,7 @@ After navigation with summary:
 
 Default compaction and branch summarization track files cumulatively. Both extract file operations from tool calls in the messages being summarized. Compaction also carries file lists from the previous nanopi-generated compaction. Branch summarization carries file lists from nanopi-generated branch summaries in the entries it summarizes.
 
-File tracking therefore accumulates across default compactions and nested default branch summaries. nanopi does not automatically carry file lists from extension-generated summaries whose `fromHook` field is `true`; extensions manage their own `details` format.
+File tracking therefore accumulates across default compactions and nested default branch summaries. nanopi does not automatically carry file lists from module-generated summaries whose `fromHook` field is `true`; the module manages its own `details` format.
 
 ### BranchSummaryEntry Structure
 
@@ -240,7 +240,7 @@ interface BranchSummaryEntry<T = unknown> {
   summary: string;
   fromId: string;      // Entry we navigated from
   usage?: Usage;       // LLM usage that generated the summary
-  fromHook?: boolean;  // true if provided by extension (legacy field name)
+  fromHook?: boolean;  // true if a module provided it (legacy field name)
   details?: T;         // implementation-specific data
 }
 
@@ -251,7 +251,7 @@ interface BranchSummaryDetails {
 }
 ```
 
-Same as compaction, extensions can store custom data in `details`.
+Same as compaction, modules can store custom data in `details`.
 
 See [`collectEntriesForBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts), [`prepareBranchEntries()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts), and [`generateBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts) for the implementation.
 
@@ -313,9 +313,9 @@ This prevents the model from treating it as a conversation to continue.
 
 Tool results are truncated to 2000 characters during serialization. Content beyond that limit is replaced with a marker indicating how many characters were truncated. This keeps summarization requests within reasonable token budgets, since tool results (especially from `read` and `bash`) are typically the largest contributors to context size.
 
-## Custom Summarization via Extensions
+## Custom Summarization via Modules
 
-Extensions can intercept and customize both compaction and branch summarization. See [`extensions/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/extensions/types.ts) for event type definitions.
+Modules can intercept and customize both compaction and branch summarization through `session_before_compact`, `session_compact`, and `session_before_tree`. See [`modules/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/modules/types.ts) for event type definitions and [Modules](modules.md) for the surrounding factory.
 
 ### session_before_compact
 
@@ -389,22 +389,11 @@ nanopi.on("session_before_compact", async (event, ctx) => {
 });
 ```
 
-See [custom-compaction.ts](../examples/extensions/custom-compaction.ts) for a complete example using a different model.
+A module that wants a different model for summaries calls `nanopi.setModel()` for the compaction run and restores the previous model afterwards; see [Modules](modules.md).
 
-### session_compact_failed
+### Failures
 
-Fired when manual or automatic compaction fails or is aborted. This is useful for telemetry extensions that need to pair `session_before_compact` attempts with terminal outcomes.
-
-```typescript
-nanopi.on("session_compact_failed", async (event, ctx) => {
-  const { reason, errorMessage, aborted, willRetry, fromExtension } = event;
-  // reason - "manual" (/compact), "threshold", or "overflow"
-  // errorMessage - present for non-abort failures
-  // aborted - true for canceled/aborted compactions
-  // willRetry - whether the aborted turn would have retried after compaction
-  // fromExtension - whether extension-provided compaction content was being used
-});
-```
+A failed or aborted compaction surfaces as a `session_before_compact` result that nanopi did not accept plus the error in the session diagnostics; there is no separate `session_compact_failed` event. `session_compact` fires only for compactions that landed, so pair your `session_before_compact` bookkeeping with `session_compact`.
 
 ### session_before_tree
 

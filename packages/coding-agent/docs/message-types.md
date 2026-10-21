@@ -219,7 +219,7 @@ Unless `excludeFromContext` is true, nanopi converts this message to user-role t
 
 ### CustomMessage
 
-Created when an extension sends a context message.
+Created when a module sends a custom message.
 
 ```typescript
 interface CustomMessage<T = unknown> {

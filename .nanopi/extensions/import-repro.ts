@@ -17,7 +17,11 @@
 import { Buffer } from "node:buffer";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, isAbsolute, join, resolve } from "node:path";
-import type { ExtensionAPI, ExtensionCommandContext } from "@nanopi/pi-coding-agent";
+import type {
+	ModuleApi,
+	ModuleCommandContext,
+	SessionModule,
+} from "@nanopi/pi-coding-agent";
 
 const GIST_ID_RE = /^[0-9a-fA-F]{20,}$/;
 const GIST_URL_RE = /^https:\/\/gist\.github\.com\/(?:[^/]+\/)?([0-9a-fA-F]{20,})(?:[/#?].*)?$/;
@@ -275,10 +279,10 @@ async function fetchGistSession(gistId: string): Promise<{ header: SessionHeader
 	throw new Error(`gist ${gistId} has no .jsonl or .html session file`);
 }
 
-export default function (nanopi: ExtensionAPI) {
+function registerImportReproCommand(nanopi: ModuleApi) {
 	nanopi.registerCommand("ir", {
 		description: "Import a CI issue-analysis session from a gist ID, share URL, or issue URL and switch to it",
-		handler: async (args: string, ctx: ExtensionCommandContext) => {
+		handler: async (args: string, ctx: ModuleCommandContext) => {
 			const ref = args.trim();
 			if (!ref) {
 				ctx.ui.notify("Usage: /ir <gist-id | gist-url | issue URL>", "error");
@@ -344,3 +348,10 @@ export default function (nanopi: ExtensionAPI) {
 		},
 	});
 }
+
+const importReproModule: SessionModule = {
+	name: "import-repro",
+	factory: registerImportReproCommand,
+};
+
+export default importReproModule;

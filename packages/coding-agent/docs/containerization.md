@@ -63,7 +63,7 @@ An isolated process can still affect resources you expose to it:
 - Mounting `~/.nanopi/agent` exposes your nanopi credentials, settings, and sessions.
 - Environment variables passed into a container are available to processes inside it.
 - Network access may allow code or tool output to leave the environment.
-- Tool-only isolation does not constrain the host nanopi process or extension tools that do not use the isolated backend.
+- Tool-only isolation does not constrain the host nanopi process or module tools that do not use the isolated backend.
 
 Expose only the working folder, credentials, and network destinations needed for the task. Use read-only mounts or copy files into and out of the environment when you do not want writes to affect the host.
 
@@ -177,7 +177,7 @@ openshell gateway select <name>
 openshell sandbox create --name nanopi-sandbox --from nanopi -- nanopi
 ```
 
-nanopi, its built-in tools, `!` commands, and extension tools run inside the OpenShell boundary.
+nanopi, its built-in tools, `!` commands, and module tools run inside the OpenShell boundary.
 
 ### Transfer files to a remote sandbox
 

@@ -96,6 +96,7 @@ Start with the least powerful mechanism that meets your need:
 | Add task-specific instructions and supporting files | [Skill](skills.md) |
 | Build a custom terminal component | [Terminal UI](tui.md) |
 | Connect an unsupported model service | [Custom provider](custom-provider.md) |
+| Add a tool, command, shortcut, or event handler in code | [Modules](modules.md) |
 
 ## Uninstall nanopi
 
@@ -106,4 +107,4 @@ npm uninstall -g @nanopi/pi-coding-agent
 ```
 
 
-None of these methods removes configuration, credentials, sessions, or installed nanopi packages from `~/.nanopi/agent/`.
+None of these methods removes configuration, credentials, or sessions from `~/.nanopi/agent/`.

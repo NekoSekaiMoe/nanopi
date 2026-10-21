@@ -28,7 +28,7 @@ With images:
 
 If the agent is streaming and no `streamingBehavior` is specified, the command returns an error.
 
-**Extension commands**: If the message is an extension command (e.g., `/mycommand`), it executes immediately even during streaming. Extension commands manage their own LLM interaction via `nanopi.sendMessage()`.
+**Module commands**: If the message is a module command (e.g., `/mycommand`), it executes immediately even during streaming. Module commands manage their own LLM interaction via `nanopi.sendMessage()`.
 
 **Input expansion**: Skill commands (`/skill:name`) and prompt templates (`/template`) are expanded before sending/queueing.
 
@@ -37,7 +37,7 @@ Response:
 {"id": "req-1", "type": "response", "command": "prompt", "success": true, "data": {"disposition": "started"}}
 ```
 
-`data.disposition` is `"handled"` if an extension command or input handler consumed the prompt, `"queued"` if nanopi queued it during a run, or `"started"` if nanopi accepted it to start a run. This describes the submitted prompt, not independent work started by an extension or a guarantee of completion.
+`data.disposition` is `"handled"` if a module command or input handler consumed the prompt, `"queued"` if nanopi queued it during a run, or `"started"` if nanopi accepted it to start a run. This describes the submitted prompt, not independent work started by a module or a guarantee of completion.
 
 `success: true` means the prompt was accepted, queued, or handled immediately. `success: false` means the prompt was rejected before acceptance. Failures after acceptance are reported through the normal event and message stream, not as a second `response` for the same request id.
 
@@ -45,7 +45,7 @@ The `images` field is optional. Each image uses `ImageContent` format: `{"type":
 
 ### steer
 
-Queue a steering message while the agent is running. It is delivered after the current assistant turn finishes executing its tool calls, before the next LLM call. Skill commands and prompt templates are expanded. Extension commands are not allowed (use `prompt` instead).
+Queue a steering message while the agent is running. It is delivered after the current assistant turn finishes executing its tool calls, before the next LLM call. Skill commands and prompt templates are expanded. Module commands are not allowed (use `prompt` instead).
 
 ```json
 {"type": "steer", "message": "Stop and do this instead"}
@@ -69,7 +69,7 @@ See [set_steering_mode](#set_steering_mode) for controlling how steering message
 
 ### follow_up
 
-Queue a follow-up message to be processed after the agent finishes. Delivered only when agent has no more tool calls or steering messages. Skill commands and prompt templates are expanded. Extension commands are not allowed (use `prompt` instead).
+Queue a follow-up message to be processed after the agent finishes. Delivered only when agent has no more tool calls or steering messages. Skill commands and prompt templates are expanded. Module commands are not allowed (use `prompt` instead).
 
 ```json
 {"type": "follow_up", "message": "After you're done, also do this"}
@@ -129,7 +129,7 @@ To implement interactive Esc behavior, send `clear_queue` before `abort`, then r
 
 ### new_session
 
-Start a fresh session. Can be canceled by a `session_before_switch` extension event handler.
+Start a fresh session. Can be canceled by a `session_before_switch` event handler.
 
 ```json
 {"type": "new_session"}
@@ -145,7 +145,7 @@ Response:
 {"type": "response", "command": "new_session", "success": true, "data": {"cancelled": false}}
 ```
 
-If an extension canceled:
+If a module handler canceled:
 ```json
 {"type": "response", "command": "new_session", "success": true, "data": {"cancelled": true}}
 ```
@@ -591,7 +591,7 @@ Response:
 
 ### switch_session
 
-Load a different session file. Can be canceled by a `session_before_switch` extension event handler.
+Load a different session file. Can be canceled by a `session_before_switch` event handler.
 
 ```json
 {"type": "switch_session", "sessionPath": "/path/to/session.jsonl"}
@@ -602,14 +602,14 @@ Response:
 {"type": "response", "command": "switch_session", "success": true, "data": {"cancelled": false}}
 ```
 
-If an extension canceled the switch:
+If a module handler canceled the switch:
 ```json
 {"type": "response", "command": "switch_session", "success": true, "data": {"cancelled": true}}
 ```
 
 ### fork
 
-Create a new fork from a previous user message on the active branch. Can be canceled by a `session_before_fork` extension event handler. Returns the text of the message being forked from.
+Create a new fork from a previous user message on the active branch. Can be canceled by a `session_before_fork` event handler. Returns the text of the message being forked from.
 
 ```json
 {"type": "fork", "entryId": "abc123"}
@@ -625,7 +625,7 @@ Response:
 }
 ```
 
-If an extension canceled the fork:
+If a module handler canceled the fork:
 ```json
 {
   "type": "response",
@@ -637,7 +637,7 @@ If an extension canceled the fork:
 
 ### clone
 
-Duplicate the current active branch into a new session at the current position. Can be canceled by a `session_before_fork` extension event handler.
+Duplicate the current active branch into a new session at the current position. Can be canceled by a `session_before_fork` event handler.
 
 ```json
 {"type": "clone"}
@@ -653,7 +653,7 @@ Response:
 }
 ```
 
-If an extension canceled the clone:
+If a module handler canceled the clone:
 ```json
 {
   "type": "response",
@@ -787,7 +787,7 @@ The current session name is available via `get_state` in the `sessionName` field
 
 ### get_commands
 
-Get available commands (extension commands, prompt templates, and skills). Run one through the `prompt` command by prefixing its name with `/`.
+Get available commands (module commands, prompt templates, and skills). Run one through the `prompt` command by prefixing its name with `/`.
 
 ```json
 {"type": "get_commands"}
@@ -819,9 +819,9 @@ Response:
 
 Each command has:
 - `name`: Command name (use `/name`)
-- `description`: Human-readable description (optional for extension commands)
+- `description`: Human-readable description (optional for module commands)
 - `source`: What kind of command:
-  - `"extension"`: Registered via `nanopi.registerCommand()` in an extension
+  - `"extension"`: Registered via `nanopi.registerCommand()` in a module (the wire value keeps its old name)
   - `"prompt"`: Loaded from a prompt template `.md` file
   - `"skill"`: Loaded from a skill directory (name is prefixed with `skill:`)
 - `sourceInfo`: Metadata for the resource that registered the command:

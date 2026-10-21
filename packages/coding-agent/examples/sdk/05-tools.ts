@@ -6,8 +6,8 @@
  * Tool names are matched against all available tools. If you use a custom `cwd`,
  * createAgentSession() applies that cwd when it builds the actual built-in tools.
  *
- * For custom tools, see 06-extensions.ts - custom tools are registered via the
- * extensions system using nanopi.registerTool().
+ * For custom tools, see 06-modules.ts - a module registers them through
+ * nanopi.registerTool() in its factory.
  */
 
 import { createAgentSession, SessionManager } from "@nanopi/pi-coding-agent";

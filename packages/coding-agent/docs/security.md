@@ -14,7 +14,7 @@ Different ways of running nanopi place different limits on what generated comman
 |---|---|
 | Directly, with the permissions of its operating-system user | Anything that user cannot access. A dedicated user account can narrow those permissions, but nanopi still shares the operating system and network with other users. |
 | Entirely inside a container, virtual machine, or sandbox | Host files and processes that you do not expose to the environment. Credentials and network services remain accessible if you make them available inside it. This is usually the strongest practical option. |
-| Outside the isolated environment, with only its built-in tools running inside | Host resources are protected from actions performed through those tools. nanopi itself and other extensions remain outside the boundary, so this is a narrower form of isolation. |
+| Outside the isolated environment, with only its built-in tools running inside | Host resources are protected from actions performed through those tools. nanopi itself and anything else in-process remain outside the boundary, so this is a narrower form of isolation. |
 
 The working folder controls resource discovery and the default location for tools, but it does not prevent commands from accessing other paths available to the nanopi process.
 
@@ -26,7 +26,7 @@ For setup instructions and the limitations of each isolation method, see [Run na
 
 ## Understand project trust
 
-Project trust controls whether nanopi loads most settings and resources supplied by a working folder. It prevents a folder from silently loading executable extensions before you approve it.
+Project trust controls whether nanopi loads most settings and resources supplied by a working folder. It prevents a folder from silently changing settings or resources before you approve it. Modules are compiled in, so a project cannot add executable code without a rebuild.
 
 Project trust is not a complete startup boundary. nanopi reads the project `sessionDir` setting while selecting or creating a session, before it resolves project trust. Declining trust prevents the remaining project settings and protected resources from loading, but it cannot undo that initial session-directory lookup.
 
@@ -37,7 +37,7 @@ Project trust does not limit what tool calls can access or affect. After nanopi 
 nanopi requires a project-trust decision when it finds any of these resources from the current working directory:
 
 - `.nanopi/settings.json`
-- `.nanopi/extensions`, `.nanopi/skills`, or `.nanopi/prompts`
+- `.nanopi/skills` or `.nanopi/prompts`
 - `.nanopi/SYSTEM.md` or `.nanopi/APPEND_SYSTEM.md`
 - project `.agents/skills` in the current directory or an ancestor directory
 
@@ -46,9 +46,7 @@ A bare `.nanopi` directory does not require project trust.
 Granting project trust allows nanopi to load:
 
 - project settings
-- extensions, skills, prompt templates, and system-prompt files under `.nanopi`
-- missing packages configured through project settings
-- project-local and project-package extensions
+- skills, prompt templates, and system-prompt files under `.nanopi`
 
 Declining project trust skips those protected resources, except for the initial `sessionDir` lookup described above.
 
@@ -58,8 +56,8 @@ Context files such as `AGENTS.override.md`, `AGENTS.md`, and `CLAUDE.md` load re
 
 A command-line `--approve` or `--no-approve` override applies first. When protected resources exist and there is no command-line override:
 
-1. User-level and command-line extensions can handle the `project_trust` event. The first extension that returns yes or no owns the decision.
-2. If no extension decides, nanopi looks for a saved decision for the current directory or one of its parents. The closest decision applies.
+1. User-level and command-line modules can handle the `project_trust` event. The first handler that returns yes or no owns the decision.
+2. If no handler decides, nanopi looks for a saved decision for the current directory or one of its parents. The closest decision applies.
 3. If no saved decision applies, nanopi follows the global `defaultProjectTrust` setting, whose default is `"ask"`.
 
 Saved decisions use canonical directory paths and live in:
@@ -72,7 +70,7 @@ Use `/trust` to save a decision for future nanopi processes.
 
 ### Project trust without an interactive prompt
 
-Print, JSON, and RPC modes cannot show the built-in trust prompt. If no command-line override, extension, or saved decision applies:
+Print, JSON, and RPC modes cannot show the built-in trust prompt. If no command-line override, module handler, or saved decision applies:
 
 - `defaultProjectTrust: "always"` loads protected project resources.
 - `defaultProjectTrust: "ask"` or `"never"` skips them.
@@ -85,7 +83,7 @@ These practices do not replace isolation, but they reduce exposure or make recov
 
 - Give nanopi access only to files and services required for the task.
 - Use snapshots, backups, or version control before substantial changes.
-- Review extensions and packages before loading them. Extensions execute inside the nanopi process.
+- Review code you compile in. Modules execute inside the nanopi process.
 - Prefer narrowly scoped, short-lived credentials.
 - Review diffs and generated output before applying results to another system.
 - Review sessions before exporting or sharing them. They can contain prompts, tool arguments, command output, file contents, and credentials exposed during the conversation.
@@ -94,4 +92,4 @@ These practices do not replace isolation, but they reduce exposure or make recov
 
 Follow the repository [Security Policy](https://github.com/NekoSekaiMoe/nanopi/blob/main/SECURITY.md). Do not open a public issue for a security-sensitive report.
 
-Expected local-agent behavior, prompt injection from untrusted content, lack of a built-in sandbox, and behavior from user-installed extensions or skills are generally outside the security boundary unless the report demonstrates a privilege-boundary bypass or access that the local user did not already have.
+Expected local-agent behavior, prompt injection from untrusted content, lack of a built-in sandbox, and behavior from compiled-in modules or skills are generally outside the security boundary unless the report demonstrates a privilege-boundary bypass or access that the local user did not already have.
