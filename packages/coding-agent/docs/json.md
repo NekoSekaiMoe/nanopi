@@ -119,7 +119,7 @@ Use `toolCallId` to correlate the lifecycle. `partialResult` is the latest parti
 | Event | Fields | Meaning |
 |---|---|---|
 | `queue_update` | `steering`, `followUp` | The pending steering or follow-up queue changed. Both fields contain the complete current queue. |
-| `entry_appended` | `entry` | An extension appended a custom session entry through `nanopi.appendEntry()`. |
+| `entry_appended` | `entry` | A module appended a custom session entry through `nanopi.appendEntry()`. |
 | `session_info_changed` | `name` | The session display name changed. An absent `name` means it was cleared. |
 | `thinking_level_changed` | `level` | The active thinking level changed. |
 
@@ -187,13 +187,13 @@ A direct RPC [`bash`](rpc-commands.md#bash) command emits one `bash_execution_up
 {"type":"bash_execution_update","id":"req-1","delta":"total 48\n"}
 ```
 
-RPC also adds `extension_error` when an extension handler throws:
+RPC also adds `extension_error` when a module event handler throws:
 
 ```json
-{"type":"extension_error","extensionPath":"/path/to/extension.ts","event":"tool_call","error":"Error message"}
+{"type":"extension_error","moduleName":"my-module","event":"tool_call","error":"Error message"}
 ```
 
-Extension UI records are a separate RPC subprotocol, not `AgentSessionEvent` values. See [RPC Module UI](rpc-module-ui.md).
+Module UI records are a separate RPC subprotocol, not `AgentSessionEvent` values. See [RPC Module UI](rpc-module-ui.md).
 
 ## TypeScript types
 

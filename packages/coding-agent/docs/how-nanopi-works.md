@@ -18,7 +18,7 @@ The active branch supplies conversation history. nanopi converts its session ent
 
 nanopi builds the system prompt from its base instructions and discovered context files. The request also carries tool definitions and skill descriptions.
 
-Full skill instructions are loaded on demand. Extensions can add instructions or transform context.
+Full skill instructions are loaded on demand. Modules can add instructions or transform context.
 
 Prompt templates expand editor input before it becomes a user message. Selected files, images, pasted text, and shell output can become message content.
 
@@ -38,12 +38,12 @@ RPC mode accepts JSONL commands on stdin and writes responses and events to stdo
 
 All interfaces use the same agent and session mechanisms.
 
-## Extensions and resources
+## Modules and resources
 
-Extensions are TypeScript modules loaded into the nanopi process. Their factory functions register tools, commands, shortcuts, providers, event handlers, renderers, and terminal UI.
+Modules are TypeScript objects compiled into the nanopi process. Their factory functions register tools, commands, shortcuts, providers, event handlers, renderers, and terminal UI. Nothing is discovered from disk, so a new module requires rebuilding nanopi or embedding it through the SDK.
 
-Skills provide on-demand instructions and supporting files. Prompt templates provide reusable message text. nanopi packages distribute these resources through npm or git.
+Skills provide on-demand instructions and supporting files. Prompt templates provide reusable message text. Tools, commands, and event handlers beyond the built-ins come from [modules](modules.md), which are compiled in.
 
 ## Trust and permissions
 
-nanopi resolves project trust before loading project settings and resources. After the trust decision and project-resource loading, nanopi loads context files. Enabled tools use the operating-system permissions of the nanopi process. Extensions execute inside that process.
+nanopi resolves project trust before loading project settings and resources. After the trust decision and project-resource loading, nanopi loads context files. Enabled tools use the operating-system permissions of the nanopi process. Modules execute inside that process.

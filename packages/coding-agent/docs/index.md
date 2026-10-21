@@ -18,8 +18,8 @@ If nanopi is already installed, choose what you want to do:
 
 ## Customize nanopi
 
-nanopi can reuse prompts, load specialized instructions, add executable integrations, change its terminal interface, connect model services, and distribute these resources as packages.
-Use the [Quickstart customization chooser](quickstart.md#choose-how-to-customize-nanopi) to select the smallest mechanism that meets your need.
+nanopi can reuse prompts, load specialized instructions, add tools and commands in code, change its terminal interface, and connect model services.
+Use the [Quickstart customization chooser](quickstart.md#choose-how-to-customize-nanopi) to select the smallest mechanism that meets your need: skills and prompt templates are files, while anything executable is a [module](modules.md).
 
 ## Automate or embed nanopi
 
@@ -36,4 +36,4 @@ For platform-specific help, see [Terminal Setup](terminal-setup.md), [Windows](w
 
 ## Work safely
 
-nanopi's tools and extensions run with the permissions of the nanopi process. Project trust controls which project resources nanopi loads, but it does not sandbox tool calls. Review [Security](security.md) before using untrusted files, repositories, extensions, or unattended automation.
+nanopi's tools and modules run with the permissions of the nanopi process. Project trust controls which project resources nanopi loads, but it does not sandbox tool calls. Review [Security](security.md) before using untrusted files, repositories, or unattended automation.

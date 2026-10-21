@@ -120,11 +120,39 @@ for the shell-tools-only flavor, and the module list itself as `BUILTIN_MODULES`
 `enabledModules()` and `isBashOnlyBuild()` describe the running build, so guard
 code that assumes a tool or module is present.
 
-<a id="inlineextension"></a>
+<a id="modules"></a>
+
+### Modules
 
 Modules are the only extension mechanism: pass `SessionModule` objects (`{ name, factory }`, where the factory receives a `ModuleApi`) to `DefaultResourceLoader` via the `modules` option, or compose them in your own entry point with `createAgentSession({ modules })`. Nothing is loaded from disk; the built-in modules (run modes, llama.cpp, compaction, the bundled extras) are compiled in.
 
-See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tools](../examples/sdk/05-tools.ts), [extensions](../examples/sdk/06-extensions.ts), and [full control](../examples/sdk/12-full-control.ts).
+There is no loader to call and no path to drop a file into, so a module runs only when your code imports it:
+
+```typescript
+import type { SessionModule } from "@nanopi/pi-coding-agent";
+
+const myModule: SessionModule = {
+	name: "my-tool",
+	factory: (nanopi) => {
+		nanopi.registerTool(myTool);
+		nanopi.on("before_agent_start", (event) => ({
+			systemPrompt: `${event.systemPrompt}\n\nPrefer ripgrep over grep.`,
+		}));
+	},
+};
+```
+
+```typescript
+// In the app that creates the session:
+const { session } = await createAgentSession({ modules: [myModule] });
+```
+
+- The factory receives `ModuleApi`: `on()` over the documented events, plus `registerTool`, `registerCommand`, `registerFlag`, `registerProvider`, `registerVirtualModel`, `sendMessage`, `exec`, `getSettings`, `setModel`, and the rest of the session surface.
+- To extend the CLI itself rather than an embedding app, add the module to your own entry point or to the repo-local `.nanopi/extensions/*.ts` and import it from `src/modules/index.ts`; see [Repo-local modules](configuration.md#repo-local-modules). The bundled module list is `BUILTIN_MODULES` from `@nanopi/pi-coding-agent`.
+- The full guide - what a module can register, the event set, and what it cannot do - is [Modules](modules.md).
+- `--modules a,b` narrows the compiled-in list for one run; it cannot add a module the binary does not carry.
+
+See [Programmatic modules](../examples/sdk/06-modules.ts) for a runnable example, and the focused examples for [models](../examples/sdk/02-custom-model.ts), [tools](../examples/sdk/05-tools.ts), and [full control](../examples/sdk/12-full-control.ts).
 
 ## Examples
 
@@ -135,7 +163,7 @@ See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tool
 | [System prompt](../examples/sdk/03-custom-prompt.ts) | Replace or append to the system prompt |
 | [Skills](../examples/sdk/04-skills.ts) | Discover, filter, and add skills |
 | [Tools](../examples/sdk/05-tools.ts) | Select built-in tools and their working directory |
-| [Extensions](../examples/sdk/06-extensions.ts) | Load file-based and inline extensions |
+| [Modules](../examples/sdk/06-modules.ts) | Register tools and event handlers in code |
 | [Context files](../examples/sdk/07-context-files.ts) | Add or replace project instructions |
 | [Prompt templates](../examples/sdk/08-prompt-templates.ts) | Add file-style prompt templates |
 | [Credentials](../examples/sdk/09-api-keys-and-oauth.ts) | Configure credential and model storage |

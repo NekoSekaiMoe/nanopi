@@ -10,7 +10,7 @@ For a built-in provider, start with `/login`, then choose a model with `/model`.
 | A provider API key | Store it through `/login` or set its environment variable |
 | A local GGUF model | Connect nanopi to the llama.cpp router |
 | An OpenAI-, Anthropic-, or Google-compatible endpoint | Add it to `models.json` |
-| A provider with a custom protocol or authentication flow | Build or install a provider extension |
+| A provider with a custom protocol or authentication flow | Build a provider module |
 
 Model metadata ships with the package: see `packages/ai/src/providers/data` in the repository for the bundled providers, model IDs, capabilities, context limits, and pricing. Regenerate it with `npm run generate:models`.
 
@@ -20,9 +20,9 @@ Run `/login` and select a provider. nanopi stores credentials in [`auth.json`](c
 
 You can instead provide an API key through the provider's environment variable. This is useful in CI and other environments where nanopi should not write credentials. [Providers](providers.md) lists the variables and provider-specific setup.
 
-When several credential sources are configured, nanopi uses a runtime `--api-key` first, then a stored `auth.json` credential, an `apiKey` from `models.json`, and finally the provider's environment variables or ambient cloud credentials. Provider extensions can define their own authentication behavior.
+When several credential sources are configured, nanopi uses a runtime `--api-key` first, then a stored `auth.json` credential, an `apiKey` from `models.json`, and finally the provider's environment variables or ambient cloud credentials. Provider modules can define their own authentication behavior.
 
-Keep `auth.json` and any credential commands private. Project settings and extensions can execute inside the nanopi process after you trust a project. Review [Security](security.md) before loading configuration from an untrusted directory.
+Keep `auth.json` and any credential commands private. Project settings can change behavior inside the nanopi process after you trust a project. Review [Security](security.md) before loading configuration from an untrusted directory.
 
 ## Select a model
 
@@ -66,7 +66,7 @@ The `minimal` build flavor ships no built-in provider: every model comes from `m
 
 The dummy key makes the model available to nanopi; Ollama ignores it. For an authenticated endpoint, `apiKey` and header values can use `$NAME` or `${NAME}` environment interpolation, a literal value, or a leading `!command`. Commands in `models.json` run at request time and are not cached by nanopi.
 
-Opening `/model` reloads the file. A `models` entry adds or replaces a model with the same ID on that provider. Use `modelOverrides` to change metadata for an existing built-in or extension-provided model without replacing the provider's model list. Unknown override IDs are ignored.
+Opening `/model` reloads the file. A `models` entry adds or replaces a model with the same ID on that provider. Use `modelOverrides` to change metadata for an existing built-in or module-provided model without replacing the provider's model list. Unknown override IDs are ignored.
 
 ### Describe model input and caching
 
@@ -99,7 +99,7 @@ Use `promptCache` to declare the provider's best-effort cache lifetime in second
 { "id": "claude-sonnet-5", "promptCache": { "short": 300, "long": 3600 } }
 ```
 
-Choose the conservative end of any published range. A model without a lifetime for the active tier is not eligible for cache warming. A `modelOverrides` entry can set `inputLimits` or `promptCache` for a built-in or extension model, including a model accessed through a validated proxy. See [`cacheWarming`](settings.md#model-and-thinking).
+Choose the conservative end of any published range. A model without a lifetime for the active tier is not eligible for cache warming. A `modelOverrides` entry can set `inputLimits` or `promptCache` for a built-in or module-provided model, including a model accessed through a validated proxy. See [`cacheWarming`](settings.md#model-and-thinking).
 
 ### Configure sampling by thinking level
 
@@ -146,7 +146,7 @@ Chat models on a [llama.cpp router](llama-cpp.md#classification) are also listed
 
 OpenAI's Decisions API needs an API key. Sign in with ChatGPT credentials do not work with it, so `gpt-6-luna` is not listed as available while `openai` is logged in through `/login`, even when `OPENAI_API_KEY` is set; log out of `openai` to use the key. GPT-6 Luna also judges images passed in `images`; other classifier models return an error for them. The API rejects inputs above 922K tokens, but requests that run longer than about five seconds, currently above roughly 600K input tokens, fail with a gateway timeout.
 
-Classifier models do not appear in `/model`; extensions reach them through `ctx.modelRegistry`. Find one with `ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest")` and call `ctx.modelRegistry.classify(model, { state, questions })`:
+Classifier models do not appear in `/model`; modules reach them through `ctx.modelRegistry`. Find one with `ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest")` and call `ctx.modelRegistry.classify(model, { state, questions })`:
 
 ```typescript
 const jev = ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest");
@@ -172,7 +172,7 @@ When the service reports token counts, as all System One services do, `result.us
 
 Image models generate images from a prompt and optional input images. nanopi lists OpenRouter's image models, such as `google/gemini-2.5-flash-image` and `black-forest-labs/flux.2-pro`, under the `openrouter` provider; they use the same `OPENROUTER_API_KEY` or `/login` credential as its chat models.
 
-Like classifier models, image models do not appear in `/model`; extensions generate images through `ctx.modelRegistry.generateImages()` with an image model from `ctx.modelRegistry.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image")`. The result's `output` holds base64 image blocks:
+Like classifier models, image models do not appear in `/model`; modules generate images through `ctx.modelRegistry.generateImages()` with an image model from `ctx.modelRegistry.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image")`. The result's `output` holds base64 image blocks:
 
 ```typescript
 const painter = ctx.modelRegistry.getModelOfType("image", "openrouter", "google/gemini-2.5-flash-image");
@@ -187,7 +187,7 @@ if (result.stopReason !== "stop") throw new Error(result.errorMessage ?? "image 
 
 ## Add a custom provider
 
-Use an extension when the provider needs custom streaming, model discovery, or authentication behavior. See [Custom Providers](custom-provider.md) for the extension workflow.
+Use a module when the provider needs custom streaming, model discovery, or authentication behavior. See [Custom Providers](custom-provider.md) for the registration workflow and [Modules](modules.md) for the module itself.
 
 ## Troubleshooting
 

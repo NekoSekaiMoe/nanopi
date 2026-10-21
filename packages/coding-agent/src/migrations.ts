@@ -9,9 +9,12 @@ import { CONFIG_DIR_NAME, getAgentDir, getBinDir } from "./config.ts";
 import { migrateKeybindingsConfig } from "./core/keybindings.ts";
 import { stripBom } from "./utils/text.ts";
 
-const MIGRATION_GUIDE_URL =
-	"https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/CHANGELOG.md#extensions-migration";
-const EXTENSIONS_DOC_URL = "https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/docs/extensions.md";
+/**
+ * Printed when a legacy resource directory is found. Modules are compiled in,
+ * so there is no install step for whatever the user kept there; the text says
+ * so instead of pointing at the removed extension docs.
+ */
+const MODULES_DOC_URL = "https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/docs/sdk.md#modules";
 
 /**
  * Migrate legacy oauth.json and settings.json apiKeys to auth.json.
@@ -225,7 +228,7 @@ function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] 
 	const warnings: string[] = [];
 
 	if (existsSync(hooksDir)) {
-		warnings.push(`${label} hooks/ directory found. Hooks have been renamed to extensions.`);
+		warnings.push(`${label} hooks/ directory found. Hooks are gone; modules register hooks in code.`);
 	}
 
 	if (existsSync(toolsDir)) {
@@ -240,7 +243,7 @@ function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] 
 			});
 			if (customTools.length > 0) {
 				warnings.push(
-					`${label} tools/ directory contains custom tools. Custom tools have been merged into extensions.`,
+					`${label} tools/ directory contains custom tools. Tools are registered by modules in code now.`,
 				);
 			}
 		} catch {
@@ -252,9 +255,10 @@ function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] 
 }
 
 /**
- * Run extension system migrations (commands→prompts) and collect warnings about deprecated directories.
+ * Migrate commands/ to prompts/ and collect warnings about resource
+ * directories modules replaced.
  */
-function migrateExtensionSystem(cwd: string): string[] {
+function migrateResourceDirs(cwd: string): string[] {
 	const agentDir = getAgentDir();
 	const projectDir = join(cwd, CONFIG_DIR_NAME);
 
@@ -280,9 +284,8 @@ export async function showDeprecationWarnings(warnings: string[]): Promise<void>
 	for (const warning of warnings) {
 		console.log(chalk.yellow(`Warning: ${warning}`));
 	}
-	console.log(chalk.yellow(`\nMove your extensions to the extensions/ directory.`));
-	console.log(chalk.yellow(`Migration guide: ${MIGRATION_GUIDE_URL}`));
-	console.log(chalk.yellow(`Documentation: ${EXTENSIONS_DOC_URL}`));
+	console.log(chalk.yellow(`\nNothing in those directories is loaded: modules are compiled in.`));
+	console.log(chalk.yellow(`Documentation: ${MODULES_DOC_URL}`));
 	console.log(chalk.dim(`\nPress any key to continue...`));
 
 	await new Promise<void>((resolve) => {
@@ -310,6 +313,6 @@ export function runMigrations(cwd: string): {
 	migrateSessionsFromAgentRoot();
 	migrateToolsToBin();
 	migrateKeybindingsConfigFile();
-	const deprecationWarnings = migrateExtensionSystem(cwd);
+	const deprecationWarnings = migrateResourceDirs(cwd);
 	return { migratedAuthProviders, deprecationWarnings };
 }

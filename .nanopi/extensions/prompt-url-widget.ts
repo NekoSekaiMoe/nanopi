@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
-import { DynamicBorder, type ExtensionAPI, type ExtensionContext } from "@nanopi/pi-coding-agent";
+import { DynamicBorder, type ModuleApi, type ModuleContext, type SessionModule } from "@nanopi/pi-coding-agent";
 import { Container, hyperlink, Text } from "@nanopi/pi-tui";
 
 const PR_PROMPT_PATTERN = /^\s*You are given one or more GitHub PR URLs:\s*(\S+)/im;
@@ -114,7 +114,7 @@ function formatAdvisoryDetail(advisory: GitHubAdvisoryMetadata): string | undefi
 	return parts.length > 0 ? parts.join(" · ") : undefined;
 }
 
-async function fetchAdvisoryMetadata(nanopi: ExtensionAPI, cwd: string, target: string): Promise<GhMetadata | undefined> {
+async function fetchAdvisoryMetadata(nanopi: ModuleApi, cwd: string, target: string): Promise<GhMetadata | undefined> {
 	const advisoryRef = parseAdvisoryUrl(target) ?? (await readAdvisoryRefFromDraft(cwd, target));
 	if (!advisoryRef) return undefined;
 
@@ -136,7 +136,7 @@ async function fetchAdvisoryMetadata(nanopi: ExtensionAPI, cwd: string, target: 
 }
 
 async function fetchGhMetadata(
-	nanopi: ExtensionAPI,
+	nanopi: ModuleApi,
 	kind: PromptMatch["kind"],
 	target: string,
 	cwd: string,
@@ -169,8 +169,8 @@ function formatAuthor(author?: GhMetadata["author"]): string | undefined {
 	return undefined;
 }
 
-export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
-	const setWidget = (ctx: ExtensionContext, match: PromptMatch, metadata?: GhMetadata) => {
+function createPromptUrlWidget(nanopi: ModuleApi) {
+	const setWidget = (ctx: ModuleContext, match: PromptMatch, metadata?: GhMetadata) => {
 		ctx.ui.setWidget("prompt-url", (_tui, thm) => {
 			const displayTarget = metadata?.displayUrl ?? match.target;
 			const titleText = metadata?.title
@@ -191,7 +191,7 @@ export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
 		});
 	};
 
-	const applySessionName = (ctx: ExtensionContext, match: PromptMatch, metadata?: GhMetadata) => {
+	const applySessionName = (ctx: ModuleContext, match: PromptMatch, metadata?: GhMetadata) => {
 		const label = getPromptLabel(match.kind);
 		const displayTarget = metadata?.displayUrl ?? match.target;
 		const trimmedTitle = metadata?.title?.trim();
@@ -208,7 +208,7 @@ export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
 		}
 	};
 
-	const updatePromptContext = (ctx: ExtensionContext, match: PromptMatch) => {
+	const updatePromptContext = (ctx: ModuleContext, match: PromptMatch) => {
 		setWidget(ctx, match);
 		applySessionName(ctx, match);
 		void fetchGhMetadata(nanopi, match.kind, match.target, ctx.cwd).then((meta) => {
@@ -218,17 +218,13 @@ export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
 	};
 
 	nanopi.on("before_agent_start", async (event, ctx) => {
-		if (!ctx.hasUI) return;
+		if (!ctx.hasUI || event.messageType !== "user") return;
 		const match = extractPromptMatch(event.prompt);
 		if (!match) {
 			return;
 		}
 
 		updatePromptContext(ctx, match);
-	});
-
-	nanopi.on("session_switch", async (_event, ctx) => {
-		rebuildFromSession(ctx);
 	});
 
 	const getUserText = (content: string | { type: string; text?: string }[] | undefined): string => {
@@ -242,7 +238,7 @@ export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
 		);
 	};
 
-	const rebuildFromSession = (ctx: ExtensionContext) => {
+	const rebuildFromSession = (ctx: ModuleContext) => {
 		if (!ctx.hasUI) return;
 
 		const entries = ctx.sessionManager.getEntries();
@@ -268,3 +264,10 @@ export default function promptUrlWidgetExtension(nanopi: ExtensionAPI) {
 		rebuildFromSession(ctx);
 	});
 }
+
+const promptUrlWidgetModule: SessionModule = {
+	name: "prompt-url-widget",
+	factory: createPromptUrlWidget,
+};
+
+export default promptUrlWidgetModule;
