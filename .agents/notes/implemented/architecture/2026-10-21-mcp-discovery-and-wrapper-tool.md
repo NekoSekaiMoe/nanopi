@@ -1,4 +1,4 @@
-# Agent Note: MCP discovery, the wrapper tool, and platform-correct server lookup
+# Agent Note: MCP discovery, the `mcp` shell tool, and platform-correct server lookup
 
 Status: implemented
 
@@ -48,15 +48,31 @@ Discovery is off only by explicit request: `.nanopi/mcp.json` takes a
 command, so a checked-out repository must be able to lose that privilege from the
 user-level file.
 
-**The main agent gets one wrapper tool, `mcp`.** No `server` lists the servers
-and their sources; `server` + `tool` + `args` delegates through the `subagent`
-tool (spawn, then wait) and returns the child's report. The isolated child turn
-is the point: the external payload never enters the main transcript, and the
-child's tool set is pinned to `mcp__<server>__<tool>,read` so it cannot touch the
-tree or block a writing subagent. If a build has no `subagent` tool the wrapper
-runs the call in-process rather than leaving the agent without MCP. The extra
-module keeps blocking raw `mcp__*` in the main session and now names the wrapper
-in its block reason and prompt guideline.
+**The main agent gets one shell tool, `mcp`, and every MCP call takes that
+shape.** The main agent calls `mcp` with `server` + `tool` + `args`; the shell
+spawns a subagent with its tool set pinned to `mcp__<server>__<tool>,read`; the
+subagent calls the real tool with the arguments passed through unchanged; the
+server's output comes back verbatim. No `server` lists the servers and their
+sources, no `tool` lists one server's tools. The isolated child turn is the
+point: the external payload never enters the main transcript, the child cannot
+touch the tree or block a writing subagent, and the model never has to name an
+`mcp__*` tool it cannot see. If a build has no `subagent` tool the shell runs the
+call in-process rather than leaving the agent without MCP. The extra module keeps
+blocking raw `mcp__*` in the main session and names the shell in its block
+reason, its system-prompt guideline, and the shell's own tool description.
+
+Pass-through is a contract, not a nicety: the brief tells the child to send the
+arguments it was given without adding, renaming, or dropping a field, and to
+return the tool's text verbatim with no summary. Without both halves the result
+the main agent sees is the child's rewrite of an external payload, and a retry
+with different arguments is an unlogged second request to an external service.
+
+**Nothing adds `mcp__*` to a child's default tools.** pi-subagent-mini's
+`DEFAULT_TOOLS` is `read,bash,grep,find,ls`; the shell names the one tool it
+needs. Declaring every `mcp__*` on every child would put all server schemas into
+each child's prompt and cache prefix for a capability most children never use,
+so the `tools` parameter description, the subagent description tail, and the
+CHANGELOG all say that a hand-written spawn has to name the tool it wants.
 
 **LSP coverage grows to 31 entries, and root markers accept globs.** Ruby, PHP,
 Java, Kotlin, C#, F#, Swift, Zig, Lua, Dart, Haskell, Elixir, Erlang, Scala,
@@ -82,13 +98,14 @@ answerable.
 - **Normalize Claude's `command`+`args` only.** Cursor and Claude share it, but
   OpenCode stores one argv array and VS Code uses a different key and file, so a
   single-shape reader imports nothing from half the clients on a machine.
-- **Make `mcp` a thin passthrough that calls the server itself.** Simplest, and
-  it defeats the isolation the block exists for: a large file dump from a server
-  would land in the main transcript, which is what the subagent hop prevents.
+- **Make `mcp` call the server directly instead of through a subagent.**
+  Simplest, and it defeats the isolation the block exists for: a large file dump
+  from a server would land in the main transcript, which is what the subagent hop
+  prevents. The in-process path exists only for builds with no `subagent` tool.
 - **Teach the main agent to spawn a subagent by hand for each MCP call.** That is
   what the old prompt said, and it failed in practice: the model has to name
   `mcp__<server>__<tool>` exactly and write a GOAL/CONTEXT brief for a one-line
-  call. The wrapper owns the brief, so the model states server, tool, and args.
+  call. The shell owns the brief, so the model states server, tool, and args.
 - **Do the whole thing in the LSP/MCP modules instead of a shared file.** The two
   copies would drift on exactly the platform edge (WSL lookup versus WSL spawn)
   that made the bug hard to see, so each extra keeps its own small copy of the
@@ -99,10 +116,10 @@ answerable.
 - A machine with Cursor or Claude Desktop configured gets MCP tools without
   writing a config, and `/mcp` says where each server came from so the import is
   auditable rather than magic.
-- The `mcp` wrapper costs a spawn (a child session) per call: roughly a second of
+- The `mcp` shell costs a spawn (a child session) per call: roughly a second of
   startup plus the child's own prompt. For repeated calls in one task the model
-  can still use `subagent` directly with several `mcp__*` tools; the wrapper is
-  for the one-shot case.
+  can still use `subagent` directly with several `mcp__*` tools named in `tools`;
+  the shell is for the one-shot case.
 - Discovery syntax support is intentionally partial: a small TOML subset reader
   covers Codex's `[mcp_servers.*]` tables, not full TOML. An exotic config (inline
   tables, multi-line strings) is skipped with a reported problem instead of

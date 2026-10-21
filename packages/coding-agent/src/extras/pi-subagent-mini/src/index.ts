@@ -51,7 +51,7 @@ const DESCRIPTION_RESULT =
 const DESCRIPTION_TAIL =
 	"spawn returns a jobId immediately; keep working meanwhile and the report arrives as a subagent-complete notification. " +
 	"wait blocks (default 120s), status shows state, kill stops it. Follow-ups are a new spawn briefed with the previous report. " +
-	"MCP tools (mcp__server__tool) exist only inside subagents; the `mcp` tool wraps that delegation, so use it instead of spawning by hand for a single MCP call.";
+	"MCP tools (mcp__server__tool) exist only inside subagents and are not in the default child tool list: name them in `tools` when a child needs one. For a single MCP call use the `mcp` tool instead, which owns that brief.";
 
 /**
  * Built-in modules a child must not load: `pi-ui` renders a TUI footer and
@@ -164,8 +164,8 @@ function isMcpSubsystemEnabled(): boolean {
  */
 function childModuleNames(registered: readonly string[]): string[] {
 	const names = registered.filter((name) => !CHILD_MODULE_SKIP.has(name));
-	// MCP tools are subagent-only: mcp-lite has to come along or the `mcp__*`
-	// tools added to the child's default tool list cannot resolve.
+	// MCP tools are subagent-only: mcp-lite has to come along or a `tools` list
+	// naming `mcp__*` cannot resolve in the child.
 	return names.filter((name) => name !== "mcp-lite" || isMcpSubsystemEnabled());
 }
 
@@ -536,7 +536,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			action: Type.Union([Type.Literal("spawn"), Type.Literal("wait"), Type.Literal("status"), Type.Literal("kill")], { description: "default flow: spawn, then wait for the notification" }),
 			task: Type.Optional(Type.String({ description: "spawn: the brief, as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES" })),
 			description: Type.Optional(Type.String({ description: "spawn: one-line scope shown in status and the notification (defaults to the brief's GOAL line)" })),
-			tools: Type.Optional(Type.String({ description: `spawn: comma list, default ${DEFAULT_TOOLS}${" (plus mcp__* when MCP is enabled)"}` })),
+			tools: Type.Optional(Type.String({ description: `spawn: comma list, default ${DEFAULT_TOOLS}; MCP tools (mcp__*) are never added implicitly, name them here` })),
 			cwd: Type.Optional(Type.String({ description: "spawn: working directory" })),
 			model: Type.Optional(Type.String({ description: "spawn: model id (provider/model); defaults to the current session model" })),
 			modules: Type.Optional(Type.String({ description: "spawn: comma-separated built-in module names for the child, replacing the inherited set; default: this session's modules minus interactive-only ones" })),
