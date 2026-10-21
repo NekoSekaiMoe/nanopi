@@ -145,6 +145,9 @@ importers:
       ignore:
         specifier: 7.0.8
         version: 7.0.8
+      jiti:
+        specifier: 2.7.0
+        version: 2.7.0
       minimatch:
         specifier: 10.2.6
         version: 10.2.6

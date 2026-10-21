@@ -29,7 +29,62 @@ const COMPONENT_MODULES = {
 		module: "src/utils/syntax-highlight.ts",
 		stub: "src/utils/syntax-highlight-disabled.ts",
 	},
+	"jiti-modules": {
+		module: "src/core/modules/jiti-loader.ts",
+		stub: "src/core/modules/jiti-loader-disabled.ts",
+	},
 };
+
+/**
+ * The components whose install is a lazily imported package rather than a
+ * static module graph. `jiti-loader` imports jiti inside a function, so
+ * esbuild still resolves and bundles it; dropping the import keeps the
+ * package out of the build instead of shipping bytes no code can reach.
+ */
+const COMPONENT_LAZY_IMPORTS = {
+	"jiti-modules": "jiti",
+};
+
+/**
+ * The packages this build keeps out because it cannot load disk modules: the
+ * single file leaves jiti external for its zero-dependency promise, so the
+ * component is off there regardless of flavor.
+ *
+ * @param {{ components: Record<string, boolean | string>, singleFile?: boolean }} input
+ * @returns {Record<string, boolean | string>}
+ */
+export function resolveComponentSwitches({ components, singleFile = false }) {
+	if (!singleFile) return components;
+	return { ...components, "jiti-modules": false };
+}
+
+/**
+ * Removes the `import("pkg")` calls a disabled lazy component owns from the
+ * compiled output. esbuild cannot dead-code-eliminate them: the import is
+ * inside a function whose enclosing build is still reachable.
+ *
+ * @returns {import("esbuild").Plugin}
+ */
+export function createLazyImportDropPlugin({ components }) {
+	const dropped = Object.entries(COMPONENT_LAZY_IMPORTS)
+		.filter(([component]) => components[component] === false)
+		.map(([, packageName]) => packageName);
+	if (dropped.length === 0) return inertPlugin();
+	const pattern = dropped.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|");
+	const filter = new RegExp(`^(${pattern})$`);
+	return {
+		name: "lazy-import-drops",
+		setup(build) {
+			build.onResolve({ filter }, (args) =>
+				filter.test(args.path) ? { path: "nanopi-disabled-lazy-import", namespace: "disabled-lazy" } : undefined,
+			);
+			build.onLoad({ filter: /.*/, namespace: "disabled-lazy" }, () => ({
+				contents: "export {};",
+				loader: "js",
+			}));
+		},
+	};
+}
 
 /**
  * The extensionless absolute path an import resolves to, or undefined for a
