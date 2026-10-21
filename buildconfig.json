@@ -216,6 +216,7 @@
 				"module/pi-ui": false,
 				"module/todo-lite": false,
 				"module/websearch": false,
+				"syntax-highlight": true,
 				"providers": "presets",
 				"apis": "all"
 			}

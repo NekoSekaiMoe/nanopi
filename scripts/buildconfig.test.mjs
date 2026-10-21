@@ -498,3 +498,17 @@ describe("apis component", () => {
 		throws(() => loadBuildConfig(dir), /uses "__ALL__" alongside concrete API ids/);
 	});
 });
+
+describe("real flavors", () => {
+	const config = loadBuildConfig(join(import.meta.dirname, ".."));
+
+	// Every flavor but minimal ships the syntax-highlight grammars. The flavors
+	// list them one by one over a `*: false` base, so the wildcard in `full` is
+	// the only reason `full` has them; base lost them silently (its bundle was
+	// 918 KiB smaller than main's while the diff touched nothing related).
+	it("keeps syntax highlighting in every flavor but minimal", () => {
+		strictEqual(resolveFlavorComponents(config, "full")["syntax-highlight"], true);
+		strictEqual(resolveFlavorComponents(config, "base")["syntax-highlight"], true);
+		strictEqual(resolveFlavorComponents(config, "minimal")["syntax-highlight"], false);
+	});
+});
