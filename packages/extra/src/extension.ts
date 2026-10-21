@@ -427,8 +427,16 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		if (engine.mode === "plan") guidelines.push(PLAN_GUIDELINE);
 		else if (engine.mode === "minimal") guidelines.push(MINIMAL_GUIDELINE);
 		const all = nanopi.getAllTools().map((tool) => tool.name);
-		const mcpEnabled = (loadExtraSettings(process.cwd()).settings.subsystems.mcp ?? true) && all.some(isMcpToolName);
-		if (mcpEnabled && all.includes("subagent")) {
+		// Both halves have to exist for the guideline to be true: servers registered
+		// (`mcp__*`) and the shell (`mcp`) that reaches them. The shell needs the
+		// `subagent` tool to delegate into, so a build without it gets no guideline
+		// instead of an instruction pointing at a missing tool.
+		const mcpEnabled =
+			(loadExtraSettings(process.cwd()).settings.subsystems.mcp ?? true) &&
+			all.some(isMcpToolName) &&
+			all.includes("mcp") &&
+			all.includes("subagent");
+		if (mcpEnabled) {
 			guidelines.push(MCP_SUBAGENT_ONLY_GUIDELINE);
 		}
 		event.systemPromptOptions.promptGuidelines = guidelines;

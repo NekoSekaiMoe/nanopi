@@ -7,20 +7,33 @@ Lean MCP (Model Context Protocol) client for nanopi — a slim port of
 files other clients already have. No OAuth, health pings, or reconnection
 machinery.
 
-## Two ways in
+## The call path
 
-- **`mcp` — one wrapper tool for the main agent.** Without arguments it lists
-  the servers and where each came from; with `server` + `tool` + `args` it runs
-  the call inside a subagent (`subagent` spawn, then wait) and returns that
-  child's report. The external payload therefore never lands in the main
-  conversation, which is the whole point of the isolation. If a build has no
-  `subagent` tool, the wrapper runs the call in-process instead of failing.
+Every MCP call is one round trip:
+
+```
+main agent --mcp(server, tool, args)--> mcp shell
+                                         |  spawn subagent, tools = mcp__<server>__<tool>,read
+                                         v
+                                       subagent --mcp__<server>__<tool>(args)--> MCP server
+                                         |  passes the arguments through unchanged
+                                         v
+main agent <------------- the tool's output, verbatim
+```
+
+- **`mcp` — the shell the main agent calls.** Without `server` it lists the
+  servers and where each came from; without `tool` it lists that server's tools;
+  with both it spawns a subagent and returns that child's report. The subagent
+  hop is the point: the external payload never lands in the main conversation,
+  and the model never has to name an `mcp__*` tool it cannot see. If a build has
+  no `subagent` tool, the shell runs the call in-process instead of failing.
 - **`mcp__<server>__<tool>` — the server's own tools, subagent-only.** They
   register with `defaultActive: false`, so the main agent never declares them;
-  subagent children activate them with `--tools mcp__*` (pi-subagent-mini
-  forwards both when the extra module's `mcp` subsystem switch is on). The extra
-  module blocks every `mcp__*` call in main-agent sessions and points the model
-  at the wrapper.
+  the shell activates exactly the one it needs in the child's `tools` list. None
+  are added to a child's defaults (pi-subagent-mini's `DEFAULT_TOOLS` is
+  `read,bash,grep,find,ls`), so a hand-written `spawn` that wants MCP has to
+  name the tool. The extra module blocks every `mcp__*` call in main-agent
+  sessions and points the model at the shell.
 
 ## Configuration
 
