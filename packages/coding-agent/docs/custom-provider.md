@@ -1,15 +1,15 @@
 # Custom Providers
 
-A provider extension connects nanopi to a model service that needs custom authentication, model discovery, request handling, or streaming. If the service already speaks a supported API, configure it in `models.json` instead.
+A provider module connects nanopi to a model service that needs custom authentication, model discovery, request handling, or streaming. If the service already speaks a supported API, configure it in `models.json` instead.
 
-Provider extensions run inside nanopi and can inspect credentials, prompts, tool definitions, model responses, and usage. Treat them as trusted code and avoid logging secrets or provider payloads.
+Provider modules run inside nanopi and can inspect credentials, prompts, tool definitions, model responses, and usage. Treat them as trusted code and avoid logging secrets or provider payloads.
 
 ## Choose the smallest integration
 
 | Requirement | Use |
 |---|---|
 | Add models behind a supported API | [`models.json`](models.md#configure-a-compatible-endpoint) |
-| Change an existing provider endpoint or headers | `models.json` or a small provider extension |
+| Change an existing provider endpoint or headers | `models.json` or a small provider module |
 | Discover models dynamically | A provider with `refreshModels` |
 | Add a `/login` flow | A provider with native or legacy OAuth configuration |
 | Implement an unsupported wire protocol | A provider with `stream` or `streamSimple` |
@@ -18,12 +18,12 @@ A provider module is code you compose into your own entry point (`createAgentSes
 
 ## Register a provider
 
-Call `nanopi.registerProvider()` from the extension factory. nanopi waits for asynchronous factories before startup continues, so providers registered there are available to startup model selection and `nanopi --list-models`.
+Call `nanopi.registerProvider()` from the module factory ([Modules](modules.md)). nanopi waits for asynchronous factories before startup continues, so providers registered there are available to startup model selection and `nanopi --list-models`.
 
 There are two registration forms:
 
 - Register a complete `Provider` from `@nanopi/pi-ai` for native authentication, filtering, discovery, refresh, and streaming behavior.
-- Register a provider name with `ProviderConfig` for the legacy configuration form used by existing extensions.
+- Register a provider name with `ProviderConfig` for the legacy configuration form.
 
 Prefer a complete provider for new integrations that own more than static endpoint and model metadata. nanopi composes `models.json` overrides above a registered native provider.
 
@@ -67,9 +67,9 @@ nanopi.registerProvider("media-tools", {
 
 Model-level `baseUrl` values take precedence over the provider endpoint. If no `models` list is supplied, built-in models of every operation remain registered. Equal model IDs in different operations remain distinct, including their model-specific headers.
 
-Calls made after initial extension loading take effect immediately. Use `nanopi.unregisterProvider()` to remove the dynamic provider and restore built-in behavior that it replaced.
+Calls made after initial module loading take effect immediately. Use `nanopi.unregisterProvider()` to remove the dynamic provider and restore built-in behavior that it replaced.
 
-See the checked [GitLab Duo provider](../examples/extensions/custom-provider-gitlab-duo/) for a complete registration that delegates streaming to built-in API implementations.
+A module registers providers the same way; see [Modules](sdk.md#modules) for the surrounding factory and the streaming contract in [`packages/ai`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/ai/src/) for API implementations to delegate to.
 
 ## Provide authentication
 
@@ -143,7 +143,7 @@ The stream must also honor request instrumentation supplied through `SimpleStrea
 - Await `options.onProviderStreamEvent?.(providerEvent, model)` for each parsed provider event before normalizing it.
 - Pass through the abort signal and provider-scoped environment.
 
-These hooks power extension request inspection, response-header events, and provider-stream observation. Omitting them makes the provider behave differently from nanopi’s built-in providers.
+These hooks power module request inspection, response-header events, and provider-stream observation. Omitting them makes the provider behave differently from nanopi’s built-in providers.
 
 ## Report failures and usage
 

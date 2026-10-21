@@ -90,6 +90,10 @@
           "title": "Build on nanopi",
           "items": [
             {
+              "title": "Write Modules",
+              "path": "modules.md"
+            },
+            {
               "title": "Add Custom Providers",
               "path": "custom-provider.md"
             },

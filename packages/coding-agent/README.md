@@ -8,7 +8,7 @@
 
 nanopi is a minimal, extensible agent harness that you can make your own.
 
-Adapt nanopi to your workflows, not the other way around. Customize nanopi with [extensions](docs/extensions.md), [skills](docs/skills.md), [prompt templates](docs/prompt-templates.md), and [themes](docs/themes.md). Bundle them as [nanopi packages](docs/packages.md) and share via npm or git.
+Adapt nanopi to your workflows, not the other way around. Extend it with [modules](docs/sdk.md#modules) - programmatic modules compiled into the build - and customize it with [skills](docs/skills.md) and [prompt templates](docs/prompt-templates.md).
 
 nanopi ships with powerful defaults but skips features like sub-agents and plan mode. Ask nanopi to build what you want, or install a package that does it your way.
 

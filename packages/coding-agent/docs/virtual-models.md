@@ -111,4 +111,4 @@ The transcript already records the selection and every dispatched model, and `ct
 
 Routers can call other models through `ctx.modelRegistry`, for example `ctx.modelRegistry.classify()` with a classifier model from `ctx.modelRegistry.findOfType("classifier", provider, id)`. The call adds latency before the first token of the turn.
 
-See [`jev-router.ts`](../examples/extensions/jev-router.ts) for a complete router. It plans on a strong OpenAI Codex model chosen by the Jev classifier, lets that model make the first edit, and then switches once to a cheaper model, accepting a single prompt-cache miss. It keeps the phase as router state.
+A router is a module: `nanopi.registerVirtualModel()` in the factory, then `nanopi.setModel()` and `ctx.modelRegistry` inside the request handlers. `pi-smart-flow` and `pi-fake-codex` under `packages/coding-agent/src/extras/` are compiled-in modules that route and re-tag requests the same way.

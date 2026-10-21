@@ -47,6 +47,10 @@ export default defineConfig({
 				replacement: `${workspaceSourcePaths.aiProviders}/$1.ts`,
 			},
 			{ find: /^@nanopi\/pi-agent-core$/, replacement: workspaceSourcePaths.agentIndex },
+			// Modules that live outside the package tree import the package by
+			// name; the workspace link resolves published builds, so tests need
+			// the source alias the same way they do for the other packages.
+			{ find: /^@nanopi\/pi-coding-agent$/, replacement: workspaceSourcePaths.codingAgentIndex },
 			{ find: /^@nanopi\/pi-extra$/, replacement: workspaceSourcePaths.extraIndex },
 			{ find: /^@nanopi\/pi-codemode$/, replacement: workspaceSourcePaths.codemodeIndex },
 			{ find: /^@nanopi\/pi-codemode\/declarations$/, replacement: workspaceSourcePaths.codemodeDeclarations },
