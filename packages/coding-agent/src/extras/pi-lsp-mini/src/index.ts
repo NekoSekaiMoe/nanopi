@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { LspManager, formatDiagnostic, severityRank, delay, findProjectRoot } from "./manager.ts";
+import { loadServers } from "./config.ts";
 import { DIAGNOSTICS, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { callGraphReport, type Direction } from "./callgraph.ts";
@@ -144,10 +145,23 @@ export default function lspMiniExtension(pi: ModuleApi): void {
   pi.registerCommand("lsp", {
     description: "List configured language servers",
     handler: async (_args: string, ctx) => {
-      const servers = manager.listServers();
-      const lines = servers.length === 0 ? ["no language servers found on PATH"] :
-        servers.map((server) => `  ${server.id.padEnd(12)} ${Array.isArray(server.command) ? server.command.join(" | ") : server.command}  (${server.include?.join(" ")})`);
-      ctx.ui.notify(`pi-lsp-mini servers:\n${lines.join("\n")}`);
+      const available = manager.listServers();
+      const availableIds = new Set(available.map((server) => server.id));
+      const installed = available.length === 0
+        ? ["  (none found on PATH)"]
+        : available.map((server) => `  ${server.id.padEnd(14)} ${server.include?.join(" ")}`);
+      // Listing only what resolved leaves the useful question unanswered ("why is
+      // my language unsupported?"), so every built-in entry is shown with its state.
+      const missing = loadServers()
+        .filter((server) => !availableIds.has(server.id))
+        .map((server) => `  ${server.id.padEnd(14)} ${Array.isArray(server.command) ? server.command.join(" | ") : server.command}`);
+      ctx.ui.notify(
+        [
+          `pi-lsp-mini: ${available.length} language server(s) installed`,
+          ...installed,
+          ...(missing.length > 0 ? ["", `${missing.length} configured but not installed (first command on PATH wins):`, ...missing] : []),
+        ].join("\n"),
+      );
     },
   });
 

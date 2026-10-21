@@ -1,6 +1,6 @@
 {
 	"name": "mcp-lite",
-	"version": "1.1.0",
+	"version": "1.2.0",
 	"description": "Lean MCP (Model Context Protocol) client for nanopi: stdio and streamable-http servers, tools bridged as mcp__* tools. Subagent-only by design. Slim port of irahardianto/pi-mcp-extension.",
 	"keywords": [
 		"pi-package",
