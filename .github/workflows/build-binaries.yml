@@ -220,6 +220,11 @@ jobs:
       - name: Create draft GitHub Release and upload assets
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # gh 由 GH_REPO 定位仓库，但 release create 仍会跑 `git tag --list`
+          # 取 tag 注解。本 job 没有 checkout，工作区不是 git 仓库，那一步直接
+          # 以 128 退出（`fatal: not a git repository`），draft 建不出来。
+          # 用 -R 显式给仓库，gh 会跳过所有本地 git 调用。
+          GH_REPO_FLAG: -R ${{ github.repository }}
         run: |
           set -euo pipefail
 
@@ -243,16 +248,16 @@ jobs:
             SHA256SUMS
           )
 
-          existing_release="$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          existing_release="$(gh release view ${GH_REPO_FLAG} "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
           if [[ "${existing_release}" == "false" ]]; then
             echo "::error::GitHub Release ${RELEASE_TAG} is already published. Refusing to mutate a public release."
             exit 1
           fi
           if [[ "${existing_release}" == "true" ]]; then
-            gh release delete "${RELEASE_TAG}" --yes
+            gh release delete ${GH_REPO_FLAG} "${RELEASE_TAG}" --yes
           fi
 
-          gh release create "${RELEASE_TAG}" \
+          gh release create ${GH_REPO_FLAG} "${RELEASE_TAG}" \
             --verify-tag \
             --draft \
             --title "${RELEASE_TAG}" \
@@ -260,7 +265,7 @@ jobs:
             "${release_assets[@]}"
 
           expected_asset_names="$(printf '%s\n' "${release_assets[@]}" | sort)"
-          actual_asset_names="$(gh release view "${RELEASE_TAG}" --json assets --jq '.assets[].name' | sort)"
+          actual_asset_names="$(gh release view ${GH_REPO_FLAG} "${RELEASE_TAG}" --json assets --jq '.assets[].name' | sort)"
 
           if [[ "${actual_asset_names}" != "${expected_asset_names}" ]]; then
             echo "::error::Draft GitHub Release asset set does not match expected files."
@@ -281,10 +286,13 @@ jobs:
       - name: Publish staged GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 同 stage-github-release：本 job 没有 checkout，gh 必须用 -R 显式
+          # 指定仓库，否则它去问本地 git 取仓库信息会直接失败。
+          GH_REPO_FLAG: -R ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          existing_release="$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          existing_release="$(gh release view ${GH_REPO_FLAG} "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
           if [[ "${existing_release}" == "" ]]; then
             echo "::error::Draft GitHub Release ${RELEASE_TAG} does not exist."
             exit 1
@@ -294,7 +302,7 @@ jobs:
             exit 1
           fi
 
-          gh release edit "${RELEASE_TAG}" --draft=false
+          gh release edit ${GH_REPO_FLAG} "${RELEASE_TAG}" --draft=false
 
   cleanup-draft-github-release:
     runs-on: ubuntu-latest
@@ -312,10 +320,12 @@ jobs:
       - name: Delete draft GitHub Release after failure
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 兜底 job 同样没有 checkout，gh 必须用 -R 显式指定仓库。
+          GH_REPO_FLAG: -R ${{ github.repository }}
         run: |
           set -euo pipefail
 
-          existing_release="$(gh release view "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
+          existing_release="$(gh release view ${GH_REPO_FLAG} "${RELEASE_TAG}" --json isDraft --jq .isDraft 2>/dev/null || true)"
           if [[ "${existing_release}" == "true" ]]; then
-            gh release delete "${RELEASE_TAG}" --yes
+            gh release delete ${GH_REPO_FLAG} "${RELEASE_TAG}" --yes
           fi
