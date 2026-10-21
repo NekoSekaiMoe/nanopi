@@ -100,7 +100,8 @@ function overlayEnvAuthContext(base: AuthContext, env: ProviderEnv): AuthContext
 }
 
 const DEFAULT_OAUTH_MINIMUM_VALIDITY_MS = 5 * 60 * 1000;
-const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
+/** Bounds one credential network exchange (token refresh or availability re-resolve). */
+export const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
 
 /**
  * Refresh a stored OAuth credential under the credential-store lock and persist

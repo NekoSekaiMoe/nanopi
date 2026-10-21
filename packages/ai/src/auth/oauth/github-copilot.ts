@@ -490,12 +490,30 @@ function copilotEnterpriseDomain(credential: OAuthCredential): string | undefine
 	return normalizeDomain(enterpriseUrl) ?? undefined;
 }
 
+/**
+ * Re-read the account model catalog for the current access token. `GET /models` reports per-account
+ * policy, so a plan change or a model enabled in another client only reaches the picker after this.
+ */
+async function refreshGitHubCopilotAvailability(
+	credential: OAuthCredential,
+	signal: AbortSignal,
+): Promise<OAuthCredential> {
+	const { availableModelIds } = await fetchGitHubCopilotModels(
+		credential.access,
+		copilotEnterpriseDomain(credential),
+		signal,
+		{ maxRetries: 0, maxElapsedMs: 0 },
+	);
+	return { ...credential, availableModelIds };
+}
+
 export const githubCopilotOAuth: OAuthAuth = {
 	name: "GitHub Copilot",
 	isSubscription: true,
 	login: loginGitHubCopilot,
 	refresh: (credential, signal) =>
 		refreshGitHubCopilotToken(credential.refresh, copilotEnterpriseDomain(credential), signal),
+	refreshAvailability: refreshGitHubCopilotAvailability,
 
 	/** Derive the credential-specific proxy endpoint for each request. */
 	async toAuth(credential) {
