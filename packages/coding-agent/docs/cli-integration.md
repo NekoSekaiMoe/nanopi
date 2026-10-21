@@ -65,9 +65,9 @@ Add an `id` to commands that need correlation. The matching response repeats tha
 
 A successful `prompt` response means the prompt was accepted, queued, or handled. It does not mean the run completed. Continue consuming events through `agent_settled` when completion matters.
 
-RPC commands can change models, inspect state, manage sessions, run shell commands, and answer extension UI requests.
+RPC commands can change models, inspect state, manage sessions, run shell commands, and answer module UI requests.
 
-Extension dialogs form a request-response subprotocol. Other extension UI updates are notifications that a client may display or ignore. TUI-only extension capabilities are unavailable or degraded outside interactive mode.
+Module dialogs form a request-response subprotocol. Other module UI updates are notifications that a client may display or ignore. TUI-only module capabilities are unavailable or degraded outside interactive mode.
 
 For Node.js or TypeScript integrations, prefer `RpcClient` from `@nanopi/pi-coding-agent`. It starts a nanopi RPC child process, correlates requests, exposes typed command methods, and delivers session events to listeners.
 
@@ -97,7 +97,7 @@ Change the top-level `bin` field to set the executable name. These settings affe
 ## Examples and references
 
 - [RPC client](../examples/rpc-client.ts): typed Node.js integration
-- [RPC extension UI](../examples/rpc-extension-ui.ts): custom terminal client with extension dialogs
+- [RPC module UI](../examples/rpc-extension-ui.ts): custom terminal client with module dialogs
 - [Command Line](cli.md): startup options and mode selection
 - [JSON Event Stream](json.md): JSON event reference
 - [RPC Protocol](rpc.md): RPC lifecycle, framing, errors, and shutdown

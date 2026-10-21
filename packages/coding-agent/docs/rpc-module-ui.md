@@ -1,6 +1,6 @@
 # RPC Module UI
 
-Extensions can request user interaction through `ctx.ui`. In RPC mode, supported calls become a request/response subprotocol alongside normal [RPC commands](rpc-commands.md) and [session events](json.md).
+Modules can request user interaction through `ctx.ui`. In RPC mode, supported calls become a request/response subprotocol alongside normal [RPC commands](rpc-commands.md) and [session events](json.md).
 
 There are two categories of module UI methods:
 
@@ -185,7 +185,7 @@ Responses are sent for dialog methods only (`select`, `confirm`, `input`, `edito
 
 ### Cancellation response (any dialog)
 
-Dismiss any dialog method. The extension receives `undefined` (for select/input/editor) or `false` (for confirm).
+Dismiss any dialog method. The module receives `undefined` (for select/input/editor) or `false` (for confirm).
 
 ```json
 {"type": "extension_ui_response", "id": "uuid-3", "cancelled": true}
@@ -193,6 +193,6 @@ Dismiss any dialog method. The extension receives `undefined` (for select/input/
 
 ## Example
 
-See the checked [RPC module UI client](../examples/rpc-extension-ui.ts) and its [demo extension](../examples/extensions/rpc-demo.ts).
+See the checked [RPC module UI client](../examples/rpc-extension-ui.ts) for a client that speaks this protocol to a module.
 
 The exported request and response unions are defined in [`rpc-types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/modes/rpc/rpc-types.ts). See [SDK modules](sdk.md) for mode-independent module guidance.

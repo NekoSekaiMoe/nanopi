@@ -71,7 +71,7 @@ Treat each custom component instance as belonging to one interaction. Create a n
 
 Finish the interaction with the completion callback supplied to the component factory. It resolves the `ctx.ui.custom()` promise and disposes the component. Do not call `OverlayHandle.hide()` on an overlay created by `ctx.ui.custom()`.
 
-See [`overlay-qa-tests.ts`](../examples/extensions/overlay-qa-tests.ts) for positioning, stacking, focus, responsive visibility, and animation behavior.
+`ctx.ui.custom()` takes these options in a module command handler; the overlay options are the same set the terminal UI exposes publicly, defined in [`packages/tui/src/index.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/tui/src/index.ts).
 
 ## Apply themes correctly
 
@@ -111,13 +111,6 @@ Use `NANOPI_TUI_WRITE_LOG` to capture the raw ANSI stream when diagnosing render
 
 ## Examples and source
 
-The checked extension examples cover the main patterns:
-
-- [`preset.ts`](../examples/extensions/preset.ts) and [`tools.ts`](../examples/extensions/tools.ts) use selection and settings lists.
-- [`qna.ts`](../examples/extensions/qna.ts) uses cancellable asynchronous UI.
-- [`modal-editor.ts`](../examples/extensions/modal-editor.ts) replaces the editor.
-- [`custom-footer.ts`](../examples/extensions/custom-footer.ts) replaces the footer.
-- [`widget-placement.ts`](../examples/extensions/widget-placement.ts) places persistent content around the editor.
-- [`doom-overlay/`](../examples/extensions/doom-overlay/) demonstrates a continuously rendered overlay.
+The compiled-in modules in `packages/coding-agent/src/extras/` are the worked examples: `pi-ui` uses widgets, status lines, and footers, `ask-lite` a dialog, `todo-lite` custom tool rendering. They register through the same `ModuleApi` a user module gets.
 
 The public exports are defined in [`packages/tui/src/index.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/tui/src/index.ts). See [SDK modules](sdk.md) for module lifecycle, state, tools, events, and mode behavior.

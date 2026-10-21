@@ -1,6 +1,6 @@
 # Examples
 
-Example code for the pi-coding-agent SDK, process integration, and extensions.
+Example code for the pi-coding-agent SDK and process integration.
 
 ## CLI integration
 
@@ -15,22 +15,11 @@ node examples/rpc-client.ts "Explain this repository"
 ## Directories
 
 ### [sdk/](sdk/)
-Programmatic usage via `createAgentSession()`. Shows how to customize models, prompts, tools, extensions, and session management.
-
-### [extensions/](extensions/)
-Example extensions demonstrating:
-- Lifecycle event handlers (tool interception, safety gates, context modifications)
-- Custom tools (todo lists, questions, subagents, output truncation)
-- Commands and keyboard shortcuts
-- Custom UI (footers, headers, editors, overlays)
-- Git integration (checkpoints, auto-commit)
-- System prompt modifications and custom compaction
-- External integrations (SSH, file watchers, system theme sync)
-- Custom providers (Anthropic with custom streaming, GitLab Duo)
+Programmatic usage via `createAgentSession()`. Shows how to customize models, prompts, tools, modules, and session management. [06-modules.ts](sdk/06-modules.ts) is the module example: tools and event handlers registered in code.
 
 ## Documentation
 
 - [SDK Examples](sdk/README.md)
 - [CLI Integration](../docs/cli-integration.md)
-- [Extensions Documentation](../docs/extensions.md)
+- [Modules Documentation](../docs/sdk.md#modules)
 - [Skills Documentation](../docs/skills.md)

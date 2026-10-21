@@ -13,7 +13,7 @@ The runtime example shows how to build a recreate function that closes over proc
 | `03-custom-prompt.ts` | Replace or modify system prompt |
 | `04-skills.ts` | Discover, filter, or replace skills |
 | `05-tools.ts` | Built-in tool allowlists |
-| `06-extensions.ts` | Logging, blocking, result modification |
+| `06-modules.ts` | Programmatic modules: tools, event handlers, system-prompt tweaks |
 | `07-context-files.ts` | AGENTS.md context files |
 | `08-prompt-templates.ts` | File-based prompt templates |
 | `09-api-keys-and-oauth.ts` | API key resolution, OAuth config |
@@ -38,6 +38,7 @@ import {
   DefaultResourceLoader,
   ModelRuntime,
   SessionManager,
+  type SessionModule,
   SettingsManager,
 } from "@nanopi/pi-coding-agent";
 
@@ -66,6 +67,15 @@ const { session } = await createAgentSession({
   modelRuntime,
 });
 
+// Module: registers a tool and event handlers, nothing loaded from disk
+const myModule: SessionModule = {
+  name: "my-module",
+  factory: (nanopi) => {
+    nanopi.registerTool(myTool);
+    nanopi.on("tool_call", (event) => console.log(event.toolName));
+  },
+};
+
 // Full control
 const customRuntime = await ModelRuntime.create({
   authPath: "/my/app/auth.json",
@@ -75,7 +85,7 @@ await customRuntime.setRuntimeApiKey("anthropic", process.env.MY_KEY!);
 
 const resourceLoader = new DefaultResourceLoader({
   systemPromptOverride: () => "You are helpful.",
-  extensionFactories: [myExtension],
+  modules: [myModule],
   skillsOverride: () => ({ skills: [], diagnostics: [] }),
   agentsFilesOverride: () => ({ agentsFiles: [] }),
   promptsOverride: () => ({ prompts: [], diagnostics: [] }),
@@ -112,7 +122,7 @@ await session.prompt("Hello");
 | `thinkingLevel` | From settings/"off" | off, low, medium, high |
 | `tools` | `["read", "bash", "edit", "write"]` built-ins | Allowlist tool names across built-in, extension, and custom tools |
 | `customTools` | `[]` | Additional tool definitions |
-| `resourceLoader` | DefaultResourceLoader | Resource loader for extensions, skills, prompts, themes, and context files |
+| `resourceLoader` | DefaultResourceLoader | Resource loader for modules, skills, prompts, and context files |
 | `sessionManager` | `SessionManager.create(cwd)` | Persistence |
 | `settingsManager` | `SettingsManager.create(cwd, agentDir)` | Settings overrides |
 
