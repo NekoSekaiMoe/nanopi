@@ -73,57 +73,16 @@ The event set is the one real consumers use: `project_trust`, `session_start`, `
 
 Several handlers for the same event run in module load order. `tool_call` can block or modify, `message_end` can replace the message, `input` can transform a prompt, `turn_end` merges boundaries.
 
-## Modules from disk
-
-Compiled-in modules are the whole story for a build without jiti support. The
-`base` and `full` builds also load module files from three places:
-
-1. The paths in `$NANOPI_EXTENSIONS` (files or directories, `:`-separated).
-2. `<agent dir>/extensions/`, the user-wide directory (`~/.nanopi/agent/extensions/`).
-3. `.nanopi/extensions/`, the project directory — only when the project is
-   trusted, because these files are code the project wrote.
-
-A module file default-exports either a `SessionModule` or a bare factory. jiti
-transforms it in-process, so a `.ts` file runs as written and `import type`
-lines cost nothing at runtime. Aliases point `@nanopi/pi-coding-agent`,
-`@nanopi/pi-agent-core`, `@nanopi/pi-ai`, and `@nanopi/pi-tui` at the running
-installation, so a module sees the same classes, tools, and theme helpers the
-CLI uses.
-
-```ts
-// .nanopi/extensions/hello.ts
-import type { SessionModule } from "@nanopi/pi-coding-agent";
-
-const hello: SessionModule = {
-	name: "hello",
-	factory: (nanopi) => {
-		nanopi.registerCommand("hello", {
-			description: "Say hello",
-			handler: async (_args, ctx) => ctx.ui.notify("hello", "info"),
-		});
-	},
-};
-
-export default hello;
-```
-
-One broken file is reported as a diagnostic and skipped; the rest still load.
-
-The `minimal` build and every single-file `nanopi.js` have no jiti: the
-`jiti-modules` component is off, and a disk module there is never read. The npm
-bundle carries jiti as a dependency and loads jiti only when it actually has a
-file to import.
-
 ## What a module cannot do
 
-- Be reloaded. Editing a module means restarting the process; the module set is
-  read once per session.
+- Be discovered. Nothing scans `~/.nanopi` or `.nanopi` for code to run.
+- Be reloaded. Editing a module means rebuilding the binary or restarting the embedding app.
 - Reach events that no consumer uses. The event set above is the surface; events that no built-in consumer needed (`resources_discover`, `user_bash`, and a dozen others) were removed rather than kept as empty hooks.
 
 Skills, prompt templates, and context files are still local files that nanopi discovers at startup. They are separate from modules and do not need code.
 
 ## Learn from the built-ins
 
-Everything shipped with nanopi is a module: run modes and permissions (`packages/extra`), llama.cpp support, `/compact`, `/context`, `/status`, `/init`, codex-style compaction, and the extras under `packages/coding-agent/src/extras/` (`ask-lite`, `todo-lite`, `websearch`, `pi-rewind`, `pi-subagent-mini`, `pi-ui`, and the rest). This repository's own `.nanopi/extensions/` modules (`import-repro`, `prompt-url-widget`, `redraws`) are smaller, readable examples of the same shape; point `$NANOPI_EXTENSIONS` at that directory to load them into a development build.
+Everything shipped with nanopi is a module: run modes and permissions (`packages/extra`), llama.cpp support, `/compact`, `/context`, `/status`, `/init`, codex-style compaction, and the extras under `packages/coding-agent/src/extras/` (`ask-lite`, `todo-lite`, `websearch`, `pi-rewind`, `pi-subagent-mini`, `pi-ui`, and the rest). This repository's own `.nanopi/extensions/` modules (`import-repro`, `prompt-url-widget`, `redraws`) are smaller, readable examples of the same shape; they are run through the SDK, since the CLI build only compiles modules under `packages/coding-agent/src/`.
 
 A full runnable SDK example is [06-modules.ts](../examples/sdk/06-modules.ts).

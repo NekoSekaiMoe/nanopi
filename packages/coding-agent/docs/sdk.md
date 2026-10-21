@@ -148,7 +148,7 @@ const { session } = await createAgentSession({ modules: [myModule] });
 ```
 
 - The factory receives `ModuleApi`: `on()` over the documented events, plus `registerTool`, `registerCommand`, `registerFlag`, `registerProvider`, `registerVirtualModel`, `sendMessage`, `exec`, `getSettings`, `setModel`, and the rest of the session surface.
-- To extend the CLI itself rather than an embedding app, put the module in `.nanopi/extensions/` (loaded at startup, no build step; see [Modules from disk](modules.md#modules-from-disk)) or import it from `src/modules/index.ts` to compile it in; see [Repo-local modules](configuration.md#repo-local-modules). The bundled module list is `BUILTIN_MODULES` from `@nanopi/pi-coding-agent`.
+- To extend the CLI itself rather than an embedding app, add the module to your own entry point or to the repo-local `.nanopi/extensions/*.ts` and import it from `src/modules/index.ts`; see [Repo-local modules](configuration.md#repo-local-modules). The bundled module list is `BUILTIN_MODULES` from `@nanopi/pi-coding-agent`.
 - The full guide - what a module can register, the event set, and what it cannot do - is [Modules](modules.md).
 - `--modules a,b` narrows the compiled-in list for one run; it cannot add a module the binary does not carry.
 

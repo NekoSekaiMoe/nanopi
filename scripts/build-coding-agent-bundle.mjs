@@ -24,7 +24,6 @@ import {
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
 import { httpsProxyAgentNamedExportPlugin } from "./proxy-agent-plugin.mjs";
-import { createLazyImportDropPlugin, createComponentStubPlugin, resolveComponentSwitches, validateComponentStubExports } from "./build-components.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
@@ -40,9 +39,7 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // Build flavors (buildconfig.json) control peripheral components. The
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
-const resolved = resolveBuildFlavor(repoRoot);
-const { flavor, toolset, toolNames, providers, apis } = resolved;
-const components = resolveComponentSwitches({ components: resolved.components });
+const { flavor, components, toolset, toolNames, providers, apis } = resolveBuildFlavor(repoRoot);
 // A provider set that ships every catalog has no runtime filter; a set that
 // ships none resolves to an empty list and the build keeps no built-in provider.
 const builtinProviderIds = resolveBuiltinProviderIds(providers);
@@ -58,11 +55,6 @@ validateFlavorModules(repoRoot, readBuiltinModuleNames(repoRoot));
 // Provider sets name built-in catalogs; validateFlavorProviders fails the build
 // when a set and the generated catalogs in packages/ai disagree.
 validateFlavorProviders(repoRoot, readProviderCatalogIds(repoRoot), flavor);
-validateComponentStubExports(codingAgentDir);
-const { plugin: componentStubPlugin, disabledModules: disabledComponentModules } = createComponentStubPlugin({
-	components,
-	codingAgentDir,
-});
 const moduleStubDir = mkdtempSync(join(tmpdir(), "nanopi-module-stubs-"));
 const { plugin: moduleStubPlugin, disabled: disabledModules } = createModuleStubPlugin({
 	stubDir: moduleStubDir,
@@ -133,8 +125,6 @@ function commonBuildOptions() {
 		plugins: [
 			moduleStubPlugin,
 			toolStubPlugin,
-			componentStubPlugin,
-			createLazyImportDropPlugin({ components }),
 			lazyJitiPlugin,
 			httpsProxyAgentNamedExportPlugin(repoRoot),
 		],
@@ -256,6 +246,5 @@ console.log(
 		(excludedFlows.length > 0 ? `, excluded OAuth: ${excludedFlows.join(", ")}` : "") +
 		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
 		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
-		(disabledComponentModules.length > 0 ? `, excluded components: ${disabledComponentModules.join(", ")}` : "") +
 		")",
 );

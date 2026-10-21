@@ -36,15 +36,13 @@ For `SYSTEM.md` and `APPEND_SYSTEM.md`, the trusted project file takes precedenc
 
 ### Repo-local modules
 
-`.nanopi/extensions/` is a project module directory: the `base` and `full` builds load the `.ts`/`.js` files in it when the project is trusted, so a module there needs no build step. See [Modules from disk](modules.md#modules-from-disk).
-
-A module that ships with the CLI itself is compiled in. A project that wants its module inside the binary adds it where the module list is written:
+There is no project extension directory: modules are compiled in, so a project cannot hand the CLI a file to load at runtime. A project that wants its own module adds it where the module list is written:
 
 1. Put the module under `packages/coding-agent/src/` and export a `SessionModule` (`{ name, factory }`).
 2. Import it from `packages/coding-agent/src/modules/index.ts` and add it to `BUILTIN_MODULES`.
 3. Add a `module/<name>` component and a `moduleBundles` entry to the root `buildconfig.json`; `validateFlavorModules()` fails the build without them.
 
-A module outside `packages/coding-agent/src/` cannot be compiled into the CLI: `tsconfig.build.json` sets `rootDir: "src"`, so tsc rejects any file above it. Importing one type-checks and runs from source, but the build stops at `TS6059`. That is why this repository's own `import-repro`, `prompt-url-widget`, and `redraws` live in `.nanopi/extensions/` and load from disk: set `$NANOPI_EXTENSIONS=.nanopi/extensions` and a development build picks them up without recompiling.
+A module outside `packages/coding-agent/src/` cannot be compiled into the CLI: `tsconfig.build.json` sets `rootDir: "src"`, so tsc rejects any file above it. Importing one type-checks and runs from source, but the build stops at `TS6059`. `.nanopi/extensions/` is therefore a place to keep module source, not a place nanopi loads from. `import-repro`, `prompt-url-widget`, and `redraws` live there for that reason: they are written against the module API and run through the SDK, not through the CLI build.
 
 See [Modules](modules.md) for what a module can register, and [SDK modules](sdk.md#modules) for the embedding-app route.
 
