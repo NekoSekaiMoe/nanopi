@@ -43,7 +43,12 @@ import {
 	validateExternalImports,
 } from "./esbuild-shared.mjs";
 import { createApiStubPlugin, validateStubs } from "./build-apis.mjs";
-import { createComponentStubPlugin, validateComponentStubExports } from "./build-components.mjs";
+import {
+	createComponentStubPlugin,
+	createLazyImportDropPlugin,
+	resolveComponentSwitches,
+	validateComponentStubExports,
+} from "./build-components.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { httpsProxyAgentNamedExportPlugin } from "./proxy-agent-plugin.mjs";
 import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
@@ -62,7 +67,12 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // Build flavors (buildconfig.json) drop peripheral components from the
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
-const { flavor, components, toolset, toolNames, providers, apis } = resolveBuildFlavor(repoRoot);
+const resolved = resolveBuildFlavor(repoRoot);
+const { flavor, toolset, toolNames, providers, apis } = resolved;
+// The single file never loads disk modules: it keeps jiti external so the
+// artifact stays zero-dependency, so the component is off here whatever the
+// flavor says.
+const components = resolveComponentSwitches({ components: resolved.components, singleFile: true });
 // A provider set that ships every catalog has no runtime filter; a set that
 // ships none resolves to an empty list and the build keeps no built-in provider.
 const builtinProviderIds = resolveBuiltinProviderIds(providers);
@@ -328,6 +338,7 @@ const { plugin: apiStubPlugin, disabledApis, disabledProviders } = createApiStub
 const plugins = [
 	apiStubPlugin,
 	componentStubPlugin,
+	createLazyImportDropPlugin({ components }),
 	moduleStubPlugin,
 	toolStubPlugin,
 	httpsProxyAgentNamedExportPlugin(repoRoot),

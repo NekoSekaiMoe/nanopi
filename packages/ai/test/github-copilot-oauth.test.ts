@@ -741,3 +741,49 @@ describe("GitHub Copilot OAuth device flow", () => {
 		expect(accessTokenPollTimes).toEqual([startTime.getTime() + 5000, startTime.getTime() + 15000]);
 	});
 });
+
+describe("GitHub Copilot availability refresh", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("re-reads the account model catalog for the stored access token", async () => {
+		const pickerModelId = requireModelId(githubCopilotProvider().getModels(), 0);
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: unknown) => {
+				expect(getUrl(input)).toBe(testCopilotModelsUrl);
+				return jsonResponse({
+					data: [
+						{ id: pickerModelId, model_picker_enabled: true, capabilities: { supports: { tool_calls: true } } },
+					],
+				});
+			}),
+		);
+
+		const credential = {
+			type: "oauth" as const,
+			access: testCopilotAccessToken,
+			refresh: "ghu_refresh",
+			expires: Date.now() + 60_000,
+			availableModelIds: ["stale-model"],
+		};
+		await expect(githubCopilotOAuth.refreshAvailability?.(credential, neverAbortedSignal)).resolves.toMatchObject({
+			access: testCopilotAccessToken,
+			availableModelIds: [pickerModelId],
+		});
+	});
+
+	it("rejects when the catalog request fails so the stored list is kept", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => jsonResponse({ message: "boom" }, 500)),
+		);
+		await expect(
+			githubCopilotOAuth.refreshAvailability?.(
+				{ type: "oauth", access: testCopilotAccessToken, refresh: "ghu_refresh", expires: 0 },
+				neverAbortedSignal,
+			),
+		).rejects.toThrow(/500/);
+	});
+});

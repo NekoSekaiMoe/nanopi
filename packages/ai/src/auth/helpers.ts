@@ -55,5 +55,11 @@ export function lazyOAuth(input: {
 		login: async (interaction, options) => (await loaded()).login(interaction, options),
 		refresh: async (credential, signal) => (await loaded()).refresh(credential, signal),
 		toAuth: async (credential) => (await loaded()).toAuth(credential),
+		refreshAvailability: async (credential, signal) => {
+			const flow = await loaded();
+			// Flows without availability re-resolution keep the stored credential unchanged.
+			if (!flow.refreshAvailability) return credential;
+			return flow.refreshAvailability(credential, signal);
+		},
 	};
 }

@@ -144,7 +144,9 @@ describe("OpenAI ChatGPT OAuth", () => {
 		const exchangeBodies: URLSearchParams[] = [];
 		let tokenCall = 0;
 		const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
-			expect(input instanceof Request ? input.url : String(input)).toBe(TOKEN_URL);
+			const url = input instanceof Request ? input.url : String(input);
+			// The account model catalog request follows a successful exchange; it is not a token call.
+			if (url !== TOKEN_URL) return jsonResponse({ models: [{ id: "gpt-5.5" }] });
 			exchangeBodies.push(new URLSearchParams(String(init?.body)));
 			tokenCall += 1;
 			return tokenCall === 1 ? jsonResponse({ error: "invalid_grant" }, 400) : jsonResponse(tokenResponse());
@@ -165,10 +167,11 @@ describe("OpenAI ChatGPT OAuth", () => {
 		expect(authorizeUrls[1]?.searchParams.get("client_id")).toBe("oaiapp_issued");
 		expect(authorizeUrls[1]?.searchParams.get("agent_name_hint")).toBeNull();
 		expect(authorizeUrls[0]?.searchParams.get("state")).not.toBe(authorizeUrls[1]?.searchParams.get("state"));
-		expect(fetchMock).toHaveBeenCalledTimes(2);
+		expect(exchangeBodies).toHaveLength(2);
 		expect(exchangeBodies[0]?.get("client_id")).toBe("oaiapp_issued");
 		expect(exchangeBodies[1]?.get("client_id")).toBe("oaiapp_issued");
 		expect(credential.access).toBe("access-token");
+		expect(credential.modelIds).toEqual(["gpt-5.5"]);
 	});
 
 	it("does not restart authorization when the stored client ID itself is rejected", async () => {

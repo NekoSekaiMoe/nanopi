@@ -254,6 +254,15 @@ export interface OAuthAuth {
 	 * can load the implementation on first use.
 	 */
 	toAuth(credential: OAuthCredential): Promise<ModelAuth>;
+
+	/**
+	 * Re-resolve the account-specific model availability stored on the credential,
+	 * e.g. after a refresh that replaced the access token. Network call; `Models`
+	 * runs it during a network refresh under the store lock and treats failures as
+	 * non-fatal so the request path is never blocked. Without it the availability
+	 * captured at login goes stale for accounts whose plan or entitlements change.
+	 */
+	refreshAvailability?(credential: OAuthCredential, signal: AbortSignal): Promise<OAuthCredential>;
 }
 
 /**

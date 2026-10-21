@@ -3,6 +3,7 @@ import { defaultProviderAuthContext as defaultAuthContext } from "./auth/context
 import { InMemoryCredentialStore } from "./auth/credential-store.ts";
 import {
 	type AuthResolutionOverrides,
+	DEFAULT_OAUTH_REFRESH_TIMEOUT_MS,
 	ModelsError,
 	refreshStoredOAuthCredential,
 	resolveProviderAuth,
@@ -586,7 +587,10 @@ class ModelsImpl implements MutableModels {
 
 					const credential = await this.resolveRefreshCredential(provider, storedCredential, signal);
 					if (!credential) return;
-					await this.runProviderRefreshPhase(provider, credential, true, options.force, generation, signal);
+					// Availability runs after the token refresh so it can use the rotated access token,
+					// and before the catalog phase so filters see fresh account availability.
+					const refreshed = await this.refreshCredentialAvailability(provider, credential, signal);
+					await this.runProviderRefreshPhase(provider, refreshed, true, options.force, generation, signal);
 				})();
 
 				try {
@@ -644,6 +648,46 @@ class ModelsImpl implements MutableModels {
 		const result = await apiKey.resolve({ ctx: this.authContext, credential, signal });
 		if (!result) return undefined;
 		return { type: "api_key", key: result.auth.apiKey, env: result.env };
+	}
+
+	/**
+	 * Re-resolve account model availability that the provider stores on the credential.
+	 * Best effort: a failure keeps the stored availability so the catalog still refreshes.
+	 */
+	private async refreshCredentialAvailability(
+		provider: Provider,
+		credential: Credential,
+		signal: AbortSignal,
+	): Promise<Credential> {
+		const oauth = provider.auth.oauth;
+		const refreshAvailability = oauth?.refreshAvailability;
+		if (credential.type !== "oauth" || !refreshAvailability || signal.aborted) return credential;
+		const lockWait = new AbortController();
+		const cancelLockWait = () => lockWait.abort(signal.reason);
+		signal.addEventListener("abort", cancelLockWait, { once: true });
+		if (signal.aborted) cancelLockWait();
+		try {
+			const updated = await this.credentials.modify(
+				provider.id,
+				async (current) => {
+					signal.removeEventListener("abort", cancelLockWait);
+					if (current?.type !== "oauth") return undefined; // logged out meanwhile
+					// A credential replaced since the token resolution is already newer than this pass.
+					if (current.access !== credential.access) return undefined;
+					try {
+						return await refreshAvailability(current, AbortSignal.timeout(DEFAULT_OAUTH_REFRESH_TIMEOUT_MS));
+					} catch {
+						return undefined;
+					}
+				},
+				{ signal: lockWait.signal },
+			);
+			return updated?.type === "oauth" ? updated : credential;
+		} catch {
+			return credential;
+		} finally {
+			signal.removeEventListener("abort", cancelLockWait);
+		}
 	}
 
 	private async readCredential(providerId: string, signal: AbortSignal): Promise<Credential | undefined> {
@@ -711,7 +755,12 @@ class ModelsImpl implements MutableModels {
 			const providers = await this.getAuthenticatedProviders(providerId, signal);
 			return providers.flatMap(({ provider, credential }) => {
 				const models = provider.getModels();
-				return provider.filterModels?.(models, credential) ?? models;
+				if (provider.filterModels) return provider.filterModels(models, credential);
+				if (!provider.filterAllModels) return models;
+				// Keep chat models that a provider's every-type policy still allows, so OpenAI and
+				// GitHub Copilot restrict their chat list to what the signed-in account can use.
+				const allowedIds = new Set(provider.filterAllModels(models, credential).map((model) => model.id));
+				return models.filter((model) => allowedIds.has(model.id));
 			});
 		})();
 		return raceWithAbortSignal(available, signal);
