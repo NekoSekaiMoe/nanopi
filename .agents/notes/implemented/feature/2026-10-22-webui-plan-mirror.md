@@ -74,20 +74,41 @@ Localization follows the existing `t()` table (`步骤`, `验证`, `展开步骤
   shared, mode-independent source of truth (issue #152's own analysis pointed
   at `tool_result.details.todos`).
 
+## Rebuilding the plan on load (follow-up)
+
+The first round left the plan absent for a session reloaded from disk, because
+`/projects/:hash/sessions/:id` returns messages without tool `details`. The
+endpoint now derives it: `planFromSessionEntries(entries)` walks the recorded
+branch and returns the last `todo` result whose `details` has a plan shape.
+
+The log is a tree, and `parseSessionEntries` returns every line. Walking it in
+file order would surface a plan from an abandoned branch, so the branch is
+rebuilt from `parentId` links, starting at the last entry (the leaf, matching
+`SessionManager.buildSessionPath`). Results record no tool name, only a
+`toolCallId`, so "is this a plan?" is asked of the shape: `planSnapshotOf`
+returns `undefined` for anything that is not `details.todos`, and the walk
+skips those instead of stopping.
+
+An empty list is meaningful — the model cleared its plan — so it wins over any
+earlier result rather than falling through. A `context_edit` replaces a
+message's content but leaves the details, so an edited-away `todo` result is
+still in the log; those call ids are dropped before the walk, newest edit first,
+which keeps the newest decision when one target is edited twice.
+
+The frontend needed one line: `loadSession` seeds the hook's `plan` from
+`detail.plan`, which is the same state the live `tool_result` events replace.
+
 ## Consequences
 
 - The plan is visible in the browser while it is being executed, which is what
-  makes step creation on the webui usable at all.
-- The plan is a snapshot of the last `todo` result, so a transcript reloaded
-  from disk shows no plan until the next `todo` call. Rebuilding it from the
-  session history was out of scope: `/projects/:hash/sessions/:id` does not
-  carry tool `details`, so the endpoint would have to re-derive them from the
-  message log.
+  makes step creation on the webui usable at all, and it survives a reload
+  because the transcript is now read for it.
 - Two shapes now describe a plan (`details.todos` in the tool, `plan` on the
   wire). They are deliberately similar but separately typed, so the browser
   does not import the extension's module types; the initializer in
   `planSnapshotOf` is the single place the mapping is written.
 - Testing: `test/webui-plan-snapshot.test.ts` covers mirroring, the `clear`
-  snapshot, non-plan tools, and malformed rows. `pnpm run check` covers types
-  and the browser smoke check; the card was verified visually against a live
-  webui session.
+  snapshot, non-plan tools, and malformed rows; `test/webui-plan-history.test.ts`
+  covers the log derivation (branch order, edits, empty plan, shapeless
+  results, malformed rows). `pnpm run check` covers types and the browser smoke
+  check; the card was verified visually against a live webui session.

@@ -238,4 +238,33 @@ describe("webui session detail", () => {
 		expect(replies.length).toBeGreaterThan(0);
 		expect(replies.every((reply) => reply.provider === "faux/beta")).toBe(true);
 	});
+
+	it("derives the plan from the transcript", async () => {
+		// The plan lands in the log as tool details, which the messages drop, so
+		// the endpoint carries it as its own field; without it a reloaded session
+		// shows no plan until the next todo call (issue #152).
+		await turn("faux/beta");
+		const manager = runtime?.session.sessionManager;
+		manager?.appendMessage({
+			role: "toolResult",
+			toolCallId: "call-plan",
+			toolName: "todo",
+			content: [{ type: "text", text: "Added 2 todos" }],
+			details: {
+				action: "add",
+				todos: [
+					{ id: 1, text: "collect the log", status: "completed" },
+					{ id: 2, text: "derive the plan", status: "in_progress" },
+				],
+			},
+			isError: false,
+			timestamp: Date.now(),
+		});
+		const file = runtime?.session.sessionFile as string;
+		const { plan } = readSessionMessages(await readFile(file, "utf8"));
+		expect(plan).toEqual([
+			{ id: 1, text: "collect the log", status: "completed" },
+			{ id: 2, text: "derive the plan", status: "in_progress" },
+		]);
+	});
 });
