@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261022]
 
 ### Added
 - Added `RetryPolicy.nonRetryableErrorPatterns` and the `options` argument of `isRetryableAssistantError(message, options)`: extra case-insensitive substrings that classify an error as terminal without widening the built-in retry classifier, for gateways whose quota or limit wording the built-in patterns do not cover

@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261022]
 
 ### Added
 
@@ -15,7 +15,7 @@
 
 - Mode badges (red `yolo`, green `plan`) were invisible in the default TUI: `ctx.ui.setFooter()` is a replacing setter and pi-ui installs its own footer later in every session start, silently dropping the extra's badge footer. Badges now flow through the `ctx.ui.setStatus()` channel under the `mode` key, with colors embedded by the producer via `theme.fg()`, and render right-aligned in whatever footer is installed.
 
-### Changed
+### Removed
 
 - Removed the `createBadgeFooter`/`renderFooterLine`/`renderBadges` exports (`src/footer.ts`); `src/badges.ts` exports `modeBadgeText` and `badgeLabels` instead, and the extension no longer calls `ctx.ui.setFooter()`.
 

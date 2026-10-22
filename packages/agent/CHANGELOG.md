@@ -1,6 +1,6 @@
 # Changelog
 
-## [Unreleased]
+## [20261022]
 
 ### Added
 - Added the `prepareInput` loop hook: it sees each non-empty input batch before that batch's `message_start`/`message_end` events and before the context append, so preparation that depends on the pending input can run first. A failure or abort still delivers the batch

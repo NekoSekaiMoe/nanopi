@@ -1,6 +1,6 @@
 {
 	"name": "@nanopi/pi-extra",
-	"version": "20261013.0.0",
+	"version": "20261022.0.0",
 	"description": "Run modes, permission gating, subsystem toggles, ENV overrides, and webui bridge module for nanopi",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -23,7 +23,7 @@
 		"prepublishOnly": "pnpm run build"
 	},
 	"dependencies": {
-		"@nanopi/pi-tui": "^20261013.0.0"
+		"@nanopi/pi-tui": "^20261022.0.0"
 	},
 	"devDependencies": {
 		"@types/node": "22.19.19",
