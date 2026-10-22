@@ -483,6 +483,8 @@ export class AgentSession {
 	private _agentRunAbortRequested = false;
 	private _idleWaitPromise: Promise<void> | undefined;
 	private _resolveIdleWait: (() => void) | undefined;
+	/** Set from `_startRun` until `agent.prompt()` is under way: a run exists, but has no stream to steer yet. */
+	private _isAgentPromptPending = false;
 
 	/** Tracks pending steering messages for UI display. Removed when delivered. */
 	private _steeringMessages: string[] = [];
@@ -492,6 +494,8 @@ export class AgentSession {
 	private _pendingNextTurnMessages: CustomMessage[] = [];
 	/** Context-only custom messages queued during a run, flushed once the current turn's tool results are in. */
 	private _pendingCustomMessages: CustomMessage[] = [];
+	/** Messages delivered while a run was starting, joined to that run's first request. */
+	private _pendingStartingMessages: CustomMessage[] = [];
 
 	// Compaction state
 	private _compactionAbortController: AbortController | undefined = undefined;
@@ -1702,6 +1706,14 @@ export class AgentSession {
 		return !this._isAgentRunActive && !this.isCompacting;
 	}
 
+	/**
+	 * A run is starting but `agent.prompt()` has not been issued yet: nothing is streaming
+	 * and `prompt()` would reject, but a delivery can still be queued on that run.
+	 */
+	private _isRunStarting(): boolean {
+		return this._isAgentPromptPending;
+	}
+
 	/** Current effective system prompt, including changes not yet sent to the model. */
 	get systemPrompt(): string {
 		return buildSystemPrompt(this._runSystemPromptOptions ?? this._baseSystemPromptOptions);
@@ -2078,12 +2090,14 @@ export class AgentSession {
 	 */
 	private async _startRun(trigger: BeforeAgentStartTrigger, onStarted?: () => void): Promise<void> {
 		this._isAgentRunActive = true;
+		this._isAgentPromptPending = true;
 		this._agentRunAbortRequested = false;
 		let messages: AgentMessage[];
 		try {
 			messages = await this._prepareRun(trigger);
 		} catch (error) {
 			this._isAgentRunActive = false;
+			this._isAgentPromptPending = false;
 			this._flushPendingBashMessages();
 			this._flushPendingCustomMessages();
 			this._resolveIdleWaitIfIdle();
@@ -2101,8 +2115,14 @@ export class AgentSession {
 		// The run records the loadout in the transcript; restored tools that did not register by now
 		// are dropped, so a tool that never registers does not stay pending.
 		this._pendingToolNames.clear();
+		let promptIssued = false;
 		try {
-			await this.agent.prompt(messages);
+			const prompting = this.agent.prompt(messages);
+			// Past this point the agent owns the queue, so a delivery can steer or follow up
+			// instead of being rejected as a second concurrent prompt.
+			promptIssued = true;
+			this._isAgentPromptPending = false;
+			await prompting;
 			while (!this._agentRunAbortRequested) {
 				if (await this._handlePostAgentRun()) {
 					if (this._agentRunAbortRequested) break;
@@ -2114,6 +2134,8 @@ export class AgentSession {
 				await this.agent.continue();
 			}
 		} finally {
+			// A prompt that failed before reaching the agent leaves nothing to steer.
+			if (!promptIssued) this._isAgentPromptPending = false;
 			if (this._agentRunAbortRequested) this._finishCancelledRetry();
 			this._failedResponse = undefined;
 			this._lastRunForcedSystemPrompt = this._runSystemPromptOptions?.forceSystemPrompt;
@@ -2173,6 +2195,8 @@ export class AgentSession {
 		// Inject any pending "nextTurn" messages as context alongside the starting message
 		messages.push(...this._pendingNextTurnMessages);
 		this._pendingNextTurnMessages = [];
+		messages.push(...this._pendingStartingMessages);
+		this._pendingStartingMessages = [];
 		for (const msg of result.messages) {
 			messages.push({
 				role: "custom",
@@ -2596,11 +2620,12 @@ export class AgentSession {
 	/**
 	 * Send a custom message to the session. Creates a CustomMessageEntry.
 	 *
-	 * Handles four cases:
+	 * Handles five cases:
 	 * - Streaming: queues message, processed when loop pulls from queue
 	 * - Streaming + triggerTurn false: appended to state/session once the current turn ends
 	 * - Not streaming + triggerTurn: appends to state/session, starts new turn
 	 * - Not streaming + no trigger: appends to state/session, no turn
+	 * - Queued run still starting (no agent stream yet): handed to that run, never rejected
 	 *
 	 * @param message Custom message with customType, content, display, details
 	 * @param options.triggerTurn If true and not streaming, triggers a new LLM turn
@@ -2621,6 +2646,12 @@ export class AgentSession {
 		} satisfies CustomMessage<T>;
 		if (options?.deliverAs === "nextTurn") {
 			this._pendingNextTurnMessages.push(appMessage);
+		} else if (this._isRunStarting()) {
+			// No stream to steer yet and `agent.prompt()` would reject a second run, so
+			// hold the message until the run's first request. `_startRun` drains this
+			// queue right before issuing the prompt; draining it here would push the
+			// message ahead of the run's own starting messages.
+			this._pendingStartingMessages.push(appMessage);
 		} else if (this.isStreaming && options?.triggerTurn !== false) {
 			if (options?.deliverAs === "followUp") {
 				this.agent.followUp(appMessage);
@@ -2642,6 +2673,44 @@ export class AgentSession {
 		} else {
 			this._appendCustomMessage(appMessage);
 		}
+	}
+
+	/**
+	 * Hand a custom message to the session and report how it landed.
+	 *
+	 * `sendCustomMessage` is fire-and-forget: it cannot say whether the message will start
+	 * a turn, join a running one, or wait for the user's next prompt. A producer whose only
+	 * output is that message (a background job's report) has to know which, because a turn
+	 * started with nobody attached to it is a report the frontend never shows.
+	 *
+	 * With `startTurn` it starts a turn only when the session is idle, so a delivery that
+	 * races a settling turn is queued for the next prompt instead of colliding with it.
+	 *
+	 * @returns "started" - a turn is running that this call started
+	 *          "queued"  - another run will deliver it (steering, follow-up, or a run still starting)
+	 *          "pending" - it waits in the transcript until the next prompt, which will carry it
+	 */
+	async deliverCustomMessage<T = unknown>(
+		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+		options?: { startTurn?: boolean; deliverAs?: "steer" | "followUp" },
+	): Promise<"started" | "queued" | "pending"> {
+		const busy = this.isStreaming || this._isRunStarting();
+		if (options?.startTurn && !busy && !this.isCompacting) {
+			// Starting the run is not awaited: a custom message starts an agent run, and a
+			// run only ends when a model stops asking for tools. Awaiting it here would turn
+			// a fire-and-forget delivery into a wait on the whole turn.
+			this.sendCustomMessage(message, { triggerTurn: true, deliverAs: options.deliverAs }).catch((error) => {
+				// The message is the producer's only output: a start that throws must say so.
+				throw error;
+			});
+			return "started";
+		}
+		if (busy) {
+			await this.sendCustomMessage(message, { triggerTurn: true, deliverAs: options?.deliverAs ?? "followUp" });
+			return "queued";
+		}
+		await this.sendCustomMessage(message, { deliverAs: "nextTurn" });
+		return "pending";
 	}
 
 	private _appendCustomMessage(appMessage: CustomMessage): void {
@@ -3796,6 +3865,7 @@ export class AgentSession {
 						});
 					});
 				},
+				deliverMessage: (message, options) => this.deliverCustomMessage(message, options),
 				sendUserMessage: (content, options) => {
 					this.sendUserMessage(content, options).catch((err) => {
 						runner.emitError({

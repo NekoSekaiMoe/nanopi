@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
 	type ApprovalMode,
 	type ImageData,
@@ -10,6 +10,7 @@ import {
 	type UserInputRequestEvent,
 	type UserInputResponse,
 	createSession,
+	getChatActive,
 	getSession,
 	postChatUserInput,
 	respondPermission,
@@ -325,6 +326,165 @@ export function useChat({
 		}
 	}, [setCurrentSession, detachStream]);
 
+	const onSseEvent = (
+		event: SSEEvent,
+		generation: number,
+		targetSession: string | null,
+	): void => {
+		if (generationRef.current !== generation) return;
+		switch (event.type) {
+			case "session_assigned": {
+				setCurrentSession(event.session_id);
+				try {
+					const url = new URL(window.location.href);
+					url.searchParams.set("session", event.session_id.slice(0, 8));
+					window.history.replaceState(null, "", url.toString());
+				} catch {
+					/* ignore */
+				}
+				break;
+			}
+			case "text":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) =>
+						appendStreamBlock(blocks, "text", event.content),
+					),
+				);
+				break;
+			case "reasoning":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) =>
+						appendStreamBlock(blocks, "reasoning", event.content),
+					),
+				);
+				break;
+			case "tool_start":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) => [
+						...blocks,
+						{
+							kind: "tool",
+							id: event.id,
+							name: event.name,
+							args: event.arguments,
+							display: "",
+							output: "",
+							status: "running",
+						},
+					]),
+				);
+				break;
+			case "tool_output":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) =>
+						appendToolOutput(blocks, event.chunk),
+					),
+				);
+				break;
+			case "tool_progress":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) => {
+						for (let index = blocks.length - 1; index >= 0; index -= 1) {
+							const block = blocks[index];
+							if (block.kind === "tool" && block.id === event.id) {
+								const copy = [...blocks];
+								copy[index] = { ...block, progress: event.progress };
+								return copy;
+							}
+						}
+						return blocks;
+					}),
+				);
+				break;
+			case "tool_result":
+				// Plan snapshots ride on the todo tool's result; keep the
+				// latest one instead of deriving it from the transcript.
+				if (event.plan) setPlan(event.plan);
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) => finishTool(blocks, event)),
+				);
+				break;
+			case "artifact_start":
+				artifactRef.current = { lang: event.language ?? "", buffer: "" };
+				break;
+			case "artifact_content":
+				if (artifactRef.current) artifactRef.current.buffer += event.content;
+				break;
+			case "artifact_end": {
+				const artifact = artifactRef.current;
+				artifactRef.current = null;
+				if (!artifact) break;
+				const fence = "```";
+				const block = `\n\n${fence}${artifact.lang}\n${artifact.buffer}\n${fence}\n\n`;
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) =>
+						appendStreamBlock(blocks, "text", block),
+					),
+				);
+				break;
+			}
+			case "command_output":
+				setMessages((current) =>
+					updateLastAssistant(current, (blocks) =>
+						appendStreamBlock(blocks, "text", `\n\n${event.text}\n\n`),
+					),
+				);
+				break;
+			case "permission_request":
+				setPermission({
+					sessionId: event.session_id || targetSession || "",
+					toolName: event.tool_name,
+					reason: event.reason,
+					callId: event.call_id,
+					args: event.arguments,
+					allowAllBash: event.allow_all_bash,
+				});
+				break;
+			case "user_input_request":
+				setUserInput(event);
+				break;
+			case "warning":
+				setNotice(event.message);
+				break;
+			case "persistence_warning":
+				setNotice(event.message);
+				break;
+			case "rate_limited":
+				setNotice(event.message ?? t("请求过于频繁，请稍后再试"));
+				break;
+			case "error":
+				// The backend forwards the provider status; show it as is.
+				// `retrying` means the runtime may recover, which the
+				// composer reflects instead of a stuck "thinking" state.
+				setError({
+					message: event.message,
+					code: event.code,
+					retrying: event.retrying === true,
+				});
+				break;
+			case "retry":
+				setNotice(
+					`${t("重试中")} (${event.attempt}/${event.max_attempts}) · ${event.message}`,
+				);
+				break;
+			case "stopped":
+				setStreaming(false);
+				break;
+			case "done":
+				setStreaming(false);
+				setPermission(null);
+				setUserInput(null);
+				window.setTimeout(onSessionsChanged, 250);
+				if (event.stop_reason === "error" && event.message) {
+					setError({ message: event.message, code: event.code, retrying: false });
+				}
+				onTurnDone?.();
+				break;
+			default:
+				break;
+		}
+	};
+
 	const send = useCallback(
 		async (text: string, images: ImageData[] = []) => {
 			const trimmed = text.trim();
@@ -382,160 +542,7 @@ export function useChat({
 						images: images.length ? images : undefined,
 						approval_mode: approvalMode,
 					},
-					(event: SSEEvent) => {
-						if (generationRef.current !== generation) return;
-						switch (event.type) {
-							case "session_assigned": {
-								setCurrentSession(event.session_id);
-								try {
-									const url = new URL(window.location.href);
-									url.searchParams.set("session", event.session_id.slice(0, 8));
-									window.history.replaceState(null, "", url.toString());
-								} catch {
-									/* ignore */
-								}
-								break;
-							}
-							case "text":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) =>
-										appendStreamBlock(blocks, "text", event.content),
-									),
-								);
-								break;
-							case "reasoning":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) =>
-										appendStreamBlock(blocks, "reasoning", event.content),
-									),
-								);
-								break;
-							case "tool_start":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) => [
-										...blocks,
-										{
-											kind: "tool",
-											id: event.id,
-											name: event.name,
-											args: event.arguments,
-											display: "",
-											output: "",
-											status: "running",
-										},
-									]),
-								);
-								break;
-							case "tool_output":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) =>
-										appendToolOutput(blocks, event.chunk),
-									),
-								);
-								break;
-							case "tool_progress":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) => {
-										for (let index = blocks.length - 1; index >= 0; index -= 1) {
-											const block = blocks[index];
-											if (block.kind === "tool" && block.id === event.id) {
-												const copy = [...blocks];
-												copy[index] = { ...block, progress: event.progress };
-												return copy;
-											}
-										}
-										return blocks;
-									}),
-								);
-								break;
-							case "tool_result":
-								// Plan snapshots ride on the todo tool's result; keep the
-								// latest one instead of deriving it from the transcript.
-								if (event.plan) setPlan(event.plan);
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) => finishTool(blocks, event)),
-								);
-								break;
-							case "artifact_start":
-								artifactRef.current = { lang: event.language ?? "", buffer: "" };
-								break;
-							case "artifact_content":
-								if (artifactRef.current) artifactRef.current.buffer += event.content;
-								break;
-							case "artifact_end": {
-								const artifact = artifactRef.current;
-								artifactRef.current = null;
-								if (!artifact) break;
-								const fence = "```";
-								const block = `\n\n${fence}${artifact.lang}\n${artifact.buffer}\n${fence}\n\n`;
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) =>
-										appendStreamBlock(blocks, "text", block),
-									),
-								);
-								break;
-							}
-							case "command_output":
-								setMessages((current) =>
-									updateLastAssistant(current, (blocks) =>
-										appendStreamBlock(blocks, "text", `\n\n${event.text}\n\n`),
-									),
-								);
-								break;
-							case "permission_request":
-								setPermission({
-									sessionId: event.session_id || targetSession || "",
-									toolName: event.tool_name,
-									reason: event.reason,
-									callId: event.call_id,
-									args: event.arguments,
-									allowAllBash: event.allow_all_bash,
-								});
-								break;
-							case "user_input_request":
-								setUserInput(event);
-								break;
-							case "warning":
-								setNotice(event.message);
-								break;
-							case "persistence_warning":
-								setNotice(event.message);
-								break;
-							case "rate_limited":
-								setNotice(event.message ?? t("请求过于频繁，请稍后再试"));
-								break;
-							case "error":
-								// The backend forwards the provider status; show it as is.
-								// `retrying` means the runtime may recover, which the
-								// composer reflects instead of a stuck "thinking" state.
-								setError({
-									message: event.message,
-									code: event.code,
-									retrying: event.retrying === true,
-								});
-								break;
-							case "retry":
-								setNotice(
-									`${t("重试中")} (${event.attempt}/${event.max_attempts}) · ${event.message}`,
-								);
-								break;
-							case "stopped":
-								setStreaming(false);
-								break;
-							case "done":
-								setStreaming(false);
-								setPermission(null);
-								setUserInput(null);
-								window.setTimeout(onSessionsChanged, 250);
-								if (event.stop_reason === "error" && event.message) {
-									setError({ message: event.message, code: event.code, retrying: false });
-								}
-								onTurnDone?.();
-								break;
-							default:
-								break;
-						}
-					},
+					(event: SSEEvent) => onSseEvent(event, generation, targetSession),
 					controller.signal,
 				);
 			} catch (cause) {
@@ -567,6 +574,55 @@ export function useChat({
 			workingDir,
 		],
 	);
+
+	/**
+	 * Follow a turn this tab did not ask for.
+	 *
+	 * A background turn (a job reporting in, a prompt queued behind the running one)
+	 * has no HTTP response behind it: its events go nowhere, so the report only lands
+	 * in the transcript and the chat sits unchanged until a reload. Polling
+	 * `/chat/active` catches the start, and a session reload is what turns a settled
+	 * turn into what the user sees. While a local turn streams, its own SSE handler
+	 * already updates the view.
+	 */
+	const backgroundWatchRef = useRef<{ busy: boolean; generation: number }>({ busy: false, generation: -1 });
+	useEffect(() => {
+		if (streaming) {
+			backgroundWatchRef.current = { busy: false, generation: generationRef.current };
+			return;
+		}
+		let cancelled = false;
+		let timer: number | undefined;
+		const tick = () => {
+			void getChatActive()
+				.then((sessions) => {
+					if (cancelled) return;
+					const active = sessions.length > 0;
+					const previous = backgroundWatchRef.current;
+					if (previous.busy && !active && previous.generation === generationRef.current) {
+						// The background turn just settled: reload the transcript it wrote.
+						const id = sessionIdRef.current;
+						if (id) void loadSession(id);
+						onSessionsChanged();
+					}
+					backgroundWatchRef.current = {
+						busy: active,
+						generation: active ? generationRef.current : backgroundWatchRef.current.generation,
+					};
+				})
+				.catch(() => {
+					/* a poll that fails is not worth a banner */
+				})
+				.finally(() => {
+					if (!cancelled) timer = window.setTimeout(tick, 2000);
+				});
+		};
+		timer = window.setTimeout(tick, 1500);
+		return () => {
+			cancelled = true;
+			if (timer !== undefined) window.clearTimeout(timer);
+		};
+	}, [streaming, loadSession, onSessionsChanged]);
 
 	const stop = useCallback(async () => {
 		const alias = requestIdRef.current;

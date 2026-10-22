@@ -371,6 +371,7 @@ export class ModuleRegistry {
 	): void {
 		// Copy actions into the shared runtime (all extension APIs reference this)
 		this.runtime.sendMessage = actions.sendMessage;
+		this.runtime.deliverMessage = actions.deliverMessage;
 		this.runtime.sendUserMessage = actions.sendUserMessage;
 		this.runtime.appendEntry = actions.appendEntry;
 		this.runtime.setSessionName = actions.setSessionName;
@@ -1312,6 +1313,7 @@ export function createModuleRuntime(): ModuleRuntime {
 
 	const runtime: ModuleRuntime = {
 		sendMessage: notInitialized,
+		deliverMessage: notInitialized,
 		sendUserMessage: notInitialized,
 		appendEntry: notInitialized,
 		setSessionName: notInitialized,
@@ -1489,6 +1491,10 @@ function createModuleApi(
 		// Action methods - delegate to shared runtime
 		sendMessage(message, options): void {
 			runtime.sendMessage(message, options);
+		},
+
+		deliverMessage(message, options): Promise<"started" | "queued" | "pending"> {
+			return runtime.deliverMessage(message, options);
 		},
 
 		sendUserMessage(content, options): void {

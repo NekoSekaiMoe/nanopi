@@ -14,6 +14,10 @@
 
 ### Fixed
 
+- Fixed `pi-subagent-mini` losing a finished child's report. The report was sent as a steering message, but `isStreaming` is already false while the run is settling, so the delivery fell through to a second `agent.prompt()` that rejected on the run in flight and was caught and dropped. `AgentSession` now exposes `deliverCustomMessage()`, which starts a turn only when the session is idle and reports whether the message was started, queued, or left pending; the tool no longer starts a turn nobody can read
+- Fixed the webui showing nothing for a report that arrived through the busy branch: `/chat` answered 409 while a turn ran, so a background delivery had no reader. `/chat` accepts `queue: true`, parks the prompt and runs it when the running turn settles, and the webui polls `/chat/active` to reload the transcript a background turn wrote ([#162](https://cnb.cool/shinytale/nanopi/-/issues/162))
+- Fixed a `pi-subagent-mini` child starting from an empty 1.7k-token context every round: children now run with their own session file and `action: "continue"` appends to it, carrying the previous report forward
+- Fixed `pi-subagent-mini` leaving `dependsOn`, `isolated`, and `onFailure` to the model's self-restraint: `spawn` accepts `dependsOn` (start condition is every dependency settled, a failed dependency blocks the dependent), `isolated: true` (the tool creates and removes the git worktree, so no path is copied by hand), and `onFailure: "retry" | "report"` with a fixed 3-attempt limit
 - Fixed the `grep` tool following `RIPGREP_CONFIG_PATH`, where options such as `--fixed-strings` silently changed regex searches into literal ones. The tool now runs `rg --no-config` ([#11203](https://github.com/earendil-works/pi/issues/11203)).
 - Fixed `mcp.json` files that start with a UTF-8 BOM failing to parse, which silently skipped every server and the `discovery` block ([#11191](https://github.com/earendil-works/pi/issues/11191)).
 - Fixed `/compact <instructions>` being ignored when compaction splits a turn and the split turn is the only new content ([#11058](https://github.com/earendil-works/pi/issues/11058)).
