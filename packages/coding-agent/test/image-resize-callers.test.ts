@@ -24,7 +24,7 @@ describe("image resize callers", () => {
 		testDir = join(tmpdir(), `image-resize-callers-${Date.now()}`);
 		mkdirSync(testDir, { recursive: true });
 		vi.mocked(resizeImage).mockReset();
-		vi.mocked(resizeImage).mockResolvedValue(null);
+		vi.mocked(resizeImage).mockResolvedValue({ ok: false, reason: "too-large" });
 	});
 
 	afterEach(() => {
@@ -40,7 +40,9 @@ describe("image resize callers", () => {
 
 		expect(result.content).toHaveLength(1);
 		expect(result.content[0].type).toBe("text");
-		expect((result.content[0] as { type: "text"; text: string }).text).toContain("Image omitted");
+		expect((result.content[0] as { type: "text"; text: string }).text).toContain(
+			"could not be resized below the inline image size limit",
+		);
 	});
 
 	it("file processor omits image attachments when auto-resize cannot produce a safe image", async () => {

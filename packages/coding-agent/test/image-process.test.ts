@@ -1,6 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { processImage } from "../src/utils/image-process.ts";
 import { detectSupportedImageMimeType } from "../src/utils/mime.ts";
+import * as photon from "../src/utils/photon.ts";
+
+const TINY_PNG = Buffer.from(
+	"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==",
+	"base64",
+);
 
 function createTinyBmp1x1Red24bpp(): Buffer {
 	const buffer = Buffer.alloc(58);
@@ -53,5 +59,30 @@ describe("image processing pipeline", () => {
 		expect(result.mimeType).toBe("image/png");
 		expect(result.hints).toContain("[Image converted from image/bmp to image/png.]");
 		expectPngMagic(result.data);
+	});
+
+	it("blames the missing image backend instead of the format when nothing can decode", async () => {
+		// A format with no passthrough support needs photon to convert; without it the failure is
+		// about the backend, not the format.
+		vi.spyOn(photon, "loadPhoton").mockResolvedValue(null);
+		try {
+			const result = await processImage(createTinyBmp1x1Red24bpp(), "image/bmp");
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.reason).toBe("photon-unavailable");
+			expect(result.message).toContain("image backend is unavailable");
+		} finally {
+			vi.restoreAllMocks();
+		}
+	});
+
+	it("reports too-large with the byte budget when resizing cannot reach the limit", async () => {
+		const result = await processImage(TINY_PNG, "image/png", { resizeOptions: { maxBytes: 1 } });
+
+		expect(result.ok).toBe(false);
+		if (result.ok) return;
+		expect(result.reason).toBe("too-large");
+		expect(result.message).toContain("limit of 1 bytes");
 	});
 });

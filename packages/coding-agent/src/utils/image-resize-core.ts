@@ -8,6 +8,14 @@ export interface ImageResizeOptions {
 	jpegQuality?: number; // Default: 80
 }
 
+/**
+ * Why `resizeImageInProcess` produced no image. Callers use this to tell "the image is too large"
+ * apart from "the image backend is unavailable", which need different user-facing messages.
+ */
+export type ImageResizeFailureReason = "photon-unavailable" | "decode-failed" | "too-large";
+
+export type ImageResizeResult = { ok: true; image: ResizedImage } | { ok: false; reason: ImageResizeFailureReason };
+
 export interface ResizedImage {
 	data: string; // base64
 	mimeType: string;
@@ -25,7 +33,7 @@ export interface ResizedImage {
 export const IMAGE_RESIZE_WORKER_RESPONSE_TYPE = "nanopi:image-resize-response";
 
 export type ResizeImageWorkerResponse =
-	| { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; result: ResizedImage | null }
+	| { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; result: ImageResizeResult }
 	| { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; error: string };
 
 // 4.5MB of base64 payload. Provides headroom below Anthropic's 5MB limit.
@@ -55,10 +63,10 @@ function encodeCandidate(buffer: Uint8Array, mimeType: string): EncodedCandidate
 
 /**
  * Resize an image to fit within the specified max dimensions and encoded file size.
- * Returns null if the image cannot be resized below maxBytes.
+ * Returns the failure reason instead of null when no image is produced.
  *
  * Uses Photon (Rust/WASM) for image processing. If Photon is not available,
- * returns null.
+ * fails with `photon-unavailable`.
  *
  * Strategy for staying under maxBytes:
  * 1. First resize to maxWidth/maxHeight
@@ -70,13 +78,13 @@ export async function resizeImageInProcess(
 	inputBytes: Uint8Array,
 	mimeType: string,
 	options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+): Promise<ImageResizeResult> {
 	const opts = { ...DEFAULT_OPTIONS, ...options };
 	const inputBase64Size = Math.ceil(inputBytes.byteLength / 3) * 4;
 
 	const photon = await loadPhoton();
 	if (!photon) {
-		return null;
+		return { ok: false, reason: "photon-unavailable" };
 	}
 
 	let image: ReturnType<typeof photon.PhotonImage.new_from_byteslice> | undefined;
@@ -92,13 +100,16 @@ export async function resizeImageInProcess(
 		// Check if already within all limits (dimensions AND encoded size)
 		if (originalWidth <= opts.maxWidth && originalHeight <= opts.maxHeight && inputBase64Size < opts.maxBytes) {
 			return {
-				data: Buffer.from(inputBytes).toString("base64"),
-				mimeType: mimeType || `image/${format}`,
-				originalWidth,
-				originalHeight,
-				width: originalWidth,
-				height: originalHeight,
-				wasResized: false,
+				ok: true,
+				image: {
+					data: Buffer.from(inputBytes).toString("base64"),
+					mimeType: mimeType || `image/${format}`,
+					originalWidth,
+					originalHeight,
+					width: originalWidth,
+					height: originalHeight,
+					wasResized: false,
+				},
 			};
 		}
 
@@ -138,13 +149,16 @@ export async function resizeImageInProcess(
 			for (const candidate of candidates) {
 				if (candidate.encodedSize < opts.maxBytes) {
 					return {
-						data: candidate.data,
-						mimeType: candidate.mimeType,
-						originalWidth,
-						originalHeight,
-						width: currentWidth,
-						height: currentHeight,
-						wasResized: true,
+						ok: true,
+						image: {
+							data: candidate.data,
+							mimeType: candidate.mimeType,
+							originalWidth,
+							originalHeight,
+							width: currentWidth,
+							height: currentHeight,
+							wasResized: true,
+						},
 					};
 				}
 			}
@@ -163,9 +177,9 @@ export async function resizeImageInProcess(
 			currentHeight = nextHeight;
 		}
 
-		return null;
+		return { ok: false, reason: "too-large" };
 	} catch {
-		return null;
+		return { ok: false, reason: "decode-failed" };
 	} finally {
 		if (image) {
 			image.free();
