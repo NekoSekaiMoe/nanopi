@@ -30,8 +30,18 @@ const MAX_REPORT_CHARS = 6000;
 const MAX_ARCHIVE_CHARS = 16_000;
 /** A retrying job gets this many attempts in total; the limit is code, not a prompt. */
 const MAX_ATTEMPTS = 3;
-/** A failed dependency fails its dependents instead of letting them run on missing work. */
-const DEPENDENCY_STATUSES = new Set(["failed", "killed", "timeout", "blocked"]);
+/**
+ * `interrupted`: a job restored from the archive as still running. Its process is
+ * gone with the parent, so it is neither a success nor a failure the model caused.
+ */
+type JobStatus = "queued" | "blocked" | "running" | "completed" | "failed" | "killed" | "timeout" | "interrupted";
+/** Settled statuses that must not satisfy a dependent: its work never arrived. */
+const DEPENDENCY_STATUSES = new Set<string>(["failed", "killed", "timeout", "blocked", "interrupted"]);
+/**
+ * Statuses a restore still has to act on: `queued`/`blocked` can run, and `running`
+ * lost its process with the parent, so it becomes `interrupted`.
+ */
+const RESUMABLE_STATUSES = new Set<string>(["queued", "blocked", "running"]);
 const ARCHIVE_VERSION = 2;
 const ARCHIVE_TYPE = "subagent-job";
 /** Same widget key pi-subagents uses, so pi-ui's flat skin picks this up too. */
@@ -58,7 +68,8 @@ const DESCRIPTION_RESULT =
 const DESCRIPTION_TAIL =
 	"spawn returns a jobId immediately; keep working meanwhile and the report arrives as a subagent-complete notification. " +
 	"wait blocks (default 120s), status shows state, kill stops it, continue runs another turn on the same child session. " +
-	"`dependsOn` holds a job until the jobs it names settle, `isolated: true` gives it its own git worktree, " +
+	"`dependsOn` holds a job until the jobs it names settle and pastes their reports into its brief, " +
+	"`isolated: true` gives it its own git worktree, " +
 	"`onFailure: \"retry\"` retries up to 3 attempts. " +
 	"MCP tools (mcp__server__tool) exist only inside subagents and are not in the default child tool list: name them in `tools` when a child needs one. For a single MCP call use the `mcp` tool instead, which owns that brief.";
 
@@ -72,7 +83,7 @@ const DESCRIPTION_TAIL =
  */
 const CHILD_MODULE_SKIP = new Set(["pi-ui", "pi-rewind", "ask-lite", "todo-lite"]);
 
-interface Job {
+export interface Job {
 	id: string;
 	task: string;
 	tools: string;
@@ -100,7 +111,9 @@ interface Job {
 	lastReportSet?: boolean;
 	/** Clears the current attempt's timeout when it settles or is retried. */
 	cancelTimeout?: () => void;
-	status: "queued" | "blocked" | "running" | "completed" | "failed" | "killed" | "timeout";
+	/** True once the archive has recorded a settled job; a restore must not re-queue it. */
+	settledRecorded?: boolean;
+	status: JobStatus;
 	finalOutput: string;
 	errorMessage?: string;
 	usage?: { input: number; output: number };
@@ -118,6 +131,14 @@ type RestoredJob = {
 	id: string;
 	status: Job["status"];
 	task: string;
+	/** Edges of the graph: what this job waited for when it was archived. */
+	dependsOn?: string[];
+	/** A pending job's own tool/model/timeout, so a re-queued job keeps its shape. */
+	tools?: string;
+	model?: string;
+	timeoutSec?: number;
+	onFailure?: Job["onFailure"];
+	cwd?: string;
 	scope: string;
 	report: string;
 	sessionId?: string;
@@ -224,12 +245,42 @@ function clipReport(report: string): { text: string; truncated: boolean } {
 	return { text: `${head}\n…(clipped)…\n${tail}`, truncated: true };
 }
 
+/**
+ * The context a job starts with: the settled reports of the jobs it depends on,
+ * then its own brief.
+ *
+ * This is the same assembly `continue` already did for the previous round, moved
+ * to where the dependency edges are known. Without it the only way to hand B's
+ * output to C was for the main agent to copy B's report into C's brief by hand,
+ * one report per hop, and a clipped report silently lost the tail.
+ */
+export function dependentBrief(job: Job, jobs: Map<string, Job>): string {
+	const sections = job.dependsOn.map((id) => {
+		const dependency = jobs.get(id);
+		if (!dependency) return undefined;
+		const report = dependency.finalOutput || dependency.errorMessage || "";
+		if (!report.trim()) return `### ${id} (${dependency.status})
+(no report)`;
+		return `### ${id} (${dependency.status})
+${report.slice(-MAX_ARCHIVE_CHARS)}`;
+	});
+	const context = sections.filter((section) => section !== undefined);
+	if (context.length === 0) return job.task;
+	return `Context from the jobs this one depends on (verbatim reports):\n${context.join("\n\n")}\n\n${job.task}`;
+}
+
 /** Report arrives as a notification; the archive is also what survives /compact and restarts. */
 function archive(job: Job, scope: string): RestoredJob {
 	return {
 		id: job.id,
 		status: job.status,
 		task: job.task.slice(0, 2000),
+		dependsOn: job.dependsOn,
+		tools: job.tools,
+		model: job.model,
+		timeoutSec: job.timeoutSec,
+		onFailure: job.onFailure,
+		cwd: job.cwd,
 		scope,
 		report: job.finalOutput || job.errorMessage || "",
 		sessionId: job.sessionId,
@@ -252,6 +303,19 @@ function rootOf(id: string): string {
 
 function isPending(status: Job["status"]): boolean {
 	return status === "queued" || status === "blocked" || status === "running";
+}
+
+/** Start a new run on an existing job: its previous attempt's outcome no longer applies. */
+function resetForRun(job: Job): void {
+	job.attempts = 0;
+	job.currentJobId = job.id;
+	job.startedAt = Date.now();
+	job.errorMessage = undefined;
+	job.finalOutput = "";
+	job.durationMs = undefined;
+	job.done = new Promise<void>((resolve) => {
+		job.resolveDone = resolve;
+	});
 }
 
 export default function subagentMini(pi: ModuleApi): void {
@@ -401,10 +465,27 @@ export default function subagentMini(pi: ModuleApi): void {
 
 	/** Persist the settled job so /compact or a restart does not orphan it. */
 	const record = (job: Job, scope: string): void => {
+		job.settledRecorded = true;
 		try {
 			pi.appendEntry(ARCHIVE_TYPE, { version: ARCHIVE_VERSION, ...archive(job, scope) });
 		} catch {
 			// archive is best-effort; the notification already went out
+		}
+	};
+
+	/**
+	 * A settled job that the archive already holds, written again with a status the
+	 * session shutdown changed (`kill` is the single one that does this).
+	 *
+	 * Only a status change is worth an entry: the archive is append-only, and this
+	 * job's report was not delivered again, so re-persisting it would be noise.
+	 */
+	const rerecord = (job: Job, scope: string): void => {
+		if (!job.settledRecorded) return;
+		try {
+			pi.appendEntry(ARCHIVE_TYPE, { version: ARCHIVE_VERSION, ...archive(job, scope) });
+		} catch {
+			// same as record
 		}
 	};
 
@@ -586,13 +667,20 @@ export default function subagentMini(pi: ModuleApi): void {
 		job.cancelTimeout = () => clearTimeout(timer);
 	};
 
-	/** Jobs whose dependencies have all settled; a failed dependency blocks its dependents. */
+	/**
+	 * Jobs whose dependencies have all settled; a failed dependency blocks its dependents.
+	 *
+	 * A job already marked `blocked` is skipped: it is a settled outcome, and treating
+	 * it as work-in-progress again is what makes the loop below not terminate once a
+	 * dependency is settled-but-failed (its `pendingDependencies` is empty, so nothing
+	 * else would stop it from being re-blocked and re-notified on every pass).
+	 */
 	const releaseDependents = (baseCwd: string): void => {
 		let changed = true;
 		while (changed) {
 			changed = false;
 			for (const job of jobs.values()) {
-				if (job.status !== "queued" && job.status !== "blocked") continue;
+				if (job.status !== "queued") continue;
 				job.pendingDependencies = job.pendingDependencies.filter((id) => {
 					const dependency = jobs.get(id);
 					return dependency !== undefined && isPending(dependency.status);
@@ -605,11 +693,13 @@ export default function subagentMini(pi: ModuleApi): void {
 					job.status = "blocked";
 					job.errorMessage = `dependency ${failed.id} ${failed.status}`;
 					job.durationMs = Date.now() - job.startedAt;
+					// `notify` archives it; a second `record` would duplicate the entry.
 					notify(job, scopeOf(job.task));
-					record(job, scopeOf(job.task));
 					job.resolveDone();
 				} else {
-					launch(job, job.task, baseCwd);
+					// The edges are resolved here, so this is the one place where a
+					// dependent's brief can be assembled from reports instead of prose.
+					launch(job, dependentBrief(job, jobs), baseCwd);
 				}
 				changed = true;
 			}
@@ -682,7 +772,14 @@ export default function subagentMini(pi: ModuleApi): void {
 		return { ok: true, job };
 	};
 
-	/** Rebuild the job table from the session archive so /compact or a restart does not orphan past jobs. */
+	/**
+	 * Rebuild the job table from the session archive so /compact or a restart does not
+	 * orphan past jobs.
+	 *
+	 * The edges come back with the nodes: a dependency id that is archived but was
+	 * never restored would otherwise look like a job that can never settle, so the
+	 * pass below resolves every id against the table it just built.
+	 */
 	const restoreArchive = (ctx: Pick<ModuleContext, "sessionManager">): void => {
 		if (jobs.size > 0) return;
 		let restored = 0;
@@ -697,12 +794,12 @@ export default function subagentMini(pi: ModuleApi): void {
 			jobs.set(data.id, {
 				id: data.id,
 				task: data.task,
-				tools: DEFAULT_TOOLS,
-				model: undefined,
+				tools: data.tools ?? DEFAULT_TOOLS,
+				model: data.model,
 				modules: [],
-				timeoutSec: DEFAULT_TIMEOUT_SEC,
-				onFailure: "report",
-				dependsOn: [],
+				timeoutSec: data.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
+				onFailure: data.onFailure ?? "report",
+				dependsOn: data.dependsOn ?? [],
 				pendingDependencies: [],
 				currentJobId: data.id,
 				attempts: 1,
@@ -717,18 +814,64 @@ export default function subagentMini(pi: ModuleApi): void {
 				truncated: data.report.length > MAX_REPORT_CHARS,
 				startedAt: data.startedAt,
 				durationMs: data.durationMs,
+				settledRecorded: !RESUMABLE_STATUSES.has(data.status),
 				done: Promise.resolve(),
 				resolveDone: () => undefined,
 			});
 		}
-		if (restored > 0) refreshWidget();
+		if (restored === 0) return;
+		// Only the archive knows who was still waiting: recompute it against the table.
+		for (const job of jobs.values()) {
+			job.pendingDependencies = job.dependsOn.filter((id) => {
+				const dependency = jobs.get(id);
+				return dependency !== undefined && isPending(dependency.status);
+			});
+		}
+		refreshWidget();
+	};
+
+	/**
+	 * Hand a restored job that was still waiting back to the scheduler.
+	 *
+	 * The parent process died, so a job archived as `running` loses its `done`
+	 * promise and nothing will ever settle it: it becomes `interrupted`, which counts
+	 * as settled-but-not-succeeded for its dependents. A job archived as `queued` or
+	 * `blocked` never got that far, so it can run now with its brief intact. Nothing
+	 * here touches a settled job, so a restore never re-runs work that already ran.
+	 */
+	const resumeRestored = (baseCwd: string): void => {
+		const interrupted = [...jobs.values()].filter((job) => job.status === "running");
+		for (const job of interrupted) {
+			// The process is gone with the parent, so the report will never arrive: write
+			// the outcome down (the notification was never sent) and let its dependents
+			// see a settled failure instead of waiting on a `done` that cannot resolve.
+			job.status = "interrupted";
+			job.errorMessage = "interrupted: the parent session ended before this job settled";
+			job.durationMs = job.durationMs ?? Date.now() - job.startedAt;
+			// `notify` already archives the job once its report is delivered; a second
+			// `record` here would leave two entries for the same outcome.
+			notify(job, scopeOf(job.task));
+		}
+		// `queued` and `blocked` never started, so they can still run. `releaseDependents`
+		// decides which: it resolves the edges once against the table the restore built,
+		// so a job whose dependency was interrupted is blocked here rather than waiting.
+		const runnable = [...jobs.values()].filter((job) => job.status === "queued" || job.status === "blocked");
+		if (runnable.length === 0) return;
+		for (const job of runnable) resetForRun(job);
+		releaseDependents(baseCwd);
+		refreshWidget();
+		ensureWidgetTimer();
 	};
 
 	pi.on("session_start", async (event: SessionStartEvent, ctx) => {
 		uiRef = ctx.ui as typeof uiRef;
 		ctxSetStatus = (text) => ctx.ui.setStatus(WIDGET_KEY, text);
-		if (event.reason === "new") jobs.clear();
+		if (event.reason === "new") {
+			jobs.clear();
+			return;
+		}
 		restoreArchive(ctx);
+		resumeRestored(ctx.cwd);
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -744,6 +887,14 @@ export default function subagentMini(pi: ModuleApi): void {
 			job.errorMessage = "parent session shut down";
 			job.durationMs = Date.now() - job.startedAt;
 			job.resolveDone();
+			// The next session restores this job from its archive entry and reads the
+			// edges from there; without this write the graph would come back as nodes
+			// with no edges, which is the whole point of recording them.
+			try {
+				pi.appendEntry(ARCHIVE_TYPE, { version: ARCHIVE_VERSION, ...archive(job, scopeOf(job.task)) });
+			} catch {
+				// best-effort, as everywhere else in the archive path
+			}
 		}
 		for (const job of jobs.values()) {
 			if (job.worktree) removeWorktree(job, job.cwd || process.cwd(), false);
@@ -770,7 +921,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) to subagent spawn with read-only tools; keep only the final report in this conversation. Add write/edit to tools only when the subagent should modify files.",
 			"Write every spawn brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess.",
 			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree (the tool creates it, merges the branch when the job completes, and drops it when the job fails).",
-			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle, and a failed dependency blocks it. Set `onFailure: \"retry\"` for flaky work; the retry limit is fixed at 3 attempts and not something to enforce in the brief.",
+			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle with their reports already in its brief, so do not copy them into it. A failed dependency blocks it. Set `onFailure: \"retry\"` for flaky work; the retry limit is fixed at 3 attempts and not something to enforce in the brief.",
 			"Use `action: \"continue\"` to keep working in a child's own session. The child keeps its transcript, so the brief only has to say what changed; the previous report is passed along automatically.",
 		],
 		// The tool list is a contract, not a free-form string: a listed tool that
@@ -841,7 +992,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			dependsOn: Type.Optional(
 				Type.Array(Type.String(), {
 					description:
-						"spawn: job ids that must settle first. The job starts when all of them settle; a failed dependency blocks it instead of running it on missing work.",
+						"spawn: job ids that must settle first. The job starts when all of them settle, with their reports pasted into its brief (do not copy them in by hand); a failed dependency blocks it instead of running it on missing work.",
 				}),
 			),
 			isolated: Type.Optional(
@@ -920,7 +1071,7 @@ export default function subagentMini(pi: ModuleApi): void {
 					`${jobSummary(job)}.\n` +
 						(job.status === "running"
 							? "A subagent-complete notification with its report arrives when done — continue other work meanwhile."
-							: `It starts once ${job.pendingDependencies.join(", ")} settles; the report arrives then.`) +
+							: `It starts once ${job.pendingDependencies.join(", ")} settles, with their reports in its brief; the report arrives then.`) +
 						" action=status peeks, action=wait blocks, action=kill stops it.",
 				);
 			}
@@ -1006,13 +1157,7 @@ export default function subagentMini(pi: ModuleApi): void {
 					}
 				}
 				job.isContinue = true;
-				job.attempts = 0;
-				job.errorMessage = undefined;
-				job.finalOutput = "";
-				job.durationMs = undefined;
-				job.done = new Promise<void>((resolve) => {
-					job.resolveDone = resolve;
-				});
+				resetForRun(job);
 				job.cwd = job.cwd || ctx.cwd;
 				launch(job, `${previous}${job.task}`, job.cwd);
 				refreshWidget();
@@ -1029,7 +1174,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			job.errorMessage = "killed by the main agent";
 			job.durationMs = Date.now() - job.startedAt;
 			if (job.worktree) removeWorktree(job, ctx.cwd, false);
-			record(job, scopeOf(job.task));
+			rerecord(job, scopeOf(job.task));
 			const pid = job.proc?.pid;
 			if (pid !== undefined) killProcessTree(pid);
 			else job.proc?.kill("SIGTERM");
