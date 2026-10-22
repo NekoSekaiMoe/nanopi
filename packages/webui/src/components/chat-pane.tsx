@@ -5,8 +5,15 @@ import { useEffect, useRef, useState } from "react";
 import { Composer } from "@/components/composer";
 import { MessageItem } from "@/components/message-item";
 import { PermissionCard } from "@/components/permission-card";
+import { PlanCard } from "@/components/plan-card";
 import { UserInputCard } from "@/components/user-input-card";
-import type { ImageData, ModelInfo, UserInputRequestEvent, UserInputResponse } from "@/lib/api";
+import type {
+	ImageData,
+	ModelInfo,
+	PlanItem,
+	UserInputRequestEvent,
+	UserInputResponse,
+} from "@/lib/api";
 import { type Poem, randomPoem } from "@/lib/greeting";
 import type { PendingPermission, TurnError, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
@@ -36,6 +43,7 @@ export function ChatPane({
 	notice,
 	permission,
 	userInput,
+	plan,
 	models,
 	provider,
 	onProvider,
@@ -63,6 +71,7 @@ export function ChatPane({
 	notice: string | null;
 	permission: PendingPermission | null;
 	userInput: UserInputRequestEvent | null;
+	plan: PlanItem[];
 	models: ModelInfo[];
 	provider: string;
 	onProvider: (provider: string) => void;
@@ -173,6 +182,8 @@ export function ChatPane({
 								{notice}
 							</Banner>
 						) : null}
+
+						<PlanCard items={plan} streaming={streaming} />
 
 						{permission ? (
 							<PermissionCard

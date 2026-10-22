@@ -518,6 +518,7 @@ export function AppClient() {
 						notice={chat.notice}
 						permission={chat.permission}
 						userInput={chat.userInput}
+						plan={chat.plan}
 						models={usableModels}
 						provider={provider}
 						onProvider={setProvider}

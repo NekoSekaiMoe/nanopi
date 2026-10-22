@@ -339,6 +339,15 @@ export async function setReasoningEffort(
 	return readJson<ReasoningEffortResponse>(response);
 }
 
+/** One step of the session plan the `todo` tool maintains. */
+export interface PlanItem {
+	id: number;
+	text: string;
+	status: "pending" | "in_progress" | "completed" | "cancelled";
+	/** Verification steps must finish, so they never count as cancelled. */
+	isVerification?: boolean;
+}
+
 export type SSEEvent =
 	| { type: "runtime_info"; provider: string; model: string }
 	| { type: "session_assigned"; session_id: string }
@@ -354,6 +363,8 @@ export type SSEEvent =
 			output: string;
 			success: boolean;
 			duration_ms: number;
+			/** Current plan, sent with every `todo` result; absent for other tools. */
+			plan?: PlanItem[];
 	  }
 	| { type: "tokens"; prompt: number; completion: number; total: number }
 	| {
