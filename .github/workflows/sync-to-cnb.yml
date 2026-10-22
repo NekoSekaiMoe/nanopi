@@ -1,8 +1,8 @@
 # 将 GitHub 仓库上的改动镜像推送到 CNB（cnb.cool/shinytale/nanopi），
 # 与 .cnb.yml 的 mirror-to-github 互为反向。
 #
-# 双向镜像都不用 force push：任一侧非 fast-forward 时推送会被拒绝并使
-# 本 workflow 失败，由人介入判断方向，避免两侧互相覆盖。
+# 双向镜像都不用 force push：两侧只推「远端 tip 之上的合成提交」或快进，
+# 互相不覆盖。main 的镜像逻辑与 .cnb.yml 共用 scripts/mirror-main.mjs。
 # CNB_KEY 配置在 GitHub 仓库 Settings > Secrets and variables > Actions。
 
 name: Sync to CNB
@@ -35,49 +35,10 @@ jobs:
           CNB_KEY: ${{ secrets.CNB_KEY }}
         run: |
           set -euo pipefail
-          # CNB 对海外 IP 的匿名读会返 401，fetch 也必须带凭据；
-          # 禁掉交互提示，认证失败时直接报错而不是挂起。
-          export GIT_TERMINAL_PROMPT=0
+          # CNB 对海外 IP 的匿名读会返 401，fetch 也必须带凭据。
+          node scripts/mirror-main.mjs --remote "https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git"
 
-          public=https://cnb.cool/shinytale/nanopi.git
-          authed=https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git
-
-          git fetch --quiet "$authed" main
-
-          # 快照本地 HEAD 的树，push 后再回来比一次内容，与 .cnb.yml 的
-          # mirror-to-github 用同一个标准：内容相同就是镜像成功。
-          local_tree=$(git rev-parse HEAD^{tree})
-
-          # 推送不代表成功：非 fast-forward 会被远端拒绝。判定方向是
-          # 「远端 tip 是不是本地 HEAD 的祖先」，即 FETCH_HEAD 在前、
-          # HEAD 在后；写反了就变成「远端是否领先于我们」，那恰好是推送
-          # 会被拒绝的情形，等于把 guard 钉死在反面。
-          if git merge-base --is-ancestor FETCH_HEAD HEAD; then
-            echo "fast-forward: $(git rev-parse HEAD) is ahead of $public main"
-          elif [ "$(git rev-parse "FETCH_HEAD^{tree}")" = "$local_tree" ]; then
-            # CNB 的 push main 在历史分叉时推的是「CNB 树 + GitHub tip 父」的合成
-            # 提交，两侧 sha 因此不同、内容相同。这里再遇到同一棵树就没有可推的。
-            echo "CNB main already has this tree: $local_tree"
-            exit 0
-          else
-            echo "not a fast-forward of $public main; push will be rejected" >&2
-            exit 1
-          fi
-
-          git push --quiet "$authed" HEAD:refs/heads/main
-
-          # 远端树必须与本地树逐字节一致，否则不算镜像成功。
-          git fetch --quiet "$authed" main
-          remote_tree=$(git rev-parse FETCH_HEAD^{tree})
-          if [ "$local_tree" != "$remote_tree" ]; then
-            echo "tree mismatch after push:" >&2
-            echo "  local  $local_tree" >&2
-            echo "  remote $remote_tree" >&2
-            git diff --stat "$local_tree" "$remote_tree" >&2 || true
-            exit 1
-          fi
-          echo "mirrored $(git rev-parse HEAD): $remote_tree"
-      # tag 同步与 main 是两件事：main 用 fast-forward 断言加推送后树比对，
+      # tag 同步与 main 是两件事：main 按内容判定加推送后树比对，
       # tag 是「已存在且指向同一 commit 就跳过、指向不同 commit 就报错」。
       # 两个方向都不 force，所以 tag 一旦在两侧分叉就会永久卡住，需人介入。
       - name: Push tags to CNB
