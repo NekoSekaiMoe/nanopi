@@ -4,7 +4,12 @@
 
 import { describe, expect, it } from "vitest";
 import { convertToPng, loadPngTranscoder } from "../src/utils/image-convert.ts";
-import { formatDimensionNote, resizeImage } from "../src/utils/image-resize.ts";
+import {
+	formatDimensionNote,
+	type ImageResizeResult,
+	type ResizedImage,
+	resizeImage,
+} from "../src/utils/image-resize.ts";
 
 // Small 2x2 red PNG image (base64) - generated with ImageMagick
 const TINY_PNG =
@@ -90,6 +95,11 @@ it("loadPngTranscoder converts synchronously to oriented PNG data", async () => 
 	expect(transcoder(Buffer.from("not an image").toString("base64"), "image/jpeg")).toBeNull();
 });
 
+function expectImage(result: ImageResizeResult): asserts result is { ok: true; image: ResizedImage } {
+	expect(result.ok).toBe(true);
+	if (!result.ok) throw new Error(`expected a resized image, got ${result.reason}`);
+}
+
 describe("resizeImage", () => {
 	it("should keep caller input bytes intact", async () => {
 		const input = new Uint8Array(imageBytes(TINY_PNG));
@@ -102,7 +112,7 @@ describe("resizeImage", () => {
 			maxBytes: 1024 * 1024,
 		});
 
-		expect(result).not.toBeNull();
+		expect(result.ok).toBe(true);
 		expect(input.byteLength).toBe(originalByteLength);
 		expect(input[0]).toBe(originalFirstByte);
 	});
@@ -114,13 +124,13 @@ describe("resizeImage", () => {
 			maxBytes: 1024 * 1024,
 		});
 
-		expect(result).not.toBeNull();
-		expect(result!.wasResized).toBe(false);
-		expect(result!.data).toBe(TINY_PNG);
-		expect(result!.originalWidth).toBe(2);
-		expect(result!.originalHeight).toBe(2);
-		expect(result!.width).toBe(2);
-		expect(result!.height).toBe(2);
+		expectImage(result);
+		expect(result.image.wasResized).toBe(false);
+		expect(result.image.data).toBe(TINY_PNG);
+		expect(result.image.originalWidth).toBe(2);
+		expect(result.image.originalHeight).toBe(2);
+		expect(result.image.width).toBe(2);
+		expect(result.image.height).toBe(2);
 	});
 
 	it("should resize image exceeding dimension limits", async () => {
@@ -130,12 +140,12 @@ describe("resizeImage", () => {
 			maxBytes: 1024 * 1024,
 		});
 
-		expect(result).not.toBeNull();
-		expect(result!.wasResized).toBe(true);
-		expect(result!.originalWidth).toBe(100);
-		expect(result!.originalHeight).toBe(100);
-		expect(result!.width).toBeLessThanOrEqual(50);
-		expect(result!.height).toBeLessThanOrEqual(50);
+		expectImage(result);
+		expect(result.image.wasResized).toBe(true);
+		expect(result.image.originalWidth).toBe(100);
+		expect(result.image.originalHeight).toBe(100);
+		expect(result.image.width).toBeLessThanOrEqual(50);
+		expect(result.image.height).toBeLessThanOrEqual(50);
 	});
 
 	it("should resize image exceeding byte limit", async () => {
@@ -150,20 +160,20 @@ describe("resizeImage", () => {
 		});
 
 		// Should have tried to reduce size
-		expect(result).not.toBeNull();
-		const resultBuffer = Buffer.from(result!.data, "base64");
+		expectImage(result);
+		const resultBuffer = Buffer.from(result.image.data, "base64");
 		expect(resultBuffer.length).toBeLessThan(originalSize);
-		expect(result!.data.length).toBeLessThan(LARGE_PNG_200x200.length);
+		expect(result.image.data.length).toBeLessThan(LARGE_PNG_200x200.length);
 	});
 
-	it("should return null when image cannot be resized below maxBytes", async () => {
+	it("should report too-large when image cannot be resized below maxBytes", async () => {
 		const result = await resizeImage(imageBytes(LARGE_PNG_200x200), "image/png", {
 			maxWidth: 2000,
 			maxHeight: 2000,
 			maxBytes: 1,
 		});
 
-		expect(result).toBeNull();
+		expect(result).toEqual({ ok: false, reason: "too-large" });
 	});
 
 	it("should handle JPEG input", async () => {
@@ -173,10 +183,10 @@ describe("resizeImage", () => {
 			maxBytes: 1024 * 1024,
 		});
 
-		expect(result).not.toBeNull();
-		expect(result!.wasResized).toBe(false);
-		expect(result!.originalWidth).toBe(2);
-		expect(result!.originalHeight).toBe(2);
+		expectImage(result);
+		expect(result.image.wasResized).toBe(false);
+		expect(result.image.originalWidth).toBe(2);
+		expect(result.image.originalHeight).toBe(2);
 	});
 });
 

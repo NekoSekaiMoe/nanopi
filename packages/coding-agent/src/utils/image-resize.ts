@@ -2,12 +2,31 @@ import { Worker } from "node:worker_threads";
 import {
 	IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
 	type ImageResizeOptions,
+	type ImageResizeResult,
 	type ResizedImage,
 	type ResizeImageWorkerResponse,
 	resizeImageInProcess,
 } from "./image-resize-core.ts";
 
-export type { ImageResizeOptions, ResizedImage } from "./image-resize-core.ts";
+export type {
+	ImageResizeFailureReason,
+	ImageResizeOptions,
+	ImageResizeResult,
+	ResizedImage,
+} from "./image-resize-core.ts";
+
+/**
+ * Worker startup/teardown failures already reported to the user. A single session resizing many
+ * images would otherwise repeat the same fallback notice for every image.
+ */
+const reportedWorkerFailures = new Set<string>();
+
+function reportWorkerFailureOnce(error: Error): void {
+	const reason = error.message;
+	if (reportedWorkerFailures.has(reason)) return;
+	reportedWorkerFailures.add(reason);
+	console.warn(`nanopi: image resize worker unavailable (${reason}); resizing images on the main thread instead.`);
+}
 
 function toTransferableBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
 	// Transfer detaches the buffer, so transfer a worker-owned copy and leave the
@@ -30,13 +49,13 @@ async function resizeImageInWorker(
 	inputBytes: Uint8Array,
 	mimeType: string,
 	options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+): Promise<ImageResizeResult> {
 	const worker = createResizeWorker(workerSpecifier);
 	try {
 		const inputBytesForWorker = toTransferableBytes(inputBytes);
-		return await new Promise<ResizedImage | null>((resolve, reject) => {
+		return await new Promise<ImageResizeResult>((resolve, reject) => {
 			let settled = false;
-			const settle = (result: ResizedImage | null): void => {
+			const settle = (result: ImageResizeResult): void => {
 				if (settled) return;
 				settled = true;
 				resolve(result);
@@ -77,15 +96,20 @@ async function resizeImageInWorker(
 /**
  * Resize an image to fit within the specified max dimensions and encoded file size.
  * Runs Photon in a worker thread so WASM decoding, resizing, and encoding do not
- * block the TUI event loop. If the worker cannot be loaded (for example in some
- * Bun compiled executable layouts), fall back to in-process resizing so image
- * reads still work.
+ * block the TUI event loop.
+ *
+ * The worker is a separate module on disk, so some layouts cannot load it: single-file
+ * builds (`binaries/nanopi.js`, Bun compiled executables) ship one file with no worker
+ * chunk next to it. When the worker fails to start or crashes, this falls back to
+ * in-process resizing and warns once per distinct failure so the degraded mode is
+ * visible instead of silent. A `null` result from the worker itself is a real resize
+ * failure and is returned as-is, without falling back.
  */
 export async function resizeImage(
 	inputBytes: Uint8Array,
 	mimeType: string,
 	options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+): Promise<ImageResizeResult> {
 	const isTypeScriptRuntime = import.meta.url.endsWith(".ts");
 	const workerUrl = new URL(
 		isTypeScriptRuntime ? "./image-resize-worker.ts" : "./image-resize-worker.js",
@@ -94,7 +118,8 @@ export async function resizeImage(
 
 	try {
 		return await resizeImageInWorker(workerUrl, inputBytes, mimeType, options);
-	} catch {
+	} catch (error) {
+		reportWorkerFailureOnce(error instanceof Error ? error : new Error(String(error)));
 		return resizeImageInProcess(inputBytes, mimeType, options);
 	}
 }
