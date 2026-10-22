@@ -75,11 +75,17 @@ function parseServerEntry(name: string, value: unknown): McpServerConfig | undef
 	return undefined;
 }
 
+/** Parse a config file, tolerating the UTF-8 BOM that Windows PowerShell writes. */
+function readJsonConfig(file: string): unknown {
+	const text = readFileSync(file, "utf8");
+	return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
+}
+
 function readConfigFile(file: string): Map<string, McpServerConfig> {
 	const servers = new Map<string, McpServerConfig>();
 	if (!existsSync(file)) return servers;
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+		const parsed: unknown = readJsonConfig(file);
 		const mcpServers =
 			parsed && typeof parsed === "object" ? (parsed as { mcpServers?: unknown }).mcpServers : undefined;
 		if (!mcpServers || typeof mcpServers !== "object") return servers;
@@ -96,7 +102,7 @@ function readConfigFile(file: string): Map<string, McpServerConfig> {
 function readDiscoverySettings(file: string): McpDiscoverySettings {
 	if (!existsSync(file)) return {};
 	try {
-		const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
+		const parsed: unknown = readJsonConfig(file);
 		const block =
 			parsed && typeof parsed === "object" ? (parsed as { discovery?: unknown }).discovery : undefined;
 		if (!block || typeof block !== "object") return {};

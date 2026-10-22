@@ -934,6 +934,29 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(result)).toContain("No matches found");
 			expect(existsSync(marker)).toBe(false);
 		});
+
+		// Ported from earendil-works/pi#11203: RIPGREP_CONFIG_PATH options such as
+		// --fixed-strings used to silently turn the tool's regex search into a literal one.
+		it("should ignore ambient ripgrep config", async () => {
+			const testFile = join(testDir, "ripgrep-config.txt");
+			writeFileSync(testFile, "a.c\nabc\n");
+			const configFile = join(testDir, "ripgreprc");
+			writeFileSync(configFile, "--fixed-strings\n");
+			const previous = process.env.RIPGREP_CONFIG_PATH;
+			process.env.RIPGREP_CONFIG_PATH = configFile;
+
+			try {
+				const result = await grepTool.execute("test-call-grep-config", {
+					pattern: "a.c",
+					path: testFile,
+				});
+
+				expect(getTextOutput(result)).toContain("abc");
+			} finally {
+				if (previous === undefined) delete process.env.RIPGREP_CONFIG_PATH;
+				else process.env.RIPGREP_CONFIG_PATH = previous;
+			}
+		});
 	});
 
 	describe("find tool", () => {

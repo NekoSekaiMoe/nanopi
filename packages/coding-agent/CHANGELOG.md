@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed the `grep` tool following `RIPGREP_CONFIG_PATH`, where options such as `--fixed-strings` silently changed regex searches into literal ones. The tool now runs `rg --no-config` ([#11203](https://github.com/earendil-works/pi/issues/11203)).
+- Fixed `mcp.json` files that start with a UTF-8 BOM failing to parse, which silently skipped every server and the `discovery` block ([#11191](https://github.com/earendil-works/pi/issues/11191)).
+
 ## [20261022]
 
 ### New Features

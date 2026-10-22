@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed whitespace-only tool output (for example a bare `\r\n` from bash) being sent verbatim to OpenAI Completions, OpenAI Responses, and Google, where providers reject it; those results now use the existing no-output placeholders ([#8720](https://github.com/earendil-works/pi/issues/8720)).
+
 ## [20261022]
 
 ### Added
