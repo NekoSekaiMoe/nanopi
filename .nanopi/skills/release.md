@@ -13,7 +13,7 @@ Run repository commands from the repo root (two directories above this skill), u
 
 **GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`. The `npm run release:patch|minor` scripts are obsolete; do not use them.
 
-Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, webui, export templates, sidecars, and OAuth flows, the standard tool set, the preset providers), `nanopi-minimal.js` (`minimal` flavor: `base` with only the bash tool registered and the run-mode/permission module dropped), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
+Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, docs, examples, webui, sidecars, and OAuth flows, the standard tool set, the curated six-vendor catalog in `providerSets.core`, and the HTML export templates), `nanopi-minimal.js` (`minimal` flavor: `base` with only the bash tool registered and the run-mode/permission module dropped), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
 
 1. **Update CHANGELOGs**: ask the user whether they ran the `/cl` prompt on the latest commit on `main`. If not, they must run `/cl` first to audit and update each package's `[Unreleased]` section before releasing.
 
@@ -45,7 +45,7 @@ Release assets, built by CI from the release tag: the source archive, `nanopi.js
    /tmp/nanopi-bundles/nanopi-minimal.js --version
    ```
 
-   The minimal bundle registers the bash tool alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup. A flavored build also only registers the providers in its set, so `--list-models` on `nanopi-base.js` / `nanopi-minimal.js` must not name a provider outside `providerSets.presets`.
+   The minimal bundle registers the bash tool alone; a `--tools read,bash` run is reported as unavailable rather than failing at startup. A flavored build also only registers the providers in its set, so `--list-models` on `nanopi-base.js` / `nanopi-minimal.js` must not name a provider outside the flavor's provider set (`providerSets.core` for `base`, `none` for `minimal`).
 
    Flavor propagation, and why the smoke test keeps the flavor on one command
    line: the single-file and bundle scripts read `NANOPI_BUILD_FLAVOR` from the

@@ -203,7 +203,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), the preset model providers and every API implementation, and none of the bundled extras; no webui, export templates, sidecars, or OAuth flows, so a login that needs a flow has to use an API key",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the HTML export templates; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -220,9 +220,10 @@
 				"module/todo-lite": false,
 				"module/websearch": false,
 				"syntax-highlight": true,
-				"providers": "presets",
+				"providers": "core",
 				"apis": "all",
-				"jiti-modules": true
+				"jiti-modules": true,
+				"export-html": true
 			}
 		},
 		"minimal": {
@@ -325,6 +326,23 @@
 				"xiaomi-token-plan-ams",
 				"xiaomi-token-plan-cn",
 				"xiaomi-token-plan-sgp",
+				"zai",
+				"zai-coding-cn",
+				"zhipuai"
+			]
+		},
+		"core": {
+			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi). Every other catalog stays a one-entry `models.json` away but ships no data, which is where ~1.5 MiB of the bundle goes. `base` ships this set; `full` ships `all`",
+			"providers": [
+				"anthropic",
+				"google",
+				"kimi-coding",
+				"moonshotai",
+				"moonshotai-cn",
+				"openai",
+				"qwen-token-plan",
+				"qwen-token-plan-cn",
+				"qwen-token-plan-individual",
 				"zai",
 				"zai-coding-cn",
 				"zhipuai"

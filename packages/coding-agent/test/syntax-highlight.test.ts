@@ -29,16 +29,24 @@ const eagerLanguages = [
 	"groovy",
 	"perl",
 	"lua",
+	"xml",
+	"css",
+	"yaml",
+	"markdown",
+	"sql",
+	"powershell",
+	"dockerfile",
 ];
 const eagerLanguagesLoadedAtStartup = eagerLanguages.every(supportsLanguage);
-const uncommonLanguageLoadedAtStartup = supportsLanguage("ada");
+// `ceylon` is a highlight.js grammar the eager table cannot carry.
+const uncommonLanguageLoadedAtStartup = supportsLanguage("ceylon");
 
 describe("syntax highlight renderer", () => {
-	it("loads the twenty most common languages at startup and defers the rest", async () => {
+	it("loads the eager grammars at startup and defers the rest", async () => {
 		expect(eagerLanguagesLoadedAtStartup).toBe(true);
 		expect(uncommonLanguageLoadedAtStartup).toBe(false);
 		await loadAllHighlightLanguages();
-		expect(supportsLanguage("ada")).toBe(true);
+		expect(supportsLanguage("ceylon")).toBe(true);
 	});
 
 	it("renders highlighted spans with the provided theme", () => {

@@ -130,16 +130,40 @@ function toPosix(path) {
 }
 
 /**
+ * Root files of the embedded package dir. Only `package.json` is embedded: it
+ * is the one the CLI reads at startup (version, config dir). README and
+ * CHANGELOG are 670 KiB of changelog prose that no runtime path opens; the
+ * standalone artifact documents itself through the embedded docs tree, and the
+ * npm package still ships both files.
+ */
+function embeddedPackageFiles() {
+	return [join(codingAgentDir, "package.json")];
+}
+
+/**
+ * A flavor with no asset component left (the `minimal` SKU drops docs,
+ * examples, webui and export-html) embeds nothing at all. The extracted tree
+ * would be a single package.json, which is worse than the alternative: the
+ * runtime falls back to its compiled-in values (VERSION is injected, the
+ * app name and config directory have the same defaults package.json carries)
+ * and keeps the agent directory the user configured instead of pointing
+ * NANOPI_PACKAGE_DIR at a cache tree that holds nothing.
+ */
+function flavorHasAssets() {
+	return ["export-html", "webui", "docs", "examples"].some(isComponentEnabled);
+}
+
+/**
  * Embedded package assets: everything config.ts path helpers resolve relative
  * to the package dir. Layout matches the npm package (dist/ plus root files)
  * so NANOPI_PACKAGE_DIR pointing at the extracted tree needs no special cases.
+ *
+ * The payload is empty when `flavorHasAssets()` says the flavor carries no
+ * asset component; the runtime then extracts nothing (see
+ * src/standalone/assets.ts).
  */
 function buildAssetsPayload() {
-	const packageDirFiles = [
-		join(codingAgentDir, "package.json"),
-		join(codingAgentDir, "README.md"),
-		join(codingAgentDir, "CHANGELOG.md"),
-	];
+	const packageDirFiles = embeddedPackageFiles();
 	// [source tree, path inside the extracted package dir]
 	const distTrees = [];
 	if (isComponentEnabled("export-html")) {
@@ -151,6 +175,10 @@ function buildAssetsPayload() {
 	const repoTrees = [];
 	if (isComponentEnabled("docs")) repoTrees.push([join(codingAgentDir, "docs"), "docs"]);
 	if (isComponentEnabled("examples")) repoTrees.push([join(codingAgentDir, "examples"), "examples"]);
+
+	if (!flavorHasAssets()) {
+		return { payload: gzipSync(Buffer.from(JSON.stringify({}))).toString("base64"), rawBytes: 0, skipped: true };
+	}
 
 	const archive = {};
 	for (const filePath of packageDirFiles) {
@@ -166,7 +194,7 @@ function buildAssetsPayload() {
 
 	const rawBytes = Object.keys(archive).length;
 	const payload = gzipSync(Buffer.from(JSON.stringify(archive))).toString("base64");
-	return { payload, rawBytes };
+	return { payload, rawBytes, skipped: false };
 }
 
 /**
@@ -291,11 +319,14 @@ for (const required of requiredInputs) {
 	}
 }
 
-const { payload: assetsPayload, rawBytes: assetCount } = buildAssetsPayload();
+const { payload: assetsPayload, rawBytes: assetCount, skipped: assetsSkipped } = buildAssetsPayload();
 const collectedSidecars = collectSidecarFiles();
 const sidecarManifest = buildSidecarManifest(collectedSidecars);
 const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
 const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
+// A flavor without assets embeds no package.json, so config.ts (which reads the
+// version from the package dir it starts in) needs the version compiled in.
+const embedsPackageJson = assetsSkipped === false;
 // Same contract as the npm bundle: the single-file artifact has no .git directory
 // at runtime, so the commit is baked in at build time.
 const buildCommit = resolveBuildCommit(repoRoot);
@@ -384,8 +415,9 @@ try {
 			// of the artifact, and the flag that tells the runtime it is the
 			// standalone build.
 			NANOPI_SINGLE_FILE: "true",
-			NANOPI_SINGLE_FILE_ASSETS: JSON.stringify(assetsPayload),
+			NANOPI_SINGLE_FILE_ASSETS: embedsPackageJson ? JSON.stringify(assetsPayload) : "undefined",
 			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
+			NANOPI_SINGLE_FILE_VERSION_FALLBACK: embedsPackageJson ? "undefined" : JSON.stringify(version),
 			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
 			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),
 		},
@@ -449,7 +481,7 @@ console.log(
 		")",
 );
 console.log(
-	`  embedded assets: ${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed; sidecar manifest: ${sidecarCount} files; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
+	`  embedded assets: ${assetsSkipped ? "none (no asset component in this flavor)" : `${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed`}; sidecar manifest: ${sidecarCount} files; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
 );
 
 // Emit the TUI sidecar tarball referenced by the manifest as a release asset.

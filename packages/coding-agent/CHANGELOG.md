@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added 106 highlight.js grammars to the eager set (22 → 128): markup and config formats (`xml`, `css`, `scss`, `less`, `yaml`, `ini`, `markdown`, `dockerfile`, `makefile`, `nginx`, `properties`), query and data languages (`sql`, `pgsql`, `n1ql`, `xquery`), shell dialects (`powershell`, `awk`, `shell`), the mainstream ecosystem (`objectivec`, `erlang`, `elixir`, `haskell`, `clojure`, `fsharp`, `ocaml`, `r`, `julia`, `fortran`, `lisp`, `scheme`, `vbnet`, `coffeescript`, `elm`, `crystal`, `nim`, `haxe`, `d`, `vala`, `zephir`), hardware and assembly (`verilog`, `vhdl`, `armasm`, `x86asm`, `llvm`), and `diff`, `http`, `protobuf`, `cmake`, `tcl`, `twig`, `qml`, `glsl`, `latex`, `reasonml`. A language without a grammar still renders as plain text, never as an error. The single-file `full` build stays under 10 MiB because the four largest grammars stay out along with `README.md`/`CHANGELOG.md` and three unreferenced doc screenshots (issue [#149](https://cnb.cool/shinytale/nanopi/-/issues/149))
+
+### Changed
+
+- `base` now ships a curated model catalog instead of all 46 provider catalogs: the new `providerSets.core` lists openai, google, anthropic, glm/z.ai and qwen (12 catalog ids), which leaves ~700 KiB of model data out of the binary. Any other vendor still works through a `models.json` entry, and `full` keeps every catalog. `base` keeps the HTML export templates (`--export`, `/export`, `/share`) but not the browser UI, so `nanopi webui` there reports the component as not included instead of shipping a Next build
+- Single-file builds no longer embed `README.md` and `CHANGELOG.md`. The artifact documents itself through the embedded `docs/` tree, and nothing at runtime opens either file (issue [#149](https://cnb.cool/shinytale/nanopi/-/issues/149))
+- A single-file flavor without an asset component (`minimal`: no docs, examples, webui or export templates) embeds no assets at all instead of a lone `package.json`, so it no longer extracts a cache directory or overrides `NANOPI_PACKAGE_DIR`
+
 ### Fixed
 
 - Fixed the `grep` tool following `RIPGREP_CONFIG_PATH`, where options such as `--fixed-strings` silently changed regex searches into literal ones. The tool now runs `rg --no-config` ([#11203](https://github.com/earendil-works/pi/issues/11203)).
