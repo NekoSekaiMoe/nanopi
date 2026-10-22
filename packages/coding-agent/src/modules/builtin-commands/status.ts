@@ -13,6 +13,7 @@
  */
 
 import { BUILD_VERSION } from "../../core/build-version.ts";
+import { formatMiB, type MemorySample, sampleMemory } from "../../core/memory-usage.ts";
 import type { ModuleApi, ModuleCommandContext, ToolInfo } from "../../core/modules/types.ts";
 import { formatContextPath, getCompactExtensionLabels, type ResourceItem } from "../../core/resource-listing.ts";
 import { formatTokens } from "./context.ts";
@@ -45,6 +46,18 @@ function collectTokenTotals(ctx: ModuleCommandContext): TokenTotals {
 		}
 	}
 	return totals;
+}
+
+/**
+ * Memory row: `rss 141MiB, peak 148MiB, heap 44MiB`. `sample` lets callers pass
+ * the interactive session's last periodic sample; without one the row is
+ * measured on demand.
+ */
+export function formatMemoryRow(sample?: MemorySample): string {
+	const current = sample ?? sampleMemory();
+	const text = `rss ${formatMiB(current.rss)}, peak ${formatMiB(current.rssPeak)}, heap ${formatMiB(current.heapUsed)}`;
+	const external = current.external > 0 ? `, external ${formatMiB(current.external)}` : "";
+	return text + external;
 }
 
 export function collectStatusRows(ctx: ModuleCommandContext, _allTools: ToolInfo[]): StatusRow[] {
@@ -86,6 +99,7 @@ export function collectStatusRows(ctx: ModuleCommandContext, _allTools: ToolInfo
 			value: `${formatTokens(totals.input + totals.output)} total (${formatTokens(totals.input)} input + ${formatTokens(totals.output)} output)`,
 		},
 		{ label: "Context:", value: contextText },
+		{ label: "Memory:", value: formatMemoryRow(ctx.getMemorySample?.()) },
 	];
 }
 

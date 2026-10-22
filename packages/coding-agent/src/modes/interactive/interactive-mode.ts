@@ -82,6 +82,7 @@ import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defau
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
+import { MemorySampler } from "../../core/memory-usage.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
 import {
 	defaultModelPerProvider,
@@ -416,6 +417,8 @@ export class InteractiveMode {
 	private footer: FooterComponent;
 	private footerContainer: Container;
 	private footerDataProvider: FooterDataProvider;
+	/** Shared with `AgentSession` so `/status` shows the last periodic sample. */
+	private readonly memorySampler: MemorySampler;
 	// Stored so the same manager can be injected into custom editors, selectors, and extension UI.
 	private keybindings: KeybindingsManager;
 	private version: string;
@@ -601,6 +604,7 @@ export class InteractiveMode {
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
 		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
+		this.memorySampler = new MemorySampler();
 		this.footer = new FooterComponent(this.session, this.footerDataProvider);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerContainer = new Container();
@@ -924,6 +928,11 @@ export class InteractiveMode {
 
 		// Initialize extensions first so resources are shown before messages
 		await this.rebindCurrentSession();
+
+		// Opt-in memory sampling (NANOPI_MEM_DEBUG=1). The last sample feeds /status.
+		this.memorySampler.sample();
+		this.session.setMemorySampleProvider(() => this.memorySampler.last);
+		this.memorySampler.start();
 
 		// Render initial messages AFTER showing loaded resources
 		this.renderInitialMessages();
@@ -6207,6 +6216,7 @@ export class InteractiveMode {
 			this.ui.terminal.setProgress(false);
 		}
 		this.clearStatusIndicator();
+		this.memorySampler.stop();
 		this.themeController.dispose();
 		this.clearExtensionTerminalInputListeners();
 		this.footer.dispose();
