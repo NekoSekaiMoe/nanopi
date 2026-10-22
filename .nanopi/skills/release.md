@@ -13,7 +13,7 @@ Run repository commands from the repo root (two directories above this skill), u
 
 **GitHub-only distribution**: releases publish only to GitHub Releases. npm publishing was removed from the flow (the maintainer cannot complete npm 2FA); the `publish-npm` and `announce-nanopi-dev-release` jobs no longer exist in `.github/workflows/build-binaries.yml`. The `npm run release:patch|minor` scripts are obsolete; do not use them.
 
-Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, docs, examples, sidecars, and OAuth flows, the standard tool set, the curated six-vendor catalog in `providerSets.core`), `nanopi-minimal.js` (`minimal` flavor: `base` with only the bash tool registered and the run-mode/permission module dropped), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
+Release assets, built by CI from the release tag: the source archive, `nanopi.js` (single-file, `full` flavor), `nanopi-base.js` (`base` flavor: `full` without the bundled extras, docs, examples, webui, sidecars, and OAuth flows, the standard tool set, the curated six-vendor catalog in `providerSets.core`, and the HTML export templates), `nanopi-minimal.js` (`minimal` flavor: `base` with only the bash tool registered and the run-mode/permission module dropped), `nanopi-sidecars-<version>.tgz`, and `SHA256SUMS`. Flavor definitions live in the root `buildconfig.json`.
 
 1. **Update CHANGELOGs**: ask the user whether they ran the `/cl` prompt on the latest commit on `main`. If not, they must run `/cl` first to audit and update each package's `[Unreleased]` section before releasing.
 

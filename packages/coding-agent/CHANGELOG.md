@@ -8,7 +8,7 @@
 
 ### Changed
 
-- `base` now ships a curated model catalog instead of all 46 provider catalogs: the new `providerSets.core` lists openai, google, anthropic, glm/z.ai and qwen (12 catalog ids), which leaves ~700 KiB of model data out of the binary. Any other vendor still works through a `models.json` entry, and `full` keeps every catalog. `base` also keeps the browser UI and the HTML export templates: without them `nanopi webui` and `--export-html` were broken commands, not a smaller SKU
+- `base` now ships a curated model catalog instead of all 46 provider catalogs: the new `providerSets.core` lists openai, google, anthropic, glm/z.ai and qwen (12 catalog ids), which leaves ~700 KiB of model data out of the binary. Any other vendor still works through a `models.json` entry, and `full` keeps every catalog. `base` keeps the HTML export templates (`--export`, `/export`, `/share`) but not the browser UI, so `nanopi webui` there reports the component as not included instead of shipping a Next build
 - Single-file builds no longer embed `README.md` and `CHANGELOG.md`. The artifact documents itself through the embedded `docs/` tree, and nothing at runtime opens either file (issue [#149](https://cnb.cool/shinytale/nanopi/-/issues/149))
 - A single-file flavor without an asset component (`minimal`: no docs, examples, webui or export templates) embeds no assets at all instead of a lone `package.json`, so it no longer extracts a cache directory or overrides `NANOPI_PACKAGE_DIR`
 

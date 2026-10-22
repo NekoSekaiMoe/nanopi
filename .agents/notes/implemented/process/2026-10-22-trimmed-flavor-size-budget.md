@@ -51,10 +51,24 @@ being built to ship every catalog, which was the rule that made a middle tier
 impossible; it requires every catalog to be in *some* set, so no shard is
 unreachable, and every set to name existing catalogs.
 
-`base` gains `webui` and `export-html` (1.2 MiB of assets, 388 KiB of export
-templates) in exchange: without them `webui`'s browser UI and `export-html`'s
-CLI command were dead features in a 6.7 MiB binary that is otherwise a
-complete CLI. `base` does not gain `docs`; that stays the `full` difference.
+`base` gains `export-html` (308 KiB of templates) in exchange: `--export`,
+`/export` and `/share` all read those templates, and the component is a
+template reader plus a renderer, not a subsystem. `base` does not gain `docs`;
+that stays the `full` difference. It also does not gain `webui`: the browser UI
+is a deployment shape (a Next 16 static export, Chrome 111+ / Safari 16.4+, a
+`/chat` SSE bridge and provider-account CRUD on top of `@nanopi/pi-extra`), and
+`base` is the terminal-first SKU. `nanopi webui` in `base` reports the
+component as not included — the same clean "not in this build" path any other
+dropped component takes — so the SKU carries no Next pipeline and no
+half-working server.
+
+Keeping `export-html` without `webui` also uncovered a bug the two components
+had been hiding for each other: `--export` builds its CSS variables from
+`getResolvedThemeColors()`, and the theme is installed by `initTheme()`, which
+only ran later in `main()` on the way into a session mode. So `nanopi --export`
+died with "Theme not initialized" in *every* flavor; `--export-html` had never
+worked from the CLI. `main()` now initializes the theme before the export
+branch.
 
 **Grammars.** `EAGER_LANGUAGES` grows from 22 to 128 named imports: the
 languages an agent actually reads (markup, config, query languages, the
@@ -76,9 +90,15 @@ remaining 63 grammars through `highlight.js/lib/index.js`.
   nothing links to.
 - **Give `base` the 46 catalogs and let `models.json` handle the rest.** That
   is what `presets` did, and it is exactly the 1.5 MiB the issue asked about.
-- **Drop `webui`/`export-html` from `base` and call it leaner.** A CLI that
-  ships `nanopi webui` and `--export-html` as broken commands is not a smaller
-  SKU, it is a broken one.
+- **Ship `webui` in `base`.** It was the other half of the "don't ship dead
+  commands" argument, and `base` loses it on purpose: the browser UI is a
+  deployment shape, not a core capability, and it drags a Next build into a
+  flavor meant for terminals. `nanopi webui` fails with "not included in this
+  build", which is a legible absence rather than a broken command — the same
+  trade `full` makes for nothing and `minimal` makes for both components.
+- **Ship `export-html` in `base`.** Kept, for the opposite reason: the export
+  path is 388 KiB of templates read by a single CLI command, and without it
+  three separate entry points (`--export`, `/export`, `/share`) break at once.
 - **A `providerSets.core` that also included every token-plan variant of every
   vendor.** 46 ids by another name; the data is the cost, not the list.
 
@@ -89,9 +109,14 @@ scripts/build-coding-agent-single-file.mjs`, esbuild metafile attribution:
 
 ```
 full      12.6 MiB -> 9.3 MiB   assets 3.9 -> 1.4, JS 8.0 -> 7.0
-base        6.7 MiB (new)       assets 1.2, catalogs 0.9 -> 0.2
+base        6.0 MiB (new)       assets 0.1, catalogs 0.9 -> 0.2 (36 stubbed)
 minimal     2.7 MiB -> 2.4 MiB  assets 0.3 -> 0, JS unchanged
 ```
+
+`base` without `webui` is 6.0 MiB rather than the 6.7 MiB measured with it:
+`nanopi webui` in `base` prints "the webui is not included in this build",
+`--export` writes a working HTML file, and `--list-models` names only the
+curated vendors.
 
 - `full` lands under the 10 MiB target, with ~0.45 MiB of grammar headroom for
   the languages someone asks for next.

@@ -688,6 +688,9 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (parsed.export) {
+		// The export renderer derives its CSS variables from the active theme, so
+		// the theme has to exist before the first `getResolvedThemeColors()` call.
+		initTheme();
 		let result: string;
 		try {
 			const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
