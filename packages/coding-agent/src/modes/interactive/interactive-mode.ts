@@ -167,6 +167,7 @@ import { TrustSelectorComponent } from "./components/trust-selector.ts";
 import { UserMessageComponent } from "./components/user-message.ts";
 import { UserMessageSelectorComponent } from "./components/user-message-selector.ts";
 import { WelcomeHeader } from "./components/welcome-box.ts";
+import { createDialogQueue } from "./extension-dialog-queue.ts";
 import { editInExternalEditor } from "./external-editor.ts";
 import { refreshModelCatalogs } from "./model-catalog-refresh.ts";
 import { getModelSearchText } from "./model-search.ts";
@@ -503,6 +504,8 @@ export class InteractiveMode {
 	private installChangeWarningShown = false;
 
 	// RegisteredModule UI state
+	/** Extension dialogs share the editor slot, so they run one at a time. */
+	private readonly extensionDialogQueue = createDialogQueue();
 	private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
 	private extensionInput: ExtensionInputComponent | undefined = undefined;
 	private extensionEditor: ExtensionEditorComponent | undefined = undefined;
@@ -1949,9 +1952,12 @@ export class InteractiveMode {
 
 	private createExtensionUIContext(): ModuleUIContext {
 		return {
-			select: (title, options, opts) => this.showExtensionSelector(title, options, opts),
-			confirm: (title, message, opts) => this.showExtensionConfirm(title, message, opts),
-			input: (title, placeholder, opts) => this.showExtensionInput(title, placeholder, opts),
+			select: (title, options, opts) =>
+				this.extensionDialogQueue(() => this.showExtensionSelector(title, options, opts)),
+			confirm: (title, message, opts) =>
+				this.extensionDialogQueue(() => this.showExtensionConfirm(title, message, opts)),
+			input: (title, placeholder, opts) =>
+				this.extensionDialogQueue(() => this.showExtensionInput(title, placeholder, opts)),
 			notify: (message, type) => this.showExtensionNotify(message, type),
 			onTerminalInput: (handler) => this.addExtensionTerminalInputListener(handler),
 			setStatus: (key, text) => this.setExtensionStatus(key, text),
@@ -1968,11 +1974,11 @@ export class InteractiveMode {
 			setFooter: (factory) => this.setExtensionFooter(factory),
 			setHeader: (factory) => this.setExtensionHeader(factory),
 			setTitle: (title) => this.ui.terminal.setTitle(title),
-			custom: (factory, options) => this.showExtensionCustom(factory, options),
+			custom: (factory, options) => this.extensionDialogQueue(() => this.showExtensionCustom(factory, options)),
 			pasteToEditor: (text) => this.editor.handleInput(`\x1b[200~${text}\x1b[201~`),
 			setEditorText: (text) => this.editor.setText(text),
 			getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
-			editor: (title, prefill) => this.showExtensionEditor(title, prefill),
+			editor: (title, prefill) => this.extensionDialogQueue(() => this.showExtensionEditor(title, prefill)),
 			addAutocompleteProvider: (factory) => {
 				this.autocompleteProviderWrappers.push(factory);
 				this.setupAutocompleteProvider();

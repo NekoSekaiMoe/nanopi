@@ -568,6 +568,53 @@ describe("prepareCompaction", () => {
 		expect(identities[0]?.requestKind).toBe("compaction");
 		expect(identities[1]).toBe(identities[0]);
 	});
+
+	it("applies custom instructions when only the turn prefix is summarized", async () => {
+		const entries = [
+			createMessageEntry(createUserMessage("deploy the service")),
+			createMessageEntry(createAssistantMessage("deployed")),
+		];
+		const preparation = prepareCompaction(entries, {
+			...DEFAULT_COMPACTION_SETTINGS,
+			keepRecentTokens: 1,
+		});
+		expect(preparation?.messagesToSummarize).toEqual([]);
+		expect(preparation?.turnPrefixMessages.length).toBeGreaterThan(0);
+
+		let prompt = "";
+		const streamFn: StreamFn = (requestModel, context) => {
+			const parts: string[] = [];
+			for (const message of context.messages) {
+				if (typeof message.content === "string") parts.push(message.content);
+				else for (const block of message.content ?? []) if (block.type === "text") parts.push(block.text);
+			}
+			prompt = parts.join("\n");
+			const stream = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message = {
+					...fauxAssistantMessage("summary"),
+					api: requestModel.api,
+					provider: requestModel.provider,
+					model: requestModel.id,
+				};
+				stream.push({ type: "done", reason: "stop", message });
+			});
+			return stream;
+		};
+
+		await compact(
+			preparation!,
+			getModel("anthropic", "claude-sonnet-4-5")!,
+			undefined,
+			undefined,
+			"keep the deploy steps",
+			undefined,
+			undefined,
+			streamFn,
+		);
+
+		expect(prompt).toContain("Additional focus: keep the deploy steps");
+	});
 });
 
 describe("prepareCompaction with previous compaction", () => {

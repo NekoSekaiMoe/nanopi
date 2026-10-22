@@ -6,6 +6,9 @@
 
 - Fixed the `grep` tool following `RIPGREP_CONFIG_PATH`, where options such as `--fixed-strings` silently changed regex searches into literal ones. The tool now runs `rg --no-config` ([#11203](https://github.com/earendil-works/pi/issues/11203)).
 - Fixed `mcp.json` files that start with a UTF-8 BOM failing to parse, which silently skipped every server and the `discovery` block ([#11191](https://github.com/earendil-works/pi/issues/11191)).
+- Fixed `/compact <instructions>` being ignored when compaction splits a turn and the split turn is the only new content ([#11058](https://github.com/earendil-works/pi/issues/11058)).
+- Fixed concurrent extension dialogs replacing each other, which left the displaced dialog's promise unsettled and hung extensions awaiting `ui.select()` or `ui.confirm()`. Extension dialogs now run one at a time ([#11166](https://github.com/earendil-works/pi/issues/11166), [#9909](https://github.com/earendil-works/pi/issues/9909)).
+- Fixed resumed sessions and `/tree` navigation leaving extension tools inactive when the branch recorded its tools before the extension was installed ([#11062](https://github.com/earendil-works/pi/issues/11062)).
 
 ## [20261022]
 

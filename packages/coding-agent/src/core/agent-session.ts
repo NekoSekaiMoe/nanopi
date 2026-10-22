@@ -2030,11 +2030,40 @@ export class AgentSession {
 	 */
 	private _restoreToolsFromTranscript(): void {
 		this._pendingToolNames.clear();
-		const current = getCurrentSystemMessage(this.sessionManager.buildSessionContext().messages);
+		const messages = this.sessionManager.buildSessionContext().messages;
+		const current = getCurrentSystemMessage(messages);
 		if (!current) return;
 		const names = (current.toolsAdded ?? []).map((tool) => tool.name);
 		this._pendingToolNames = new Set(names.filter((name) => this._isAllowedTool(name)));
-		this._setActiveTools(names);
+		this._setActiveTools([...names, ...this._unrecordedExtensionTools(messages, names)]);
+	}
+
+	/**
+	 * Extension tools the transcript never mentioned.
+	 *
+	 * A module installed after the branch was recorded registers its tools at startup, but the
+	 * transcript declaration is what an earlier resume path trusted, so those tools stayed
+	 * inactive even though the extension loaded. Tools the branch added or removed explicitly
+	 * keep their recorded state, and tools registered with `defaultActive: false` stay inactive.
+	 */
+	private _unrecordedExtensionTools(
+		messages: ReadonlyArray<AgentMessage>,
+		activeNames: ReadonlyArray<string>,
+	): string[] {
+		const mentioned = new Set<string>();
+		for (const message of messages) {
+			if (message.role !== "system") continue;
+			for (const tool of message.toolsAdded ?? []) mentioned.add(tool.name);
+			for (const tool of message.toolsRemoved ?? []) mentioned.add(tool.name);
+		}
+		const active = new Set(activeNames);
+		return [...this._toolRegistry.keys()].filter(
+			(name) =>
+				!active.has(name) &&
+				!mentioned.has(name) &&
+				!this._baseToolDefinitions.has(name) &&
+				this._isActivatedOnRegistration(name),
+		);
 	}
 
 	// =========================================================================

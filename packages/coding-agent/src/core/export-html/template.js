@@ -1616,7 +1616,10 @@
               text: match[2],
               tokens: this.lexer.inlineTokens(match[2])
             };
-          }
+          },
+          // CJK text has no spaces, so CommonMark flanking rules leave "**注意：**后面"
+          // as literal asterisks. Same extension as the TUI renderer.
+          emStrong: markedCjkFriendly().tokenizer.emStrong
         },
         renderer: {
           // Sanitize link URLs with a scheme allow-list. Browsers strip C0

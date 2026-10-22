@@ -150,6 +150,7 @@ function generateHtml(sessionData: SessionData): string {
 	const templateCss = readFileSync(join(templateDir, "template.css"), "utf-8");
 	const templateJs = readFileSync(join(templateDir, "template.js"), "utf-8");
 	const markedJs = readFileSync(join(templateDir, "vendor", "marked.min.js"), "utf-8");
+	const markedCjkFriendlyJs = readFileSync(join(templateDir, "vendor", "marked-cjk-friendly.min.js"), "utf-8");
 	const hljsJs = readFileSync(join(templateDir, "vendor", "highlight.min.js"), "utf-8");
 
 	const themeVars = generateThemeVars();
@@ -174,6 +175,7 @@ function generateHtml(sessionData: SessionData): string {
 		.replace("{{JS}}", templateJs)
 		.replace("{{SESSION_DATA}}", sessionDataBase64)
 		.replace("{{MARKED_JS}}", markedJs)
+		.replace("{{MARKED_CJK_FRIENDLY_JS}}", markedCjkFriendlyJs)
 		.replace("{{HIGHLIGHT_JS}}", hljsJs);
 }
 
