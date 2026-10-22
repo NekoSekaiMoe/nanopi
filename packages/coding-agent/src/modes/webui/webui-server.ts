@@ -148,6 +148,44 @@ export function describeProviderError(raw: string | undefined): { message: strin
 	return { message, code };
 }
 
+/** One row of the todo extension's plan, as the browser renders it. */
+export interface WebuiPlanItem {
+	id: number;
+	text: string;
+	status: "pending" | "in_progress" | "completed" | "cancelled";
+	isVerification?: boolean;
+}
+
+/**
+ * The `todo` tool keeps the session plan in its result `details`, which the
+ * text `output` does not carry. Send that snapshot alongside the result so the
+ * browser can mirror the plan the TUI shows in its working line; without it the
+ * plan exists only inside the model's context and `/chat` streams a cmd-only
+ * transcript. Other tools carry no plan, so the field stays absent instead of
+ * shipping an empty list on every call.
+ */
+export function planSnapshotOf(toolName: string, details: unknown): { plan?: WebuiPlanItem[] } {
+	if (toolName !== "todo") return {};
+	const raw = (details as { todos?: unknown } | undefined)?.todos;
+	if (!Array.isArray(raw)) return {};
+	const statuses = new Set(["pending", "in_progress", "completed", "cancelled"]);
+	const plan: WebuiPlanItem[] = [];
+	for (const item of raw) {
+		if (!item || typeof item !== "object") continue;
+		const record = item as Record<string, unknown>;
+		const status = typeof record.status === "string" ? record.status : "";
+		if (typeof record.id !== "number" || !statuses.has(status)) continue;
+		if (typeof record.text !== "string") continue;
+		plan.push({
+			id: record.id,
+			text: record.text,
+			status: status as WebuiPlanItem["status"],
+			...(record.isVerification === true ? { isVerification: true } : {}),
+		});
+	}
+	return { plan };
+}
+
 /** Packages the build registers as bundled extras (auto-registered when unfiltered). */
 const _BUNDLED_EXTRA_PACKAGE_NAMES = new Set(["pi-subagent-mini", "ask-lite", "todo-lite", "mcp-lite"]);
 
@@ -858,6 +896,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 						output: String(output),
 						success: !event.isError,
 						duration_ms: event.durationMs ?? 0,
+						...planSnapshotOf(event.toolName, event.result?.details),
 					});
 					break;
 				}

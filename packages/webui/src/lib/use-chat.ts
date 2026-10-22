@@ -4,6 +4,7 @@ import { useCallback, useRef, useState } from "react";
 import {
 	type ApprovalMode,
 	type ImageData,
+	type PlanItem,
 	type SessionMessage,
 	type SSEEvent,
 	type UserInputRequestEvent,
@@ -243,6 +244,7 @@ export function useChat({
 	const [notice, setNotice] = useState<string | null>(null);
 	const [permission, setPermission] = useState<PendingPermission | null>(null);
 	const [userInput, setUserInput] = useState<UserInputRequestEvent | null>(null);
+	const [plan, setPlan] = useState<PlanItem[]>([]);
 	const [approvalMode, setApprovalMode] = useState<ApprovalMode>("standard");
 
 	const abortRef = useRef<AbortController | null>(null);
@@ -273,6 +275,7 @@ export function useChat({
 			setStreaming(false);
 			setPermission(null);
 			setUserInput(null);
+			setPlan([]);
 			setError(null);
 			artifactRef.current = null;
 			setLoading(true);
@@ -304,6 +307,7 @@ export function useChat({
 		setStreaming(false);
 		setPermission(null);
 		setUserInput(null);
+		setPlan([]);
 		setError(null);
 		artifactRef.current = null;
 		setMessages([]);
@@ -441,6 +445,9 @@ export function useChat({
 								);
 								break;
 							case "tool_result":
+								// Plan snapshots ride on the todo tool's result; keep the
+								// latest one instead of deriving it from the transcript.
+								if (event.plan) setPlan(event.plan);
 								setMessages((current) =>
 									updateLastAssistant(current, (blocks) => finishTool(blocks, event)),
 								);
@@ -619,6 +626,7 @@ export function useChat({
 		notice,
 		permission,
 		userInput,
+		plan,
 		approvalMode,
 		setApprovalMode,
 		setError,

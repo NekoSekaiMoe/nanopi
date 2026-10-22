@@ -9,6 +9,7 @@
 - Fixed `/compact <instructions>` being ignored when compaction splits a turn and the split turn is the only new content ([#11058](https://github.com/earendil-works/pi/issues/11058)).
 - Fixed concurrent extension dialogs replacing each other, which left the displaced dialog's promise unsettled and hung extensions awaiting `ui.select()` or `ui.confirm()`. Extension dialogs now run one at a time ([#11166](https://github.com/earendil-works/pi/issues/11166), [#9909](https://github.com/earendil-works/pi/issues/9909)).
 - Fixed resumed sessions and `/tree` navigation leaving extension tools inactive when the branch recorded its tools before the extension was installed ([#11062](https://github.com/earendil-works/pi/issues/11062)).
+- Fixed the webui dropping the `todo` tool's plan: `/chat` sent only the tool's text output, so steps were created and updated with nothing on screen. `tool_result` now carries the plan snapshot and the browser renders it beside the composer ([#152](https://cnb.cool/shinytale/nanopi/-/issues/152)).
 
 ## [20261022]
 

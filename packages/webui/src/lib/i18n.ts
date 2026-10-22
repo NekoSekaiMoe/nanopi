@@ -212,6 +212,10 @@ const EN: Record<string, string> = {
 	"极高": "Extra high",
 	"最高": "Max",
 	"默认": "Default",
+	"步骤": "steps",
+	"验证": "verify",
+	"展开步骤": "Show steps",
+	"收起步骤": "Hide steps",
 };
 
 export function t(zh: string): string {
