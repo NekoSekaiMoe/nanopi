@@ -63,7 +63,11 @@ function git(args, options = {}) {
 }
 
 function run(command, args, options = {}) {
-	const result = spawnSync(command, args, options);
+	// The source archive is written through a spawnSync pipe; the default
+	// maxBuffer of 1 MiB overflows for archives larger than that and kills
+	// git with ENOBUFS, so allow the archive and its gzip output (~25 MiB
+	// for this repo) to be buffered.
+	const result = spawnSync(command, args, { maxBuffer: 512 * 1024 * 1024, ...options });
 	const status = exitStatus(result);
 	if (status !== 0) rule(`${command} ${args.join(" ")} failed with exit ${status}`);
 	return result;
