@@ -208,6 +208,10 @@ export async function createTestModulesResult(
 
 export interface CreateTestResourceLoaderOptions {
 	modulesResult?: LoadModulesResult;
+	/** Standing input that comes from neither a module nor disk, such as a hand-written system prompt. */
+	appendSystemPrompt?: string[];
+	/** Context files a module would otherwise load, such as an AGENTS.md. */
+	contextFiles?: Array<{ path: string; content: string }>;
 }
 
 export function createTestResourceLoader(options: CreateTestResourceLoaderOptions = {}): ResourceLoader {
@@ -221,10 +225,10 @@ export function createTestResourceLoader(options: CreateTestResourceLoaderOption
 		getModules: () => modulesResult,
 		getSkills: () => ({ skills: [], diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
-		getAgentsFiles: () => ({ agentsFiles: [] }),
+		getAgentsFiles: () => ({ agentsFiles: options.contextFiles ?? [] }),
 		getSystemPrompt: () => undefined,
 		getSystemPromptSource: () => undefined,
-		getAppendSystemPrompt: () => [],
+		getAppendSystemPrompt: () => options.appendSystemPrompt ?? [],
 		getAppendSystemPromptSources: () => [],
 		extendResources: () => {},
 		reload: async () => {},

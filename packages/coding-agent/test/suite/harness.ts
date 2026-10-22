@@ -110,6 +110,9 @@ export interface HarnessOptions {
 	allowedToolNames?: string[];
 	excludedToolNames?: string[];
 	resourceLoader?: ResourceLoader;
+	/** Standing inputs for the default resource loader, ignored when `resourceLoader` is set. */
+	appendSystemPrompt?: string[];
+	contextFiles?: Array<{ path: string; content: string }>;
 	modules?: Array<SessionModule | CreateTestModulesResultInput | ModuleFactory>;
 	withConfiguredAuth?: boolean;
 	modelsJson?: Record<string, unknown>;
@@ -205,7 +208,12 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 	});
 	const modulesResult = options.modules ? await createTestModulesResult(options.modules, tempDir) : undefined;
 	const resourceLoader =
-		options.resourceLoader ?? createTestResourceLoader(modulesResult ? { modulesResult } : undefined);
+		options.resourceLoader ??
+		createTestResourceLoader({
+			...(modulesResult ? { modulesResult } : {}),
+			...(options.appendSystemPrompt ? { appendSystemPrompt: options.appendSystemPrompt } : {}),
+			...(options.contextFiles ? { contextFiles: options.contextFiles } : {}),
+		});
 
 	const session = new AgentSession({
 		agent,
