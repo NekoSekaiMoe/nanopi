@@ -413,6 +413,14 @@ export interface StreamChatBody {
 	approval_mode?: ApprovalMode;
 }
 
+/** Session ids with a turn running in the daemon. Empty when it is idle. */
+export async function getChatActive(): Promise<string[]> {
+	const response = await fetch("/chat/active", { headers: authHeaders() });
+	if (!response.ok) throw await failure(response);
+	const body = (await response.json()) as unknown;
+	return Array.isArray(body) ? body.filter((id): id is string => typeof id === "string") : [];
+}
+
 export async function stopChat(sessionId: string): Promise<void> {
 	const response = await fetch("/chat/stop", {
 		method: "POST",

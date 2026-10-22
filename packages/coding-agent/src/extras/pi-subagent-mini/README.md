@@ -3,59 +3,77 @@
 Lean single-tool subagent extension for [pi](https://github.com/earendil-works/pi).
 **Zero runtime dependencies** — no node_modules needed.
 
-One tool (`subagent`), four actions, ~296 prompt tokens (vs 1,563 for the
-5-tool suite it replaces):
+One tool (`subagent`), five actions:
 
 | action | what it does |
 | --- | --- |
-| `spawn` | Start an isolated child session (`--mode json -p --no-session`) with a tool allowlist; returns a `jobId` immediately |
+| `spawn` | Start an isolated child session with a tool allowlist; returns a `jobId` immediately |
 | `wait` | Block until done (default 120s, `waitSec` to change), return the report |
 | `status` | State + report tail |
 | `kill` | Stop it |
+| `continue` | Run another round on the same child session, so the child keeps its transcript |
 
-On completion a `subagent-complete` steering message delivers the report as a
-**new turn** — the main conversation only ever sees the final report, never the
-child's intermediate work.
+On completion a `subagent-complete` custom message carries the report. It starts a
+new turn only when the parent session is idle; while a turn runs it is queued onto
+it, so a report never races the run that is settling.
 
 ## Parameters
 
-- `action`: spawn / wait / status / kill
-- `task` (spawn): the brief, written as `GOAL` / `CONTEXT` / `EXPECTED OUTPUT` / `STOP RULES`
-- `description` (spawn): one-line scope for status and the notification (defaults to the GOAL line)
+- `action`: spawn / wait / status / kill / continue
+- `task` (spawn/continue): the brief, written as `GOAL` / `CONTEXT` / `EXPECTED OUTPUT` / `STOP RULES`
+- `description` (spawn/continue): one-line scope for status and the notification (defaults to the GOAL line)
 - `waitSec` (wait): how long to block; a timeout returns the job as still running
-- `tools` (spawn): comma list, default `read,bash,grep,find,ls`; add `write,edit` only when the child should modify files
-- `cwd` (spawn): working directory (default: session cwd)
-- `model` / `timeoutSec` (spawn): optional; timeout default 600s
-- `jobId` (wait/status/kill)
+- `tools` (spawn/continue): comma list, default `read,bash,grep,find,ls`; add `write,edit` only when the child should modify files
+- `cwd` (spawn): working directory (default: session cwd); rejected together with `isolated`
+- `model` / `timeoutSec`: optional; timeout default 600s per attempt
+- `dependsOn` (spawn): job ids that must settle first
+- `isolated` (spawn/continue): give the job its own git worktree
+- `onFailure`: `"report"` (default) or `"retry"`, capped at 3 attempts
+- `jobId` (wait/status/kill/continue)
 
-Design trade-offs (deliberate, to stay lean): no agent registry, no mailbox —
-follow-up questions are handled by spawning a new subagent with context from
-the previous report (stated in the tool description so the model knows).
-Max 4 concurrent subagents, and only one of them may write at a time: `bash`
-makes any child writable in practice, so writers are serialized rather than
-told apart file by file. To write in parallel, give each subagent its own tree
-with `git worktree add <dir> -b <branch>` and pass `cwd` to spawn, then merge
-the branches yourself — a prompt guideline, not a mechanism, so nothing
-enforces it. Recursion is prevented at the execution layer (the child's module
-set has no subagent tool) and at the prompt layer (the description opens by
-saying the subagent is not the main agent).
+## What the code enforces
+
+**Sessions, not one-shot briefs.** A child runs with its own session file and the
+tool records the session id. `continue` appends a new round to that same
+transcript with the previous report as context, so a follow-up brief only has to
+say what changed instead of restating everything the child already knows.
+
+**Dependencies.** `dependsOn: ["sa-1", "sa-2"]` means the job does not start until
+both settle. A dependency that failed, timed out, or was killed blocks the
+dependent (`blocked`, reported like any other outcome) rather than letting it run
+on missing work. An unknown id is refused at spawn time, because it can never
+settle. The main agent does not poll for this.
+
+**Isolation.** `isolated: true` runs `git worktree add <dir> -b subagent/<jobId>`
+next to the repository root and passes that directory as the child's cwd. The
+directory is derived by the tool, so no model copies a path. On `completed` the
+branch is merged back and the tree removed; on failure, kill, or timeout the tree
+is removed and the branch dropped.
+
+**Failure semantics.** `onFailure: "retry"` reruns a failed attempt with the
+failure text prepended to the brief, up to 3 attempts in total. The limit is a
+constant; a brief cannot raise it.
+
+**Concurrency.** Max 4 concurrent subagents. Only one of them may write to the
+shared tree at a time: `bash` makes any child a potential writer, so writers are
+serialized unless they are isolated, which gives each one its own tree.
 
 ## Notes
 
-- Children start from their own prompt (~1.7k tokens) and keep no session
-  (`--no-session`), with `--no-skills --no-prompt-templates`. `AGENTS.md` stays
-  on: the child has `bash` and can commit, so the repository rules (no `git add
-  -A`, `pnpm run check`, no emoji) are the cheapest thing to keep.
+- Children keep `AGENTS.md` (`--no-skills --no-prompt-templates` are the only
+  discovery flags turned off): the child has `bash` and can commit, so the
+  repository rules (no `git add -A`, `pnpm run check`, no emoji) are the cheapest
+  thing to keep.
 - The notification clips a long report head-and-tail so the conclusion survives;
   the full text goes to the session as a `subagent-job` entry, which is also how
-  `/compact` and a restart learn which subagents ran.
+  `/compact` and a restart learn which subagents ran and which session each one owns.
 - Child tools default to the parent's declared order, matching its `<rules>`
   block. Tool order is the tail of the Anthropic cached prefix, so a different
   order means a full cache miss on every child turn.
 - Uses the same subprocess mechanism as the big suites (`--mode json` NDJSON
   events), just without the orchestration/TUI/config layers.
-- Interactive mode shows a live `subagent-async` widget (one row per running
-  job, refreshed every second). It deliberately reuses the same widget key as
+- Interactive mode shows a live `subagent-async` widget (one row per active job,
+  refreshed every second). It deliberately reuses the same widget key as
   `pi-subagents`, so [`pi-ui`](../pi-ui/)'s flat skin picks these jobs up too.
 
 ## Usage

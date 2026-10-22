@@ -124,9 +124,26 @@ interface ChatRequestBody {
 	session_id?: string;
 	provider?: string;
 	images?: { media_type: string; data: string }[];
+	/**
+	 * Queue behind the running turn instead of answering 409. A producer that cannot
+	 * ask again later (a background job reporting in) sets this; a user-driven send
+	 * does not, because the frontend knows it is blocked.
+	 */
+	queue?: boolean;
 }
 
 type SseEvent = Record<string, unknown> & { type: string };
+
+/**
+ * One started `/chat` turn. The run outlives the HTTP response that asked for it:
+ * `attach` streams it, and `runDetached` is for a turn with no reader at all (a
+ * queued prompt).
+ */
+interface WebuiTurn {
+	sessionId: string;
+	attach(req: IncomingMessage, res: ServerResponse): void;
+	runDetached(): void;
+}
 
 /** Stable identifier for a working directory, used as the project bucket hash. */
 function projectHash(cwd: string): string {
@@ -708,6 +725,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 	// Single in-flight turn; the frontend blocks sending while a turn streams.
 	let turnActive = false;
+	// Prompts parked behind the running turn (`/chat` with `queue: true`). Only the
+	// producer that cannot retry later asks for this; see ChatRequestBody.queue.
+	const chatQueue: ChatRequestBody[] = [];
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
 	const oauthFlows = new Map<string, OAuthFlowState>();
 
@@ -860,54 +880,47 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		return runtime.session;
 	}
 
-	/** The `/chat` turn: subscribe, prompt, stream SSE until the run settles. */
-	function runChatTurn(req: IncomingMessage, res: ServerResponse, body: ChatRequestBody): void {
+	/**
+	 * Start one `/chat` turn. The run is independent of any HTTP response: a turn
+	 * nobody is attached to (a job reporting in, a queued prompt) still runs, and a
+	 * browser that reconnects picks it up from the next round on. `attach` is what
+	 * turns the run into an SSE stream; it can be called once per request.
+	 */
+	function beginTurn(body: ChatRequestBody, opts: { abortOnDetach: boolean }): WebuiTurn {
 		const session = currentSession();
-		res.writeHead(200, {
-			"content-type": "text/event-stream; charset=utf-8",
-			"cache-control": "no-cache",
-			connection: "keep-alive",
-		});
-		const send = (event: SseEvent) => {
-			res.write(`data: ${JSON.stringify(event)}\n\n`);
-		};
-		let settled = false;
-		// Set once the turn is over, so the request closing afterwards (the normal
-		// end of a stream) does not abort the run like a real disconnect does.
-		let finished = false;
 		const startedAt = Date.now();
-		let toolCalls = 0;
-		let promptTokens = 0;
-		let completionTokens = 0;
-		let cachedTokens = 0;
-		let rounds = 0;
-
-		send({
-			type: "runtime_info",
-			provider: modelKey(session.model ?? ({ provider: "", id: "" } as Model<any>)).replace(/^\//, ""),
-			model: session.model?.id ?? "",
-		});
-		send({ type: "session_assigned", session_id: session.sessionId });
-
+		const state = {
+			ended: false,
+			// Set once the turn is over, so a request closing afterwards (the normal
+			// end of a stream) does not abort the run like a real disconnect does.
+			finished: false,
+		};
+		const subscribers = new Set<(event: SseEvent) => void>();
+		const emit = (event: SseEvent) => {
+			for (const send of subscribers) send(event);
+		};
+		const stats = { toolCalls: 0, rounds: 0, promptTokens: 0, completionTokens: 0, cachedTokens: 0 };
 		// The final assistant message decides the turn outcome; keep its stop
 		// reason and provider error so `done` carries them.
 		let lastStopReason: string | undefined;
 		let lastErrorMessage: string | undefined;
 		let lastErrorCode: number | undefined;
-
-		let eventUnsubscribe: (() => void) | undefined;
+		let endTurn: () => void = () => undefined;
+		const cleared = new Promise<void>((resolve) => {
+			endTurn = resolve;
+		});
 
 		const onEvent = (event: AgentSessionEvent) => {
 			switch (event.type) {
 				case "turn_start":
-					rounds++;
+					stats.rounds++;
 					break;
 				case "message_update": {
 					const streamEvent = event.assistantMessageEvent as AssistantMessageEvent;
 					if (streamEvent.type === "text_delta") {
-						send({ type: "text", content: streamEvent.delta });
+						emit({ type: "text", content: streamEvent.delta });
 					} else if (streamEvent.type === "thinking_delta") {
-						send({ type: "reasoning", content: streamEvent.delta });
+						emit({ type: "reasoning", content: streamEvent.delta });
 					}
 					break;
 				}
@@ -917,9 +930,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 						const assistant = message as Extract<Message, { role: "assistant" }>;
 						const usage = assistant.usage;
 						if (usage) {
-							promptTokens += usage.input;
-							completionTokens += usage.output;
-							cachedTokens += usage.cacheRead;
+							stats.promptTokens += usage.input;
+							stats.completionTokens += usage.output;
+							stats.cachedTokens += usage.cacheRead;
 						}
 						// A failed model response keeps its stream open in the
 						// session; surface the provider error right away so the UI
@@ -929,7 +942,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 							const detail = describeProviderError(assistant.errorMessage);
 							lastErrorMessage = detail.message;
 							lastErrorCode = detail.code;
-							send({ type: "error", message: detail.message, code: detail.code, retrying: true });
+							emit({ type: "error", message: detail.message, code: detail.code, retrying: true });
 						} else {
 							lastErrorMessage = undefined;
 							lastErrorCode = undefined;
@@ -938,7 +951,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					break;
 				}
 				case "tool_execution_start":
-					send({
+					emit({
 						type: "tool_start",
 						id: event.toolCallId,
 						name: event.toolName,
@@ -954,12 +967,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 									.map((part) => (part as { text?: string }).text ?? "")
 									.join("")
 							: "";
-					if (chunk) send({ type: "tool_output", chunk });
-					send({ type: "tool_progress", id: event.toolCallId, progress: "" });
+					if (chunk) emit({ type: "tool_output", chunk });
+					emit({ type: "tool_progress", id: event.toolCallId, progress: "" });
 					break;
 				}
 				case "tool_execution_end": {
-					toolCalls++;
+					stats.toolCalls++;
 					const output =
 						typeof event.result?.content === "object" && Array.isArray(event.result?.content)
 							? (event.result.content as Array<{ type: string; text?: string }>)
@@ -967,7 +980,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 									.map((part) => part.text ?? "")
 									.join("\n")
 							: ((event.result?.content as unknown as string) ?? "");
-					send({
+					emit({
 						type: "tool_result",
 						id: event.toolCallId,
 						name: event.toolName,
@@ -979,10 +992,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					break;
 				}
 				case "compaction_start":
-					send({ type: "warning", message: "compacting context…" });
+					emit({ type: "warning", message: "compacting context…" });
 					break;
 				case "auto_retry_start":
-					send({
+					emit({
 						type: "retry",
 						attempt: event.attempt,
 						max_attempts: event.maxAttempts,
@@ -993,16 +1006,16 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				case "auto_retry_end":
 					if (!event.success) {
 						const detail = describeProviderError(event.finalError);
-						send({ type: "error", message: detail.message, code: detail.code, retrying: false });
+						emit({ type: "error", message: detail.message, code: detail.code, retrying: false });
 					}
 					break;
 				case "agent_settled": {
-					if (settled) return;
-					settled = true;
+					if (state.ended) return;
+					state.ended = true;
 					if (event.aborted) {
-						send({ type: "stopped" });
+						emit({ type: "stopped" });
 					} else {
-						send({
+						emit({
 							type: "done",
 							tokens: null,
 							tool_calls: null,
@@ -1012,15 +1025,14 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 							code: lastErrorCode ?? undefined,
 							stats: {
 								duration_ms: Date.now() - startedAt,
-								rounds,
-								tool_calls: toolCalls,
-								prompt_tokens: promptTokens,
-								completion_tokens: completionTokens,
-								cached_tokens: cachedTokens,
+								rounds: stats.rounds,
+								tool_calls: stats.toolCalls,
+								prompt_tokens: stats.promptTokens,
+								completion_tokens: stats.completionTokens,
+								cached_tokens: stats.cachedTokens,
 							},
 						});
 					}
-					res.end();
 					break;
 				}
 				default:
@@ -1028,13 +1040,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 		};
 
-		eventUnsubscribe = session.subscribe(onEvent);
+		const eventUnsubscribe = session.subscribe(onEvent);
 		// Surface extra-module permission prompts as SSE permission_request events;
 		// POST /chat/permission answers them (see handleApi).
 		const unsubscribeBroker = extraBridge.available
 			? extraBridge.permissions.subscribe((event) => {
 					if (event.type !== "prompt") return;
-					send({
+					emit({
 						type: "permission_request",
 						session_id: session.sessionId,
 						tool_name: event.info.toolName,
@@ -1051,7 +1063,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			? extraBridge.asks.subscribe((event) => {
 					if (event.type !== "prompt") return;
 					const first = event.questions[0];
-					send({
+					emit({
 						type: "user_input_request",
 						request_id: event.requestId,
 						session_id: session.sessionId,
@@ -1064,17 +1076,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					});
 				})
 			: undefined;
-		const finish = () => {
-			finished = true;
-			if (!settled) {
-				settled = true;
-				send({ type: "done", tokens: null, tool_calls: null, session_id: session.sessionId });
-				res.end();
-			}
-			eventUnsubscribe?.();
+
+		const detachAll = () => {
+			eventUnsubscribe();
 			unsubscribeBroker?.();
 			unsubscribeAsks?.();
+		};
+		const finish = () => {
+			state.finished = true;
+			detachAll();
 			turnActive = false;
+			endTurn();
 		};
 
 		const images: ImageContent[] | undefined = body.images?.map((image) => ({
@@ -1083,31 +1095,88 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			mimeType: image.media_type,
 		}));
 
-		session
+		void session
 			.prompt(body.message ?? "", {
 				...(images?.length ? { images } : {}),
 				source: "webui",
 			})
 			.catch((error: Error) => {
-				send({ type: "error", message: error.message });
+				emit({ type: "error", message: error.message });
 			})
 			.finally(() => {
 				// agent_settled may fire before or after prompt() resolves; cover both.
 				finish();
 			});
 
-		// Only a client that leaves mid-turn aborts the run. The request closing
-		// after the terminal event is the normal end of a turn: aborting there
-		// killed the run that had just finished (and the next queued one with it).
-		req.on("close", () => {
-			if (finished) return;
-			void session.abort().finally(() => {
-				eventUnsubscribe?.();
-				unsubscribeBroker?.();
-				unsubscribeAsks?.();
-				turnActive = false;
-			});
-		});
+		const attachEvents = (send: (event: SseEvent) => void): (() => void) => {
+			subscribers.add(send);
+			return () => subscribers.delete(send);
+		};
+
+		const turn: WebuiTurn = {
+			sessionId: session.sessionId,
+			attach(req, res) {
+				// The SSE head is written with the first event: a queued turn may wait,
+				// and an open response with no body reads as a hang to the browser.
+				let opened = false;
+				const send = (event: SseEvent) => {
+					if (res.writableEnded) return;
+					if (!opened) {
+						opened = true;
+						res.writeHead(200, {
+							"content-type": "text/event-stream; charset=utf-8",
+							"cache-control": "no-cache",
+							connection: "keep-alive",
+						});
+					}
+					res.write(`data: ${JSON.stringify(event)}\n\n`);
+				};
+				const model = session.model ?? ({ provider: "", id: "" } as Model<any>);
+				send({
+					type: "runtime_info",
+					provider: modelKey(model).replace(/^\//, ""),
+					model: model.id,
+				});
+				send({ type: "session_assigned", session_id: session.sessionId });
+				const unsubscribe = attachEvents(send);
+				void cleared.then(() => {
+					unsubscribe();
+					if (!res.writableEnded) res.end();
+				});
+				// Only a client that leaves mid-turn aborts the run, and only for a turn
+				// this request started: a background turn belongs to whoever started it.
+				req.on("close", () => {
+					if (state.finished || !opts.abortOnDetach) {
+						unsubscribe();
+						return;
+					}
+					void session.abort().finally(() => {
+						finish();
+						unsubscribe();
+						if (!res.writableEnded) res.end();
+					});
+				});
+			},
+			runDetached() {
+				// A turn nobody reads still has to settle: wait for it, then let the queue go.
+				void cleared.then(() => releaseQueuedTurn());
+			},
+		};
+		return turn;
+	}
+
+	/**
+	 * Start the next queued prompt, if any. Two prompts cannot run at once, so a
+	 * turn asked to queue is parked here and started when the running one settles.
+	 *
+	 * The queued prompt has nobody attached: its reporter already got its answer, and
+	 * the turn it starts writes into the transcript, which is where the user reads it.
+	 */
+	function releaseQueuedTurn(): void {
+		const next = chatQueue.shift();
+		if (!next) return;
+		turnActive = true;
+		beginTurn(next, { abortOnDetach: false }).runDetached();
 	}
 
 	async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -1473,11 +1542,23 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		// --- Chat (default transport) ---
 		if (path === "/chat" && req.method === "POST") {
+			const body = await readBody(req);
+			// A producer that cannot ask again later (a background job reporting in)
+			// queues instead of taking a 409: the turn it lands in is real work whose
+			// only reader is the transcript, and dropping it loses the report.
+			if (turnActive && body.queue === true) {
+				// The prompt is written to the transcript when its turn starts, not when
+				// it is queued, and the producing client is usually gone by then: answer
+				// now with what the queue accepted, and let the turn run detached. The
+				// report lands in the transcript, which is what the user reads next.
+				chatQueue.push({ message: typeof body.message === "string" ? body.message : "" });
+				json(res, 200, { queued: true, position: chatQueue.length });
+				return;
+			}
 			if (turnActive) {
 				json(res, 409, { error: "a turn is already running in this webui", code: "busy" });
 				return;
 			}
-			const body = await readBody(req);
 			const chatBody: ChatRequestBody = {
 				message: typeof body.message === "string" ? body.message : "",
 				session_id: typeof body.session_id === "string" ? body.session_id : undefined,
@@ -1531,7 +1612,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				}
 			}
 			turnActive = true;
-			runChatTurn(req, res, chatBody);
+			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
 			return;
 		}
 		if (path === "/chat/stop" && req.method === "POST") {

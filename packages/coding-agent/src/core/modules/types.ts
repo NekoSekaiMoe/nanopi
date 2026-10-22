@@ -1549,6 +1549,18 @@ export interface ModuleApi {
 	): void;
 
 	/**
+	 * Hand a custom message to the session and report where it landed: "started" (this
+	 * call started a turn), "queued" (a run in flight will carry it), or "pending" (it
+	 * waits in the transcript for the next prompt). Use it instead of `sendMessage` when
+	 * the message is the only thing a background job produces and starting a turn with
+	 * no reader attached would lose it.
+	 */
+	deliverMessage<T = unknown>(
+		message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+		options?: { startTurn?: boolean; deliverAs?: "steer" | "followUp" },
+	): Promise<"started" | "queued" | "pending">;
+
+	/**
 	 * Send a user message to the agent. Always triggers a turn.
 	 * When the agent is streaming, use deliverAs to specify how to queue the message.
 	 * Set expandPromptTemplates to dispatch extension commands and expand skill commands and prompt templates.
@@ -1884,6 +1896,11 @@ export type SendMessageHandler = <T = unknown>(
 	options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
 ) => void;
 
+export type DeliverMessageHandler = <T = unknown>(
+	message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
+	options?: { startTurn?: boolean; deliverAs?: "steer" | "followUp" },
+) => Promise<"started" | "queued" | "pending">;
+
 export type SendUserMessageHandler = (
 	content: string | (TextContent | ImageContent)[],
 	options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
@@ -1962,6 +1979,7 @@ export interface ModuleRuntimeState {
  */
 export interface ModuleActions {
 	sendMessage: SendMessageHandler;
+	deliverMessage: DeliverMessageHandler;
 	sendUserMessage: SendUserMessageHandler;
 	appendEntry: AppendEntryHandler;
 	setSessionName: SetSessionNameHandler;
