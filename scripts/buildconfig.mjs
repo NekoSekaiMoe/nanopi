@@ -574,15 +574,25 @@ export function resolveBuiltinProviderIds(providers) {
 }
 
 /**
- * Cross-checks the providers a flavor ships against the built-in catalogs in
- * packages/ai. A provider set that names a provider the catalog does not have,
- * or a catalog the flavors never ship, fails the build instead of producing a
- * build whose model list silently disagrees with its provider set.
+ * Cross-checks the provider sets against the built-in catalogs in packages/ai.
+ *
+ * Two things have to hold, and only the second one is about the flavor being
+ * built:
+ *
+ * - every set only names catalogs that exist, and
+ * - every catalog belongs to at least one set, so no shard is unreachable.
+ *
+ * A flavor is not required to ship every catalog. `base` ships the curated
+ * `core` set and leaves ~1.5 MiB of other vendors' model data out; those
+ * catalogs stay reachable through `full` and through a hand-written
+ * `models.json`. The rule that fails the build is a catalog nobody can select,
+ * not a flavor that selects only some.
  */
 export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 	const config = loadBuildConfig(repoRoot);
 	const known = new Set(providerIds);
 	const isMarker = (providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS;
+	const reachable = new Set();
 	for (const [name, providerSet] of Object.entries(config.providerSets)) {
 		const unknown = providerSet.providers.filter((providerId) => !isMarker(providerId) && !known.has(providerId));
 		if (unknown.length > 0) {
@@ -590,21 +600,24 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 				`${BUILD_CONFIG_FILENAME} provider set "${name}" names providers without a built-in catalog: ${unknown.join(", ")}`,
 			);
 		}
+		if (providerSet.providers.includes(ALL_PROVIDERS)) {
+			for (const providerId of providerIds) reachable.add(providerId);
+		}
+		for (const providerId of providerSet.providers) {
+			if (!isMarker(providerId)) reachable.add(providerId);
+		}
 	}
-	const shipped = resolveFlavorProviders(config, flavorName);
-	// A flavor that ships every catalog, or no catalog at all, has nothing to
-	// cross-check: one names no provider, the other names nothing but a marker.
-	if (shipped.includes(ALL_PROVIDERS) || shipped.includes(NO_PROVIDERS)) return;
-	const knownIds = new Set(providerIds);
-	const unreachable = providerIds.filter((providerId) => !shipped.includes(providerId));
+	const unreachable = providerIds.filter((providerId) => !reachable.has(providerId));
 	if (unreachable.length > 0) {
 		throw new Error(
-			`Flavor "${flavorName}" ships no provider set entry for: ${unreachable.join(", ")} ` +
-				`(list it in a provider set, or mark that set "${ALL_PROVIDERS}")`,
+			`No provider set lists: ${unreachable.join(", ")} ` +
+				`(list each catalog in a provider set, or mark one set "${ALL_PROVIDERS}")`,
 		);
 	}
+	const shipped = resolveFlavorProviders(config, flavorName);
+	if (shipped.includes(ALL_PROVIDERS) || shipped.includes(NO_PROVIDERS)) return;
 	for (const providerId of shipped) {
-		if (!knownIds.has(providerId)) {
+		if (!known.has(providerId)) {
 			throw new Error(`Flavor "${flavorName}" ships an unknown provider: ${providerId}`);
 		}
 	}

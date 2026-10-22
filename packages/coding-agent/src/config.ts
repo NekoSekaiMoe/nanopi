@@ -133,7 +133,13 @@ export const PACKAGE_NAME: string = pkg.name || "@nanopi/pi-coding-agent";
 export const APP_NAME: string = nanopiConfigName || "nanopi";
 export const APP_TITLE: string = nanopiConfigName ? APP_NAME : "nanopi";
 export const CONFIG_DIR_NAME: string = pkg.nanopiConfig?.configDir || ".nanopi";
-export const VERSION: string = pkg.version || "0.0.0";
+/** Standalone builds without embedded assets inject the version instead. */
+declare const NANOPI_SINGLE_FILE_VERSION_FALLBACK: string | undefined;
+
+export const VERSION: string =
+	pkg.version ||
+	(typeof NANOPI_SINGLE_FILE_VERSION_FALLBACK === "undefined" ? undefined : NANOPI_SINGLE_FILE_VERSION_FALLBACK) ||
+	"0.0.0";
 
 // e.g., NANOPI_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;

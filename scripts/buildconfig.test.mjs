@@ -227,14 +227,18 @@ describe("providers component", () => {
 	const config = {
 		defaultFlavor: "full",
 		components: { providers: { description: "Provider set" }, webui: {} },
+		// `core` is the curated set a trimmed flavor ships; it is not the whole
+		// catalog, which is the shape `base` has in the real buildconfig.
 		providerSets: {
 			all: { description: "Every catalog", providers: ["__ALL__"] },
 			none: { description: "No catalog", providers: ["__NONE__"] },
 			presets: { description: "Presets", providers: ["openai", "anthropic"] },
+			core: { description: "Curated", providers: ["openai"] },
 		},
 		flavors: {
 			full: { components: { "*": true, providers: "all" } },
 			small: { components: { "*": false, providers: "presets" } },
+			trimmed: { components: { "*": false, providers: "core" } },
 			empty: { components: { "*": false, providers: "none" } },
 			unnamed: { components: { "*": true } },
 		},
@@ -281,13 +285,29 @@ describe("providers component", () => {
 		);
 	});
 
-	it("rejects a flavor that leaves catalogs out of every provider set", () => {
-		const dir = writeConfig(config);
+	it("rejects a catalog that no provider set can select", () => {
+		// Same sets with the marker dropped: `google` has a catalog, but no set
+		// lists it, so no flavor could ever reach it.
+		const dir = writeConfig({
+			...config,
+			providerSets: { ...config.providerSets, all: { description: "Every catalog", providers: ["openai", "anthropic"] } },
+		});
 		tempDirs.push(dir);
-		throws(
-			() => validateFlavorProviders(dir, ["openai", "anthropic", "google"], "small"),
-			/Flavor "small" ships no provider set entry for: google/,
-		);
+		throws(() => validateFlavorProviders(dir, ["openai", "anthropic", "google"], "full"), /No provider set lists: google/);
+	});
+
+	it("accepts a flavor that ships less than the whole catalog", () => {
+		const withFullSet = {
+			...config,
+			providerSets: { ...config.providerSets, every: { providers: ["__ALL__"] } },
+			flavors: { ...config.flavors, trimmed: { components: { "*": false, providers: "core" } } },
+		};
+		const dir = writeConfig(withFullSet);
+		tempDirs.push(dir);
+		// `trimmed` ships `core` (openai only): fewer than the three catalogs that
+		// exist, which is exactly what `base` does with the other 40 vendors.
+		validateFlavorProviders(dir, ["openai", "anthropic", "google"], "trimmed");
+		strictEqual(resolveFlavorProviders(loadBuildConfig(dir), "trimmed").join(","), "openai");
 	});
 
 	it("accepts a flavor that ships every catalog through the full set marker", () => {
