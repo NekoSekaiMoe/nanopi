@@ -26,7 +26,7 @@ it, so a report never races the run that is settling.
 - `tools` (spawn/continue): comma list, default `read,bash,grep,find,ls`; add `write,edit` only when the child should modify files
 - `cwd` (spawn): working directory (default: session cwd); rejected together with `isolated`
 - `model` / `timeoutSec`: optional; timeout default 600s per attempt
-- `dependsOn` (spawn): job ids that must settle first
+- `dependsOn` (spawn): job ids that must settle first; their reports are pasted into the dependent's brief
 - `isolated` (spawn/continue): give the job its own git worktree
 - `onFailure`: `"report"` (default) or `"retry"`, capped at 3 attempts
 - `jobId` (wait/status/kill/continue)
@@ -39,10 +39,34 @@ transcript with the previous report as context, so a follow-up brief only has to
 say what changed instead of restating everything the child already knows.
 
 **Dependencies.** `dependsOn: ["sa-1", "sa-2"]` means the job does not start until
-both settle. A dependency that failed, timed out, or was killed blocks the
-dependent (`blocked`, reported like any other outcome) rather than letting it run
-on missing work. An unknown id is refused at spawn time, because it can never
-settle. The main agent does not poll for this.
+both settle, and that it starts with their reports already in its brief:
+
+```
+Context from the jobs this one depends on (verbatim reports):
+### sa-1 (completed)
+<report>
+
+### sa-2 (completed)
+<report>
+
+Task: <the brief that was spawned>
+```
+
+That assembly is the same one `continue` uses for the previous round, moved to
+where the edges are known, so a dependent never depends on the main agent copying
+a report by hand (and nothing silently loses a report's tail).
+
+A dependency that failed, timed out, or was killed blocks the dependent
+(`blocked`, reported like any other outcome) rather than letting it run on missing
+work. An unknown id is refused at spawn time, because it can never settle. The
+main agent does not poll for this.
+
+**Restarts.** Every archived job records its `dependsOn` edges, so a restored
+session rebuilds the graph instead of a bag of reports. A job archived as
+`queued`/`blocked` is re-queued and runs (with its dependency reports injected);
+a job archived as `running` lost its process with the parent, so it becomes
+`interrupted` — settled, not succeeded — and its dependents see the failure
+instead of waiting forever.
 
 **Isolation.** `isolated: true` runs `git worktree add <dir> -b subagent/<jobId>`
 next to the repository root and passes that directory as the child's cwd. The
