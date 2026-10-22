@@ -980,6 +980,50 @@ Inline \(A_{sf}\)`,
 				["Map ℂ³"],
 			);
 		});
+
+		// Ported from earendil-works/pi#11159: an unclosed display-math block used to swallow every
+		// following table, because math was allowed to pair across the table's delimiter row.
+		describe("unclosed display math before tables", () => {
+			const table = ["| A | B |", "|---|---|", "| 1 | 2 |"];
+			const render = (source: string) =>
+				new Markdown(source, 0, 0, defaultMarkdownTheme).render(80).map((line) => stripAnsi(line).trimEnd());
+
+			const expectTable = (lines: string[]) => {
+				assert.ok(
+					lines.some((line) => line.includes("│ A │ B │")),
+					`missing header: ${lines.join(" | ")}`,
+				);
+				assert.ok(
+					lines.some((line) => line.includes("│ 1 │ 2 │")),
+					`missing row: ${lines.join(" | ")}`,
+				);
+			};
+
+			it("renders a table after an orphan $$ opener", () => {
+				const lines = render(["Intro", "", "$$", "", ...table, "", "After"].join("\n"));
+				expectTable(lines);
+				assert.ok(lines.includes("$$"));
+				assert.ok(lines.includes("After"));
+			});
+
+			it("renders a table after an orphan $$ opener with math-like content", () => {
+				const lines = render(["$$", "x = 1", "", ...table].join("\n"));
+				expectTable(lines);
+				assert.ok(lines.includes("x = 1"));
+			});
+
+			it("does not pair an unclosed $$ with a later $$ across a table", () => {
+				const lines = render(["Intro", "", "$$", "x = 1", "", ...table, "", "$$", "y^2", "$$"].join("\n"));
+				expectTable(lines);
+				assert.ok(lines.some((line) => line.includes("y²")));
+			});
+
+			it("renders a single-column table with a pipe-free aligned delimiter after an orphan $$", () => {
+				const lines = render(["$$", "", "| A |", ":---:", "| 1 |"].join("\n"));
+				assert.ok(lines.some((line) => line.includes("│ A │")));
+				assert.ok(lines.some((line) => line.includes("│ 1 │")));
+			});
+		});
 	});
 
 	describe("Backslash escapes", () => {
@@ -1582,6 +1626,29 @@ bar`,
 
 			assert.ok(joinedPlain.includes("~strikethrough~"), "Single-tilde delimiters should remain visible");
 			assert.ok(!joinedOutput.includes("\x1b[9m"), "Single-tilde text should not use strikethrough styling");
+		});
+	});
+
+	// Ported from earendil-works/pi#10730: CJK text has no spaces, so strict CommonMark flanking
+	// rules leave "**注意：**后面" as literal asterisks. marked-cjk-friendly relaxes only CJK punctuation.
+	describe("CJK emphasis", () => {
+		const tagTheme: MarkdownTheme = {
+			...defaultMarkdownTheme,
+			bold: (text) => `<b>${text}</b>`,
+			italic: (text) => `<i>${text}</i>`,
+		};
+		const render = (text: string) => new Markdown(text, 0, 0, tagTheme).render(80).map((line) => line.trimEnd());
+
+		it("renders emphasis delimited next to CJK punctuation", () => {
+			assert.deepStrictEqual(render("**这是测试。**后面"), ["<b>这是测试。</b>后面"]);
+			assert.deepStrictEqual(render("**一句话说清：**一台机器"), ["<b>一句话说清：</b>一台机器"]);
+			assert.deepStrictEqual(render("**要点到此为止。**20 小时"), ["<b>要点到此为止。</b>20 小时"]);
+			assert.deepStrictEqual(render("字**「引用」**字"), ["字<b>「引用」</b>字"]);
+			assert.deepStrictEqual(render("*斜体。*后面"), ["<i>斜体。</i>后面"]);
+		});
+
+		it("keeps CommonMark flanking rules for non-CJK text", () => {
+			assert.deepStrictEqual(render("**end.**Then next"), ["**end.**Then next"]);
 		});
 	});
 

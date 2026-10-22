@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed bold and italic delimited next to CJK punctuation rendering literal asterisks, in the TUI and in HTML exports, by tokenizing emphasis with marked-cjk-friendly ([#10730](https://github.com/earendil-works/pi/pull/10730), [#3353](https://github.com/earendil-works/pi/issues/3353)).
+- Fixed an unclosed display-math block swallowing every following table ([#11159](https://github.com/earendil-works/pi/issues/11159)).
+
 ## [20261022]
 
 ### Added
