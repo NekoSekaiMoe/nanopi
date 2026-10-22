@@ -190,6 +190,11 @@ export interface SessionDetail {
 	/** Thinking level recorded in the transcript; resumes with the session. */
 	thinking_level?: string;
 	messages: SessionMessage[];
+	/**
+	 * Plan of the last `todo` result in the transcript. Absent for a session
+	 * that never built one; present but empty after a `clear`.
+	 */
+	plan?: PlanItem[];
 }
 
 export async function listSessions(): Promise<SessionMetaWithProject[]> {

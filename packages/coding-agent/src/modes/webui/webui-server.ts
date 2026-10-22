@@ -31,7 +31,13 @@ import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
 import { getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
-import { parseSessionEntries, type SessionInfo, SessionManager } from "../../core/session-manager.ts";
+import {
+	type FileEntry,
+	parseSessionEntries,
+	type SessionEntry,
+	type SessionInfo,
+	SessionManager,
+} from "../../core/session-manager.ts";
 import { mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
 	addAccountModels,
@@ -105,6 +111,14 @@ interface WebuiSessionMessage {
 	created_at?: number;
 }
 
+/** What GET session detail derives from one transcript file. */
+interface SessionDetailContent {
+	messages: WebuiSessionMessage[];
+	thinking_level?: string;
+	/** Plan of the last todo result on the recorded branch; absent without one. */
+	plan?: PlanItem[];
+}
+
 interface ChatRequestBody {
 	message?: string;
 	session_id?: string;
@@ -149,7 +163,7 @@ export function describeProviderError(raw: string | undefined): { message: strin
 }
 
 /** One row of the todo extension's plan, as the browser renders it. */
-export interface WebuiPlanItem {
+export interface PlanItem {
 	id: number;
 	text: string;
 	status: "pending" | "in_progress" | "completed" | "cancelled";
@@ -164,12 +178,12 @@ export interface WebuiPlanItem {
  * transcript. Other tools carry no plan, so the field stays absent instead of
  * shipping an empty list on every call.
  */
-export function planSnapshotOf(toolName: string, details: unknown): { plan?: WebuiPlanItem[] } {
+export function planSnapshotOf(toolName: string, details: unknown): { plan?: PlanItem[] } {
 	if (toolName !== "todo") return {};
 	const raw = (details as { todos?: unknown } | undefined)?.todos;
 	if (!Array.isArray(raw)) return {};
 	const statuses = new Set(["pending", "in_progress", "completed", "cancelled"]);
-	const plan: WebuiPlanItem[] = [];
+	const plan: PlanItem[] = [];
 	for (const item of raw) {
 		if (!item || typeof item !== "object") continue;
 		const record = item as Record<string, unknown>;
@@ -179,7 +193,7 @@ export function planSnapshotOf(toolName: string, details: unknown): { plan?: Web
 		plan.push({
 			id: record.id,
 			text: record.text,
-			status: status as WebuiPlanItem["status"],
+			status: status as PlanItem["status"],
 			...(record.isVerification === true ? { isVerification: true } : {}),
 		});
 	}
@@ -478,11 +492,75 @@ function toWebuiMessage(message: AgentMessage): WebuiSessionMessage | null {
 	return null;
 }
 
-/** Read a session file and map its message entries for GET session detail. */
-export function readSessionMessages(content: string): { messages: WebuiSessionMessage[]; thinking_level?: string } {
+/**
+ * The todo plan recorded in a session log: the last plan-shaped `todo` result
+ * on the recorded branch, projected through any context edit that replaced it.
+ *
+ * A session file is a tree; `parseSessionEntries` returns every line, branches
+ * and abandoned loops included, so walking them in file order would report a
+ * plan the agent never had. The branch is instead rebuilt from `parentId` links
+ * (last entry is the leaf, as in `SessionManager.buildSessionPath`), and the
+ * plan is then found by matching `toolCallId` because the results do not record
+ * the tool name.
+ *
+ * Every `todo` result carries the whole list (`planSnapshotOf`), so the newest
+ * one is the current plan: an empty list means the model cleared its plan and
+ * the card has to go with it. Only a result that never described a plan at all
+ * (no `details`, or a shape `planSnapshotOf` refuses) is walked past, which is
+ * how a log written before the field existed still yields the plan it recorded.
+ *
+ * `context_edit` entries replace a message's content in the model's context but
+ * leave the tool details alone, so a todo result the user edited away is still
+ * in the log; those are skipped like abandoned branches.
+ */
+export function planFromSessionEntries(entries: FileEntry[]): PlanItem[] | undefined {
+	const byId = new Map<string, SessionEntry>();
+	for (const entry of entries) {
+		if (entry.type !== "session") byId.set(entry.id, entry);
+	}
+	const branch: SessionEntry[] = [];
+	const seen = new Set<string>();
+	const leaf = entries[entries.length - 1];
+	let current = leaf ? byId.get(leaf.id) : undefined;
+	while (current && !seen.has(current.id)) {
+		seen.add(current.id);
+		branch.push(current);
+		current = current.parentId ? byId.get(current.parentId) : undefined;
+	}
+	branch.reverse();
+
+	// An edit replaces the content the model sees, not the details, so every
+	// edited todo result is off the table regardless of how many edits hit it.
+	const editedCalls = new Set<string>();
+	for (const entry of branch) {
+		if (entry.type !== "context_edit") continue;
+		const result = toolResultOf(byId.get(entry.targetId));
+		if (result) editedCalls.add(result.toolCallId);
+	}
+
+	for (let index = branch.length - 1; index >= 0; index -= 1) {
+		const result = toolResultOf(branch[index]);
+		if (!result || editedCalls.has(result.toolCallId)) continue;
+		const plan = planSnapshotOf("todo", result.details).plan;
+		if (plan) return plan;
+	}
+	return undefined;
+}
+
+/** The tool result a message entry carries, or undefined for other entries. */
+function toolResultOf(entry: SessionEntry | undefined): { toolCallId: string; details?: unknown } | undefined {
+	if (!entry) return undefined;
+	if (entry.type !== "message" || entry.message.role !== "toolResult") return undefined;
+	const result = entry.message as ToolResultMessage;
+	return { toolCallId: result.toolCallId, details: result.details };
+}
+
+/** Read a session file for GET session detail: messages, settings and the plan. */
+export function readSessionMessages(content: string): SessionDetailContent {
+	const entries = parseSessionEntries(content);
 	const messages: WebuiSessionMessage[] = [];
 	let thinkingLevel: string | undefined;
-	for (const entry of parseSessionEntries(content)) {
+	for (const entry of entries) {
 		if (entry.type === "message") {
 			const mapped = toWebuiMessage(entry.message);
 			if (mapped) messages.push(mapped);
@@ -490,7 +568,7 @@ export function readSessionMessages(content: string): { messages: WebuiSessionMe
 			thinkingLevel = entry.thinkingLevel;
 		}
 	}
-	return { messages, thinking_level: thinkingLevel };
+	return { messages, thinking_level: thinkingLevel, plan: planFromSessionEntries(entries) };
 }
 
 function sessionMeta(info: SessionInfo): WebuiSessionMeta & { project_hash: string } {
@@ -1341,7 +1419,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					return;
 				}
 				const content = await readFile(info.path, "utf8");
-				const { messages, thinking_level } = readSessionMessages(content);
+				const { messages, thinking_level, plan } = readSessionMessages(content);
 				const active = runtime.session.sessionId === info.id;
 				// The transcript records the thinking level per session; resuming this
 				// session (the open one included) restores it, so the picker reports
@@ -1356,6 +1434,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					message_count: info.messageCount,
 					thinking_level: level,
 					messages,
+					// The plan lives in tool details the messages above drop, so a
+					// reloaded session would otherwise show no plan until the next todo
+					// call; the transcript is the only record of it.
+					...(plan ? { plan } : {}),
 				});
 				return;
 			}

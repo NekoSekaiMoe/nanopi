@@ -284,6 +284,10 @@ export function useChat({
 				const detail = await getSession(projectHash, id);
 				if (generationRef.current !== generation) return;
 				setMessages(fromSessionMessages(detail.messages));
+				// The plan is a tool detail the transcript does not carry per message,
+				// so the backend derives it from the log; without it a reloaded
+				// session would stay plan-less until the next todo call.
+				setPlan(detail.plan ?? []);
 				// A transcript carries its own thinking level; show the one the
 				// resumed session will actually use instead of the previous model's.
 				onThinkingLevel?.(detail.thinking_level);
