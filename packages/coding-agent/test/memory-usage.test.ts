@@ -1,13 +1,19 @@
 import { strictEqual } from "node:assert";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	DEFAULT_MEM_INTERVAL_MS,
+	createFileLogger,
+	DEFAULT_DEBUG_INTERVAL_MS,
+	formatDebugHeader,
 	formatMemorySample,
 	formatMiB,
-	isMemoryDebugEnabled,
+	isDebugEnabled,
 	type MemorySample,
 	MemorySampler,
-	resolveMemoryIntervalMs,
+	resolveDebugIntervalMs,
+	resolveDebugLogPath,
 	sampleMemory,
 } from "../src/core/memory-usage.ts";
 import { formatMemoryRow } from "../src/modules/builtin-commands/status.ts";
@@ -27,20 +33,54 @@ function sample(overrides: Partial<MemorySample> = {}): MemorySample {
 	};
 }
 
-describe("memory debug flag", () => {
+describe("debug flag", () => {
 	it("accepts 1/true/yes and nothing else", () => {
-		strictEqual(isMemoryDebugEnabled({ NANOPI_MEM_DEBUG: "1" }), true);
-		strictEqual(isMemoryDebugEnabled({ NANOPI_MEM_DEBUG: "TRUE" }), true);
-		strictEqual(isMemoryDebugEnabled({ NANOPI_MEM_DEBUG: "yes" }), true);
-		strictEqual(isMemoryDebugEnabled({ NANOPI_MEM_DEBUG: "0" }), false);
-		strictEqual(isMemoryDebugEnabled({}), false);
+		strictEqual(isDebugEnabled({ NANOPI_DEBUG: "1" }), true);
+		strictEqual(isDebugEnabled({ NANOPI_DEBUG: "TRUE" }), true);
+		strictEqual(isDebugEnabled({ NANOPI_DEBUG: "yes" }), true);
+		strictEqual(isDebugEnabled({ NANOPI_DEBUG: "0" }), false);
+		strictEqual(isDebugEnabled({}), false);
+	});
+
+	it("ignores the old memory-only flag", () => {
+		strictEqual(isDebugEnabled({ NANOPI_MEM_DEBUG: "1" }), false);
 	});
 
 	it("falls back to the default interval for missing or absurd values", () => {
-		strictEqual(resolveMemoryIntervalMs({}), DEFAULT_MEM_INTERVAL_MS);
-		strictEqual(resolveMemoryIntervalMs({ NANOPI_MEM_INTERVAL_MS: "50" }), DEFAULT_MEM_INTERVAL_MS);
-		strictEqual(resolveMemoryIntervalMs({ NANOPI_MEM_INTERVAL_MS: "nope" }), DEFAULT_MEM_INTERVAL_MS);
-		strictEqual(resolveMemoryIntervalMs({ NANOPI_MEM_INTERVAL_MS: "250" }), 250);
+		strictEqual(resolveDebugIntervalMs({}), DEFAULT_DEBUG_INTERVAL_MS);
+		strictEqual(resolveDebugIntervalMs({ NANOPI_DEBUG_INTERVAL_MS: "50" }), DEFAULT_DEBUG_INTERVAL_MS);
+		strictEqual(resolveDebugIntervalMs({ NANOPI_DEBUG_INTERVAL_MS: "nope" }), DEFAULT_DEBUG_INTERVAL_MS);
+		strictEqual(resolveDebugIntervalMs({ NANOPI_DEBUG_INTERVAL_MS: "250" }), 250);
+	});
+
+	it("points the log at nanopi-debug.log in the requested directory", () => {
+		strictEqual(resolveDebugLogPath("/tmp/x"), "/tmp/x/nanopi-debug.log");
+		strictEqual(resolveDebugLogPath(), join(process.cwd(), "nanopi-debug.log"));
+	});
+
+	it("labels the header with version, pid and cwd", () => {
+		strictEqual(
+			formatDebugHeader({ version: "v20261022.abc1234", pid: 42, cwd: "/repo" }),
+			"debug start version v20261022.abc1234 pid 42 cwd /repo",
+		);
+	});
+});
+
+describe("file logger", () => {
+	it("appends one timestamped line per sample", () => {
+		const directory = mkdtempSync(join(tmpdir(), "nanopi-debug-"));
+		try {
+			const path = join(directory, "logs", "nanopi-debug.log");
+			const log = createFileLogger(path);
+			log("mem rss 1MiB");
+			log("mem rss 2MiB");
+			const lines = readFileSync(path, "utf8").trimEnd().split("\n");
+			strictEqual(lines.length, 2);
+			expect(lines[0]).toMatch(/^\[\d{4}-\d{2}-\d{2}T[^\]]+\] mem rss 1MiB$/);
+			expect(lines[1]).toContain("mem rss 2MiB");
+		} finally {
+			rmSync(directory, { recursive: true, force: true });
+		}
 	});
 });
 
@@ -86,7 +126,7 @@ describe("MemorySampler", () => {
 	it("logs periodic samples when enabled and stops on request", async () => {
 		const samples: string[] = [];
 		const sampler = new MemorySampler({
-			env: { NANOPI_MEM_DEBUG: "1", NANOPI_MEM_INTERVAL_MS: "100" },
+			env: { NANOPI_DEBUG: "1", NANOPI_DEBUG_INTERVAL_MS: "100" },
 			log: (line) => samples.push(line),
 		});
 		const stop = sampler.start();

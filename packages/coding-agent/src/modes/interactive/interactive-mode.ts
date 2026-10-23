@@ -82,7 +82,7 @@ import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defau
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
-import { MemorySampler } from "../../core/memory-usage.ts";
+import { formatDebugHeader, formatMemorySample, MemorySampler, resolveDebugLogPath } from "../../core/memory-usage.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
 import {
 	defaultModelPerProvider,
@@ -417,7 +417,11 @@ export class InteractiveMode {
 	private footer: FooterComponent;
 	private footerContainer: Container;
 	private footerDataProvider: FooterDataProvider;
-	/** Shared with `AgentSession` so `/status` shows the last periodic sample. */
+	/**
+	 * Shared with `AgentSession` so `/status` shows the last periodic sample.
+	 * Enabled by `NANOPI_DEBUG=1`; samples go to `nanopi-debug.log` in the agent
+	 * dir because stderr is painted over by the full-screen renderer.
+	 */
 	private readonly memorySampler: MemorySampler;
 	// Stored so the same manager can be injected into custom editors, selectors, and extension UI.
 	private keybindings: KeybindingsManager;
@@ -604,7 +608,7 @@ export class InteractiveMode {
 		this.editorContainer = new Container();
 		this.editorContainer.addChild(this.editor as Component);
 		this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
-		this.memorySampler = new MemorySampler();
+		this.memorySampler = new MemorySampler({ logPath: resolveDebugLogPath(getAgentDir()) });
 		this.footer = new FooterComponent(this.session, this.footerDataProvider);
 		this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 		this.footerContainer = new Container();
@@ -854,6 +858,17 @@ export class InteractiveMode {
 			console.log(theme.fg("dim", `Model scope: ${modelList}${cycleHint}`));
 		}
 
+		// Opt-in sampling (NANOPI_DEBUG=1) starts here so the log still has the startup
+		// cost when the TUI later dies. It writes to a file: the full-screen renderer
+		// repaints over any stderr line, so the numbers would be invisible there.
+		if (this.memorySampler.enabled) {
+			this.memorySampler.write(
+				formatDebugHeader({ version: BUILD_VERSION, pid: process.pid, cwd: this.sessionManager.getCwd() }),
+			);
+			this.memorySampler.write(formatMemorySample(this.memorySampler.sample(), "mem startup"));
+			this.memorySampler.start();
+		}
+
 		this.renderWidgets(); // Initialize with default spacer
 		this.mountInteractiveTui(this.renderer, [
 			this.documentContainer,
@@ -929,10 +944,8 @@ export class InteractiveMode {
 		// Initialize extensions first so resources are shown before messages
 		await this.rebindCurrentSession();
 
-		// Opt-in memory sampling (NANOPI_MEM_DEBUG=1). The last sample feeds /status.
-		this.memorySampler.sample();
+		// The last sample feeds /status; sampling itself started before the UI mounted.
 		this.session.setMemorySampleProvider(() => this.memorySampler.last);
-		this.memorySampler.start();
 
 		// Render initial messages AFTER showing loaded resources
 		this.renderInitialMessages();

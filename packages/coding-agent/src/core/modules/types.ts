@@ -376,7 +376,7 @@ export interface ModuleContext {
 	getLoadedResources(): LoadedResources;
 	/**
 	 * Last memory sample of this process, when the runtime keeps one
-	 * (`NANOPI_MEM_DEBUG=1`). Callers fall back to sampling on demand.
+	 * (`NANOPI_DEBUG=1`). Callers fall back to sampling on demand.
 	 */
 	getMemorySample?(): MemorySample | undefined;
 }
