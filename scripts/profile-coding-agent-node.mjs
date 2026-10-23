@@ -202,6 +202,10 @@ function formatMs(value) {
 	return `${value.toFixed(1)}ms`;
 }
 
+function formatMiB(value) {
+	return `${value < 1 ? value.toFixed(1) : Math.round(value)}MiB`;
+}
+
 function toDisplayPath(path) {
 	const relativePath = relative(repoRoot, path);
 	if (relativePath !== "" && !relativePath.startsWith("..")) {
@@ -247,6 +251,19 @@ function parseStartupTimings(stderr) {
 	}
 
 	return timings;
+}
+
+/**
+ * Startup RSS from the `memory to first usable state: startup rss 237MiB ...` line the
+ * interactive mode prints on stderr in benchmark mode.
+ */
+function parseStartupMemory(stderr) {
+	const line = stderr.split(/\r?\n/).find((entry) => entry.startsWith("memory to first usable state:"));
+	if (!line) {
+		return undefined;
+	}
+	const match = /rss (\d+(?:\.\d+)?)MiB/.exec(line);
+	return match ? Number.parseFloat(match[1]) : undefined;
 }
 
 function summarizeTimingMaps(runs) {
@@ -421,7 +438,7 @@ async function runTuiBenchmarkRun({ runtime, runIndex, measuredIndex, options, p
 			throw new Error(`CPU profile was not written: ${profilePath}`);
 		}
 
-		return { elapsedMs, profilePath, timings: parseStartupTimings(stderr) };
+		return { elapsedMs, profilePath, timings: parseStartupTimings(stderr), startupRssMiB: parseStartupMemory(stderr) };
 	} finally {
 		if (tempRoot) {
 			rmSync(tempRoot, { recursive: true, force: true });
@@ -615,11 +632,18 @@ async function main() {
 	const elapsedSummary = summarize(measuredRuns.map((run) => run.elapsedMs));
 	const timingSummaries = summarizeTimingMaps(measuredRuns);
 	const maxElapsedRun = measuredRuns.reduce((slowest, run) => (run.elapsedMs > slowest.elapsedMs ? run : slowest));
+	const rssValues = measuredRuns
+		.map((run) => run.startupRssMiB)
+		.filter((value) => value !== undefined);
+	const rssSummary = rssValues.length === 0 ? undefined : summarize(rssValues);
 	if (measuredRuns.length === 1) {
 		process.stdout.write("\nResult\n");
 		process.stdout.write(`  runtime:          ${runtime}${options.bundle ? " (bundle)" : ""}\n`);
 		process.stdout.write(`  mode:             ${options.mode}\n`);
 		process.stdout.write(`  elapsed:          ${formatMs(measuredRuns[0].elapsedMs)}\n`);
+		if (rssSummary) {
+			process.stdout.write(`  startup rss:      ${formatMiB(rssSummary.median)}\n`);
+		}
 		for (const [label, summary] of timingSummaries.entries()) {
 			process.stdout.write(`  ${label}: ${formatMs(summary.median)}\n`);
 		}
@@ -628,6 +652,9 @@ async function main() {
 			process.stdout.write(`  profiles dir:     ${toDisplayPath(profileDir)}\n`);
 		}
 		process.stdout.write(`METRIC startup_time_ms=${measuredRuns[0].elapsedMs.toFixed(1)}\n`);
+		if (rssSummary) {
+			process.stdout.write(`METRIC startup_rss_mib=${rssSummary.median.toFixed(1)}\n`);
+		}
 		for (const [label, summary] of timingSummaries.entries()) {
 			process.stdout.write(`METRIC ${toMetricName(label)}=${summary.median.toFixed(1)}\n`);
 		}
@@ -641,6 +668,10 @@ async function main() {
 	process.stdout.write(`  elapsed median:   ${formatMs(elapsedSummary.median)}\n`);
 	process.stdout.write(`  elapsed avg:      ${formatMs(elapsedSummary.avg)}\n`);
 	process.stdout.write(`  elapsed max:      ${formatMs(elapsedSummary.max)}\n`);
+	if (rssSummary) {
+		process.stdout.write(`  startup rss median: ${formatMiB(rssSummary.median)}\n`);
+		process.stdout.write(`  startup rss max:    ${formatMiB(rssSummary.max)}\n`);
+	}
 	for (const [label, summary] of timingSummaries.entries()) {
 		process.stdout.write(`  ${label} median: ${formatMs(summary.median)}\n`);
 	}
@@ -649,6 +680,9 @@ async function main() {
 		process.stdout.write(`  profiles dir:     ${toDisplayPath(profileDir)}\n`);
 	}
 	process.stdout.write(`METRIC startup_time_ms=${elapsedSummary.median.toFixed(1)}\n`);
+	if (rssSummary) {
+		process.stdout.write(`METRIC startup_rss_mib=${rssSummary.median.toFixed(1)}\n`);
+	}
 	for (const [label, summary] of timingSummaries.entries()) {
 		process.stdout.write(`METRIC ${toMetricName(label)}=${summary.median.toFixed(1)}\n`);
 	}

@@ -12,6 +12,7 @@ import {
 	isDebugEnabled,
 	type MemorySample,
 	MemorySampler,
+	parseMemorySampleRss,
 	resolveDebugIntervalMs,
 	resolveDebugLogPath,
 	sampleMemory,
@@ -93,6 +94,12 @@ describe("formatting", () => {
 
 	it("renders a one-line sample with peak and external memory apart", () => {
 		strictEqual(formatMemorySample(sample()), "mem rss 140MiB peak 148MiB heap 12MiB/34MiB ext 8MiB ab 1MiB");
+	});
+
+	it("reads the rss figure back out of a sample line", () => {
+		strictEqual(parseMemorySampleRss("mem startup rss 237MiB peak 237MiB heap 44MiB/46MiB ext 27MiB ab 2MiB"), 237);
+		strictEqual(parseMemorySampleRss("mem first-render rss 0.4MiB"), 0.4);
+		strictEqual(parseMemorySampleRss("debug start version v20261022.abc1234 pid 42 cwd /repo"), undefined);
 	});
 
 	it("summarises the /status row and drops an empty external figure", () => {
