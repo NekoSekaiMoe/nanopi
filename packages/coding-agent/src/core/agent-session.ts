@@ -89,6 +89,7 @@ import {
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
+import type { MemorySample } from "./memory-usage.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
@@ -530,6 +531,8 @@ export class AgentSession {
 	private readonly _deferredSettledActions: Array<() => Promise<void>> = [];
 
 	private _resourceLoader: ResourceLoader;
+	/** Interactive mode installs its sampler; `/status` falls back to an on-demand sample. */
+	private _memorySamplerMemorySample: (() => MemorySample | undefined) | undefined;
 	private _moduleFlagValues?: Map<string, boolean | string>;
 	private _customTools: ToolDefinition[];
 	private _baseToolDefinitions: Map<string, ToolDefinition> = new Map();
@@ -3709,6 +3712,14 @@ export class AgentSession {
 	}
 
 	/**
+	 * Install the mode's memory sampler so `/status` reports the last periodic
+	 * sample instead of taking a fresh one.
+	 */
+	setMemorySampleProvider(provider: (() => MemorySample | undefined) | undefined): void {
+		this._memorySamplerMemorySample = provider;
+	}
+
+	/**
 	 * Toggle auto-compaction setting.
 	 */
 	setAutoCompactionEnabled(enabled: boolean): void {
@@ -3952,6 +3963,7 @@ export class AgentSession {
 				getSystemPrompt: () => this.systemPrompt,
 				getSystemPromptOptions: () => this._baseSystemPromptOptions,
 				getLoadedResources,
+				getMemorySample: this._memorySamplerMemorySample,
 				executeTool: (callerId, name, args, options) => this._executeNestedToolCall(callerId, name, args, options),
 				getCallableTools: () => this._getCallableTools(),
 			},

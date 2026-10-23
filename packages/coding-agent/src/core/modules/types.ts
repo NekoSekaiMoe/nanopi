@@ -60,6 +60,7 @@ import type { EventBus } from "../event-bus.ts";
 import type { ExecOptions, ExecResult } from "../exec.ts";
 import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
 import type { KeybindingsManager } from "../keybindings.ts";
+import type { MemorySample } from "../memory-usage.ts";
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
@@ -373,6 +374,11 @@ export interface ModuleContext {
 	getSystemPrompt(): string;
 	/** Get the resources (context files, skills, prompts, extensions) loaded for the session. */
 	getLoadedResources(): LoadedResources;
+	/**
+	 * Last memory sample of this process, when the runtime keeps one
+	 * (`NANOPI_DEBUG=1`). Callers fall back to sampling on demand.
+	 */
+	getMemorySample?(): MemorySample | undefined;
 }
 
 /** Options for {@link ModuleToolContext.executeTool}. */
@@ -2019,6 +2025,8 @@ export interface ModuleContextActions {
 	getSystemPrompt: () => string;
 	getSystemPromptOptions?: () => BuildSystemPromptOptions;
 	getLoadedResources?: () => LoadedResources;
+	/** Last memory sample of the process, when the mode keeps one. */
+	getMemorySample?: () => MemorySample | undefined;
 	/** Backs `ModuleToolContext.executeTool()`. Without it, nested calls fail. */
 	executeTool?: (
 		callerId: string,

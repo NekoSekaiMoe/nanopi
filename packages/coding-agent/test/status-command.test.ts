@@ -203,6 +203,7 @@ describe("collectStatusRows", () => {
 			"Thinking:",
 			"Token usage:",
 			"Context:",
+			"Memory:",
 		]);
 		const byLabel = new Map(rows.map((row) => [row.label, row.value]));
 		expect(byLabel.get("Model:")).toBe("gpt-test");
@@ -210,6 +211,7 @@ describe("collectStatusRows", () => {
 		expect(byLabel.get("Thinking:")).toBe("high");
 		expect(byLabel.get("Token usage:")).toContain("150 total");
 		expect(byLabel.get("Context:")).toContain("12.3k / 200k");
+		expect(byLabel.get("Memory:")).toContain("rss ");
 		expect(labels.some((label) => label.toLowerCase().includes("visit"))).toBe(false);
 	});
 });

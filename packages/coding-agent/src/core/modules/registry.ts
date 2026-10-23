@@ -13,6 +13,7 @@ import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
+import type { MemorySample } from "../memory-usage.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
 import type { SessionManager } from "../session-manager.ts";
@@ -330,6 +331,7 @@ export class ModuleRegistry {
 	private getSystemPromptOptionsFn: () => BuildSystemPromptOptions = () =>
 		normalizeBuildSystemPromptOptions({ cwd: this.cwd });
 	private getLoadedResourcesFn: () => LoadedResources = () => EMPTY_LOADED_RESOURCES;
+	private getMemorySampleFn: (() => MemorySample | undefined) | undefined;
 	private executeToolFn: ModuleContextActions["executeTool"];
 	private getCallableToolsFn: () => readonly AgentTool[] = () => [];
 	private newSessionHandler: NewSessionHandler = async () => ({ cancelled: false });
@@ -408,6 +410,7 @@ export class ModuleRegistry {
 		this.getSystemPromptOptionsFn =
 			contextActions.getSystemPromptOptions ?? (() => normalizeBuildSystemPromptOptions({ cwd: this.cwd }));
 		this.getLoadedResourcesFn = contextActions.getLoadedResources ?? this.getLoadedResourcesFn;
+		this.getMemorySampleFn = contextActions.getMemorySample;
 		this.executeToolFn = contextActions.executeTool;
 		this.getCallableToolsFn = contextActions.getCallableTools ?? (() => []);
 
@@ -840,6 +843,7 @@ export class ModuleRegistry {
 			getLoadedResources: () => {
 				return runner.getLoadedResourcesFn();
 			},
+			getMemorySample: runner.getMemorySampleFn ? () => runner.getMemorySampleFn?.() : undefined,
 		};
 	}
 

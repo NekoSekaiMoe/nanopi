@@ -4,6 +4,7 @@
 
 ### Added
 
+- `/status` now reports process memory: RSS, peak RSS, heap, and external/arrayBuffers. `NANOPI_DEBUG=1` turns on periodic sampling (every `NANOPI_DEBUG_INTERVAL_MS`, default 5000) that appends the same line to `nanopi-debug.log` under the agent dir, so startup cost and per-turn growth can be measured instead of guessed — the log is a file because interactive mode repaints over anything written to stderr (issue [#165](https://cnb.cool/shinytale/nanopi/-/issues/165))
 - Added 106 highlight.js grammars to the eager set (22 → 128): markup and config formats (`xml`, `css`, `scss`, `less`, `yaml`, `ini`, `markdown`, `dockerfile`, `makefile`, `nginx`, `properties`), query and data languages (`sql`, `pgsql`, `n1ql`, `xquery`), shell dialects (`powershell`, `awk`, `shell`), the mainstream ecosystem (`objectivec`, `erlang`, `elixir`, `haskell`, `clojure`, `fsharp`, `ocaml`, `r`, `julia`, `fortran`, `lisp`, `scheme`, `vbnet`, `coffeescript`, `elm`, `crystal`, `nim`, `haxe`, `d`, `vala`, `zephir`), hardware and assembly (`verilog`, `vhdl`, `armasm`, `x86asm`, `llvm`), and `diff`, `http`, `protobuf`, `cmake`, `tcl`, `twig`, `qml`, `glsl`, `latex`, `reasonml`. A language without a grammar still renders as plain text, never as an error. The single-file `full` build stays under 10 MiB because the four largest grammars stay out along with `README.md`/`CHANGELOG.md` and three unreferenced doc screenshots (issue [#149](https://cnb.cool/shinytale/nanopi/-/issues/149))
 
 ### Changed
