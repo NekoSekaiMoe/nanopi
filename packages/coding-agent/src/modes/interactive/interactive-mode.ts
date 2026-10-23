@@ -861,13 +861,9 @@ export class InteractiveMode {
 		// Opt-in sampling (NANOPI_DEBUG=1) starts here so the log still has the startup
 		// cost when the TUI later dies. It writes to a file: the full-screen renderer
 		// repaints over any stderr line, so the numbers would be invisible there.
-		if (this.memorySampler.enabled) {
-			this.memorySampler.write(
-				formatDebugHeader({ version: BUILD_VERSION, pid: process.pid, cwd: this.sessionManager.getCwd() }),
-			);
-			this.memorySampler.write(formatMemorySample(this.memorySampler.sample(), "mem startup"));
-			this.memorySampler.start();
-		}
+		this.startMemorySampling();
+
+		this.writeMemorySample("mem startup");
 
 		this.renderWidgets(); // Initialize with default spacer
 		this.mountInteractiveTui(this.renderer, [
@@ -960,11 +956,34 @@ export class InteractiveMode {
 
 		// Flush the completed startup state before loading the remaining syntax grammars.
 		this.ui.renderNow();
+		// Second startup sample: the delta from `mem startup` is what the managed tools,
+		// grammars, and session setup cost.
+		this.writeMemorySample("mem first-render");
 		void loadAllHighlightLanguages().then(() => {
 			if (!this.isInitialized) return;
 			this.ui.invalidate();
 			this.ui.requestRender();
 		});
+	}
+
+	/**
+	 * Startup is sampled at two points (`mem startup` before the TUI mounts, `mem first-render`
+	 * after the first usable state), and both lines are written whether or not NANOPI_DEBUG is
+	 * on: a startup cost report is useless if measuring it needs a flag nobody turns on. The
+	 * periodic sampler stays behind the flag.
+	 */
+	private startMemorySampling(): void {
+		if (!this.memorySampler.enabled) return;
+		this.memorySampler.write(
+			formatDebugHeader({ version: BUILD_VERSION, pid: process.pid, cwd: this.sessionManager.getCwd() }),
+		);
+		this.memorySampler.start();
+	}
+
+	/** One labeled sample to the sampler's log, plus the latest sample for `/status`. */
+	private writeMemorySample(label: string): void {
+		const sample = this.memorySampler.sample();
+		this.memorySampler.write(formatMemorySample(sample, label));
 	}
 
 	/**

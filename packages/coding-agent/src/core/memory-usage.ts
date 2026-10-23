@@ -173,6 +173,12 @@ export function formatMemorySample(sample: MemorySample, label = "mem"): string 
 	return parts.join(" ");
 }
 
+/** MiB value in a `formatMemorySample` line (`rss 237MiB`), or undefined when the line is not a sample. */
+export function parseMemorySampleRss(line: string): number | undefined {
+	const match = /\brss (\d+(?:\.\d+)?)MiB\b/.exec(line);
+	return match ? Number.parseFloat(match[1]) : undefined;
+}
+
 /** One-line startup identity, so a pasted log says which build produced it. */
 export function formatDebugHeader(input: { version: string; pid: number; cwd: string }): string {
 	return `debug start version ${input.version} pid ${input.pid} cwd ${input.cwd}`;

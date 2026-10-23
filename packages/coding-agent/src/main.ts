@@ -46,6 +46,7 @@ import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
 import { BUILD_VERSION } from "./core/build-version.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
+import { formatMemorySample, sampleMemory } from "./core/memory-usage.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
 import { ModelRuntime } from "./core/model-runtime.ts";
 import type { SessionModule } from "./core/modules/types.ts";
@@ -1012,6 +1013,10 @@ export async function main(args: string[], options?: MainOptions) {
 		if (startupBenchmark) {
 			await interactiveMode.init();
 			time("interactiveMode.init");
+			// stderr is the benchmark's result channel (it holds the startup timings), so the
+			// cost line that pairs startup time with startup memory goes there too.
+			const startupRss = formatMemorySample(sampleMemory(), "startup").split(" heap ")[0];
+			console.error(`memory to first usable state: ${startupRss}`);
 			// Give the TUI's stdin handler a brief chance to consume terminal query replies
 			// (Kitty keyboard protocol, device attributes, cell size) before restoring the terminal.
 			await new Promise((resolve) => setTimeout(resolve, 150));
