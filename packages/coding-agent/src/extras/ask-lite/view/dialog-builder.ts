@@ -8,8 +8,7 @@ import type { TabBar } from "./components/tab-bar.js";
 import type { StatefulView } from "./stateful-view.js";
 import type { TabComponents } from "./tab-components.js";
 import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from "./tab-content-strategy.js";
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
-import { DynamicBorder } from "../../../modes/interactive/components/dynamic-border.ts";
+import { DynamicBorder, type Theme } from "@nanopi/pi-coding-agent";
 
 export const HINT_PART_ENTER = "Enter to select";
 export const HINT_PART_NAV = "↑/↓ to navigate";

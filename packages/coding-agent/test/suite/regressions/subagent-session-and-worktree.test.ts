@@ -64,6 +64,8 @@ async function call(job: Job, params: Record<string, unknown>): Promise<string> 
 		cwd: job.cwd,
 		ui: { setWidget: () => {}, setStatus: () => {} },
 		model: job.harness.getModel(),
+		getAgentDir: () => join(job.harness.tempDir, "agent"),
+		resolveHostEntry: () => ({ cmd: process.execPath, args: [] }),
 	} as never;
 	const result = await job.tool.execute("call-1", params as never, undefined, undefined, ctx);
 	return (result.content as Array<{ type: string; text: string }>).map((part) => part.text).join("\n");

@@ -29,7 +29,11 @@ describe("mcp-lite config", () => {
 		});
 		const project = makeProject(`\uFEFF${body}`);
 
-		const config = loadMcpConfig(project, { home: join(project, "home"), env: {} });
+		const config = loadMcpConfig(project, {
+			agentDir: join(project, "home", ".nanopi", "agent"),
+			home: join(project, "home"),
+			env: {},
+		});
 
 		expect(config.servers.get("bomtest")).toMatchObject({ transport: "stdio", command: "echo" });
 		expect(config.discovery.mode).toBe("off");
@@ -39,7 +43,11 @@ describe("mcp-lite config", () => {
 		const body = JSON.stringify({ mcpServers: { plain: { transport: "stdio", command: "cat" } } });
 		const project = makeProject(body);
 
-		const config = loadMcpConfig(project, { home: join(project, "home"), env: {} });
+		const config = loadMcpConfig(project, {
+			agentDir: join(project, "home", ".nanopi", "agent"),
+			home: join(project, "home"),
+			env: {},
+		});
 
 		expect(config.servers.get("plain")).toMatchObject({ transport: "stdio", command: "cat" });
 	});

@@ -35,11 +35,19 @@ export function readBuiltinModuleNames(repoRoot) {
  * compiled output either way: `../extras/x/index.js` from the modules barrel,
  * `../../extras/x/index.js` from an importer two levels below src.
  *
- * @returns {Array<{ name: string, specifiers: string[], source: string }>}
+ * A module that lives outside the coding-agent package (`@nanopi/pi-extra`) is
+ * imported by package name, so its specifier is the name itself and its stub
+ * has to keep the named exports the coding-agent reads from it.
+ *
+ * @returns {Array<{ name: string, specifiers: string[], exportNames?: string[], source: string }>}
  */
 export function resolveModuleBundles(repoRoot, config) {
 	return config.moduleBundleNames.map((name) => {
-		const source = join(repoRoot, config.moduleBundles[name].source);
+		const bundle = config.moduleBundles[name];
+		const source = join(repoRoot, bundle.source);
+		if (bundle.package !== undefined) {
+			return { name, source, specifiers: [bundle.package], exportNames: bundle.exportNames ?? [] };
+		}
 		return {
 			name,
 			source,

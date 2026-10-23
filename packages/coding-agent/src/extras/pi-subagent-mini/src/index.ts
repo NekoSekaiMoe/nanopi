@@ -1,10 +1,15 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { existsSync, readFileSync, rmSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
-import type { ModuleApi, ModuleContext, SessionStartEvent, ToolLoadout } from "../../../core/modules/types.ts";
-import { APP_NAME, getPackageDir } from "../../../config.ts";
-import { isSingleNodeFileRuntime } from "../../../standalone/assets.ts";
+import type {
+	ModuleApi,
+	ModuleContext,
+	ModuleUIContext,
+	SessionStartEvent,
+	ToolLoadout,
+} from "../../../core/modules/types.ts";
+import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
 /**
@@ -44,8 +49,8 @@ const DEPENDENCY_STATUSES = new Set<string>(["failed", "killed", "timeout", "blo
 const RESUMABLE_STATUSES = new Set<string>(["queued", "blocked", "running"]);
 const ARCHIVE_VERSION = 2;
 const ARCHIVE_TYPE = "subagent-job";
-/** Same widget key pi-subagents uses, so pi-ui's flat skin picks this up too. */
-const WIDGET_KEY = "subagent-async";
+/** Status-bar key for the subagent summary line; see `setStatus` in session_start. */
+const STATUS_KEY = "subagent-async";
 const WRITE_TOOLS = /^(write|edit|apply_patch)$/;
 /** `write,edit` etc. — anything that can mutate the working tree. */
 const canWrite = (tools: string): boolean => tools.split(",").some((name) => WRITE_TOOLS.test(name.trim()));
@@ -152,37 +157,6 @@ function textResult(text: string) {
 	return { content: [{ type: "text" as const, text }], details: {} };
 }
 
-/**
- * The command that launches a child session.
- *
- * The single-file distribution (nanopi.js) must run itself: `getPackageDir()`
- * points at the extracted asset cache there, whose package.json has no `bin`
- * entry for a child to run through node. Anything this process runs was
- * started by node, so `argv[1]` is the entry that is actually executing.
- */
-function resolveChildCommand(): { cmd: string; args: string[] } {
-	const entryPoint = process.argv[1];
-	if (isSingleNodeFileRuntime() && entryPoint) return { cmd: process.execPath, args: [entryPoint] };
-	try {
-		const dir = getPackageDir();
-		const bin = JSON.parse(readFileSync(path.join(dir, "package.json"), "utf8")).bin as
-			| Record<string, string>
-			| undefined;
-		const entry = bin?.[APP_NAME] ?? Object.values(bin ?? {})[0];
-		// Resolve against the package dir and refuse a path that is not there: a
-		// guess that does not exist only turns into a MODULE_NOT_FOUND crash
-		// inside the child, where the reason is invisible to the parent.
-		if (typeof entry === "string") {
-			const candidate = path.join(dir, entry);
-			if (existsSync(candidate)) return { cmd: process.execPath, args: [candidate] };
-		}
-	} catch {
-		// fall through
-	}
-	// Not a nanopi checkout: fall back to whatever the user has on PATH.
-	return { cmd: APP_NAME, args: [] };
-}
-
 function textOf(message: { content?: Array<{ type: string; text?: string }> }): string {
 	return (message.content ?? []).filter((b) => b.type === "text").map((b) => b.text ?? "").join("\n").trim();
 }
@@ -192,7 +166,7 @@ function textOf(message: { content?: Array<{ type: string; text?: string }> }): 
  * settings (<agentDir>/extra/settings.json with a .nanopi/extra/settings.json
  * project override); default enabled.
  */
-function isMcpSubsystemEnabled(): boolean {
+function isMcpSubsystemEnabled(agentDir: string): boolean {
 	const read = (file: string): boolean | undefined => {
 		try {
 			const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
@@ -205,7 +179,6 @@ function isMcpSubsystemEnabled(): boolean {
 			return undefined;
 		}
 	};
-	const agentDir = process.env.NANOPI_CODING_AGENT_DIR ?? path.join(process.env.HOME ?? ".", ".nanopi", "agent");
 	return (
 		read(path.join(process.cwd(), ".nanopi", "extra", "settings.json")) ??
 		read(path.join(agentDir, "extra", "settings.json")) ??
@@ -219,11 +192,11 @@ function isMcpSubsystemEnabled(): boolean {
  * `src/<pkg>/index.ts` guesses only existed in a source checkout, so bundled and
  * installed builds silently fell back to no modules at all.
  */
-function childModuleNames(registered: readonly string[]): string[] {
+function childModuleNames(registered: readonly string[], agentDir: string): string[] {
 	const names = registered.filter((name) => !CHILD_MODULE_SKIP.has(name));
 	// MCP tools are subagent-only: mcp-lite has to come along or a `tools` list
 	// naming `mcp__*` cannot resolve in the child.
-	return names.filter((name) => name !== "mcp-lite" || isMcpSubsystemEnabled());
+	return names.filter((name) => name !== "mcp-lite" || isMcpSubsystemEnabled(agentDir));
 }
 
 /** The first line of a brief, which is the only honest one-line "what was asked". */
@@ -321,8 +294,7 @@ function resetForRun(job: Job): void {
 export default function subagentMini(pi: ModuleApi): void {
 	const jobs = new Map<string, Job>();
 	let counter = 0;
-	const childCommand = resolveChildCommand();
-	let uiRef: { setWidget(key: string, content: unknown, options?: unknown): void } | undefined;
+	let uiRef: ModuleUIContext | undefined;
 	let widgetTimer: NodeJS.Timeout | undefined;
 
 	const widgetLines = (): string[] | undefined => {
@@ -341,9 +313,12 @@ export default function subagentMini(pi: ModuleApi): void {
 	};
 
 	const refreshWidget = (): void => {
-		if (!uiRef?.setWidget) return;
+		if (!uiRef) return;
 		try {
-			uiRef.setWidget(WIDGET_KEY, widgetLines(), { placement: "belowEditor" });
+			const rows = widgetLines();
+			uiRef
+				.channel(SUBAGENT_CHANNEL)
+				.update(rows ? { label: "subagent jobs", kind: "rows", rows } : undefined, { placement: "belowEditor" });
 		} catch {
 			// widget is cosmetic; never break the tool flow
 		}
@@ -490,7 +465,7 @@ export default function subagentMini(pi: ModuleApi): void {
 	};
 
 	/** Launch one child process for `job` (a first attempt or a retry) and wire its report. */
-	const launch = (job: Job, prompt: string, baseCwd: string): void => {
+	const launch = (job: Job, prompt: string, baseCwd: string, ctx: ModuleContext): void => {
 		// A retry replaces the previous attempt's process and its timeout.
 		job.cancelTimeout?.();
 		const attempt = job.attempts + 1;
@@ -503,7 +478,11 @@ export default function subagentMini(pi: ModuleApi): void {
 		// rules (no `git add -A`, `pnpm run check`, no emoji) are the cheapest thing
 		// to keep. Skills and prompt templates are on-demand, so turning them off
 		// saves startup scanning rather than tokens.
-		const args = [...childCommand.args, "--mode", "json", "-p", "--no-skills", "--no-prompt-templates"];
+		// The child must be this same installation: `resolveHostEntry()` answers
+		// "the entry the parent is running", which no path guessed from the
+		// package layout can (the single-file build runs from an asset cache).
+		const child = ctx.resolveHostEntry();
+		const args = [...child.args, "--mode", "json", "-p", "--no-skills", "--no-prompt-templates"];
 		// A child session is a file we own: `--session <id>` reuses the same id and
 		// directory the tool recorded, so a later `continue` appends to the growing
 		// transcript instead of meeting the id in a different project directory.
@@ -518,7 +497,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		// extension path as `parsed.messages[0]` — i.e. as the child's prompt.
 		args.push(prompt);
 
-		const proc = spawn(childCommand.cmd, args, {
+		const proc = spawn(child.cmd, args, {
 			cwd: jobCwd(job, baseCwd),
 			env: process.env,
 			stdio: ["ignore", "pipe", "pipe"],
@@ -555,7 +534,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				// The retry brief says what went wrong; without that the child re-runs
 				// the same failing path and the second attempt is just the first one's cost.
 				const context = errorMessage ? `Previous attempt failed: ${errorMessage}\n\n` : "";
-				launch(job, `${context}${prompt}`, baseCwd);
+				launch(job, `${context}${prompt}`, baseCwd, ctx);
 				refreshWidget();
 				return;
 			}
@@ -570,7 +549,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			// subagents ran, and the notification carries the clipped text only.
 			record(job, scopeOf(job.task));
 			job.resolveDone();
-			releaseDependents(job.cwd ?? baseCwd);
+			releaseDependents(job.cwd ?? baseCwd, ctx);
 			refreshWidget();
 		};
 
@@ -651,7 +630,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				// Name the command: a child that died before producing any event
 				// (missing entry point, wrong resolution) is otherwise reported as a
 				// bare exit code with a Node stack the parent cannot attribute.
-				const launched = [childCommand.cmd, ...childCommand.args].join(" ");
+				const launched = [child.cmd, ...child.args].join(" ");
 				const why = stderrTail ? `: ${stderrTail.trim()}` : "";
 				finish("failed", `exit ${code}, no assistant output (launched: ${launched})${why}`);
 			}
@@ -675,7 +654,7 @@ export default function subagentMini(pi: ModuleApi): void {
 	 * dependency is settled-but-failed (its `pendingDependencies` is empty, so nothing
 	 * else would stop it from being re-blocked and re-notified on every pass).
 	 */
-	const releaseDependents = (baseCwd: string): void => {
+	const releaseDependents = (baseCwd: string, ctx: ModuleContext): void => {
 		let changed = true;
 		while (changed) {
 			changed = false;
@@ -699,7 +678,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				} else {
 					// The edges are resolved here, so this is the one place where a
 					// dependent's brief can be assembled from reports instead of prose.
-					launch(job, dependentBrief(job, jobs), baseCwd);
+					launch(job, dependentBrief(job, jobs), baseCwd, ctx);
 				}
 				changed = true;
 			}
@@ -720,6 +699,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			cwd?: string;
 		},
 		baseCwd: string,
+		ctx: ModuleContext,
 	):
 		| { ok: true; job: Job }
 		| { ok: false; error: string } => {
@@ -766,7 +746,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			const dependency = jobs.get(dependencyId);
 			return dependency !== undefined && isPending(dependency.status);
 		});
-		if (job.pendingDependencies.length === 0) launch(job, job.task, cwd);
+		if (job.pendingDependencies.length === 0) launch(job, job.task, cwd, ctx);
 		refreshWidget();
 		ensureWidgetTimer();
 		return { ok: true, job };
@@ -839,7 +819,7 @@ export default function subagentMini(pi: ModuleApi): void {
 	 * `blocked` never got that far, so it can run now with its brief intact. Nothing
 	 * here touches a settled job, so a restore never re-runs work that already ran.
 	 */
-	const resumeRestored = (baseCwd: string): void => {
+	const resumeRestored = (baseCwd: string, ctx: ModuleContext): void => {
 		const interrupted = [...jobs.values()].filter((job) => job.status === "running");
 		for (const job of interrupted) {
 			// The process is gone with the parent, so the report will never arrive: write
@@ -858,20 +838,20 @@ export default function subagentMini(pi: ModuleApi): void {
 		const runnable = [...jobs.values()].filter((job) => job.status === "queued" || job.status === "blocked");
 		if (runnable.length === 0) return;
 		for (const job of runnable) resetForRun(job);
-		releaseDependents(baseCwd);
+		releaseDependents(baseCwd, ctx);
 		refreshWidget();
 		ensureWidgetTimer();
 	};
 
 	pi.on("session_start", async (event: SessionStartEvent, ctx) => {
-		uiRef = ctx.ui as typeof uiRef;
-		ctxSetStatus = (text) => ctx.ui.setStatus(WIDGET_KEY, text);
+		uiRef = ctx.ui;
+		ctxSetStatus = (text) => ctx.ui.setStatus(STATUS_KEY, text);
 		if (event.reason === "new") {
 			jobs.clear();
 			return;
 		}
 		restoreArchive(ctx);
-		resumeRestored(ctx.cwd);
+		resumeRestored(ctx.cwd, ctx);
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -1008,12 +988,12 @@ export default function subagentMini(pi: ModuleApi): void {
 			waitSec: Type.Optional(Type.Number({ description: `wait: max seconds to block, default ${DEFAULT_WAIT_SEC}` })),
 		}),
 		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-			if (!uiRef) uiRef = ctx.ui as unknown as typeof uiRef;
+			if (!uiRef) uiRef = ctx.ui;
 
 			const inheritedModules = (): string[] =>
 				params.modules !== undefined
 					? params.modules.split(",").map((s) => s.trim()).filter(Boolean)
-					: childModuleNames(pi.getModuleNames());
+					: childModuleNames(pi.getModuleNames(), ctx.getAgentDir());
 			// Children inherit the session's current model by default; without this they
 			// fall back to settings.json defaults, which may be stale or unusable.
 			const inheritedModel = (): string | undefined =>
@@ -1064,6 +1044,7 @@ export default function subagentMini(pi: ModuleApi): void {
 						cwd: params.cwd,
 					},
 					ctx.cwd,
+					ctx,
 				);
 				if (!spawned.ok) return textResult(spawned.error);
 				const job = spawned.job;
@@ -1159,7 +1140,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				job.isContinue = true;
 				resetForRun(job);
 				job.cwd = job.cwd || ctx.cwd;
-				launch(job, `${previous}${job.task}`, job.cwd);
+				launch(job, `${previous}${job.task}`, job.cwd, ctx);
 				refreshWidget();
 				ensureWidgetTimer();
 				return textResult(`${jobSummary(job)}\nIts report arrives as a subagent-complete notification.`);
@@ -1179,7 +1160,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			if (pid !== undefined) killProcessTree(pid);
 			else job.proc?.kill("SIGTERM");
 			job.resolveDone();
-			releaseDependents(ctx.cwd);
+			releaseDependents(ctx.cwd, ctx);
 			refreshWidget();
 			return textResult(`subagent ${job.id} killed`);
 		},

@@ -49,7 +49,7 @@ export function moduleComponentName(name) {
 /**
  * Builds the plugin plus the list of disabled modules.
  *
- * @param {{ stubDir: string, modules: ReadonlyArray<{ name: string, specifiers: readonly string[] }>, components: Record<string, boolean | string> }} options
+ * @param {{ stubDir: string, modules: ReadonlyArray<{ name: string, specifiers: readonly string[], exportNames?: readonly string[] }>, components: Record<string, boolean | string> }} options
  * @returns {{ plugin: import("esbuild").Plugin, disabled: string[] }}
  */
 export function createModuleStubPlugin({ stubDir, modules, components }) {
@@ -64,14 +64,15 @@ export function createModuleStubPlugin({ stubDir, modules, components }) {
 	disabled.forEach((module, index) => {
 		const file = join(stubDir, `module-${index}.mjs`);
 		paths.set(module.name, file);
-		// The registry keeps the module listed so `--modules` still parses; the
-		// stub registers nothing, and enabledModules() filters it out.
-		writeFileSync(
-			file,
+		const header =
 			`// Inert stub for the "${module.name}" built-in module: this build flavor\n` +
-				`// excludes it (buildconfig.json "${moduleComponentName(module.name)}").\n` +
-				`export default function noopModule() {}\n`,
-		);
+			`// excludes it (buildconfig.json "${moduleComponentName(module.name)}").\n`;
+		// The registry keeps the module listed so `--modules` still parses; the
+		// stub registers nothing, and enabledModules() filters it out. A module
+		// outside the coding-agent package also has a default export to keep
+		// (pi-extra's `extraBridge`), so `exportNames` names what to stand in for.
+		const named = (module.exportNames ?? []).map((name) => `export const ${name} = {};\n`).join("");
+		writeFileSync(file, `${header}export default function noopModule() {}\n${named}`);
 	});
 
 	return {
