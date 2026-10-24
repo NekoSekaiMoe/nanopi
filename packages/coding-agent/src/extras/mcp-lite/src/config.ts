@@ -14,7 +14,6 @@ import { join } from "node:path";
 import type { McpServerConfig } from "./client.ts";
 import { discoverServers, type DiscoveryOptions } from "./discover.ts";
 
-const ENV_AGENT_DIR = "NANOPI_CODING_AGENT_DIR";
 
 export type McpDiscoveryMode = "auto" | "off";
 
@@ -39,12 +38,6 @@ export interface McpConfig {
 	discovery: McpDiscoverySettings;
 	/** Where the file was found, for the status line. */
 	discoveryFiles: string[];
-}
-
-function getAgentDir(): string {
-	const envDir = process.env[ENV_AGENT_DIR];
-	if (envDir) return envDir;
-	return join(homedir(), ".nanopi", "agent");
 }
 
 function parseServerEntry(name: string, value: unknown): McpServerConfig | undefined {
@@ -145,8 +138,17 @@ export function resolveDiscovery(
  * which keeps the manual file authoritative while a machine that only ever
  * configured MCP for Cursor or Claude still gets working tools.
  */
-export function loadMcpConfig(cwd: string, options: { env?: Record<string, string | undefined>; home?: string } = {}): McpConfig {
-	const globalFile = join(getAgentDir(), "mcp.json");
+/**
+ * `agentDir` is the host's directory (`ctx.getAgentDir()`). Deriving it here
+ * from `homedir()` ignored the `NANOPI_CODING_AGENT_DIR` override and the
+ * tilde expansion the host does, so a user who moved their config was read
+ * from two different places depending on which module asked.
+ */
+export function loadMcpConfig(
+	cwd: string,
+	options: { agentDir: string; env?: Record<string, string | undefined>; home?: string },
+): McpConfig {
+	const globalFile = join(options.agentDir, "mcp.json");
 	const projectFile = join(cwd, ".nanopi", "mcp.json");
 	const servers = new Map<string, McpServerConfig>();
 	const origins = new Map<string, string>();

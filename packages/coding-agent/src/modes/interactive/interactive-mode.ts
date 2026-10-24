@@ -1993,6 +1993,9 @@ export class InteractiveMode {
 
 	private createExtensionUIContext(): ModuleUIContext {
 		return {
+			// The registry wraps this context with its channel host, so a direct
+			// call is only reachable in tests that bypass setUIContext().
+			channel: () => ({ update: () => {}, transform: () => () => {} }),
 			select: (title, options, opts) =>
 				this.extensionDialogQueue(() => this.showExtensionSelector(title, options, opts)),
 			confirm: (title, message, opts) =>

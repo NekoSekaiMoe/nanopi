@@ -15,7 +15,6 @@
 
 import fs from "node:fs";
 import { dirname, join } from "node:path";
-import { getAgentDir } from "../../../config.ts";
 import {
 	configDeadlineMs,
 	configTimeoutMs,
@@ -51,8 +50,9 @@ interface CooldownEntry {
 
 type CooldownState = Record<string, CooldownEntry>;
 
-export function getCooldownPath(): string {
-	return join(getAgentDir(), "websearch-state.json");
+/** Cooldown cache path inside the host's agent dir; see `ctx.getAgentDir()`. */
+export function getCooldownPath(agentDir: string): string {
+	return join(agentDir, "websearch-state.json");
 }
 
 function cooldownKey(engine: EngineName, keyIndex: number | undefined): string {
@@ -91,6 +91,8 @@ function writeCooldowns(path: string, state: CooldownState): void {
 export interface SearchOptions {
 	limit?: number;
 	config?: WebsearchConfig;
+	/** Agent dir the cooldown cache is written under; omitted disables the cache. */
+	agentDir?: string;
 	cooldownPath?: string;
 	signal?: AbortSignal;
 }
@@ -134,12 +136,13 @@ async function walkChain<T>(
 	role: "search" | "fetch",
 	config: WebsearchConfig,
 	signal: AbortSignal,
-	cooldownPath: string,
+	cooldownPath: string | undefined,
 	use: (engine: EngineName, key: string | null, context: EngineContext) => Promise<T>,
 ): Promise<WalkResult<T>> {
 	const deadline = Date.now() + configDeadlineMs(config);
 	const perAttempt = configTimeoutMs(config);
-	const cooldowns = readCooldowns(cooldownPath);
+	// No agent dir means no cache: a call that only had a key and a URL still runs.
+	const cooldowns = cooldownPath ? readCooldowns(cooldownPath) : {};
 
 	const chain = enginesForRole(engineChain(config), role);
 	if (chain.length === 0) {
@@ -174,7 +177,7 @@ async function walkChain<T>(
 						until: Date.now() + (/month|credit|quota|payment/i.test(message) ? MONTHLY_COOLDOWN_MS : DEFAULT_COOLDOWN_MS),
 						reason: message.slice(0, 200),
 					};
-					writeCooldowns(cooldownPath, cooldowns);
+					if (cooldownPath) writeCooldowns(cooldownPath, cooldowns);
 				}
 			}
 		}
@@ -193,7 +196,8 @@ export async function runSearch(query: string, options: SearchOptions = {}): Pro
 	const config = options.config ?? {};
 	const limit = clampLimit(options.limit);
 	const signal = options.signal ?? new AbortController().signal;
-	const walked = await walkChain("search", config, signal, options.cooldownPath ?? getCooldownPath(), (engine, key, context) =>
+	const cooldownPath = options.cooldownPath ?? (options.agentDir ? getCooldownPath(options.agentDir) : undefined);
+	const walked = await walkChain("search", config, signal, cooldownPath, (engine, key, context) =>
 		runSearchOn(engine, trimmed, limit * OUTBOUND_LIMIT_FACTOR, key, context),
 	);
 	return {
@@ -210,7 +214,8 @@ export async function runFetch(url: string, options: SearchOptions = {}): Promis
 	if (!/^https?:\/\//i.test(target)) throw new Error("read_page needs an http(s) url");
 	const config = options.config ?? {};
 	const signal = options.signal ?? new AbortController().signal;
-	const walked = await walkChain("fetch", config, signal, options.cooldownPath ?? getCooldownPath(), (engine, key, context) =>
+	const cooldownPath = options.cooldownPath ?? (options.agentDir ? getCooldownPath(options.agentDir) : undefined);
+	const walked = await walkChain("fetch", config, signal, cooldownPath, (engine, key, context) =>
 		runFetchOn(engine, target, key, context),
 	);
 	const page: FetchedPage = walked.value;

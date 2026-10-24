@@ -181,6 +181,23 @@ export interface ModuleUIContext {
 	/** Set the label shown for hidden thinking blocks. Call with no argument to restore default. */
 	setHiddenThinkingLabel(label?: string): void;
 
+	/**
+	 * Read or write a named widget channel instead of an ad-hoc widget key.
+	 *
+	 * A channel is a `(channel, producer)` pair that two modules agree on without
+	 * either of them seeing the other's code: the producer writes, any number of
+	 * transforms reshape what is written, and the host draws the result under the
+	 * editor. Unlike `setWidget`, the host never inspects the content of a
+	 * channel, so the transform owner is free to replace a plain row list with a
+	 * component of its own.
+	 *
+	 * `transforms` are scoped to one ui context (one interactive session) and run
+	 * in registration order, so the last registered transform draws the result.
+	 * Content is keyed by the caller's label, so a channel event of unknown shape
+	 * stays an error instead of being silently rendered as an empty block.
+	 */
+	channel<T extends ModuleWidgetChannelContent>(channel: ModuleWidgetChannel<T>): ModuleWidgetChannelContext<T>;
+
 	/** Set a widget to display above or below the editor. Accepts string array or component factory. */
 	setWidget(key: string, content: string[] | undefined, options?: ModuleWidgetOptions): void;
 	setWidget(
@@ -288,6 +305,51 @@ export interface ModuleUIContext {
 }
 
 // ============================================================================
+// Named widget channels
+// ============================================================================
+
+/** Where a channel's output is drawn. Mirrors {@link WidgetPlacement}. */
+export type ModuleWidgetChannelPlacement = WidgetPlacement;
+
+/** Options for {@link ModuleWidgetChannelContext.update}. */
+export interface ModuleWidgetChannelUpdateOptions {
+	/** Where the output is drawn. Defaults to "belowEditor". */
+	placement?: ModuleWidgetChannelPlacement;
+}
+
+/**
+ * What a channel carries: a label the reader shows for unknown content, and a
+ * `kind` tag the transform owner may key on.
+ */
+export interface ModuleWidgetChannelContent {
+	/** Human-readable name, e.g. "subagent jobs". Used in diagnostics for content a transform ignores. */
+	readonly label: string;
+	/** Names the producer's payload shape, e.g. "rows". */
+	readonly kind: string;
+}
+
+/** Identifies one channel. Two modules agree by importing the same constant. */
+export interface ModuleWidgetChannel<T extends ModuleWidgetChannelContent = ModuleWidgetChannelContent> {
+	/** Channel id, e.g. "subagent". */
+	readonly name: string;
+	/** Validates a value written to the channel, narrowing it to `T`. */
+	is(value: unknown): value is T;
+}
+
+/** A transform owns what a channel draws for one session. */
+export type ModuleWidgetChannelTransform<T extends ModuleWidgetChannelContent = ModuleWidgetChannelContent> = (
+	content: T,
+) => { lines: string[] } | { component: (tui: TUI, theme: Theme) => Component & { dispose?(): void } } | undefined;
+
+/** Producer/reader handle for one channel. */
+export interface ModuleWidgetChannelContext<T extends ModuleWidgetChannelContent = ModuleWidgetChannelContent> {
+	/** Write content, or clear the channel with undefined. */
+	update(content: T | undefined, options?: ModuleWidgetChannelUpdateOptions): void;
+	/** Register a transform for this ui context. Returns an unsubscribe function. */
+	transform(transform: ModuleWidgetChannelTransform<T>): () => void;
+}
+
+// ============================================================================
 // RegisteredModule Context
 // ============================================================================
 
@@ -339,6 +401,23 @@ export interface ModuleContext {
 	hasUI: boolean;
 	/** Current working directory */
 	cwd: string;
+	/**
+	 * The user's agent directory (`~/.nanopi/agent`, or `NANOPI_CODING_AGENT_DIR`).
+	 * Host config files, caches, and state an extension keeps for the user belong
+	 * here: deriving it from `homedir()` picks up neither the env override nor a
+	 * renamed config dir, and two modules that each derive it drift apart.
+	 */
+	getAgentDir(): string;
+	/**
+	 * The node invocation that runs *this* installation's entry point, for a
+	 * module that has to spawn another session (a subagent, a supervisor).
+	 *
+	 * The contract is "same entry as the parent", not "the package's bin path":
+	 * a single-file build, a source checkout, and a global install each answer
+	 * differently, and a module that guesses one of them starts the wrong
+	 * binary — or none at all — without failing loudly.
+	 */
+	resolveHostEntry(): { cmd: string; args: string[] };
 	/** Session manager (read-only) */
 	sessionManager: ReadonlySessionManager;
 	/** Model registry for API key resolution */

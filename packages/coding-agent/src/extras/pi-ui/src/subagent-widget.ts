@@ -17,9 +17,9 @@
  *     happened; exploringHistoryRenderer keeps each row flat instead of the
  *     default `[pi-ui-exploring]` panel CustomMessageComponent would draw.
  *   - Live: the "• Exploring" header over the rows gathered so far, under the
- *     editor, where the next call is about to land. pi-subagent-mini writes its
- *     running jobs to the shared widget key and those become rows too, so a
- *     live subagent keeps the group open.
+ *     editor, where the next call is about to land. pi-subagent-mini publishes
+ *     its running jobs on the shared subagent channel and those become rows
+ *     too, so a live subagent keeps the group open.
  *
  * When the turn stops exploring, the block leaves no trace: the live rows are
  * truncated (the chat keeps the rows), and once a later turn settles, history
@@ -36,10 +36,9 @@ import type {
 } from "@nanopi/pi-coding-agent";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { Text, TuiMainScreen, truncateToWidth } from "@nanopi/pi-tui";
+import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
 import { type ExploreCall, exploreCallFor, exploringCalls } from "./tools.ts";
 
-/** Widget key shared with pi-subagent-mini (src/index.ts: WIDGET_KEY). */
-const SUBAGENT_WIDGET_KEY = "subagent-async";
 /** Session message pi-subagent-mini appends for a subagent report. */
 const SUBAGENT_COMPLETE_TYPE = "subagent-complete";
 /** The history-row message this module appends per finished exploration call. */
@@ -227,38 +226,26 @@ function installRenderMeasure(): void {
 }
 
 /**
- * Wrap ctx.ui.setWidget: pi-subagent-mini's running jobs become rows of the
+ * Own the subagent channel: pi-subagent-mini's running jobs become rows of the
  * live block, and their disappearance settles it.
  */
 export function skinSubagentWidget(ui: ModuleUIContext): void {
   if (skinnedContexts.has(ui)) return;
-  type SetWidget = ModuleUIContext["setWidget"];
-  const original = ui.setWidget.bind(ui) as SetWidget;
-  const call = original as (key: string, content: unknown, options?: unknown) => void;
-  const wrapped = ((key: string, content: unknown, options?: unknown) => {
-    if (key !== SUBAGENT_WIDGET_KEY) {
-      call(key, content, options);
-      return;
-    }
-    const lines = Array.isArray(content) ? content.filter((line): line is string => typeof line === "string") : [];
-    if (lines.length === 0) {
+  skinnedContexts.add(ui);
+  ui.channel(SUBAGENT_CHANNEL).transform((content) => {
+    if (content.rows.length === 0) {
       collapseExploringBlock();
-      call(key, undefined, options);
-      return;
+      return undefined;
     }
-    call(
-      key,
-      (tui: TUI, theme: Theme) => {
+    return {
+      component: (tui: TUI, theme: Theme) => {
         const block = liveBlockFor(tui);
-        block.calls = subagentCalls(lines, theme);
+        block.calls = subagentCalls(content.rows, theme);
         block.collapsed = false;
         return liveComponent(tui, theme);
       },
-      options,
-    );
-  }) as SetWidget;
-  ui.setWidget = wrapped;
-  skinnedContexts.add(ui);
+    };
+  });
 }
 
 /** Input fields that name what an exploration call looked at. */

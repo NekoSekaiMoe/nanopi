@@ -152,12 +152,27 @@ export function loadBuildConfig(repoRoot) {
 				throw new Error(`${BUILD_CONFIG_FILENAME} "moduleBundles" entry "${name}" has no "${MODULE_COMPONENT_PREFIX}${name}" component`);
 			}
 			const keys = typeof spec === "object" && spec !== null && !Array.isArray(spec) ? Object.keys(spec) : [];
-			const unknownKeysForModule = keys.filter((key) => key !== "source");
+			const unknownKeysForModule = keys.filter((key) => key !== "source" && key !== "package" && key !== "exportNames");
 			if (unknownKeysForModule.length > 0) {
 				throw new Error(`"moduleBundles" entry "${name}" has unknown keys: ${unknownKeysForModule.join(", ")}`);
 			}
 			if (typeof spec.source !== "string") {
 				throw new Error(`"moduleBundles" entry "${name}" must define a "source" path`);
+			}
+			// A workspace package is imported by name, not by a path inside the
+			// coding-agent src tree, so its stub has to match the package
+			// specifier and keep whatever named exports the importer reads.
+			if (spec.package !== undefined && typeof spec.package !== "string") {
+				throw new Error(`"moduleBundles" entry "${name}" has a non-string "package"`);
+			}
+			if (
+				spec.exportNames !== undefined &&
+				(!Array.isArray(spec.exportNames) || spec.exportNames.some((exportName) => typeof exportName !== "string"))
+			) {
+				throw new Error(`"moduleBundles" entry "${name}" has a non-string "exportNames" entry`);
+			}
+			if (spec.exportNames !== undefined && spec.package === undefined) {
+				throw new Error(`"moduleBundles" entry "${name}" names "exportNames" without a "package"`);
 			}
 		}
 	}

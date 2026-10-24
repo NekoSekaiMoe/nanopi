@@ -143,7 +143,7 @@ export default function mcpLiteExtension(pi: ModuleApi): void {
 	pi.on("session_start", (event, ctx) => {
 		if (event.reason === "reload") return;
 		void (async () => {
-			loaded = loadMcpConfig(ctx.cwd);
+			loaded = loadMcpConfig(ctx.cwd, { agentDir: ctx.getAgentDir() });
 			for (const [name, serverConfig] of loaded.servers) {
 				if (states.has(name)) continue;
 				const state: ServerState = {

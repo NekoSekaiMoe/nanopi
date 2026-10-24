@@ -24,7 +24,6 @@
 
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
 	ModuleApi,
@@ -48,17 +47,14 @@ interface CompactThinkingConfig {
   hideThinkingSetByUs?: boolean;
 }
 
-function agentDir(): string {
-  return process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+/** Config lives in the host's agent dir; see `ctx.getAgentDir()`. */
+function configPath(ctx: ModuleContext): string {
+  return join(ctx.getAgentDir(), "pi-smart-flow.json");
 }
 
-function configPath(): string {
-  return join(agentDir(), "pi-smart-flow.json");
-}
-
-function loadConfig(): CompactThinkingConfig {
+function loadConfig(ctx: ModuleContext): CompactThinkingConfig {
   try {
-    const raw = readFileSync(configPath(), "utf8");
+    const raw = readFileSync(configPath(ctx), "utf8");
     const parsed: unknown = JSON.parse(raw);
     if (parsed && typeof parsed === "object") return parsed as CompactThinkingConfig;
   } catch {
@@ -67,10 +63,10 @@ function loadConfig(): CompactThinkingConfig {
   return {};
 }
 
-async function saveConfig(config: CompactThinkingConfig): Promise<void> {
+async function saveConfig(ctx: ModuleContext, config: CompactThinkingConfig): Promise<void> {
   try {
-    await mkdir(agentDir(), { recursive: true });
-    await writeFile(configPath(), `${JSON.stringify(config, null, 2)}\n`, "utf8");
+    await mkdir(ctx.getAgentDir(), { recursive: true });
+    await writeFile(configPath(ctx), `${JSON.stringify(config, null, 2)}\n`, "utf8");
   } catch {
     // Config persistence is best-effort; the session toggle still works.
   }
@@ -115,8 +111,11 @@ function boundInput(text: string): string {
 }
 
 export function registerCompactThinking(pi: ModuleApi): void {
-  const config = loadConfig();
-  let enabled = config.compactThinking === true;
+  // Read on first session, not at import: the agent dir comes from the host
+  // context (`NANOPI_CODING_AGENT_DIR` and a possibly renamed config dir come
+  // with it), and there is no context before a session starts.
+  let config: CompactThinkingConfig = {};
+  let enabled = false;
   // Serialize summaries so transcript entries stay in message order.
   let queue: Promise<void> = Promise.resolve();
 
@@ -187,6 +186,11 @@ export function registerCompactThinking(pi: ModuleApi): void {
     return new Text(`${dot} ${verb}${meta}\n${body}`, 0, 0);
   });
 
+  pi.on("session_start", (_event, ctx) => {
+    config = loadConfig(ctx);
+    enabled = config.compactThinking === true;
+  });
+
   pi.on("agent_start", () => {
     thinkingStartedAt = undefined;
     thinkingMs = 0;
@@ -251,7 +255,7 @@ export function registerCompactThinking(pi: ModuleApi): void {
       } catch {
         note = " Could not update Pi's hideThinkingBlock setting; toggle it in /settings.";
       }
-      await saveConfig(config);
+      await saveConfig(ctx, config);
       ctx.ui.notify(`Compact thinking ${enabled ? "on" : "off"}.${note}`, "info");
     },
   });

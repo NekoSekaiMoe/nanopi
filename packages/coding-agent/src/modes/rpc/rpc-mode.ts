@@ -134,6 +134,9 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 	 * Create an extension UI context that uses the RPC protocol.
 	 */
 	const createExtensionUIContext = (): ModuleUIContext => ({
+		// The registry wraps this context with its channel host, so a direct call is
+		// unreachable; RPC has no widget surface to publish to.
+		channel: () => ({ update: () => {}, transform: () => () => {} }),
 		select: (title, options, opts) =>
 			createDialogPromise(opts, undefined, { method: "select", title, options, timeout: opts?.timeout }, (r) =>
 				"cancelled" in r && r.cancelled ? undefined : "value" in r ? r.value : undefined,

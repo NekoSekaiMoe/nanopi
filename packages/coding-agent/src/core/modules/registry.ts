@@ -6,6 +6,7 @@
 import type { AgentMessage, AgentTool } from "@nanopi/pi-agent-core";
 import type { ImageContent, Model, Provider, ProviderHeaders } from "@nanopi/pi-ai";
 import type { KeyId } from "@nanopi/pi-tui";
+import { getAgentDir, resolveHostEntry } from "../../config.ts";
 import { theme } from "../../modes/interactive/theme/theme.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
@@ -89,6 +90,7 @@ import type {
 	ToolResultEventResult,
 	TurnEndEvent,
 } from "./types.ts";
+import { WidgetChannelHost } from "./widget-channels.ts";
 
 // RegisteredModule shortcuts compete with canonical keybinding ids from keybindings.json.
 // Only editor-global shortcuts are reserved here. Picker-specific bindings are not.
@@ -271,6 +273,7 @@ export async function emitProjectTrustEvent(
 }
 
 const noOpUIContext: ModuleUIContext = {
+	channel: () => ({ update: () => {}, transform: () => () => {} }),
 	select: async () => undefined,
 	confirm: async () => false,
 	input: async () => undefined,
@@ -312,6 +315,7 @@ export class ModuleRegistry {
 	private modules: RegisteredModule[];
 	private runtime: ModuleRuntime;
 	private uiContext: ModuleUIContext;
+	private widgetChannels = new WidgetChannelHost();
 	private mode: ModuleMode = "print";
 	private cwd: string;
 	private sessionManager: SessionManager;
@@ -515,7 +519,8 @@ export class ModuleRegistry {
 	}
 
 	setUIContext(uiContext?: ModuleUIContext, mode: ModuleMode = "print"): void {
-		this.uiContext = uiContext ?? noOpUIContext;
+		this.uiContext = uiContext ? this.widgetChannels.forContext(uiContext) : noOpUIContext;
+		this.widgetChannels.bind(uiContext);
 		this.mode = mode;
 	}
 
@@ -795,6 +800,8 @@ export class ModuleRegistry {
 			get cwd() {
 				return runner.cwd;
 			},
+			getAgentDir: () => getAgentDir(),
+			resolveHostEntry: () => resolveHostEntry(),
 			get sessionManager() {
 				return runner.sessionManager;
 			},

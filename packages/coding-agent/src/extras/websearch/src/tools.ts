@@ -10,7 +10,7 @@
 import { Text } from "@nanopi/pi-tui";
 import type { ModuleApi, Theme } from "@nanopi/pi-coding-agent";
 import { type Static, Type } from "typebox";
-import { loadWebsearchConfig } from "./config.ts";
+import { getWebsearchConfigPath, loadWebsearchConfig } from "./config.ts";
 import type { SearchAttempt, SearchItem } from "./engines.ts";
 import { MAX_LIMIT, runFetch, runSearch } from "./search.ts";
 
@@ -77,10 +77,12 @@ export function registerWebsearchTools(pi: ModuleApi): void {
 		annotations: { readOnlyHint: true, openWorldHint: true },
 		parameters: searchParams,
 
-		async execute(_toolCallId, params: Static<typeof searchParams>, signal) {
+		async execute(_toolCallId, params: Static<typeof searchParams>, signal, _onUpdate, ctx) {
+			const agentDir = ctx.getAgentDir();
 			const outcome = await runSearch(params.query, {
 				limit: params.max_results,
-				config: loadWebsearchConfig(),
+				config: loadWebsearchConfig(getWebsearchConfigPath(agentDir)),
+				agentDir,
 				signal,
 			});
 			const uncertainty: string[] = [];
@@ -139,9 +141,10 @@ export function registerWebsearchTools(pi: ModuleApi): void {
 		annotations: { readOnlyHint: true, openWorldHint: true },
 		parameters: fetchParams,
 
-		async execute(_toolCallId, params: Static<typeof fetchParams>, signal) {
-			const config = loadWebsearchConfig();
-			const outcome = await runFetch(params.url, { config, signal });
+		async execute(_toolCallId, params: Static<typeof fetchParams>, signal, _onUpdate, ctx) {
+			const agentDir = ctx.getAgentDir();
+			const config = loadWebsearchConfig(getWebsearchConfigPath(agentDir));
+			const outcome = await runFetch(params.url, { config, agentDir, signal });
 			const notes: string[] = [];
 			if (outcome.truncated) notes.push("Content truncated at 60000 characters.");
 			if (attemptsUsedFallback(outcome.attempts)) {

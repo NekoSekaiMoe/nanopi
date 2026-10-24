@@ -12,7 +12,6 @@
 
 import fs from "node:fs";
 import { join } from "node:path";
-import { getAgentDir } from "../../../config.ts";
 import { resolveConfigValue } from "../../../core/resolve-config-value.ts";
 
 export type EngineName = "firecrawl" | "keenable" | "tavily" | "exa";
@@ -58,8 +57,9 @@ export const WEBSEARCH_CONFIG_FILE = "websearch.json";
 export const DEFAULT_TIMEOUT_MS = 20_000;
 export const DEFAULT_DEADLINE_MS = 60_000;
 
-export function getWebsearchConfigPath(): string {
-	return join(getAgentDir(), WEBSEARCH_CONFIG_FILE);
+/** The config lives in the host's agent dir; see `ctx.getAgentDir()`. */
+export function getWebsearchConfigPath(agentDir: string): string {
+	return join(agentDir, WEBSEARCH_CONFIG_FILE);
 }
 
 function isEngineName(value: unknown): value is EngineName {
@@ -83,7 +83,7 @@ function normalizeEngineConfig(value: unknown): EngineConfig | undefined {
  * empty config: search then runs on the keyless defaults instead of failing,
  * and a typo cannot take the tool offline.
  */
-export function loadWebsearchConfig(path = getWebsearchConfigPath()): WebsearchConfig {
+export function loadWebsearchConfig(path: string): WebsearchConfig {
 	let raw: unknown;
 	try {
 		raw = JSON.parse(fs.readFileSync(path, "utf-8"));

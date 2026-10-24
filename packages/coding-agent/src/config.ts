@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join, resolve } from "path";
 import { fileURLToPath } from "url";
+import { isSingleNodeFileRuntime } from "./standalone/assets.ts";
 import { normalizePath } from "./utils/paths.ts";
 import { stripBom } from "./utils/text.ts";
 
@@ -33,6 +34,38 @@ export function findNodePackageDir(startDir: string): string {
 		dir = dirname(dir);
 	}
 	return startDir;
+}
+
+/**
+ * The node invocation that runs this installation's own entry point.
+ *
+ * The single-file distribution (nanopi.js) must run itself: `getPackageDir()`
+ * points at the extracted asset cache there, whose package.json has no `bin`
+ * entry for a child to run through node. Anything this process runs was started
+ * by node, so `argv[1]` is the entry that is actually executing. Everywhere
+ * else the package's `bin` entry is the child entry, and a path that does not
+ * exist is refused: a guess that is wrong only turns into a MODULE_NOT_FOUND
+ * crash inside the child, where the reason is invisible to the parent.
+ *
+ * Falls back to the bare command name, so a caller that is not running from a
+ * nanopi installation (`npx`, a global install shadowed by PATH) still spawns
+ * the binary the user has.
+ */
+export function resolveHostEntry(): { cmd: string; args: string[] } {
+	const entryPoint = process.argv[1];
+	if (isSingleNodeFileRuntime() && entryPoint) return { cmd: process.execPath, args: [entryPoint] };
+	try {
+		const dir = getPackageDir();
+		const bin = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).bin as Record<string, string> | undefined;
+		const entry = bin?.[APP_NAME] ?? Object.values(bin ?? {})[0];
+		if (typeof entry === "string") {
+			const candidate = join(dir, entry);
+			if (existsSync(candidate)) return { cmd: process.execPath, args: [candidate] };
+		}
+	} catch {
+		// fall through
+	}
+	return { cmd: APP_NAME, args: [] };
 }
 
 export function getPackageDir(): string {

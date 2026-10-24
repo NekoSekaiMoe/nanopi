@@ -157,7 +157,7 @@ describe("loadMcpConfig", () => {
 		const previous = process.env.NANOPI_CODING_AGENT_DIR;
 		process.env.NANOPI_CODING_AGENT_DIR = join(home, ".nanopi", "agent");
 		try {
-			const config = loadMcpConfig(cwd, { home });
+			const config = loadMcpConfig(cwd, { agentDir: join(home, ".nanopi", "agent"), home });
 			expect(config.servers.get("shared")).toMatchObject({ command: "mine" });
 			expect(config.origins.get("shared")).toContain("agent");
 			expect(config.servers.get("extra")).toMatchObject({ command: "cursor-only" });
@@ -175,7 +175,7 @@ describe("loadMcpConfig", () => {
 		const previous = process.env.NANOPI_CODING_AGENT_DIR;
 		process.env.NANOPI_CODING_AGENT_DIR = join(home, ".nanopi", "agent");
 		try {
-			const config = loadMcpConfig(cwd, { home });
+			const config = loadMcpConfig(cwd, { agentDir: join(home, ".nanopi", "agent"), home });
 			expect(config.servers.size).toBe(0);
 			expect(config.discoveryFiles).toEqual([]);
 		} finally {
@@ -191,7 +191,7 @@ describe("loadMcpConfig", () => {
 		const previous = process.env.NANOPI_CODING_AGENT_DIR;
 		process.env.NANOPI_CODING_AGENT_DIR = join(home, ".nanopi", "agent");
 		try {
-			expect(loadMcpConfig(cwd, { home }).servers.size).toBe(0);
+			expect(loadMcpConfig(cwd, { agentDir: join(home, ".nanopi", "agent"), home }).servers.size).toBe(0);
 		} finally {
 			if (previous === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
 			else process.env.NANOPI_CODING_AGENT_DIR = previous;
