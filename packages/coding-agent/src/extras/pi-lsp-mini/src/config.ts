@@ -233,6 +233,11 @@ function userConfigPath(): string {
 
 let cachedServers: LspServerConfig[] | undefined;
 
+/** Drops the memoized merge. Tests that point NANOPI_CODING_AGENT_DIR at another config need this. */
+export function resetServersCache(): void {
+  cachedServers = undefined;
+}
+
 /** Built-in defaults, overridden per-id by ~/.nanopi/agent/lsp.json ({ "servers": [{ "id": ..., ... }] }). */
 export function loadServers(): LspServerConfig[] {
   if (cachedServers) return cachedServers;

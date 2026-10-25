@@ -7,7 +7,7 @@ instructions):
 
 - **Diagnostics** — `lsp_diagnostics` on a file or a whole directory; issues are
   also appended automatically after every `write`, and after every `edit` when
-  `editDiagnostics` is enabled (see below).
+  the opt-in [`editDiagnostics`](#diagnostics-after-edit) check is enabled.
 - **Call relations** — `lsp_callgraph` walks incoming/outgoing call hierarchy
   recursively (who calls this function / what it calls).
 - **Batch replace / delete** — `lsp_rename` (scope-aware workspace rename) and
@@ -102,26 +102,37 @@ inline args allowed, absolute paths supported), `args`, `include` (extensions),
 `rootMarkers`, `diagnosticsWaitMs`, `settings`, `initializationOptions`,
 `compileCommandsProbe` (bool, cpp default true), `enabled`.
 
-## Diagnostics after edit (opt-in)
+## Diagnostics after edit
 
-A diagnostic report attached to an edit is only useful if it describes the
-content the edit just wrote. Language servers publish the analysis of the
-snapshot they were holding before the change went out, so the first publish that
-arrives after an edit routinely belongs to the *previous* content — reporting it
-shows the model errors it just fixed, or errors it never introduced. The module
-therefore stamps every publish with a revision and waits only for one newer than
-the edit.
-
-Disabled by default; enable it in `~/.nanopi/agent/lsp.json`:
+`write` always reports what the server says about the file it just wrote. `edit`
+does not, by default: an agent loop runs `edit` far more often than `write`, and
+a language server on that path is a per-turn latency cost. Turn it on per user in
+`~/.nanopi/agent/lsp.json`:
 
 ```json
-{ "editDiagnostics": { "enabled": true, "timeoutMs": 8000, "errorsOnly": false, "maxDiagnostics": 8 } }
+{
+  "editDiagnostics": { "enabled": true }
+}
 ```
 
-`timeoutMs` bounds the wait (`0` returns nothing), `errorsOnly` drops warnings,
-`maxDiagnostics` caps the report per file. No matching server, a crashed server,
-an unreadable file or a timeout all return the edit result unchanged: this path
-never turns a successful edit into a failed one.
+| key | default | meaning |
+| --- | --- | --- |
+| `enabled` | `false` | Run the check at all. Anything but `true` is off. |
+| `debounceMs` | `500` | Initial pause after `didChange` before looking for a publish. |
+| `timeoutMs` | `8000` | Total budget. On expiry the edit result is returned unchanged. |
+| `errorsOnly` | `false` | Drop warnings; report errors only. |
+| `maxDiagnostics` | `8` | Cap on reported diagnostics per file. |
+
+Two invariants hold regardless of configuration:
+
+- **Freshness.** A server publishes diagnostics for whatever it last saw, so the
+  snapshot available right after an edit is usually the *pre*-edit one. The
+  check records a publish counter before touching the file and only accepts
+  reports newer than that mark; when none arrives inside the budget it reports
+  nothing rather than stale errors attributed to this edit.
+- **Never fatal.** No matching server, a server that will not start, a file the
+  server refuses, or a timeout all mean "no diagnostics". A successful `edit` is
+  never turned into a failure by the check.
 
 ## Install
 
@@ -151,3 +162,6 @@ language-server binaries you want are on PATH (or configured in
   assignments, arguments, or callbacks are reported as `✋ manual`.
 - Rename/delete re-open changed files on the server and re-run diagnostics,
   reporting new errors introduced by the change.
+- The post-`edit` check waits for a publish it can prove is new. Servers that
+  only re-publish on `didSave` therefore report nothing there — that is the
+  intended trade: silence instead of a stale error blamed on the edit.

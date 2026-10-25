@@ -80,6 +80,10 @@ export class LspManager {
    *  document, which is how a caller separates "diagnostics for the content I just
    *  wrote" from the pre-write snapshot a server publishes on its own. */
   private readonly diagnostics = new Map<string, DiagnosticsEntry>();
+  /** Every document some server has published for, including publishes that
+   *  reported nothing: a clean file is being tracked too, and "nobody has looked
+   *  at this yet" has to stay distinguishable from "looked, found nothing". */
+  private readonly published = new Set<string>();
   private revision = 0;
 
   listServers(): LspServerConfig[] {
@@ -129,7 +133,9 @@ export class LspManager {
         // Keep an empty publish instead of deleting it: "the new content has no
         // issues" is the answer a post-edit check is waiting for, and a deleted
         // entry is indistinguishable from "no publish yet".
-        this.diagnostics.set(`${match.server.id}\u0000${file}`, { diagnostics: diags, revision: ++this.revision });
+        const key = `${match.server.id}\u0000${file}`;
+        this.published.add(key);
+        this.diagnostics.set(key, { diagnostics: diags, revision: ++this.revision });
       });
       this.clients.set(key, client);
     }
@@ -172,6 +178,48 @@ export class LspManager {
   /** Highest publish revision seen so far, for any file. */
   currentRevision(): number {
     return this.revision;
+  }
+
+  /**
+   * Newest publish counter across the servers watching `file`. Take it before
+   * touching the file and pass it to `diagnosticsSince` to accept only reports
+   * that describe the new content.
+   */
+  markFor(file: string): number {
+    const absolute = path.resolve(file);
+    let mark = 0;
+    for (const [key, entry] of this.diagnostics) {
+      if (fileOf(key) === absolute && entry.revision > mark) mark = entry.revision;
+    }
+    return mark;
+  }
+
+  /** How many servers have ever published for `file`; used to decide when a wait has an answer from everyone. */
+  serverCountFor(file: string): number {
+    const absolute = path.resolve(file);
+    let count = 0;
+    for (const key of this.published) {
+      if (fileOf(key) === absolute) count += 1;
+    }
+    return count;
+  }
+
+  /**
+   * Diagnostics published after `mark`. A publish that reported nothing comes
+   * back as an empty list with a newer mark, which is an answer ("clean") and
+   * not a missing one, so a caller can tell the two apart.
+   */
+  diagnosticsSince(file: string, mark: number): { serverId: string; diagnostics: Diagnostic[]; mark: number }[] {
+    const absolute = path.resolve(file);
+    const out: { serverId: string; diagnostics: Diagnostic[]; mark: number }[] = [];
+    for (const key of this.published) {
+      if (fileOf(key) !== absolute) continue;
+      const entry = this.diagnostics.get(key);
+      if (!entry || entry.revision <= mark) continue;
+      const [serverId] = key.split("\u0000");
+      out.push({ serverId, diagnostics: entry.diagnostics, mark: entry.revision });
+    }
+    return out;
   }
 
   /**
@@ -339,6 +387,11 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new Error("aborted"));
     }, { once: true });
   });
+}
+
+/** The absolute file of a `server id\u0000file` map key. */
+function fileOf(key: string): string {
+  return key.slice(key.indexOf("\u0000") + 1);
 }
 
 export interface DiagnosticsEntry {

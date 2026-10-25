@@ -116,9 +116,9 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     await manager.shutdownAll();
   });
 
-  // after write/edit, opt-in: report the diagnostics of the content that was just
-  // written (lsp.json `editDiagnostics.enabled`). The default `write`/`edit`
-  // report below covers the pre-existing behaviour and stays unguarded.
+  // after write/edit, opt-in for `edit`: report the diagnostics of the content
+  // that was just written (lsp.json `editDiagnostics.enabled`). The `write`
+  // report below covers the always-on behaviour and stays unguarded.
   pi.on("tool_result", async (event, ctx) => {
     if (event.toolName !== "edit" && event.toolName !== "write") return undefined;
     if (event.isError) return undefined;
