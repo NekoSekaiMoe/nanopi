@@ -33,6 +33,13 @@ const COMPONENT_MODULES = {
 		module: "src/core/modules/jiti-loader.ts",
 		stub: "src/core/modules/jiti-loader-disabled.ts",
 	},
+	// The Markdown renderer is imported statically by agent-session and by the
+	// CLI entry, so a flavor without it swaps in a stub that throws the same
+	// "not included in this build" error a runtime check would.
+	"export-markdown": {
+		module: "src/core/export-markdown/index.ts",
+		stub: "src/core/export-markdown/index-disabled.ts",
+	},
 };
 
 /**

@@ -5,7 +5,10 @@
 			"description": "Browser UI served by `nanopi webui` (packages/webui, copied to dist/webui and embedded in single-file builds)"
 		},
 		"export-html": {
-			"description": "HTML export templates and vendored assets (dist/core/export-html)"
+			"description": "HTML export templates and vendored assets (dist/core/export-html). Also the print source of a PDF: the README tells users to open the exported HTML in a browser and print it"
+		},
+		"export-markdown": {
+			"description": "Session export to Markdown (the /export command, --export-format md, and the RPC export_session command). Dropping it leaves the HTML export, which renders in the browser from the template's own data payload"
 		},
 		"docs": {
 			"description": "In-package documentation (embedded in single-file builds; the npm package always ships it)"
@@ -205,7 +208,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the HTML export templates; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the export to Markdown and HTML (a PDF is that HTML printed by the browser); none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -225,11 +228,12 @@
 				"providers": "core",
 				"apis": "all",
 				"jiti-modules": true,
-				"export-html": true
+				"export-html": true,
+				"export-markdown": true
 			}
 		},
 		"minimal": {
-			"description": "base with the bash tool alone, one endpoint shape, and no peripheral code: the shell tool is the only tool the build registers (the other tool definitions are stubbed out), endpoint API implementations are cut to openai-completions, the syntax-highlight grammars and embedded-code detection are dropped, run modes and permissions (module/extra) fall away with the extras, and the endpoint and key come from models.json instead of a shipped catalog",
+			"description": "base with the bash tool alone, one endpoint shape, and no peripheral code: the shell tool is the only tool the build registers (the other tool definitions are stubbed out), endpoint API implementations are cut to openai-completions, the syntax-highlight grammars and embedded-code detection are dropped, every export format falls away, run modes and permissions (module/extra) fall away with the extras, and the endpoint and key come from models.json instead of a shipped catalog",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -252,7 +256,9 @@
 				"oauth/*": false,
 				"syntax-highlight": false,
 				"embedded-code": false,
-				"jiti-modules": false
+				"jiti-modules": false,
+				"export-html": false,
+				"export-markdown": false
 			}
 		}
 	},

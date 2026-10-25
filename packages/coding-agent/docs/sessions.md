@@ -55,7 +55,7 @@ Use `--session` when you already know the session path or ID. Use `--fork` to cr
 
 ## Export or share a session
 
-Use `/export` to write the current session as HTML or JSONL. Use `/share` to upload it and get a viewer link. nanopi uses a Radius artifact when Radius authentication is configured; otherwise, it uses a private GitHub gist.
+Use `/export [path]` to write the current session as Markdown (`.md`), HTML (`.html`), or the session file itself (`.jsonl`); the path extension picks the format and HTML is the default. A PDF is the HTML export printed by a browser: open the exported `.html` file and pick "Print to PDF" - the print stylesheet reveals the output, thinking, and compaction blocks the page keeps behind a click. Use `/share` to upload it and get a viewer link. nanopi uses a Radius artifact when Radius authentication is configured; otherwise, it uses a private GitHub gist.
 
 Review exported or shared sessions first. They can contain prompts, model responses, tool arguments, command output, file contents, and extension messages.
 

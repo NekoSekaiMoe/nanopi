@@ -6,6 +6,7 @@ import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import chalk from "chalk";
 import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } from "../config.ts";
 import type { ModuleFlag } from "../core/modules/types.ts";
+import { parseExportFormat, type SessionExportFormat } from "../core/session-export-formats.ts";
 import { getToolListError } from "../core/settings-manager.ts";
 
 export type Mode = "text" | "json" | "rpc";
@@ -35,6 +36,8 @@ export interface Args {
 	noBuiltinTools?: boolean;
 	print?: boolean;
 	export?: string;
+	/** `--export-format <md|html>`: overrides the format inferred from the output path. */
+	exportFormat?: SessionExportFormat;
 	noSkills?: boolean;
 	skills?: string[];
 	promptTemplates?: string[];
@@ -184,6 +187,17 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--export" && i + 1 < args.length) {
 			result.export = args[++i];
+		} else if (arg === "--export-format" && i + 1 < args.length) {
+			const value = args[++i];
+			const format = parseExportFormat(value);
+			if (format === undefined) {
+				result.diagnostics.push({
+					type: "error",
+					message: `Invalid export format "${value}". Valid values: md, html`,
+				});
+			} else {
+				result.exportFormat = format;
+			}
 		} else if (arg === "--skill" && i + 1 < args.length) {
 			result.skills = result.skills ?? [];
 			result.skills.push(args[++i]);
@@ -300,7 +314,8 @@ ${chalk.bold("Options:")}
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
   --no-prompt-templates, -np     Disable prompt template discovery and loading
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
-  --export <file>                Export session file to HTML and exit
+  --export <file>                Export a session file and exit (format from the extension)
+  --export-format <format>       Export format: md or html (overrides the extension)
   --list-models [search]         List available models (with optional fuzzy search)
   --refresh                      Refetch provider catalogs first (with --list-models)
   --verbose                      Force verbose startup (overrides quietStartup setting)
@@ -375,9 +390,10 @@ ${chalk.bold("Examples:")}
   # Disable one tool while keeping the rest available
   ${APP_NAME} --exclude-tools ask_question
 
-  # Export a session file to HTML
+  # Export a session file as HTML or Markdown
   ${APP_NAME} --export ~/${CONFIG_DIR_NAME}/agent/sessions/--path--/session.jsonl
   ${APP_NAME} --export session.jsonl output.html
+  ${APP_NAME} --export session.jsonl output.md
 
 ${chalk.bold("Environment Variables:")}
   ANTHROPIC_AUTH_TOKEN             - Anthropic bearer auth token

@@ -10,6 +10,7 @@ import type { ImageContent } from "@nanopi/pi-ai";
 import type { PromptDisposition, QueuedInputDisposition, SessionStats } from "../../core/agent-session.ts";
 import type { BashResult } from "../../core/bash-executor.ts";
 import type { CompactionResult } from "../../core/compaction/index.ts";
+import type { SessionExportFormat } from "../../core/session-export-formats.ts";
 import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
 import type { JsonAgentSessionEvent } from "../json-event.ts";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
@@ -375,6 +376,18 @@ export class RpcClient {
 	 */
 	async exportHtml(outputPath?: string): Promise<{ path: string }> {
 		const response = await this.send({ type: "export_html", outputPath });
+		return this.getData(response);
+	}
+
+	/**
+	 * Export the session in one of the formats the build carries.
+	 * `exportHtml()` stays for callers that only ever want HTML.
+	 */
+	async exportSession(
+		format: SessionExportFormat,
+		outputPath?: string,
+	): Promise<{ path: string; format: SessionExportFormat }> {
+		const response = await this.send({ type: "export_session", format, outputPath });
 		return this.getData(response);
 	}
 

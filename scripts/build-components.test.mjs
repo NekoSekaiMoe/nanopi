@@ -37,6 +37,10 @@ function fixture({ stubSource = 'export function highlight(code: string): string
 	mkdirSync(join(dir, "src/core/modules"), { recursive: true });
 	writeFileSync(join(dir, "src/core/modules/jiti-loader.ts"), JITI_LOADER_EXPORTS);
 	writeFileSync(join(dir, "src/core/modules/jiti-loader-disabled.ts"), JITI_LOADER_EXPORTS);
+	mkdirSync(join(dir, "src/core/export-markdown"), { recursive: true });
+	const markdownExports = "export function run(): string {\n\treturn '';\n}\n";
+	writeFileSync(join(dir, "src/core/export-markdown/index.ts"), markdownExports);
+	writeFileSync(join(dir, "src/core/export-markdown/index-disabled.ts"), markdownExports);
 	return dir;
 }
 
