@@ -53,15 +53,12 @@ export interface ReadOperations {
 	access: (absolutePath: string) => Promise<void>;
 	/** Detect image MIME type, return null or undefined for non-images */
 	detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
-	/** Stat the file so `edit` can tell later whether it changed. Omitted means "no snapshot". */
-	stat?: (absolutePath: string) => Promise<{ size: number; mtimeMs: number }>;
 }
 
 const defaultReadOperations: ReadOperations = {
 	readFile: (path) => fsReadFile(path),
 	access: (path) => fsAccess(path, constants.R_OK),
 	detectImageMimeType: detectSupportedImageMimeTypeFromFile,
-	stat: (path) => fsStat(path),
 };
 
 export interface ReadToolOptions {
@@ -130,6 +127,7 @@ export function createReadToolDefinition(
 							// Check if file exists and is readable.
 							await ops.access(absolutePath);
 							if (aborted) return;
+							const stats = await fsStat(absolutePath);
 							const mimeType = ops.detectImageMimeType ? await ops.detectImageMimeType(absolutePath) : undefined;
 							let content: (TextContent | ImageContent)[];
 							let details: ReadToolDetails | undefined;
@@ -155,12 +153,11 @@ export function createReadToolDefinition(
 									];
 								}
 							} else {
-								// Read text content. The stat is taken before the read: a write
-								// between the two then looks like a change, which is the safe
-								// direction for an advisory hint.
-								const snapshot = await ops.stat?.(absolutePath).catch(() => undefined);
-								if (snapshot) recordRead(absolutePath, snapshot);
+								// Read text content.
 								const buffer = await ops.readFile(absolutePath);
+								// Snapshot the state this text came from, so a later edit can say
+								// whether the model is working from an outdated view of the file.
+								recordRead(absolutePath, { mtimeMs: stats.mtimeMs, size: stats.size });
 								const textContent = buffer.toString("utf-8");
 								const allLines = textContent.split("\n");
 								const totalFileLines = allLines.length;

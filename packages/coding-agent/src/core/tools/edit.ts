@@ -73,8 +73,6 @@ export interface EditToolDetails {
 	patch: string;
 	/** Line number of the first change in the new file (for editor navigation) */
 	firstChangedLine?: number;
-	/** Set when the file changed on disk since the model last read it. Advisory, not a failure. */
-	staleRead?: string;
 }
 
 /**
@@ -88,15 +86,12 @@ export interface EditOperations {
 	writeFile: (absolutePath: string, content: string) => Promise<void>;
 	/** Check if file is readable and writable (throw if not) */
 	access: (absolutePath: string) => Promise<void>;
-	/** Stat the file for the advisory stale-read check. Omitted means "no check". */
-	stat?: (absolutePath: string) => Promise<{ size: number; mtimeMs: number }>;
 }
 
 const defaultEditOperations: EditOperations = {
 	readFile: (path) => fsReadFile(path),
 	writeFile: (path, content) => fsWriteFile(path, content, "utf-8"),
 	access: (path) => fsAccess(path, constants.R_OK | constants.W_OK),
-	stat: (path) => fsStat(path),
 };
 
 export interface EditToolOptions {
@@ -186,18 +181,18 @@ export function createEditToolDefinition(
 				}
 				throwIfAborted();
 
-				// The state the matched text came from. Taking it before the read means a
-				// write landing in between shows up as a change, which is the safe
-				// direction for an advisory hint.
-				const snapshot = await ops.stat?.(absolutePath).catch(() => undefined);
+				// Read the file. The stat before and after the read bracket the state the
+				// matched text came from; a change in between means the oldText belongs to
+				// a version that is already gone, so it is reported rather than applied.
+				const before = await fsStat(absolutePath);
 				const buffer = await ops.readFile(absolutePath);
 				const rawContent = buffer.toString("utf-8");
+				const after = await fsStat(absolutePath);
 				throwIfAborted();
-
-				// Advisory staleness check: the model may be matching against text it
-				// read before someone else wrote the file. Cheap to compute and never
-				// blocks - the edit can still be exactly right.
-				const staleRead = snapshot ? describeStaleRead(absolutePath, snapshot) : undefined;
+				const changedDuringRead = before.mtimeMs !== after.mtimeMs || before.size !== after.size;
+				const staleNote = changedDuringRead
+					? `Note: this file changed on disk while the edit was reading it. Re-read it before the next edit so the next oldText matches what is actually there.`
+					: describeStaleRead(absolutePath, { mtimeMs: after.mtimeMs, size: after.size });
 
 				// Strip BOM before matching. The model will not include an invisible BOM in oldText.
 				const { bom, text: content } = splitBom(rawContent);
@@ -209,10 +204,9 @@ export function createEditToolDefinition(
 				const finalContent = bom + restoreLineEndings(newContent, originalEnding);
 				await ops.writeFile(absolutePath, finalContent);
 				throwIfAborted();
-				// The model now knows exactly what this file contains, so a later
-				// `edit` in the same session should not compare against the stale state.
-				const written = await ops.stat?.(absolutePath).catch(() => undefined);
-				if (written) recordRead(absolutePath, written);
+				// The edit is now the newest content the model has seen.
+				const written = await fsStat(absolutePath).catch(() => undefined);
+				if (written) recordRead(absolutePath, { mtimeMs: written.mtimeMs, size: written.size });
 
 				const diffResult = generateDiffString(baseContent, newContent);
 				const patch = generateUnifiedPatch(path, baseContent, newContent);
@@ -220,15 +214,10 @@ export function createEditToolDefinition(
 					content: [
 						{
 							type: "text",
-							text: `Successfully replaced ${edits.length} block(s) in ${path}.${staleRead ? `\n\nNote: ${staleRead}.` : ""}`,
+							text: `Successfully replaced ${edits.length} block(s) in ${path}.${staleNote ? `\n\n${staleNote}` : ""}`,
 						},
 					],
-					details: {
-						diff: diffResult.diff,
-						patch,
-						firstChangedLine: diffResult.firstChangedLine,
-						staleRead,
-					},
+					details: { diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine },
 				};
 			});
 		},

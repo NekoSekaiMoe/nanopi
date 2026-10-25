@@ -15,8 +15,9 @@ describe("edit-diff error messages", () => {
 		const content = ["const first = 1;", "middle();", "const first = 1;", "tail();"].join("\n");
 		const message = attempt(content, "const first = 1;", "const first = 2;");
 		expect(message).toContain("Found 2 occurrences");
-		expect(message).toContain("line 1: const first = 1;");
-		expect(message).toContain("line 3: const first = 1;");
+		expect(message).toContain("at file lines 1, 3");
+		expect(message).toContain("1: const first = 1;");
+		expect(message).toContain("3: const first = 1;");
 	});
 
 	it("names the called-out edit index for multi-edit duplicates", () => {
@@ -48,9 +49,9 @@ describe("edit-diff error messages", () => {
 		].join("\n");
 		const message = attempt(content, "export function loadConfig() {\n  return readSetting();", "x();");
 		expect(message).toContain("Could not find the exact text");
-		expect(message).toContain("The closest lines in the file are:");
-		expect(message).toContain("line 1: export function loadConfig() {");
-		expect(message).toContain("line 2: return readSettings();");
+		expect(message).toContain("Closest lines in the file:");
+		expect(message).toContain("1: export function loadConfig() {");
+		expect(message).toContain("2: return readSettings();");
 	});
 
 	it("ranks rare identifiers above boilerplate", () => {
@@ -62,16 +63,16 @@ describe("edit-diff error messages", () => {
 			"  }",
 		].join("\n");
 		const message = attempt(content, "applyTheme(preferredTheme);", "applyTheme(nextTheme);");
-		const closest = message.slice(message.indexOf("The closest lines in the file are:"));
+		const closest = message.slice(message.indexOf("Closest lines in the file:"));
 		// Both `applyTheme` lines are candidates; the first reported one must be one of them.
 		expect(closest).toContain("applyTheme(");
-		expect(closest).not.toContain("line 1: if (ready) {");
+		expect(closest).not.toContain("1: if (ready) {");
 	});
 
 	it("omits the suggestion block when nothing shares an identifier", () => {
 		const content = "alpha();\nbeta();\n";
 		const message = attempt(content, "zzz();", "yyy();");
 		expect(message).toContain("Could not find the exact text");
-		expect(message).not.toContain("closest lines in the file");
+		expect(message).not.toContain("Closest lines in the file:");
 	});
 });
