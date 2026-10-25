@@ -1,5 +1,6 @@
 import { hasOAuthFlows } from "../build-components.ts";
 import { APP_NAME } from "../config.ts";
+import { enabledExportFormats } from "./session-export-formats.ts";
 import type { SourceInfo } from "./source-info.ts";
 
 export type SlashCommandSource = "extension" | "prompt" | "skill";
@@ -23,7 +24,7 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "tree", description: "Navigate session tree (switch branches)" },
 	{ name: "effort", description: "Set thinking effort", argumentHint: "<level>" },
 	{ name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
-	{ name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },
+	{ name: "export", description: "Export session (HTML default; path extension picks .md/.html/.jsonl)" },
 	{ name: "import", description: "Import and resume a session from a JSONL file" },
 	{ name: "share", description: "Share session as a secret GitHub gist" },
 	{ name: "bug", description: "Report a bug to the nanopi developers", argumentHint: "<description>" },
@@ -50,8 +51,16 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
  * `/login` and `/logout` only reach an API key dialog at best and report that
  * nothing is stored at worst; the build drops them from autocomplete and from
  * the conflict list. Their handlers stay reachable for API-key logins.
+ *
+ * `/export` follows the same rule: a build whose flavors drop every export
+ * component (the minimal flavor) has nothing to export to. The JSONL export is
+ * the session file itself and is not gated, so only a build with no export
+ * component at all loses the command.
  */
 export function builtinSlashCommands(): ReadonlyArray<BuiltinSlashCommand> {
-	if (hasOAuthFlows()) return ALL_BUILTIN_SLASH_COMMANDS;
-	return ALL_BUILTIN_SLASH_COMMANDS.filter((command) => command.name !== "login" && command.name !== "logout");
+	const commands = hasOAuthFlows()
+		? ALL_BUILTIN_SLASH_COMMANDS
+		: ALL_BUILTIN_SLASH_COMMANDS.filter((command) => command.name !== "login" && command.name !== "logout");
+	if (enabledExportFormats().length > 0) return commands;
+	return commands.filter((command) => command.name !== "export");
 }

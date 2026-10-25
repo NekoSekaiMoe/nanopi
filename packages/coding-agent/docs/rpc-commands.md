@@ -589,6 +589,31 @@ Response:
 }
 ```
 
+### export_session
+
+Export the session in one of the formats the build carries. `md`, `html`, and `jsonl` are the same three formats `/export` writes; `html` behaves exactly like `export_html`.
+
+```json
+{"type": "export_session", "format": "md"}
+```
+
+With custom path:
+```json
+{"type": "export_session", "format": "md", "outputPath": "/tmp/session.md"}
+```
+
+Response:
+```json
+{
+  "type": "response",
+  "command": "export_session",
+  "success": true,
+  "data": {"path": "/tmp/session.md", "format": "md"}
+}
+```
+
+A build flavor that omits a format (for example `base` has no HTML export) answers with `success: false` and the reason, rather than writing an empty file. `pdf` is refused with a hint: export `html` and print that document from a browser.
+
 ### switch_session
 
 Load a different session file. Can be canceled by a `session_before_switch` event handler.

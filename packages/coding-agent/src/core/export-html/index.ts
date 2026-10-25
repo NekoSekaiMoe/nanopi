@@ -27,7 +27,7 @@ export interface ToolHtmlRenderer {
 }
 
 /** Pre-rendered HTML for a custom tool call and result */
-interface RenderedToolHtml {
+export interface RenderedToolHtml {
 	callHtml?: string;
 	resultHtmlCollapsed?: string;
 	resultHtmlExpanded?: string;
@@ -126,7 +126,7 @@ function generateThemeVars(): string {
 	return lines.join("\n      ");
 }
 
-interface SessionData {
+export interface SessionData {
 	header: ReturnType<SessionManager["getHeader"]>;
 	entries: ReturnType<SessionManager["getEntries"]>;
 	leafId: string | null;
@@ -137,9 +137,13 @@ interface SessionData {
 }
 
 /**
- * Core HTML generation logic shared by both export functions.
+ * Render the HTML document for a session data payload.
+ *
+ * This document is what a reader opens in a browser and what they print to
+ * PDF, so the print rules in template.css are part of the export, not a
+ * separate renderer's layout.
  */
-function generateHtml(sessionData: SessionData): string {
+export function renderSessionHtml(sessionData: SessionData): string {
 	if (!isBuildComponentEnabled("export-html")) {
 		throw new Error(
 			'HTML export is not included in this build (buildconfig.json component "export-html" is disabled)',
@@ -274,7 +278,7 @@ export async function exportSessionToHtml(
 		renderedTools,
 	};
 
-	const html = generateHtml(sessionData);
+	const html = renderSessionHtml(sessionData);
 
 	let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
 	if (!outputPath) {
@@ -308,7 +312,7 @@ export async function exportFromFile(inputPath: string, options?: ExportOptions 
 		tools: undefined,
 	};
 
-	const html = generateHtml(sessionData);
+	const html = renderSessionHtml(sessionData);
 
 	let outputPath = opts.outputPath ? normalizePath(opts.outputPath) : undefined;
 	if (!outputPath) {

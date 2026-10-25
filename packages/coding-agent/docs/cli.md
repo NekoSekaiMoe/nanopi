@@ -40,7 +40,10 @@ nanopi resolves `@path` from the current working directory. The working director
 | `--mode text` | Select text output; still open the terminal UI when stdin and stdout are terminals |
 | `--mode json` | Run the supplied prompts, write JSONL events to stdout, then exit |
 | `--mode rpc` | Read JSONL commands from stdin and write responses and events to stdout until shutdown |
-| `--export <input> [output]` | Export a session file to HTML and exit; derive the destination when `output` is omitted |
+| `--export <input> [output]` | Export a session file and exit. The format comes from `output`'s extension (`md`, `html`, `jsonl`) and defaults to HTML; the destination is derived when `output` is omitted |
+| `--export-format <format>` | Force the export format (`md`, `html`, `jsonl`) regardless of the output path |
+
+nanopi writes no PDF. Export HTML and print that document from a browser when you need one (see [Export or share a session](sessions.md#export-or-share-a-session), which also lists what each build flavor carries).
 
 RPC mode rejects `@file` arguments. JSON and RPC modes reserve stdout for protocol records. See [JSON Event Stream](json.md) and [RPC Protocol](rpc.md).
 

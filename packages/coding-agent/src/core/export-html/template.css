@@ -1065,3 +1065,28 @@
       body { background: white; color: black; }
       #content { max-width: none; }
     }
+
+    /*
+     * Attachments (PDF and paper) have no click target, so everything the page
+     * keeps behind a click is revealed when printing: collapsed tool output,
+     * the thinking block, and the compaction detail. A PDF that keeps only the
+     * collapsed preview loses the half of the conversation that did the work.
+     */
+    @media print {
+      #hamburger, #sidebar-overlay, .copy-link-btn { display: none !important; }
+      /* The help bar is interaction: keyboard hints, toggle buttons and the
+         JSONL download do nothing on paper, and the print rules below already
+         expand what they would have revealed. */
+      .help-bar { display: none !important; }
+      #app { display: block; }
+      /* The toggle writes an inline display on these, so the override needs
+         the flag or printing a collapsed page keeps it collapsed. */
+      .tool-output.expandable .output-preview { display: none !important; }
+      .tool-output.expandable .output-full { display: block !important; }
+      .thinking-collapsed { display: none !important; }
+      .thinking-text { display: block !important; }
+      .compaction .compaction-collapsed { display: none !important; }
+      .compaction .compaction-content { display: block !important; }
+      .markdown-content pre, .tool-output { white-space: pre-wrap; word-break: break-word; }
+      .tool-execution, .compaction { break-inside: avoid; }
+    }

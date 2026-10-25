@@ -89,6 +89,7 @@ import {
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./defaults.ts";
 import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.ts";
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
+import { exportSessionToMarkdown } from "./export-markdown/index.ts";
 import type { MemorySample } from "./memory-usage.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
@@ -4811,6 +4812,15 @@ export class AgentSession {
 			outputPath,
 			toolRenderer,
 		});
+	}
+
+	/**
+	 * Export the current session branch to a Markdown file.
+	 * @param outputPath Target file path. If omitted, derives one from the session file.
+	 * @returns The resolved output file path.
+	 */
+	exportToMarkdown(outputPath?: string): string {
+		return exportSessionToMarkdown(this.sessionManager, { outputPath });
 	}
 
 	/**

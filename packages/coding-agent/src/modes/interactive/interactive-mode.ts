@@ -106,6 +106,12 @@ import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../cor
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
 import {
+	formatNotIncludedMessage,
+	isExportFormatEnabled,
+	parseExportFormat,
+	pdfExportHint,
+} from "../../core/session-export-formats.ts";
+import {
 	type SessionEntry,
 	SessionManager,
 	sessionEntryToContextMessages,
@@ -5750,13 +5756,25 @@ export class InteractiveMode {
 		const outputPath = this.getPathCommandArgument(text, "/export");
 
 		try {
-			if (outputPath?.endsWith(".jsonl")) {
-				const filePath = this.session.exportToJsonl(outputPath);
-				this.showStatus(`Session exported to: ${filePath}`);
-			} else {
-				const filePath = await this.session.exportToHtml(outputPath);
-				this.showStatus(`Session exported to: ${filePath}`);
+			// The extension picks the format; `.jsonl` stays the session file and
+			// `.md` joins the HTML export instead of producing HTML under a name
+			// that promises something else.
+			const extension = outputPath ? /\.([^./]+)$/.exec(outputPath)?.[1] : undefined;
+			const requested = extension ? parseExportFormat(extension) : undefined;
+			if (requested === "pdf") {
+				this.showError(pdfExportHint());
+				return;
 			}
+			const format = requested ?? "html";
+			if (!isExportFormatEnabled(format)) {
+				this.showError(formatNotIncludedMessage(format));
+				return;
+			}
+			let filePath: string;
+			if (format === "jsonl") filePath = this.session.exportToJsonl(outputPath);
+			else if (format === "md") filePath = this.session.exportToMarkdown(outputPath);
+			else filePath = await this.session.exportToHtml(outputPath);
+			this.showStatus(`Session exported to: ${filePath}`);
 		} catch (error: unknown) {
 			this.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
 		}

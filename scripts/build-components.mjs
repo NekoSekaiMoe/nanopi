@@ -33,6 +33,13 @@ const COMPONENT_MODULES = {
 		module: "src/core/modules/jiti-loader.ts",
 		stub: "src/core/modules/jiti-loader-disabled.ts",
 	},
+	// The Markdown renderer is imported statically by agent-session and by the
+	// CLI entry, so a flavor without it swaps in a stub that throws the same
+	// "not included in this build" error a runtime check would.
+	"export-markdown": {
+		module: "src/core/export-markdown/index.ts",
+		stub: "src/core/export-markdown/index-disabled.ts",
+	},
 };
 
 /**
@@ -46,9 +53,9 @@ const COMPONENT_LAZY_IMPORTS = {
 };
 
 /**
- * The packages this build keeps out because it cannot load disk modules: the
- * single file leaves jiti external for its zero-dependency promise, so the
- * component is off there regardless of flavor.
+ * The component the standalone single file cannot carry whatever the flavor
+ * says: it leaves jiti external for its zero-dependency promise, so loading
+ * disk modules is off there.
  *
  * @param {{ components: Record<string, boolean | string>, singleFile?: boolean }} input
  * @returns {Record<string, boolean | string>}

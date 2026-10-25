@@ -379,6 +379,18 @@ export class RpcClient {
 	}
 
 	/**
+	 * Export the session in one of the formats the build carries.
+	 * `exportHtml()` stays for callers that only ever want HTML.
+	 */
+	async exportSession(
+		format: "md" | "html" | "jsonl",
+		outputPath?: string,
+	): Promise<{ path: string; format: "md" | "html" | "jsonl" }> {
+		const response = await this.send({ type: "export_session", format, outputPath });
+		return this.getData(response);
+	}
+
+	/**
 	 * Switch to a different session file.
 	 * @returns Object with `cancelled: true` if an extension cancelled the switch
 	 */

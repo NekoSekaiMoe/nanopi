@@ -5,6 +5,7 @@
  * createAgentSession() options. The SDK does the heavy lifting.
  */
 
+import { existsSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { type ImageContent, modelsAreEqual } from "@nanopi/pi-ai";
 import { setCapabilityOverrides } from "@nanopi/pi-tui";
@@ -45,6 +46,7 @@ import { formatNoModelsAvailableMessage } from "./core/auth-guidance.ts";
 import { AuthStorage, ReadOnlyAuthStorage } from "./core/auth-storage.ts";
 import { BUILD_VERSION } from "./core/build-version.ts";
 import { exportFromFile } from "./core/export-html/index.ts";
+import { exportSessionToMarkdown } from "./core/export-markdown/index.ts";
 import { applyHttpProxySettings, configureHttpDispatcher } from "./core/http-dispatcher.ts";
 import { formatMemorySample, sampleMemory } from "./core/memory-usage.ts";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "./core/model-resolver.ts";
@@ -59,6 +61,13 @@ import {
 	MissingSessionCwdError,
 	type SessionCwdIssue,
 } from "./core/session-cwd.ts";
+import {
+	formatNotIncludedMessage,
+	isExportFormatEnabled,
+	parseExportFormat,
+	pdfExportHint,
+	type SessionExportFormat,
+} from "./core/session-export-formats.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
 import { collectSettingsDiagnostics, deduplicateDiagnostics } from "./core/settings-diagnostics.ts";
 import { SettingsManager } from "./core/settings-manager.ts";
@@ -73,6 +82,48 @@ import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 
 const MODULE_LOAD_FAILURE_HINT =
 	"Hint: a built-in module failed to initialize; this is a bug in the module, not in your configuration.";
+
+/**
+ * Format of a `--export` run. The output path decides when it names one of the
+ * export extensions; HTML is the historical default, so a path with any other
+ * extension or no extension at all still produces the HTML document.
+ */
+function resolveExportFormat(outputPath: string | undefined): SessionExportFormat {
+	const extension = outputPath ? /\.[^./]+$/.exec(outputPath)?.[0]?.slice(1) : undefined;
+	const parsed = extension ? parseExportFormat(extension) : undefined;
+	if (parsed === "pdf") throw new Error(pdfExportHint());
+	return parsed ?? "html";
+}
+
+/** The path an export writes to when the caller named none. */
+function defaultExportPath(inputPath: string, format: SessionExportFormat): string | undefined {
+	if (format === "html" || format === "jsonl") return undefined;
+	const basename = inputPath.replace(/\.[^./\\]+$/, "").replace(/^.*[\\/]/, "");
+	return `${basename}.${format}`;
+}
+
+/**
+ * Write a session file in the requested format. HTML keeps using exportFromFile,
+ * which renders the browser document from the templates; the Markdown branch
+ * renders the transcript in Node.
+ */
+async function exportSessionFile(
+	inputPath: string,
+	format: SessionExportFormat,
+	outputPath: string | undefined,
+): Promise<string> {
+	if (format === "html") return await exportFromFile(inputPath, outputPath);
+	const resolvedInputPath = resolvePath(inputPath);
+	if (!existsSync(resolvedInputPath)) {
+		throw new Error(`File not found: ${resolvedInputPath}`);
+	}
+	// The JSONL export is the session file as it stands: `--export x.jsonl out.jsonl`
+	// is a copy, and asking for it never needs a renderer.
+	if (format === "jsonl") return resolvedInputPath;
+	const sessionManager = SessionManager.open(resolvedInputPath);
+	const target = outputPath ?? defaultExportPath(resolvedInputPath, format);
+	return exportSessionToMarkdown(sessionManager, { outputPath: target });
+}
 
 /**
  * Read all content from piped stdin.
@@ -695,7 +746,13 @@ export async function main(args: string[], options?: MainOptions) {
 		let result: string;
 		try {
 			const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
-			result = await exportFromFile(parsed.export, outputPath);
+			// An explicit `--export-format` may name a format this build has no
+			// writer for, so it is checked before the path-derived one.
+			const format = parsed.exportFormat ?? resolveExportFormat(outputPath);
+			if (!isExportFormatEnabled(format)) {
+				throw new Error(formatNotIncludedMessage(format));
+			}
+			result = await exportSessionFile(parsed.export, format, outputPath);
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "Failed to export session";
 			console.error(chalk.red(`Error: ${message}`));
