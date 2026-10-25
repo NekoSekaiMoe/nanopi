@@ -244,31 +244,102 @@ export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResul
 	};
 }
 
-function countOccurrences(content: string, oldText: string): number {
-	const fuzzyContent = normalizeForFuzzyMatch(content);
-	const fuzzyOldText = normalizeForFuzzyMatch(oldText);
-	return fuzzyContent.split(fuzzyOldText).length - 1;
+/** 1-based line numbers of every occurrence of `needle` in `haystack`. */
+function findOccurrenceLines(haystack: string, needle: string): number[] {
+	const lines: number[] = [];
+	let from = 0;
+	while (true) {
+		const index = haystack.indexOf(needle, from);
+		if (index === -1) break;
+		lines.push(haystack.slice(0, index).split("\n").length);
+		from = index + Math.max(1, needle.length);
+	}
+	return lines;
 }
 
-function getNotFoundError(path: string, editIndex: number, totalEdits: number): Error {
-	if (totalEdits === 1) {
-		return new Error(
-			`Could not find the exact text in ${path}. The old text must match exactly including all whitespace and newlines.`,
-		);
+/** Words long enough to mean something; short tokens like `}` or `if` match everywhere. */
+const CLUE_TOKEN = /[A-Za-z_$][A-Za-z0-9_$]{3,}/g;
+
+function clueTokens(text: string): Set<string> {
+	return new Set(text.match(CLUE_TOKEN) ?? []);
+}
+
+/**
+ * Ranks file lines against `oldText` by shared identifier tokens.
+ *
+ * Substring matching cannot answer "what did you probably mean": a one-line
+ * `oldText` such as `}` occurs on hundreds of lines, while the line the model
+ * meant shares its identifiers. Each candidate line is scored by how many of
+ * the rarest tokens of `oldText` it contains, and the best three are returned.
+ */
+function findClosestLines(
+	content: string,
+	oldText: string,
+	limit = 3,
+): { line: number; text: string; score: number }[] {
+	const wanted = clueTokens(oldText);
+	if (wanted.size === 0) return [];
+
+	const lines = content.split("\n");
+	const frequency = new Map<string, number>();
+	for (const token of wanted) {
+		let count = 0;
+		for (const line of lines) if (line.includes(token)) count++;
+		frequency.set(token, count);
 	}
+
+	const scored: { line: number; text: string; score: number }[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const text = lines[i];
+		if (text.trim().length === 0) continue;
+		let score = 0;
+		for (const token of clueTokens(text)) {
+			if (!wanted.has(token)) continue;
+			// Rarer tokens carry more signal: a shared helper name beats a shared `const`.
+			score += 1 / Math.max(1, frequency.get(token) ?? 1);
+		}
+		if (score > 0) scored.push({ line: i + 1, text: text.trim().slice(0, 120), score });
+	}
+	return scored.sort((a, b) => b.score - a.score || a.line - b.line).slice(0, limit);
+}
+
+function describeClosestLines(content: string, oldText: string): string {
+	const closest = findClosestLines(content, oldText);
+	if (closest.length === 0) return "";
+	return `\nClosest lines in the file:\n${closest
+		.map((candidate) => `  ${candidate.line}: ${candidate.text}`)
+		.join("\n")}\nRead those lines again and copy the text exactly as it appears.`;
+}
+
+function getNotFoundError(
+	path: string,
+	editIndex: number,
+	totalEdits: number,
+	content: string,
+	oldText: string,
+): Error {
+	const target = totalEdits === 1 ? "the exact text" : `edits[${editIndex}]`;
 	return new Error(
-		`Could not find edits[${editIndex}] in ${path}. The oldText must match exactly including all whitespace and newlines.`,
+		`Could not find ${target} in ${path}. The old text must match exactly, including all whitespace and newlines.${describeClosestLines(content, oldText)}`,
 	);
 }
 
-function getDuplicateError(path: string, editIndex: number, totalEdits: number, occurrences: number): Error {
-	if (totalEdits === 1) {
-		return new Error(
-			`Found ${occurrences} occurrences of the text in ${path}. The text must be unique. Please provide more context to make it unique.`,
-		);
-	}
+function getDuplicateError(
+	path: string,
+	editIndex: number,
+	totalEdits: number,
+	occurrences: number[],
+	content: string,
+): Error {
+	const target = totalEdits === 1 ? "the text" : `edits[${editIndex}]`;
+	const lines = content.split("\n");
+	const listing = occurrences
+		.slice(0, 5)
+		.map((line) => `  ${line}: ${(lines[line - 1] ?? "").trim().slice(0, 120)}`)
+		.join("\n");
+	const more = occurrences.length > 5 ? `\n  ...and ${occurrences.length - 5} more` : "";
 	return new Error(
-		`Found ${occurrences} occurrences of edits[${editIndex}] in ${path}. Each oldText must be unique. Please provide more context to make it unique.`,
+		`Found ${occurrences.length} occurrences of ${target} in ${path}, at file lines ${occurrences.join(", ")}. ${totalEdits === 1 ? "The text" : "Each oldText"} must be unique. Extend oldText with the surrounding lines shown above, or split the change into per-occurrence edits.\n${listing}${more}`,
 	);
 }
 
@@ -322,12 +393,14 @@ export function applyEditsToNormalizedContent(
 		const edit = normalizedEdits[i];
 		const matchResult = fuzzyFindText(replacementBaseContent, edit.oldText);
 		if (!matchResult.found) {
-			throw getNotFoundError(path, i, normalizedEdits.length);
+			throw getNotFoundError(path, i, normalizedEdits.length, replacementBaseContent, edit.oldText);
 		}
 
-		const occurrences = countOccurrences(replacementBaseContent, edit.oldText);
-		if (occurrences > 1) {
-			throw getDuplicateError(path, i, normalizedEdits.length, occurrences);
+		// Match occurrences in the same space as matchResult.index, which is the
+		// normalized text whenever fuzzy matching kicked in.
+		const occurrences = findOccurrenceLines(matchResult.contentForReplacement, normalizedEdits[i].oldText);
+		if (occurrences.length > 1) {
+			throw getDuplicateError(path, i, normalizedEdits.length, occurrences, replacementBaseContent);
 		}
 
 		matchedEdits.push({

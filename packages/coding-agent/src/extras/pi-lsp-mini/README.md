@@ -6,7 +6,8 @@ schemas + descriptions + snippets of all 5 tools; zero injected system
 instructions):
 
 - **Diagnostics** — `lsp_diagnostics` on a file or a whole directory; issues are
-  also appended automatically after every `write`/`edit`.
+  also appended automatically after every `write`, and after every `edit` when
+  `editDiagnostics` is enabled (see below).
 - **Call relations** — `lsp_callgraph` walks incoming/outgoing call hierarchy
   recursively (who calls this function / what it calls).
 - **Batch replace / delete** — `lsp_rename` (scope-aware workspace rename) and
@@ -100,6 +101,27 @@ Each entry: `id`, `command` (string or list of alternatives; first on PATH wins,
 inline args allowed, absolute paths supported), `args`, `include` (extensions),
 `rootMarkers`, `diagnosticsWaitMs`, `settings`, `initializationOptions`,
 `compileCommandsProbe` (bool, cpp default true), `enabled`.
+
+## Diagnostics after edit (opt-in)
+
+A diagnostic report attached to an edit is only useful if it describes the
+content the edit just wrote. Language servers publish the analysis of the
+snapshot they were holding before the change went out, so the first publish that
+arrives after an edit routinely belongs to the *previous* content — reporting it
+shows the model errors it just fixed, or errors it never introduced. The module
+therefore stamps every publish with a revision and waits only for one newer than
+the edit.
+
+Disabled by default; enable it in `~/.nanopi/agent/lsp.json`:
+
+```json
+{ "editDiagnostics": { "enabled": true, "timeoutMs": 8000, "errorsOnly": false, "maxDiagnostics": 8 } }
+```
+
+`timeoutMs` bounds the wait (`0` returns nothing), `errorsOnly` drops warnings,
+`maxDiagnostics` caps the report per file. No matching server, a crashed server,
+an unreadable file or a timeout all return the edit result unchanged: this path
+never turns a successful edit into a failed one.
 
 ## Install
 

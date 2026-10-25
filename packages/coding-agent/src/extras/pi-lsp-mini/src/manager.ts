@@ -76,7 +76,11 @@ export async function findProjectRoot(file: string, markers: string[] | undefine
 export class LspManager {
   private readonly clients = new Map<string, LspClient>();
   private readonly backoff = new Map<string, { retryAt: number; reason: string }>();
-  private readonly diagnostics = new Map<string, Diagnostic[]>(); // file -> latest
+  /** file+server -> latest publish. `revision` increases with every publish for that
+   *  document, which is how a caller separates "diagnostics for the content I just
+   *  wrote" from the pre-write snapshot a server publishes on its own. */
+  private readonly diagnostics = new Map<string, DiagnosticsEntry>();
+  private revision = 0;
 
   listServers(): LspServerConfig[] {
     return loadServers().filter((s) => {
@@ -122,8 +126,10 @@ export class LspManager {
         if (cdbDir) extraArgs.push(`--compile-commands-dir=${cdbDir}`);
       }
       client = new LspClient(match.server, match.root, { bin, args: [...parts.slice(1), ...(match.server.args ?? []), ...extraArgs] }, (file, diags) => {
-        if (diags.length === 0) this.diagnostics.delete(`${match.server.id}\u0000${file}`);
-        else this.diagnostics.set(`${match.server.id}\u0000${file}`, diags);
+        // Keep an empty publish instead of deleting it: "the new content has no
+        // issues" is the answer a post-edit check is waiting for, and a deleted
+        // entry is indistinguishable from "no publish yet".
+        this.diagnostics.set(`${match.server.id}\u0000${file}`, { diagnostics: diags, revision: ++this.revision });
       });
       this.clients.set(key, client);
     }
@@ -153,14 +159,44 @@ export class LspManager {
     return { client, match };
   }
 
-  latestDiagnostics(file: string): { serverId: string; diagnostics: Diagnostic[] }[] {
+  latestDiagnostics(file: string): { serverId: string; diagnostics: Diagnostic[]; revision: number }[] {
     const absolute = path.resolve(file);
-    const out: { serverId: string; diagnostics: Diagnostic[] }[] = [];
-    for (const [key, diags] of this.diagnostics) {
+    const out: { serverId: string; diagnostics: Diagnostic[]; revision: number }[] = [];
+    for (const [key, entry] of this.diagnostics) {
       const [serverId, f] = key.split("\u0000");
-      if (f === absolute) out.push({ serverId, diagnostics: diags });
+      if (f === absolute) out.push({ serverId, diagnostics: entry.diagnostics, revision: entry.revision });
     }
     return out;
+  }
+
+  /** Highest publish revision seen so far, for any file. */
+  currentRevision(): number {
+    return this.revision;
+  }
+
+  /**
+   * Waits until the file has a publish newer than `sinceRevision`.
+   *
+   * A server normally publishes once for the pre-edit content it was holding,
+   * then again for the content just pushed. Returning the first publish would
+   * report the pre-edit state as the result of the edit, so the revision gate
+   * skips it. Resolves false on timeout (or abort) — never throws.
+   */
+  async waitForDiagnosticsAfter(
+    file: string,
+    sinceRevision: number,
+    timeoutMs: number,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    const absolute = path.resolve(file);
+    const deadline = Date.now() + Math.max(0, timeoutMs);
+    while (Date.now() < deadline) {
+      if (signal?.aborted) return false;
+      const fresh = this.latestDiagnostics(absolute).some((entry) => entry.revision > sinceRevision);
+      if (fresh) return true;
+      await delay(Math.min(60, Math.max(1, deadline - Date.now())), signal).catch(() => undefined);
+    }
+    return false;
   }
 
   /** Opens every file, waits for diagnostics to settle, returns them. */
@@ -303,6 +339,11 @@ export function delay(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new Error("aborted"));
     }, { once: true });
   });
+}
+
+export interface DiagnosticsEntry {
+  diagnostics: Diagnostic[];
+  revision: number;
 }
 
 const SEVERITY_LABEL = ["?", "E", "W", "I", "H"];
