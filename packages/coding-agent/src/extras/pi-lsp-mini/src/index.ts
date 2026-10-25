@@ -6,6 +6,8 @@ import { loadServers } from "./config.ts";
 import { DIAGNOSTICS, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { callGraphReport, type Direction } from "./callgraph.ts";
+import { appendReport, collectEditDiagnostics } from "./edit-diagnostics.ts";
+import { loadEditDiagnosticsSettings } from "./settings.ts";
 import {
   applyLineRangeDeletes,
   applyTextEdits,
@@ -114,12 +116,23 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     await manager.shutdownAll();
   });
 
-  // after write/edit: silently append LSP diagnostics for the touched file
+  // after write/edit, opt-in: report the diagnostics of the content that was just
+  // written (lsp.json `editDiagnostics.enabled`). The default `write`/`edit`
+  // report below covers the pre-existing behaviour and stays unguarded.
   pi.on("tool_result", async (event, ctx) => {
-    if (event.toolName !== "write" && event.toolName !== "edit") return undefined;
+    if (event.toolName !== "edit" && event.toolName !== "write") return undefined;
     if (event.isError) return undefined;
     const inputPath = (event.input as { path?: string } | undefined)?.path;
     if (!inputPath) return undefined;
+
+    const editDiagnostics = loadEditDiagnosticsSettings();
+    if (event.toolName === "edit" && editDiagnostics.enabled) {
+      const report = await collectEditDiagnostics(manager, ctx, inputPath, editDiagnostics);
+      if (report.lines.length === 0) return undefined;
+      return { content: appendReport(event.content, report) };
+    }
+
+    if (event.toolName !== "write") return undefined;
 
     try {
       const absolute = path.resolve(ctx.cwd, inputPath);

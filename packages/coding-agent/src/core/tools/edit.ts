@@ -1,6 +1,6 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { constants } from "fs";
-import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
+import { access as fsAccess, readFile as fsReadFile, stat as fsStat, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { splitBom } from "../../utils/text.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
@@ -15,6 +15,7 @@ import {
 } from "./edit-diff.ts";
 import { withFileMutationQueue } from "./file-mutation-queue.ts";
 import { resolveToCwd } from "./path-utils.ts";
+import { describeStaleRead, recordRead } from "./read-snapshot.ts";
 import { type EditRenderState, editRenderers } from "./renderers/edit.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
@@ -180,10 +181,18 @@ export function createEditToolDefinition(
 				}
 				throwIfAborted();
 
-				// Read the file.
+				// Read the file. The stat before and after the read bracket the state the
+				// matched text came from; a change in between means the oldText belongs to
+				// a version that is already gone, so it is reported rather than applied.
+				const before = await fsStat(absolutePath);
 				const buffer = await ops.readFile(absolutePath);
 				const rawContent = buffer.toString("utf-8");
+				const after = await fsStat(absolutePath);
 				throwIfAborted();
+				const changedDuringRead = before.mtimeMs !== after.mtimeMs || before.size !== after.size;
+				const staleNote = changedDuringRead
+					? `Note: this file changed on disk while the edit was reading it. Re-read it before the next edit so the next oldText matches what is actually there.`
+					: describeStaleRead(absolutePath, { mtimeMs: after.mtimeMs, size: after.size });
 
 				// Strip BOM before matching. The model will not include an invisible BOM in oldText.
 				const { bom, text: content } = splitBom(rawContent);
@@ -195,6 +204,9 @@ export function createEditToolDefinition(
 				const finalContent = bom + restoreLineEndings(newContent, originalEnding);
 				await ops.writeFile(absolutePath, finalContent);
 				throwIfAborted();
+				// The edit is now the newest content the model has seen.
+				const written = await fsStat(absolutePath).catch(() => undefined);
+				if (written) recordRead(absolutePath, { mtimeMs: written.mtimeMs, size: written.size });
 
 				const diffResult = generateDiffString(baseContent, newContent);
 				const patch = generateUnifiedPatch(path, baseContent, newContent);
@@ -202,7 +214,7 @@ export function createEditToolDefinition(
 					content: [
 						{
 							type: "text",
-							text: `Successfully replaced ${edits.length} block(s) in ${path}.`,
+							text: `Successfully replaced ${edits.length} block(s) in ${path}.${staleNote ? `\n\n${staleNote}` : ""}`,
 						},
 					],
 					details: { diff: diffResult.diff, patch, firstChangedLine: diffResult.firstChangedLine },
