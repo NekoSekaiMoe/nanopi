@@ -9,9 +9,12 @@
  */
 
 import type { MemoryEntry } from "./parse.ts";
+import type { StaleCandidate } from "./freshness.ts";
 
 /** Per-session cap: a note that needs more than this is a document, not a memory. */
 const MAX_CANDIDATES = 3;
+/** Candidates for deletion per run: a cleanup request, not an edit session. */
+const MAX_STALE = 5;
 /** A session earns notes by lasting long enough to reach a conclusion. */
 const MIN_USER_TURNS = 2;
 const MAX_TRANSCRIPT_CHARS = 24_000;
@@ -35,9 +38,10 @@ Bad: \`- src/retry.ts has 42 lines.\` (the code already says it)`;
 
 const OUTPUT_FORMAT = `Reply with one fenced json block and nothing else:
 \`\`\`json
-{ "candidates": [ { "text": "- ...", "reason": "why it survives without this session", "section": "Build" } ] }
+{ "candidates": [ { "text": "- ...", "reason": "why it survives without this session", "section": "Build" } ], "stale": [ { "text": "- ...", "reason": "what makes it out of date" } ] }
 \`\`\`
-Use an empty "candidates" array when nothing qualifies. "section" names the AGENTS.md heading the entry belongs under, or "Project Notes" for a new one.`;
+Use an empty "candidates" array when nothing qualifies. "section" names the AGENTS.md heading the entry belongs under, or "Project Notes" for a new one.
+"stale" lists existing entries this session proved wrong, verbatim from <existing-entries>; leave it out when none were.`;
 
 export interface ExtractionInput {
 	/** The user's prompts, in order, as the only record of intent. */
@@ -50,6 +54,12 @@ export interface ExtractionInput {
 	otherFiles: readonly string[];
 	/** Turns the model already proposed and the user declined, so it stops re-proposing them. */
 	rejected: readonly string[];
+	/**
+	 * Entries that look out of date by the clock or by a path that no longer
+	 * exists. The model is the only reader that can tell "the file moved" from
+	 * "the rule changed", so it gets asked instead of guessed at.
+	 */
+	stale?: readonly StaleCandidate[];
 }
 
 /** Build the extraction request, or undefined when the session has nothing worth reading. */
@@ -62,9 +72,16 @@ export function buildExtractionPrompt(input: ExtractionInput): { systemPrompt: s
 		input.existing.length > 0
 			? input.existing.map((entry) => entry.text).join("\n")
 			: "(none: the file has no bullets yet)";
+	const suspicious =
+		input.stale && input.stale.length > 0
+			? `<possibly-stale>\nThese entries look out of date. Say which are actually wrong, in "stale":\n${input.stale
+					.map((item) => `- ${item.entry.body}${describeStale(item)}`)
+					.join("\n")}\n</possibly-stale>`
+			: "";
 	const sections: string[] = [];
 	const body = [
 		`<existing-entries>\n${existing}\n</existing-entries>`,
+		suspicious,
 		input.otherFiles.length > 0
 			? `<other-context-files>\nAlso loaded by every session: ${input.otherFiles.join(", ")}\n</other-context-files>`
 			: "",
@@ -79,6 +96,11 @@ export function buildExtractionPrompt(input: ExtractionInput): { systemPrompt: s
 		.join("\n\n");
 	sections.push(body);
 	return { systemPrompt: EXTRACTION_SYSTEM_PROMPT, prompt: sections.join("\n\n") };
+}
+
+function describeStale(item: StaleCandidate): string {
+	if (item.reason === "missing") return ` [names ${item.paths.join(", ")}, which no longer exist]`;
+	return ` [kept ${item.days} days ago]`;
 }
 
 /**
@@ -107,8 +129,14 @@ export interface Candidate {
 	section?: string;
 }
 
+export interface ExtractionResult {
+	candidates: Candidate[];
+	/** Existing entries the model says this session proved wrong. */
+	stale: Candidate[];
+}
+
 /** Parse the model's reply. Returns undefined when no json block can be read. */
-export function parseCandidates(reply: string): Candidate[] | undefined {
+export function parseCandidates(reply: string): ExtractionResult | undefined {
 	const fenced = /```(?:json)?\s*\n([\s\S]*?)```/i.exec(reply);
 	const body = fenced ? fenced[1] : reply;
 	const start = body.indexOf("{");
@@ -123,6 +151,15 @@ export function parseCandidates(reply: string): Candidate[] | undefined {
 	if (typeof parsed !== "object" || parsed === null || !("candidates" in parsed)) return undefined;
 	const raw = (parsed as { candidates: unknown }).candidates;
 	if (!Array.isArray(raw)) return undefined;
+	const stale = (parsed as { stale?: unknown }).stale;
+	return {
+		candidates: readCandidates(raw).slice(0, MAX_CANDIDATES),
+		stale: Array.isArray(stale) ? readCandidates(stale).slice(0, MAX_STALE) : [],
+	};
+}
+
+/** Accept both a bare string and `{ text, reason, section }`, and drop anything else. */
+function readCandidates(raw: unknown[]): Candidate[] {
 	const candidates: Candidate[] = [];
 	for (const item of raw) {
 		if (typeof item === "string") {
@@ -140,7 +177,7 @@ export function parseCandidates(reply: string): Candidate[] | undefined {
 			section: typeof section === "string" ? section : undefined,
 		});
 	}
-	return candidates.slice(0, MAX_CANDIDATES);
+	return candidates;
 }
 
-export { MAX_CANDIDATES, MIN_USER_TURNS };
+export { MAX_CANDIDATES, MAX_STALE, MIN_USER_TURNS };
