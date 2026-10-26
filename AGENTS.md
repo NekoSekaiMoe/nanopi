@@ -66,6 +66,7 @@ Committing:
 Never run (destroys other agents' work or bypasses checks):
 
 - `git reset --hard`, `git checkout .`, `git clean -fd`, `git stash`, `git add -A`, `git add .`, `git commit --no-verify`.
+- `git push --force` to `main`, and any merge that drops a commit already on `main`. A lost tree leaves no trace in `git log` (the parent chain stays intact), so the damage surfaces later as unexplained reverted work: `b3ffe400` reverted `c897cdf2` that way and needed #241 to undo. Bring main in with `git merge origin/main` instead of reinstating an older tree.
 
 If rebase conflicts occur:
 

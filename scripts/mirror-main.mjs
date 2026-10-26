@@ -9,6 +9,11 @@
 //
 // 判定按内容做，不按 sha：两侧的历史早已分叉（一侧收到的是「对方 tip 上的合成
 // 提交」），祖先关系不可靠，树相同就等于镜像完成。
+//
+// 树相同不等于可以覆盖：本地这份树是「本地 HEAD 那一刻」的快照，远端可能已经
+// 在这之后往前走了。用旧树盖掉远端新提交，被盖掉的那些提交在 `git log` 里没有
+// 任何痕迹（父链没断，丢的只是内容），只有下一轮合并的人才会发现问题。所以远端
+// 有新提交时必须证明「它带的东西本地树里都还在」，否则拒绝推送。
 
 import { execFileSync } from "node:child_process";
 
@@ -67,6 +72,26 @@ function withRetry(label, action) {
 	}
 }
 
+// 远端 tip 相对本地树删掉的文件。判定按文件内容做：本地树里有同名文件但内容不同
+// 不算「带过来了」，因为那多半正是要回退的那个改动。
+//
+//   git diff --raw <远端 tip> <本地树>
+//
+// 输出每行形如 `:<old mode> <new mode> <old blob> <new blob> <status>\t<path>`，
+// 状态首字母 `D` 表示该文件在本地树里不存在。
+function removalsOf(remoteTip, localTree) {
+	const raw = git(["diff", "--raw", "--no-abbrev", remoteTip, localTree]);
+	const removals = [];
+	for (const line of raw.split("\n")) {
+		if (!line) continue;
+		const [meta, ...pathParts] = line.split("\t");
+		const status = meta.split(" ").at(-1);
+		const path = pathParts.join("\t");
+		if (status === "D") removals.push(path);
+	}
+	return removals;
+}
+
 const { remote } = parseArgs(process.argv.slice(2));
 
 const head = git(["rev-parse", "HEAD"]);
@@ -83,6 +108,21 @@ if (treeOf("FETCH_HEAD") === localTree) {
 // HEAD 的」单父合成提交：合并提交（-p HEAD -p FETCH_HEAD）会把整个待推区间带进
 // 通告，GitHub 的 push protection 会因此重新扫描历史里的提交，等于白推。
 const fastForward = git(["merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD"], { allowFailure: true }) !== null;
+
+// 合成提交只搬内容，被它落下的远端提交在历史上留不下痕迹。非快进时必须先证明
+// 那些提交的文件本地树仍然都有，否则就是一次内容回退（#242：b3ffe400 用旧树
+// 盖掉了 c897cdf2 的 #235 改动）。
+if (!fastForward) {
+	const removals = removalsOf("FETCH_HEAD", localTree);
+	if (removals.length > 0) {
+		console.error(`refusing to overwrite ${remote} main: ${removals.length} file(s) from its tip are absent locally`);
+		for (const path of removals.slice(0, 20)) console.error(`  ${path}`);
+		if (removals.length > 20) console.error(`  ... and ${removals.length - 20} more`);
+		console.error("merge the remote main into this branch and rerun; the mirror never reverts content");
+		process.exit(1);
+	}
+}
+
 const target = fastForward ? head : git(["commit-tree", localTree, "-p", "FETCH_HEAD", "-m", `Merge CNB main ${head}`]);
 
 if (fastForward) {

@@ -116,3 +116,48 @@ test("a missing remote fails instead of reporting success", async (t) => {
 	const result = mirror(local, join(root, "does-not-exist.git"));
 	assert.notEqual(result.status, 0);
 });
+
+// 远端在本地这份树之后又往前走了：合成提交拿旧树落下去就等于回退。父链看不出来
+// （父仍是远端 tip），丢的只有内容，所以必须在推送前拒绝。
+test("a diverged remote with newer content is refused instead of reverted", async (t) => {
+	const { remote, root } = await createFixture(t, "revert");
+	seedRepo(t, root, remote);
+	const local = clone(t, root, remote, "local");
+
+	// 对端改写了 a.txt 并新增了只有它才有的 c.txt —— 历史分叉，树也不同。
+	const other = clone(t, root, remote, "other");
+	commit(other, "a.txt", "rewritten", "rewrite on the remote side");
+	commit(other, "c.txt", "three", "remote-only file");
+	git(other, ["push", "--quiet", remote, "HEAD:refs/heads/main"]);
+
+	commit(local, "b.txt", "two", "second");
+
+	const result = mirror(local, remote);
+	assert.notEqual(result.status, 0);
+	assert.match(result.stderr, /refusing to overwrite/);
+	assert.match(result.stderr, /c\.txt/);
+	// 远端没被动过。
+	assert.equal(git(remote, ["rev-parse", "main"]), git(other, ["rev-parse", "HEAD"]));
+});
+
+// 分叉但远端的新提交本地树里都还带着（例如本地用别的历史重做了同样的改动），
+// 合成提交不丢内容，照旧放行。
+test("a diverged remote whose content survives locally is still mirrored", async (t) => {
+	const { remote, root } = await createFixture(t, "subset");
+	seedRepo(t, root, remote);
+	const local = clone(t, root, remote, "local");
+
+	const other = clone(t, root, remote, "other");
+	commit(other, "c.txt", "three", "remote-only file");
+	git(other, ["push", "--quiet", remote, "HEAD:refs/heads/main"]);
+
+	// 本地把同样的内容也加进来（另一次提交），但还多了一个远端没有的文件，
+	// 树因此不同，走的是合成提交那条路。
+	commit(local, "c.txt", "three", "add c.txt on the local side");
+	commit(local, "d.txt", "four", "local-only file");
+
+	const result = mirror(local, remote);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /diverged histories/);
+	assert.equal(git(remote, ["rev-parse", "main^{tree}"]), git(local, ["rev-parse", "HEAD^{tree}"]));
+});
