@@ -4,8 +4,8 @@
  *
  * The bundle aliases the module at resolve time (scripts/build-components.mjs)
  * instead of relying on a dead branch: a `const ENABLED = components[...] !== false`
- * guard folds every caller but leaves the static imports in place, so every
- * grammar in `EAGER_LANGUAGES` stayed in the bundle of a build that renders no color.
+ * guard folds every caller but leaves the grammar imports in place, so all 191
+ * highlight.js grammars stayed in the bundle of a build that renders no color.
  * A resolve-time alias keeps the imports out entirely.
  *
  * The signatures match `syntax-highlight.ts` exactly, because callers import
@@ -22,8 +22,8 @@ export interface HighlightOptions {
 	theme?: HighlightTheme;
 }
 
-export function loadAllHighlightLanguages(): Promise<void> {
-	return Promise.resolve();
+export function pendingHighlightLanguages(): Promise<void>[] {
+	return [];
 }
 
 /** Renders code blocks in the plain output color. */

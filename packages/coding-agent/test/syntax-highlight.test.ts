@@ -3,50 +3,25 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { getMarkdownTheme, highlightCode, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	highlight,
-	loadAllHighlightLanguages,
+	pendingHighlightLanguages,
 	renderHighlightedHtml,
 	supportsLanguage,
 } from "../src/utils/syntax-highlight.ts";
 
-const eagerLanguages = [
-	"python",
-	"java",
-	"go",
-	"javascript",
-	"cpp",
-	"typescript",
-	"php",
-	"ruby",
-	"c",
-	"csharp",
-	"nix",
-	"bash",
-	"rust",
-	"scala",
-	"kotlin",
-	"swift",
-	"dart",
-	"groovy",
-	"perl",
-	"lua",
-	"xml",
-	"css",
-	"yaml",
-	"markdown",
-	"sql",
-	"powershell",
-	"dockerfile",
-];
-const eagerLanguagesLoadedAtStartup = eagerLanguages.every(supportsLanguage);
-// `ceylon` is a highlight.js grammar the eager table cannot carry.
-const uncommonLanguageLoadedAtStartup = supportsLanguage("ceylon");
+const bundledLanguages = ["python", "typescript", "bash", "rust", "xml", "coq", "sql_more"];
+const bundledLanguagesReportedAtStartup = bundledLanguages.every(supportsLanguage);
 
 describe("syntax highlight renderer", () => {
-	it("loads the eager grammars at startup and defers the rest", async () => {
-		expect(eagerLanguagesLoadedAtStartup).toBe(true);
-		expect(uncommonLanguageLoadedAtStartup).toBe(false);
-		await loadAllHighlightLanguages();
-		expect(supportsLanguage("ceylon")).toBe(true);
+	// #252: every grammar is deferred, so no language is loadable at startup and
+	// asking for one only starts the load. `notalanguage` is not bundled at all
+	// and must not trigger one.
+	it("defers every grammar until a code block asks for it", async () => {
+		expect(bundledLanguagesReportedAtStartup).toBe(true);
+		expect(supportsLanguage("notalanguage")).toBe(false);
+		await Promise.all(pendingHighlightLanguages());
+		for (const language of bundledLanguages) {
+			expect(highlight("const value = 1", { language, ignoreIllegals: true })).toBeTruthy();
+		}
 	});
 
 	it("renders highlighted spans with the provided theme", () => {
@@ -95,7 +70,11 @@ describe("syntax highlight renderer", () => {
 });
 
 describe("theme syntax highlighting", () => {
-	beforeEach(() => {
+	beforeEach(async () => {
+		// A grammar only becomes colorable once its load settled, and every test here
+		// renders its first block synchronously.
+		await Promise.all(["typescript", "python", "diff", "javascript"].map((language) => supportsLanguage(language)));
+		await Promise.all(pendingHighlightLanguages());
 		setCapabilities({ images: null, trueColor: true, hyperlinks: false });
 		initTheme();
 	});
