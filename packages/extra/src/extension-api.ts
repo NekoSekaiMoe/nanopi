@@ -14,6 +14,8 @@ import type { BadgeThemeSlice } from "./badges.ts";
 export interface ExtraUIDialogOptions {
 	signal?: AbortSignal;
 	timeout?: number;
+	/** Caption shown under the title. */
+	description?: string;
 }
 
 export interface ExtraUIContext {
@@ -21,6 +23,8 @@ export interface ExtraUIContext {
 	notify(message: string, type?: "info" | "warning" | "error"): void;
 	/** Footer status channel: badge text under "mode", rendered by the installed footer. */
 	setStatus(key: string, text: string | undefined): void;
+	/** Terminal title; `undefined` restores the app's own title. */
+	setTitle(title: string | undefined): void;
 	readonly theme: BadgeThemeSlice;
 }
 
@@ -92,7 +96,7 @@ export interface ExtraExtensionAPI {
 	): void;
 	on(
 		event: "agent_settled",
-		handler: (event: { type: "agent_settled" }, ctx: ExtraExtensionContext) => Promise<void> | void,
+		handler: (event: { type: "agent_settled"; aborted: boolean }, ctx: ExtraExtensionContext) => Promise<void> | void,
 	): void;
 	on(
 		event: "before_agent_start",

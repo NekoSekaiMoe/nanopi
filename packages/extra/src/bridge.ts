@@ -29,6 +29,8 @@ export interface BridgeExtensionHooks {
 	applySubsystem(key: SubsystemKey, enabled: boolean): void;
 	/** Re-derive the active tool set from the current mode (minimal narrows it). */
 	applyModeToolSet(): void;
+	/** The prompt the input box should offer while the gate holds a call, if any. */
+	continueSuggestion?(): string | undefined;
 }
 
 /** Session-side judge inputs the extension binds for webui-mode AI decisions. */
@@ -81,6 +83,16 @@ export class ExtraBridge {
 		if (!isRunMode(value)) return { ok: false, error: `invalid default mode: ${String(value)}` };
 		saveExtraSettings({ defaultMode: value });
 		return { ok: true };
+	}
+
+	/**
+	 * Prompt to offer in the input box while a permission prompt is holding a call.
+	 *
+	 * Feature-detected by the caller: a build flavor that excludes this module
+	 * substitutes `{}` for the bridge, so the method is absent rather than inert.
+	 */
+	continueSuggestion?(): string | undefined {
+		return this.extensionHooks?.continueSuggestion?.();
 	}
 
 	/** Validate and answer the outstanding permission prompt. */

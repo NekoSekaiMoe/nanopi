@@ -80,6 +80,53 @@ describe("PermissionGate", () => {
 		expect(judged).toBe(2);
 	});
 
+	test("approveOnce runs that call only and keeps no memory", async () => {
+		let asked = 0;
+		const gate = new PermissionGate(
+			async () => {
+				asked++;
+				return "deny" as PermissionDecision;
+			},
+			async () => ({ action: "allow" }),
+		);
+		gate.approveOnce("call-1");
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		// The approval was spent: the next call of the same kind asks again.
+		await expect(gate.check(info({ callId: "call-2" }))).resolves.toEqual({
+			action: "deny",
+			reason: "The user declined this bash call",
+		});
+		expect(asked).toBe(1);
+	});
+
+	test("an approval also answers a hazard, which a session allowance does not cover", async () => {
+		let asked = 0;
+		const gate = new PermissionGate(
+			async () => {
+				asked++;
+				return "deny" as PermissionDecision;
+			},
+			async () => ({ action: "allow" }),
+		);
+		gate.approveOnce("call-1");
+		const hazardous = info({ hazard: "git reset --hard discards uncommitted changes" });
+		await expect(gate.check(hazardous)).resolves.toEqual({ action: "allow" });
+		expect(asked).toBe(0);
+	});
+
+	test("an approval that lands while the prompt is up wins over a dismissal", async () => {
+		const gate = new PermissionGate(
+			async (call) => {
+				// The user pressed "explain" and continued: the approval arrives
+				// before the prompt listener resolves.
+				gate.approveOnce(call.callId);
+				return undefined;
+			},
+			async () => ({ action: "allow" }),
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+	});
+
 	test("a hazard is gated even after the tool was allowed for the session", async () => {
 		let asked = 0;
 		const gate = new PermissionGate(

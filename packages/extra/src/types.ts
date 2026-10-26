@@ -16,10 +16,23 @@ export function isRunMode(value: unknown): value is RunMode {
 	return typeof value === "string" && (RUN_MODES as readonly string[]).includes(value);
 }
 
-/** Permission prompt answers. `ai_decide` delegates current and future calls of the same class to the model. */
-export type PermissionDecision = "allow" | "allow_session" | "deny" | "ai_decide";
+/**
+ * Permission prompt answers.
+ *
+ * `allow_once` skips the prompt for the call that was asked about and nothing
+ * else: it follows a user who read an explanation of the call, so the next call
+ * of the same kind prompts again. `ai_decide` delegates current and future
+ * calls of the same class to the model.
+ */
+export type PermissionDecision = "allow" | "allow_session" | "allow_once" | "deny" | "ai_decide";
 
-export const PERMISSION_DECISIONS: readonly PermissionDecision[] = ["allow", "allow_session", "deny", "ai_decide"];
+export const PERMISSION_DECISIONS: readonly PermissionDecision[] = [
+	"allow",
+	"allow_session",
+	"allow_once",
+	"deny",
+	"ai_decide",
+];
 
 export function isPermissionDecision(value: unknown): value is PermissionDecision {
 	return typeof value === "string" && (PERMISSION_DECISIONS as readonly string[]).includes(value);

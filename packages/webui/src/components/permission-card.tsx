@@ -1,7 +1,7 @@
 "use client";
 
 import { ShieldAlert } from "lucide-react";
-import type { PendingPermission } from "@/lib/use-chat";
+import type { PendingPermission, PermissionAnswer } from "@/lib/use-chat";
 import { t } from "@/lib/i18n";
 
 export function PermissionCard({
@@ -9,7 +9,7 @@ export function PermissionCard({
 	onAnswer,
 }: {
 	pending: PendingPermission;
-	onAnswer: (decision: "allow" | "deny" | "allow_session") => void;
+	onAnswer: (decision: PermissionAnswer) => void;
 }) {
 	const args =
 		typeof pending.args === "string" ? pending.args : JSON.stringify(pending.args ?? {}, null, 2);
@@ -39,6 +39,13 @@ export function PermissionCard({
 								className="h-8 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("拒绝")}
+							</button>
+							<button
+								type="button"
+								onClick={() => onAnswer("ai_decide")}
+								className="h-8 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+							>
+								{t("让 AI 决定")}
 							</button>
 							<button
 								type="button"

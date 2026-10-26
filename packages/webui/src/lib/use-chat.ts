@@ -22,6 +22,9 @@ import {
 import { randomId } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
+/** Answers a permission card can send; `ai_decide` lets the model rule on the call. */
+export type PermissionAnswer = "allow" | "deny" | "allow_session" | "ai_decide";
+
 export interface TextBlock {
 	kind: "text";
 	text: string;
@@ -667,7 +670,7 @@ export function useChat({
 	}, [onSessionsChanged]);
 
 	const answerPermission = useCallback(
-		async (decision: "allow" | "deny" | "allow_session") => {
+		async (decision: PermissionAnswer) => {
 			const pending = permission;
 			if (!pending) return;
 			setPermission(null);

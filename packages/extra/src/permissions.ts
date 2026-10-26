@@ -1,10 +1,15 @@
 /**
  * Per-call permission gating (non-yolo, non-plan sessions).
  *
- * Four answers per prompt: allow once, allow this session (per tool), reject,
- * or let the model decide. "Let the model decide" keys the class by
+ * Five answers per prompt: allow once, allow this session (per tool), allow the
+ * call that was asked about after reading an explanation of it, reject, or let
+ * the model decide. "Let the model decide" keys the class by
  * tool + first shell command and caches one verdict per class for the rest of
  * the session: the class never prompts again.
+ *
+ * `allow_once` is what the explanation flow answers with: the user has just been
+ * told what the call does, so this one runs, but the gate keeps no memory of it
+ * and the next call of the same kind asks again.
  *
  * A call that carries a hazard (`git reset --hard` in the current checkout) is
  * gated even in a session whose tool was allowed for good, and the hazard is
@@ -32,6 +37,8 @@ function classKey(info: PermissionCallInfo): string {
 export class PermissionGate {
 	private readonly sessionAllowedTools = new Set<string>();
 	private readonly judgedClasses = new Map<string, JudgeVerdict>();
+	/** Calls approved out-of-band through `approveOnce()`, consumed by `check()`. */
+	private readonly approvedCalls = new Set<string>();
 	private readonly prompter: PermissionPrompter;
 	private readonly judge: PermissionJudge;
 
@@ -45,7 +52,23 @@ export class PermissionGate {
 		this.sessionAllowedTools.add(toolName);
 	}
 
+	/**
+	 * Run one call without remembering anything.
+	 *
+	 * The call arrives as a token so a stale approval cannot be replayed: `check()`
+	 * deletes the token when it consumes it, and the tokens of calls that never
+	 * reach the gate (the turn was interrupted, the model rerouted the call) are
+	 * dropped on the way out of `check()`.
+	 */
+	approveOnce(callId: string): void {
+		this.approvedCalls.add(callId);
+	}
+
 	async check(info: PermissionCallInfo): Promise<PermissionOutcome> {
+		// Claim the approval before anything can ask: an approved call must not
+		// prompt underneath a dialog the user already answered.
+		if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
+
 		// A session-wide allowance covers the tool the user was shown, not a
 		// command that would destroy work they did not have in mind.
 		if (!info.hazard && this.sessionAllowedTools.has(info.toolName)) return { action: "allow" };
@@ -55,6 +78,9 @@ export class PermissionGate {
 		if (judged) return judged;
 
 		const decision = await this.prompter(info);
+		// An approval for this call that arrived while the prompt was up (the user
+		// read the explanation and continued) wins: no second prompt, no memory.
+		if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
 		switch (decision) {
 			case "allow":
 				return { action: "allow" };
