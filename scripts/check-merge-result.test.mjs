@@ -71,15 +71,18 @@ test("a stale tree that drops a newer file is reported", async (t) => {
 	assert.match(result.stderr, /keep\.txt/);
 });
 
-test("a rename is not a deletion", async (t) => {
+// 检查按路径比内容，改名会被当成删除：旧版本数 `D` 状态，同内容的改名是 `R`，
+// 所以放行。判据是「main 的文件还在不在」，改名后旧路径确实没了。
+test("a rename is reported, not waved through", async (t) => {
 	const cwd = await repo(t, "rename");
-	commit(cwd, { "a.txt": "the same long content\\nfor rename detection to work" }, "base");
+	commit(cwd, { "a.txt": "same content so git pairs it as a rename" }, "base");
 	git(cwd, ["branch", "-f", "main", "HEAD"]);
 	git(cwd, ["mv", "a.txt", "b.txt"]);
 	git(cwd, ["commit", "-q", "--no-gpg-sign", "-m", "rename"]);
 
 	const result = check(cwd);
-	assert.equal(result.status, 0, result.stderr);
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /a\.txt/);
 });
 
 test("a missing base fails instead of passing silently", async (t) => {
