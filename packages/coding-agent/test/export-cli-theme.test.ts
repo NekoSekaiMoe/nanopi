@@ -141,6 +141,27 @@ describe("CLI --export formats", () => {
 		expect(existsSync(outputPath)).toBe(false);
 	});
 
+	test("refuses --export-format pdf before the export branch runs", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-bad-format-"));
+		tempDirs.push(dir);
+		const outputPath = join(dir, "out.txt");
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const originalExit = process.exit;
+		process.exit = ((code?: number) => {
+			throw new Error(`exit ${code}`);
+		}) as typeof process.exit;
+		try {
+			await expect(main(["--export", writeSession(dir), "--export-format", "pdf", outputPath])).rejects.toThrow(
+				"exit 1",
+			);
+		} finally {
+			process.exit = originalExit;
+		}
+		expect(String(error.mock.calls[0]?.[0] ?? "")).toContain("print that document to PDF from a browser");
+		error.mockRestore();
+		expect(existsSync(outputPath)).toBe(false);
+	});
+
 	test("keeps HTML for a path without a known export extension", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-html-"));
 		tempDirs.push(dir);
