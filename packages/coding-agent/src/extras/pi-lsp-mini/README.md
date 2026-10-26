@@ -129,6 +129,24 @@ more time to settle.
 The value is re-read on every call, so editing `lsp.json` mid-session applies
 without restarting.
 
+A deadline is a ceiling on work, so an expired one has to stop the work, not
+just stop waiting for it. Two things follow:
+
+- **Expiry cancels the request.** The client sends `$/cancelRequest` for the id
+  it gave up on (`jsonrpc.ts`), so the server drops it. Without that, a retry
+  queues behind an answer nobody will read, and a bigger deadline only widens
+  the window in which that happens.
+- **A multi-request tool gets one budget, not one per request.** `lsp_callgraph`
+  walks the graph breadth-first; `depth=3` on a wide graph is dozens of
+  sequential requests, and a per-request deadline would make the tool call's
+  real ceiling `depth x fan-out x timeout`. The per-call `timeoutMs` is spent
+  once, shared by every hop (`budget.ts`); when it runs out the report keeps what
+  it collected and says it was truncated. `lsp_diagnostics` scans servers in
+  parallel and waits once, instead of serially per server.
+
+A tool call never blocks for longer than its budget, and no request it abandoned
+is left running on the server.
+
 ## Diagnostics after edit
 
 `write` always reports what the server says about the file it just wrote. `edit`

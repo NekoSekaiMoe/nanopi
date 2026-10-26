@@ -75,7 +75,7 @@ export async function findProjectRoot(file: string, markers: string[] | undefine
 
 export class LspManager {
   private readonly clients = new Map<string, LspClient>();
-  private readonly backoff = new Map<string, { retryAt: number; reason: string }>();
+  private readonly backoff = new Map<string, { retryAt: number; reason: string; failures: number }>();
   /** file+server -> latest publish. `revision` increases with every publish for that
    *  document, which is how a caller separates "diagnostics for the content I just
    *  wrote" from the pre-write snapshot a server publishes on its own. */
@@ -146,9 +146,12 @@ export class LspManager {
       return client;
     } catch (error) {
       const reason = (error as Error).message;
-      const attempts = (this.backoff.get(key)?.retryAt ?? 0) > 0 ? 2 : 1;
-      const delay = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(attempts, 6));
-      this.backoff.set(key, { retryAt: Date.now() + delay, reason });
+      // Count consecutive failures, not "has ever failed": reading retryAt as a
+      // truthy flag pinned the delay at 2s forever, so a server that keeps
+      // dying was retried every two seconds instead of backing off.
+      const failures = (this.backoff.get(key)?.failures ?? 0) + 1;
+      const wait = Math.min(BACKOFF_MAX_MS, BACKOFF_BASE_MS * 2 ** Math.min(failures - 1, 6));
+      this.backoff.set(key, { retryAt: Date.now() + wait, reason, failures });
       throw error;
     }
   }
@@ -250,13 +253,19 @@ export class LspManager {
   /** Opens every file, waits for diagnostics to settle, returns them. */
   async collectDiagnostics(ctx: Ctx, files: string[], waitMs: number): Promise<Map<string, { serverId: string; diagnostics: Diagnostic[] }[]>> {
     const opened = new Map<string, { client: LspClient; match: MatchedServer }>();
-    for (const file of files) {
-      try {
-        const target = await this.openFile(ctx, file);
-        if (target) opened.set(path.resolve(ctx.cwd, file), target);
-      } catch {
-        // unmatchable / unopenable files are skipped silently in batch mode
-      }
+    // Opening is a notification, not a request: files go out together so the
+    // scan waits once for the server to settle instead of serialising N opens.
+    const results = await Promise.all(
+      files.map(async (file) => {
+        try {
+          return { file, target: await this.openFile(ctx, file) };
+        } catch {
+          return { file, target: undefined }; // unmatchable / unopenable files are skipped in batch mode
+        }
+      }),
+    );
+    for (const { file, target } of results) {
+      if (target) opened.set(path.resolve(ctx.cwd, file), target);
     }
     await delay(waitMs, ctx.signal);
     const result = new Map<string, { serverId: string; diagnostics: Diagnostic[] }[]>();

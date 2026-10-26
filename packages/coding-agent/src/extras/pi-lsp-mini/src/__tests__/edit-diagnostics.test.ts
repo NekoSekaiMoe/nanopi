@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
+import { createBudget } from "../budget.ts";
 import { DEFAULT_SETTINGS, loadSettings, requestTimeoutFor, resetServersCache } from "../config.ts";
 import { collectEditDiagnostics } from "../edit-diagnostics.ts";
 import { LspManager } from "../manager.ts";
@@ -305,7 +306,7 @@ describe("request deadline", () => {
 
 		const started = Date.now();
 		const answer = await opened!.client
-			.references(join(cwd, "sample.txt"), 0, 0, false, 300)
+			.references(join(cwd, "sample.txt"), 0, 0, false, createBudget({ timeoutMs: 300, defaultTimeoutMs: 20_000 }))
 			.then(() => "resolved", (error: Error) => error.message);
 		expect(answer).toMatch(/timed out after 300ms/);
 		expect(Date.now() - started).toBeLessThan(1800);
@@ -319,12 +320,18 @@ describe("request deadline", () => {
 
 		const absolute = join(cwd, "sample.txt");
 		const fast = await opened!.client
-			.references(absolute, 0, 0, false, 200)
+			.references(absolute, 0, 0, false, createBudget({ timeoutMs: 200, defaultTimeoutMs: 20_000 }))
 			.then(() => "resolved", (error: Error) => error.message);
 		expect(fast).toMatch(/timed out after 200ms/);
 
 		// Same server, same call, longer budget: the answer arrives.
-		const slow = await opened!.client.references(absolute, 0, 0, false, 20_000);
+		const slow = await opened!.client.references(
+			absolute,
+			0,
+			0,
+			false,
+			createBudget({ timeoutMs: 20_000, defaultTimeoutMs: 20_000 }),
+		);
 		expect(slow === null || Array.isArray(slow)).toBe(true);
 	});
 });
