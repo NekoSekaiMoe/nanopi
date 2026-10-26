@@ -55,6 +55,7 @@ Multiple nanopi sessions may be running in this cwd at the same time, each modif
 
 Committing:
 
+- Sync with the remote before every commit: `git fetch origin && git merge --ff-only origin/main`. A commit made on a stale branch is lost on the next pull, because the pull rewinds the branch onto the remote tip; the reflog is the only way back. The `.husky/pre-commit` hook rejects a commit while the branch is behind its upstream, but it cannot help when hooks are not installed, so run the sync yourself first. The `/sync` command in this repo does the fetch + fast-forward in one step.
 - Only commit files YOU changed in THIS session.
 - Stage explicit paths (`git add <path1> <path2>`); never `git add -A` / `git add .`.
 - Before committing, run `git status` and verify you are only staging your files.
