@@ -1,9 +1,6 @@
 /**
  * Chat row for run records (`custom` entries of type `run`). Records carry no model content, so
  * something has to say that the last run failed and `/retry` can replay it.
- *
- * The row carries no reason: the failed assistant message ends with the same text, and a tool call
- * records its own error, so repeating it here only echoed a multi-line provider error twice.
  */
 
 import { Text } from "@nanopi/pi-tui";
@@ -19,9 +16,9 @@ function renderRunRecord(
 ): Text | undefined {
 	const data = getRunRecordData(entry);
 	if (!data || data.outcome !== "failed") return undefined;
-	const reason = data.stopReason === "aborted" || !data.errorMessage ? "Run was aborted" : "Run failed";
 	const attempts = data.attempts > 0 ? ` after ${data.attempts} attempt${data.attempts === 1 ? "" : "s"}` : "";
-	return new Text(theme.fg("dim", `${reason}${attempts}. /retry replays it.`), 0, 0);
+	const reason = data.errorMessage ? `: ${data.errorMessage}` : "";
+	return new Text(theme.fg("dim", `Run failed${attempts}${reason}. /retry replays it.`), 0, 0);
 }
 
 export function registerRunRecord(pi: ModuleApi): void {
