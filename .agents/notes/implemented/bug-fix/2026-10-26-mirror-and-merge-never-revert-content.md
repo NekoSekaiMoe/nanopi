@@ -37,9 +37,10 @@ base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`
   按定义已经把 base 的树合进来了，回退永远查不出来。代价是它拿不到 PR 的代码，
   脚本里按 `CNB_PULL_REQUEST_SLUG` / `CNB_PULL_REQUEST_BRANCH` 自己合一次。
 - `.github/workflows/ci.yml` 的 `Check merge result` 步骤，`fetch-depth: 0`，
-  `--base refs/remotes/origin/${{ github.base_ref }}`。workflow 只在 `pull_request`
-  触发（不响应 `push`），步骤并进 `build-check-test`，脚本只读 git 对象、不需要依赖，
-  不用为它单独起一个 runner。
+  `--base refs/remotes/origin/${{ github.base_ref }}`。步骤并进 `build-check-test`，
+  脚本只读 git 对象、不需要依赖，不用为它单独起一个 runner。workflow 同时响应
+  `push` 与 `pull_request`（直推 main 也要过 build/check/test，#258），这一步只在
+  `github.base_ref` 非空时跑 —— push 上没有可比的 base。
 
 ## Alternatives considered
 
@@ -51,9 +52,10 @@ base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`
   丢没丢东西看不出来。`pull_request.mergeable` 同理。（这里的 `pull_request` 指
   CNB 的同名事件；GitHub Actions 的 `pull_request` 检出的就是合并后的提交，可以用，
   见下一条。）
-- **GitHub 侧响应 `push` 而不是 `pull_request`。** 检查的语义是「合进 base 会丢什么」，
-  push 事件没有可比的 base，`github.base_ref` 为空。GitHub 那边的直推路径由
-  `sync-to-cnb.yml` 反向镜像兜底，回退会在 CNB 侧被 `mirror-main.mjs` 拦下。
+- **在 GitHub 的 `push` 事件上跑 merge-result。** 检查的语义是「合进 base 会丢什么」，
+  push 事件没有可比的 base，`github.base_ref` 为空，脚本只能退化成对空 ref 报错。
+  直推 main 的回退由 `sync-to-cnb.yml` 反向镜像 + CNB 侧的 `mirror-main.mjs` 拦；
+  push 事件上只跑 build/check/test，那一步按 `github.base_ref` 分流跳过。
 - **镜像改为拒绝一切非快进推送。** 两侧历史按设计永久分叉（合成提交），非快进是常态，
   拒绝等于关掉镜像。
 - **镜像自动 `git merge FETCH_HEAD` 后再推。** 冲突要人判断，自动合并会把冲突标记
