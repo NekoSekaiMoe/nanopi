@@ -12,6 +12,8 @@ export interface LspServerConfig {
   /** Walk up from the file until one of these exists; fallback: cwd */
   rootMarkers?: string[];
   diagnosticsWaitMs?: number;
+  /** Per-request deadline for this server. Overrides the top-level `requestTimeout`. */
+  requestTimeout?: number;
   settings?: unknown;
   initializationOptions?: unknown;
   enabled?: boolean;
@@ -233,9 +235,45 @@ function userConfigPath(): string {
 
 let cachedServers: LspServerConfig[] | undefined;
 
-/** Drops the memoized merge. Tests that point NANOPI_CODING_AGENT_DIR at another config need this. */
+/**
+ * Drops the memoized server merge. Tests that point NANOPI_CODING_AGENT_DIR at
+ * another config need this. Top-level settings are re-read on every call, so a
+ * mid-session edit of lsp.json applies without a restart.
+ */
 export function resetServersCache(): void {
   cachedServers = undefined;
+}
+
+export interface LspSettings {
+  /** Deadline for one LSP request. A cold tsserver on a large repo routinely
+   *  exceeds the old hardcoded 20s, and the model only sees "tool failed". */
+  requestTimeout: number;
+}
+
+export const DEFAULT_SETTINGS: LspSettings = { requestTimeout: 30_000 };
+
+/**
+ * Request deadline in effect for `server`: its own `requestTimeout`, else the
+ * top-level one, else the default. Read at call time so a config reload applies
+ * without restarting the session.
+ */
+export function requestTimeoutFor(server: LspServerConfig): number {
+  return server.requestTimeout ?? loadSettings().requestTimeout;
+}
+
+function positiveOr(value: unknown, fallback: number, max: number): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.min(max, value) : fallback;
+}
+
+/** Reads the top-level keys of ~/.nanopi/agent/lsp.json. */
+export function loadSettings(): LspSettings {
+  let raw: { requestTimeout?: unknown } | undefined;
+  try {
+    raw = JSON.parse(fs.readFileSync(userConfigPath(), "utf8"));
+  } catch {
+    raw = undefined;
+  }
+  return { requestTimeout: positiveOr(raw?.requestTimeout, DEFAULT_SETTINGS.requestTimeout, 600_000) };
 }
 
 /** Built-in defaults, overridden per-id by ~/.nanopi/agent/lsp.json ({ "servers": [{ "id": ..., ... }] }). */

@@ -1,5 +1,6 @@
 import type { CallHierarchyItem, Location } from "./lsp-types.ts";
 import { uriToFilePath, type LspClient } from "./client.ts";
+import type { Budget } from "./budget.ts";
 
 export type Direction = "incoming" | "outgoing" | "both";
 
@@ -43,14 +44,35 @@ async function buildTree(
   root: CallHierarchyItem,
   direction: "incoming" | "outgoing",
   depth: number,
+  budget: Budget | undefined,
+  truncated: { hitBudget: boolean },
 ): Promise<GraphNode> {
   const seen = new Set([itemKey(root)]);
   const rootNode: GraphNode = { item: root, children: [], callSites: [], recursive: false };
 
   const expand = async (node: GraphNode, currentDepth: number): Promise<void> => {
     if (currentDepth >= depth || seen.size >= MAX_NODES) return;
-    const calls = (direction === "incoming" ? await client.incomingCalls(node.item) : await client.outgoingCalls(node.item)) as
-      ({ from?: CallHierarchyItem; to?: CallHierarchyItem; fromRanges?: Location[] } | null)[] | null;
+    if (budget?.expired) {
+      truncated.hitBudget = true;
+      return;
+    }
+    // One deadline for the whole walk: an expired budget stops the expansion
+    // instead of each hop getting a fresh timeout and the tool call running for
+    // depth x fan-out x timeout.
+    let calls: ({ from?: CallHierarchyItem; to?: CallHierarchyItem; fromRanges?: Location[] } | null)[] | null;
+    try {
+      calls = (direction === "incoming"
+        ? await client.incomingCalls(node.item, budget)
+        : await client.outgoingCalls(node.item, budget)) as typeof calls;
+    } catch (error) {
+      // A hop that outlives the shared budget keeps what the walk already
+      // collected and says so; the depth reached so far is still useful.
+      if (budget?.expired) {
+        truncated.hitBudget = true;
+        return;
+      }
+      throw error;
+    }
     for (const call of (calls ?? []).filter((c): c is NonNullable<typeof c> => c != null)) {
       const next = direction === "incoming" ? call.from : call.to;
       if (!next) continue;
@@ -93,21 +115,26 @@ export async function callGraphReport(
   root: CallHierarchyItem,
   direction: Direction,
   depth: number,
+  budget?: Budget,
 ): Promise<string> {
   const header = `Root: ${root.name}${root.detail ? ` — ${root.detail}` : ""}  (${shortName(root)})`;
   const out: string[] = [header];
+  const truncated = { hitBudget: false };
 
   if (direction !== "outgoing") {
-    const tree = await buildTree(client, root, "incoming", depth);
+    const tree = await buildTree(client, root, "incoming", depth, budget, truncated);
     out.push("", "Callers (who calls it):");
     const lines = renderTree(tree, "incoming");
     out.push(...(lines.length > 0 ? lines : ["  (none)"]));
   }
-  if (direction !== "incoming") {
-    const tree = await buildTree(client, root, "outgoing", depth);
+  if (direction !== "incoming" && !truncated.hitBudget) {
+    const tree = await buildTree(client, root, "outgoing", depth, budget, truncated);
     out.push("", "Callees (what it calls):");
     const lines = renderTree(tree, "outgoing");
     out.push(...(lines.length > 0 ? lines : ["  (none)"]));
+  }
+  if (truncated.hitBudget) {
+    out.push("", `⚠ truncated: ${budget?.timeoutMs}ms budget spent — raise timeoutMs or lower depth`);
   }
   return out.join("\n");
 }

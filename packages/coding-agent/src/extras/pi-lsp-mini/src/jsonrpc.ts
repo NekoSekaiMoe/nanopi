@@ -14,6 +14,11 @@ export interface RpcMessage {
 	error?: { code: number; message: string; data?: unknown };
 }
 
+interface Pending {
+	resolve: (v: unknown) => void;
+	reject: (e: Error) => void;
+}
+
 type NotificationHandler = (params: unknown) => void;
 type RequestHandler = (params: unknown) => unknown;
 
@@ -22,7 +27,7 @@ const CRLF_CRLF = Buffer.from("\r\n\r\n");
 export class RpcConnection {
 	private buffer: Buffer<ArrayBufferLike> = Buffer.alloc(0);
 	private nextId = 1;
-	private readonly pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
+	private readonly pending = new Map<number, Pending>();
 	private readonly notificationHandlers = new Map<string, NotificationHandler>();
 	private readonly requestHandlers = new Map<string, RequestHandler>();
 	private closed = false;
@@ -98,14 +103,41 @@ export class RpcConnection {
 		});
 	}
 
-	sendRequest<T>(method: string, params?: unknown): Promise<T> {
+	/**
+	 * Sends a request and forgets it when `signal` aborts.
+	 *
+	 * Dropping the entry is only half of it: a caller that gave up on a request
+	 * has to tell the server, or the server keeps computing an answer nobody
+	 * reads while the next attempt queues behind it. `$/cancelRequest` is that
+	 * message, and it is why an expired deadline does not pile up work.
+	 */
+	sendRequest<T>(method: string, params?: unknown, signal?: AbortSignal): Promise<T> {
 		return new Promise<T>((resolve, reject) => {
 			if (this.closed) return reject(new Error("connection closed"));
+			if (signal?.aborted) return reject(new Error("request cancelled"));
 			const id = this.nextId++;
-			this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-			void this.write({ jsonrpc: "2.0", id, method, params: params ?? null }).catch((e) => {
+			const detach = () => signal?.removeEventListener("abort", onAbort);
+			const onAbort = () => {
+				if (!this.pending.delete(id)) return;
+				void this.write({ jsonrpc: "2.0", method: "$/cancelRequest", params: { id } });
+				reject(new Error(`request ${method} cancelled`));
+			};
+			this.pending.set(id, {
+				resolve: (value) => {
+					detach();
+					resolve(value as T);
+				},
+				reject: (error) => {
+					detach();
+					reject(error);
+				},
+			});
+			signal?.addEventListener("abort", onAbort, { once: true });
+			void this.write({ jsonrpc: "2.0", id, method, params: params ?? null }).catch((e: unknown) => {
+				const entry = this.pending.get(id);
+				if (!entry) return;
 				this.pending.delete(id);
-				reject(e as Error);
+				entry.reject(e as Error);
 			});
 		});
 	}

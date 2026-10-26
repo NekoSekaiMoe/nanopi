@@ -11,8 +11,22 @@
  *
  * FAKE_LSP_STALE=1 makes the server publish a stale error on didOpen only,
  * and stay silent afterwards - the shape of a server that lags behind.
+ *
+ * FAKE_LSP_SLOW_MS=<n> delays every incoming message by n ms before handling it
+ * (except `exit`), which is how a test sees the client-side request deadline: a
+ * server that answers slower than the deadline must fail, and one that answers
+ * faster must not.
+ *
+ * Every `$/cancelRequest` received is appended to the file named by
+ * FAKE_LSP_LOG if set, one line per cancelled id. A test uses it to assert the
+ * client actually withdrew a request it gave up on, instead of leaving the
+ * server computing an answer nobody reads.
+ *
+ * `textDocument/prepareCallHierarchy` / `callHierarchy/incomingCalls` answer
+ * FAKE_LSP_FANOUT callers (default 0), so a call-graph walk can be steered.
  */
 import { Buffer } from "node:buffer";
+import { appendFileSync } from "node:fs";
 
 let buffer = Buffer.alloc(0);
 let version = 0;
@@ -21,6 +35,9 @@ const documents = new Map();
 
 const stale = process.env.FAKE_LSP_STALE === "1";
 const delayMs = Number(process.env.FAKE_LSP_DELAY_MS ?? 0);
+const slowMs = Number(process.env.FAKE_LSP_SLOW_MS ?? 0);
+const logFile = process.env.FAKE_LSP_LOG;
+const fanout = Number(process.env.FAKE_LSP_FANOUT ?? 0);
 
 function send(payload) {
 	const body = Buffer.from(JSON.stringify(payload), "utf8");
@@ -49,10 +66,44 @@ function toDiagnostics(text) {
 	return diagnostics;
 }
 
-function handle(message) {
+function record(line) {
+	if (!logFile) return;
+	try {
+		appendFileSync(logFile, `${line}\n`);
+	} catch {
+		// the test only reads this file; a logging failure must not change behavior
+	}
+}
+
+function hierarchyItem(uri, name, line) {
+	const range = { start: { line, character: 0 }, end: { line, character: 10 } };
+	return { name, kind: 12, uri, range, selectionRange: range };
+}
+
+function dispatch(message) {
 	const { id, method, params } = message;
+	if (method === "$/cancelRequest") {
+		record(`cancel ${params?.id}`);
+		return;
+	}
 	if (method === "initialize") {
-		send({ jsonrpc: "2.0", id, result: { capabilities: { textDocumentSync: 1 } } });
+		send({ jsonrpc: "2.0", id, result: { capabilities: { textDocumentSync: 1, callHierarchyProvider: true } } });
+		return;
+	}
+	if (method === "textDocument/prepareCallHierarchy") {
+		send({ jsonrpc: "2.0", id, result: [hierarchyItem(params.textDocument.uri, "root", 0)] });
+		return;
+	}
+	if (method === "callHierarchy/incomingCalls" || method === "callHierarchy/outgoingCalls") {
+		const key = method === "callHierarchy/incomingCalls" ? "from" : "to";
+		const children = [];
+		for (let i = 0; i < fanout; i++) {
+			children.push({
+				[key]: hierarchyItem(`${params.item.uri}#${i}`, `child${i}`, i),
+				fromRanges: [{ uri: params.item.uri, range: { start: { line: i, character: 0 }, end: { line: i, character: 4 } } }],
+			});
+		}
+		send({ jsonrpc: "2.0", id, result: children });
 		return;
 	}
 	if (method === "textDocument/didOpen") {
@@ -90,7 +141,10 @@ process.stdin.on("data", (chunk) => {
 		if (buffer.length < start + length) return;
 		const body = buffer.subarray(start, start + length).toString("utf8");
 		buffer = buffer.subarray(start + length);
-		handle(JSON.parse(body));
+		const message = JSON.parse(body);
+		if (message.method === "exit") dispatch(message);
+		else if (slowMs > 0) setTimeout(() => dispatch(message), slowMs);
+		else dispatch(message);
 	}
 });
 

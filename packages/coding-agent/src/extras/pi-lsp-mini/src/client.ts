@@ -2,10 +2,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 import { RpcConnection } from "./jsonrpc.ts";
 import { Methods, type CallHierarchyItem, type Diagnostic, type DocumentSymbol, type Location, type SymbolInformation, type TextEdit, type WorkspaceEdit } from "./lsp-types.ts";
-import type { LspServerConfig } from "./config.ts";
+import { requestTimeoutFor, type LspServerConfig } from "./config.ts";
+import type { Budget } from "./budget.ts";
 
 const STARTUP_TIMEOUT_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 20_000;
 
 export function filePathToUri(file: string): string {
 	return `file://${encodeURI(file.split(path.sep).join("/")).replace(/[?#]/g, encodeURIComponent)}`;
@@ -23,12 +23,27 @@ export interface OpenDocument {
 	text: string;
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
-	let timer: NodeJS.Timeout | undefined;
-	const timeout = new Promise<never>((_, reject) => {
-		timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms`)), timeoutMs);
-	});
-	return Promise.race([promise, timeout]).finally(() => timer && clearTimeout(timer));
+const NO_SIGNAL = new AbortController().signal;
+
+function abortMessage(reason: string, timeoutMs?: number): string {
+	return timeoutMs === undefined ? `${reason} cancelled by caller` : `${reason} timed out after ${timeoutMs}ms`;
+}
+
+/** Combines the caller's abort signal with a deadline; `timeoutMs` undefined arms none. */
+function deadlineSignal(signal: AbortSignal | undefined, timeoutMs: number | undefined): { signal: AbortSignal; done: () => void } {
+	if (timeoutMs === undefined && !signal) return { signal: NO_SIGNAL, done: () => undefined };
+	const controller = new AbortController();
+	const onAbort = () => controller.abort();
+	signal?.addEventListener("abort", onAbort, { once: true });
+	const timer = timeoutMs === undefined ? undefined : setTimeout(() => controller.abort(), timeoutMs);
+	timer?.unref?.();
+	return {
+		signal: controller.signal,
+		done: () => {
+			if (timer) clearTimeout(timer);
+			signal?.removeEventListener("abort", onAbort);
+		},
+	};
 }
 
 interface ServerCapabilitiesLike {
@@ -107,11 +122,10 @@ export class LspClient {
 		this.connection = connection;
 		this.registerHandlers(connection);
 
-		const init = (await withTimeout(
-			connection.sendRequest<{ capabilities: ServerCapabilitiesLike }>(Methods.initialize, this.initializeParams()),
-			STARTUP_TIMEOUT_MS,
-			`${this.server.id} initialize`,
-		)) as { capabilities: ServerCapabilitiesLike };
+		const startup = deadlineSignal(undefined, STARTUP_TIMEOUT_MS);
+		const init = await connection
+			.sendRequest<{ capabilities: ServerCapabilitiesLike }>(Methods.initialize, this.initializeParams(), startup.signal)
+			.finally(startup.done);
 		this.capabilities = init.capabilities;
 
 		await connection.sendNotification(Methods.initialized, {});
@@ -172,9 +186,40 @@ export class LspClient {
 		connection.onNotification("telemetry/event", () => undefined);
 	}
 
-	private req<T>(label: string, method: string, params: unknown): Promise<T> {
-		if (!this.connection) throw new Error(`${this.server.id}: connection unavailable`);
-		return withTimeout(this.connection.sendRequest<T>(method, params), REQUEST_TIMEOUT_MS, label);
+	/**
+	 * One request under the configured deadline. `timeoutMs` is a per-call
+	 * override; without it the server's `requestTimeout` decides, because a cold
+	 * tsserver on a large repository needs longer than any fixed number a caller
+	 * could guess.
+	 */
+	private req<T>(label: string, method: string, params: unknown, budget?: Budget): Promise<T> {
+		const timeoutMs = budget ? budget.remainingMs : undefined;
+		return this.request<T>(label, method, params, timeoutMs ?? requestTimeoutFor(this.server), budget?.signal);
+	}
+
+	/**
+	 * One request under one deadline. On expiry the abort signal fires, which
+	 * sends `$/cancelRequest`: the server stops working on an answer nobody will
+	 * read, instead of the request sitting in its queue next to the retry.
+	 */
+	private async request<T>(
+		label: string,
+		method: string,
+		params: unknown,
+		timeoutMs: number | undefined,
+		signal?: AbortSignal,
+	): Promise<T> {
+		const connection = this.connection;
+		if (!connection) throw new Error(`${this.server.id}: connection unavailable`);
+		const deadline = deadlineSignal(signal, timeoutMs);
+		try {
+			if (deadline.signal.aborted) throw new Error(abortMessage(label, timeoutMs));
+			return await connection.sendRequest<T>(method, params, deadline.signal);
+		} catch (error) {
+			throw deadline.signal.aborted ? new Error(abortMessage(label, timeoutMs)) : error;
+		} finally {
+			deadline.done();
+		}
 	}
 
 	/** Opens (or updates) the file on the server so it matches disk content. */
@@ -199,41 +244,64 @@ export class LspClient {
 		});
 	}
 
-	async references(file: string, line: number, character: number, includeDeclaration: boolean): Promise<Location[] | null> {
+	async references(
+		file: string,
+		line: number,
+		character: number,
+		includeDeclaration: boolean,
+		budget?: Budget,
+	): Promise<Location[] | null> {
 		return this.req<Location[] | null>(`${this.server.id} references`, Methods.references, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
 			context: { includeDeclaration },
-		});
+		}, budget);
 	}
 
-	async prepareCallHierarchy(file: string, line: number, character: number): Promise<CallHierarchyItem[] | null> {
+	async prepareCallHierarchy(
+		file: string,
+		line: number,
+		character: number,
+		budget?: Budget,
+	): Promise<CallHierarchyItem[] | null> {
 		return this.req<CallHierarchyItem[] | null>(`${this.server.id} prepareCallHierarchy`, Methods.prepareCallHierarchy, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
-		});
+		}, budget);
 	}
 
-	async incomingCalls(item: CallHierarchyItem): Promise<{ from: CallHierarchyItem; fromRanges: Location[] }[] | null> {
-		return this.req(`${this.server.id} incomingCalls`, Methods.incomingCalls, { item });
+	async incomingCalls(
+		item: CallHierarchyItem,
+		budget?: Budget,
+	): Promise<{ from: CallHierarchyItem; fromRanges: Location[] }[] | null> {
+		return this.req(`${this.server.id} incomingCalls`, Methods.incomingCalls, { item }, budget);
 	}
 
-	async outgoingCalls(item: CallHierarchyItem): Promise<{ to: CallHierarchyItem; fromRanges: Location[] }[] | null> {
-		return this.req(`${this.server.id} outgoingCalls`, Methods.outgoingCalls, { item });
+	async outgoingCalls(
+		item: CallHierarchyItem,
+		budget?: Budget,
+	): Promise<{ to: CallHierarchyItem; fromRanges: Location[] }[] | null> {
+		return this.req(`${this.server.id} outgoingCalls`, Methods.outgoingCalls, { item }, budget);
 	}
 
-	async rename(file: string, line: number, character: number, newName: string): Promise<WorkspaceEdit | null> {
+	async rename(
+		file: string,
+		line: number,
+		character: number,
+		newName: string,
+		budget?: Budget,
+	): Promise<WorkspaceEdit | null> {
 		return this.req<WorkspaceEdit | null>(`${this.server.id} rename`, Methods.rename, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
 			newName,
-		});
+		}, budget);
 	}
 
-	async documentSymbol(file: string): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
+	async documentSymbol(file: string, budget?: Budget): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
 		return this.req<DocumentSymbol[] | SymbolInformation[] | null>(`${this.server.id} documentSymbol`, Methods.documentSymbol, {
 			textDocument: { uri: filePathToUri(file) },
-		});
+		}, budget);
 	}
 
 	async shutdown(): Promise<void> {
