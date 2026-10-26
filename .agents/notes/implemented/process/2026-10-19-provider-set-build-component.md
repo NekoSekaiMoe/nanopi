@@ -83,9 +83,11 @@ with `buildconfig.json`.
   prompts, webui bridge) is dropped too, because the issue asked for no modes
   beyond the tool itself. Its assistant behaves like a shell-only agent: no
   approval prompts, no undo of a command.
-- `base` and `minimal` ship `providerSets.presets`. The `presets` list equals the
-  full catalog today; it exists so the next stand-in or gateway-only provider
-  can stay out of the small SKUs by adding it to `all` alone.
+- `base` and `minimal` ship `providerSets.presets`, which equaled the full
+  catalog when this note was written. They no longer do: the catalog is curated
+  to 30 ids and `full` ships the same set, so the set a flavor names no longer
+  tells a full build from a trimmed one
+  ([curated provider catalog](2026-10-26-curated-provider-catalog.md)).
 - `full` regenerates all shards, so `src/models.generated.ts` and the shard set
   stay as they were; only the small flavors produce a different tree, and a
   checkout that built one needs `pnpm run generate:models` before working on

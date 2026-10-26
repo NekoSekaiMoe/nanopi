@@ -78,9 +78,12 @@ so the checkout matches what the generator writes.
   `defaultFlavor`'s provider component is not a string set name records
   nothing, and the drift comes back. That is the same assumption
   `flavorProviderSelection` makes.
-- `presets` remains a dormant 48-vendor list. It is not broken, but it is not a
-  description of the full catalog either, despite what the provider-set note
-  says today.
+- `presets` was a dormant 48-vendor list at the time of this fix. It is no
+  longer dormant: `full` ships it, and it carries the same curated 30 ids as
+  `all` ([curated provider catalog](../process/2026-10-26-curated-provider-catalog.md)).
+  The two are kept equal on purpose, so the "second write target" argument above
+  no longer applies — the generator writes `all`, and `presets` is edited
+  alongside it.
 - The build's cross-check is unchanged: unreachable catalog still fails, unknown
   provider in a set still fails.
 
