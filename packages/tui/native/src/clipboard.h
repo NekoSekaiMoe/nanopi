@@ -3,9 +3,10 @@
 
 // Mechanism shared by the three platform units: the async job, the formats a
 // platform can report, and the N-API plumbing. Platform policy (allocator,
-// buffer copy, which operations exist) is supplied by the unit through the
-// NANOPI_CLIPBOARD_* macros before this header is included. Every helper here
-// is `static` and used, so `-Werror` keeps the header honest.
+// buffer copy, which operations exist) is supplied by the selected unit through
+// the NANOPI_CLIPBOARD_* macros before this header is included. Every helper
+// here is `static` and used by the selected unit, so `-Werror` keeps the header
+// honest.
 #include <stdlib.h>
 #include <string.h>
 #include "napi-loader.h"

@@ -1,9 +1,20 @@
-#include <pthread.h>
-#include <stdlib.h>
-#include <time.h>
-#include "../../clipboard.h"
+// Stub of the Linux unit: the executor is one contiguous block of
+// platform-linux.c that only depends on clipboard.h, so the worker test compiles
+// that block instead of pulling in X11. Keep it a verbatim copy of the block in
+// platform-linux.c: test/native-clipboard-linux.test.ts fails when they drift.
 
-static void read_clipboard(clipboard_job* job);
+// X requests block on the server, so each read runs on a private thread and the
+// caller waits on a condition variable for at most WORKER_WAIT_SECONDS. A read
+// that outlives that wait keeps the helper busy until it returns; callers in the
+// meantime report the clipboard as unavailable instead of queueing behind it.
+
+// The stub unit has no X11 path, so a read can only be issued against it by mistake.
+static void read_clipboard(clipboard_job* job) {
+    (void)job;
+}
+
+#define WORKER_WAIT_SECONDS 3 // Allow the two-second transfer deadline to report its own error first.
+
 static pthread_mutex_t worker_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_once_t worker_once = PTHREAD_ONCE_INIT;
 static pthread_cond_t worker_changed;
@@ -49,7 +60,7 @@ static void clipboard_execute(clipboard_job* job) {
         worker_result = (clipboard_job){.operation = job->operation};
         struct timespec deadline;
         clock_gettime(CLOCK_MONOTONIC, &deadline);
-        deadline.tv_sec += 3; // Allow the two-second transfer deadline to report its own error first.
+        deadline.tv_sec += WORKER_WAIT_SECONDS;
         pthread_t thread;
         if (pthread_create(&thread, 0, read_on_private_thread, 0) == 0) {
             pthread_detach(thread);
@@ -69,3 +80,4 @@ static void clipboard_execute(clipboard_job* job) {
     }
     pthread_mutex_unlock(&worker_mutex);
 }
+

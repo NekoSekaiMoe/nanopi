@@ -17,18 +17,12 @@ static void tracked_free(void* pointer) {
     free(pointer);
 }
 
-#define calloc tracked_calloc
-#define free tracked_free
-#include "../../native/linux/src/clipboard-worker.h"
-#undef calloc
-#undef free
-
-// The fixture exercises the executor only, so the modifier query is never
-// reached; clipboard.h still requires the unit to answer for it.
-static bool clipboard_modifier_pressed(const char* name) {
-    (void)name;
-    return false;
-}
+// Reuse the production headers and the production executor without pulling in
+// X11: only the private-thread plumbing is under test, so the unit's X11 read
+// is replaced with the stub below.
+#include "../../native/src/napi-loader.h"
+#include "../../native/src/clipboard.h"
+#include "clipboard-worker-stub.c"
 
 // Exercise the production executor with a controlled blocking callback, without X11.
 static void read_clipboard(clipboard_job* job) {

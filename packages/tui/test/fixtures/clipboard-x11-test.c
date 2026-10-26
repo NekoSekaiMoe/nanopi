@@ -1,9 +1,10 @@
-#include <xcb/xcb.h>
+// Runs the real Linux unit in-process (single-threaded, so its global
+// allocator overrides are safe): platform-preload.h brings the X11 headers and
+// includes platform-linux.c behind the macro the prebuild is built with.
+#define NANOPI_PLATFORM_LINUX
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 
 // Track only allocations made by the clipboard implementation, not libxcb.
 // This makes the partial-transfer leak regression deterministic, unlike RSS.
@@ -40,7 +41,7 @@ static void tracked_free(void* pointer) {
 
 #define realloc tracked_realloc
 #define free tracked_free
-#include "../../native/linux/src/linux-platform-x11.c"
+#include "../../native/src/platform-preload.h"
 #undef realloc
 #undef free
 

@@ -4,6 +4,9 @@ import { fileURLToPath } from "node:url";
 
 const moduleRequire = createRequire(import.meta.url);
 const TUI_PACKAGE_NAME = "@nanopi/pi-tui";
+// Every prebuild carries the same name: platforms differ in which unit was
+// compiled (`-DNANOPI_PLATFORM_*`), not in the file the loader opens.
+const NATIVE_FILE_NAME = "tui-platform.node";
 
 export interface NativeModuleCandidateOptions {
 	moduleUrl?: string;
@@ -11,8 +14,15 @@ export interface NativeModuleCandidateOptions {
 	resolvePackage?: (specifier: string) => string;
 }
 
+/** Prebuild path relative to the TUI package root, the sidecar root, or the agent bin dir. */
+export function getNativeModulePath(platform: string, arch: string): string {
+	return join("native", platform, "prebuilds", `${platform}-${arch}`, NATIVE_FILE_NAME);
+}
+
 export function getNativeModuleCandidates(nativePath: string, options: NativeModuleCandidateOptions = {}): string[] {
-	const moduleDir = dirname(fileURLToPath(options.moduleUrl ?? import.meta.url));
+	const moduleDir = options.moduleUrl
+		? dirname(fileURLToPath(options.moduleUrl))
+		: dirname(fileURLToPath(import.meta.url));
 	const candidates: string[] = [];
 
 	// Sidecar root for single-file distributions: the coding-agent entrypoint

@@ -1,6 +1,6 @@
-// windows.h comes from napi-loader.h. Clipboard data crosses the API as HGLOBAL
-// handles, and text is UTF-16, so both replace the POSIX defaults.
-#include <stdint.h>
+// Clipboard data crosses the OS API as HGLOBAL handles and UTF-16 text, so both
+// replace the POSIX defaults in clipboard.h. windows.h arrives through
+// napi-loader.h.
 #define NANOPI_CLIPBOARD_WRITE
 #define NANOPI_CLIPBOARD_ALLOC(size) GlobalAlloc(GPTR, (size))
 #define NANOPI_CLIPBOARD_FREE(data) \
@@ -14,7 +14,8 @@
 // HGLOBAL memory is not addressable through plain pointers on every compiler, so
 // copy through volatile to keep the writes visible to the reading thread.
 static void copy_bytes(uint8_t* destination, const uint8_t* source, size_t length);
-#include "../../clipboard.h"
+#include "napi-loader.h"
+#include "clipboard.h"
 
 static void copy_bytes(uint8_t* destination, const uint8_t* source, size_t length) {
     volatile uint8_t* target = destination;

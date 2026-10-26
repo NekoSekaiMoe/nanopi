@@ -1,6 +1,5 @@
 import { createRequire } from "node:module";
-import * as path from "node:path";
-import { getNativeModuleCandidates } from "./native-module-path.ts";
+import { getNativeModuleCandidates, getNativeModulePath } from "./native-module-path.ts";
 
 const cjsRequire = createRequire(import.meta.url);
 
@@ -25,16 +24,10 @@ type NativePlatformHelper = NativeClipboard & {
 // Cache module loading, not display availability: a disconnected display can recover.
 const helpers = new Map<string, NativePlatformHelper | undefined>();
 
-function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatformHelper | undefined {
+function loadNativePlatformHelper(platform: string): NativePlatformHelper | undefined {
 	const arch = process.arch;
 	if (arch !== "x64" && arch !== "arm64") return undefined;
-	const nativePath = path.join(
-		"native",
-		platform,
-		"prebuilds",
-		`${platform}-${arch}`,
-		`${platform}-platform${suffix}.node`,
-	);
+	const nativePath = getNativeModulePath(platform, arch);
 	if (helpers.has(nativePath)) return helpers.get(nativePath);
 
 	for (const modulePath of getNativeModuleCandidates(nativePath)) {
@@ -62,9 +55,12 @@ export function getNativePlatformHelper(): NativePlatformHelper | undefined {
 	return loadNativePlatformHelper(process.platform);
 }
 
-/** Load a clipboard helper without opening the display until a read is requested. */
+/**
+ * Load a clipboard helper without opening the display until a read is requested.
+ * The Linux prebuild is the X11 unit; Wayland reads keep using `wl-paste`.
+ */
 export function getNativeClipboard(): NativeClipboard | undefined {
 	if (process.platform !== "linux") return getNativePlatformHelper();
 	if (!process.env.DISPLAY) return undefined;
-	return loadNativePlatformHelper("linux", "-x11");
+	return loadNativePlatformHelper("linux");
 }

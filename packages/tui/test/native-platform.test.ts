@@ -6,9 +6,7 @@ import { fileURLToPath } from "node:url";
 import { getNativeClipboard, getNativePlatformHelper } from "../src/native-platform.ts";
 
 test("Linux ARM64 prebuild supports 64 KB system pages", () => {
-	const binary = readFileSync(
-		new URL("../native/linux/prebuilds/linux-arm64/linux-platform-x11.node", import.meta.url),
-	);
+	const binary = readFileSync(new URL("../native/linux/prebuilds/linux-arm64/tui-platform.node", import.meta.url));
 	assert.equal(binary.subarray(0, 4).toString(), "\x7fELF");
 	const offset = Number(binary.readBigUInt64LE(32));
 	const entrySize = binary.readUInt16LE(54);
@@ -61,7 +59,7 @@ test("Linux loads X11 lazily and rechecks DISPLAY", { skip: !["arm64", "x64"].in
 	const display = process.env.DISPLAY;
 	const waylandDisplay = process.env.WAYLAND_DISPLAY;
 	const modulePath = fileURLToPath(
-		new URL(`../native/linux/prebuilds/linux-${process.arch}/linux-platform-x11.node`, import.meta.url),
+		new URL(`../native/linux/prebuilds/linux-${process.arch}/tui-platform.node`, import.meta.url),
 	);
 	const previous = require.cache[modulePath];
 	t.after(() => {
