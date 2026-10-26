@@ -36,8 +36,10 @@ base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`
   **事件必须选 `pull_request.target`**：`pull_request` 拿的是预合并后的提交，
   按定义已经把 base 的树合进来了，回退永远查不出来。代价是它拿不到 PR 的代码，
   脚本里按 `CNB_PULL_REQUEST_SLUG` / `CNB_PULL_REQUEST_BRANCH` 自己合一次。
-- `.github/workflows/ci.yml` 的 `merge-result` job，`fetch-depth: 0`，
-  `--base refs/remotes/origin/${{ github.base_ref }}`。
+- `.github/workflows/ci.yml` 的 `Check merge result` 步骤，`fetch-depth: 0`，
+  `--base refs/remotes/origin/${{ github.base_ref }}`。workflow 只在 `pull_request`
+  触发（不响应 `push`），步骤并进 `build-check-test`，脚本只读 git 对象、不需要依赖，
+  不用为它单独起一个 runner。
 
 ## Alternatives considered
 
@@ -46,7 +48,12 @@ base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`
   只管 UI 定制与 NPC）。而且它解决不了 `b3ffe400` 这种「预合并结果本身就是旧树」的情形 ——
   那次回退在提交生成时就发生了，与谁点的合并无关。
 - **在 `pull_request` 事件上顺手检查。** 拿到的是预合并提交，base 的树已经被合进来，
-  丢没丢东西看不出来。`pull_request.mergeable` 同理。
+  丢没丢东西看不出来。`pull_request.mergeable` 同理。（这里的 `pull_request` 指
+  CNB 的同名事件；GitHub Actions 的 `pull_request` 检出的就是合并后的提交，可以用，
+  见下一条。）
+- **GitHub 侧响应 `push` 而不是 `pull_request`。** 检查的语义是「合进 base 会丢什么」，
+  push 事件没有可比的 base，`github.base_ref` 为空。GitHub 那边的直推路径由
+  `sync-to-cnb.yml` 反向镜像兜底，回退会在 CNB 侧被 `mirror-main.mjs` 拦下。
 - **镜像改为拒绝一切非快进推送。** 两侧历史按设计永久分叉（合成提交），非快进是常态，
   拒绝等于关掉镜像。
 - **镜像自动 `git merge FETCH_HEAD` 后再推。** 冲突要人判断，自动合并会把冲突标记
