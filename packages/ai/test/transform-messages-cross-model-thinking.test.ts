@@ -97,3 +97,35 @@ describe("thinking from other models", () => {
 		]);
 	});
 });
+
+describe("malformed tool-call arguments on replay", () => {
+	it("drops argumentsError so the replayed call carries no failure text", () => {
+		const messages: Message[] = [
+			{ role: "user", content: "read the file", timestamp: Date.now() },
+			assistant("moonshotai/Kimi-K3", [
+				{
+					type: "toolCall",
+					id: "call_1",
+					name: "read",
+					arguments: {},
+					argumentsError: 'Unexpected end of JSON input\n\nReceived arguments:\n{"path":"READ',
+				},
+			]),
+			{
+				role: "toolResult",
+				toolCallId: "call_1",
+				toolName: "read",
+				content: [{ type: "text", text: 'Invalid arguments for tool "read": Unexpected end of JSON input' }],
+				isError: true,
+				timestamp: Date.now(),
+			},
+		];
+
+		for (const model of [kimi, { ...kimi, id: "other-model" }] as Model<"openai-completions">[]) {
+			const replayed = transformMessages(messages, model).find((msg) => msg.role === "assistant");
+			const toolCall = (replayed as AssistantMessage).content.find((block) => block.type === "toolCall");
+			expect(toolCall).toMatchObject({ id: "call_1", name: "read", arguments: {} });
+			expect(toolCall).not.toHaveProperty("argumentsError");
+		}
+	});
+});
