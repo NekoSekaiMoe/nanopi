@@ -19,6 +19,7 @@ import { googleVertexProvider } from "./google-vertex.ts";
 import { groqProvider } from "./groq.ts";
 import { huggingfaceProvider } from "./huggingface.ts";
 import { kimiCodingProvider } from "./kimi-coding.ts";
+import { kiroProvider } from "./kiro.ts";
 import { metaProvider } from "./meta.ts";
 import { modalProvider } from "./modal.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
@@ -154,6 +155,7 @@ export function builtinProviders(): Provider[] {
 		groqProvider(),
 		huggingfaceProvider(),
 		kimiCodingProvider(),
+		kiroProvider(),
 		metaProvider(),
 		modalProvider(),
 		moonshotaiProvider(),

@@ -2,6 +2,7 @@ import { anthropicOAuth } from "./auth/oauth/anthropic.ts";
 import { antigravityOAuth } from "./auth/oauth/antigravity.ts";
 import { githubCopilotOAuth } from "./auth/oauth/github-copilot.ts";
 import { kimiCodingOAuth } from "./auth/oauth/kimi-coding.ts";
+import { kiroOAuth } from "./auth/oauth/kiro.ts";
 import { registerBundledOAuthFlowLoaders } from "./auth/oauth/load.ts";
 import { metaOAuth } from "./auth/oauth/meta.ts";
 import { openaiChatGPTOAuth } from "./auth/oauth/openai-chatgpt.ts";
@@ -19,6 +20,7 @@ export function registerBundledOAuthFlows(): void {
 		githubCopilot: () => githubCopilotOAuth,
 		openrouter: () => openRouterOAuth,
 		kimiCoding: () => kimiCodingOAuth,
+		kiro: () => kiroOAuth,
 		meta: () => metaOAuth,
 		xai: () => xaiOAuth,
 	});

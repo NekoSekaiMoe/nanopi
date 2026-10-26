@@ -31,6 +31,7 @@ type OAuthFlowLoaders = {
 	githubCopilot: () => OAuthAuth | Promise<OAuthAuth>;
 	openrouter: () => OAuthAuth | Promise<OAuthAuth>;
 	kimiCoding: () => OAuthAuth | Promise<OAuthAuth>;
+	kiro: () => OAuthAuth | Promise<OAuthAuth>;
 	meta: () => OAuthAuth | Promise<OAuthAuth>;
 	xai: () => OAuthAuth | Promise<OAuthAuth>;
 };
@@ -75,6 +76,11 @@ export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {
 export const loadKimiCodingOAuth = async (): Promise<OAuthAuth> => {
 	if (bundledLoaders) return bundledLoaders.kimiCoding();
 	return ((await importOAuthModule("./kimi-coding.ts")) as { kimiCodingOAuth: OAuthAuth }).kimiCodingOAuth;
+};
+
+export const loadKiroOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.kiro();
+	return ((await importOAuthModule("./kiro.ts")) as { kiroOAuth: OAuthAuth }).kiroOAuth;
 };
 
 export const loadMetaOAuth = async (): Promise<OAuthAuth> => {

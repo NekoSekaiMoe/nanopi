@@ -122,6 +122,7 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 		opencode: "OPENCODE_API_KEY",
 		"opencode-go": "OPENCODE_API_KEY",
 		"kimi-coding": "KIMI_API_KEY",
+		kiro: "KIRO_API_KEY",
 		antigravity: "ANTIGRAVITY_ACCESS_TOKEN",
 		meta: "META_API_KEY",
 		"cloudflare-workers-ai": "CLOUDFLARE_API_KEY",

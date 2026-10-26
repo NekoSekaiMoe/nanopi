@@ -133,6 +133,7 @@ export const OAUTH_FLOW_IDS: readonly string[] = [
 	"antigravity",
 	"github-copilot",
 	"kimi-coding",
+	"kiro",
 	"meta",
 	"openai-chatgpt",
 	"openai-codex",

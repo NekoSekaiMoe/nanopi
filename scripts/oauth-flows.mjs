@@ -21,6 +21,7 @@ export const OAUTH_FLOWS = [
 	{ module: "antigravity", loader: "antigravity", exportName: "antigravityOAuth" },
 	{ module: "github-copilot", loader: "githubCopilot", exportName: "githubCopilotOAuth" },
 	{ module: "kimi-coding", loader: "kimiCoding", exportName: "kimiCodingOAuth" },
+	{ module: "kiro", loader: "kiro", exportName: "kiroOAuth" },
 	{ module: "meta", loader: "meta", exportName: "metaOAuth" },
 	{ module: "openai-chatgpt", loader: "openaiChatGPT", exportName: "openaiChatGPTOAuth" },
 	{ module: "openai-codex", loader: "openaiCodex", exportName: "openaiCodexOAuth" },
