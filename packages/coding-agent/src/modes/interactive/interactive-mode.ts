@@ -70,12 +70,23 @@ import {
 } from "../../core/cache-stats.ts";
 import { formatCacheWarmingStatus, formatCacheWarmingUsage } from "../../core/cache-warmer.ts";
 import { getInContextCompactionOutcome } from "../../core/compaction/index.ts";
-import { findExtensionStackMatches, recordCrash, takeUnnotifiedCrash } from "../../core/crash-log.ts";
+import { findExtensionStackMatches, readCrashLog, recordCrash, takeUnnotifiedCrash } from "../../core/crash-log.ts";
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defaults.ts";
+import {
+	type DiagnosticBundleInput,
+	type WrittenDiagnosticBundle,
+	writeDiagnosticBundle,
+} from "../../core/diagnostic-bundle.ts";
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
-import { formatDebugHeader, formatMemorySample, MemorySampler, resolveDebugLogPath } from "../../core/memory-usage.ts";
+import {
+	formatDebugHeader,
+	formatMemorySample,
+	isDebugEnabled,
+	MemorySampler,
+	resolveDebugLogPath,
+} from "../../core/memory-usage.ts";
 import { createCompactionSummaryMessage, createCustomMessage } from "../../core/messages.ts";
 import {
 	defaultModelPerProvider,
@@ -98,6 +109,7 @@ import type {
 import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../core/resource-listing.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
+import { serializeSessionBranch } from "../../core/session-export.ts";
 import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
@@ -861,6 +873,8 @@ export class InteractiveMode {
 
 		this.writeMemorySample("mem startup");
 
+		this.writeDiagnosticBundle("startup");
+
 		this.renderWidgets(); // Initialize with default spacer
 		this.mountInteractiveTui(this.renderer, [
 			this.documentContainer,
@@ -980,6 +994,35 @@ export class InteractiveMode {
 	private writeMemorySample(label: string): void {
 		const sample = this.memorySampler.sample();
 		this.memorySampler.write(formatMemorySample(sample, label));
+	}
+
+	/**
+	 * `NANOPI_DEBUG=1` writes a diagnostic bundle at startup and at exit. Debug mode
+	 * exists for sessions that go wrong, and the bundle is only useful if it was
+	 * already on disk when they did, so nothing here waits for a prompt.
+	 */
+	private writeDiagnosticBundle(phase: DiagnosticBundleInput["phase"]): Promise<WrittenDiagnosticBundle | undefined> {
+		if (!isDebugEnabled()) return Promise.resolve(undefined);
+		const agentDir = getAgentDir();
+		const session = this.session;
+		const input: DiagnosticBundleInput = {
+			phase,
+			cwd: this.sessionManager.getCwd(),
+			sessionManager: this.sessionManager,
+			...(session.model ? { model: session.model } : {}),
+			modelRuntime: session.modelRuntime,
+			thinkingLevel: session.thinkingLevel,
+			modules: session.resourceLoader.getModules(),
+			settings: {
+				global: this.settingsManager.getGlobalSettings(),
+				project: this.settingsManager.getProjectSettings(),
+			},
+			crashes: readCrashLog(path.join(agentDir, "crashes.json")),
+			// An ephemeral session has no file of its own; the branch is still worth keeping.
+			sessionJsonl: serializeSessionBranch(this.sessionManager),
+			agentDir,
+		};
+		return writeDiagnosticBundle(input);
 	}
 
 	/**
@@ -3664,6 +3707,11 @@ export class InteractiveMode {
 		if (resumeCommand) {
 			process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
 		}
+
+		// After the screen is restored, so the notice survives, and awaited: the bundle
+		// holds the only record of a debug session that just closed.
+		const bundle = await this.writeDiagnosticBundle("exit");
+		if (bundle) process.stdout.write(`${chalk.dim("Diagnostic bundle:")} ${bundle.directory}\n`);
 
 		process.exit(0);
 	}

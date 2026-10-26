@@ -67,4 +67,8 @@ Review exported or shared sessions first. They can contain prompts, model respon
 
 ## Report a bug
 
-Bugs go to the GitHub tracker: https://github.com/NekoSekaiMoe/nanopi/issues/new?template=bug.yml. nanopi has no in-app reporting command. To attach context, run `/export` first (or `/share` for a link) and review the output before posting it, since sessions can contain prompts, tool arguments, command output, and file contents.
+Bugs go to the GitHub tracker: https://github.com/NekoSekaiMoe/nanopi/issues/new?template=bug.yml. nanopi has no in-app reporting command and uploads nothing.
+
+To attach context, start nanopi with `NANOPI_DEBUG=1`. Debug mode writes a diagnostic bundle to `<agent dir>/diagnostics/` when the session starts and again when it ends, and prints the directory on exit. A bundle holds `diagnostics.json` (environment, model and provider with credentials redacted, loaded modules, settings), `report.json` (failed assistant turns and recorded crashes), `session.jsonl` (the current branch), and the tail of the debug log, next to a `bundle.zip` with the same files.
+
+Review the bundle before posting it. Sessions can contain prompts, tool arguments, command output, and file contents, and the transcript is not redacted. Without the flag, run `/export` (or `/share` for a link) instead.
