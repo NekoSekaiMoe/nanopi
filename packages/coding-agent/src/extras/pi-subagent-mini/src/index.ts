@@ -1,5 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
-import { readFileSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 import type {
@@ -38,6 +38,8 @@ const MAX_ATTEMPTS = 3;
 /**
  * `interrupted`: a job restored from the archive as still running. Its process is
  * gone with the parent, so it is neither a success nor a failure the model caused.
+ * `killed`: the process ended on a signal (kill -9, OOM, or this tool's own kill),
+ * so its result is never arriving — settled, but not failed by the model.
  */
 type JobStatus = "queued" | "blocked" | "running" | "completed" | "failed" | "killed" | "timeout" | "interrupted";
 /** Settled statuses that must not satisfy a dependent: its work never arrived. */
@@ -47,6 +49,13 @@ const DEPENDENCY_STATUSES = new Set<string>(["failed", "killed", "timeout", "blo
  * lost its process with the parent, so it becomes `interrupted`.
  */
 const RESUMABLE_STATUSES = new Set<string>(["queued", "blocked", "running"]);
+/**
+ * Settled statuses a retry must not re-run: a killed child was killed by something
+ * outside its own work, so a second attempt mostly buys the same ending again.
+ */
+const UNRETRYABLE_STATUSES = new Set<string>(["killed"]);
+/** Signals that mean "the process was ended from outside", not "it exited badly". */
+const EXTERNAL_SIGNALS = new Set<string>(["SIGKILL", "SIGTERM", "SIGINT", "SIGHUP"]);
 const ARCHIVE_VERSION = 2;
 const ARCHIVE_TYPE = "subagent-job";
 /** Status-bar key for the subagent summary line; see `setStatus` in session_start. */
@@ -88,6 +97,13 @@ const DESCRIPTION_TAIL =
  */
 const CHILD_MODULE_SKIP = new Set(["pi-ui", "pi-rewind", "ask-lite", "todo-lite"]);
 
+/** One attempt's ending, kept after a retry replaces the job's `status`. */
+export interface AttemptOutcome {
+	attempt: number;
+	status: JobStatus;
+	error?: string;
+}
+
 export interface Job {
 	id: string;
 	task: string;
@@ -99,9 +115,18 @@ export interface Job {
 	/** Job ids this one waits for, and the ones that were not settled when it was spawned. */
 	dependsOn: string[];
 	pendingDependencies: string[];
+	/** Seconds to wait for the dependencies before blocking; unset waits indefinitely. */
+	dependsOnTimeoutSec?: number;
+	/** When the dependencies started being waited on, for `dependsOnTimeoutSec`. */
+	waitingSince?: number;
 	/** `sa-3/attempt-2` for a retry; equal to `id` for a first attempt. */
 	currentJobId: string;
 	attempts: number;
+	/**
+	 * How each attempt ended. `status` only describes the latest attempt, so without
+	 * this the previous attempts' outcomes were simply overwritten by the retry.
+	 */
+	attemptLog: AttemptOutcome[];
 	/** Working directory the job was spawned from; a worktree overrides it. */
 	cwd?: string;
 	/** Child session id, so a later `continue` resumes the same transcript. */
@@ -138,6 +163,9 @@ type RestoredJob = {
 	task: string;
 	/** Edges of the graph: what this job waited for when it was archived. */
 	dependsOn?: string[];
+	dependsOnTimeoutSec?: number;
+	/** Attempts that already ended, so a restored job still shows how it got here. */
+	attemptLog?: AttemptOutcome[];
 	/** A pending job's own tool/model/timeout, so a re-queued job keeps its shape. */
 	tools?: string;
 	model?: string;
@@ -249,6 +277,8 @@ function archive(job: Job, scope: string): RestoredJob {
 		status: job.status,
 		task: job.task.slice(0, 2000),
 		dependsOn: job.dependsOn,
+		dependsOnTimeoutSec: job.dependsOnTimeoutSec,
+		attemptLog: job.attemptLog,
 		tools: job.tools,
 		model: job.model,
 		timeoutSec: job.timeoutSec,
@@ -269,6 +299,18 @@ function jobCwd(job: Job, fallback: string): string {
 	return job.worktree?.path ?? job.cwd ?? fallback;
 }
 
+/**
+ * Whether the child's process still exists. Used to tell "never started" from
+ * "ran and crashed": `close` fires in both cases, and only the first is worth
+ * skipping a retry for. POSIX only — elsewhere the answer is "assume it ran".
+ */
+function childAlive(proc: ChildProcess): boolean {
+	const pid = proc.pid;
+	if (pid === undefined) return false;
+	if (process.platform === "win32") return true;
+	return existsSync(`/proc/${pid}`);
+}
+
 /** `sa-3` -> `3`; a retry id solves to the job it belongs to. */
 function rootOf(id: string): string {
 	return /^(sa-\d+)(?:\/attempt-\d+)?$/.exec(id)?.[1] ?? id;
@@ -278,7 +320,11 @@ function isPending(status: Job["status"]): boolean {
 	return status === "queued" || status === "blocked" || status === "running";
 }
 
-/** Start a new run on an existing job: its previous attempt's outcome no longer applies. */
+/**
+ * Start a new run on an existing job: the previous attempt's outcome no longer
+ * describes the job. `attemptLog` is deliberately not cleared — it is the only
+ * record of how the earlier attempts ended.
+ */
 function resetForRun(job: Job): void {
 	job.attempts = 0;
 	job.currentJobId = job.id;
@@ -324,6 +370,13 @@ export default function subagentMini(pi: ModuleApi): void {
 		}
 	};
 
+	/**
+	 * Set by the tool call, which is the only place that owns a cwd and a context:
+	 * a deadline that expires while nothing else happens needs both to block the
+	 * dependent and report it.
+	 */
+	let scheduler: { baseCwd: string; ctx: ModuleContext } | undefined;
+
 	const ensureWidgetTimer = (): void => {
 		if (widgetTimer) return;
 		widgetTimer = setInterval(() => {
@@ -333,6 +386,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				refreshWidget(); // clears it (undefined lines)
 				return;
 			}
+			if (scheduler) expireWaitingDependencies(scheduler.baseCwd, scheduler.ctx);
 			refreshWidget();
 		}, 1000);
 		widgetTimer.unref?.();
@@ -527,10 +581,21 @@ export default function subagentMini(pi: ModuleApi): void {
 				refreshWidget();
 				return;
 			}
-			job.finalOutput = lastAssistant?.text ?? "";
+			// A killed attempt may still have printed a message, but it was not the
+			// answer: the payload is why it died, or the report would say "completed"
+			// in the notification while the status says `killed`.
+			job.finalOutput = status === "killed" ? "" : (lastAssistant?.text ?? "");
 			job.usage = lastAssistant?.usage;
 			job.durationMs = Date.now() - job.startedAt;
-			if (status !== "completed" && job.onFailure === "retry" && job.attempts < MAX_ATTEMPTS) {
+			// Record the attempt before the retry replaces the job's status: a killed or
+			// timed-out attempt is otherwise invisible once attempt 2 starts.
+			job.attemptLog = [...job.attemptLog, { attempt: job.attempts, status, error: errorMessage }];
+			if (
+				status !== "completed" &&
+				!UNRETRYABLE_STATUSES.has(status) &&
+				job.onFailure === "retry" &&
+				job.attempts < MAX_ATTEMPTS
+			) {
 				// The retry brief says what went wrong; without that the child re-runs
 				// the same failing path and the second attempt is just the first one's cost.
 				const context = errorMessage ? `Previous attempt failed: ${errorMessage}\n\n` : "";
@@ -612,7 +677,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		});
 		proc.on("error", (error: Error) => finish("failed", `spawn failed: ${error.message}`));
 		// `close` (not `exit`) so the stdout pipe is drained before the report is read.
-		proc.on("close", (code) => {
+		proc.on("close", (code, signal) => {
 			if (attemptSettled) return;
 			// A zero exit code does not mean the child succeeded: in `--mode json` an
 			// API/auth failure arrives as an assistant message with stopReason "error"
@@ -623,17 +688,34 @@ export default function subagentMini(pi: ModuleApi): void {
 					"failed",
 					`model error${lastAssistant.errorMessage ? `: ${lastAssistant.errorMessage}` : ` (stopReason: ${lastAssistant.stopReason})`}`,
 				);
-			} else if (lastAssistant) {
-				if (code === 0 || code === null) finish("completed");
-				else finish("failed", `exit ${code}${lastAssistant.errorMessage ? `: ${lastAssistant.errorMessage}` : ""}`);
-			} else {
-				// Name the command: a child that died before producing any event
-				// (missing entry point, wrong resolution) is otherwise reported as a
-				// bare exit code with a Node stack the parent cannot attribute.
-				const launched = [child.cmd, ...child.args].join(" ");
-				const why = stderrTail ? `: ${stderrTail.trim()}` : "";
-				finish("failed", `exit ${code}, no assistant output (launched: ${launched})${why}`);
+				return;
 			}
+			// `code === null` means the process did not exit by itself: it was ended by
+			// `signal` (kill -9, OOM, a container restart). Counting that as success was
+			// the worst case — a report was published for a child that never finished.
+			if (signal && code === null) {
+				const killed = EXTERNAL_SIGNALS.has(signal);
+				const why = `terminated by ${signal}`;
+				finish(killed ? "killed" : "failed", killed ? `${why} (external kill: no result)` : why);
+				return;
+			}
+			if (lastAssistant) {
+				if (code === 0) finish("completed");
+				else finish("failed", `exit ${code}${lastAssistant.errorMessage ? `: ${lastAssistant.errorMessage}` : ""}`);
+				return;
+			}
+			// Name the command: a child that died before producing any event
+			// (missing entry point, wrong resolution) is otherwise reported as a
+			// bare exit code with a Node stack the parent cannot attribute.
+			const launched = [child.cmd, ...child.args].join(" ");
+			const why = stderrTail ? `: ${stderrTail.trim()}` : "";
+			if (!childAlive(proc)) {
+				// Nothing was ever printed and the process is gone: the child never got
+				// started, which is not the same failure as one that ran and crashed.
+				finish("failed", `child never ran (launched: ${launched})${why}`);
+				return;
+			}
+			finish("failed", `exit ${code}, no assistant output (launched: ${launched})${why}`);
 		});
 
 		const timer = setTimeout(() => {
@@ -664,7 +746,21 @@ export default function subagentMini(pi: ModuleApi): void {
 					const dependency = jobs.get(id);
 					return dependency !== undefined && isPending(dependency.status);
 				});
-				if (job.pendingDependencies.length > 0) continue;
+				if (job.pendingDependencies.length > 0) {
+					// Waiting is bounded by a timeout, not by a status: a dependency that is
+					// still pending has produced nothing to wait for a conclusion on.
+					const waited = job.dependsOnTimeoutSec;
+					if (waited === undefined) continue;
+					job.waitingSince ??= Date.now();
+					if (Date.now() - job.waitingSince < waited * 1000) continue;
+					job.status = "blocked";
+					job.errorMessage = `dependency ${job.pendingDependencies.join(", ")} did not settle in ${waited}s`;
+					job.durationMs = Date.now() - job.startedAt;
+					notify(job, scopeOf(job.task));
+					job.resolveDone();
+					changed = true;
+					continue;
+				}
 				const failed = job.dependsOn
 					.map((id) => jobs.get(id))
 					.find((dependency) => dependency && DEPENDENCY_STATUSES.has(dependency.status));
@@ -686,6 +782,26 @@ export default function subagentMini(pi: ModuleApi): void {
 		refreshWidget();
 	};
 
+	/**
+	 * Enforce `dependsOnTimeoutSec` for jobs still waiting.
+	 *
+	 * `releaseDependents` only runs when something settles, so a dependency that
+	 * never settles would leave its dependents waiting with nobody to notice the
+	 * deadline. This is the same check driven by the widget tick instead.
+	 */
+	const expireWaitingDependencies = (baseCwd: string, ctx: ModuleContext): void => {
+		let expired = false;
+		for (const job of jobs.values()) {
+			if (job.status !== "queued" || job.pendingDependencies.length === 0) continue;
+			const waited = job.dependsOnTimeoutSec;
+			if (waited === undefined) continue;
+			job.waitingSince ??= Date.now();
+			if (Date.now() - job.waitingSince < waited * 1000) continue;
+			expired = true;
+		}
+		if (expired) releaseDependents(baseCwd, ctx);
+	};
+
 	const spawnJob = (
 		params: {
 			task: string;
@@ -695,6 +811,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			timeoutSec?: number;
 			onFailure?: "retry" | "report";
 			dependsOn?: string[];
+			dependsOnTimeoutSec?: number;
 			isolated?: boolean;
 			cwd?: string;
 		},
@@ -722,8 +839,10 @@ export default function subagentMini(pi: ModuleApi): void {
 			onFailure: params.onFailure ?? "report",
 			dependsOn: params.dependsOn ?? [],
 			pendingDependencies: [],
+			dependsOnTimeoutSec: params.dependsOnTimeoutSec,
 			currentJobId: id,
 			attempts: 0,
+			attemptLog: [],
 			isContinue: false,
 			status: "queued",
 			finalOutput: "",
@@ -734,6 +853,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			resolveDone,
 		};
 		jobs.set(id, job);
+		scheduler = { baseCwd, ctx };
 		if (params.isolated) {
 			try {
 				createWorktree(job, baseCwd);
@@ -747,6 +867,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			return dependency !== undefined && isPending(dependency.status);
 		});
 		if (job.pendingDependencies.length === 0) launch(job, job.task, cwd, ctx);
+		else job.waitingSince = Date.now();
 		refreshWidget();
 		ensureWidgetTimer();
 		return { ok: true, job };
@@ -781,8 +902,11 @@ export default function subagentMini(pi: ModuleApi): void {
 				onFailure: data.onFailure ?? "report",
 				dependsOn: data.dependsOn ?? [],
 				pendingDependencies: [],
+				dependsOnTimeoutSec: data.dependsOnTimeoutSec,
 				currentJobId: data.id,
-				attempts: 1,
+				// A restored job at least ran once; the archive decides how it ended.
+				attempts: data.attemptLog?.length ?? 1,
+				attemptLog: data.attemptLog ?? [],
 				sessionId: data.sessionId,
 				worktree: data.worktree,
 				isContinue: false,
@@ -806,6 +930,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				const dependency = jobs.get(id);
 				return dependency !== undefined && isPending(dependency.status);
 			});
+			if (job.pendingDependencies.length > 0) job.waitingSince = Date.now();
 		}
 		refreshWidget();
 	};
@@ -825,6 +950,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			// The process is gone with the parent, so the report will never arrive: write
 			// the outcome down (the notification was never sent) and let its dependents
 			// see a settled failure instead of waiting on a `done` that cannot resolve.
+			job.attemptLog = [...job.attemptLog, { attempt: job.attempts, status: "interrupted", error: "parent session ended" }];
 			job.status = "interrupted";
 			job.errorMessage = "interrupted: the parent session ended before this job settled";
 			job.durationMs = job.durationMs ?? Date.now() - job.startedAt;
@@ -863,6 +989,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			const pid = job.proc?.pid;
 			if (pid !== undefined) killProcessTree(pid);
 			else job.proc?.kill("SIGKILL");
+			job.attemptLog = [...job.attemptLog, { attempt: job.attempts, status: "killed", error: "parent session shut down" }];
 			job.status = "killed";
 			job.errorMessage = "parent session shut down";
 			job.durationMs = Date.now() - job.startedAt;
@@ -876,12 +1003,44 @@ export default function subagentMini(pi: ModuleApi): void {
 				// best-effort, as everywhere else in the archive path
 			}
 		}
+		// A dependent of a job killed by the shutdown is settled-but-unsucceeded: without
+		// this pass it stays `queued` with an empty pending list and nobody to wake it.
+		for (const job of jobs.values()) {
+			if (job.status !== "queued") continue;
+			const killed = job.dependsOn
+				.map((id) => jobs.get(id))
+				.find((dependency) => dependency !== undefined && DEPENDENCY_STATUSES.has(dependency.status));
+			if (!killed) continue;
+			job.status = "blocked";
+			job.errorMessage = `dependency ${killed.id} ${killed.status}`;
+			job.durationMs = Date.now() - job.startedAt;
+			job.resolveDone();
+			try {
+				pi.appendEntry(ARCHIVE_TYPE, { version: ARCHIVE_VERSION, ...archive(job, scopeOf(job.task)) });
+			} catch {
+				// same best-effort archive as above
+			}
+		}
 		for (const job of jobs.values()) {
 			if (job.worktree) removeWorktree(job, job.cwd || process.cwd(), false);
 		}
 	});
 
 	const jobCwdLabel = (job: Job): string => (job.worktree ? job.worktree.path : job.cwd || "(session cwd)");
+
+	/**
+	 * Earlier attempts, on one line. `status` describes the latest attempt only, so
+	 * without this a retried job looks like it never failed at all.
+	 */
+	const attemptHistory = (job: Job): string => {
+		const settled = job.attemptLog.filter((attempt) => attempt.attempt < job.attempts || job.attempts === 0);
+		if (settled.length === 0) return "";
+		const parts = settled.map((attempt) => {
+			const error = attempt.error ? `: ${attempt.error}` : "";
+			return `attempt ${attempt.attempt} ${attempt.status}${error}`;
+		});
+		return `\nattempts: ${parts.join("; ")}`;
+	};
 
 	const jobSummary = (job: Job): string => {
 		const where = jobCwdLabel(job);
@@ -975,6 +1134,12 @@ export default function subagentMini(pi: ModuleApi): void {
 						"spawn: job ids that must settle first. The job starts when all of them settle, with their reports pasted into its brief (do not copy them in by hand); a failed dependency blocks it instead of running it on missing work.",
 				}),
 			),
+			dependsOnTimeoutSec: Type.Optional(
+				Type.Number({
+					description:
+						"spawn: stop waiting for `dependsOn` after this many seconds and report the job as blocked with the dependencies that never settled. Default: wait indefinitely.",
+				}),
+			),
 			isolated: Type.Optional(
 				Type.Boolean({
 					description:
@@ -1040,6 +1205,7 @@ export default function subagentMini(pi: ModuleApi): void {
 						timeoutSec: params.timeoutSec,
 						onFailure: params.onFailure,
 						dependsOn,
+						dependsOnTimeoutSec: params.dependsOnTimeoutSec,
 						isolated: params.isolated === true,
 						cwd: params.cwd,
 					},
@@ -1072,7 +1238,9 @@ export default function subagentMini(pi: ModuleApi): void {
 				const elapsed = Math.round((job.durationMs ?? Date.now() - job.startedAt) / 1000);
 				const tail = (job.finalOutput || job.errorMessage || "(still running, no final output yet)").slice(-1500);
 				const session = job.sessionId ? `\nsession: ${job.sessionId} (action=continue resumes it)` : "";
-				return textResult(`${jobSummary(job)} (${elapsed}s)\nscope: ${scopeOf(job.task)}${session}\n\n${tail}`);
+				return textResult(
+					`${jobSummary(job)} (${elapsed}s)\nscope: ${scopeOf(job.task)}${attemptHistory(job)}${session}\n\n${tail}`,
+				);
 			}
 
 			if (params.action === "wait") {
@@ -1141,6 +1309,7 @@ export default function subagentMini(pi: ModuleApi): void {
 				resetForRun(job);
 				job.cwd = job.cwd || ctx.cwd;
 				launch(job, `${previous}${job.task}`, job.cwd, ctx);
+				scheduler = { baseCwd: ctx.cwd, ctx };
 				refreshWidget();
 				ensureWidgetTimer();
 				return textResult(`${jobSummary(job)}\nIts report arrives as a subagent-complete notification.`);
@@ -1151,6 +1320,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			// Mark the job dead before signalling: killing the tree makes the child exit,
 			// and its `close` handler must not rewrite the status to "failed".
 			job.cancelTimeout?.();
+			job.attemptLog = [...job.attemptLog, { attempt: job.attempts, status: "killed", error: "killed by the main agent" }];
 			job.status = "killed";
 			job.errorMessage = "killed by the main agent";
 			job.durationMs = Date.now() - job.startedAt;
