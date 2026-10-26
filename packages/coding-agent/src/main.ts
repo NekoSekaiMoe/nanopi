@@ -61,11 +61,11 @@ import {
 	MissingSessionCwdError,
 	type SessionCwdIssue,
 } from "./core/session-cwd.ts";
-import { exportSessionToJsonl } from "./core/session-export.ts";
 import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
 	parseExportFormat,
+	pdfExportHint,
 	type SessionExportFormat,
 } from "./core/session-export-formats.ts";
 import { assertValidSessionId, SessionManager } from "./core/session-manager.ts";
@@ -80,6 +80,9 @@ import { enabledModules } from "./modules/index.ts";
 import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./modules/llama/managed.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 
+const MODULE_LOAD_FAILURE_HINT =
+	"Hint: a built-in module failed to initialize; this is a bug in the module, not in your configuration.";
+
 /**
  * Format of a `--export` run. The output path decides when it names one of the
  * export extensions; HTML is the historical default, so a path with any other
@@ -87,7 +90,9 @@ import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
  */
 function resolveExportFormat(outputPath: string | undefined): SessionExportFormat {
 	const extension = outputPath ? /\.[^./]+$/.exec(outputPath)?.[0]?.slice(1) : undefined;
-	return (extension ? parseExportFormat(extension) : undefined) ?? "html";
+	const parsed = extension ? parseExportFormat(extension) : undefined;
+	if (parsed === "pdf") throw new Error(pdfExportHint());
+	return parsed ?? "html";
 }
 
 /** The path an export writes to when the caller named none. */
@@ -112,18 +117,13 @@ async function exportSessionFile(
 	if (!existsSync(resolvedInputPath)) {
 		throw new Error(`File not found: ${resolvedInputPath}`);
 	}
-	// JSONL is the session file's own format: no component gates it, and the
-	// branch is re-serialized the same way `/export` writes it.
-	if (format === "jsonl") {
-		return exportSessionToJsonl(SessionManager.open(resolvedInputPath), outputPath ?? resolvedInputPath);
-	}
-	return exportSessionToMarkdown(SessionManager.open(resolvedInputPath), {
-		outputPath: outputPath ?? defaultExportPath(resolvedInputPath, format),
-	});
+	// The JSONL export is the session file as it stands: `--export x.jsonl out.jsonl`
+	// is a copy, and asking for it never needs a renderer.
+	if (format === "jsonl") return resolvedInputPath;
+	const sessionManager = SessionManager.open(resolvedInputPath);
+	const target = outputPath ?? defaultExportPath(resolvedInputPath, format);
+	return exportSessionToMarkdown(sessionManager, { outputPath: target });
 }
-
-const MODULE_LOAD_FAILURE_HINT =
-	"Hint: a built-in module failed to initialize; this is a bug in the module, not in your configuration.";
 
 /**
  * Read all content from piped stdin.
@@ -746,6 +746,8 @@ export async function main(args: string[], options?: MainOptions) {
 		let result: string;
 		try {
 			const outputPath = parsed.messages.length > 0 ? parsed.messages[0] : undefined;
+			// An explicit `--export-format` may name a format this build has no
+			// writer for, so it is checked before the path-derived one.
 			const format = parsed.exportFormat ?? resolveExportFormat(outputPath);
 			if (!isExportFormatEnabled(format)) {
 				throw new Error(formatNotIncludedMessage(format));

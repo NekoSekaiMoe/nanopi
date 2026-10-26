@@ -208,7 +208,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the export to Markdown and HTML (a PDF is that HTML printed by the browser); none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the export to Markdown and HTML; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
 			"components": {
 				"*": false,
 				"module/*": true,

@@ -37,10 +37,12 @@ function fixture({ stubSource = 'export function highlight(code: string): string
 	mkdirSync(join(dir, "src/core/modules"), { recursive: true });
 	writeFileSync(join(dir, "src/core/modules/jiti-loader.ts"), JITI_LOADER_EXPORTS);
 	writeFileSync(join(dir, "src/core/modules/jiti-loader-disabled.ts"), JITI_LOADER_EXPORTS);
-	mkdirSync(join(dir, "src/core/export-markdown"), { recursive: true });
-	const markdownExports = "export function run(): string {\n\treturn '';\n}\n";
-	writeFileSync(join(dir, "src/core/export-markdown/index.ts"), markdownExports);
-	writeFileSync(join(dir, "src/core/export-markdown/index-disabled.ts"), markdownExports);
+	for (const component of ["export-markdown"]) {
+		mkdirSync(join(dir, "src/core", component), { recursive: true });
+		const source = "export function run(): string {\n\treturn '';\n}\n";
+		writeFileSync(join(dir, "src/core", component, "index.ts"), source);
+		writeFileSync(join(dir, "src/core", component, "index-disabled.ts"), source);
+	}
 	return dir;
 }
 
@@ -138,3 +140,4 @@ describe("createLazyImportDropPlugin", () => {
 		strictEqual(resolvePath(plugin, "some-other-package"), undefined);
 	});
 });
+

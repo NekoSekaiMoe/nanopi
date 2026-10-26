@@ -4,8 +4,8 @@
  *
  * The export-html templates and the webui build are peripheral components
  * controlled by buildconfig.json flavors; a flavor that disables them ships
- * dist/ without them and the runtime reports them as not included. The
- * Markdown export carries no asset tree of its own: its renderer reads the
+ * dist/ without them and the runtime reports them as not included. Markdown
+ * and PDF export carry no asset tree of their own: their renderers read the
  * session, not files.
  *
  * The flavor is read from `--flavor` only. NANOPI_BUILD_FLAVOR is ignored on

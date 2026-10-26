@@ -109,6 +109,7 @@ import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
 	parseExportFormat,
+	pdfExportHint,
 } from "../../core/session-export-formats.ts";
 import {
 	type SessionEntry,
@@ -5759,7 +5760,12 @@ export class InteractiveMode {
 			// `.md` joins the HTML export instead of producing HTML under a name
 			// that promises something else.
 			const extension = outputPath ? /\.([^./]+)$/.exec(outputPath)?.[1] : undefined;
-			const format = (extension ? parseExportFormat(extension) : undefined) ?? "html";
+			const requested = extension ? parseExportFormat(extension) : undefined;
+			if (requested === "pdf") {
+				this.showError(pdfExportHint());
+				return;
+			}
+			const format = requested ?? "html";
 			if (!isExportFormatEnabled(format)) {
 				this.showError(formatNotIncludedMessage(format));
 				return;

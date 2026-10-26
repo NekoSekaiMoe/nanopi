@@ -25,7 +25,12 @@ import {
 	waitForRawStdoutBackpressure,
 	writeRawStdout,
 } from "../../core/output-guard.ts";
-import { formatNotIncludedMessage, isExportFormatEnabled } from "../../core/session-export-formats.ts";
+import {
+	formatNotIncludedMessage,
+	isExportFormatEnabled,
+	parseExportFormat,
+	pdfExportHint,
+} from "../../core/session-export-formats.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
 import { theme } from "../interactive/theme/theme.ts";
 import { toJsonEvent } from "../json-event.ts";
@@ -575,14 +580,19 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			}
 
 			case "export_session": {
-				if (!isExportFormatEnabled(command.format)) {
-					return error(id, "export_session", formatNotIncludedMessage(command.format));
+				const format = parseExportFormat(command.format);
+				if (format === "pdf") return error(id, "export_session", pdfExportHint());
+				if (format === undefined) {
+					return error(id, "export_session", `Unknown export format "${command.format}"`);
+				}
+				if (!isExportFormatEnabled(format)) {
+					return error(id, "export_session", formatNotIncludedMessage(format));
 				}
 				let path: string;
-				if (command.format === "jsonl") path = session.exportToJsonl(command.outputPath);
-				else if (command.format === "md") path = session.exportToMarkdown(command.outputPath);
+				if (format === "jsonl") path = session.exportToJsonl(command.outputPath);
+				else if (format === "md") path = session.exportToMarkdown(command.outputPath);
 				else path = await session.exportToHtml(command.outputPath);
-				return success(id, "export_session", { path, format: command.format });
+				return success(id, "export_session", { path, format });
 			}
 
 			case "switch_session": {

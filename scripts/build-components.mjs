@@ -53,9 +53,9 @@ const COMPONENT_LAZY_IMPORTS = {
 };
 
 /**
- * The packages this build keeps out because it cannot load disk modules: the
- * single file leaves jiti external for its zero-dependency promise, so the
- * component is off there regardless of flavor.
+ * The component the standalone single file cannot carry whatever the flavor
+ * says: it leaves jiti external for its zero-dependency promise, so loading
+ * disk modules is off there.
  *
  * @param {{ components: Record<string, boolean | string>, singleFile?: boolean }} input
  * @returns {Record<string, boolean | string>}

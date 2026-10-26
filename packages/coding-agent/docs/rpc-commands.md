@@ -591,7 +591,7 @@ Response:
 
 ### export_session
 
-Export the session in one of the formats the build carries. `md`, `html`, and `jsonl` are the same three formats `/export` writes; `html` behaves exactly like `export_html`. There is no PDF format: a PDF is the HTML export printed by a browser.
+Export the session in one of the formats the build carries. `md`, `html`, and `jsonl` are the same three formats `/export` writes; `html` behaves exactly like `export_html`.
 
 ```json
 {"type": "export_session", "format": "md"}
@@ -612,7 +612,7 @@ Response:
 }
 ```
 
-A build flavor that omits a format (for example `minimal` has no export component at all) answers with `success: false` and the reason, rather than writing an empty file.
+A build flavor that omits a format (for example `base` has no HTML export) answers with `success: false` and the reason, rather than writing an empty file. `pdf` is refused with a hint: export `html` and print that document from a browser.
 
 ### switch_session
 

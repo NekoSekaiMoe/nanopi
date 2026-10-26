@@ -4,9 +4,9 @@
  *
  * `buildconfig.json` splits export into two components so a trimmed build
  * ships only what it advertises: `export-markdown` (Markdown) and
- * `export-html` (HTML plus the templates it reads from disk). There is no PDF
- * writer: a PDF is the HTML export printed by the browser, so the two formats
- * a build carries are the two it writes.
+ * `export-html` (HTML plus the templates it reads from disk). Nobody writes a
+ * PDF: the PDF is the HTML export document printed by a browser, which needs
+ * no code from this build (issue #187).
  */
 
 import { isBuildComponentEnabled } from "../build-components.ts";
@@ -29,9 +29,15 @@ const FORMAT_ALIASES: Record<string, SessionExportFormat> = {
 	jsonl: "jsonl",
 };
 
-/** Normalize a format name or file extension, or undefined when it is not one of them. */
-export function parseExportFormat(value: string): SessionExportFormat | undefined {
-	return FORMAT_ALIASES[value.trim().toLowerCase()];
+/**
+ * Parse a format name or a file extension. `pdf` is not a format this build
+ * writes, but it parses to itself so the caller can answer with the hint
+ * instead of silently writing HTML under a `.pdf` name.
+ */
+export function parseExportFormat(value: string): SessionExportFormat | "pdf" | undefined {
+	const normalized = value.trim().toLowerCase();
+	if (normalized === "pdf") return "pdf";
+	return FORMAT_ALIASES[normalized];
 }
 
 export function isExportFormatEnabled(format: SessionExportFormat): boolean {
@@ -44,8 +50,16 @@ export function enabledExportFormats(): SessionExportFormat[] {
 	return (["md", "html"] as const).filter(isExportFormatEnabled);
 }
 
-/** Formats a build without the export components refuses, spelled for an error message. */
+/** Why a build without the export component refuses a format, spelled for an error message. */
 export function formatNotIncludedMessage(format: SessionExportFormat): string {
 	if (format === "jsonl") return "The JSONL export is the session file itself and has no build component";
 	return `${format.toUpperCase()} export is not included in this build (buildconfig.json component "${FORMAT_COMPONENT[format]}" is disabled)`;
+}
+
+/** What to do instead of asking for a PDF: the HTML export is the printable document. */
+export function pdfExportHint(): string {
+	return (
+		"PDF export is not part of nanopi: export HTML and print that document to PDF from a browser " +
+		"(open the file, then Print > Save as PDF)"
+	);
 }

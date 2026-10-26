@@ -121,6 +121,26 @@ describe("CLI --export formats", () => {
 		expect(markdown).toContain("hi there");
 	});
 
+	test("refuses .pdf with the print-the-HTML hint instead of writing a file", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-pdf-"));
+		tempDirs.push(dir);
+		const outputPath = join(dir, "out.pdf");
+		const sessionFile = writeSession(dir);
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const originalExit = process.exit;
+		process.exit = ((code?: number) => {
+			throw new Error(`exit ${code}`);
+		}) as typeof process.exit;
+		try {
+			await expect(main(["--export", sessionFile, outputPath])).rejects.toThrow("exit 1");
+		} finally {
+			process.exit = originalExit;
+		}
+		expect(String(error.mock.calls[0]?.[0])).toContain("print that document to PDF from a browser");
+		error.mockRestore();
+		expect(existsSync(outputPath)).toBe(false);
+	});
+
 	test("keeps HTML for a path without a known export extension", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-html-"));
 		tempDirs.push(dir);

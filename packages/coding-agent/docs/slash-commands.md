@@ -36,7 +36,7 @@ Extensions, prompt templates, and skills can add commands. The command menu in n
 | Command | Description |
 |---|---|
 | `/copy` | Copy the last assistant message |
-| `/export [path]` | Export the session; the path extension picks `.md`, `.html` (default), or `.jsonl`. For a PDF, export HTML and print it from the browser |
+| `/export [path]` | Export the session; the path extension picks `.md`, `.html` (default), or `.jsonl` |
 | `/share` | Upload the session and return a viewer link |
 | `/bug [description]` | Prepare a private bug report for the nanopi developers |
 

@@ -52,8 +52,8 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
  * nothing is stored at worst; the build drops them from autocomplete and from
  * the conflict list. Their handlers stay reachable for API-key logins.
  *
- * `/export` follows the same rule: a build whose flavor drops both export
- * components (the minimal flavor) has nothing to export to. The JSONL export is
+ * `/export` follows the same rule: a build whose flavors drop every export
+ * component (the minimal flavor) has nothing to export to. The JSONL export is
  * the session file itself and is not gated, so only a build with no export
  * component at all loses the command.
  */
