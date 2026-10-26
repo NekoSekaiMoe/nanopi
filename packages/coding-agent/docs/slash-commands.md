@@ -38,7 +38,6 @@ Extensions, prompt templates, and skills can add commands. The command menu in n
 | `/copy` | Copy the last assistant message |
 | `/export [path]` | Export the session; the path extension picks `.md`, `.html` (default), or `.jsonl` |
 | `/share` | Upload the session and return a viewer link |
-| `/bug [description]` | Prepare a private bug report for the nanopi developers |
 
 Review a session before exporting or sharing it. Sessions can contain prompts, tool arguments, command output, file contents, and credentials exposed during the conversation.
 

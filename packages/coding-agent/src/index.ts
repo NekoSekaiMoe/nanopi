@@ -48,18 +48,6 @@ export {
 export { AuthStorage, ReadOnlyAuthStorage, readStoredCredential } from "./core/auth-storage.ts";
 // Process and shell helpers
 export { type BashExecutorOptions, type BashResult, executeBashWithOperations } from "./core/bash-executor.ts";
-export {
-	BUG_REPORT_CUSTOM_ENTRY_TYPE,
-	type BugReportBundle,
-	type BugReportDiagnostics,
-	type BugReportMetadata,
-	type BugReportSessionEntryData,
-	bugReportFiles,
-	collectBugReportDiagnostics,
-	collectBugReportMetadata,
-	redactJsonValue,
-	redactUrl,
-} from "./core/bug-report.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
 // Compaction
 export {
