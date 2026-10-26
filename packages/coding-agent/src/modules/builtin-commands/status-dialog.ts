@@ -56,6 +56,9 @@ export function wrapStatusText(text: string, width: number): string[] {
 	return lines;
 }
 
+/** Rows the dialog draws outside the scrollable body: 3 above, 3 below. */
+const STATUS_CHROME_ROWS = 6;
+
 /** Overlay placement: full-width, docked to the bottom edge (matches /context). */
 const OVERLAY_OPTIONS = {
 	anchor: "bottom-center",
@@ -87,8 +90,9 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 	let scrollOffset = 0;
 	// Rows the last render could show. Key handling runs before the next render, so
 	// keyboard paging needs the size the body already had. `render()` derives it from
-	// the rows it actually emits, not from the terminal height: the terminal can be
-	// taller than the overlay, and a page taller than the body drops rows on PgDn.
+	// the rows it draws and the terminal height, and caps it at the body length: a
+	// terminal taller than the overlay otherwise yields a page longer than the body,
+	// and one PgDn then jumps past every row.
 	let pageRows = 1;
 	// Body rows from the last render, so key handling clamps against the real length.
 	let totalRows = 0;
@@ -140,10 +144,11 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 					}
 					const allRows = [...rowLines, ...body];
 
-					// rule + title + blank above the body, blank + rule + hint below it: six
-					// chrome rows this dialog actually draws.
+					// Chrome the dialog draws around the body: rule + title + blank above, blank +
+					// rule + hint below. The body never grows past what the overlay can show.
 					const rows = Math.max(1, tui.terminal.rows);
-					pageRows = Math.max(1, Math.min(rows - 6, allRows.length));
+					const pageLimit = Math.max(1, rows - STATUS_CHROME_ROWS);
+					pageRows = Math.max(1, Math.min(pageLimit, allRows.length));
 					totalRows = allRows.length;
 					scrollOffset = clampScrollOffset(scrollOffset, allRows.length, pageRows);
 					const visible = allRows.slice(scrollOffset, scrollOffset + pageRows);
