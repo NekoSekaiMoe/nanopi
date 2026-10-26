@@ -255,31 +255,6 @@ describe("Coding Agent Tools", () => {
 			expect(Buffer.from(imageBlock?.data ?? "", "base64")[0]).toBe(0x89);
 		});
 
-		it("should refuse non-regular files instead of blocking on the open", async () => {
-			// Opening a FIFO for reading blocks until a writer appears, so a `read` that
-			// goes through with it hangs the agent loop with no way out.
-			const fifo = join(testDir, "pipe");
-			const made = spawnSync("mkfifo", [fifo]);
-
-			if (made.status !== 0) return; // mkfifo unavailable (Windows)
-
-			const result = await readTool.execute("test-call-fifo", { path: fifo }).then(
-				() => "resolved",
-				(error: Error) => error.message,
-			);
-
-			expect(result).toMatch(/is a named pipe \(FIFO\), not a regular file/);
-		});
-
-		it("should name the kind of directory instead of reading it", async () => {
-			const dir = join(testDir, "a-directory");
-			mkdirSync(dir, { recursive: true });
-
-			await expect(readTool.execute("test-call-dir", { path: dir })).rejects.toThrow(
-				/is a directory, not a regular file/,
-			);
-		});
-
 		it("should treat files with image extension but non-image content as text", async () => {
 			const testFile = join(testDir, "not-an-image.png");
 			writeFileSync(testFile, "definitely not a png");

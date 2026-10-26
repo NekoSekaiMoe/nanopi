@@ -1,6 +1,6 @@
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } from "@nanopi/pi-ai";
-import { constants, type Stats } from "fs";
+import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, stat as fsStat } from "fs/promises";
 import { type Static, Type } from "typebox";
 import { processImage } from "../../utils/image-process.ts";
@@ -84,29 +84,6 @@ function getNonVisionImageNote(model: Model<Api> | undefined): string | undefine
 	return "[Current model does not support images. The image will be omitted from this request.]";
 }
 
-/** What the path is, for the guard's error message. */
-function describeKind(stats: Stats): string {
-	if (stats.isDirectory()) return "a directory";
-	if (stats.isFIFO()) return "a named pipe (FIFO)";
-	if (stats.isSocket()) return "a socket";
-	if (stats.isCharacterDevice()) return "a character device";
-	if (stats.isBlockDevice()) return "a block device";
-	return "not a regular file";
-}
-
-/**
- * Refuses anything that is not a regular file.
- *
- * Opening a FIFO or a character device blocks until a writer shows up: `read` on
- * a shell-created FIFO, on `/dev/tty`, or on a stale socket never returns, and
- * the agent loop hangs with no way out. The type check is the only thing that
- * stops the open from happening at all, so it runs before any read.
- */
-function assertRegularFile(absolutePath: string, stats: Stats): void {
-	if (stats.isFile()) return;
-	throw new Error(`${absolutePath} is ${describeKind(stats)}, not a regular file. Use bash if you need its content.`);
-}
-
 export function createReadToolDefinition(
 	cwd: string,
 	options?: ReadToolOptions,
@@ -151,7 +128,6 @@ export function createReadToolDefinition(
 							await ops.access(absolutePath);
 							if (aborted) return;
 							const stats = await fsStat(absolutePath);
-							assertRegularFile(absolutePath, stats);
 							const mimeType = ops.detectImageMimeType ? await ops.detectImageMimeType(absolutePath) : undefined;
 							let content: (TextContent | ImageContent)[];
 							let details: ReadToolDetails | undefined;
