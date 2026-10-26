@@ -12,11 +12,17 @@ export const EMPTY_CATALOG_MARKER = "// no-builtin-providers";
 
 export type ModelDataStructure = Record<string, Record<string, string>>;
 
+/**
+ * The stamp a build writes next to the provider data. It carries no per-file
+ * hashes: the catalog files are validated against the structure the aggregator
+ * declares (`validateModelDataDirectory`), and the build compares the stamp
+ * itself to the staged directory it just wrote. A hash table here would be
+ * bundled into the single-file artifact, where nothing reads it.
+ */
 export interface ModelDataManifest {
 	schemaVersion: number;
 	generatedAt: string;
 	structureHash: string;
-	files: Record<string, string>;
 }
 
 const MODEL_DATA_IMPORT_PATTERN =
@@ -140,25 +146,11 @@ export function readModelDataProviderIds(packageRoot: string): string[] {
 }
 
 /**
- * Provider ids named by the manifest of a generated data directory, or the data
- * file names themselves when the manifest is unreadable: the caller validates
- * both, and a broken manifest has to fail the validation, not the listing.
+ * Provider ids named by the data files of a generated data directory. The
+ * manifest is not consulted: it records the structure hash only, so the files
+ * on disk are the record of which providers the last run wrote.
  */
 function readDataDirectoryProviderIds(dataDir: string): string[] {
-	const manifestPath = join(dataDir, MODEL_DATA_MANIFEST_FILE);
-	if (existsSync(manifestPath)) {
-		let manifest: unknown;
-		try {
-			manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-		} catch {
-			manifest = undefined;
-		}
-		const files = isRecord(manifest) && isRecord(manifest.files) ? Object.keys(manifest.files) : [];
-		const providerIds = files
-			.filter((file) => file.endsWith(".json") && file !== MODEL_DATA_MANIFEST_FILE)
-			.map((file) => file.slice(0, -".json".length));
-		if (providerIds.length > 0) return providerIds.sort();
-	}
 	if (!existsSync(dataDir)) {
 		throw new Error(`No generated model data found: ${dataDir} (run \`pnpm run generate:models\`)`);
 	}
@@ -212,16 +204,11 @@ export function modelDataStructureHash(structure: ModelDataStructure): string {
 	return sha256(JSON.stringify(normalized));
 }
 
-export function createModelDataManifest(
-	structure: ModelDataStructure,
-	fileContents: Readonly<Record<string, string>>,
-	generatedAt: string,
-): ModelDataManifest {
+export function createModelDataManifest(structure: ModelDataStructure, generatedAt: string): ModelDataManifest {
 	return {
 		schemaVersion: MODEL_DATA_SCHEMA_VERSION,
 		generatedAt,
 		structureHash: modelDataStructureHash(structure),
-		files: sortedRecord(Object.entries(fileContents).map(([file, content]) => [file, sha256(content)] as const)),
 	};
 }
 
@@ -326,23 +313,10 @@ export function validateModelDataDirectory(structure: ModelDataStructure, dataDi
 	if (manifest?.structureHash !== expectedStructureHash) {
 		errors.push("model data generation stamp does not match the generated catalog");
 	}
-	const manifestFiles = isRecord(manifest?.files) ? manifest.files : undefined;
-	if (!manifestFiles) errors.push("model data manifest has no file hashes");
-	else {
-		const manifestFileNames = Object.keys(manifestFiles).sort();
-		if (!sameStrings(expectedFiles, manifestFileNames)) {
-			errors.push(`manifest file hashes do not match provider data files (${describeSetDifference(expectedFiles, manifestFileNames)})`);
-		}
-	}
-
 	for (const [providerId, expectedModels] of Object.entries(structure)) {
 		const filename = `${providerArtifactName(providerId)}.json`;
 		const path = join(dataDir, filename);
 		if (!existsSync(path)) continue;
-		const content = readFileSync(path, "utf8");
-		if (manifestFiles && manifestFiles[filename] !== sha256(content)) {
-			errors.push(`${filename} does not match its manifest hash`);
-		}
 		const groups = readJsonObject(path, filename, errors);
 		if (!groups) continue;
 

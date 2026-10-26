@@ -33,6 +33,7 @@ describe("oauth flows outside a flavored bundle", () => {
 			"antigravity",
 			"github-copilot",
 			"kimi-coding",
+			"kiro",
 			"meta",
 			"openai-chatgpt",
 			"openai-codex",

@@ -233,6 +233,91 @@ function antigravityModels(): Model<"antigravity">[] {
 	}));
 }
 
+/**
+ * Kiro is not a models.dev provider. The catalog is the model list the Kiro
+ * backend serves to its own client, kept in sync by hand; ids and limits are
+ * the ones Kiro's account-independent `/ListAvailableModels` answer advertises.
+ * Access is subscription-backed, so every cost is zero.
+ */
+function kiroModels(): Model<"anthropic-messages">[] {
+	const cost: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	const baseUrl = "https://q.us-east-1.amazonaws.com/generateAssistantResponse";
+	const entries: {
+		id: string;
+		name: string;
+		contextWindow: number;
+		maxTokens: number;
+		reasoning?: boolean;
+		input?: ("text" | "image")[];
+	}[] = [
+		{
+			id: "claude-sonnet-4.5",
+			name: "Claude Sonnet 4.5 (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 64000,
+			reasoning: true,
+			input: ["text", "image"],
+		},
+		{
+			id: "claude-haiku-4.5",
+			name: "Claude Haiku 4.5 (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 64000,
+			reasoning: true,
+			input: ["text", "image"],
+		},
+		{
+			id: "claude-sonnet-4",
+			name: "Claude Sonnet 4 (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 64000,
+			input: ["text", "image"],
+		},
+		{
+			id: "deepseek-3.2",
+			name: "DeepSeek 3.2 (Kiro)",
+			contextWindow: 128000,
+			maxTokens: 32000,
+		},
+		{
+			id: "minimax-m2.5",
+			name: "MiniMax M2.5 (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 32000,
+		},
+		{
+			id: "glm-5",
+			name: "GLM-5 (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 32000,
+			reasoning: true,
+		},
+		{
+			id: "qwen3-coder-next",
+			name: "Qwen3 Coder Next (Kiro)",
+			contextWindow: 256000,
+			maxTokens: 32000,
+		},
+		{
+			id: "auto",
+			name: "Auto (Kiro)",
+			contextWindow: 200000,
+			maxTokens: 64000,
+			reasoning: true,
+			input: ["text", "image"],
+		},
+	];
+	return entries.map((entry) => ({
+		...entry,
+		api: "anthropic-messages",
+		provider: "kiro",
+		baseUrl,
+		reasoning: entry.reasoning === true,
+		input: entry.input ?? ["text"],
+		cost,
+	}));
+}
+
 interface ModelsDevModel {
 	id: string;
 	name: string;
@@ -3457,7 +3542,7 @@ export const CLASSIFIER_MODELS: Record<string, never> = {};
 	// The end-of-run cross-check reads the shard set out of the aggregator, which
 	// this run just emptied, so it is skipped here and the shards themselves are
 	// gone: nothing is left to disagree with.
-	const manifest = createModelDataManifest({}, {}, new Date().toISOString());
+	const manifest = createModelDataManifest({}, new Date().toISOString());
 	writeFileSync(join(dataDir, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest, null, 2)}\n`);
 
 
@@ -3927,6 +4012,8 @@ async function generateModels() {
 
 	allModels.push(...antigravityModels());
 
+	allModels.push(...kiroModels());
+
 	// Add "auto" alias for openrouter/auto
 	if (!allModels.some(m => m.provider === "openrouter" && m.id === "auto")) {
 		allModels.push({
@@ -4136,17 +4223,10 @@ async function generateModels() {
 		let restoreGeneratedCatalog: (() => void) | undefined;
 		try {
 			mkdirSync(stagedDataDir, { recursive: true });
-			const fileContents: Record<string, string> = {};
 			for (const providerId of generatedDataProviderIds) {
-				const filename = `${providerArtifactName(providerId)}.json`;
-				const content = serializeJson(generatedDataProviders[providerId]);
-				fileContents[filename] = content;
-				writeFileSync(join(stagedDataDir, filename), content);
+				writeJson(join(stagedDataDir, `${providerArtifactName(providerId)}.json`), generatedDataProviders[providerId]);
 			}
-			writeJson(
-				join(stagedDataDir, MODEL_DATA_MANIFEST_FILE),
-				createModelDataManifest(modelDataStructure, fileContents, generatedAt),
-			);
+			writeJson(join(stagedDataDir, MODEL_DATA_MANIFEST_FILE), createModelDataManifest(modelDataStructure, generatedAt));
 			validateModelDataDirectory(modelDataStructure, stagedDataDir);
 
 			if (!generatorOptions.dataOnly) {

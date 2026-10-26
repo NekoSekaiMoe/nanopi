@@ -28,6 +28,8 @@ nanopi
 
 This table covers providers with a single primary API-key variable. Providers that need additional configuration or support ambient credentials are covered under [Provider Specific Config](#provider-specific-config).
 
+The table lists the providers the default build ships a catalog for. A vendor whose catalog is not in this build still works: add it to [`models.json`](models.md#configure-a-compatible-endpoint) with its `baseUrl`, `api`, `envVar` and models — the provider itself is still compiled in.
+
 | Provider | Environment variable |
 |---|---|
 | Anthropic | `ANTHROPIC_API_KEY` |
@@ -50,6 +52,7 @@ This table covers providers with a single primary API-key variable. Providers th
 | Together AI | `TOGETHER_API_KEY` |
 | Baseten | `BASETEN_API_KEY` |
 | Kimi For Coding | `KIMI_API_KEY` |
+| Kiro (AWS) | `KIRO_API_KEY` |
 | Google Antigravity (unofficial) | `ANTIGRAVITY_ACCESS_TOKEN` |
 | Meta | `META_API_KEY` |
 | Moonshot AI (Global and China) | `MOONSHOT_API_KEY` |
@@ -59,6 +62,8 @@ This table covers providers with a single primary API-key variable. Providers th
 | Xiaomi MiMo Token Plan (China) | `XIAOMI_TOKEN_PLAN_CN_API_KEY` |
 | Xiaomi MiMo Token Plan (Amsterdam) | `XIAOMI_TOKEN_PLAN_AMS_API_KEY` |
 | Xiaomi MiMo Token Plan (Singapore) | `XIAOMI_TOKEN_PLAN_SGP_API_KEY` |
+
+Kiro signs in with the AWS builder-id device flow: `/login kiro` prints a code and waits. The client registration AWS issues for the install is stored with the credential, so a later refresh needs no new sign-in; `KIRO_REGION` picks the region for an enterprise install (default `us-east-1`).
 
 Anthropic also recognizes `ANTHROPIC_OAUTH_TOKEN` as an API credential and `ANTHROPIC_AUTH_TOKEN` as bearer authentication.
 
@@ -224,6 +229,14 @@ export ANTIGRAVITY_PROJECT_ID=your-cloud-code-project
 The token does not refresh itself, so it suits one-off runs rather than a long session.
 
 If login reports no Cloud Code project, open Antigravity once with the same account so Google provisions one, then log in again.
+
+### Kiro
+
+`/login kiro` runs the AWS builder-id device flow: it registers a client, prints a code, and waits while you approve it in the browser. Kiro is subscription-backed, so the catalog carries zero prices.
+
+The client registration AWS issues for this install is stored with the credential, so token refresh needs no new sign-in; re-login is only needed when the refresh token dies. Requests go to `q.<region>.amazonaws.com/generateAssistantResponse`. `KIRO_REGION` selects the region for an enterprise install (default `us-east-1`).
+
+For scripted use, set `KIRO_API_KEY` instead. A key does not refresh itself, so it suits one-off runs rather than a long session.
 
 ### Google Vertex AI
 

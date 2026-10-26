@@ -2,9 +2,15 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `kiro` provider and its `/login kiro` OAuth flow: the AWS builder-id device flow (client registration, device authorization, then a Kiro API key) against `q.<region>.amazonaws.com/generateAssistantResponse`. The credential stores the client registration AWS issued for the install so a refresh needs no new sign-in, and `KIRO_REGION` selects the endpoint for an enterprise install. `KIRO_API_KEY` covers scripted use (issue [#227](https://cnb.cool/shinytale/nanopi/-/issues/227))
+
 ### Changed
 
 - `src/models.generated.ts` and the `src/providers/<id>.models.ts` shards are gitignored build products instead of committed files. `pnpm run generate-models` already rewrote them on every build, so the copies in the repository only produced diffs nobody wrote. The model-data checks now derive the provider list from `buildconfig.json` provider sets and the data manifest when the aggregator is absent, and `pnpm run ensure:model-catalogs` generates the catalogs for a checkout that has none.
+- The `all` provider set is a curated list instead of every OpenAI-compatible catalog models.dev lists: 206 catalogs became 30. A catalog stays when someone can plausibly type its key on purpose — the assistants people reach for first, the subscription plans, and the hosts a large account brings — and the rest is a `models.json` entry away. The dropped vendors include `cerebras`, `baseten`, `together`, `modal`, `nvidia`, `sensenova`, `typesafe`, `cloudflare-ai-gateway`, `cloudflare-workers-ai`, `opencode`, `opencode-go`, the `siliconflow` and `alibaba-token-plan` regional keys, and the long tail of aggregators with a handful of models behind someone else's API. Their provider modules stay compiled in, so a `models.json` entry still works (issue [#227](https://cnb.cool/shinytale/nanopi/-/issues/227))
+- The model-data manifest now records the schema version, the generation timestamp and the structure hash, and no longer carries a hash per provider data file. Only the structure is validated; the table of file names and hashes was bundled into the single-file artifact, where nothing reads it (issue [#227](https://cnb.cool/shinytale/nanopi/-/issues/227))
 
 ### Fixed
 

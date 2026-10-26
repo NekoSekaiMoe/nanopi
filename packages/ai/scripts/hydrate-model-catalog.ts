@@ -62,7 +62,7 @@ export function hydrateModelCatalog(
 
 	// Public catalogs have no generation timestamp. Use a fixed stamp so hydration
 	// produces identical bytes for identical input, regardless of build time.
-	const manifest = createModelDataManifest(structure, files, "1970-01-01T00:00:00.000Z");
+	const manifest = createModelDataManifest(structure, "1970-01-01T00:00:00.000Z");
 	const providersDir = join(packageRoot, "src", "providers");
 	const stagingRoot = mkdtempSync(join(providersDir, ".model-hydration-"));
 	const stagedData = join(stagingRoot, "data");

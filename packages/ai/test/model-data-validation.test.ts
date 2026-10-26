@@ -74,7 +74,7 @@ function writeFixtureData(
 	const filename = "test-provider.json";
 	const content = `${JSON.stringify({ [apiGroup]: values })}\n`;
 	writeFileSync(join(dataDir, filename), content);
-	const manifest = createModelDataManifest(structure, { [filename]: content }, GENERATED_AT);
+	const manifest = createModelDataManifest(structure, GENERATED_AT);
 	manifest.schemaVersion = manifestSchemaVersion;
 	writeFileSync(join(dataDir, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
 }
@@ -312,15 +312,32 @@ describe("generated model data validation", () => {
 			"anthropic-messages": fixture.values,
 		})}\n`;
 		writeFileSync(join(fixture.dataDir, filename), content);
-		const manifest = createModelDataManifest(fixture.structure, { [filename]: content }, GENERATED_AT);
+		const manifest = createModelDataManifest(fixture.structure, GENERATED_AT);
 		writeFileSync(join(fixture.dataDir, MODEL_DATA_MANIFEST_FILE), `${JSON.stringify(manifest)}\n`);
 		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow("more than one API group");
 	});
 
-	it("rejects missing model IDs and stale file hashes", () => {
+	it("rejects missing model IDs", () => {
 		const fixture = createFixture();
 		writeFileSync(join(fixture.dataDir, "test-provider.json"), "{}\n");
-		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow(/manifest hash|model IDs/);
+		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).toThrow("model IDs do not match");
+	});
+
+	// The manifest carries no per-file hashes: the catalog files are validated
+	// against the structure the aggregator declares, so a hand-edited value still
+	// has to keep the ids, and the bytes themselves are not what is checked.
+	it("accepts edited model values and rejects a manifest that names extra files", () => {
+		const fixture = createFixture();
+		const model = fixture.values["chat:model-a"] as Record<string, unknown>;
+		model.name = "Renamed Model A";
+		writeFixtureData(fixture.dataDir, fixture.structure, fixture.values);
+		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).not.toThrow();
+
+		const manifestPath = join(fixture.dataDir, MODEL_DATA_MANIFEST_FILE);
+		const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as Record<string, unknown>;
+		manifest.files = { "test-provider.json": "not-a-hash" };
+		writeFileSync(manifestPath, `${JSON.stringify(manifest)}\n`);
+		expect(() => validateModelDataDirectory(fixture.structure, fixture.dataDir)).not.toThrow();
 	});
 
 	it("rejects incompatible schema and generation stamps", () => {

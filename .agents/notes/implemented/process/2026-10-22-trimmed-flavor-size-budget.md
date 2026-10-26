@@ -119,7 +119,10 @@ minimal     2.7 MiB -> 2.4 MiB  assets 0.3 -> 0, JS unchanged
 curated vendors.
 
 - `full` lands under the 10 MiB target, with ~0.45 MiB of grammar headroom for
-  the languages someone asks for next.
+  the languages someone asks for next. Budgets below are as measured here; the
+  catalog numbers moved again when `full` stopped shipping every catalog
+  (206 -> 30 ids, 12.1 -> 9.4 MiB, 3.33 MiB of model data -> 0.30 MiB), see
+  [curated provider catalog](2026-10-26-curated-provider-catalog.md).
 - `base` reports its providers through `--list-models` and answers `/login`
   with only the six curated vendors. Any other vendor is a `models.json` entry.
 - A `minimal` artifact no longer creates `~/.cache/nanopi/standalone/<version>`
