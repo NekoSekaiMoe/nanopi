@@ -1,10 +1,12 @@
-import { Key, matchesKey } from "@nanopi/pi-tui";
+import { Key, matchesKey, pageStep } from "@nanopi/pi-tui";
 import type { QuestionAnswer } from "../tool/types.js";
 import { ROW_INTENT_META } from "./row-intent.js";
 import type { QuestionnaireRuntime, QuestionnaireState } from "./state.js";
 
 const KEYBIND_UP = "tui.select.up";
 const KEYBIND_DOWN = "tui.select.down";
+const KEYBIND_PAGE_UP = "tui.select.pageUp";
+const KEYBIND_PAGE_DOWN = "tui.select.pageDown";
 const KEYBIND_CONFIRM = "tui.select.confirm";
 const KEYBIND_CANCEL = "tui.select.cancel";
 
@@ -146,6 +148,23 @@ function prevNavOnUp(state: QuestionnaireState, runtime: QuestionnaireRuntime): 
 	return { kind: "nav", nextIndex: wrapTab(state.optionIndex - 1, Math.max(1, runtime.items.length)) };
 }
 
+/**
+ * PgUp/PgDn inside the option list: one visible window at a time, wrapping at the ends
+ * like ↑/↓ do (the list is one continuous cycle with the chat row). Returns null when the
+ * key is not a paging key, so callers can fall through to their own handling.
+ */
+function pageNavAction(data: string, state: QuestionnaireState, runtime: QuestionnaireRuntime): QuestionnaireAction | null {
+	const kb = runtime.keybindings;
+	const pageUp = kb.matches(data, KEYBIND_PAGE_UP);
+	if (!pageUp && !kb.matches(data, KEYBIND_PAGE_DOWN)) return null;
+	if (runtime.items.length === 0) return { kind: "ignore" };
+	const nextIndex = pageStep(state.optionIndex, runtime.items.length, pageUp ? -1 : 1, {
+		pageSize: runtime.visibleRows,
+		wrap: true,
+	});
+	return { kind: "nav", nextIndex };
+}
+
 export function routeKey(data: string, state: QuestionnaireState, runtime: QuestionnaireRuntime): QuestionnaireAction {
 	const kb = runtime.keybindings;
 
@@ -196,6 +215,10 @@ export function routeKey(data: string, state: QuestionnaireState, runtime: Quest
 		if (kb.matches(data, KEYBIND_DOWN)) {
 			return { kind: "focus_options", optionIndex: 0 };
 		}
+		// Paging out of the chat row lands in the option list, same as ↓.
+		if (kb.matches(data, KEYBIND_PAGE_UP) || kb.matches(data, KEYBIND_PAGE_DOWN)) {
+			return { kind: "focus_options", optionIndex: kb.matches(data, KEYBIND_PAGE_UP) ? runtime.items.length - 1 : 0 };
+		}
 		const tab = tabSwitchAction(data, state, runtime);
 		if (tab) return tab;
 		return { kind: "ignore" };
@@ -214,7 +237,7 @@ export function routeKey(data: string, state: QuestionnaireState, runtime: Quest
 		if (kb.matches(data, KEYBIND_DOWN)) {
 			return nextNavOnDown(state, runtime);
 		}
-		return { kind: "ignore" };
+		return pageNavAction(data, state, runtime) ?? { kind: "ignore" };
 	}
 
 	if (runtime.isMulti && state.currentTab === runtime.questions.length) {
@@ -251,6 +274,8 @@ export function routeKey(data: string, state: QuestionnaireState, runtime: Quest
 	if (kb.matches(data, KEYBIND_DOWN)) {
 		return nextNavOnDown(state, runtime);
 	}
+	const paged = pageNavAction(data, state, runtime);
+	if (paged) return paged;
 
 	if (q.multiSelect) {
 		const focusedKind = runtime.currentItem?.kind;

@@ -68,7 +68,13 @@ describe("/status dialog paging", () => {
 		press(PAGE_DOWN);
 		expect(body(press("\u001b[A"))).not.toBe(initial);
 
-		// One line up from the top of the second page leaves the offset at 0.
+		// A page down leaves the last visible row as the new first row, so a single line up
+		// from there is still a scroll — but walking back to the first page drops the marker.
+		const oneLineUp = body(press("\u001b[A"));
+		expect(oneLineUp).not.toBe(initial);
+		expect(oneLineUp).toContain("{dim}↑");
+
+		press(PAGE_UP);
 		const backToTop = body(press("\u001b[A"));
 		expect(backToTop).not.toContain("{dim}↑");
 		expect(backToTop).toContain("tool-0");
@@ -95,5 +101,46 @@ describe("/status dialog paging", () => {
 		const atEnd = body(press(PAGE_DOWN));
 		expect(atEnd).toEqual(body(press(PAGE_DOWN)));
 		expect(atEnd).not.toContain("{dim}↓");
+	});
+
+	it("pages by the rows it draws, not by the terminal height", async () => {
+		// One row of content on a 40-row terminal. The old `rows - 1 - chrome` budget
+		// claimed 34 rows and scrolled past the single row it could show.
+		let component: (Component & { dispose?(): void }) | undefined;
+		const tui = { terminal: { rows: 40 }, requestRender: () => {} } as unknown as TUI;
+		const ctx = {
+			ui: {
+				custom: (
+					factory: (
+						tui: TUI,
+						theme: unknown,
+						keybindings: KeybindingsManager,
+						done: (result: unknown) => void,
+					) => Component,
+				) => {
+					component = factory(
+						tui,
+						{
+							fg: (color: string, text: string) => `{${color}}${text}`,
+							bold: (text: string) => text,
+							bg: (_color: string, text: string) => text,
+						},
+						new TuiKeybindingsManager(TUI_KEYBINDINGS),
+						() => {},
+					);
+					return Promise.resolve();
+				},
+			},
+		} as unknown as Pick<ModuleCommandContext, "ui">;
+
+		await showStatusDialog(ctx, { title: "status", rows: [{ label: "model", value: "x" }], sections: [] });
+		const opened = component;
+		if (!opened) throw new Error("dialog did not open");
+		expect(body(opened.render(60))).toContain("model");
+
+		opened.handleInput?.(PAGE_DOWN);
+		const afterPageDown = body(opened.render(60));
+		expect(afterPageDown).toContain("model");
+		expect(afterPageDown).not.toContain("{dim}↑");
 	});
 });

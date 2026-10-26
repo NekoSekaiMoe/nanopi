@@ -1,5 +1,5 @@
 import type { Component } from "@nanopi/pi-tui";
-import { CURSOR_MARKER, visibleWidth, wrapTextWithAnsi } from "@nanopi/pi-tui";
+import { CURSOR_MARKER, visibleWidth, windowStart, wrapTextWithAnsi } from "@nanopi/pi-tui";
 
 // Grapheme-aware extraction at the cursor: pi-tui's Input advances `cursor` by
 // grapheme-cluster code-unit length, so the cursor can land between code units of
@@ -136,6 +136,11 @@ export class WrappingSelect implements Component {
 		this.inputCursorOffset = offset;
 	}
 
+	/** One page of rows; the key router routes PgUp/PgDn here. */
+	get pageSize(): number {
+		return this.maxVisible;
+	}
+
 	/** Intentionally empty — input is routed at the container level. */
 	handleInput(_data: string): void {}
 
@@ -200,10 +205,8 @@ export class WrappingSelect implements Component {
 	}
 
 	private computeVisibleWindow(): { startIndex: number; endIndex: number } {
-		const half = Math.floor(this.maxVisible / 2);
-		const startIndex = Math.max(0, Math.min(this.selectedIndex - half, this.items.length - this.maxVisible));
-		const endIndex = Math.min(startIndex + this.maxVisible, this.items.length);
-		return { startIndex, endIndex };
+		const startIndex = windowStart(this.selectedIndex, this.items.length, this.maxVisible);
+		return { startIndex, endIndex: Math.min(startIndex + this.maxVisible, this.items.length) };
 	}
 
 	private hasItemsOutsideWindow(startIndex: number, endIndex: number): boolean {

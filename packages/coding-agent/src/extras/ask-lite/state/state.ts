@@ -47,4 +47,6 @@ export interface QuestionnaireRuntime {
 	isMulti: boolean;
 	currentItem: WrappingSelectItem | undefined;
 	items: readonly WrappingSelectItem[];
+	/** Option rows the list can show at once; PgUp/PgDn move by this many. */
+	visibleRows: number;
 }

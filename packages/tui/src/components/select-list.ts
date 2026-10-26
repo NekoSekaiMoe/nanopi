@@ -8,7 +8,6 @@ const PRIMARY_COLUMN_GAP = 2;
 const MIN_DESCRIPTION_WIDTH = 10;
 
 const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/g, " ").trim();
-const clamp = (value: number, min: number, max: number): number => Math.max(min, Math.min(value, max));
 
 export interface SelectItem {
 	value: string;
@@ -115,10 +114,10 @@ export class SelectList implements Component {
 	handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
 		if (this.filteredItems.length === 0) return undefined;
 		if (event.type === "wheel" && event.wheelDelta) {
-			const delta = event.wheelDelta < 0 ? -1 : 1;
+			// The down arrow wraps at the bottom; the wheel has to stop there too, or one
+			// notch past the last row is a no-op instead of a jump back to the top.
 			const previousIndex = this.selectedIndex;
-			this.selectedIndex = Math.max(0, Math.min(this.filteredItems.length - 1, this.selectedIndex + delta));
-			if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
+			this.moveSelection(event.wheelDelta < 0 ? -1 : 1);
 			return { handled: true, render: this.selectedIndex !== previousIndex };
 		}
 		// Hover must not change selection: the visible range is centered on it.
@@ -150,21 +149,15 @@ export class SelectList implements Component {
 
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
-		// Up arrow - wrap to bottom when at top
+		// Up/Down move one row, PageUp/PageDown one window; both wrap like the arrows always did.
 		if (kb.matches(keyData, "tui.select.up")) {
-			this.selectedIndex = this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
-			this.notifySelectionChange();
-		}
-		// Down arrow - wrap to top when at bottom
-		else if (kb.matches(keyData, "tui.select.down")) {
-			this.selectedIndex = this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
-			this.notifySelectionChange();
-		}
-		// PageUp/PageDown - move by a window, wrapping like the arrows do
-		else if (kb.matches(keyData, "tui.select.pageUp")) {
-			this.movePage(-1);
+			this.moveSelection(-1);
+		} else if (kb.matches(keyData, "tui.select.down")) {
+			this.moveSelection(1);
+		} else if (kb.matches(keyData, "tui.select.pageUp")) {
+			this.moveSelection(-1, "page");
 		} else if (kb.matches(keyData, "tui.select.pageDown")) {
-			this.movePage(1);
+			this.moveSelection(1, "page");
 		}
 		// Enter
 		else if (kb.matches(keyData, "tui.select.confirm")) {
@@ -181,10 +174,11 @@ export class SelectList implements Component {
 		}
 	}
 
-	private movePage(direction: -1 | 1): void {
+	/** Move the selection by one row or one window, wrapping at the ends like the arrows do. */
+	private moveSelection(direction: -1 | 1, step: "row" | "page" = "row"): void {
 		const previousIndex = this.selectedIndex;
 		this.selectedIndex = pageStep(this.selectedIndex, this.filteredItems.length, direction, {
-			pageSize: this.maxVisible,
+			pageSize: step === "page" ? this.maxVisible : 1,
 			wrap: true,
 		});
 		if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
@@ -243,7 +237,7 @@ export class SelectList implements Component {
 			return Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP);
 		}, 0);
 
-		return clamp(widestPrimary, min, max);
+		return Math.max(min, Math.min(widestPrimary, max));
 	}
 
 	private getPrimaryColumnBounds(): { min: number; max: number } {

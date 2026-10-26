@@ -11,7 +11,7 @@ import { QuestionTabStrategy, SubmitTabStrategy, type TabContentStrategy } from 
 import { DynamicBorder, type Theme } from "@nanopi/pi-coding-agent";
 
 export const HINT_PART_ENTER = "Enter to select";
-export const HINT_PART_NAV = "↑/↓ to navigate";
+export const HINT_PART_NAV = "↑/↓ PgUp/PgDn to navigate";
 export const HINT_PART_TOGGLE = "Space to toggle";
 export const HINT_PART_NOTES = "n to add notes";
 export const HINT_PART_TAB = "Tab to switch questions";
