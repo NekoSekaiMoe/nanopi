@@ -5,8 +5,9 @@
 //   node install.js --sku=minimal --version=v20261013 --out=./nanopi.js
 
 import { createHash } from "node:crypto";
-import { chmodSync, writeFileSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, join, resolve } from "node:path";
 import { styleText } from "node:util";
 
 const REPOSITORY = "NekoSekaiMoe/nanopi";
@@ -33,7 +34,7 @@ const text = async (url, description) => (await download(url, description)).text
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const parseArguments = (arguments_) => {
-	const options = { sku: "full", version: "latest", out: undefined, help: false };
+	const options = { sku: "full", version: "latest", out: undefined, prefix: undefined, help: false };
 	for (let index = 0; index < arguments_.length; index++) {
 		const expression = arguments_[index];
 		const equals = expression.indexOf("=");
@@ -43,7 +44,8 @@ const parseArguments = (arguments_) => {
 		switch (name) {
 			case "--sku":
 			case "--version":
-			case "--out": {
+			case "--out":
+			case "--prefix": {
 				const result = value();
 				if (!result) throw new InstallError(`${name} needs a value`);
 				options[name.slice(2)] = result;
@@ -57,22 +59,32 @@ const parseArguments = (arguments_) => {
 				throw new InstallError(`unknown argument: ${expression}`);
 		}
 	}
+	if (options.out !== undefined && options.prefix !== undefined) {
+		throw new InstallError("--out and --prefix cannot be combined");
+	}
 	if (!Object.hasOwn(SKUS, options.sku)) {
 		throw new InstallError(`unknown sku: ${options.sku} (expected ${Object.keys(SKUS).join(", ")})`);
 	}
 	return options;
 };
 
-const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--out=<path>]
+const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--out=<path>] [--prefix=<dir>]
 
   --sku       bundle to download: full (default), base, minimal
   --version   release tag, with or without the leading v (default: latest)
   --out       where to write the bundle (default: ./<asset name>)
+  --prefix    install directory, like npm's prefix; the bundle goes to
+              <prefix>/bin/<asset name> and nothing else is installed
+  --help      print this summary
+
+  --out and --prefix are mutually exclusive. Without either, the bundle is
+  written to the current directory.
 
 Examples:
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node - --sku=minimal
-  node install.js --version=v20261013 --out=./nanopi.js`;
+  node install.js --version=v20261013 --out=./nanopi.js
+  node install.js --prefix=~/.local`;
 
 const releaseTag = async (version) => {
 	if (version !== "latest") return version.startsWith("v") ? version : `v${version}`;
@@ -82,6 +94,9 @@ const releaseTag = async (version) => {
 	if (typeof release.tag_name !== "string") throw new InstallError("latest release has no tag_name");
 	return release.tag_name;
 };
+
+// `~/x` survives the shell inside `--prefix=~/x` but not outside it, so expand it here.
+const expandHome = (path) => (path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
 
 const absoluteUrl = (url) => (url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`);
 
@@ -112,7 +127,16 @@ const main = async () => {
 	const actual = sha256(bytes);
 	if (actual !== expected) throw new InstallError(`${asset} checksum mismatch: expected ${expected}, got ${actual}`);
 
-	const out = resolve(options.out ?? basename(url));
+	const name = basename(url);
+	let out;
+	if (options.prefix === undefined) {
+		out = resolve(options.out ?? name);
+	} else {
+		// npm-style layout: <prefix>/bin. No shim, so the bundle is run as `node <prefix>/bin/nanopi.js`.
+		const directory = resolve(expandHome(options.prefix), "bin");
+		mkdirSync(directory, { recursive: true });
+		out = join(directory, name);
+	}
 	writeFileSync(out, bytes);
 	chmodSync(out, 0o755);
 	process.stdout.write(`${styleText("green", "Downloaded")} ${asset} (${bytes.byteLength} bytes) from ${tag}\n${out}\n`);

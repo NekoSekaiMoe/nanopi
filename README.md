@@ -38,11 +38,15 @@ curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js
 # keep it as a script and pass arguments without the `-`
 curl -fsSLO https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js
 node install.js --sku=base --out=./nanopi.js
+
+# install into a prefix, like npm: writes <prefix>/bin/nanopi.js
+node install.js --prefix=~/.local
 ```
 
 - `--sku=full|base|minimal` (default `full`) picks the flavor; see the flavor table in `buildconfig.json` for what each carries.
 - `--version=<tag>` (default: latest release) accepts the tag with or without the leading `v`.
 - `--out=<path>` (default `./<asset name>`) is where the bundle is written.
+- `--prefix=<dir>` writes the bundle to `<dir>/bin/<asset name>` instead, creating the directory. It installs nothing else: no wrapper script, no symlink, so start it with `node <dir>/bin/nanopi.js`. It cannot be combined with `--out`.
 
 The download is checked against the release's `SHA256SUMS` and fails on a mismatch. Run `node install.js --help` for the same summary.
 
