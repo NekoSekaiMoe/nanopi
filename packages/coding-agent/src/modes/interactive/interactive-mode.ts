@@ -134,7 +134,7 @@ import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipb
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
-import { loadAllHighlightLanguages } from "../../utils/syntax-highlight.ts";
+import { pendingHighlightLanguages } from "../../utils/syntax-highlight.ts";
 import { ensureTool, type ToolStatus } from "../../utils/tools-manager.ts";
 import { ArminComponent } from "./components/armin.ts";
 import { AssistantMessageComponent } from "./components/assistant-message.ts";
@@ -964,16 +964,20 @@ export class InteractiveMode {
 		// Initialize available provider count for footer display
 		await this.updateAvailableProviderCount();
 
-		// Flush the completed startup state before loading the remaining syntax grammars.
+		// Flush the completed startup state before the grammars the first render asked
+		// for finish loading, so their code blocks are recolored in a second pass.
 		this.ui.renderNow();
-		// Second startup sample: the delta from `mem startup` is what the managed tools,
-		// grammars, and session setup cost.
+		// Second startup sample: the delta from `mem startup` is what the managed tools
+		// and session setup cost.
 		this.writeMemorySample("mem first-render");
-		void loadAllHighlightLanguages().then(() => {
-			if (!this.isInitialized) return;
-			this.ui.invalidate();
-			this.ui.requestRender();
-		});
+		const pendingGrammars = pendingHighlightLanguages();
+		if (pendingGrammars.length > 0) {
+			void Promise.all(pendingGrammars).then(() => {
+				if (!this.isInitialized) return;
+				this.ui.invalidate();
+				this.ui.requestRender();
+			});
+		}
 	}
 
 	/**

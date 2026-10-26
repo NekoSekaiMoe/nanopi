@@ -70,18 +70,19 @@ died with "Theme not initialized" in *every* flavor; `--export-html` had never
 worked from the CLI. `main()` now initializes the theme before the export
 branch.
 
-**Grammars.** `EAGER_LANGUAGES` grows from 22 to 128 named imports: the
-languages an agent actually reads (markup, config, query languages, the
-mainstream set, and the diff/patch shells), minus the four grammars that cost
-most (mathematica 135 KB, isbl 108 KB, 1c 64 KB, gml 60 KB) and the ones with
-no plausible code-block tag. `loadAllHighlightLanguages()` still defers the
-remaining 63 grammars through `highlight.js/lib/index.js`.
+**Grammars.** All 191 grammars load on demand: the size argument was settled
+first (a 128-grammar eager table), then the heap it registered at startup was
+rejected and the table became a name list, see
+[grammars load on demand](../simplification/2026-10-26-grammars-load-on-demand.md). The size
+budget this section fixed is unchanged: none of the grammars is in the entry
+graph any more, and each one is its own 4 KiB chunk.
 
 ## Alternatives considered
 
 - **Keep the whole 1.3 MiB grammar set eager.** Simplest, and `full` becomes
   11.3 MiB — outside the requested 10-10.5 MiB. The four largest grammars are
-  also 370 KiB for languages no session writes.
+  also 370 KiB for languages no session writes. Deferring all of them instead
+  of 128 costs nothing in size: no grammar is in the entry graph either way.
 - **Trim `docs` from `full` (3.3 MiB packed).** It is the only asset component
   the system prompt points the model at (`docs/index.md`, `examples/`), so
   removing it changes behavior, not size. Not a size lever.
@@ -130,5 +131,5 @@ curated vendors.
   build output (`embedded assets: none`) and by `--version`.
 - `docs/images/` now holds one file. Adding a screenshot back means adding a
   page that links it, not a file.
-- The eager grammar table is the place to add a language; a missing grammar
+- `BUNDLED_LANGUAGES` is the place to add a language; a missing grammar
   degrades to plain rendering, never to an error.
