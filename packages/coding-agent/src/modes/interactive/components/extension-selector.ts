@@ -3,7 +3,7 @@
  * Displays a list of string options with keyboard navigation.
  */
 
-import { Container, getKeybindings, Spacer, Text, type TUI } from "@nanopi/pi-tui";
+import { Container, getKeybindings, pageStep, Spacer, Text, type TUI } from "@nanopi/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -102,6 +102,14 @@ export class ExtensionSelectorComponent extends Container {
 			this.updateList();
 		} else if (kb.matches(keyData, "tui.select.down") || keyData === "j") {
 			this.selectedIndex = Math.min(this.options.length - 1, this.selectedIndex + 1);
+			this.updateList();
+		} else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
+			// The whole option list is on screen, so a page is the full list: PgUp/PgDn go to the ends.
+			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
+			this.selectedIndex = pageStep(this.selectedIndex, this.options.length, direction, {
+				pageSize: this.options.length,
+				wrap: false,
+			});
 			this.updateList();
 		} else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
 			const selected = this.options[this.selectedIndex];

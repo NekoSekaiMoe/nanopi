@@ -8,10 +8,12 @@ import {
 	type Focusable,
 	getKeybindings,
 	Input,
+	pageStep,
 	Spacer,
 	Text,
 	truncateToWidth,
 	visibleWidth,
+	windowStart,
 } from "@nanopi/pi-tui";
 import { KeybindingsManager } from "../../../core/keybindings.ts";
 import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
@@ -447,10 +449,7 @@ class SessionList implements Component, Focusable {
 		}
 
 		// Calculate visible range with scrolling
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredSessions.length - this.maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.filteredSessions.length, this.maxVisible);
 		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredSessions.length);
 
 		// Render visible sessions (one line each with tree structure)
@@ -617,13 +616,19 @@ class SessionList implements Component, Focusable {
 		else if (kb.matches(keyData, "tui.select.down")) {
 			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + 1);
 		}
-		// Page up - jump up by maxVisible items
+		// Page up - jump up by maxVisible items, stopping at the top
 		else if (kb.matches(keyData, "tui.select.pageUp")) {
-			this.selectedIndex = Math.max(0, this.selectedIndex - this.maxVisible);
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredSessions.length, -1, {
+				pageSize: this.maxVisible,
+				wrap: false,
+			});
 		}
-		// Page down - jump down by maxVisible items
+		// Page down - jump down by maxVisible items, stopping at the bottom
 		else if (kb.matches(keyData, "tui.select.pageDown")) {
-			this.selectedIndex = Math.min(this.filteredSessions.length - 1, this.selectedIndex + this.maxVisible);
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredSessions.length, 1, {
+				pageSize: this.maxVisible,
+				wrap: false,
+			});
 		}
 		// Enter
 		else if (kb.matches(keyData, "tui.select.confirm")) {

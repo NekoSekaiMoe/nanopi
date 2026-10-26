@@ -1,4 +1,5 @@
 import { getKeybindings } from "../keybindings.ts";
+import { pageStep, windowStart } from "../pager.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
 import { truncateToWidth, visibleWidth } from "../utils.ts";
 
@@ -159,6 +160,12 @@ export class SelectList implements Component {
 			this.selectedIndex = this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
 			this.notifySelectionChange();
 		}
+		// PageUp/PageDown - move by a window, wrapping like the arrows do
+		else if (kb.matches(keyData, "tui.select.pageUp")) {
+			this.movePage(-1);
+		} else if (kb.matches(keyData, "tui.select.pageDown")) {
+			this.movePage(1);
+		}
 		// Enter
 		else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selectedItem = this.filteredItems[this.selectedIndex];
@@ -174,11 +181,17 @@ export class SelectList implements Component {
 		}
 	}
 
+	private movePage(direction: -1 | 1): void {
+		const previousIndex = this.selectedIndex;
+		this.selectedIndex = pageStep(this.selectedIndex, this.filteredItems.length, direction, {
+			pageSize: this.maxVisible,
+			wrap: true,
+		});
+		if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
+	}
+
 	private getVisibleRange(): { startIndex: number; endIndex: number } {
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredItems.length - this.maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.filteredItems.length, this.maxVisible);
 		return {
 			startIndex,
 			endIndex: Math.min(startIndex + this.maxVisible, this.filteredItems.length),

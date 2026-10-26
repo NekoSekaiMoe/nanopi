@@ -7,8 +7,10 @@ import {
 	Input,
 	Key,
 	matchesKey,
+	pageStep,
 	Spacer,
 	Text,
+	windowStart,
 } from "@nanopi/pi-tui";
 import { getModelSearchText } from "../model-search.ts";
 import { theme } from "../theme/theme.ts";
@@ -240,10 +242,7 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 			return;
 		}
 
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.filteredItems.length - this.maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.filteredItems.length, this.maxVisible);
 		const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
 		for (let i = startIndex; i < endIndex; i++) {
 			const item = this.filteredItems[i]!;
@@ -290,6 +289,16 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 		if (kb.matches(data, "tui.select.down")) {
 			if (this.filteredItems.length === 0) return;
 			this.selectedIndex = this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
+			this.updateList();
+			return;
+		}
+		if (kb.matches(data, "tui.select.pageUp") || kb.matches(data, "tui.select.pageDown")) {
+			if (this.filteredItems.length === 0) return;
+			const direction = kb.matches(data, "tui.select.pageUp") ? -1 : 1;
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredItems.length, direction, {
+				pageSize: this.maxVisible,
+				wrap: true,
+			});
 			this.updateList();
 			return;
 		}

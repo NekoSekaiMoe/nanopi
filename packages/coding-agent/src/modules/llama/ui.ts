@@ -4,6 +4,7 @@ import {
 	type Focusable,
 	fuzzyFilter,
 	Input,
+	pageStep,
 	type SelectItem,
 	SelectList,
 	Spacer,
@@ -11,6 +12,7 @@ import {
 	type TUI,
 	truncateToWidth,
 	visibleWidth,
+	windowStart,
 } from "@nanopi/pi-tui";
 import type { KeybindingsManager } from "../../core/keybindings.ts";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
@@ -19,6 +21,9 @@ import { keyHint } from "../../modes/interactive/components/keybinding-hints.ts"
 import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import type { LlamaModelInfo, LlamaProgress } from "./client.ts";
 import type { HuggingFaceModel } from "./huggingface.ts";
+
+/** Search result rows shown before the list scrolls; also one PgUp/PgDn step. */
+const SEARCH_RESULT_ROWS = 10;
 
 const DOWNLOAD_VALUE = "\0download";
 const RESTART_VALUE = "\0restart";
@@ -154,11 +159,8 @@ class HuggingFaceSearch extends Container implements Focusable {
 
 	private updateResults(): void {
 		this.resultsContainer.clear();
-		const maxVisible = 10;
-		const start = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredResults.length - maxVisible),
-		);
+		const maxVisible = SEARCH_RESULT_ROWS;
+		const start = windowStart(this.selectedIndex, this.filteredResults.length, maxVisible);
 		const end = Math.min(start + maxVisible, this.filteredResults.length);
 		for (let index = start; index < end; index++) {
 			const model = this.filteredResults[index];
@@ -260,6 +262,20 @@ class HuggingFaceSearch extends Container implements Focusable {
 		if (this.keybindings.matches(data, "tui.select.down")) {
 			if (this.filteredResults.length > 0) {
 				this.selectedIndex = this.selectedIndex === this.filteredResults.length - 1 ? 0 : this.selectedIndex + 1;
+				this.updateResults();
+			}
+			return;
+		}
+		if (
+			this.keybindings.matches(data, "tui.select.pageUp") ||
+			this.keybindings.matches(data, "tui.select.pageDown")
+		) {
+			if (this.filteredResults.length > 0) {
+				const direction = this.keybindings.matches(data, "tui.select.pageUp") ? -1 : 1;
+				this.selectedIndex = pageStep(this.selectedIndex, this.filteredResults.length, direction, {
+					pageSize: SEARCH_RESULT_ROWS,
+					wrap: true,
+				});
 				this.updateResults();
 			}
 			return;

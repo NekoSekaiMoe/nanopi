@@ -1,4 +1,4 @@
-import { Container, getKeybindings, Spacer, Text } from "@nanopi/pi-tui";
+import { Container, getKeybindings, pageStep, Spacer, Text } from "@nanopi/pi-tui";
 import {
 	getProjectTrustOptions,
 	type ProjectTrustOption,
@@ -121,6 +121,14 @@ export class TrustSelectorComponent extends Container {
 			this.updateList();
 		} else if (kb.matches(keyData, "tui.select.down") || keyData === "j") {
 			this.selectedIndex = Math.min(this.trustOptions.length - 1, this.selectedIndex + 1);
+			this.updateList();
+		} else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
+			// The whole option list is on screen, so a page is the full list: PgUp/PgDn go to the ends.
+			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
+			this.selectedIndex = pageStep(this.selectedIndex, this.trustOptions.length, direction, {
+				pageSize: this.trustOptions.length,
+				wrap: false,
+			});
 			this.updateList();
 		} else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
 			const selected = this.trustOptions[this.selectedIndex];

@@ -1,4 +1,13 @@
-import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "@nanopi/pi-tui";
+import {
+	type Component,
+	Container,
+	getKeybindings,
+	pageStep,
+	Spacer,
+	Text,
+	truncateToWidth,
+	windowStart,
+} from "@nanopi/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 
@@ -39,10 +48,7 @@ class UserMessageList implements Component {
 		}
 
 		// Calculate visible range with scrolling
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), this.messages.length - this.maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.messages.length, this.maxVisible);
 		const endIndex = Math.min(startIndex + this.maxVisible, this.messages.length);
 
 		// Render visible messages (2 lines per message + blank line)
@@ -87,6 +93,18 @@ class UserMessageList implements Component {
 		// Down arrow - go to next (newer) message, wrap to top when at bottom
 		else if (kb.matches(keyData, "tui.select.down")) {
 			this.selectedIndex = this.selectedIndex === this.messages.length - 1 ? 0 : this.selectedIndex + 1;
+		}
+		// PageUp/PageDown - move by a screen of messages, wrapping like the arrows do
+		else if (kb.matches(keyData, "tui.select.pageUp")) {
+			this.selectedIndex = pageStep(this.selectedIndex, this.messages.length, -1, {
+				pageSize: this.maxVisible,
+				wrap: true,
+			});
+		} else if (kb.matches(keyData, "tui.select.pageDown")) {
+			this.selectedIndex = pageStep(this.selectedIndex, this.messages.length, 1, {
+				pageSize: this.maxVisible,
+				wrap: true,
+			});
 		}
 		// Enter - select message and branch
 		else if (kb.matches(keyData, "tui.select.confirm")) {

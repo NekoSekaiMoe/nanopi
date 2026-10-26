@@ -1,7 +1,20 @@
 import type { ApiKeyAuth, AuthCheck, OAuthAuth } from "@nanopi/pi-ai";
-import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, TruncatedText } from "@nanopi/pi-tui";
+import {
+	Container,
+	type Focusable,
+	fuzzyFilter,
+	getKeybindings,
+	Input,
+	pageStep,
+	Spacer,
+	TruncatedText,
+	windowStart,
+} from "@nanopi/pi-tui";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
+
+/** Provider rows shown before the list starts scrolling; also one PgUp/PgDn step. */
+const PAGE_ROWS = 8;
 
 export type AuthSelectorProvider = {
 	id: string;
@@ -135,12 +148,8 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 	private updateList(): void {
 		this.listContainer.clear();
 
-		const maxVisible = 8;
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredProviders.length - maxVisible),
-		);
-		const endIndex = Math.min(startIndex + maxVisible, this.filteredProviders.length);
+		const startIndex = windowStart(this.selectedIndex, this.filteredProviders.length, PAGE_ROWS);
+		const endIndex = Math.min(startIndex + PAGE_ROWS, this.filteredProviders.length);
 
 		for (let i = startIndex; i < endIndex; i++) {
 			const provider = this.filteredProviders[i];
@@ -194,6 +203,16 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 		else if (kb.matches(keyData, "tui.select.down")) {
 			if (this.filteredProviders.length === 0) return;
 			this.selectedIndex = Math.min(this.filteredProviders.length - 1, this.selectedIndex + 1);
+			this.updateList();
+		}
+		// PageUp/PageDown
+		else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
+			if (this.filteredProviders.length === 0) return;
+			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredProviders.length, direction, {
+				pageSize: PAGE_ROWS,
+				wrap: false,
+			});
 			this.updateList();
 		}
 		// Enter

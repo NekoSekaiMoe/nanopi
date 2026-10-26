@@ -19,7 +19,7 @@
  * pure keyboard interaction.
  */
 
-import { Key, Markdown, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { clampScrollOffset, Key, Markdown, matchesKey, pageStep, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
 import { getMarkdownTheme } from "../../modes/interactive/theme/theme.ts";
 
@@ -107,10 +107,12 @@ function rowWithSuffix(prefix: string, suffix: string, width: number): string {
 export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, data: ContextDialogData): Promise<void> {
 	const previewByKey = new Map(data.previews.map((preview) => [preview.key, preview]));
 	let selected = 0;
+	// Rows the last render could show; key handling runs before the next one.
+	let pageRows = 1;
 
 	while (true) {
 		const action = await ctx.ui.custom<string | undefined>(
-			(tui, theme, _keybindings, done) => {
+			(tui, theme, keybindings, done) => {
 				return {
 					invalidate() {},
 					handleInput(input: string) {
@@ -126,6 +128,19 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 						}
 						if (matchesKey(input, Key.down)) {
 							selected = (selected + 1) % data.previews.length;
+							tui.requestRender();
+							return;
+						}
+						// One page is the rows the dialog can show; the list wraps like ↑/↓ do.
+						if (
+							keybindings.matches(input, "tui.select.pageUp") ||
+							keybindings.matches(input, "tui.select.pageDown")
+						) {
+							const direction = keybindings.matches(input, "tui.select.pageUp") ? -1 : 1;
+							selected = pageStep(selected, data.previews.length, direction, {
+								pageSize: pageRows,
+								wrap: true,
+							});
 							tui.requestRender();
 							return;
 						}
@@ -175,6 +190,7 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 						const rows = Math.max(1, tui.terminal.rows);
 						const chrome = 6; // rule + title + bar + rule + hint + one blank
 						const maxParts = Math.max(1, rows - chrome - 1);
+						pageRows = maxParts;
 						const shownParts =
 							partRows.length > maxParts
 								? [
@@ -192,7 +208,7 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 							...shownParts,
 							"",
 							rule(theme, width),
-							hintRow(theme, "Enter to preview · ↑/↓ to navigate · Esc to close", width),
+							hintRow(theme, "Enter to preview · ↑/↓ PgUp/PgDn to navigate · Esc to close", width),
 						];
 					},
 				};
@@ -226,14 +242,14 @@ export async function showTextPreview(
 		.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "");
 
 	await ctx.ui.custom(
-		(tui, theme, _keybindings, done) => {
+		(tui, theme, keybindings, done) => {
 			const markdownView = new Markdown(content, 0, 0, getMarkdownTheme());
 			let scrollOffset = 0;
 			let pageSize = 1;
 			let totalLines = 1;
 
 			const scrollTo = (nextOffset: number): void => {
-				const next = Math.max(0, Math.min(nextOffset, Math.max(0, totalLines - pageSize)));
+				const next = clampScrollOffset(nextOffset, totalLines, pageSize);
 				if (next === scrollOffset) return;
 				scrollOffset = next;
 				tui.requestRender();
@@ -250,8 +266,8 @@ export async function showTextPreview(
 					}
 					if (matchesKey(input, Key.up)) scrollTo(scrollOffset - 1);
 					else if (matchesKey(input, Key.down)) scrollTo(scrollOffset + 1);
-					else if (matchesKey(input, "pageUp")) scrollTo(scrollOffset - pageSize);
-					else if (matchesKey(input, "pageDown")) scrollTo(scrollOffset + pageSize);
+					else if (keybindings.matches(input, "tui.editor.pageUp")) scrollTo(scrollOffset - pageSize);
+					else if (keybindings.matches(input, "tui.editor.pageDown")) scrollTo(scrollOffset + pageSize);
 					else if (matchesKey(input, Key.home)) scrollTo(0);
 					else if (matchesKey(input, Key.end)) scrollTo(totalLines - pageSize);
 				},
@@ -264,7 +280,7 @@ export async function showTextPreview(
 					const bodyWidth = Math.max(1, width - 4);
 					const wrapped = stripFenceMarkers(markdownView.render(bodyWidth));
 					totalLines = wrapped.length;
-					scrollOffset = Math.min(scrollOffset, Math.max(0, totalLines - pageSize));
+					scrollOffset = clampScrollOffset(scrollOffset, totalLines, pageSize);
 
 					const visible = wrapped.slice(scrollOffset, scrollOffset + pageSize);
 					// Three-region overflow: replace edge rows with dim arrows.

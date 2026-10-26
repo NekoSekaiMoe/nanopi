@@ -1,5 +1,6 @@
 import { fuzzyFilter } from "../fuzzy.ts";
 import { getKeybindings } from "../keybindings.ts";
+import { pageStep, windowStart } from "../pager.ts";
 import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
 import { truncateToWidth, visibleWidth, wrapTextWithAnsi } from "../utils.ts";
 import { Input } from "./input.ts";
@@ -236,6 +237,18 @@ export class SettingsList implements Component {
 		} else if (kb.matches(data, "tui.select.down")) {
 			if (displayItems.length === 0) return;
 			this.selectedIndex = this.selectedIndex === displayItems.length - 1 ? 0 : this.selectedIndex + 1;
+		} else if (kb.matches(data, "tui.select.pageUp")) {
+			if (displayItems.length === 0) return;
+			this.selectedIndex = pageStep(this.selectedIndex, displayItems.length, -1, {
+				pageSize: this.maxVisible,
+				wrap: true,
+			});
+		} else if (kb.matches(data, "tui.select.pageDown")) {
+			if (displayItems.length === 0) return;
+			this.selectedIndex = pageStep(this.selectedIndex, displayItems.length, 1, {
+				pageSize: this.maxVisible,
+				wrap: true,
+			});
 		} else if (
 			kb.matches(data, "tui.select.confirm") ||
 			(data === " " && (!this.searchEnabled || this.searchInput?.getValue().length === 0))
@@ -254,10 +267,7 @@ export class SettingsList implements Component {
 	}
 
 	private getVisibleRange(displayItems: readonly SettingItem[]): { startIndex: number; endIndex: number } {
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(this.maxVisible / 2), displayItems.length - this.maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, displayItems.length, this.maxVisible);
 		return { startIndex, endIndex: Math.min(startIndex + this.maxVisible, displayItems.length) };
 	}
 
