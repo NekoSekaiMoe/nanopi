@@ -91,6 +91,9 @@
 		"module/pi-lsp-mini": {
 			"description": "LSP tools"
 		},
+		"module/pi-memory": {
+			"description": "Memory distillation: /remember and the end-of-session AGENTS.md reminder"
+		},
 		"module/pi-rewind": {
 			"description": "Session rewind command"
 		},
@@ -176,6 +179,9 @@
 		"pi-lsp-mini": {
 			"source": "packages/coding-agent/src/extras/pi-lsp-mini/src/index.ts"
 		},
+		"pi-memory": {
+			"source": "packages/coding-agent/src/extras/pi-memory/src/index.ts"
+		},
 		"pi-rewind": {
 			"source": "packages/coding-agent/src/extras/pi-rewind/src/index.ts"
 		},
@@ -217,6 +223,7 @@
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
 				"module/pi-lsp-mini": false,
+				"module/pi-memory": false,
 				"module/pi-rewind": false,
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,
@@ -242,6 +249,7 @@
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
 				"module/pi-lsp-mini": false,
+				"module/pi-memory": false,
 				"module/pi-rewind": false,
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,

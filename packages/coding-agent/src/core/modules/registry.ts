@@ -141,7 +141,9 @@ const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltI
 /** The message that starts a run: the before_agent_start event without its prompt fields. */
 export type BeforeAgentStartTrigger =
 	| Pick<BeforeAgentStartUserEvent, "messageType" | "prompt" | "images">
-	| Pick<BeforeAgentStartCustomEvent, "messageType" | "message">;
+	| Pick<BeforeAgentStartCustomEvent, "messageType" | "message">
+	/** A replay of the last turn, which adds no message of its own. */
+	| { messageType: "continue" };
 
 /** Combined result from all before_agent_start handlers. */
 interface BeforeAgentStartCombinedResult {

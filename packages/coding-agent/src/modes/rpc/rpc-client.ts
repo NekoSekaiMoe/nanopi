@@ -349,6 +349,13 @@ export class RpcClient {
 	}
 
 	/**
+	 * Replay the last failed response.
+	 */
+	async retryLastRun(): Promise<void> {
+		await this.send({ type: "retry_last_run" });
+	}
+
+	/**
 	 * Execute a bash command.
 	 */
 	async bash(command: string): Promise<BashResult> {

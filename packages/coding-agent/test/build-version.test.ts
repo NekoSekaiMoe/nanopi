@@ -1,5 +1,5 @@
-import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
+import { VERSION } from "../src/config.ts";
 import { BUILD_VERSION, dateFromVersion, formatBuildVersion, resolveBuildCommit } from "../src/core/build-version.ts";
 
 describe("dateFromVersion", () => {
@@ -35,14 +35,9 @@ describe("resolveBuildCommit", () => {
 });
 
 describe("BUILD_VERSION", () => {
+	// The date comes from package.json, so derive the expectation from VERSION
+	// instead of pinning a release date that goes stale on every bump.
 	it("carries the date from the package version", () => {
-		// Read the version instead of hardcoding it: this assertion went stale on the
-		// first package bump and failed for every checkout until someone noticed.
-		const packageJson = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf-8")) as {
-			version: string;
-		};
-		const expectedDate = packageJson.version.split(".")[0];
-
-		expect(BUILD_VERSION.startsWith(`v${expectedDate}`)).toBe(true);
+		expect(BUILD_VERSION.startsWith(`v${dateFromVersion(VERSION)}`)).toBe(true);
 	});
 });

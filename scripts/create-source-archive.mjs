@@ -39,10 +39,12 @@ function rule(message) {
 }
 
 // Date tags (vYYYYMMDD) may omit the minor/patch parts that package.json carries
-// (20261013 vs 20261013.0.0); compare on the padded 3-part form.
-function paddedVersion(version) {
-	const parts = version.split(".");
-	return `${parts[0] || 0}.${parts[1] || 0}.${parts[2] || 0}`;
+// (20261013 vs 20261013.0.0), and a same-day follow-up (v20261013.1.0) names the
+// release line rather than the exact package version. The date part is the
+// release identity: comparing all three would demand a package.json bump the
+// release flow never makes.
+function releaseDate(version) {
+	return version.split(".")[0];
 }
 
 const version = values.version;
@@ -74,9 +76,17 @@ function run(command, args, options = {}) {
 }
 
 const commit = git(["rev-parse", "--verify", "--end-of-options", `${sourceRef}^{commit}`]);
-const packageVersion = JSON.parse(git(["show", `${commit}:packages/coding-agent/package.json`])).version;
-if (paddedVersion(packageVersion) !== paddedVersion(version)) {
-	rule(`Version ${version} does not match package version ${packageVersion} at ${sourceRef}`);
+// Read through the tree, not `<commit>:<path>`: `git show` on a commit without a
+// cache-tree records a bogus entry for the path's parent directory instead of
+// failing, so a checkout of a large tag could read the wrong file. The tree is
+// also the base of the temporary index below.
+const tree = git(["rev-parse", "--verify", "--end-of-options", `${commit}^{tree}`]);
+const packageVersion = JSON.parse(git(["cat-file", "blob", `${tree}:packages/coding-agent/package.json`])).version;
+if (releaseDate(packageVersion) !== releaseDate(version)) {
+	rule(
+		`Version ${version} does not match package version ${packageVersion} at ${sourceRef} (${commit}); ` +
+			`the release tag's date must match the package.json version`,
+	);
 }
 
 const modelDataDirectory = join(repositoryRoot, "packages/ai/src/providers/data");
@@ -98,7 +108,7 @@ process.on("exit", () => rmSync(stagingDirectory, { recursive: true, force: true
 // deterministic for the same commit and generated model data.
 const temporaryIndex = join(stagingDirectory, "index");
 const indexEnvironment = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
-git(["read-tree", commit], { env: indexEnvironment });
+git(["read-tree", tree], { env: indexEnvironment });
 git(["add", "-f", "--", modelDataManifest, ...generatedModelData], { env: indexEnvironment });
 const archiveTree = git(["write-tree"], { env: indexEnvironment });
 const archiveMtime = git(["show", "-s", "--format=%ct", commit]);

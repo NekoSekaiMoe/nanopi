@@ -548,6 +548,11 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 				return success(id, "abort_retry");
 			}
 
+			case "retry_last_run": {
+				await session.retryLastRun();
+				return success(id, "retry_last_run");
+			}
+
 			// =================================================================
 			// Bash
 			// =================================================================

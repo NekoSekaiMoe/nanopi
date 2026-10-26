@@ -50,6 +50,7 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 | `/hotkeys` | Show active keyboard shortcuts |
 | `/changelog` | Show changelog entries |
 | `/init [instructions]` | Generate an AGENTS.md contributor guide for the repository |
+| `/remember [entry]` | Distill this session into AGENTS.md entries, or write the given entry; every entry is validated, deduped against the file, and confirmed before it is written |
 | `/exit` | Quit nanopi |
 
 ## Commands added by resources
