@@ -47,6 +47,19 @@ export function modelsWithinAllowlist(
 	return current ? [current, ...allowed] : allowed;
 }
 
+/**
+ * Drop the catalog rows whose provider is not authenticated.
+ *
+ * A built-in provider ships its whole packaged catalog (`alibaba-cn` alone is
+ * dozens of ids), so keeping every greyed-out row turns the picker into a browse
+ * of models the user cannot run. Only the catalog contribution is filtered: the
+ * availability snapshot and the active session model are already known-good, and
+ * a credential can resolve for a provider that declares no auth method.
+ */
+export function dropUnauthenticated(models: readonly Model<any>[], authenticated: ReadonlySet<string>): Model<any>[] {
+	return models.filter((model) => authenticated.has(model.provider));
+}
+
 function sameModel(a: Model<any>, b: Model<any>): boolean {
 	return a.provider === b.provider && a.id === b.id;
 }

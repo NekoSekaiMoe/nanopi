@@ -71,6 +71,7 @@ import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { type CopilotAutoState, copilotAutoVirtualModel } from "./copilot-auto.ts";
+import { withLiveCatalog } from "./live-catalog-provider.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -272,7 +273,8 @@ export class ModelRuntime implements Models {
 						builtinModelDataGeneratedAt,
 					);
 				}
-				return withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt);
+				// Ask the endpoint what it serves now; the packaged snapshot is the fallback.
+				return withLiveCatalog(withRemoteCatalog(provider, options.catalogBaseUrl, builtinModelDataGeneratedAt));
 			});
 		const runtime = new ModelRuntime(
 			credentials,
