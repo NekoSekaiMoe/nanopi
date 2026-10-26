@@ -13,8 +13,11 @@
 // 看不出任何痕迹，只有下一个动到同一片代码的人会发现。
 //
 // 这里检查的是本次改动相对 base 的净效果：base 有的文件，结果树里必须还在，
-// 名字与内容都不变。改名不算回退（删除与新增成对出现时 `git diff --raw`
-// 报的是 R，不是 D），显式删除文件的人会在 CI 里看到这条报错。
+// 名字与内容都不变。改名与显式删除都会命中，它们确实让 base 的路径消失了，
+// 该由 PR 描述说明，而不是让检查替它们猜。
+//
+// 反过来算（结果 -> base）会把 PR 新增的文件当成删除，所以路径只能从 base 起算：
+// 拿 base 的树列文件，再看每个文件在结果里还在不在。
 
 import { execFileSync } from "node:child_process";
 
@@ -41,15 +44,25 @@ try {
 	process.exit(2);
 }
 
-// `git diff` 的输出格式：`:<old mode> <new mode> <old blob> <new blob> <status>\t<path>`。
-// 状态 `D` 表示文件在结果里不存在；`R<score>` 是改名，不算丢内容。
-const raw = git(["diff", "--raw", "--no-abbrev", `${base}^{tree}`, `${head}^{tree}`]);
+// 逐文件比对内容，而不是数 `git diff --raw` 的状态：`A`/`D` 的方向由参数顺序决定，
+// 与「改名」混在一起时读起来太容易反。`ls-tree -r` 给的是 `<mode> <type> <blob>\t<path>`。
+const filesIn = (tree) => {
+	const entries = new Map();
+	for (const line of git(["ls-tree", "-r", "--full-tree", tree]).split("\n")) {
+		if (!line) continue;
+		const [meta, path] = line.split("\t");
+		entries.set(path, meta.split(" ")[2]);
+	}
+	return entries;
+};
+
+const before = filesIn(`${base}^{tree}`);
+const after = filesIn(`${head}^{tree}`);
 const removed = [];
-for (const line of raw.split("\n")) {
-	if (!line) continue;
-	const [meta, ...pathParts] = line.split("\t");
-	const status = meta.split(" ").at(-1);
-	if (status === "D") removed.push(pathParts[0]);
+for (const [path, blob] of before) {
+	// 改名在两侧是不同路径，会命中这里：删掉旧名、留下新名，正是检查要拦的那类改动
+	// （回退 main 上的内容时，被盖掉的文件连新名字都没有）。
+	if (after.get(path) !== blob) removed.push(path);
 }
 
 if (removed.length === 0) {

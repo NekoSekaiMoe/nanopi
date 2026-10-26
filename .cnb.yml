@@ -52,6 +52,9 @@ main:
 #
 # 这条流水线要变成「阻止合并」还需要在仓库设置里把 main 设为保护分支并勾选
 # 「需要通过状态检查」，否则它只是一条会变红的记录。
+#
+# 缩进不能丢：pull_request.target 是上面 main: 的子键。e1a11be62 曾把它写成顶格的
+# 第二个 main:，YAML 直接拒绝整份文件（duplicated mapping key，见 #246）。
   pull_request.target:
     - name: merge-result
       runner:
@@ -65,6 +68,9 @@ main:
             cd /tmp/base
             # 两侧都是 CNB 上的仓库，checkout 自带的只读令牌够用。
             git fetch --no-tags origin "+refs/heads/$CNB_PULL_REQUEST_BRANCH:refs/remotes/pr/head"
+            # 默认构建镜像里没有 node（cnb-4u8-1k5s1gkfc 报 sh: node: command not found），
+            # 每一步各装一次，不依赖上一步留下的环境。
+            apt-get update && apt-get install nodejs -y
             node scripts/check-merge-result.mjs --base "refs/remotes/pr/head"
 
 # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
