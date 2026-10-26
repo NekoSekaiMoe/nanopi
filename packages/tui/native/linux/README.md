@@ -19,15 +19,13 @@ produce all six platform/arch pairs). The build script prints the compiler
 version, libxcb header version, and sha256 of the output; record them in the
 commit message when the prebuilds change.
 
-The current prebuilds are byte-identical to upstream pi's, which means they
-were built from pi's `PI_CLIPBOARD` sources, not from the renamed
-`NANOPI_CLIPBOARD` sources in this directory (`a7dc3429a` renamed the C
-sources but did not rebuild). The `linux-arm64` and `linux-x64` files
-differ, unlike darwin/win32, so they were built on two hosts and are not a
-cross-build:
+The current prebuilds were built from the sources in this directory, so they
+carry the `NANOPI_CLIPBOARD` property atom and `nanopi.clipboard` N-API entry
+introduced by `a7dc3429a`. The `linux-arm64` and `linux-x64` files differ,
+unlike darwin/win32, so they are per-arch builds, not a cross-build:
 
-- linux-x64 `522d2550f7fa5d0d5bd204f45983f786ce2be9cf80f27f00179640d31d0689d6` (18008 bytes)
-- linux-arm64 `63d4545349a25b5c97e352ea6d254cea50ff3c14161212ad3ddb3fc28022ddb5` (67240 bytes)
+- linux-x64 `591c3419461b00af2ac6e795cab4c094df3441f566a063671e7f1e4f3c7bf190` (18008 bytes, gcc 12.2.0, xcb 1.15)
+- linux-arm64 `787d38a3ea7af6d9cf86b21db1d8fd477de494e68f02da85e5bb4875539dbd37` (67232 bytes, aarch64-linux-gnu-gcc 12.2.0, xcb 1.15)
 
 Both import only `libxcb.so.1` unversioned plus libc-through-PLT symbols
 (`calloc`, `realloc`, `free`, `memcpy`, `poll`, `__errno_location`,
@@ -35,10 +33,10 @@ Both import only `libxcb.so.1` unversioned plus libc-through-PLT symbols
 `-Wl,--unresolved-symbols=ignore-all` buys: one file loads on both glibc and
 musl, and symbols resolve lazily when the helper is `dlopen`ed.
 
-The committed sources have no `realloc`/`free` declaration in scope
-(`xcb/xcb.h` is the only system include), so a clean rebuild under GCC 14 or
-newer fails with `implicit declaration of function 'realloc'`; older GCC only
-warns behind `-Werror`.
+`linux-platform-x11.c` calls `realloc` and `free` directly, so it includes
+`<stdlib.h>` for them. It previously reached `<stdlib.h>` only through
+`clipboard-worker.h` -> `clipboard.h`, which happened to work on glibc but made
+the file depend on a header it never included.
 
 ## Testing
 

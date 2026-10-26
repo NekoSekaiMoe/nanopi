@@ -1,4 +1,5 @@
 #include <xcb/xcb.h>
+#include <stdlib.h>
 #include <string.h>
 #include <xcb/xcbext.h>
 #include <errno.h>
