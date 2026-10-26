@@ -11,6 +11,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "../../config.ts";
+import { fetchModelListing } from "../../core/model-listing.ts";
 import { stripJsonComments } from "../../utils/json.ts";
 import { stripBom } from "../../utils/text.ts";
 
@@ -425,37 +426,22 @@ export interface DiscoveredModel {
 	name?: string;
 }
 
-/** List models from the endpoint: `/models` (OpenAI-compatible) or `/v1/models` (Anthropic). */
+/**
+ * List models from the endpoint, through the same reader the built-in catalog
+ * refresh uses: `{base}/models`, falling back to `{base}/v1/models` (or the
+ * reverse for an Anthropic-shaped gateway), so a models.json entry is listed
+ * whether or not its baseUrl carries the version segment.
+ */
 export async function discoverModels(input: {
 	type: string;
 	base_url: string;
 	api_key?: string;
 	headers?: Record<string, string>;
 }): Promise<DiscoveredModel[]> {
-	const baseUrl = input.base_url.trim().replace(/\/+$/, "");
-	if (!baseUrl) throw new ProviderAccountError("base_url is required", 400);
-	const url = input.type === "anthropic" ? `${baseUrl}/v1/models` : `${baseUrl}/models`;
-	const headers: Record<string, string> = { ...input.headers };
-	if (input.api_key) {
-		if (input.type === "anthropic") {
-			headers["x-api-key"] = input.api_key;
-			headers["anthropic-version"] = "2023-06-01";
-		} else {
-			headers.Authorization = `Bearer ${input.api_key}`;
-		}
-	}
-	let response: Response;
+	if (!input.base_url.trim()) throw new ProviderAccountError("base_url is required", 400);
 	try {
-		response = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+		return (await fetchModelListing({ ...input, baseUrl: input.base_url })) ?? [];
 	} catch (error) {
-		throw new ProviderAccountError(`could not reach ${url}: ${error instanceof Error ? error.message : error}`, 502);
+		throw new ProviderAccountError(error instanceof Error ? error.message : String(error), 502);
 	}
-	if (!response.ok) {
-		throw new ProviderAccountError(`${url} answered ${response.status}`, 502);
-	}
-	const payload = (await response.json()) as { data?: Array<{ id?: string; display_name?: string }> };
-	const models = Array.isArray(payload.data) ? payload.data : [];
-	return models
-		.filter((model): model is { id: string; display_name?: string } => typeof model.id === "string")
-		.map((model) => ({ id: model.id, name: model.display_name }));
 }
