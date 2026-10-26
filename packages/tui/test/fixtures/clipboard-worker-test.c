@@ -23,6 +23,13 @@ static void tracked_free(void* pointer) {
 #undef calloc
 #undef free
 
+// The fixture exercises the executor only, so the modifier query is never
+// reached; clipboard.h still requires the unit to answer for it.
+static bool clipboard_modifier_pressed(const char* name) {
+    (void)name;
+    return false;
+}
+
 // Exercise the production executor with a controlled blocking callback, without X11.
 static void read_clipboard(clipboard_job* job) {
     job->data = tracked_calloc(5, 1);
@@ -56,6 +63,7 @@ static napi_value get_state(napi_env env, napi_callback_info info) {
 }
 
 NANOPI_NAPI_EXPORT napi_value napi_register_module_v1(napi_env env, napi_value exports) {
+    set_function_export(env, exports, "isModifierPressed", is_modifier_pressed);
     set_function_export(env, exports, "getText", get_clipboard_text);
     set_function_export(env, exports, "getImage", get_clipboard_image);
     set_function_export(env, exports, "release", release_reader);

@@ -244,6 +244,70 @@ static bool preferred_target(x11_clipboard* clipboard, bool image, xcb_atom_t* t
     return received && (valid || targets.type == XCB_NONE);
 }
 
+// Modifier state has to come from the X server keymap, not from a focused
+// window: nanocode asks while the terminal owns focus. Only core X requests are
+// used, so the prebuild keeps importing nothing but libxcb.so.1. The keysyms are
+// protocol constants written out here (0xffe1 Shift_L, 0xffe3 Control_L, 0xffe9
+// Alt_L, 0xffeb Super_L) because X11/keysymdef.h ships with libX11, not libxcb.
+static xcb_keysym_t modifier_keysym(const char* name) {
+    if (!name) return XCB_NO_SYMBOL;
+    if (strcmp(name, "shift") == 0) return 0xffe1;
+    if (strcmp(name, "control") == 0) return 0xffe3;
+    if (strcmp(name, "option") == 0 || strcmp(name, "alt") == 0) return 0xffe9;
+    if (strcmp(name, "command") == 0 || strcmp(name, "super") == 0 || strcmp(name, "win") == 0) return 0xffeb;
+    return XCB_NO_SYMBOL;
+}
+
+// The left-hand keysym of every keycode, i.e. the one a modifier reports with no
+// shift level applied.
+static bool find_keycode(xcb_connection_t* connection, xcb_keysym_t keysym, xcb_keycode_t* keycode) {
+    const xcb_setup_t* setup = xcb_get_setup(connection);
+    unsigned first = setup->min_keycode;
+    unsigned count = (unsigned)(setup->max_keycode - setup->min_keycode) + 1u;
+    xcb_get_keyboard_mapping_reply_t* reply =
+        xcb_get_keyboard_mapping_reply(connection, xcb_get_keyboard_mapping(connection, first, count), 0);
+    if (!reply) return false;
+    xcb_keysym_t* keysyms = xcb_get_keyboard_mapping_keysyms(reply);
+    bool found = false;
+    if (keysyms) {
+        unsigned per_keycode = reply->keysyms_per_keycode;
+        for (unsigned index = 0; per_keycode && index < count && !found; index++) {
+            if (keysyms[index * per_keycode] == keysym) {
+                *keycode = (xcb_keycode_t)(first + index);
+                found = true;
+            }
+        }
+    }
+    free(reply);
+    return found;
+}
+
+static bool clipboard_modifier_pressed(const char* name) {
+    xcb_keysym_t keysym = modifier_keysym(name);
+    if (keysym == XCB_NO_SYMBOL) return false;
+
+    // A separate connection keeps this off the clipboard worker's deadline and
+    // mutex. Any failure reports "not pressed", like the other platform units.
+    xcb_connection_t* connection = xcb_connect(0, 0);
+    if (xcb_connection_has_error(connection)) {
+        xcb_disconnect(connection);
+        return false;
+    }
+
+    bool pressed = false;
+    xcb_keycode_t keycode = 0;
+    if (find_keycode(connection, keysym, &keycode)) {
+        xcb_query_keymap_reply_t* reply = xcb_query_keymap_reply(connection, xcb_query_keymap(connection), 0);
+        if (reply) {
+            unsigned byte = (unsigned)keycode / 8u;
+            if (byte < sizeof(reply->keys)) pressed = (reply->keys[byte] & (1u << (keycode % 8u))) != 0;
+            free(reply);
+        }
+    }
+    xcb_disconnect(connection);
+    return pressed;
+}
+
 static bool read_selection(x11_clipboard* clipboard, bool image, property_data* result) {
     xcb_atom_t target = XCB_NONE;
     bool received = preferred_target(clipboard, image, &target) &&
@@ -272,6 +336,7 @@ static void read_clipboard(clipboard_job* job) {
 }
 
 NANOPI_NAPI_EXPORT napi_value napi_register_module_v1(napi_env env, napi_value exports) {
+    set_function_export(env, exports, "isModifierPressed", is_modifier_pressed);
     set_function_export(env, exports, "getText", get_clipboard_text);
     set_function_export(env, exports, "getImage", get_clipboard_image);
     return exports;
