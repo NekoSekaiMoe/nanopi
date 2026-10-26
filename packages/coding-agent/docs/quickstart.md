@@ -6,11 +6,30 @@ For native Windows setup, read [Windows Setup](windows.md). For Android, read [T
 
 ## 1. Install nanopi
 
-Install nanopi from npm. This requires Node.js 22.19 or newer:
+The bundle installs with one command and needs no registry account. This requires
+Node.js 22.19 or newer:
 
 ```bash
-npm install -g --ignore-scripts @nanopi/pi-coding-agent
+curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
+
+It writes the bundle and a `nanopi` shim into `~/.local/bin`; the installer prints a
+note when that directory is not on `PATH`.
+
+The npm package lives in GitHub Packages, which only serves authenticated clients.
+To install that way, put the registry and a token with `read:packages` in `~/.npmrc`:
+
+```text
+@nekosekaimoe:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
+```
+
+```bash
+npm install -g --ignore-scripts @nekosekaimoe/nanopi
+```
+
+Docker users can pull `ghcr.io/nekosekaimoe/nanopi` instead; see
+[Containerization](containerization.md).
 
 nanopi does not require dependency lifecycle scripts for a normal npm installation.
 
@@ -103,7 +122,7 @@ Start with the least powerful mechanism that meets your need:
 If you installed nanopi with npm, run:
 
 ```bash
-npm uninstall -g @nanopi/pi-coding-agent
+npm uninstall -g @nekosekaimoe/nanopi
 ```
 
 
