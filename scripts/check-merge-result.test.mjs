@@ -101,6 +101,23 @@ test("a rename is reported, not waved through", async (t) => {
 	assert.match(result.stderr, /a\.txt/);
 });
 
+// #255 的形态：基线是目标分支 tip，结果是把 PR 分支合进来之后的树。PR 新增的文件
+// 在结果里当然还在。之前 CI 把 PR 分支当基线、工作树当结果，方向一反，PR 新增的
+// 每个文件都被读成「被删掉」。
+test("a file the branch adds survives the merge", async (t) => {
+	const cwd = await repo(t, "pr-add");
+	commit(cwd, { "a.txt": "one" }, "base");
+	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	commit(cwd, { "d/note.md": "new work", "a.txt": "one, but longer" }, "add a note");
+	git(cwd, ["checkout", "-q", "main"]);
+	git(cwd, ["merge", "-q", "--no-ff", "--no-gpg-sign", "topic"]);
+
+	const result = check(cwd, "HEAD~1");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /rewrites 1 file/);
+	assert.match(result.stdout, /no file from HEAD~1 disappears/);
+});
+
 test("a missing base fails instead of passing silently", async (t) => {
 	const cwd = await repo(t, "missing");
 	commit(cwd, { "a.txt": "one" }, "base");

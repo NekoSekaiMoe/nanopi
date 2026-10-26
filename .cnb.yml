@@ -71,7 +71,13 @@ main:
             # 默认构建镜像里没有 node（cnb-4u8-1k5s1gkfc 报 sh: node: command not found），
             # 每一步各装一次，不依赖上一步留下的环境。
             apt-get update && apt-get install nodejs -y
-            node scripts/check-merge-result.mjs --base "refs/remotes/pr/head"
+            # 这里的工作树是目标分支（main）的 tip，不是预合并结果：pull_request.target
+            # 拿不到 PR 的代码。所以基线只能是工作树，PR 分支要合进来当结果——
+            # 反过来把 PR 分支当基线（#255），PR 新增的每个文件都成了「被删掉」。
+            git config user.email npc@cnb.cool
+            git config user.name npc
+            git merge --no-edit "refs/remotes/pr/head"
+            node scripts/check-merge-result.mjs --base HEAD~1
 
 # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
 #

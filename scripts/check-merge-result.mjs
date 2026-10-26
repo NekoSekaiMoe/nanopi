@@ -24,6 +24,10 @@
 //
 // 反过来算（结果 -> base）会把 PR 新增的文件当成删除，所以路径只能从 base 起算：
 // 拿 base 的树列文件，再看每个文件在结果里还在不在。
+//
+// 谁当 base 由调用方决定，这里只认「base 是基线、HEAD 是结果」。CI 里基线是目标
+// 分支（main）的 tip，结果是把 PR 分支合进来之后的树——两个不能倒过来（#255：
+// 拿 PR 分支当基线时，PR 自己新增的文件全成了「被删掉」）。
 
 import { execFileSync } from "node:child_process";
 
