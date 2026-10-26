@@ -4,8 +4,8 @@
 // 两个方向（CNB -> GitHub 见 .cnb.yml，GitHub -> CNB 见
 // .github/workflows/sync-to-cnb.yml）调用同一份逻辑，各自只负责取凭据。
 //
-// Usage:
-//   node scripts/mirror-tags.mjs --remote <url>
+// Usage: 见 scripts/mirror.mjs（唯一入口）；本文件只导出 mirrorTags，
+// 供它按子命令调用。
 //
 // 判定是「远端已存在且指向同一 commit 就跳过、指向不同 commit 就报错」，不是对象
 // id 不等就报错：同名轻量 tag 在另一侧是 annotated 不算冲突。两个方向都不 force，
@@ -36,18 +36,6 @@ function git(args, { allowFailure = false } = {}) {
 		if (!allowFailure) throw error;
 		return null;
 	}
-}
-
-function parseArgs(argv) {
-	let remote;
-	for (let index = 0; index < argv.length; index += 1) {
-		if (argv[index] === "--remote") remote = argv[index + 1];
-	}
-	if (!remote) {
-		console.error("Usage: node scripts/mirror-tags.mjs --remote <url>");
-		process.exit(2);
-	}
-	return { remote };
 }
 
 function sleep(ms) {
@@ -86,47 +74,47 @@ function remoteObjectOf(name) {
 	return git(["rev-parse", "--verify", "--quiet", REMOTE_TAGS_PREFIX + name], { allowFailure: true });
 }
 
-const { remote } = parseArgs(process.argv.slice(2));
+export function mirrorTags(remote) {
+	fetchRemoteTags(remote);
 
-fetchRemoteTags(remote);
-
-const pending = [];
-for (const { name, object } of localAnnotatedTags()) {
-	const remoteObject = remoteObjectOf(name);
-	if (remoteObject === object) continue;
-	if (remoteObject) {
-		const localCommit = git(["rev-parse", `${object}^{commit}`]);
-		const remoteCommit = git(["rev-parse", `${remoteObject}^{commit}`]);
-		if (localCommit !== remoteCommit) {
-			console.error(`tag ${name} points to different commits on both sides; refusing to overwrite:`);
-			console.error(`  local  ${object} (${localCommit})`);
-			console.error(`  remote ${remoteObject} (${remoteCommit})`);
-			process.exit(1);
+	const pending = [];
+	for (const { name, object } of localAnnotatedTags()) {
+		const remoteObject = remoteObjectOf(name);
+		if (remoteObject === object) continue;
+		if (remoteObject) {
+			const localCommit = git(["rev-parse", `${object}^{commit}`]);
+			const remoteCommit = git(["rev-parse", `${remoteObject}^{commit}`]);
+			if (localCommit !== remoteCommit) {
+				console.error(`tag ${name} points to different commits on both sides; refusing to overwrite:`);
+				console.error(`  local  ${object} (${localCommit})`);
+				console.error(`  remote ${remoteObject} (${remoteCommit})`);
+				return false;
+			}
+			console.log(`tag ${name} exists on the remote (${remoteObject}); not rewriting it`);
+			continue;
 		}
-		console.log(`tag ${name} exists on the remote (${remoteObject}); not rewriting it`);
-		continue;
+		pending.push(name);
 	}
-	pending.push(name);
-}
 
-if (pending.length === 0) {
-	console.log("no new annotated tags to mirror");
-	process.exit(0);
-}
-
-// 不带 force：两个方向都不覆盖已有 tag，分叉在上面已经拦住了。
-for (const name of pending) {
-	withRetry(`git push ${name}`, () => git(["push", "--quiet", remote, `refs/tags/${name}:refs/tags/${name}`]));
-}
-
-// push 的退出码不足以证明落上去的是本地这个对象，重新 fetch 后逐个比一次。
-fetchRemoteTags(remote);
-for (const name of pending) {
-	const localObject = git(["rev-parse", `refs/tags/${name}`]);
-	const remoteObject = remoteObjectOf(name);
-	if (localObject !== remoteObject) {
-		console.error(`tag ${name} mismatch after push: local ${localObject} remote ${remoteObject}`);
-		process.exit(1);
+	if (pending.length === 0) {
+		console.log("no new annotated tags to mirror");
+		return;
 	}
-	console.log(`mirrored tag ${name}: ${remoteObject}`);
+
+	// 不带 force：两个方向都不覆盖已有 tag，分叉在上面已经拦住了。
+	for (const name of pending) {
+		withRetry(`git push ${name}`, () => git(["push", "--quiet", remote, `refs/tags/${name}:refs/tags/${name}`]));
+	}
+
+	// push 的退出码不足以证明落上去的是本地这个对象，重新 fetch 后逐个比一次。
+	fetchRemoteTags(remote);
+	for (const name of pending) {
+		const localObject = git(["rev-parse", `refs/tags/${name}`]);
+		const remoteObject = remoteObjectOf(name);
+		if (localObject !== remoteObject) {
+			console.error(`tag ${name} mismatch after push: local ${localObject} remote ${remoteObject}`);
+			return false;
+		}
+		console.log(`mirrored tag ${name}: ${remoteObject}`);
+	}
 }
