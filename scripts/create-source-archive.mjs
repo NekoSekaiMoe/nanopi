@@ -10,8 +10,13 @@ import { exitStatus, repositoryRoot } from "./lib/node-runner.mjs";
 // Creates the deterministic source archive uploaded with GitHub releases.
 //
 // Usage:
-//   pnpm run hydrate:model-data
+//   pnpm run generate:models
 //   node scripts/create-source-archive.mjs --version <version> --ref <git-ref> --out <archive.tar.gz>
+//
+// The generated model catalogs are gitignored, so the archive adds the data
+// directory to a temporary index. The aggregator and the shards come from the
+// commit itself: a checkout regenerates them, and the archive carries the ones
+// the commit was verified with.
 
 const usage = () => "Usage: node scripts/create-source-archive.mjs --version <version> [--ref <git-ref>] --out <archive.tar.gz>";
 
@@ -91,7 +96,7 @@ if (releaseDate(packageVersion) !== releaseDate(version)) {
 
 const modelDataDirectory = join(repositoryRoot, "packages/ai/src/providers/data");
 const modelDataManifest = join(modelDataDirectory, ".manifest.json");
-const missingModelData = "Generated model data is missing. Run pnpm run hydrate:model-data first.";
+const missingModelData = "Generated model data is missing. Run pnpm run generate:models first.";
 if (!statSync(modelDataManifest, { throwIfNoEntry: false })?.isFile()) rule(missingModelData);
 const generatedModelData = readdirSync(modelDataDirectory, { withFileTypes: true })
 	.filter((entry) => entry.isFile() && entry.name.endsWith(".json"))

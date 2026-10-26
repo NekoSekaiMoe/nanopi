@@ -102,8 +102,20 @@ function readProviderStructure(path: string, providerId: string): Record<string,
 	return sortedRecord(models);
 }
 
+/**
+ * Provider ids of the checkout's generated catalog.
+ *
+ * The aggregator is the record when it exists. A clean checkout does not have
+ * it (the generator writes it on every build, and it is gitignored), so the
+ * provider data directory becomes the record instead: the manifest lists every
+ * provider file. The structure derived from those files is validated entry by
+ * entry anyway, so reading it does not trust a file that was never checked.
+ */
 export function readModelDataProviderIds(packageRoot: string): string[] {
 	const aggregatorPath = join(packageRoot, "src", "models.generated.ts");
+	if (!existsSync(aggregatorPath)) {
+		return readDataDirectoryProviderIds(join(packageRoot, "src", "providers", "data"));
+	}
 	const aggregator = readFileSync(aggregatorPath, "utf8");
 	// Module names lose dots (`llama.cpp` → `llama-cpp`), so prefer the ids the
 	// generator recorded next to each import.
@@ -116,7 +128,7 @@ export function readModelDataProviderIds(packageRoot: string): string[] {
 		// A flavor with no provider builds an empty catalog on purpose, so zero
 		// imports are valid when the aggregator says so: the structure is empty,
 		// and the shards and data files must be gone too.
-		if (!readFileSync(aggregatorPath, "utf8").includes(EMPTY_CATALOG_MARKER)) {
+		if (!aggregator.includes(EMPTY_CATALOG_MARKER)) {
 			throw new Error(`No generated provider imports found in ${aggregatorPath}`);
 		}
 		return [];
@@ -127,6 +139,48 @@ export function readModelDataProviderIds(packageRoot: string): string[] {
 	return providerIds;
 }
 
+/**
+ * Provider ids named by the manifest of a generated data directory, or the data
+ * file names themselves when the manifest is unreadable: the caller validates
+ * both, and a broken manifest has to fail the validation, not the listing.
+ */
+function readDataDirectoryProviderIds(dataDir: string): string[] {
+	const manifestPath = join(dataDir, MODEL_DATA_MANIFEST_FILE);
+	if (existsSync(manifestPath)) {
+		let manifest: unknown;
+		try {
+			manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+		} catch {
+			manifest = undefined;
+		}
+		const files = isRecord(manifest) && isRecord(manifest.files) ? Object.keys(manifest.files) : [];
+		const providerIds = files
+			.filter((file) => file.endsWith(".json") && file !== MODEL_DATA_MANIFEST_FILE)
+			.map((file) => file.slice(0, -".json".length));
+		if (providerIds.length > 0) return providerIds.sort();
+	}
+	if (!existsSync(dataDir)) {
+		throw new Error(`No generated model data found: ${dataDir} (run \`pnpm run generate:models\`)`);
+	}
+	return readdirSync(dataDir)
+		.filter((entry) => entry.endsWith(".json") && entry !== MODEL_DATA_MANIFEST_FILE)
+		.map((entry) => entry.slice(0, -".json".length))
+		.sort();
+}
+
+/**
+ * The generated shard names next to the data directory. They are build products
+ * too, so a checkout without them is listed rather than rejected: the shard set
+ * is only checked when it exists, which is what `validateGeneratedModelData`
+ * does after the generator or the build wrote it.
+ */
+function readProviderShardNames(providersDir: string): string[] {
+	if (!existsSync(providersDir)) return [];
+	return readdirSync(providersDir)
+		.filter((entry) => entry.endsWith(".models.ts"))
+		.sort();
+}
+
 export function readModelDataStructure(packageRoot: string): ModelDataStructure {
 	const providersDir = join(packageRoot, "src", "providers");
 	const dataDir = join(providersDir, "data");
@@ -134,10 +188,8 @@ export function readModelDataStructure(packageRoot: string): ModelDataStructure 
 	const expectedShards = providerIds
 		.map((providerId) => `${providerArtifactName(providerId)}.models.ts`)
 		.sort();
-	const actualShards = readdirSync(providersDir)
-		.filter((entry) => entry.endsWith(".models.ts"))
-		.sort();
-	if (!sameStrings(expectedShards, actualShards)) {
+	const actualShards = readProviderShardNames(providersDir);
+	if (actualShards.length > 0 && !sameStrings(expectedShards, actualShards)) {
 		throw new Error(
 			`Generated model aggregator and provider shards do not match (${describeSetDifference(expectedShards, actualShards)})`,
 		);

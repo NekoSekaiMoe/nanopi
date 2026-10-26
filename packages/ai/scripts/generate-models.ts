@@ -4108,8 +4108,10 @@ async function generateModels() {
 						.filter((entry) => entry.endsWith(".models.ts"))
 						.map((entry) => [entry, readFileSync(join(providersDir, entry), "utf8")] as const),
 				);
+				// A checkout that never generated has no aggregator to restore, so the
+				// rollback removes what this run wrote instead of rewriting it.
 				const aggregatorPath = join(packageRoot, "src/models.generated.ts");
-				const previousAggregator = readFileSync(aggregatorPath, "utf8");
+				const previousAggregator = existsSync(aggregatorPath) ? readFileSync(aggregatorPath, "utf8") : undefined;
 				restoreGeneratedCatalog = () => {
 					for (const entry of readdirSync(providersDir)) {
 						if (entry.endsWith(".models.ts")) rmSync(join(providersDir, entry));
@@ -4117,7 +4119,8 @@ async function generateModels() {
 					for (const [entry, content] of previousShardContents) {
 						writeFileSync(join(providersDir, entry), content);
 					}
-					writeFileSync(aggregatorPath, previousAggregator);
+					if (previousAggregator === undefined) rmSync(aggregatorPath, { force: true });
+					else writeFileSync(aggregatorPath, previousAggregator);
 				};
 
 				const generatedShardFiles = new Set<string>();

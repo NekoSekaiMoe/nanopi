@@ -296,6 +296,18 @@ describe("providers component", () => {
 		throws(() => validateFlavorProviders(dir, ["openai", "anthropic", "google"], "full"), /No provider set lists: google/);
 	});
 
+	it("reads the catalog from a marker set when no set names a provider", () => {
+		// Every set is a marker, so the ids handed in are the only record of what
+		// exists: nothing can be unreachable, and `google` is not part of the catalog.
+		const dir = writeConfig({
+			...config,
+			providerSets: { all: { description: "Every catalog", providers: [ALL_PROVIDERS] } },
+			flavors: { full: { components: { "*": true, providers: "all" } } },
+		});
+		tempDirs.push(dir);
+		assert.doesNotThrow(() => validateFlavorProviders(dir, ["openai", "anthropic"], "full"));
+	});
+
 	it("accepts a flavor that ships less than the whole catalog", () => {
 		const withFullSet = {
 			...config,

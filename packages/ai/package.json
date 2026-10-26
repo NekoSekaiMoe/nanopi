@@ -57,11 +57,12 @@
 	],
 	"scripts": {
 		"clean": "shx rm -rf dist",
+		"ensure-model-catalogs": "node --import ../../ts-import.mjs scripts/ensure-model-catalogs.ts",
 		"generate-models": "node --import ../../ts-import.mjs scripts/generate-models.ts --strict",
 		"hydrate-model-data": "node --import ../../ts-import.mjs scripts/generate-models.ts --strict --data-only",
 		"check:model-data": "node --import ../../ts-import.mjs scripts/check-model-data.ts",
 		"build": "pnpm run generate-models && pnpm run build:offline",
-		"build:offline": "pnpm run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
+		"build:offline": "pnpm run ensure-model-catalogs && pnpm run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
 		"test": "vitest --run",
 		"prepublishOnly": "pnpm run clean && pnpm run build"
 	},

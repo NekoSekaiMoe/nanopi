@@ -80,6 +80,20 @@ for (const name of ["CI", "GITHUB_ACTIONS"]) {
 }
 
 process.stdout.write(`Running tests without API keys in isolated home: ${home}\n`);
+// The catalogs are gitignored build products, so a checkout that never built has
+// none and the suites that import them cannot even resolve. Generate them first
+// with the real environment: the generator reads the provider sets through the
+// repo, and a package run under the isolated home would have no store to use.
+const catalogs = spawnSync("pnpm", ["run", "ensure:model-catalogs"], {
+	stdio: "inherit",
+	shell: process.platform === "win32",
+	cwd: process.cwd(),
+});
+if (exitStatus(catalogs) !== 0) {
+	process.stderr.write("Failed to generate the model catalogs\n");
+	process.exit(1);
+}
+
 const result = spawnSync("pnpm", ["test"], {
 	stdio: "inherit",
 	env: environment,

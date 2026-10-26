@@ -1859,7 +1859,7 @@ The separate `ImagesModels`/`ImagesProvider` collection that existed briefly (`c
 
 ### Adding a New Provider
 
-Adding a new LLM provider requires changes across multiple files. The layered layout: API implementations live in `src/api/`, provider factories in `src/providers/`, stable generated catalog wrappers live in `src/providers/<id>.models.ts`, and `src/models.generated.ts` registers them. This checklist covers all necessary steps:
+Adding a new LLM provider requires changes across multiple files. The layered layout: API implementations live in `src/api/`, provider factories in `src/providers/`, generated catalog wrappers land in `src/providers/<id>.models.ts`, and `src/models.generated.ts` registers them. The wrappers and the aggregator are build products: `pnpm run generate:models` writes them on every build and they are gitignored, so nothing in this checklist adds them by hand. This checklist covers all necessary steps:
 
 #### 1. Core Types (`src/types.ts`)
 
@@ -1881,9 +1881,10 @@ Add a lazy wrapper `src/api/<api-id>.lazy.ts` (`<name>Api()` via `lazyApi()`) so
 #### 3. Model Generation (`scripts/generate-models.ts`)
 
 - Add logic to fetch and parse models from the provider's source (e.g., models.dev API)
-- Map chat/tool-capable provider data to `Model`, image-generation data to `ImageModel`, and models.dev `type: "decision"` entries to `ClassifierModel`; hydration groups the ignored `src/providers/data/<id>.json` values by API while stable `src/providers/<id>.models.ts` wrappers derive exact model/API types directly from those JSON keys
+- Map chat/tool-capable provider data to `Model`, image-generation data to `ImageModel`, and models.dev `type: "decision"` entries to `ClassifierModel`; hydration groups the ignored `src/providers/data/<id>.json` values by API while the generated `src/providers/<id>.models.ts` wrappers derive exact model/API types directly from those JSON keys
 - Keep model ids unique within each provider and model type; emit separate entries when an upstream model supports multiple operations
 - Handle provider-specific quirks (pricing format, capability flags, model ID transformations)
+- List the provider id in a `providerSets` entry of `buildconfig.json`; the model generator writes exactly the catalogs those sets name, and a catalog no set lists fails the build
 
 #### 4. Provider Factory (`src/providers/<id>.ts`)
 
