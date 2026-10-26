@@ -50,6 +50,8 @@ export interface QuestionnaireBuilt {
 	adapter: QuestionnairePropsAdapter;
 	notesInput: Input;
 	inlineInput: Input;
+	/** Option rows one page shows on the currently built tab; PgUp/PgDn step by this. */
+	optionPageSize: () => number;
 	render: (width: number) => string[];
 	invalidate: () => void;
 }
@@ -135,7 +137,7 @@ class QuestionnaireBuilder {
 		const globalBindings = this.buildGlobalBindings(dialog, submitPicker, tabBar);
 		const perTabBindings = this.buildPerTabBindings();
 		const adapter = this.buildAdapter(tabs, globalBindings, perTabBindings);
-		return this.handle(adapter, dialog);
+		return this.handle(adapter, dialog, tabs);
 	}
 
 	private makeSelectTheme(): WrappingSelectTheme {
@@ -299,11 +301,16 @@ class QuestionnaireBuilder {
 		});
 	}
 
-	private handle(adapter: QuestionnairePropsAdapter, dialog: DialogView): QuestionnaireBuilt {
+	private handle(
+		adapter: QuestionnairePropsAdapter,
+		dialog: DialogView,
+		tabs: ReadonlyArray<TabComponents>,
+	): QuestionnaireBuilt {
 		return {
 			adapter,
 			notesInput: this.notesInput,
 			inlineInput: this.inlineInput,
+			optionPageSize: () => tabs[0]?.optionList.pageSize ?? 1,
 			render: (w) => dialog.render(w),
 			invalidate: () => adapter.invalidate(),
 		};

@@ -12,14 +12,23 @@
  *      ■ Memory             ...        (selected → selectedBg)
  *
  *   ───────────────────────────────────────────
- *    Enter to preview · ↑/↓ to navigate · Esc to close
+ *    Enter to preview · ↑/↓ PgUp/PgDn to navigate · Esc to close
  *
  * Dialog conventions: bottom-center anchor, width 100%, fixed chrome top/bottom,
  * scrollable middle region with ↑/↓ overflow markers, one-line hint footer,
  * pure keyboard interaction.
  */
 
-import { clampScrollOffset, Key, Markdown, matchesKey, pageStep, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import {
+	clampScrollOffset,
+	Key,
+	Markdown,
+	matchesKey,
+	pageScrollOffset,
+	pageStep,
+	truncateToWidth,
+	visibleWidth,
+} from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
 import { getMarkdownTheme } from "../../modes/interactive/theme/theme.ts";
 
@@ -187,9 +196,10 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 						});
 
 						// On tiny terminals drop blank rows first, then clip part rows.
+						// rule, title, blank, bar, blank, …parts…, blank, rule, hint.
 						const rows = Math.max(1, tui.terminal.rows);
-						const chrome = 6; // rule + title + bar + rule + hint + one blank
-						const maxParts = Math.max(1, rows - chrome - 1);
+						const chrome = 8;
+						const maxParts = Math.max(1, Math.min(rows - chrome, partRows.length));
 						pageRows = maxParts;
 						const shownParts =
 							partRows.length > maxParts
@@ -266,16 +276,20 @@ export async function showTextPreview(
 					}
 					if (matchesKey(input, Key.up)) scrollTo(scrollOffset - 1);
 					else if (matchesKey(input, Key.down)) scrollTo(scrollOffset + 1);
-					else if (keybindings.matches(input, "tui.editor.pageUp")) scrollTo(scrollOffset - pageSize);
-					else if (keybindings.matches(input, "tui.editor.pageDown")) scrollTo(scrollOffset + pageSize);
-					else if (matchesKey(input, Key.home)) scrollTo(0);
+					else if (keybindings.matches(input, "tui.editor.pageUp")) {
+						scrollTo(pageScrollOffset(scrollOffset, totalLines, pageSize, -1));
+					} else if (keybindings.matches(input, "tui.editor.pageDown")) {
+						scrollTo(pageScrollOffset(scrollOffset, totalLines, pageSize, 1));
+					} else if (matchesKey(input, Key.home)) scrollTo(0);
 					else if (matchesKey(input, Key.end)) scrollTo(totalLines - pageSize);
 				},
 				render(width: number) {
-					// Fixed chrome: top rule + title + bottom rule + hint row.
+					// Fixed chrome: top rule + title + bottom rule + hint row. Subtracting one
+					// extra row here overflowed the overlay by a line, so the step covered a row
+					// the user never saw.
 					const rows = Math.max(1, tui.terminal.rows);
 					const chromeRows = 4;
-					pageSize = Math.max(3, rows - 1 - chromeRows);
+					pageSize = Math.max(1, rows - chromeRows);
 
 					const bodyWidth = Math.max(1, width - 4);
 					const wrapped = stripFenceMarkers(markdownView.render(bodyWidth));

@@ -205,7 +205,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 			this.selectedIndex = Math.min(this.filteredProviders.length - 1, this.selectedIndex + 1);
 			this.updateList();
 		}
-		// PageUp/PageDown
+		// PageUp/PageDown - a page at a time, stopping at the ends like the arrows do
 		else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
 			if (this.filteredProviders.length === 0) return;
 			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;

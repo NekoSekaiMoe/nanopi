@@ -1,6 +1,6 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
-import { clampScrollOffset, pageStep, windowStart } from "../src/pager.ts";
+import { clampScrollOffset, pageScrollOffset, pageStep, windowStart } from "../src/pager.ts";
 
 describe("pageStep", () => {
 	it("moves by one page in both directions", () => {
@@ -40,6 +40,24 @@ describe("windowStart", () => {
 
 	it("returns 0 when the list is shorter than the window", () => {
 		assert.equal(windowStart(2, 3, 10), 0);
+	});
+});
+
+describe("pageScrollOffset", () => {
+	it("leaves the last visible row on screen after a page turn", () => {
+		// Ten rows on screen: the row that was tenth becomes the first, so nothing is skipped.
+		assert.equal(pageScrollOffset(0, 100, 10, 1), 9);
+		assert.equal(pageScrollOffset(9, 100, 10, -1), 0);
+	});
+
+	it("still moves when only one or two rows fit", () => {
+		assert.equal(pageScrollOffset(0, 100, 1, 1), 1);
+		assert.equal(pageScrollOffset(0, 100, 2, 1), 1);
+	});
+
+	it("clamps the last page instead of scrolling into blank rows", () => {
+		assert.equal(pageScrollOffset(90, 100, 10, 1), 90);
+		assert.equal(pageScrollOffset(0, 4, 10, 1), 0);
 	});
 });
 
