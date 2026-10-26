@@ -58,6 +58,23 @@ describe("validateStubs", () => {
 		validateStubs(fixture());
 	});
 
+	// The shards are gitignored build products and the stand-ins are generated
+	// next to them, so a clean checkout has the stand-ins alone. Reading the
+	// stand-ins keeps the check runnable there instead of demanding a build.
+	it("reads the provider list from the stand-ins when the shards are gone", () => {
+		const aiDir = fixture();
+		rmSync(join(aiDir, "src/providers/example.models.ts"));
+		strictEqual(readProviderModuleIds(aiDir).join(","), "example");
+		validateStubs(aiDir);
+	});
+
+	it("asks for the generator when there is neither a shard nor a stand-in", () => {
+		const aiDir = fixture();
+		rmSync(join(aiDir, "src/providers/example.models.ts"));
+		rmSync(join(aiDir, "src/providers/disabled/example-models.ts"));
+		throws(() => readProviderModuleIds(aiDir), /run `pnpm run generate:models`/);
+	});
+
 	it("rejects a stub that dropped an export", () => {
 		throws(() => validateStubs(fixture({ apiStubExports: "export const other = () => {};" })), /example: stub is missing exampleApi/);
 	});
@@ -70,6 +87,16 @@ describe("validateStubs", () => {
 
 	it("rejects a provider without a stub", () => {
 		throws(() => validateStubs(fixture({ withProviderStub: false })), /example: no src\/providers\/disabled\/example-models.ts/);
+	});
+
+	it("reports every missing stub on its own line", () => {
+		// The real set is 200-odd providers; one line of them is unreadable.
+		const aiDir = fixture({ withProviderStub: false });
+		writeFileSync(join(aiDir, "src/providers/second.models.ts"), "export const SECOND_MODELS = {};\n");
+		throws(
+			() => validateStubs(aiDir),
+			/out of sync \(2\):\n {2}example: no src\/providers\/disabled\/example-models\.ts\n {2}second: no src\/providers\/disabled\/second-models\.ts/,
+		);
 	});
 });
 
@@ -102,6 +129,16 @@ describe("createApiStubPlugin", () => {
 		});
 		strictEqual(disabledProviders.join(","), "example");
 		const result = resolveWith(plugin, { path: "./example.models.js", resolveDir: join(aiDir, "dist/providers") });
+		strictEqual(result?.path, join(aiDir, "dist/providers/disabled/example-models.js"));
+	});
+
+	it("aliases a catalog shard imported by package name, without the .js extension", () => {
+		// The bundle rewrites `@nanopi/pi-ai/providers/example.models` to a relative
+		// import, but the single-file build hands the plugin the package specifier
+		// as written. Matching only the extension form left the shard in the graph.
+		const aiDir = fixture();
+		const { plugin } = createApiStubPlugin({ aiDir, apis: ["__ALL__"], builtinProviderIds: ["some-other-provider"] });
+		const result = resolveWith(plugin, { path: "@nanopi/pi-ai/providers/example.models", resolveDir: aiDir });
 		strictEqual(result?.path, join(aiDir, "dist/providers/disabled/example-models.js"));
 	});
 
