@@ -11,6 +11,10 @@ const testTheme = {
 	noMatch: (text: string) => text,
 };
 
+/** PageUp/PageDown as the terminal sends them (xterm CSI 5~/6~). */
+const PAGE_UP = "\u001b[5~";
+const PAGE_DOWN = "\u001b[6~";
+
 const visibleIndexOf = (line: string, text: string): number => {
 	const index = line.indexOf(text);
 	assert.notEqual(index, -1);
@@ -112,5 +116,41 @@ describe("SelectList", () => {
 
 		assert.ok(rendered[0].includes("…"));
 		assert.equal(visibleIndexOf(rendered[0], "first"), visibleIndexOf(rendered[1], "second"));
+	});
+
+	it("moves the selection by a window on PageUp/PageDown", () => {
+		const items = Array.from({ length: 20 }, (_, index) => ({ value: `item-${index}`, label: `item-${index}` }));
+		const list = new SelectList(items, 5, testTheme);
+
+		list.handleInput(PAGE_DOWN);
+		assert.equal(list.getSelectedItem()?.value, "item-5");
+
+		list.handleInput(PAGE_DOWN);
+		assert.equal(list.getSelectedItem()?.value, "item-10");
+
+		list.handleInput(PAGE_UP);
+		assert.equal(list.getSelectedItem()?.value, "item-5");
+	});
+
+	it("wraps PageUp/PageDown like the arrow keys do", () => {
+		const items = Array.from({ length: 8 }, (_, index) => ({ value: `item-${index}`, label: `item-${index}` }));
+		const list = new SelectList(items, 5, testTheme);
+
+		list.handleInput(PAGE_UP);
+		assert.equal(list.getSelectedItem()?.value, "item-3");
+
+		list.handleInput(PAGE_DOWN);
+		assert.equal(list.getSelectedItem()?.value, "item-0");
+	});
+
+	it("notifies selection changes from paging", () => {
+		const items = Array.from({ length: 20 }, (_, index) => ({ value: `item-${index}`, label: `item-${index}` }));
+		const list = new SelectList(items, 5, testTheme);
+		const changes: string[] = [];
+		list.onSelectionChange = (item) => changes.push(item.value);
+
+		list.handleInput(PAGE_DOWN);
+
+		assert.deepStrictEqual(changes, ["item-5"]);
 	});
 });

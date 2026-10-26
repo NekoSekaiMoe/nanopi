@@ -2,6 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 import { SettingsList, type SettingsListTheme } from "../src/components/settings-list.ts";
 
+/** PageUp/PageDown as the terminal sends them (xterm CSI 5~/6~). */
+const PAGE_UP = "\u001b[5~";
+const PAGE_DOWN = "\u001b[6~";
+
 const testTheme: SettingsListTheme = {
 	label: (text) => text,
 	value: (text) => text,
@@ -54,5 +58,52 @@ describe("SettingsList", () => {
 		list.handleInput(" ");
 
 		assert.deepStrictEqual(changes, [{ id: "tui-mode", value: "fullscreen" }]);
+	});
+
+	it("moves the selection by a window on PageUp/PageDown", () => {
+		const many = Array.from({ length: 20 }, (_, index) => ({
+			id: `setting-${index}`,
+			label: `Setting ${index}`,
+			currentValue: "off",
+			values: ["off", "on"],
+		}));
+		const changes: string[] = [];
+		const list = new SettingsList(
+			many,
+			5,
+			testTheme,
+			(id) => changes.push(id),
+			() => {},
+		);
+
+		list.handleInput(PAGE_DOWN);
+		list.handleInput("\r");
+		assert.deepStrictEqual(changes, ["setting-5"]);
+
+		list.handleInput(PAGE_UP);
+		list.handleInput("\r");
+		assert.deepStrictEqual(changes, ["setting-5", "setting-0"]);
+	});
+
+	it("falls back to the list when PageUp/PageDown arrive inside a search", () => {
+		const many = Array.from({ length: 20 }, (_, index) => ({
+			id: `setting-${index}`,
+			label: `Setting ${index}`,
+			currentValue: "off",
+			values: ["off", "on"],
+		}));
+		const list = new SettingsList(
+			many,
+			5,
+			testTheme,
+			() => {},
+			() => {},
+			{ enableSearch: true },
+		);
+
+		list.handleInput(PAGE_DOWN);
+
+		// The paged list renders the row five below the first one.
+		assert.match(list.render(80).join("\n"), /Setting 5/);
 	});
 });
