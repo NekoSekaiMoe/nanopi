@@ -59,6 +59,10 @@ export async function listModels(
 	if (loadError) {
 		console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
 	}
+	const loadWarning = modelRuntime.getWarnings();
+	if (loadWarning) {
+		console.error(chalk.yellow(`Warning: models.json entries skipped by this build:\n${loadWarning}`));
+	}
 
 	const models = [...(await modelRuntime.getAvailable(undefined, { signal }))];
 

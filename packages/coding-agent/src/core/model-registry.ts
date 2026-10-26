@@ -61,6 +61,11 @@ export class ModelRegistry {
 		return this.runtime.getError();
 	}
 
+	/** Non-fatal models.json problems, e.g. a model whose api this build does not carry. */
+	getWarnings(): string | undefined {
+		return this.runtime.getWarnings();
+	}
+
 	getAll(): Model<Api>[] {
 		return [...this.runtime.getModels()];
 	}

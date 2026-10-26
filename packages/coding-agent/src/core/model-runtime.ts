@@ -78,6 +78,7 @@ import {
 	type CompatibilityRequestConfig,
 	composeModelProvider,
 	configuredRequestAuthStatus,
+	createSkippedApiModels,
 	type ProviderConfigInput,
 	resolveCompatibilityRequestConfig,
 	resolveConfiguredModelHeaders,
@@ -194,6 +195,8 @@ export class ModelRuntime implements Models {
 	/** Virtual models by provider id, then model id. */
 	private readonly virtualModels = new Map<string, Map<string, RegisteredVirtualModel>>();
 	private readonly compositionErrors = new Map<string, string>();
+	/** models.json models this build cannot serve, reported as warnings instead of errors. */
+	private readonly skippedModels = createSkippedApiModels();
 	private readonly modelsPath: string | undefined;
 	private readonly modelNetworkEnabled: boolean;
 	private config: ModelConfig;
@@ -329,7 +332,7 @@ export class ModelRuntime implements Models {
 			return base;
 		}
 		try {
-			const provider = composeModelProvider(providerId, base, this.config, extension);
+			const provider = composeModelProvider(providerId, base, this.config, extension, this.skippedModels);
 			this.compositionErrors.delete(providerId);
 			return provider;
 		} catch (error) {
@@ -519,6 +522,20 @@ export class ModelRuntime implements Models {
 		options?: AuthOperationOptions,
 	): Promise<Map<string, Error>> {
 		return new Map(await this.requestAvailabilityPass(providerIds, options?.signal));
+	}
+
+	/**
+	 * Non-fatal models.json problems. Today that is a model whose `api` this build
+	 * does not carry: the flavor that reads the file is narrower than the one that
+	 * wrote it, so the entry is skipped and the rest of the provider stays usable.
+	 * Collected from the last composition of the provider that defined the model,
+	 * which is the one a reload or a catalog read refreshes.
+	 */
+	getWarnings(): string | undefined {
+		const lines = [...this.skippedModels.byProvider()].flatMap(([, messages]) =>
+			messages.map((message) => `models.json: ${message}`),
+		);
+		return lines.length > 0 ? lines.join("\n") : undefined;
 	}
 
 	getError(): string | undefined {

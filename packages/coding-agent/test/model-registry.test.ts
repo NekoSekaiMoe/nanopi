@@ -308,6 +308,10 @@ describe("ModelRegistry", () => {
 			expect(error).toContain('Provider "broken-two"');
 		});
 
+		// The whole-provider entry stays a hard error: its own `api` cannot be served
+		// either, so there is nothing to keep. The per-model skip is covered where a
+		// narrowed build can reach it (packages/coding-agent/test/model-runtime-skipped-models.test.ts).
+
 		test("custom provider with same name as built-in merges with built-in models", async () => {
 			writeModelsJson({
 				anthropic: providerConfig("https://my-proxy.example.com/v1", [{ id: "claude-custom" }]),

@@ -55,6 +55,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 	private onSelectAsDefaultCallback?: (model: Model<any>) => void;
 	private onCancelCallback: () => void;
 	private errorMessage?: string;
+	private warningMessage?: string;
 	private refreshStatusMessage = "Refreshing model catalogs…";
 	private refreshStatusKind: "muted" | "success" | "warning" = "muted";
 	private credentialsCheckMessage: string | undefined;
@@ -192,6 +193,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			const result = await refreshModelCatalogs(this.modelRuntime, this.refreshAbortController.signal);
 			if (this.closed) return;
 			this.refreshStatusMessage = "";
+			this.warningMessage = undefined;
 			if (result.aborted && timedOut) {
 				this.errorMessage = "Model refresh timed out; showing cached models.";
 			} else if (result.errors.size === 1) {
@@ -200,6 +202,8 @@ export class ModelSelectorComponent extends Container implements Focusable {
 				this.errorMessage = `Could not refresh ${result.errors.size} model catalogs (${[...result.errors.keys()].join(", ")}); showing cached models.`;
 			} else {
 				this.errorMessage = this.modelRuntime.getError();
+				const warnings = this.modelRuntime.getWarnings();
+				if (warnings) this.warningMessage = warnings;
 				if (!this.errorMessage) {
 					this.refreshStatusMessage = "Model catalogs refreshed.";
 					this.refreshStatusKind = "success";
@@ -381,6 +385,13 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		}
 		if (this.credentialsCheckMessage) {
 			this.listContainer.addChild(new Text(theme.fg("muted", `  ${this.credentialsCheckMessage}`), 0, 0));
+		}
+		if (this.warningMessage) {
+			// A skipped models.json model is a note about the list, not a failure of it.
+			this.listContainer.addChild(new Spacer(1));
+			for (const line of this.warningMessage.split("\n")) {
+				this.listContainer.addChild(new Text(theme.fg("warning", `  ${line}`), 0, 0));
+			}
 		}
 		if (this.refreshStatusMessage) {
 			this.listContainer.addChild(new Spacer(1));

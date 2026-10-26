@@ -53,7 +53,7 @@ type ReloadCommandContext = {
 	hideThinkingBlock: boolean;
 	session: {
 		moduleRegistry: unknown;
-		modelRuntime: { getError: () => string | undefined };
+		modelRuntime: { getError: () => string | undefined; getWarnings: () => string | undefined };
 	};
 	settingsManager: {
 		getHttpIdleTimeoutMs: () => number;
@@ -113,7 +113,7 @@ function createReloadCommandContext(overrides: ReloadCommandContextOverrides = {
 		hideThinkingBlock: overrides.hideThinkingBlock ?? false,
 		session: {
 			moduleRegistry: {},
-			modelRuntime: { getError: () => undefined },
+			modelRuntime: { getError: () => undefined, getWarnings: () => undefined },
 			...overrides.session,
 		},
 		settingsManager: {
