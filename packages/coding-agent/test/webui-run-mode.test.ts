@@ -1,0 +1,231 @@
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { modeEngine } from "@nanopi/pi-extra";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
+import { createAgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
+import { createAgentSessionFromServices, createAgentSessionServices } from "../src/core/agent-session-services.ts";
+import { SessionManager } from "../src/core/session-manager.ts";
+import { runWebuiMode } from "../src/modes/webui/webui-server.ts";
+
+// The webui's run mode is the process-wide extra engine, and the SPA switches it
+// from the settings page. Two defects made that switch inert: `/chat` dropped the
+// `approval_mode` field it was sent, and every new session replayed the
+// configured default over the mode the user had just picked. Both lived in the
+// endpoint wiring, so the tests drive the real server over HTTP.
+
+let runtime: AgentSessionRuntime | undefined;
+let root = "";
+let agentDir = "";
+let cwd = "";
+let base = "";
+let token = "";
+let previousAgentDir: string | undefined;
+let previousOffline: string | undefined;
+
+/** Fail a promise instead of hanging the whole test. */
+async function withTimeout<T>(promise: Promise<T>, ms: number, what: string): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	const timeout = new Promise<never>((_resolve, reject) => {
+		timer = setTimeout(() => reject(new Error(`${what} did not finish within ${ms}ms`)), ms);
+	});
+	try {
+		return await Promise.race([promise, timeout]);
+	} finally {
+		clearTimeout(timer);
+	}
+}
+
+async function writeAgentConfig(): Promise<void> {
+	const models = {
+		providers: {
+			faux: {
+				api: "openai-completions",
+				baseUrl: "http://127.0.0.1:1/v1",
+				apiKey: "test",
+				models: [{ id: "alpha", reasoning: false }],
+			},
+		},
+	};
+	await mkdir(agentDir, { recursive: true });
+	await writeFile(join(agentDir, "models.json"), `${JSON.stringify(models, null, "\t")}\n`, "utf8");
+	await writeFile(join(agentDir, "auth.json"), JSON.stringify({ faux: { type: "api_key", key: "test" } }), "utf8");
+}
+
+async function startWebui(): Promise<void> {
+	const sessionManager = SessionManager.create(cwd, join(agentDir, "sessions"));
+	const services = await createAgentSessionServices({ cwd, agentDir });
+	const model = services.modelRuntime.getModel("faux", "alpha");
+	if (!model) throw new Error("faux/alpha is missing from the test catalog");
+	const created = await createAgentSessionFromServices({ services, sessionManager, model, thinkingLevel: "off" });
+	runtime = await createAgentSessionRuntime(async () => ({ ...created, services, diagnostics: [] }), {
+		cwd,
+		agentDir,
+		sessionManager,
+	});
+	const { port, printedToken } = await new Promise<{ port: number; printedToken: string }>((resolve, reject) => {
+		const original = console.log;
+		const timer = setTimeout(() => {
+			console.log = original;
+			reject(new Error("the webui server never reported its url"));
+		}, 20_000);
+		console.log = (...args: unknown[]) => {
+			const text = args.map(String).join(" ");
+			if (!text.startsWith("nanopi webui listening on ")) {
+				original(...args);
+				return;
+			}
+			clearTimeout(timer);
+			console.log = original;
+			const listening = /listening on http:\/\/127\.0\.0\.1:(\d+)/.exec(text);
+			const open = /Open: (http:\/\/[^\s]+)/.exec(text);
+			if (!listening || !open) {
+				reject(new Error(`unexpected webui banner: ${text}`));
+				return;
+			}
+			resolve({
+				port: Number(listening[1]),
+				printedToken: new URL(open[1] as string).searchParams.get("token") ?? "",
+			});
+		};
+		void runWebuiMode(runtime as AgentSessionRuntime, { port: 0, host: "127.0.0.1" }).catch(() => {});
+	});
+	token = printedToken;
+	base = `http://127.0.0.1:${port}`;
+}
+
+async function api(path: string, init?: RequestInit): Promise<{ status: number; body: any }> {
+	const response = await fetch(`${base}${path}`, {
+		...init,
+		headers: {
+			"content-type": "application/json",
+			authorization: `Bearer ${token}`,
+			...(init?.headers ?? {}),
+		},
+	});
+	const text = await response.text();
+	try {
+		return { status: response.status, body: JSON.parse(text) };
+	} catch {
+		return { status: response.status, body: text };
+	}
+}
+
+async function mode(): Promise<string> {
+	const { status, body } = await api("/approval_mode");
+	expect(status).toBe(200);
+	return body.mode;
+}
+
+/** One /chat turn, read to its terminal event so the turn is released. */
+async function turn(fields: Record<string, unknown>): Promise<void> {
+	const request = await fetch(`${base}/chat`, {
+		method: "POST",
+		headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+		body: JSON.stringify({ message: "hi", ...fields }),
+	});
+	if (request.status !== 200) throw new Error(`chat was refused with ${request.status}`);
+	const text = await withTimeout(request.text(), 25_000, "the chat stream");
+	if (!/data: \{"type":"(done|stopped|error)"/.test(text)) {
+		throw new Error("the chat stream ended before a terminal event");
+	}
+}
+
+beforeEach(async () => {
+	previousAgentDir = process.env.NANOPI_CODING_AGENT_DIR;
+	previousOffline = process.env.NANOPI_OFFLINE;
+	root = await mkdtemp(join(tmpdir(), "nanopi-webui-mode-"));
+	agentDir = join(root, "agent");
+	cwd = join(root, "work");
+	process.env.NANOPI_CODING_AGENT_DIR = agentDir;
+	// The backend warms its catalog over the network on startup; stay offline.
+	process.env.NANOPI_OFFLINE = "1";
+	await mkdir(cwd, { recursive: true });
+	await writeAgentConfig();
+	// The engine is a process singleton: start every test from standard, or a mode
+	// left by the previous one looks like a session reset that never happened.
+	modeEngine.setMode("standard");
+	await startWebui();
+}, 40_000);
+
+afterEach(() => {
+	runtime = undefined;
+	if (previousAgentDir === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
+	else process.env.NANOPI_CODING_AGENT_DIR = previousAgentDir;
+	if (previousOffline === undefined) delete process.env.NANOPI_OFFLINE;
+	else process.env.NANOPI_OFFLINE = previousOffline;
+});
+
+describe("webui run mode", () => {
+	it("starts in standard and switches through /approval_mode", async () => {
+		expect(await mode()).toBe("standard");
+		const switched = await api("/approval_mode", { method: "POST", body: JSON.stringify({ mode: "plan" }) });
+		expect(switched.body).toEqual({ ok: true, mode: "plan" });
+		expect(await mode()).toBe("plan");
+		const rejected = await api("/approval_mode", { method: "POST", body: JSON.stringify({ mode: "bogus" }) });
+		expect(rejected.status).toBe(400);
+		expect(await mode()).toBe("plan");
+	});
+
+	it("applies the mode a turn carries", async () => {
+		// The settings page switches the engine directly, but a turn also carries
+		// the mode, which `/chat` used to drop on the floor.
+		await turn({ approval_mode: "minimal" });
+		expect(await mode()).toBe("minimal");
+		await turn({ approval_mode: "standard" });
+		expect(await mode()).toBe("standard");
+	});
+
+	it("ignores an invalid mode on a turn instead of failing it", async () => {
+		await api("/approval_mode", { method: "POST", body: JSON.stringify({ mode: "plan" }) });
+		await turn({ approval_mode: "bogus" });
+		expect(await mode()).toBe("plan");
+	});
+
+	it("keeps the picked mode when a new session is created", async () => {
+		await api("/approval_mode", { method: "POST", body: JSON.stringify({ mode: "minimal" }) });
+		const created = await api("/sessions", { method: "POST", body: "{}" });
+		expect(created.status).toBe(200);
+		// The SPA creates the session on the first send; replaying `defaultMode`
+		// there wiped the mode the user had just picked.
+		expect(await mode()).toBe("minimal");
+	});
+
+	it("streams the live mode and its changes", async () => {
+		// The settings page highlight follows this stream, so a mode switched from
+		// inside a turn (plan mode exiting) does not leave a stale button lit.
+		const controller = new AbortController();
+		const response = await fetch(`${base}/mode/stream`, {
+			headers: { authorization: `Bearer ${token}` },
+			signal: controller.signal,
+		});
+		expect(response.status).toBe(200);
+		const reader = response.body?.getReader();
+		if (!reader) throw new Error("the mode stream has no body");
+		const decoder = new TextDecoder();
+		const events: { mode: string; reason?: string }[] = [];
+		const read = async (): Promise<void> => {
+			const { done, value } = await reader.read();
+			if (done) return;
+			for (const part of decoder.decode(value, { stream: true }).split("\n\n")) {
+				const line = part.split("\n").find((entry) => entry.startsWith("data:"));
+				if (line) events.push(JSON.parse(line.slice("data:".length).trim()));
+			}
+		};
+		await withTimeout(read(), 5000, "the first mode event");
+		expect(events[0]).toEqual({ mode: "standard" });
+
+		await api("/approval_mode", { method: "POST", body: JSON.stringify({ mode: "plan" }) });
+		await withTimeout(read(), 5000, "the mode change event");
+		expect(events.at(-1)).toEqual({ mode: "plan", reason: "webui" });
+		controller.abort();
+	});
+
+	it("persists the default mode for new sessions without touching the live one", async () => {
+		await api("/extra/settings", { method: "PUT", body: JSON.stringify({ defaultMode: "plan" }) });
+		expect(await mode()).toBe("standard");
+		const stored = JSON.parse(await readFile(join(agentDir, "extra", "settings.json"), "utf8"));
+		expect(stored.defaultMode).toBe("plan");
+	});
+});

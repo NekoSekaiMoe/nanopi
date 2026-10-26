@@ -121,6 +121,12 @@ interface SessionDetailContent {
 
 interface ChatRequestBody {
 	message?: string;
+	/**
+	 * Run mode the sender is in. The settings page switches the engine directly,
+	 * but a turn carries the mode too, so a client that only knows the mode of its
+	 * own copy of the state (a freshly loaded tab) still runs the turn under it.
+	 */
+	approval_mode?: string;
 	session_id?: string;
 	provider?: string;
 	images?: { media_type: string; data: string }[];
@@ -1201,7 +1207,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (
-			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mcp|tunnel|providers|provider-accounts|model-profiles)\b/.test(
+			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|tunnel|providers|provider-accounts|model-profiles)\b/.test(
 				path,
 			)
 		) {
@@ -1561,6 +1567,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 			const chatBody: ChatRequestBody = {
 				message: typeof body.message === "string" ? body.message : "",
+				approval_mode: typeof body.approval_mode === "string" ? body.approval_mode : undefined,
 				session_id: typeof body.session_id === "string" ? body.session_id : undefined,
 				provider: typeof body.provider === "string" ? body.provider : undefined,
 				images: undefined,
@@ -1611,6 +1618,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					await restoreStoredThinkingLevel(runtime.session);
 				}
 			}
+			// Apply the requested mode before the turn, next to the model switch: the
+			// mode decides the tool set the turn runs with. An invalid value is
+			// ignored rather than failing the turn, which already has a user prompt in it.
+			if (chatBody.approval_mode) extraBridge.setMode(chatBody.approval_mode);
 			turnActive = true;
 			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
 			return;
@@ -1682,6 +1693,37 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				}
 			}
 			json(res, 200, { ok: true, mode: extraBridge.state().mode });
+			return;
+		}
+
+		/**
+		 * Live run-mode stream. The engine is process-wide and a mode also changes
+		 * from inside a turn (the model leaving plan mode, a /mode command typed into
+		 * the composer), so a client that only reads /approval_mode once would show a
+		 * stale highlight. The first event carries the current mode, so one request
+		 * both seeds and follows it.
+		 */
+		if (path === "/mode/stream" && req.method === "GET") {
+			if (!extraBridge.available) {
+				json(res, 404, { error: "run modes are not included in this build" });
+				return;
+			}
+			res.writeHead(200, {
+				"content-type": "text/event-stream; charset=utf-8",
+				"cache-control": "no-cache",
+				connection: "keep-alive",
+			});
+			const send = (mode: string, reason: string | undefined) => {
+				if (res.writableEnded) return;
+				res.write(`data: ${JSON.stringify({ mode, reason })}\n\n`);
+			};
+			const snapshot = extraBridge.engine.snapshot();
+			send(snapshot.mode, snapshot.reason);
+			const unsubscribe = extraBridge.engine.subscribe((next) => send(next.mode, next.reason));
+			req.on("close", () => {
+				unsubscribe();
+				if (!res.writableEnded) res.end();
+			});
 			return;
 		}
 

@@ -27,6 +27,8 @@ export interface BridgeExtensionHooks {
 	subsystemStatus(): SubsystemStatus[];
 	/** Immediate in-session effect of a subsystem toggle (tool filtering). */
 	applySubsystem(key: SubsystemKey, enabled: boolean): void;
+	/** Re-derive the active tool set from the current mode (minimal narrows it). */
+	applyModeToolSet(): void;
 }
 
 /** Session-side judge inputs the extension binds for webui-mode AI decisions. */
@@ -60,10 +62,17 @@ export class ExtraBridge {
 		return { available: true, mode: snapshot.mode, yolo: snapshot.yolo };
 	}
 
-	/** Validate and switch the run mode (webui /approval_mode and /extra/mode). */
+	/**
+	 * Validate and switch the run mode (webui /approval_mode, /extra/mode, and the
+	 * `approval_mode` field of /chat). The engine notifies the extension, which
+	 * applies the tool set; the explicit call covers a bridge used before its
+	 * session bound its hooks.
+	 */
 	setMode(value: unknown): { ok: true; mode: RunMode } | { ok: false; error: string } {
 		if (!isRunMode(value)) return { ok: false, error: `invalid run mode: ${String(value)}` };
+		const changed = this.engine.mode !== value;
 		this.engine.setMode(value, "webui");
+		if (changed) this.extensionHooks?.applyModeToolSet();
 		return { ok: true, mode: value };
 	}
 

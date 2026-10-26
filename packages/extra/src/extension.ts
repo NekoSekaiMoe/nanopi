@@ -151,12 +151,22 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	/** Read once per session start; `/gitguard` re-applies it. */
 	let gitGuardOn = true;
 
+	/**
+	 * Apply a mode switch wherever it came from: the footer badge in the TUI, the
+	 * tool set everywhere else. Without the second half a switch made through the
+	 * webui changed the engine while the session kept its tools, so minimal mode
+	 * still ran every tool.
+	 */
+	function onModeChange(): void {
+		applyModeToolSet();
+		applyModeStatus();
+	}
 	/** Push the current mode badges through the footer status channel. */
 	function applyModeStatus(): void {
 		if (sessionCtx?.mode !== "tui") return;
 		sessionCtx.ui.setStatus("mode", modeBadgeText(engine, sessionCtx.ui.theme));
 	}
-	engine.subscribe(() => applyModeStatus());
+	engine.subscribe(() => onModeChange());
 
 	// --- Shell sandbox (registered as a bash backend, inert until activated) ---
 	const SANDBOX_BACKEND_ID = "sandbox";
@@ -339,6 +349,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	function applyModeToolSet(): void {
 		const all = nanopi.getAllTools().map((tool) => tool.name);
 		if (engine.mode === "minimal") {
+			// Capture only when entering: the snapshot survives a same-mode reapply,
+			// and the narrowed set below must not be captured as the restore point.
 			if (!engine.preMinimalTools) engine.setPreMinimalTools(nanopi.getActiveTools());
 			nanopi.setActiveTools(
 				nanopi.getActiveTools().filter((name) => all.includes(name) && SHELL_TOOL_NAMES.has(name)),
@@ -400,10 +412,12 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		sessionCtx = ctx;
 		engine.setYolo(nanopi.getFlag("yolo") === true);
 		if (event.reason !== "reload") {
-			// New sessions pick up the configured default mode (webui switches
-			// the engine explicitly and they survive until the next session).
+			// New sessions pick up the configured default mode. The webui is the
+			// exception: the engine is process-wide and the settings page switches
+			// it live, so resetting here wiped the mode the user had just picked
+			// (the SPA creates a session on the first send, after the switch).
 			const settings = loadExtraSettings(ctx.cwd).settings;
-			engine.setMode(settings.defaultMode, "session default");
+			if (ctx.mode !== "webui") engine.setMode(settings.defaultMode, "session default");
 			applyModeToolSet();
 			// Persisted subsystem switches apply to fresh sessions too, not just
 			// when toggled live from the webui settings page.
@@ -427,6 +441,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			{
 				subsystemStatus: () => subsystemStatus(),
 				applySubsystem: (key, enabled) => applySubsystem(key, enabled),
+				applyModeToolSet: () => applyModeToolSet(),
 			},
 			ctx.cwd,
 			{
