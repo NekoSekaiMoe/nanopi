@@ -14,7 +14,9 @@ import {
 	getSession,
 	postChatUserInput,
 	respondPermission,
+	setApprovalMode as putApprovalMode,
 	stopChat,
+	streamApprovalMode,
 	streamChat,
 } from "@/lib/api";
 import { randomId } from "@/lib/utils";
@@ -246,7 +248,7 @@ export function useChat({
 	const [permission, setPermission] = useState<PendingPermission | null>(null);
 	const [userInput, setUserInput] = useState<UserInputRequestEvent | null>(null);
 	const [plan, setPlan] = useState<PlanItem[]>([]);
-	const [approvalMode, setApprovalMode] = useState<ApprovalMode>("standard");
+	const [approvalMode, setApprovalModeState] = useState<ApprovalMode>("standard");
 
 	const abortRef = useRef<AbortController | null>(null);
 	const requestIdRef = useRef<string | null>(null);
@@ -484,6 +486,30 @@ export function useChat({
 				break;
 		}
 	};
+
+	/**
+	 * Mirror the daemon run mode. The mode lives in the process, not in this tab,
+	 * so the highlight follows the engine: the settings page switches it, and a
+	 * turn can switch it too (plan mode ends with an approval prompt). The stream
+	 * seeds from the current mode and keeps following from there.
+	 */
+	useEffect(() => {
+		const controller = new AbortController();
+		// The mode is a display detail: a dropped stream must not raise a banner.
+		void streamApprovalMode((event) => setApprovalModeState(event.mode), controller.signal).catch(() => {});
+		return () => controller.abort();
+	}, []);
+
+	/**
+	 * Switch the run mode. The optimistic update keeps the button responsive, and
+	 * the reply (or the stream) settles the state when the daemon disagrees.
+	 */
+	const setApprovalMode = useCallback((mode: ApprovalMode) => {
+		setApprovalModeState(mode);
+		void putApprovalMode(mode)
+			.then((applied) => setApprovalModeState(applied))
+			.catch((cause: unknown) => setError(turnErrorFrom(cause)));
+	}, []);
 
 	const send = useCallback(
 		async (text: string, images: ImageData[] = []) => {
