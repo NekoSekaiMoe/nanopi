@@ -1,6 +1,6 @@
 import type { Model } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
-import { mergeModelLists, modelsWithinAllowlist } from "../src/modes/webui/model-list.ts";
+import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "../src/modes/webui/model-list.ts";
 
 function model(provider: string, id: string): Model<"openai-completions"> {
 	return {
@@ -68,5 +68,21 @@ describe("mergeModelLists", () => {
 		const models: Model<any>[] = [model("anthropic", "claude-sonnet-4")];
 		mergeModelLists(models, [model("anthropic", "claude-sonnet-4"), undefined]);
 		expect(models).toHaveLength(1);
+	});
+});
+
+describe("dropUnauthenticated", () => {
+	// Regression for #228: the picker listed every provider's packaged catalog,
+	// so a user with two keys scrolled past hundreds of unreachable models.
+	it("keeps only the providers that passed the auth check", () => {
+		const mixed = [...catalog, model("alibaba-cn", "qwen-max"), model("alibaba-cn", "qwen-plus")];
+		expect(dropUnauthenticated(mixed, new Set(["anthropic"])).map((entry) => entry.provider)).toEqual([
+			"anthropic",
+			"anthropic",
+		]);
+	});
+
+	it("drops every catalog row when nothing authenticated", () => {
+		expect(dropUnauthenticated(catalog, new Set())).toEqual([]);
 	});
 });

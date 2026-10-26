@@ -846,8 +846,10 @@ export interface DiscoveredModelInfo {
 
 export async function discoverProviderModels(body: {
 	type: string;
-	base_url: string;
+	base_url?: string;
 	api_key?: string;
+	/** Existing account whose saved key and base URL stand in for blank fields. */
+	provider_id?: string;
 }): Promise<DiscoveredModelInfo[]> {
 	const response = await fetch("/providers/discover-models", {
 		method: "POST",

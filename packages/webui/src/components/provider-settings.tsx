@@ -4,6 +4,7 @@ import { Check, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import {
 	type ConfigInfo,
+	type DiscoveredModelInfo,
 	type ModelInfo,
 	type ProviderAccountInfo,
 	type ProviderPresetInfo,
@@ -12,6 +13,7 @@ import {
 	createAccount,
 	deleteAccount,
 	deleteAccountModel,
+	discoverProviderModels,
 	editAccount,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -367,6 +369,29 @@ function AddProviderForm({
 	const [apiKey, setApiKey] = useState("");
 	const [model, setModel] = useState("");
 	const [modelName, setModelName] = useState("");
+	const [discoveries, setDiscoveries] = useState<DiscoveredModelInfo[]>([]);
+	const [discoverError, setDiscoverError] = useState<string | null>(null);
+	const [discovering, setDiscovering] = useState(false);
+	const [picked, setPicked] = useState<string[]>([]);
+
+	async function discover() {
+		setDiscovering(true);
+		setDiscoverError(null);
+		try {
+			const found = await discoverProviderModels({
+				type: preset?.type ?? "openai",
+				base_url: baseUrl.trim() || undefined,
+				api_key: apiKey.trim() || undefined,
+			});
+			setDiscoveries(found);
+			setPicked(found.map((entry) => entry.id));
+			if (found.length === 0) setDiscoverError(t("接口没有返回模型"));
+		} catch (cause) {
+			setDiscoverError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setDiscovering(false);
+		}
+	}
 
 	useEffect(() => {
 		setBaseUrl(preset?.default_base_url ?? "");
@@ -377,13 +402,19 @@ function AddProviderForm({
 			<form
 				onSubmit={(event) => {
 					event.preventDefault();
-					if (!model.trim() || busy) return;
+					if (busy) return;
+					const manual = model.trim();
+					const discovered = discoveries.filter((entry) => picked.includes(entry.id));
+					if (!manual && discovered.length === 0) return;
 					onSubmit({
 						provider: presetId,
 						display_name: displayName.trim() || undefined,
 						base_url: baseUrl.trim() || undefined,
 						api_key: apiKey.trim() || undefined,
-						models: [{ model: model.trim(), display_name: modelName.trim() || undefined }],
+						models: [
+							...discovered.map((entry) => ({ model: entry.id, display_name: entry.name })),
+							...(manual ? [{ model: manual, display_name: modelName.trim() || undefined }] : []),
+						],
 					});
 				}}
 				className="space-y-4"
@@ -431,6 +462,51 @@ function AddProviderForm({
 					/>
 				</Field>
 
+				<div className="flex flex-wrap items-end gap-2">
+					<button
+						type="button"
+						onClick={discover}
+						disabled={discovering || busy}
+						className="h-8 rounded-lg border border-border px-2.5 text-[12px] text-foreground transition-colors hover:bg-overlay-hover disabled:opacity-40"
+					>
+						{discovering ? t("拉取中…") : t("从接口拉取模型")}
+					</button>
+					{discoverError ? <span className="text-[11px] text-destructive">{discoverError}</span> : null}
+				</div>
+
+				{discoveries.length > 0 ? (
+					<div className="space-y-1 rounded-lg border border-border-soft p-2">
+						<p className="text-[10.5px] text-muted-foreground">
+							{t("接口返回")} {discoveries.length} {t("个模型，已选")} {picked.length} {t("个")}
+						</p>
+						<div className="max-h-56 space-y-0.5 overflow-y-auto">
+							{discoveries.map((entry) => (
+								<label
+									key={entry.id}
+									className="flex cursor-pointer items-center gap-2 rounded-md px-1.5 py-1 hover:bg-overlay-hover"
+								>
+									<input
+										type="checkbox"
+										checked={picked.includes(entry.id)}
+										onChange={(event) =>
+											setPicked((previous) =>
+												event.target.checked
+													? [...previous, entry.id]
+													: previous.filter((id) => id !== entry.id),
+											)
+										}
+										className="size-3.5 accent-foreground"
+									/>
+									<span className="min-w-0 flex-1 truncate font-mono text-[11.5px]">{entry.id}</span>
+									{entry.name && entry.name !== entry.id ? (
+										<span className="truncate text-[10.5px] text-muted-foreground">{entry.name}</span>
+									) : null}
+								</label>
+							))}
+						</div>
+					</div>
+				) : null}
+
 				<div className="grid gap-3 sm:grid-cols-2">
 					<Field label={t("模型 ID")} hint={t("例如 claude-sonnet-4")}>
 						<input
@@ -462,7 +538,7 @@ function AddProviderForm({
 					</button>
 					<button
 						type="submit"
-						disabled={busy || !model.trim()}
+						disabled={busy || (!model.trim() && picked.length === 0)}
 						className="h-8 rounded-lg bg-foreground px-3 text-[12px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
 					>
 						{busy ? t("保存中…") : t("保存")}
@@ -500,6 +576,30 @@ function EditProviderForm({
 	const unusable = unusableModels(account, models);
 	const [newModel, setNewModel] = useState("");
 	const [newModelName, setNewModelName] = useState("");
+	const [discoveries, setDiscoveries] = useState<DiscoveredModelInfo[]>([]);
+	const [discoverError, setDiscoverError] = useState<string | null>(null);
+	const [discovering, setDiscovering] = useState(false);
+
+	async function discover() {
+		setDiscovering(true);
+		setDiscoverError(null);
+		try {
+			const found = await discoverProviderModels({
+				type: account.type,
+				base_url: baseUrl.trim() || account.base_url,
+				api_key: apiKey.trim() || undefined,
+				provider_id: account.id,
+			});
+			setDiscoveries(found);
+			if (found.length === 0) setDiscoverError(t("接口没有返回模型"));
+		} catch (cause) {
+			setDiscoverError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setDiscovering(false);
+		}
+	}
+
+	const missing = discoveries.filter((entry) => !account.model_ids.includes(entry.id));
 
 	return (
 		<SettingsSubpage title={account.label || account.id} onBack={onBack}>
@@ -589,6 +689,33 @@ function EditProviderForm({
 							</div>
 						))
 					)}
+				</div>
+
+				<div className="mt-3 flex flex-wrap items-center gap-2">
+					<button
+						type="button"
+						onClick={discover}
+						disabled={discovering || busy}
+						className="h-8 rounded-lg border border-border px-2.5 text-[12px] text-foreground transition-colors hover:bg-overlay-hover disabled:opacity-40"
+					>
+						{discovering ? t("拉取中…") : t("从接口拉取模型")}
+					</button>
+					{discoverError ? <span className="text-[11px] text-destructive">{discoverError}</span> : null}
+					{missing.length > 0 ? (
+						<button
+							type="button"
+							disabled={busy}
+							onClick={() => {
+								for (const entry of missing) onAddModel({ model: entry.id, display_name: entry.name });
+								setDiscoveries([]);
+							}}
+							className="h-8 rounded-lg bg-foreground px-2.5 text-[12px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+						>
+							{t("添加")} {missing.length} {t("个新模型")}
+						</button>
+					) : discoveries.length > 0 ? (
+						<span className="text-[11px] text-muted-foreground">{t("接口返回的模型都已添加")}</span>
+					) : null}
 				</div>
 
 				<div className="mt-3 flex flex-wrap items-end gap-2">

@@ -404,6 +404,22 @@ export async function deleteAccountModel(path: string, id: string, modelId: stri
 	await writeModelsJson(path, file);
 }
 
+/** The saved API key of one models.json provider, or undefined when it has none. */
+export async function readAccountApiKey(path: string, id: string): Promise<string | undefined> {
+	const entry = (await readModelsJson(path)).providers[id];
+	return typeof entry?.apiKey === "string" && entry.apiKey.length > 0 ? entry.apiKey : undefined;
+}
+
+/** Gateway-assigned headers a models.json entry carries, minus the API key. */
+export async function readAccountHeaders(path: string, id: string): Promise<Record<string, string> | undefined> {
+	const headers = (await readModelsJson(path)).providers[id]?.headers;
+	if (!headers || typeof headers !== "object" || Array.isArray(headers)) return undefined;
+	const entries = Object.entries(headers as Record<string, unknown>).filter(
+		(entry): entry is [string, string] => typeof entry[1] === "string",
+	);
+	return entries.length > 0 ? Object.fromEntries(entries) : undefined;
+}
+
 export interface DiscoveredModel {
 	id: string;
 	name?: string;
@@ -414,11 +430,12 @@ export async function discoverModels(input: {
 	type: string;
 	base_url: string;
 	api_key?: string;
+	headers?: Record<string, string>;
 }): Promise<DiscoveredModel[]> {
 	const baseUrl = input.base_url.trim().replace(/\/+$/, "");
 	if (!baseUrl) throw new ProviderAccountError("base_url is required", 400);
 	const url = input.type === "anthropic" ? `${baseUrl}/v1/models` : `${baseUrl}/models`;
-	const headers: Record<string, string> = {};
+	const headers: Record<string, string> = { ...input.headers };
 	if (input.api_key) {
 		if (input.type === "anthropic") {
 			headers["x-api-key"] = input.api_key;

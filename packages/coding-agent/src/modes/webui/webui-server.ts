@@ -38,7 +38,7 @@ import {
 	type SessionInfo,
 	SessionManager,
 } from "../../core/session-manager.ts";
-import { mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
+import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
 	addAccountModels,
 	createAccount,
@@ -52,6 +52,8 @@ import {
 	PROVIDER_PROTOCOLS,
 	ProviderAccountError,
 	providerAccountsPath,
+	readAccountApiKey,
+	readAccountHeaders,
 } from "./provider-accounts.ts";
 
 /** Default port for `nanopi webui`. */
@@ -1244,19 +1246,20 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		/**
-		 * Chat models to expose: the availability snapshot, the active session
-		 * model, and the configured catalog, narrowed to the CLI's allowlist.
-		 * `refresh` runs the same availability pass the CLI's `--list-models` runs
-		 * through `getAvailable()`, so both sides agree on what is authenticated
-		 * (a models.json provider with no key resolves nothing there and stays out).
+		 * Chat models to expose in the picker: the availability snapshot, the
+		 * active session model, and the configured catalog, narrowed to the CLI's
+		 * allowlist.
 		 *
-		 * The catalog still contributes rows: the snapshot only holds providers
-		 * that passed an auth check, while a provider can expose credentials
-		 * without a declared one (a stored key, or a credential type it does not
-		 * advertise). Those models are usable, so the webui shows them; `available`
-		 * on the wire separates the two cases.
+		 * Catalog rows whose provider failed the auth check are dropped. A built-in
+		 * provider ships its whole packaged snapshot (alibaba-cn alone is dozens of
+		 * ids) and listing it greyed out turns a picker into a browse of models the
+		 * user cannot run; `available: false` still reaches the client for the rows
+		 * that survive, so the wire format is unchanged. A provider without a
+		 * declared auth method can still resolve a credential, so it keeps its rows
+		 * once the availability snapshot reports one.
 		 */
 		async function chatModels(refresh = false): Promise<Model<any>[]> {
+			const authenticated = authenticatedProviders();
 			const models: Model<any>[] = [];
 			if (refresh) {
 				try {
@@ -1267,7 +1270,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 			mergeModelLists(models, services.modelRuntime.getAvailableSnapshot());
 			mergeModelLists(models, [session.model]);
-			mergeModelLists(models, services.modelRuntime.getModels());
+			mergeModelLists(models, dropUnauthenticated(services.modelRuntime.getModels(), authenticated));
 			return modelsWithinAllowlist(models, services.settingsManager.getEnabledModels(), session.model);
 		}
 
@@ -1401,6 +1404,23 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		async function refreshModels(): Promise<void> {
 			await services.modelRuntime.refresh({ allowNetwork: false });
+		}
+
+		/** The saved API key and extra headers of a models.json account. */
+		async function storedAccountAuth(accountId: string | undefined): Promise<{
+			apiKey: string | undefined;
+			headers: Record<string, string> | undefined;
+		}> {
+			if (!accountId) return { apiKey: undefined, headers: undefined };
+			try {
+				const path = providerAccountsPath();
+				return {
+					apiKey: await readAccountApiKey(path, accountId),
+					headers: await readAccountHeaders(path, accountId),
+				};
+			} catch {
+				return { apiKey: undefined, headers: undefined };
+			}
 		}
 
 		// --- Config ---
@@ -1999,11 +2019,18 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 		if (path === "/providers/discover-models" && req.method === "POST") {
 			const body = await readBody(req);
+			// The settings page reloads an existing account, so a blank key and base
+			// URL mean "the ones already saved" rather than "none".
+			const accounts = await listAccounts(providerAccountsPath());
+			const accountId = str(body.provider_id);
+			const account = accountId ? accounts.find((entry) => entry.id === accountId) : undefined;
+			const saved = await storedAccountAuth(accountId);
 			try {
 				const models = await discoverModels({
-					type: str(body.type) ?? "openai",
-					base_url: str(body.base_url) ?? "",
-					api_key: str(body.api_key),
+					type: str(body.type) ?? account?.type ?? "openai",
+					base_url: str(body.base_url) ?? account?.base_url ?? "",
+					api_key: str(body.api_key) ?? saved.apiKey,
+					headers: saved.headers,
 				});
 				json(res, 200, { models });
 			} catch (error) {
