@@ -27,6 +27,8 @@ it, so a report never races the run that is settling.
 - `cwd` (spawn): working directory (default: session cwd); rejected together with `isolated`
 - `model` / `timeoutSec`: optional; timeout default 600s per attempt
 - `dependsOn` (spawn): job ids that must settle first; their reports are pasted into the dependent's brief
+- `dependsOnTimeoutSec` (spawn): stop waiting for `dependsOn` after this many seconds and report the
+  job as blocked, naming the dependencies that never settled; unset waits indefinitely
 - `isolated` (spawn/continue): give the job its own git worktree
 - `onFailure`: `"report"` (default) or `"retry"`, capped at 3 attempts
 - `jobId` (wait/status/kill/continue)
@@ -56,10 +58,17 @@ That assembly is the same one `continue` uses for the previous round, moved to
 where the edges are known, so a dependent never depends on the main agent copying
 a report by hand (and nothing silently loses a report's tail).
 
-A dependency that failed, timed out, or was killed blocks the dependent
-(`blocked`, reported like any other outcome) rather than letting it run on missing
-work. An unknown id is refused at spawn time, because it can never settle. The
-main agent does not poll for this.
+A dependency that failed, timed out, was killed, or was interrupted blocks the
+dependent (`blocked`, reported like any other outcome) rather than letting it run
+on missing work. That includes a dependency killed by `kill` or by the session
+shutdown, which used to leave its dependents queued forever. An unknown id is
+refused at spawn time, because it can never settle. The main agent does not poll
+for this.
+
+Waiting on a dependency that never settles is bounded by `dependsOnTimeoutSec`,
+not by a status: an unsettled dependency has produced nothing to draw a
+conclusion from, so waiting indefinitely is the wrong default for a job that
+might be blocking a whole chain.
 
 **Restarts.** Every archived job records its `dependsOn` edges, so a restored
 session rebuilds the graph instead of a bag of reports. A job archived as
@@ -77,6 +86,22 @@ is removed and the branch dropped.
 **Failure semantics.** `onFailure: "retry"` reruns a failed attempt with the
 failure text prepended to the brief, up to 3 attempts in total. The limit is a
 constant; a brief cannot raise it.
+
+An exit on a signal is `killed`, not `completed`: `kill -9`, the OOM killer and a
+container restart all reach the parent as `code === null` plus a signal, and
+treating that as success published a report for a child that never finished. A
+signal nobody here sent (`SIGKILL`/`SIGTERM`/`SIGINT`/`SIGHUP`) is `killed`; a
+crash signal (`SIGSEGV`, `SIGABRT`) stays `failed`. A killed job is never
+retried — it was killed by something outside its own work, and the second attempt
+mostly buys the same ending.
+
+`status` describes the latest attempt only, so every attempt's ending is kept in
+`attemptLog` (also archived). `action: "status"` prints it:
+
+```
+subagent sa-3: completed (…, attempt 2/3)
+attempts: attempt 1 timeout: timed out after 600s
+```
 
 **Concurrency.** Max 4 concurrent subagents. Only one of them may write to the
 shared tree at a time: `bash` makes any child a potential writer, so writers are
