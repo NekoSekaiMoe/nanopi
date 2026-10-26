@@ -11,6 +11,21 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # PR 的改动合进 main 会不会丢东西：与 .cnb.yml 的 merge-result 同一条检查，
+  # 逻辑在 scripts/check-merge-result.mjs。这里拿得到 PR 的提交，所以不需要另取
+  # 源分支；fetch-depth: 0 是为了 main 与 PR 的合并基点，浅 clone 查不出来。
+  merge-result:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check merge result
+        run: node scripts/check-merge-result.mjs --base "refs/remotes/origin/${{ github.base_ref }}"
+
   build-check-test:
     runs-on: ubuntu-latest
     steps:

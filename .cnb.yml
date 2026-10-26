@@ -43,6 +43,31 @@ main:
             printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
             node scripts/mirror-tags.mjs --remote https://github.com/NekoSekaiMoe/nanopi.git
 
+# PR 的预合并结果检查：这次改动合进 main 会不会丢东西。
+#
+# 事件选 pull_request.target 而不是 pull_request：后者拿的是「预合并后的提交」，
+# 按定义已经把 main 的树合并进来了，回退永远查不出来。pull_request.target 用的是
+# 合并前的目标分支最新提交，才是真正要比较的基线。反过来，它拿不到 PR 的代码，
+# 所以从 CNB_PULL_REQUEST_SLUG / CNB_PULL_REQUEST_BRANCH 取源分支自己合一次。
+#
+# 这条流水线要变成「阻止合并」还需要在仓库设置里把 main 设为保护分支并勾选
+# 「需要通过状态检查」，否则它只是一条会变红的记录。
+main:
+  pull_request.target:
+    - name: merge-result
+      runner:
+        tags: cnb:arch:amd64
+        cpus: 2
+      stages:
+        - name: check-merge-result
+          script: |
+            set -euo pipefail
+            cp -a . /tmp/base
+            cd /tmp/base
+            # 两侧都是 CNB 上的仓库，checkout 自带的只读令牌够用。
+            git fetch --no-tags origin "+refs/heads/$CNB_PULL_REQUEST_BRANCH:refs/remotes/pr/head"
+            node scripts/check-merge-result.mjs --base "refs/remotes/pr/head"
+
 # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
 #
 # install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
