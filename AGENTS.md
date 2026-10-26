@@ -25,12 +25,12 @@
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it.
 - Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
-- Never modify `packages/ai/src/models.generated.ts` directly; update `packages/ai/scripts/generate-models.ts` instead, then regenerate. Including the resulting `models.generated.ts` diff is always OK, even if regeneration includes unrelated upstream model metadata changes.
+- `packages/ai/src/models.generated.ts` and the `*.models.ts` shards next to it are generated on every build and gitignored. Never edit them; change `packages/ai/scripts/generate-models.ts` instead and run `pnpm run generate:models`.
 
 ## Commands
 
 - After code changes (not docs): `pnpm run check` (full output, no tail). Fix all errors, warnings, and infos before committing. Does not run tests.
-- `packages/ai/src/providers/data/` and the `*.models.ts` shards are generated and gitignored, so a fresh checkout must run `pnpm run hydrate:model-data` once before type checking. `pnpm run check` detects the missing data and prints that command.
+- The model catalogs (`packages/ai/src/models.generated.ts`, the `*.models.ts` shards, and `packages/ai/src/providers/data/`) are generated and gitignored, so a fresh checkout must run `pnpm run generate:models` once before type checking. `pnpm run check` detects the missing data and prints the command.
 - Never run `pnpm run build` or `pnpm test` unless requested by the user.
 - Never run the full vitest suite directly: it includes e2e tests that activate when endpoint/auth env vars are present. For all non-e2e tests, run `node ./test.mjs` from the repo root. Otherwise run specific tests from the package root:
   - Vitest: `pnpm exec vitest --run test/specific.test.ts` from the package root
@@ -59,7 +59,6 @@ Committing:
 - Only commit files YOU changed in THIS session.
 - Stage explicit paths (`git add <path1> <path2>`); never `git add -A` / `git add .`.
 - Before committing, run `git status` and verify you are only staging your files.
-- `packages/ai/src/models.generated.ts` may always be included alongside your files.
 - Message format: `{feat,fix,docs}[(ai,tui,agent,coding-agent)]: <commit message> (optionally multiple lines)`. Message is informative and concise.
 - Commit with `git commit -s`, or rely on the `.husky/commit-msg` hook: every commit carries a `Change-Id` and `Signed-off-by` trailer. CI cannot add them after the fact (CNB exposes no API to amend commit messages, and the GitHub mirror is fast-forward only), so a commit pushed without them stays without them.
 - The hooks only become active after `pnpm install` (the `prepare` script runs `husky`, which sets `core.hooksPath`). Without it, `.git/hooks/` holds only samples and commits silently land without trailers. Fix before your first commit in a fresh checkout by pointing git at the `husky` dir directly: `git config core.hooksPath .husky/_` after one `pnpm prepare`, or run `pnpm exec husky`. `.husky/commit-msg` and `.husky/pre-commit` are shell stubs that exec the matching `.mjs` (husky 9 runs hooks with `sh -e`, so the hook file itself cannot be Node).

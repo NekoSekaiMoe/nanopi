@@ -29,7 +29,7 @@
  *   stay out of a flavor.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const BUILD_FLAVOR_ENV = "NANOPI_BUILD_FLAVOR";
@@ -562,18 +562,27 @@ export function validateFlavorModules(repoRoot, moduleNames) {
 }
 
 /**
- * Provider ids with a generated catalog module in packages/ai. Read from the
- * shard file names (`<artifact>.models.ts`) rather than from the data directory,
- * because that directory is a gitignored build product that a clean checkout
- * hydrates later.
+ * Provider ids with a generated catalog module in packages/ai.
+ *
+ * Derived from the provider sets in this file instead of from the generated
+ * `src/providers/<artifact>.models.ts` shards. Those shards are build products:
+ * the model generator writes them on every build and a clean checkout does not
+ * have them, so reading the directory would fail exactly where the check this
+ * feeds is supposed to run. A provider nobody can list in a set is not worth
+ * generating, so the sets are also the complete catalog.
+ *
+ * @returns {string[]} sorted provider ids
  */
 export function readProviderCatalogIds(repoRoot) {
-	const providersDir = join(repoRoot, "packages", "ai", "src", "providers");
-	const ids = readdirSync(providersDir)
-		.filter((entry) => entry.endsWith(".models.ts"))
-		.map((entry) => entry.slice(0, -".models.ts".length));
-	if (ids.length === 0) throw new Error(`No generated provider catalogs found in ${providersDir}`);
-	return ids.sort();
+	const config = loadBuildConfig(repoRoot);
+	const ids = new Set();
+	for (const providerSet of Object.values(config.providerSets)) {
+		for (const providerId of providerSet.providers) {
+			if (providerId !== ALL_PROVIDERS && providerId !== NO_PROVIDERS) ids.add(providerId);
+		}
+	}
+	if (ids.size === 0) throw new Error(`${BUILD_CONFIG_FILENAME} provider sets list no provider`);
+	return [...ids].sort();
 }
 
 /**
@@ -607,6 +616,10 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 	const config = loadBuildConfig(repoRoot);
 	const known = new Set(providerIds);
 	const isMarker = (providerId) => providerId === ALL_PROVIDERS || providerId === NO_PROVIDERS;
+	// A set that names catalogs one by one is its own record of what exists. A set
+	// made only of a marker is not, so the marker argument is the catalog: the
+	// model generator writes exactly the ids it receives.
+	const markerIds = new Set();
 	const reachable = new Set();
 	for (const [name, providerSet] of Object.entries(config.providerSets)) {
 		const unknown = providerSet.providers.filter((providerId) => !isMarker(providerId) && !known.has(providerId));
@@ -616,12 +629,13 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
 			);
 		}
 		if (providerSet.providers.includes(ALL_PROVIDERS)) {
-			for (const providerId of providerIds) reachable.add(providerId);
+			for (const providerId of providerIds) markerIds.add(providerId);
 		}
 		for (const providerId of providerSet.providers) {
-			if (!isMarker(providerId)) reachable.add(providerId);
+			if (!isMarker(providerId)) markerIds.add(providerId);
 		}
 	}
+	for (const providerId of markerIds) reachable.add(providerId);
 	const unreachable = providerIds.filter((providerId) => !reachable.has(providerId));
 	if (unreachable.length > 0) {
 		throw new Error(

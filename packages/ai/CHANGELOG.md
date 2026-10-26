@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `src/models.generated.ts` and the `src/providers/<id>.models.ts` shards are gitignored build products instead of committed files. `pnpm run generate-models` already rewrote them on every build, so the copies in the repository only produced diffs nobody wrote. The model-data checks now derive the provider list from `buildconfig.json` provider sets and the data manifest when the aggregator is absent, and `pnpm run ensure:model-catalogs` generates the catalogs for a checkout that has none.
+
 ### Fixed
 
 - Fixed whitespace-only tool output (for example a bare `\r\n` from bash) being sent verbatim to OpenAI Completions, OpenAI Responses, and Google, where providers reject it; those results now use the existing no-output placeholders ([#8720](https://github.com/earendil-works/pi/issues/8720)).
