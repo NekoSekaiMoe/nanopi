@@ -1061,6 +1061,10 @@ export class InteractiveMode {
 		if (modelsJsonError) {
 			this.showError(`models.json error: ${modelsJsonError}`);
 		}
+		const modelsJsonWarning = this.session.modelRuntime.getWarnings();
+		if (modelsJsonWarning) {
+			this.showWarning(`models.json warning: ${modelsJsonWarning}`);
+		}
 
 		if (modelFallbackMessage) {
 			this.showWarning(modelFallbackMessage);
@@ -5738,6 +5742,8 @@ export class InteractiveMode {
 				const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
 				const modelsJsonError = this.session.modelRuntime.getError();
 				if (modelsJsonError) this.showError(`models.json error: ${modelsJsonError}`);
+				const modelsJsonWarning = this.session.modelRuntime.getWarnings();
+				if (modelsJsonWarning) this.showWarning(`models.json warning: ${modelsJsonWarning}`);
 				this.showStatus(
 					savedImplicitProjectTrust
 						? "Reloaded keybindings, extensions, skills, prompts, and context files; saved project trust"

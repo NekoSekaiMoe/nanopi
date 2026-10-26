@@ -175,6 +175,42 @@ function mergeSamplingParamsByThinkingLevel(
 	return merged;
 }
 
+/**
+ * A models.json model the running build cannot serve: its `api` is not in this
+ * build's API set. It is not a broken entry (the same file works in a fuller
+ * flavor), so the provider it belongs to keeps its other models and the skipped
+ * entry surfaces as a warning instead of taking the provider down.
+ */
+class DroppedApiModelError extends Error {}
+
+/**
+ * Skipped models, grouped by provider. `applyModelsJson` is called on every
+ * composition and on every catalog read, so the warning is collected here for
+ * callers that have a place to show it, and reset before each collection.
+ */
+export interface SkippedApiModels {
+	reset(): void;
+	record(providerId: string, message: string): void;
+	byProvider(): ReadonlyMap<string, readonly string[]>;
+}
+
+/** A collector nothing reads, for one-shot validation passes. */
+export function createSkippedApiModels(): SkippedApiModels {
+	let entries = new Map<string, string[]>();
+	return {
+		reset: () => {
+			entries = new Map();
+		},
+		// `applyModelsJson` runs again on every catalog read of the same provider, so
+		// the same skip would otherwise be listed once per read.
+		record: (providerId, message) => {
+			const messages = entries.get(providerId) ?? [];
+			if (!messages.includes(message)) entries.set(providerId, [...messages, message]);
+		},
+		byProvider: () => entries,
+	};
+}
+
 function applyModelOverride(model: Model<Api>, override: ModelsJsonModelOverride): Model<Api> {
 	return {
 		...model,
@@ -221,12 +257,13 @@ function modelFromJson(
 		);
 	}
 	// A trimmed build registers a subset of the API implementations (buildconfig.json
-	// `apis`), so a models.json entry naming a dropped one would fail on the first
-	// request instead of at load time.
+	// `apis`). A models.json entry naming a dropped one is skipped here and reported
+	// as a warning: the user's file is usually a multi-model one carried over from
+	// another flavor, and failing the whole provider would hide the models it can run.
 	if (!isApiIncluded(api)) {
-		throw new Error(
-			`Provider ${providerId}, model ${definition.id}: api "${api}" is not included in this build ` +
-				`(included: ${formatIncludedApis()})`,
+		throw new DroppedApiModelError(
+			`provider ${providerId}, model ${definition.id}: api "${api}" is not included in this build ` +
+				`(included: ${formatIncludedApis()}); the model is ignored`,
 		);
 	}
 	const baseUrl = definition.baseUrl ?? providerConfig.baseUrl ?? defaults?.baseUrl;
@@ -259,7 +296,13 @@ function modelFromJson(
 }
 
 function findModelDefaults(models: readonly AnyModel[], modelId: string, api?: Api): Model<Api> | undefined {
-	const chatModels = models.filter((model) => isModelType(model, "chat"));
+	// A model that inherits its api takes the one an earlier model of the same
+	// provider uses. In a narrowed build that earlier model may itself name a
+	// dropped api, and inheriting it would resurrect the model the build cannot
+	// serve, so only included apis are candidates.
+	const chatModels = models.filter(
+		(model): model is Model<Api> => isModelType(model, "chat") && isApiIncluded(model.api),
+	);
 	return (
 		chatModels.find((model) => model.id === modelId) ??
 		(api ? chatModels.find((model) => model.api === api) : undefined) ??
@@ -311,6 +354,7 @@ function applyModelsJson(
 	providerId: string,
 	baseModels: readonly AnyModel[],
 	config: ModelsJsonProvider | undefined,
+	skipped: SkippedApiModels,
 ): AnyModel[] {
 	if (!config) return [...baseModels];
 	const hasOverrides = config.modelOverrides && Object.keys(config.modelOverrides).length > 0;
@@ -334,10 +378,28 @@ function applyModelsJson(
 			? { ...model, baseUrl, compat: mergeCompat(model.compat, config.compat) }
 			: { ...model, baseUrl };
 	});
+	// A provider-level `api` this build does not carry is not a per-model accident:
+	// every model without its own api inherits it, so the provider cannot be served
+	// at all. Fail the whole provider, which is an error rather than a warning.
+	const providerApi = config.api;
+	if (providerApi !== undefined && !isApiIncluded(providerApi)) {
+		throw new Error(
+			`Provider ${providerId}: api "${providerApi}" is not included in this build ` +
+				`(included: ${formatIncludedApis()})`,
+		);
+	}
 	for (const definition of config.models ?? []) {
 		const existingIndex = models.findIndex((model) => isModelType(model, "chat") && model.id === definition.id);
-		const defaults = findModelDefaults(models, definition.id, definition.api ?? config.api);
-		const model = modelFromJson(providerId, definition, config, defaults);
+		const defaults = findModelDefaults(models, definition.id, definition.api ?? providerApi);
+		let model: Model<Api>;
+		try {
+			model = modelFromJson(providerId, definition, config, defaults);
+		} catch (error) {
+			// Skip a model this build cannot serve, keep the rest of the provider.
+			if (!(error instanceof DroppedApiModelError)) throw error;
+			skipped.record(providerId, error.message);
+			continue;
+		}
 		if (existingIndex >= 0) models[existingIndex] = model;
 		else models.push(model);
 	}
@@ -541,7 +603,13 @@ export function validateExtensionProvider(
 	if (extension.streamSimple && !extension.api) {
 		throw new Error(`Provider ${providerId}: "api" is required when registering streamSimple.`);
 	}
-	applyExtension(providerId, applyModelsJson(providerId, getAllProviderModels(base), modelsConfig), extension);
+	// Registration validation only checks structural errors; a model this build
+	// cannot serve is a skip, not a reason to reject the registration.
+	applyExtension(
+		providerId,
+		applyModelsJson(providerId, getAllProviderModels(base), modelsConfig, createSkippedApiModels()),
+		extension,
+	);
 }
 
 /** Compose built-in, models.json, and extension layers without reading credentials. */
@@ -550,6 +618,7 @@ export function composeModelProvider(
 	base: Provider | undefined,
 	modelConfig: ModelConfig,
 	extension: ProviderConfigInput | undefined,
+	skipped: SkippedApiModels = createSkippedApiModels(),
 ): Provider {
 	const config = modelConfig.getProvider(providerId);
 	let extensionOAuthCredential: OAuthCredentials | undefined;
@@ -561,7 +630,7 @@ export function composeModelProvider(
 	const getAllModels = (): AnyModel[] => {
 		let models = applyExtension(
 			providerId,
-			applyModelsJson(providerId, getAllProviderModels(base), config),
+			applyModelsJson(providerId, getAllProviderModels(base), config, skipped),
 			currentExtension(),
 		);
 		if (extensionOAuthCredential && extension?.oauth?.modifyModels) {
@@ -580,6 +649,9 @@ export function composeModelProvider(
 		});
 	};
 	// Validate eagerly so registration/reload reports structural errors immediately.
+	// This is also where the skipped-model warning list starts: the first read is
+	// the one that reports, and `getModels` would otherwise append a second copy.
+	skipped.reset();
 	getAllModels();
 	const apiKey = composeApiKeyAuth(providerId, base, config, extension);
 	const oauth = composeOAuthAuth(providerId, base, config, extension);
@@ -628,10 +700,11 @@ export function composeModelProvider(
 							update: () => {
 								if (refreshed) {
 									// Validate before publishing the new synchronous list.
-									applyExtension(providerId, applyModelsJson(providerId, getAllProviderModels(base), config), {
-										...extension,
-										models: refreshed,
-									});
+									applyExtension(
+										providerId,
+										applyModelsJson(providerId, getAllProviderModels(base), config, skipped),
+										{ ...extension, models: refreshed },
+									);
 									refreshedExtensionModels = refreshed;
 								}
 								extensionOAuthCredential = oauthCredential;

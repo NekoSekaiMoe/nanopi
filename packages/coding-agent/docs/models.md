@@ -64,6 +64,8 @@ The `minimal` build flavor ships no built-in provider: every model comes from `m
 }
 ```
 
+A trimmed build only carries the API implementations of its flavor: `minimal` ships `openai-completions` alone. A model whose `api` the build does not carry is skipped at load time and reported as a `models.json warning` naming the provider, the model, and the APIs the build does carry. The rest of that provider still loads, so one file can name several endpoints and only the ones this build can serve appear in `/model`. A provider-level `api` outside the build's set is an error instead, because every model under it inherits that api.
+
 The dummy key makes the model available to nanopi; Ollama ignores it. For an authenticated endpoint, `apiKey` and header values can use `$NAME` or `${NAME}` environment interpolation, a literal value, or a leading `!command`. Commands in `models.json` run at request time and are not cached by nanopi.
 
 Opening `/model` reloads the file. A `models` entry adds or replaces a model with the same ID on that provider. Use `modelOverrides` to change metadata for an existing built-in or module-provided model without replacing the provider's model list. Unknown override IDs are ignored.
