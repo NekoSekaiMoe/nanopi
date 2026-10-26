@@ -60,6 +60,12 @@ export function padLine(text: string, width: number): string {
 	return truncated + " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 }
 
+/** Rows the list dialog draws outside the part list: 5 above it, 4 below. */
+const CONTEXT_LIST_CHROME_ROWS = 9;
+
+/** Rows the preview dialog draws outside the markdown view: top rule + title, bottom rule + hint. */
+const PREVIEW_CHROME_ROWS = 4;
+
 const OVERFLOW_UP = "↑";
 const OVERFLOW_DOWN = "↓";
 
@@ -195,11 +201,10 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 							return part.label === selectedLabel ? theme.bg("selectedBg", row) : row;
 						});
 
-						// On tiny terminals drop blank rows first, then clip part rows.
-						// rule, title, blank, bar, blank, …parts…, blank, rule, hint.
+						// Chrome around the list: rule, title, blank, bar, blank above it and
+						// blank, rule, hint below — nine rows in total.
 						const rows = Math.max(1, tui.terminal.rows);
-						const chrome = 8;
-						const maxParts = Math.max(1, Math.min(rows - chrome, partRows.length));
+						const maxParts = Math.max(1, Math.min(rows - CONTEXT_LIST_CHROME_ROWS, partRows.length));
 						pageRows = maxParts;
 						const shownParts =
 							partRows.length > maxParts
@@ -284,16 +289,16 @@ export async function showTextPreview(
 					else if (matchesKey(input, Key.end)) scrollTo(totalLines - pageSize);
 				},
 				render(width: number) {
-					// Fixed chrome: top rule + title + bottom rule + hint row. Subtracting one
-					// extra row here overflowed the overlay by a line, so the step covered a row
-					// the user never saw.
+					// The body is the text rows between the title and the bottom rule: the rules,
+					// the title and the hint stay fixed, so only the text counts against the page.
 					const rows = Math.max(1, tui.terminal.rows);
-					const chromeRows = 4;
-					pageSize = Math.max(1, rows - chromeRows);
 
 					const bodyWidth = Math.max(1, width - 4);
 					const wrapped = stripFenceMarkers(markdownView.render(bodyWidth));
 					totalLines = wrapped.length;
+					// The page cannot outgrow the lines it would scroll: on a short file a page
+					// counted in terminal rows leaves the view with nothing to move.
+					pageSize = Math.max(1, Math.min(rows - PREVIEW_CHROME_ROWS, totalLines));
 					scrollOffset = clampScrollOffset(scrollOffset, totalLines, pageSize);
 
 					const visible = wrapped.slice(scrollOffset, scrollOffset + pageSize);
