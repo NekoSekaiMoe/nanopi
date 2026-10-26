@@ -39,11 +39,30 @@ export const grepToolSystemPromptContribution = {
 
 export type GrepToolInput = Static<typeof grepSchema>;
 const DEFAULT_LIMIT = 100;
+/** Matches kept for any single file, so one chatty file cannot spend the whole limit. */
+const PER_FILE_LIMIT = 20;
+/** A formatted match line (`path:line: text`), as opposed to a context line (`path-line- text`). */
+const MATCH_LINE = /:\d+: /;
+/** Files named in the "more matches than shown" notice before it summarizes the rest. */
+const TRIMMED_FILES_NAMED = 3;
+
+/** A file whose matches were not all shown, and how many were dropped. */
+export interface GrepTrimmedFile {
+	file: string;
+	/** Matches kept for this file (0 when the file was not searched at all). */
+	shown: number;
+	/** Matches ripgrep reported but the tool did not print. */
+	omitted: number;
+}
 
 export interface GrepToolDetails {
 	truncation?: TruncationResult;
 	matchLimitReached?: number;
 	linesTruncated?: boolean;
+	/** True when ripgrep was stopped before it finished, so files were never searched. */
+	stoppedEarly?: boolean;
+	/** Files that lost matches to the limit or to byte truncation. */
+	trimmedFiles?: GrepTrimmedFile[];
 }
 
 /**
@@ -175,7 +194,19 @@ export function createGrepToolDefinition(
 						let linesTruncated = false;
 						let aborted = false;
 						let killedDueToLimit = false;
+						let stoppedEarly = false;
 						const outputLines: string[] = [];
+						// Per-file budget: without it one chatty file spends the whole global
+						// match limit and the handful of files ripgrep had already scanned are
+						// all the model gets, with no sign that the rest were never searched.
+						const perFileLimit = Math.min(PER_FILE_LIMIT, effectiveLimit);
+						const fileMatchCounts = new Map<string, number>();
+						// Output line -> the file it describes, so the notices can count what
+						// survived byte truncation without re-parsing the formatted text.
+						const lineDisplay = new Map<string, string>();
+						// Lines each file actually contributed, context lines included; the
+						// difference against fileMatchCounts is what byte truncation dropped.
+						const printedByFile = new Map<string, number>();
 
 						const cleanup = () => {
 							rl.close();
@@ -218,8 +249,12 @@ export function createGrepToolDefinition(
 
 						// Collect matches during streaming, then format them after rg exits.
 						const matches: Array<{ filePath: string; lineNumber: number; lineText?: string }> = [];
+						// Matches ripgrep reported for a file that was already over its own
+						// budget. Counted, never printed, so the notice can say how much was
+						// dropped instead of silently losing it.
+						const overflow = new Map<string, number>();
 						rl.on("line", (line) => {
-							if (!line.trim() || matchCount >= effectiveLimit) return;
+							if (!line.trim() || matchLimitReached) return;
 							let event: any;
 							try {
 								event = JSON.parse(line);
@@ -227,14 +262,23 @@ export function createGrepToolDefinition(
 								return;
 							}
 							if (event.type === "match") {
-								matchCount++;
 								const filePath = event.data?.path?.text;
 								const lineNumber = event.data?.line_number;
 								const lineText = event.data?.lines?.text;
-								if (filePath && typeof lineNumber === "number")
-									matches.push({ filePath, lineNumber, lineText });
+								if (!filePath || typeof lineNumber !== "number") return;
+								const seenInFile = fileMatchCounts.get(filePath) ?? 0;
+								if (seenInFile >= perFileLimit) {
+									overflow.set(filePath, (overflow.get(filePath) ?? 0) + 1);
+									return;
+								}
+								fileMatchCounts.set(filePath, seenInFile + 1);
+								matchCount++;
+								matches.push({ filePath, lineNumber, lineText });
 								if (matchCount >= effectiveLimit) {
 									matchLimitReached = true;
+									// Stopping here means every file further along the walk was
+									// never searched, which is not the same as "no matches there".
+									stoppedEarly = true;
 									stopChild(true);
 								}
 							}
@@ -256,8 +300,27 @@ export function createGrepToolDefinition(
 								return;
 							}
 							if (matchCount === 0) {
+								// A bare "No matches found" also hides the case where every match
+								// was cut by the per-file budget: there is plenty to report.
+								const omitted = [...overflow.values()].reduce((sum, n) => sum + n, 0);
+								const text =
+									omitted === 0
+										? "No matches found"
+										: `No matches shown, but ${omitted} match(es) exceeded the ${perFileLimit}-match per-file budget. Use path= to search one file at a time`;
 								settle(() =>
-									resolve({ content: [{ type: "text", text: "No matches found" }], details: undefined }),
+									resolve({
+										content: [{ type: "text", text }],
+										details:
+											omitted === 0
+												? undefined
+												: {
+														trimmedFiles: [...overflow].map(([file, n]) => ({
+															file: formatPath(file),
+															shown: 0,
+															omitted: n,
+														})),
+													},
+									}),
 								);
 								return;
 							}
@@ -272,10 +335,17 @@ export function createGrepToolDefinition(
 										.replace(/\n$/, "");
 									const { text: truncatedText, wasTruncated } = truncateLine(sanitized);
 									if (wasTruncated) linesTruncated = true;
-									outputLines.push(`${relativePath}:${match.lineNumber}: ${truncatedText}`);
+									const row = `${relativePath}:${match.lineNumber}: ${truncatedText}`;
+									outputLines.push(row);
+									lineDisplay.set(row, relativePath);
+									printedByFile.set(match.filePath, (printedByFile.get(match.filePath) ?? 0) + 1);
 								} else {
 									const block = await formatBlock(match.filePath, match.lineNumber);
 									outputLines.push(...block);
+									for (const row of block) {
+										if (MATCH_LINE.test(row)) lineDisplay.set(row, formatPath(match.filePath));
+									}
+									printedByFile.set(match.filePath, (printedByFile.get(match.filePath) ?? 0) + 1);
 								}
 							}
 
@@ -283,18 +353,76 @@ export function createGrepToolDefinition(
 							// Apply byte truncation. There is no line limit here because the match limit already capped rows.
 							const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 							let output = truncation.content;
+							// What actually made it into the output, for the notices that report drops.
+							const linesKept = truncation.truncated ? truncation.content.split("\n") : outputLines;
+							const matchesKept = linesKept.filter((line) => MATCH_LINE.test(line)).length;
 							const details: GrepToolDetails = {};
-							// Build actionable notices for truncation and match limits.
+							// Build actionable notices for truncation and match limits. Every notice
+							// names what was dropped and where: "100 matches limit reached" on its own
+							// reads as "this is all there is", and the model stops looking.
 							const notices: string[] = [];
+							const trimmedFiles: GrepTrimmedFile[] = [];
+							const filesSearched = fileMatchCounts.size;
 							if (matchLimitReached) {
 								notices.push(
-									`${effectiveLimit} matches limit reached. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
+									`${effectiveLimit} matches limit reached after ${filesSearched} file${filesSearched === 1 ? "" : "s"}. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
 								);
 								details.matchLimitReached = effectiveLimit;
 							}
+							if (stoppedEarly) {
+								notices.push(
+									"Search stopped early, so files later in the walk were not searched at all. Narrow with path= or glob= to cover them",
+								);
+								details.stoppedEarly = true;
+							}
 							if (truncation.truncated) {
-								notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+								// The cap cut rows out of the joined output. How many matches are
+								// still visible is counted on the surviving rows, not derived from
+								// line totals, because context lines inflate those.
+								notices.push(
+									`${formatSize(DEFAULT_MAX_BYTES)} limit reached; ${matchCount - matchesKept} of ${matchCount} matches dropped. Narrow with path= or glob=`,
+								);
 								details.truncation = truncation;
+							}
+							// Matches the model can still see in each file: everything printed when
+							// nothing was cut, and the surviving rows per file otherwise.
+							const keptByFile = truncation.truncated ? new Map<string, number>() : printedByFile;
+							if (truncation.truncated) {
+								const labelToFile = new Map(
+									[...fileMatchCounts].map(([filePath]) => [formatPath(filePath), filePath]),
+								);
+								for (const line of linesKept) {
+									if (!MATCH_LINE.test(line)) continue;
+									const filePath = labelToFile.get(lineDisplay.get(line) ?? "");
+									if (filePath) keptByFile.set(filePath, (keptByFile.get(filePath) ?? 0) + 1);
+								}
+							}
+							// Files that lost matches: the per-file budget first, then byte truncation.
+							const omittedByFile = new Map<string, number>(overflow);
+							if (truncation.truncated) {
+								for (const [filePath, shown] of fileMatchCounts) {
+									const lost = shown - (keptByFile.get(filePath) ?? 0);
+									if (lost > 0) omittedByFile.set(filePath, (omittedByFile.get(filePath) ?? 0) + lost);
+								}
+							}
+							for (const [filePath, omitted] of omittedByFile) {
+								if (omitted <= 0) continue;
+								trimmedFiles.push({
+									file: formatPath(filePath),
+									shown: keptByFile.get(filePath) ?? 0,
+									omitted,
+								});
+							}
+							trimmedFiles.sort((a, b) => b.omitted - a.omitted);
+							if (trimmedFiles.length > 0) {
+								const named = trimmedFiles
+									.slice(0, TRIMMED_FILES_NAMED)
+									.map((entry) => `${entry.file} (${entry.shown} of ${entry.shown + entry.omitted})`);
+								const rest = trimmedFiles.length - named.length;
+								notices.push(
+									`Some files have more matches than shown: ${named.join(", ")}${rest > 0 ? `, and ${rest} more file${rest === 1 ? "" : "s"}` : ""}. Use path= to search one file at a time`,
+								);
+								details.trimmedFiles = trimmedFiles;
 							}
 							if (linesTruncated) {
 								notices.push(

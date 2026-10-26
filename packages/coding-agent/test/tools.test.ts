@@ -913,9 +913,68 @@ describe("Coding Agent Tools", () => {
 			expect(output).toContain("context.txt-1- before");
 			expect(output).toContain("context.txt:2: match one");
 			expect(output).toContain("context.txt-3- after");
-			expect(output).toContain("[1 matches limit reached. Use limit=2 for more, or refine pattern]");
+			expect(output).toContain("1 matches limit reached after 1 file. Use limit=2 for more, or refine pattern");
 			// Ensure second match is not present
 			expect(output).not.toContain("match two");
+		});
+
+		it("should say which files lost matches to the per-file budget", async () => {
+			// One chatty file plus a few quiet ones: the chatty file must not spend the
+			// whole global limit, and the notice must name what was cut.
+			const chatty = join(testDir, "chatty.txt");
+			writeFileSync(chatty, Array.from({ length: 40 }, (_, i) => `match ${i}`).join("\n"));
+			for (const name of ["a.txt", "b.txt"]) writeFileSync(join(testDir, name), "match here\n");
+
+			const result = await grepTool.execute("test-call-grep-per-file", { pattern: "match", path: testDir });
+			const output = getTextOutput(result);
+
+			// The quiet files are still represented even though chatty.txt matched 40 times.
+			expect(output).toContain("a.txt:1: match here");
+			expect(output).toContain("b.txt:1: match here");
+			expect(output).toContain("chatty.txt (20 of 40)");
+			expect(output).toContain("Use path= to search one file at a time");
+			expect(result.details?.trimmedFiles).toEqual([
+				expect.objectContaining({ file: "chatty.txt", shown: 20, omitted: 20 }),
+			]);
+		});
+
+		it("should mention individual files when the global match limit stops the walk", async () => {
+			for (let i = 0; i < 5; i++) {
+				writeFileSync(join(testDir, `f${i}.txt`), "match\n");
+			}
+
+			const result = await grepTool.execute("test-call-grep-stop-early", {
+				pattern: "match",
+				path: testDir,
+				limit: 2,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("2 matches limit reached after 2 files");
+			expect(output).toContain("Search stopped early");
+			expect(output).toContain("files later in the walk were not searched at all");
+			expect(result.details?.stoppedEarly).toBe(true);
+		});
+
+		it("should report how many match lines the byte limit dropped", async () => {
+			// Eight files of 20 matches each, ~500 chars per line. Every match is found
+			// (the global limit is raised past them, the per-file budget is never
+			// reached) and the joined output runs past the 50KB cap, so byte
+			// truncation is the only thing that drops rows.
+			for (let fileIndex = 0; fileIndex < 8; fileIndex++) {
+				const rows = Array.from({ length: 20 }, (_, i) => `match ${fileIndex}-${i} ${"x".repeat(480)}`);
+				writeFileSync(join(testDir, `wide${fileIndex}.txt`), rows.join("\n"));
+			}
+
+			const result = await grepTool.execute("test-call-grep-bytes", { pattern: "match", path: testDir, limit: 400 });
+			const output = getTextOutput(result);
+
+			expect(output).toMatch(/50\.0KB limit reached; \d+ of 160 matches dropped/);
+			expect(output).toContain("Narrow with path= or glob=");
+			expect(result.details?.truncation?.truncated).toBe(true);
+			// Named files, not just a total: "50KB reached" alone reads as "that is all".
+			expect(result.details?.trimmedFiles?.length).toBeGreaterThan(0);
+			expect(result.details?.trimmedFiles?.some((entry: { shown: number }) => entry.shown === 0)).toBe(true);
 		});
 
 		it("should treat flag-like patterns as search text", async () => {
