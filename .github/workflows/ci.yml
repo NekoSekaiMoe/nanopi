@@ -1,8 +1,8 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # 只有 pull_request：merge-result 是「PR 合进 main 会不会丢东西」，push 事件下
+  # 没有可比的 base；GitHub 侧是直推 main，那边由 sync-to-cnb 的镜像兜底。
   pull_request:
     branches: [main]
 
@@ -11,26 +11,18 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # PR 的改动合进 main 会不会丢东西：与 .cnb.yml 的 merge-result 同一条检查，
-  # 逻辑在 scripts/check-merge-result.mjs。这里拿得到 PR 的提交，所以不需要另取
-  # 源分支；fetch-depth: 0 是为了 main 与 PR 的合并基点，浅 clone 查不出来。
-  merge-result:
-    if: github.event_name == 'pull_request'
+  # PR 的改动合进 main 会不会丢东西：与 .cnb.yml 的 pull_request.target 同一条检查，
+  # 逻辑在 scripts/check-merge-result.mjs。脚本只读 git 对象，不需要装依赖，所以并进
+  # build-check-test 作为一个步骤，不单独占一个 runner。
+  #
+  # fetch-depth: 0 是必须的：浅 clone 没有与 base 的合并基点，脚本会以「base 缺失」退出 2。
+  build-check-test:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-
-      - name: Check merge result
-        run: node scripts/check-merge-result.mjs --base "refs/remotes/origin/${{ github.base_ref }}"
-
-  build-check-test:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup pnpm
         run: npm install -g pnpm@12.3.1
@@ -51,6 +43,11 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Check merge result
+        # 用 PR 合并后的提交与 base 比：base 有的文件在结果里必须还在（#242 的
+        # b3ffe400 用旧树盖掉了 c897cdf2，父链没断，只有比树才看得出来）。
+        run: node scripts/check-merge-result.mjs --base "refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Check
         run: pnpm run check
