@@ -8,19 +8,23 @@ const POSITION = {
   character: Type.Number({ description: "1-based column" }),
 };
 
+/** Per-call deadline override; a cold server on a large repo outlives the default. */
+const TIMEOUT = Type.Optional(Type.Number({ description: "request timeout in ms (default from lsp.json)" }));
+
 export const DIAGNOSTICS = {
   description: "LSP errors/warnings for a file or directory. Omit path to scan cwd.",
   promptSnippet: "Check code errors via LSP",
   parameters: Type.Object({
     path: Type.Optional(Type.String({ description: "file or dir (default .)" })),
     severity: Type.Optional(Type.Union([Type.Literal("error"), Type.Literal("warning"), Type.Literal("information")], { description: "min severity (default warning)" })),
+    timeoutMs: TIMEOUT,
   }),
 };
 
 export const REFERENCES = {
   description: "All references (usages) of the symbol at a 1-based line/column.",
   promptSnippet: "Find all usages of a symbol",
-  parameters: Type.Object({ ...POSITION }),
+  parameters: Type.Object({ ...POSITION, timeoutMs: TIMEOUT }),
 };
 
 export const CALLGRAPH = {
@@ -30,6 +34,7 @@ export const CALLGRAPH = {
     ...POSITION,
     direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], { description: "default both" })),
     depth: Type.Optional(Type.Number({ description: "1-4, default 2" })),
+    timeoutMs: TIMEOUT,
   }),
 };
 
@@ -40,6 +45,7 @@ export const RENAME = {
     ...POSITION,
     newName: Type.String(),
     apply: Type.Optional(Type.Boolean({ description: "default true" })),
+    timeoutMs: TIMEOUT,
   }),
 };
 
@@ -49,5 +55,6 @@ export const DELETE = {
   parameters: Type.Object({
     ...POSITION,
     apply: Type.Optional(Type.Boolean({ description: "default false" })),
+    timeoutMs: TIMEOUT,
   }),
 };

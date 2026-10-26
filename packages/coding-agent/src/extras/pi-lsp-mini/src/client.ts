@@ -2,10 +2,9 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 import { RpcConnection } from "./jsonrpc.ts";
 import { Methods, type CallHierarchyItem, type Diagnostic, type DocumentSymbol, type Location, type SymbolInformation, type TextEdit, type WorkspaceEdit } from "./lsp-types.ts";
-import type { LspServerConfig } from "./config.ts";
+import { requestTimeoutFor, type LspServerConfig } from "./config.ts";
 
 const STARTUP_TIMEOUT_MS = 30_000;
-const REQUEST_TIMEOUT_MS = 20_000;
 
 export function filePathToUri(file: string): string {
 	return `file://${encodeURI(file.split(path.sep).join("/")).replace(/[?#]/g, encodeURIComponent)}`;
@@ -172,9 +171,15 @@ export class LspClient {
 		connection.onNotification("telemetry/event", () => undefined);
 	}
 
-	private req<T>(label: string, method: string, params: unknown): Promise<T> {
+	/**
+	 * One request under the configured deadline. `timeoutMs` is a per-call
+	 * override; without it the server's `requestTimeout` decides, because a cold
+	 * tsserver on a large repository needs longer than any fixed number a caller
+	 * could guess.
+	 */
+	private req<T>(label: string, method: string, params: unknown, timeoutMs?: number): Promise<T> {
 		if (!this.connection) throw new Error(`${this.server.id}: connection unavailable`);
-		return withTimeout(this.connection.sendRequest<T>(method, params), REQUEST_TIMEOUT_MS, label);
+		return withTimeout(this.connection.sendRequest<T>(method, params), timeoutMs ?? requestTimeoutFor(this.server), label);
 	}
 
 	/** Opens (or updates) the file on the server so it matches disk content. */
@@ -199,41 +204,64 @@ export class LspClient {
 		});
 	}
 
-	async references(file: string, line: number, character: number, includeDeclaration: boolean): Promise<Location[] | null> {
+	async references(
+		file: string,
+		line: number,
+		character: number,
+		includeDeclaration: boolean,
+		timeoutMs?: number,
+	): Promise<Location[] | null> {
 		return this.req<Location[] | null>(`${this.server.id} references`, Methods.references, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
 			context: { includeDeclaration },
-		});
+		}, timeoutMs);
 	}
 
-	async prepareCallHierarchy(file: string, line: number, character: number): Promise<CallHierarchyItem[] | null> {
+	async prepareCallHierarchy(
+		file: string,
+		line: number,
+		character: number,
+		timeoutMs?: number,
+	): Promise<CallHierarchyItem[] | null> {
 		return this.req<CallHierarchyItem[] | null>(`${this.server.id} prepareCallHierarchy`, Methods.prepareCallHierarchy, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
-		});
+		}, timeoutMs);
 	}
 
-	async incomingCalls(item: CallHierarchyItem): Promise<{ from: CallHierarchyItem; fromRanges: Location[] }[] | null> {
-		return this.req(`${this.server.id} incomingCalls`, Methods.incomingCalls, { item });
+	async incomingCalls(
+		item: CallHierarchyItem,
+		timeoutMs?: number,
+	): Promise<{ from: CallHierarchyItem; fromRanges: Location[] }[] | null> {
+		return this.req(`${this.server.id} incomingCalls`, Methods.incomingCalls, { item }, timeoutMs);
 	}
 
-	async outgoingCalls(item: CallHierarchyItem): Promise<{ to: CallHierarchyItem; fromRanges: Location[] }[] | null> {
-		return this.req(`${this.server.id} outgoingCalls`, Methods.outgoingCalls, { item });
+	async outgoingCalls(
+		item: CallHierarchyItem,
+		timeoutMs?: number,
+	): Promise<{ to: CallHierarchyItem; fromRanges: Location[] }[] | null> {
+		return this.req(`${this.server.id} outgoingCalls`, Methods.outgoingCalls, { item }, timeoutMs);
 	}
 
-	async rename(file: string, line: number, character: number, newName: string): Promise<WorkspaceEdit | null> {
+	async rename(
+		file: string,
+		line: number,
+		character: number,
+		newName: string,
+		timeoutMs?: number,
+	): Promise<WorkspaceEdit | null> {
 		return this.req<WorkspaceEdit | null>(`${this.server.id} rename`, Methods.rename, {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
 			newName,
-		});
+		}, timeoutMs);
 	}
 
-	async documentSymbol(file: string): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
+	async documentSymbol(file: string, timeoutMs?: number): Promise<DocumentSymbol[] | SymbolInformation[] | null> {
 		return this.req<DocumentSymbol[] | SymbolInformation[] | null>(`${this.server.id} documentSymbol`, Methods.documentSymbol, {
 			textDocument: { uri: filePathToUri(file) },
-		});
+		}, timeoutMs);
 	}
 
 	async shutdown(): Promise<void> {

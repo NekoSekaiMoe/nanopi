@@ -99,8 +99,35 @@ Override or extend via `~/.nanopi/agent/lsp.json`:
 
 Each entry: `id`, `command` (string or list of alternatives; first on PATH wins,
 inline args allowed, absolute paths supported), `args`, `include` (extensions),
-`rootMarkers`, `diagnosticsWaitMs`, `settings`, `initializationOptions`,
-`compileCommandsProbe` (bool, cpp default true), `enabled`.
+`rootMarkers`, `diagnosticsWaitMs`, `requestTimeout`, `settings`,
+`initializationOptions`, `compileCommandsProbe` (bool, cpp default true),
+`enabled`.
+
+## Request deadline
+
+Every LSP request carries a deadline. The default is 30s, configurable at the top
+level of the same file and overridable per server:
+
+```json
+{
+  "requestTimeout": 30000,
+  "servers": [{ "id": "rust", "requestTimeout": 120000 }]
+}
+```
+
+A cold `rust-analyzer` or a `tsserver` that has to index a monorepo routinely
+takes longer than a fixed default, and the only thing the model saw for that was
+"tool failed" — no way to tell "no results" from "still working". Raising the
+deadline is the fix; retrying a request that was still running was never one.
+
+`lsp_references`, `lsp_callgraph`, `lsp_rename` and `lsp_delete` also take a
+per-call `timeoutMs`, so one expensive call can be given room without changing
+the setting. On `lsp_diagnostics` the same value replaces the wait allowance
+(`diagnosticsWaitMs`), which is how a directory scan of a large project is given
+more time to settle.
+
+The value is re-read on every call, so editing `lsp.json` mid-session applies
+without restarting.
 
 ## Diagnostics after edit
 

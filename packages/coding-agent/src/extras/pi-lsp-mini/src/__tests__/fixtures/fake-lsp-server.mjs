@@ -11,6 +11,11 @@
  *
  * FAKE_LSP_STALE=1 makes the server publish a stale error on didOpen only,
  * and stay silent afterwards - the shape of a server that lags behind.
+ *
+ * FAKE_LSP_SLOW_MS=<n> delays every incoming message by n ms before handling it
+ * (except `exit`), which is how a test sees the client-side request deadline: a
+ * server that answers slower than the deadline must fail, and one that answers
+ * faster must not.
  */
 import { Buffer } from "node:buffer";
 
@@ -21,6 +26,7 @@ const documents = new Map();
 
 const stale = process.env.FAKE_LSP_STALE === "1";
 const delayMs = Number(process.env.FAKE_LSP_DELAY_MS ?? 0);
+const slowMs = Number(process.env.FAKE_LSP_SLOW_MS ?? 0);
 
 function send(payload) {
 	const body = Buffer.from(JSON.stringify(payload), "utf8");
@@ -49,7 +55,7 @@ function toDiagnostics(text) {
 	return diagnostics;
 }
 
-function handle(message) {
+function dispatch(message) {
 	const { id, method, params } = message;
 	if (method === "initialize") {
 		send({ jsonrpc: "2.0", id, result: { capabilities: { textDocumentSync: 1 } } });
@@ -90,7 +96,10 @@ process.stdin.on("data", (chunk) => {
 		if (buffer.length < start + length) return;
 		const body = buffer.subarray(start, start + length).toString("utf8");
 		buffer = buffer.subarray(start + length);
-		handle(JSON.parse(body));
+		const message = JSON.parse(body);
+		if (message.method === "exit") dispatch(message);
+		else if (slowMs > 0) setTimeout(() => dispatch(message), slowMs);
+		else dispatch(message);
 	}
 });
 

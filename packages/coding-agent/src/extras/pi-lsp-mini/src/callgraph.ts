@@ -43,13 +43,16 @@ async function buildTree(
   root: CallHierarchyItem,
   direction: "incoming" | "outgoing",
   depth: number,
+  timeoutMs?: number,
 ): Promise<GraphNode> {
   const seen = new Set([itemKey(root)]);
   const rootNode: GraphNode = { item: root, children: [], callSites: [], recursive: false };
 
   const expand = async (node: GraphNode, currentDepth: number): Promise<void> => {
     if (currentDepth >= depth || seen.size >= MAX_NODES) return;
-    const calls = (direction === "incoming" ? await client.incomingCalls(node.item) : await client.outgoingCalls(node.item)) as
+    const calls = (direction === "incoming"
+      ? await client.incomingCalls(node.item, timeoutMs)
+      : await client.outgoingCalls(node.item, timeoutMs)) as
       ({ from?: CallHierarchyItem; to?: CallHierarchyItem; fromRanges?: Location[] } | null)[] | null;
     for (const call of (calls ?? []).filter((c): c is NonNullable<typeof c> => c != null)) {
       const next = direction === "incoming" ? call.from : call.to;
@@ -93,18 +96,19 @@ export async function callGraphReport(
   root: CallHierarchyItem,
   direction: Direction,
   depth: number,
+  timeoutMs?: number,
 ): Promise<string> {
   const header = `Root: ${root.name}${root.detail ? ` — ${root.detail}` : ""}  (${shortName(root)})`;
   const out: string[] = [header];
 
   if (direction !== "outgoing") {
-    const tree = await buildTree(client, root, "incoming", depth);
+    const tree = await buildTree(client, root, "incoming", depth, timeoutMs);
     out.push("", "Callers (who calls it):");
     const lines = renderTree(tree, "incoming");
     out.push(...(lines.length > 0 ? lines : ["  (none)"]));
   }
   if (direction !== "incoming") {
-    const tree = await buildTree(client, root, "outgoing", depth);
+    const tree = await buildTree(client, root, "outgoing", depth, timeoutMs);
     out.push("", "Callees (what it calls):");
     const lines = renderTree(tree, "outgoing");
     out.push(...(lines.length > 0 ? lines : ["  (none)"]));

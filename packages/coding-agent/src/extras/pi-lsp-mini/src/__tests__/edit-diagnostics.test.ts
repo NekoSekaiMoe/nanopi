@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { resetServersCache } from "../config.ts";
+import { DEFAULT_SETTINGS, loadSettings, requestTimeoutFor, resetServersCache } from "../config.ts";
 import { collectEditDiagnostics } from "../edit-diagnostics.ts";
 import { LspManager } from "../manager.ts";
 import { DEFAULT_EDIT_DIAGNOSTICS, loadEditDiagnosticsSettings } from "../settings.ts";
@@ -55,13 +55,17 @@ function fakeProject(env: Record<string, string> = {}): { cwd: string; agentDir:
 
 	const previous = process.env.FAKE_LSP_STALE;
 	const previousDelay = process.env.FAKE_LSP_DELAY_MS;
+	const previousSlow = process.env.FAKE_LSP_SLOW_MS;
 	if (env.FAKE_LSP_STALE) process.env.FAKE_LSP_STALE = env.FAKE_LSP_STALE;
 	if (env.FAKE_LSP_DELAY_MS) process.env.FAKE_LSP_DELAY_MS = env.FAKE_LSP_DELAY_MS;
+	if (env.FAKE_LSP_SLOW_MS) process.env.FAKE_LSP_SLOW_MS = env.FAKE_LSP_SLOW_MS;
 	restoreEnv = () => {
 		if (previous === undefined) delete process.env.FAKE_LSP_STALE;
 		else process.env.FAKE_LSP_STALE = previous;
 		if (previousDelay === undefined) delete process.env.FAKE_LSP_DELAY_MS;
 		else process.env.FAKE_LSP_DELAY_MS = previousDelay;
+		if (previousSlow === undefined) delete process.env.FAKE_LSP_SLOW_MS;
+		else process.env.FAKE_LSP_SLOW_MS = previousSlow;
 	};
 	return { cwd, agentDir, file };
 }
@@ -70,6 +74,7 @@ let restoreEnv: () => void = () => undefined;
 
 afterEach(async () => {
 	restoreEnv();
+	delete process.env.FAKE_LSP_SLOW_MS;
 	for (const manager of managers.splice(0)) await manager.shutdownAll();
 	for (const dir of temps.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
@@ -199,5 +204,127 @@ describe("post-edit diagnostics", () => {
 		// server publishes is acceptable; the point is that it returns.
 		expect(Date.now() - started).toBeLessThan(5000);
 		expect(Array.isArray(result.lines)).toBe(true);
+	});
+});
+
+describe("lsp settings", () => {
+	it("defaults the request deadline to 30s", () => {
+		expect(loadSettings()).toEqual(DEFAULT_SETTINGS);
+		expect(DEFAULT_SETTINGS.requestTimeout).toBe(30_000);
+	});
+
+	it("reads the top-level requestTimeout and ignores junk", () => {
+		const cwd = tempDir();
+		const before = process.env.NANOPI_CODING_AGENT_DIR;
+		process.env.NANOPI_CODING_AGENT_DIR = cwd;
+		resetServersCache();
+		try {
+			writeFileSync(join(cwd, "lsp.json"), JSON.stringify({ requestTimeout: 4500 }));
+			expect(loadSettings().requestTimeout).toBe(4500);
+		} finally {
+			if (before === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
+			else process.env.NANOPI_CODING_AGENT_DIR = before;
+			resetServersCache();
+		}
+	});
+
+	it("clamps a non-positive timeout back to the default", () => {
+		const cwd = tempDir();
+		const before = process.env.NANOPI_CODING_AGENT_DIR;
+		process.env.NANOPI_CODING_AGENT_DIR = cwd;
+		resetServersCache();
+		try {
+			writeFileSync(join(cwd, "lsp.json"), JSON.stringify({ requestTimeout: 0 }));
+			expect(loadSettings().requestTimeout).toBe(DEFAULT_SETTINGS.requestTimeout);
+		} finally {
+			if (before === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
+			else process.env.NANOPI_CODING_AGENT_DIR = before;
+			resetServersCache();
+		}
+	});
+
+	it("lets a server entry override the shared deadline", () => {
+		expect(requestTimeoutFor({ id: "x", command: "x", requestTimeout: 1234 })).toBe(1234);
+		expect(requestTimeoutFor({ id: "x", command: "x" })).toBe(loadSettings().requestTimeout);
+	});
+
+	it("reloads after resetServersCache", () => {
+		const agentDir = tempDir();
+		const before = process.env.NANOPI_CODING_AGENT_DIR;
+		process.env.NANOPI_CODING_AGENT_DIR = agentDir;
+		resetServersCache();
+		try {
+			writeFileSync(join(agentDir, "lsp.json"), JSON.stringify({ requestTimeout: 7000 }));
+			expect(loadSettings().requestTimeout).toBe(7000);
+			// A user editing lsp.json mid-session sees the new value next time the
+			// cache is dropped, not the value read at process start.
+			writeFileSync(join(agentDir, "lsp.json"), JSON.stringify({ requestTimeout: 9000 }));
+			resetServersCache();
+			expect(loadSettings().requestTimeout).toBe(9000);
+		} finally {
+			if (before === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
+			else process.env.NANOPI_CODING_AGENT_DIR = before;
+			resetServersCache();
+		}
+	});
+});
+
+describe("request deadline", () => {
+	/** Project whose only server is the fake one, slowed down by `slowMs` per message. */
+	function slowProject(slowMs: number, extra: Record<string, unknown> = {}): { cwd: string; file: string } {
+		const cwd = tempDir();
+		const agentDir = tempDir();
+		writeFileSync(join(cwd, ".git"), "");
+		const file = join(cwd, "sample.txt");
+		writeFileSync(file, "first\nsecond\n");
+		writeFileSync(
+			join(agentDir, "lsp.json"),
+			JSON.stringify({
+				servers: [
+					{
+						id: "fake",
+						command: `${process.execPath} ${FAKE_SERVER}`,
+						include: [".txt"],
+						rootMarkers: [".git"],
+						...extra,
+					},
+				],
+			}),
+		);
+		process.env.NANOPI_CODING_AGENT_DIR = agentDir;
+		process.env.FAKE_LSP_SLOW_MS = String(slowMs);
+		resetConfigCache();
+		return { cwd, file };
+	}
+
+	it("fails a request that outlives the deadline", async () => {
+		const { cwd, file } = slowProject(2000);
+		const manager = newManager();
+		const opened = await manager.openFile({ cwd }, file);
+		expect(opened).toBeDefined();
+
+		const started = Date.now();
+		const answer = await opened!.client
+			.references(join(cwd, "sample.txt"), 0, 0, false, 300)
+			.then(() => "resolved", (error: Error) => error.message);
+		expect(answer).toMatch(/timed out after 300ms/);
+		expect(Date.now() - started).toBeLessThan(1800);
+	});
+
+	it("honours a per-call override", async () => {
+		const { cwd, file } = slowProject(1200);
+		const manager = newManager();
+		const opened = await manager.openFile({ cwd }, file);
+		expect(opened).toBeDefined();
+
+		const absolute = join(cwd, "sample.txt");
+		const fast = await opened!.client
+			.references(absolute, 0, 0, false, 200)
+			.then(() => "resolved", (error: Error) => error.message);
+		expect(fast).toMatch(/timed out after 200ms/);
+
+		// Same server, same call, longer budget: the answer arrives.
+		const slow = await opened!.client.references(absolute, 0, 0, false, 20_000);
+		expect(slow === null || Array.isArray(slow)).toBe(true);
 	});
 });

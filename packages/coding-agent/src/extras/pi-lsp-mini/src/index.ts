@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { LspManager, formatDiagnostic, severityRank, delay, findProjectRoot } from "./manager.ts";
-import { loadServers } from "./config.ts";
+import { loadServers, type LspServerConfig } from "./config.ts";
 import { DIAGNOSTICS, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { callGraphReport, type Direction } from "./callgraph.ts";
@@ -188,6 +188,10 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     async execute(_id, params, signal, _u, ctx) {
       const target = path.resolve(ctx.cwd, params.path ?? ".");
       const min = severityRank(params.severity ?? "warning");
+      // A per-call budget also covers how long the server is given to answer at
+      // all; without one, the server's own diagnosticsWaitMs stays in charge.
+      const waitFor = (server: LspServerConfig, fallback: number): number =>
+        params.timeoutMs ?? server.diagnosticsWaitMs ?? fallback;
       const stat = await fs.stat(target).catch(() => undefined);
       if (!stat) return textResult(`not found: ${target}`);
 
@@ -199,7 +203,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
         const match = await manager.matchServer(target, ctx.cwd);
         if (!match) return textResult(`no language server matches ${target}`);
         await manager.openFile(ctx, target);
-        await delay(match.server.diagnosticsWaitMs ?? 1500, signal);
+        await delay(waitFor(match.server, 1500), signal);
         const sections: string[] = [];
         for (const { serverId, diagnostics } of manager.latestDiagnostics(target)) sections.push(...render(target, serverId, diagnostics));
         return textResult(sections.length === 0 ? `✅ no LSP issues (>= ${params.severity ?? "warning"}) in ${path.basename(target)}` : sections.join("\n"));
@@ -213,7 +217,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
         const files = await manager.listFiles(target, server, root);
         if (files.length === 0) continue;
         scanned += files.length;
-        const result = await manager.collectDiagnostics({ cwd: ctx.cwd, signal }, files, server.diagnosticsWaitMs ?? 3000);
+        const result = await manager.collectDiagnostics({ cwd: ctx.cwd, signal }, files, waitFor(server, 3000));
         for (const [file, entries] of result) {
           for (const { serverId, diagnostics } of entries) sections.push(...render(file, serverId, diagnostics));
         }
@@ -237,7 +241,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
       if (!target) return textResult(`no language server matches ${params.path}`);
       const file = path.resolve(ctx.cwd, params.path);
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
-      const refs = await target.client.references(file, p.line, p.character, false);
+      const refs = await target.client.references(file, p.line, p.character, false, params.timeoutMs);
       if (!refs || refs.length === 0) return textResult("no references found");
       const byFile = new Map<string, Location[]>();
       for (const ref of refs) {
@@ -270,10 +274,16 @@ export default function lspMiniExtension(pi: ModuleApi): void {
         return textResult(`${target.match.server.id} does not support call hierarchy; use lsp_references instead`);
       }
       const p = snapPos((await fs.readFile(path.resolve(ctx.cwd, params.path), "utf8")).split(/\r?\n/), pos(params));
-      const items = await target.client.prepareCallHierarchy(path.resolve(ctx.cwd, params.path), p.line, p.character);
+      const items = await target.client.prepareCallHierarchy(path.resolve(ctx.cwd, params.path), p.line, p.character, params.timeoutMs);
       const root: CallHierarchyItem | undefined = items?.[0];
       if (!root) return textResult("no callable symbol at that position");
-      const report = await callGraphReport(target.client, root, (params.direction ?? "both") as Direction, Math.min(4, Math.max(1, params.depth ?? 2)));
+      const report = await callGraphReport(
+        target.client,
+        root,
+        (params.direction ?? "both") as Direction,
+        Math.min(4, Math.max(1, params.depth ?? 2)),
+        params.timeoutMs,
+      );
       return textResult(report);
     },
   });
@@ -292,7 +302,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
       if (!target) return textResult(`no language server matches ${params.path}`);
       if (!target.client.supportsRename) return textResult(`${target.match.server.id} does not support rename`);
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
-      const ws = await target.client.rename(file, p.line, p.character, params.newName);
+      const ws = await target.client.rename(file, p.line, p.character, params.newName, params.timeoutMs);
       const { fileEdits, skipped } = normalizeWorkspaceEdit(ws);
       if (fileEdits.length === 0) {
         return textResult(`cannot rename at ${path.relative(ctx.cwd, file)}:${params.line} (no edits returned${skipped.length ? `; skipped: ${skipped.join(", ")}` : ""})`);
@@ -354,7 +364,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
         end: decl.range.end.line,
       });
 
-      const refs = (await target.client.references(file, p.line, p.character, false)) ?? [];
+      const refs = (await target.client.references(file, p.line, p.character, false, params.timeoutMs)) ?? [];
       const usages = refs.filter((ref) => !(fmtLoc(ref) === `${file}:${decl.range.start.line + 1}`));
 
       const plans = [];
