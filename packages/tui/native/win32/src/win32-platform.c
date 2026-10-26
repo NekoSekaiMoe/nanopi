@@ -1,5 +1,26 @@
+// windows.h comes from napi-loader.h. Clipboard data crosses the API as HGLOBAL
+// handles, and text is UTF-16, so both replace the POSIX defaults.
+#include <stdint.h>
 #define NANOPI_CLIPBOARD_WRITE
+#define NANOPI_CLIPBOARD_ALLOC(size) GlobalAlloc(GPTR, (size))
+#define NANOPI_CLIPBOARD_FREE(data) \
+    do { \
+        if (data) GlobalFree(data); \
+    } while (0)
+#define NANOPI_CLIPBOARD_STRING_GETTER "napi_get_value_string_utf16"
+#define NANOPI_CLIPBOARD_STRING_UNIT sizeof(uint16_t)
+#define NANOPI_CLIPBOARD_COPY(target, source, length) copy_bytes((target), (source), (length))
+
+// HGLOBAL memory is not addressable through plain pointers on every compiler, so
+// copy through volatile to keep the writes visible to the reading thread.
+static void copy_bytes(uint8_t* destination, const uint8_t* source, size_t length);
 #include "../../clipboard.h"
+
+static void copy_bytes(uint8_t* destination, const uint8_t* source, size_t length) {
+    volatile uint8_t* target = destination;
+    const volatile uint8_t* input = source;
+    for (size_t index = 0; index < length; index++) target[index] = input[index];
+}
 
 #ifndef BI_ALPHABITFIELDS
 #define BI_ALPHABITFIELDS 6
@@ -30,7 +51,7 @@ static int is_modifier_name_pressed(const char* name) {
     return 0;
 }
 
-static napi_value __cdecl enable_virtual_terminal_input(napi_env env, napi_callback_info info) {
+static napi_value NANOPI_NAPI_CALL enable_virtual_terminal_input(napi_env env, napi_callback_info info) {
     (void)info;
 
     HANDLE handle = GetStdHandle(STD_INPUT_HANDLE);
@@ -47,30 +68,8 @@ static napi_value __cdecl enable_virtual_terminal_input(napi_env env, napi_callb
     return result;
 }
 
-static napi_value __cdecl is_modifier_pressed(napi_env env, napi_callback_info info) {
-    napi_get_cb_info_fn napi_get_cb_info = (napi_get_cb_info_fn)node_symbol("napi_get_cb_info");
-    napi_get_value_string_utf8_fn napi_get_value_string_utf8 =
-        (napi_get_value_string_utf8_fn)node_symbol("napi_get_value_string_utf8");
-    napi_get_boolean_fn napi_get_boolean = (napi_get_boolean_fn)node_symbol("napi_get_boolean");
-
-    bool pressed = false;
-    if (napi_get_cb_info && napi_get_value_string_utf8) {
-        size_t argc = 1;
-        napi_value args[1] = {0};
-        if (napi_get_cb_info(env, info, &argc, args, 0, 0) == 0 && argc >= 1 && args[0]) {
-            char name[16] = {0};
-            size_t copied = 0;
-            if (napi_get_value_string_utf8(env, args[0], name, sizeof(name), &copied) == 0) {
-                pressed = is_modifier_name_pressed(name);
-            }
-        }
-    }
-
-    napi_value result = 0;
-    if (!napi_get_boolean || napi_get_boolean(env, pressed, &result) != 0) {
-        return fail(env, "Could not inspect modifier state");
-    }
-    return result;
+static bool clipboard_modifier_pressed(const char* name) {
+    return is_modifier_name_pressed(name) != 0;
 }
 
 static bool open_clipboard(HWND owner) {
@@ -97,12 +96,6 @@ static void write_u32(uint8_t* data, uint32_t value) {
     data[1] = (uint8_t)(value >> 8);
     data[2] = (uint8_t)(value >> 16);
     data[3] = (uint8_t)(value >> 24);
-}
-
-static void copy_bytes(uint8_t* destination, const uint8_t* source, size_t length) {
-    volatile uint8_t* target = destination;
-    const volatile uint8_t* input = source;
-    for (size_t index = 0; index < length; index++) target[index] = input[index];
 }
 
 static size_t dib_pixel_offset(const uint8_t* dib, size_t size) {

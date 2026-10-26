@@ -24,8 +24,8 @@ carry the `NANOPI_CLIPBOARD` property atom and `nanopi.clipboard` N-API entry
 introduced by `a7dc3429a`. The `linux-arm64` and `linux-x64` files differ,
 unlike darwin/win32, so they are per-arch builds, not a cross-build:
 
-- linux-x64 `591c3419461b00af2ac6e795cab4c094df3441f566a063671e7f1e4f3c7bf190` (18008 bytes, gcc 12.2.0, xcb 1.15)
-- linux-arm64 `787d38a3ea7af6d9cf86b21db1d8fd477de494e68f02da85e5bb4875539dbd37` (67232 bytes, aarch64-linux-gnu-gcc 12.2.0, xcb 1.15)
+- linux-x64 `098463d1026810438dd404c8b2639a2522865dc138671cea3a395d138d632d32` (18056 bytes, gcc 12.2.0, xcb 1.15)
+- linux-arm64 `2eef26df0176205b6e1fa92fb4d3dda15d2acb228afdcc03dd249073de6db44c` (67280 bytes, aarch64-linux-gnu-gcc 12.2.0 cross-build on x86_64, xcb 1.15)
 
 Both import only `libxcb.so.1` unversioned plus libc-through-PLT symbols
 (`calloc`, `realloc`, `free`, `memcpy`, `poll`, `__errno_location`,
@@ -33,10 +33,21 @@ Both import only `libxcb.so.1` unversioned plus libc-through-PLT symbols
 `-Wl,--unresolved-symbols=ignore-all` buys: one file loads on both glibc and
 musl, and symbols resolve lazily when the helper is `dlopen`ed.
 
-`linux-platform-x11.c` calls `realloc` and `free` directly, so it includes
-`<stdlib.h>` for them. It previously reached `<stdlib.h>` only through
+`linux-platform-x11.c` includes `<stdlib.h>` itself; the shared `clipboard.h`
+no longer supplies it. It previously reached `realloc`/`free` only through
 `clipboard-worker.h` -> `clipboard.h`, which happened to work on glibc but made
-the file depend on a header it never included.
+the file depend on a header it never included, so a clean rebuild broke under
+GCC 14 or newer (`implicit declaration of function 'realloc'`).
+
+## Layout
+
+`napi.h` is the N-API surface only. `napi-loader.h` adds `windows.h`/`dlfcn.h`
+and the symbol loader, and is included by the platform unit after its own SDK
+headers. `clipboard.h` holds the async job and formats and exposes
+`NANOPI_CLIPBOARD_ALLOC`/`_FREE`/`_COPY`/`_STRING_GETTER`/`_STRING_UNIT` as
+overridable hooks, so no `#ifdef _WIN32` remains outside the win32 unit.
+`xcb_poll_for_reply` is declared locally because `<xcb/xcbext.h>` only carries
+that prototype and would make the build depend on the full libxcb headers.
 
 ## Testing
 

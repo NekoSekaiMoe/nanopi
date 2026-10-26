@@ -1,11 +1,14 @@
 #ifndef NANOPI_CLIPBOARD_H
 #define NANOPI_CLIPBOARD_H
 
-#include "napi.h"
-#ifndef _WIN32
+// Mechanism shared by the three platform units: the async job, the formats a
+// platform can report, and the N-API plumbing. Platform policy (allocator,
+// buffer copy, which operations exist) is supplied by the unit through the
+// NANOPI_CLIPBOARD_* macros before this header is included. Every helper here
+// is `static` and used, so `-Werror` keeps the header honest.
 #include <stdlib.h>
 #include <string.h>
-#endif
+#include "napi-loader.h"
 
 typedef enum { CLIPBOARD_TEXT, CLIPBOARD_IMAGE, CLIPBOARD_WRITE, CLIPBOARD_FILES } clipboard_operation;
 // CLIPBOARD_PATHS stores concatenated, NUL-terminated UTF-8 paths in clipboard_job.data.
@@ -32,20 +35,21 @@ typedef struct {
 // Only this function runs on the worker thread. It must not call N-API.
 static void clipboard_execute(clipboard_job* job);
 
-static void* clipboard_alloc(size_t size) {
-#ifdef _WIN32
-    return GlobalAlloc(GPTR, size);
-#else
-    return calloc(1, size);
+// Windows hands clipboard data over in HGLOBAL handles, so that unit overrides
+// both. Hooks rather than #ifdef _WIN32 keeps the win32 knowledge in one file.
+#ifndef NANOPI_CLIPBOARD_ALLOC
+#define NANOPI_CLIPBOARD_ALLOC(size) calloc(1, (size))
 #endif
+#ifndef NANOPI_CLIPBOARD_FREE
+#define NANOPI_CLIPBOARD_FREE(data) free(data)
+#endif
+
+static void* clipboard_alloc(size_t size) {
+    return NANOPI_CLIPBOARD_ALLOC(size);
 }
 
 static void clipboard_free(void* data) {
-#ifdef _WIN32
-    if (data) GlobalFree(data);
-#else
-    free(data);
-#endif
+    NANOPI_CLIPBOARD_FREE(data);
 }
 
 #ifdef NANOPI_CLIPBOARD_WRITE
@@ -55,13 +59,10 @@ static void clipboard_copy(clipboard_job* job, const void* data, size_t length, 
         job->error = "Out of memory";
         return;
     }
-#ifdef _WIN32
-    volatile uint8_t* target = job->data;
-    const volatile uint8_t* source = data;
-    for (size_t index = 0; index < length; index++) target[index] = source[index];
-#else
-    memcpy(job->data, data, length);
+#ifndef NANOPI_CLIPBOARD_COPY
+#define NANOPI_CLIPBOARD_COPY(target, source, length) memcpy(target, source, length)
 #endif
+    NANOPI_CLIPBOARD_COPY(job->data, data, length);
     job->length = format == CLIPBOARD_UTF16 ? length / sizeof(uint16_t) : length;
     job->format = format;
 }
@@ -152,14 +153,18 @@ static napi_value queue_clipboard(napi_env env, napi_callback_info info, clipboa
     job->operation = operation;
 #ifdef NANOPI_CLIPBOARD_WRITE
     if (operation == CLIPBOARD_WRITE) {
-        napi_get_cb_info_fn get_info = (napi_get_cb_info_fn)node_symbol("napi_get_cb_info");
-#ifdef _WIN32
-        napi_get_value_string_utf16_fn get_string = (napi_get_value_string_utf16_fn)node_symbol("napi_get_value_string_utf16");
-        size_t unit_size = sizeof(uint16_t);
-#else
-        napi_get_value_string_utf8_fn get_string = (napi_get_value_string_utf8_fn)node_symbol("napi_get_value_string_utf8");
-        size_t unit_size = 1;
+        // Each unit names the N-API string getter its clipboard consumes and how
+        // wide one code unit is: UTF-8 on POSIX, UTF-16 on Windows.
+#ifndef NANOPI_CLIPBOARD_STRING_GETTER
+#define NANOPI_CLIPBOARD_STRING_GETTER "napi_get_value_string_utf8"
 #endif
+#ifndef NANOPI_CLIPBOARD_STRING_UNIT
+#define NANOPI_CLIPBOARD_STRING_UNIT sizeof(char)
+#endif
+        napi_get_cb_info_fn get_info = (napi_get_cb_info_fn)node_symbol("napi_get_cb_info");
+        napi_get_value_string_utf8_fn get_string =
+            (napi_get_value_string_utf8_fn)node_symbol(NANOPI_CLIPBOARD_STRING_GETTER);
+        const size_t unit_size = NANOPI_CLIPBOARD_STRING_UNIT;
         size_t argc = 1;
         napi_value argument = 0;
         if (!get_info || !get_string || get_info(env, info, &argc, &argument, 0, 0) != 0 || argc == 0 ||
@@ -204,5 +209,35 @@ static napi_value NANOPI_NAPI_CALL set_clipboard_text(napi_env env, napi_callbac
     return queue_clipboard(env, info, CLIPBOARD_WRITE);
 }
 #endif
+
+// Shared shell for isModifierPressed: argument marshalling and the boolean
+// return are identical everywhere, only the platform query differs.
+static bool clipboard_modifier_pressed(const char* name);
+
+static napi_value NANOPI_NAPI_CALL is_modifier_pressed(napi_env env, napi_callback_info info) {
+    napi_get_cb_info_fn get_info = (napi_get_cb_info_fn)node_symbol("napi_get_cb_info");
+    napi_get_value_string_utf8_fn get_string = (napi_get_value_string_utf8_fn)node_symbol("napi_get_value_string_utf8");
+    napi_get_boolean_fn get_boolean = (napi_get_boolean_fn)node_symbol("napi_get_boolean");
+
+    bool pressed = false;
+    if (get_info && get_string) {
+        size_t argc = 1;
+        napi_value args[1] = {0};
+        if (get_info(env, info, &argc, args, 0, 0) == 0 && argc >= 1 && args[0]) {
+            // Modifier names are short and fixed; a longer string cannot match.
+            char name[16] = {0};
+            size_t copied = 0;
+            if (get_string(env, args[0], name, sizeof(name), &copied) == 0) {
+                pressed = clipboard_modifier_pressed(name);
+            }
+        }
+    }
+
+    napi_value result = 0;
+    if (!get_boolean || get_boolean(env, pressed, &result) != 0) {
+        return fail(env, "Could not inspect modifier state");
+    }
+    return result;
+}
 
 #endif
