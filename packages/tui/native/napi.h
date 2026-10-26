@@ -1,17 +1,17 @@
 #ifndef NANOPI_NAPI_H
 #define NANOPI_NAPI_H
 
-// Resolve the small N-API surface we use from Node or Bun, without Node headers
-// or a link-time dependency on a particular runtime.
+// Pure N-API surface: types, calling conventions, and export convention. Nothing
+// here touches the OS, so it compiles unchanged on linux, darwin, and win32.
+// Platform headers (windows.h, dlfcn.h, ...) belong in napi-loader.h, which only
+// the loader uses.
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #ifdef _WIN32
-#include <windows.h>
 #define NANOPI_NAPI_CALL __cdecl
 #define NANOPI_NAPI_EXPORT __declspec(dllexport)
 #else
-#include <dlfcn.h>
 #define NANOPI_NAPI_CALL
 #define NANOPI_NAPI_EXPORT __attribute__((visibility("default")))
 #endif
@@ -44,48 +44,5 @@ typedef int (NANOPI_NAPI_CALL *napi_get_value_string_utf16_fn)(napi_env, napi_va
 typedef int (NANOPI_NAPI_CALL *napi_set_named_property_fn)(napi_env, napi_value, const char*, napi_value);
 typedef int (NANOPI_NAPI_CALL *napi_set_element_fn)(napi_env, napi_value, uint32_t, napi_value);
 typedef int (NANOPI_NAPI_CALL *napi_throw_error_fn)(napi_env, const char*, const char*);
-
-static void* node_symbol(const char* name) {
-#ifdef _WIN32
-    HMODULE module = GetModuleHandleA(0);
-    void* proc = module ? (void*)GetProcAddress(module, name) : 0;
-    if (proc) return proc;
-    module = GetModuleHandleA("node.dll");
-    return module ? (void*)GetProcAddress(module, name) : 0;
-#else
-    return dlsym(RTLD_DEFAULT, name);
-#endif
-}
-
-static napi_value undefined_value(napi_env env) {
-    napi_get_value_fn get_value = (napi_get_value_fn)node_symbol("napi_get_undefined");
-    napi_value result = 0;
-    if (get_value) get_value(env, &result);
-    return result;
-}
-
-static napi_value null_value(napi_env env) {
-    napi_get_value_fn get_value = (napi_get_value_fn)node_symbol("napi_get_null");
-    napi_value result = 0;
-    if (get_value) get_value(env, &result);
-    return result;
-}
-
-static napi_value fail(napi_env env, const char* message) {
-    napi_throw_error_fn napi_throw_error = (napi_throw_error_fn)node_symbol("napi_throw_error");
-    if (napi_throw_error) napi_throw_error(env, 0, message);
-    return undefined_value(env);
-}
-
-static void set_function_export(napi_env env, napi_value exports, const char* name, napi_callback callback) {
-    napi_create_function_fn napi_create_function = (napi_create_function_fn)node_symbol("napi_create_function");
-    napi_set_named_property_fn napi_set_named_property =
-        (napi_set_named_property_fn)node_symbol("napi_set_named_property");
-    napi_value fn = 0;
-    if (napi_create_function && napi_set_named_property &&
-        napi_create_function(env, name, NAPI_AUTO_LENGTH, callback, 0, &fn) == 0) {
-        napi_set_named_property(env, exports, name, fn);
-    }
-}
 
 #endif

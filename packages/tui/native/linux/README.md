@@ -35,10 +35,19 @@ Both import only `libxcb.so.1` unversioned plus libc-through-PLT symbols
 `-Wl,--unresolved-symbols=ignore-all` buys: one file loads on both glibc and
 musl, and symbols resolve lazily when the helper is `dlopen`ed.
 
-The committed sources have no `realloc`/`free` declaration in scope
-(`xcb/xcb.h` is the only system include), so a clean rebuild under GCC 14 or
-newer fails with `implicit declaration of function 'realloc'`; older GCC only
-warns behind `-Werror`.
+`linux-platform-x11.c` includes `<stdlib.h>` itself; the shared
+`clipboard.h` no longer supplies it, so a clean rebuild no longer triggers
+`implicit declaration of function 'realloc'` under GCC 14 or newer.
+
+## Layout
+
+`napi.h` is the N-API surface only. `napi-loader.h` adds `windows.h`/`dlfcn.h`
+and the symbol loader, and is included by the platform unit after its own SDK
+headers. `clipboard.h` holds the async job and formats and exposes
+`NANOPI_CLIPBOARD_ALLOC`/`_FREE`/`_COPY`/`_STRING_GETTER`/`_STRING_UNIT` as
+overridable hooks, so no `#ifdef _WIN32` remains outside the win32 unit.
+`xcb_poll_for_reply` is declared locally because `<xcb/xcbext.h>` only carries
+that prototype and would make the build depend on the full libxcb headers.
 
 ## Testing
 

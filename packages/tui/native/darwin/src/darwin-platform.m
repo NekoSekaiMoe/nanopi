@@ -1,8 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <CoreGraphics/CoreGraphics.h>
 #import <Foundation/Foundation.h>
-#include <stdlib.h>
-#include <string.h>
 #define NANOPI_CLIPBOARD_WRITE
 #include "../../clipboard.h"
 
@@ -14,34 +12,10 @@ static CGEventFlags modifier_mask_for_name(const char* name) {
     return 0;
 }
 
-static napi_value is_modifier_pressed(napi_env env, napi_callback_info info) {
-    napi_get_cb_info_fn napi_get_cb_info = (napi_get_cb_info_fn)node_symbol("napi_get_cb_info");
-    napi_get_value_string_utf8_fn napi_get_value_string_utf8 =
-        (napi_get_value_string_utf8_fn)node_symbol("napi_get_value_string_utf8");
-    napi_get_boolean_fn napi_get_boolean = (napi_get_boolean_fn)node_symbol("napi_get_boolean");
-
-    bool pressed = false;
-    if (napi_get_cb_info && napi_get_value_string_utf8) {
-        size_t argc = 1;
-        napi_value args[1] = {0};
-        if (napi_get_cb_info(env, info, &argc, args, 0, 0) == 0 && argc >= 1 && args[0]) {
-            char name[16] = {0};
-            size_t copied = 0;
-            if (napi_get_value_string_utf8(env, args[0], name, sizeof(name), &copied) == 0) {
-                CGEventFlags mask = modifier_mask_for_name(name);
-                if (mask != 0) {
-                    CGEventFlags flags = CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState);
-                    pressed = (flags & mask) != 0;
-                }
-            }
-        }
-    }
-
-    napi_value result = 0;
-    if (!napi_get_boolean || napi_get_boolean(env, pressed, &result) != 0) {
-        return fail(env, "Could not inspect modifier state");
-    }
-    return result;
+static bool clipboard_modifier_pressed(const char* name) {
+    CGEventFlags mask = modifier_mask_for_name(name);
+    if (mask == 0) return false;
+    return (CGEventSourceFlagsState(kCGEventSourceStateCombinedSessionState) & mask) != 0;
 }
 
 static void clipboard_execute(clipboard_job* job) {

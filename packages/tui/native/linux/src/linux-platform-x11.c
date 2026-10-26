@@ -1,9 +1,9 @@
-#include <xcb/xcb.h>
-#include <string.h>
-#include <xcb/xcbext.h>
 #include <errno.h>
 #include <poll.h>
+#include <stdlib.h>
+#include <string.h>
 #include <time.h>
+#include <xcb/xcb.h>
 #include "clipboard-worker.h"
 
 #define MAX_CLIPBOARD_BYTES (50u * 1024u * 1024u)
@@ -63,6 +63,10 @@ static bool wait_for_input(x11_clipboard* clipboard) {
         if (errno != EINTR) return false;
     }
 }
+
+// Declared here instead of <xcb/xcbext.h>: that header only ever carries this one
+// prototype, and skipping it drops a dependency on the versioned libxcb sources.
+int xcb_poll_for_reply(xcb_connection_t* connection, unsigned int sequence, void** reply, xcb_generic_error_t** error);
 
 static void* wait_for_reply(x11_clipboard* clipboard, unsigned sequence) {
     if (xcb_flush(clipboard->connection) <= 0) return 0;
