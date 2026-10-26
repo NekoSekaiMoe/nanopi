@@ -79,6 +79,7 @@ export function loadExtraSettings(cwd: string): ResolvedExtraSettings {
 			};
 		}
 		if (projectRaw.sandbox !== undefined) merged.sandbox = projectRaw.sandbox;
+		if (typeof projectRaw.gitGuard === "boolean") merged.gitGuard = projectRaw.gitGuard;
 	}
 	return { settings: normalizeExtraSettings(merged), sources };
 }
@@ -92,6 +93,8 @@ export interface ExtraSettingsPatch {
 	subsystems?: Partial<Record<string, boolean | null>>;
 	/** Sandbox configuration; `null` removes it (shell commands run unsandboxed). */
 	sandbox?: SandboxConfig | null;
+	/** Destructive git guard switch. */
+	gitGuard?: boolean;
 }
 
 export function saveExtraSettings(patch: ExtraSettingsPatch): ExtraSettings {
@@ -111,6 +114,7 @@ export function saveExtraSettings(patch: ExtraSettingsPatch): ExtraSettings {
 		if (patch.sandbox === null) delete next.sandbox;
 		else next.sandbox = patch.sandbox;
 	}
+	if (patch.gitGuard !== undefined) next.gitGuard = patch.gitGuard;
 	writeJsonAtomic(file, next);
 	return normalizeExtraSettings(next);
 }

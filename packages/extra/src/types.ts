@@ -38,6 +38,11 @@ export interface ExtraSettings {
 	subsystems: Partial<Record<SubsystemKey, boolean>>;
 	/** Shell sandbox. Absent means shell commands run unsandboxed. */
 	sandbox?: SandboxConfig;
+	/**
+	 * Destructive git guard (`/gitguard`). Undefined means enabled: the commands
+	 * AGENTS.md forbids prompt for permission instead of running unannounced.
+	 */
+	gitGuard?: boolean;
 }
 
 export const DEFAULT_EXTRA_SETTINGS: ExtraSettings = {
@@ -61,7 +66,8 @@ export function normalizeExtraSettings(value: unknown): ExtraSettings {
 		}
 	}
 	const sandbox = record?.sandbox === undefined ? undefined : normalizeSandboxConfig(record.sandbox);
-	return { defaultMode, subsystems, ...(sandbox ? { sandbox } : {}) };
+	const gitGuard = typeof record?.gitGuard === "boolean" ? record.gitGuard : undefined;
+	return { defaultMode, subsystems, ...(sandbox ? { sandbox } : {}), ...(gitGuard === undefined ? {} : { gitGuard }) };
 }
 
 /** Status of one subsystem switch, as reported to the webui. */

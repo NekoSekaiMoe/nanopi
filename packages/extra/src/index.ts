@@ -18,6 +18,15 @@ export { ExtraBridge, extraBridge } from "./bridge.ts";
 export { resolveEnvProvider, resolveInitMd } from "./env-config.ts";
 export { execInLocalShell, findExecutable } from "./executables.ts";
 export { createExtraExtension, extraInlineExtension, planModeVerdict } from "./extension.ts";
+export type { DestructiveGitHit, GitGuardVerdict } from "./git-guard.ts";
+export {
+	analyzeGitInvocation,
+	analyzeShellCommand,
+	checkoutRoot,
+	collectGitInvocations,
+	gitGuardNotice,
+	listWorktrees,
+} from "./git-guard.ts";
 export {
 	isMcpToolName,
 	MCP_MAIN_AGENT_BLOCK_REASON,

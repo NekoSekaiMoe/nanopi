@@ -79,6 +79,45 @@ describe("PermissionGate", () => {
 		});
 		expect(judged).toBe(2);
 	});
+
+	test("a hazard is gated even after the tool was allowed for the session", async () => {
+		let asked = 0;
+		const gate = new PermissionGate(
+			async () => {
+				asked++;
+				return "allow_session";
+			},
+			async () => ({ action: "allow" }),
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		// Same tool, no hazard: the session answer stands.
+		await expect(gate.check(info({ callId: "call-2", summary: "ls" }))).resolves.toEqual({ action: "allow" });
+		expect(asked).toBe(1);
+		// A destructive command is not what the user allowed for the session.
+		await expect(
+			gate.check(info({ callId: "call-3", summary: "git reset --hard", hazard: "git reset --hard ..." })),
+		).resolves.toEqual({ action: "allow" });
+		expect(asked).toBe(2);
+	});
+
+	test("a hazard gets its own judgment class", async () => {
+		let judged = 0;
+		const gate = new PermissionGate(
+			async () => "ai_decide",
+			async () => {
+				judged++;
+				return { action: "deny", reason: "destroys uncommitted work" };
+			},
+		);
+		// The plain class is judged once and cached.
+		await gate.check(info());
+		await gate.check(info({ callId: "call-2" }));
+		expect(judged).toBe(1);
+		// The same command carrying a hazard is judged for itself, not answered by that cache.
+		const outcome = await gate.check(info({ callId: "call-3", hazard: "git stash warning" }));
+		expect(outcome.action).toBe("deny");
+		expect(judged).toBe(2);
+	});
 });
 
 describe("PermissionBroker", () => {

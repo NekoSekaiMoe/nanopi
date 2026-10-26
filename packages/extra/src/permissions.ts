@@ -5,6 +5,10 @@
  * or let the model decide. "Let the model decide" keys the class by
  * tool + first shell command and caches one verdict per class for the rest of
  * the session: the class never prompts again.
+ *
+ * A call that carries a hazard (`git reset --hard` in the current checkout) is
+ * gated even in a session whose tool was allowed for good, and the hazard is
+ * part of its class key: a model verdict on `bash::git` must not quietly cover it.
  */
 
 import type { PermissionCallInfo, PermissionOutcome } from "./permission-types.ts";
@@ -21,7 +25,8 @@ export type PermissionJudge = (info: PermissionCallInfo) => Promise<PermissionOu
 export type JudgeVerdict = PermissionOutcome;
 
 function classKey(info: PermissionCallInfo): string {
-	return info.firstCommand ? `${info.toolName}::${info.firstCommand}` : info.toolName;
+	const base = info.firstCommand ? `${info.toolName}::${info.firstCommand}` : info.toolName;
+	return info.hazard ? `${base}::${info.hazard}` : base;
 }
 
 export class PermissionGate {
@@ -41,7 +46,9 @@ export class PermissionGate {
 	}
 
 	async check(info: PermissionCallInfo): Promise<PermissionOutcome> {
-		if (this.sessionAllowedTools.has(info.toolName)) return { action: "allow" };
+		// A session-wide allowance covers the tool the user was shown, not a
+		// command that would destroy work they did not have in mind.
+		if (!info.hazard && this.sessionAllowedTools.has(info.toolName)) return { action: "allow" };
 
 		const key = classKey(info);
 		const judged = this.judgedClasses.get(key);
