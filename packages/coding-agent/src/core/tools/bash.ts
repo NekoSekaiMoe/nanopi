@@ -263,6 +263,22 @@ export interface ShellToolConfig {
 }
 
 /**
+ * Name the reason a command was killed, so the model can tell the cases apart. A user
+ * interrupt resolves itself (the run stops), but the run-level signal is also aborted when
+ * the session tears down or the turn is replaced, and the model has to decide whether
+ * retrying is reasonable instead of guessing whether it caused the abort.
+ */
+function describeAbort(signal: AbortSignal | undefined, subject: string): string {
+	const reason = signal?.reason;
+	const detail = typeof reason === "string" ? reason.trim() : "";
+	const lines = [
+		detail ? `${subject} interrupted: ${detail}` : `${subject} interrupted before it finished`,
+		"Not a command failure: the run was cancelled from outside, so the same command may succeed when re-run.",
+	];
+	return lines.join("\n");
+}
+
+/**
  * Resolve which backend runs the commands of one shell tool: a registered
  * provider when the session selected one, otherwise the fixed `operations`
  * override, otherwise the local shell.
@@ -413,7 +429,7 @@ export function createShellToolDefinition(
 					const snapshot = await finishOutput();
 					const { text } = formatOutput(snapshot, "");
 					if (err instanceof Error && err.message === "aborted") {
-						throw new Error(appendStatus(text, "Command aborted"));
+						throw new Error(appendStatus(text, describeAbort(signal, "Command")));
 					}
 					if (err instanceof Error && err.message.startsWith("timeout:")) {
 						const timeoutSecs = err.message.split(":")[1];

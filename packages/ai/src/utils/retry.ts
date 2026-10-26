@@ -27,6 +27,42 @@ const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
 	"subscription_sharing_usage_limit_exceeded",
 ]);
 
+/**
+ * Provider finish reasons that mean the response was stopped on purpose, so asking again
+ * reproduces the same result. They surface as `stopReason: "error"` (a safety filter is a
+ * failure, not a completed turn), which otherwise flows into the retry path: the retry
+ * classifier only reads `errorMessage`, and text like "Provider finish_reason: content_filter"
+ * says nothing about whether the failure is permanent.
+ *
+ * Matched against `AssistantMessage.rawStopReason`, which each adapter fills with the
+ * provider-native value (`content_filter`, `incomplete.content_filter`, `SAFETY`, ...).
+ * Provider-native values are uppercase in Google/Bedrock, so the match is case-insensitive.
+ */
+const NON_RETRYABLE_FINISH_REASON_PATTERN = buildProviderErrorPattern([
+	// OpenAI Chat Completions / Responses: the response was dropped by a content or safety
+	// filter, or the provider judged the request malformed.
+	"content_filter",
+	"content.?policy",
+	"malformed_function_call",
+	"unexpected_tool_call",
+	"too_many_tool_calls",
+	"max_time_limit",
+
+	// Anthropic refusals and content flagged by safety classifiers.
+	"refusal",
+	"sensitive",
+
+	// Google Generative AI / Vertex finish reasons that are terminal by definition.
+	"SAFETY",
+	"BLOCKLIST",
+	"PROHIBITED_CONTENT",
+	"SPII",
+	"RECITATION",
+	"IMAGE_SAFETY",
+	"LANGUAGE",
+	"NO_IMAGE",
+]);
+
 const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	// Generic provider load, HTTP status, and server-side transient failures.
 	"overloaded",
@@ -258,6 +294,14 @@ export async function retryAssistantCall(
 }
 
 /**
+ * Finish reasons that mean the provider stopped the response deliberately. Asking again
+ * reproduces the same result, so retrying only burns the budget.
+ */
+export function isTerminalFinishReason(message: AssistantMessage): boolean {
+	return message.rawStopReason !== undefined && NON_RETRYABLE_FINISH_REASON_PATTERN.test(message.rawStopReason);
+}
+
+/**
  * Classifies whether a failed assistant message looks like a transient provider
  * or transport error, so callers can decide if the last assistant turn should be
  * restarted.
@@ -278,6 +322,7 @@ function matchesNonRetryableErrorPatterns(errorMessage: string, patterns: readon
 
 export function isRetryableAssistantError(message: AssistantMessage, options?: RetryClassificationOptions): boolean {
 	if (message.stopReason !== "error" || !message.errorMessage) return false;
+	if (isTerminalFinishReason(message)) return false;
 	const errorMessage = message.errorMessage;
 	if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
 	if (matchesNonRetryableErrorPatterns(errorMessage, options?.nonRetryableErrorPatterns)) return false;

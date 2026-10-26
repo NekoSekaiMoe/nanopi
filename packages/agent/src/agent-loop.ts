@@ -703,7 +703,7 @@ async function executeToolCallsParallel(
 			if (signal?.aborted) {
 				const finalized = {
 					toolCall,
-					result: createErrorToolResult("Operation aborted"),
+					result: createAbortedToolResult(signal),
 					isError: true,
 				} satisfies FinalizedToolCallOutcome;
 				await emitToolExecutionEnd(finalized, emit);
@@ -821,7 +821,7 @@ async function prepareToolCall(
 			if (signal?.aborted) {
 				return {
 					kind: "immediate",
-					result: createErrorToolResult("Operation aborted"),
+					result: createAbortedToolResult(signal),
 					isError: true,
 				};
 			}
@@ -840,7 +840,7 @@ async function prepareToolCall(
 		if (signal?.aborted) {
 			return {
 				kind: "immediate",
-				result: createErrorToolResult("Operation aborted"),
+				result: createAbortedToolResult(signal),
 				isError: true,
 			};
 		}
@@ -990,6 +990,21 @@ async function finalizeExecutedToolCall(
 		isError,
 		durationMs: executed.durationMs,
 	};
+}
+
+/**
+ * Message for a call that never ran because the run was aborted. Carrying the abort reason
+ * tells the model whether a retry is reasonable: a user interrupt will not get better, a
+ * replaced turn might.
+ */
+function createAbortedToolResult(signal: AbortSignal | undefined): AgentToolResult<any> {
+	const reason = signal?.reason;
+	const detail = typeof reason === "string" ? reason.trim() : "";
+	return createErrorToolResult(
+		detail
+			? `Operation aborted before the tool ran: ${detail}`
+			: "Operation aborted before the tool ran: the run was cancelled from outside",
+	);
 }
 
 function createErrorToolResult(message: string): AgentToolResult<any> {

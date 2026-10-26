@@ -1346,7 +1346,9 @@ export class AgentSession {
 	private _handleAgentEvent = async (event: AgentEvent): Promise<void> => {
 		// An abort requested while the run was starting, e.g. during before_agent_start, stops it
 		// here. agent_start is awaited before the first request.
-		if (event.type === "agent_start" && this._agentRunAbortRequested) this.agent.abort();
+		if (event.type === "agent_start" && this._agentRunAbortRequested) {
+			this.agent.abort("the user interrupted the run before it started");
+		}
 		// Record the calls a tool made through ctx.executeTool() and their usage on its result message.
 		if (this._nestedToolCalls) {
 			if (event.type === "message_start" && event.message.role === "toolResult") {
@@ -1643,7 +1645,7 @@ export class AgentSession {
 			this.abortCompaction();
 			this.abortBranchSummary();
 			this.abortBash();
-			this.agent.abort();
+			this.agent.abort("the session was shut down");
 		} catch {
 			// Dispose must succeed even if an abort hook throws.
 		}
@@ -2827,7 +2829,7 @@ export class AgentSession {
 		this.abortRetry();
 		this.abortCompaction();
 		this.abortBranchSummary();
-		this.agent.abort();
+		this.agent.abort("the user interrupted the run");
 		await this.waitForIdle();
 	}
 

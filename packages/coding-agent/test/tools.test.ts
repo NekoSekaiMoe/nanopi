@@ -608,7 +608,7 @@ describe("Coding Agent Tools", () => {
 		it("should include full output path for truncated timeout and abort errors", async () => {
 			for (const testCase of [
 				{ error: "timeout:5", expected: "Command timed out after 5 seconds" },
-				{ error: "aborted", expected: "Command aborted" },
+				{ error: "aborted", expected: "Command interrupted before it finished" },
 			]) {
 				const operations: BashOperations = {
 					exec: async (_command, _cwd, { onData }) => {
@@ -639,6 +639,27 @@ describe("Coding Agent Tools", () => {
 				expect(fullOutput).toContain("1\n2\n3");
 				expect(fullOutput).toContain("2998\n2999\n3000");
 			}
+		});
+
+		it("should name the abort reason so the model can tell an interrupt from a failure", async () => {
+			const operations: BashOperations = {
+				exec: async (_command, _cwd, { onData, signal }) => {
+					onData(Buffer.from("partial\n", "utf-8"));
+					await new Promise<void>((_resolve, reject) => {
+						signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+					});
+					return { exitCode: 0 };
+				},
+			};
+			const bash = createBashTool(testDir, { operations });
+			const controller = new AbortController();
+
+			const pending = bash.execute("test-call-abort-reason", { command: "chatty" }, controller.signal);
+			controller.abort("the user interrupted the run");
+
+			await expect(pending).rejects.toThrow(
+				/partial\s+Command interrupted: the user interrupted the run\s+Not a command failure/,
+			);
 		});
 
 		it("should throw error when cwd does not exist", async () => {

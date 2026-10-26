@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import { fauxAssistantMessage } from "../src/providers/faux.ts";
-import { isRetryableAssistantError, type RetryPolicy, retryAssistantCall, retryDelayMs } from "../src/utils/retry.ts";
+import {
+	isRetryableAssistantError,
+	isTerminalFinishReason,
+	type RetryPolicy,
+	retryAssistantCall,
+	retryDelayMs,
+} from "../src/utils/retry.ts";
 
 const openAIExplicitRetryMessage =
 	"An error occurred while processing your request. You can retry your request, or contact us through our help center at help.openai.com if the error persists. Please include the request ID req_******** in your message.";
@@ -131,6 +137,48 @@ describe("provider retry classification", () => {
 			),
 		).toBe(true);
 		expect(isRetryableAssistantError(fauxAssistantMessage("not an error"))).toBe(false);
+	});
+
+	it.each([
+		// OpenAI Chat Completions and Responses map these to `stopReason: "error"`.
+		["content_filter", "Provider finish_reason: content_filter"],
+		["incomplete.content_filter", "Response incomplete: content_filter"],
+		["malformed_function_call", "Provider finish_reason: malformed_function_call"],
+		["max_time_limit", "Response incomplete: max_time_limit"],
+		// Anthropic refusals and safety-flagged turns.
+		["refusal", "The model refused to complete the request"],
+		["sensitive", "Provider stopped with: sensitive"],
+		// Google Generative AI / Vertex uppercase finish reasons.
+		["SAFETY", "Provider stopped with: SAFETY"],
+		["PROHIBITED_CONTENT", "Provider stopped with: PROHIBITED_CONTENT"],
+	])("does not retry deterministic finish reason %s", (rawStopReason, errorMessage) => {
+		const message = { ...fauxAssistantMessage("", { stopReason: "error", errorMessage }), rawStopReason };
+		expect(isTerminalFinishReason(message)).toBe(true);
+		expect(isRetryableAssistantError(message)).toBe(false);
+	});
+
+	it("still retries transient failures that carry a finish reason", () => {
+		const message = {
+			...fauxAssistantMessage("", {
+				stopReason: "error",
+				errorMessage: "Provider finish_reason: network_error",
+			}),
+			rawStopReason: "network_error",
+		};
+		expect(isTerminalFinishReason(message)).toBe(false);
+		expect(isRetryableAssistantError(message)).toBe(true);
+	});
+
+	it("does not retry a dangling tool call the provider reported", () => {
+		// A model that emitted an unusable tool call repeats it verbatim on retry.
+		const message = {
+			...fauxAssistantMessage("", {
+				stopReason: "error",
+				errorMessage: "OpenAI Responses stream completed with an unfinished tool call: edit (call_1)",
+			}),
+			rawStopReason: "incomplete.unexpected_tool_call",
+		};
+		expect(isRetryableAssistantError(message)).toBe(false);
 	});
 
 	it("fails fast on caller-supplied non-retryable patterns", () => {

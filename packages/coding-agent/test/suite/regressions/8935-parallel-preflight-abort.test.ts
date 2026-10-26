@@ -71,6 +71,10 @@ describe("#8935 parallel preflight abort", () => {
 
 		const toolResults = harness.session.messages.filter((message) => message.role === "toolResult");
 		expect(toolResults.map((message) => message.toolCallId)).toEqual(starts.map((event) => event.toolCallId));
-		expect(toolResults.map(getMessageText)).toEqual(["Operation aborted", "Operation aborted"]);
+		// The abort reason reaches the model, so it can tell a cancelled run from a tool failure.
+		expect(toolResults.map(getMessageText)).toEqual([
+			"Operation aborted before the tool ran: the user interrupted the run",
+			"Operation aborted before the tool ran: the user interrupted the run",
+		]);
 	});
 });
