@@ -149,6 +149,58 @@ describe("CLI --export formats", () => {
 		expect(readFileSync(outputPath, "utf8")).toContain('id="session-data"');
 	});
 
+	// `--export in.jsonl out.jsonl` used to answer with the input path and write
+	// nothing, which made the one format the docs call "a copy" the only one that
+	// never produced a file.
+	test("copies the session when the output path ends in .jsonl", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-jsonl-"));
+		tempDirs.push(dir);
+		const inputPath = writeSession(dir);
+		const outputPath = join(dir, "out.jsonl");
+		const log = vi.spyOn(console, "log").mockImplementation(() => {});
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const originalExit = process.exit;
+		process.exit = ((code?: number) => {
+			throw new Error(`exit ${code}`);
+		}) as typeof process.exit;
+		try {
+			await expect(main(["--export", inputPath, outputPath])).rejects.toThrow("exit 0");
+			expect(error).not.toHaveBeenCalled();
+			expect(String(log.mock.calls[0]?.[0])).toContain(outputPath);
+		} finally {
+			process.exit = originalExit;
+			log.mockRestore();
+			error.mockRestore();
+		}
+		expect(existsSync(outputPath)).toBe(true);
+		const records = readFileSync(outputPath, "utf8")
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as Record<string, unknown>);
+		expect(records[0]).toMatchObject({ type: "session", id: "11111111-2222-3333-4444-555555555555" });
+		expect(records[1]).toMatchObject({ type: "message", id: "aaaabbbb", parentId: null });
+	});
+
+	test("refuses a .jsonl export with no output path instead of overwriting the input", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-jsonl-nopath-"));
+		tempDirs.push(dir);
+		const inputPath = writeSession(dir);
+		const before = readFileSync(inputPath, "utf8");
+		const error = vi.spyOn(console, "error").mockImplementation(() => {});
+		const originalExit = process.exit;
+		process.exit = ((code?: number) => {
+			throw new Error(`exit ${code}`);
+		}) as typeof process.exit;
+		try {
+			await expect(main(["--export", inputPath, "--export-format", "jsonl"])).rejects.toThrow("exit 1");
+		} finally {
+			process.exit = originalExit;
+		}
+		expect(String(error.mock.calls[0]?.[0])).toContain("JSONL export needs an output path");
+		error.mockRestore();
+		expect(readFileSync(inputPath, "utf8")).toBe(before);
+	});
+
 	test("lets --export-format override the extension", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "nanopi-export-format-"));
 		tempDirs.push(dir);

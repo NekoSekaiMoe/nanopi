@@ -61,6 +61,7 @@ import {
 	MissingSessionCwdError,
 	type SessionCwdIssue,
 } from "./core/session-cwd.ts";
+import { exportSessionToJsonl } from "./core/session-export.ts";
 import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
@@ -104,8 +105,8 @@ function defaultExportPath(inputPath: string, format: SessionExportFormat): stri
 
 /**
  * Write a session file in the requested format. HTML is rendered from the
- * templates by exportFromFile; Markdown is rendered in Node, so it opens the
- * session through SessionManager instead.
+ * templates by exportFromFile; Markdown and JSONL are rendered in Node, so they
+ * open the session through SessionManager instead.
  */
 async function exportSessionFile(
 	inputPath: string,
@@ -117,12 +118,19 @@ async function exportSessionFile(
 	if (!existsSync(resolvedInputPath)) {
 		throw new Error(`File not found: ${resolvedInputPath}`);
 	}
-	// The JSONL export is the session file as it stands: `--export x.jsonl out.jsonl`
-	// is a copy, and asking for it never needs a renderer.
-	if (format === "jsonl") return resolvedInputPath;
-	const sessionManager = SessionManager.open(resolvedInputPath);
+	// The JSONL export writes the branch back out, so `--export in.jsonl out.jsonl`
+	// produces the file the caller named instead of echoing the input path back.
+	// It always names one: a derived path would be the input session file itself.
+	if (format === "jsonl") {
+		if (outputPath === undefined) {
+			throw new Error(
+				`JSONL export needs an output path: \`--export ${inputPath} <output>.jsonl\` writes a copy and leaves the input session alone`,
+			);
+		}
+		return exportSessionToJsonl(SessionManager.open(resolvedInputPath), outputPath);
+	}
 	const target = outputPath ?? defaultExportPath(resolvedInputPath, format);
-	return exportSessionToMarkdown(sessionManager, { outputPath: target });
+	return exportSessionToMarkdown(SessionManager.open(resolvedInputPath), { outputPath: target });
 }
 
 /**

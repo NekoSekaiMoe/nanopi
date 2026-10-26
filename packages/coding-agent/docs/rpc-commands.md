@@ -591,7 +591,7 @@ Response:
 
 ### export_session
 
-Export the session in one of the formats the build carries. `md`, `html`, and `jsonl` are the same three formats `/export` writes; `html` behaves exactly like `export_html`.
+Export the session in one of the formats the build carries. `md`, `html`, and `jsonl` are the same three formats `/export` writes; `html` behaves exactly like `export_html`. `jsonl` re-serializes the current branch, so the `path` in the response is the file that was written, not the session nanopi loaded.
 
 ```json
 {"type": "export_session", "format": "md"}

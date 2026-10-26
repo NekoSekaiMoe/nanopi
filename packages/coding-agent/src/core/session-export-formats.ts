@@ -33,6 +33,10 @@ const FORMAT_ALIASES: Record<string, SessionExportFormat> = {
  * Parse a format name or a file extension. `pdf` is not a format this build
  * writes, but it parses to itself so the caller can answer with the hint
  * instead of silently writing HTML under a `.pdf` name.
+ *
+ * Every entry point that arms this grammar writes the target file: a `.jsonl`
+ * export is the branch re-serialized to the path the caller named (see
+ * `exportSessionToJsonl`), never a path echoed back from the input session.
  */
 export function parseExportFormat(value: string): SessionExportFormat | "pdf" | undefined {
 	const normalized = value.trim().toLowerCase();
