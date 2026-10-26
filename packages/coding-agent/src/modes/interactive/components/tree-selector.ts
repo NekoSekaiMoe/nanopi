@@ -5,11 +5,13 @@ import {
 	getKeybindings,
 	Input,
 	type Keybinding,
+	pageStep,
 	Spacer,
 	sliceByColumn,
 	Text,
 	truncateToWidth,
 	visibleWidth,
+	windowStart,
 	wrapTextWithAnsi,
 } from "@nanopi/pi-tui";
 import type { SessionTreeNode } from "../../../core/session-manager.ts";
@@ -675,13 +677,7 @@ class TreeList implements Component {
 			return lines;
 		}
 
-		const startIndex = Math.max(
-			0,
-			Math.min(
-				this.selectedIndex - Math.floor(this.maxVisibleLines / 2),
-				this.filteredNodes.length - this.maxVisibleLines,
-			),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.filteredNodes.length, this.maxVisibleLines);
 		const endIndex = Math.min(startIndex + this.maxVisibleLines, this.filteredNodes.length);
 
 		const renderedRows: HorizontalViewportRow[] = [];
@@ -1025,10 +1021,16 @@ class TreeList implements Component {
 			}
 		} else if (kb.matches(keyData, "tui.editor.cursorLeft") || kb.matches(keyData, "tui.select.pageUp")) {
 			// Page up
-			this.selectedIndex = Math.max(0, this.selectedIndex - this.maxVisibleLines);
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredNodes.length, -1, {
+				pageSize: this.maxVisibleLines,
+				wrap: false,
+			});
 		} else if (kb.matches(keyData, "tui.editor.cursorRight") || kb.matches(keyData, "tui.select.pageDown")) {
 			// Page down
-			this.selectedIndex = Math.min(this.filteredNodes.length - 1, this.selectedIndex + this.maxVisibleLines);
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredNodes.length, 1, {
+				pageSize: this.maxVisibleLines,
+				wrap: false,
+			});
 		} else if (kb.matches(keyData, "tui.select.confirm")) {
 			const selected = this.filteredNodes[this.selectedIndex];
 			if (selected && this.onSelect) {

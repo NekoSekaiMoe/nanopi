@@ -1,4 +1,4 @@
-import { Container, getKeybindings, Spacer, Text } from "@nanopi/pi-tui";
+import { Container, getKeybindings, pageStep, Spacer, Text } from "@nanopi/pi-tui";
 import { APP_NAME } from "../../../config.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -95,6 +95,14 @@ export class FirstTimeSetupComponent extends Container {
 			this.moveSelection(-1);
 		} else if (kb.matches(keyData, "tui.select.down") || keyData === "j") {
 			this.moveSelection(1);
+		} else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
+			// The whole option list is on screen, so a page is the full list: PgUp/PgDn go to the ends.
+			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
+			this.analyticsIndex = pageStep(this.analyticsIndex, ANALYTICS_OPTIONS.length, direction, {
+				pageSize: ANALYTICS_OPTIONS.length,
+				wrap: false,
+			});
+			this.update();
 		} else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
 			this.options.onSubmit({ shareAnalytics: ANALYTICS_OPTIONS[this.analyticsIndex].value });
 		} else if (kb.matches(keyData, "tui.select.cancel")) {

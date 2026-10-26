@@ -10,6 +10,10 @@ function createFakeTui(): TUI {
 	return { requestRender: () => {} } as unknown as TUI;
 }
 
+/** PageUp/PageDown as the terminal sends them (xterm CSI 5~/6~). */
+const PAGE_UP = "\u001b[5~";
+const PAGE_DOWN = "\u001b[6~";
+
 describe("model selector", () => {
 	let harness: Harness | undefined;
 
@@ -134,5 +138,37 @@ describe("model selector", () => {
 			const rendered = stripAnsi(selector.render(120).join("\n"));
 			expect(rendered).toContain("Could not refresh 2 model catalogs (openai, anthropic); showing cached models.");
 		});
+	});
+
+	it("moves the selection by a window on PageUp/PageDown", async () => {
+		harness = await createHarness({
+			models: Array.from({ length: 20 }, (_, index) => ({
+				id: `model-${String(index).padStart(2, "0")}`,
+				name: `Model ${index}`,
+				reasoning: true,
+			})),
+		});
+		const currentModel = harness.getModel("model-00")!;
+		const selector = new ModelSelectorComponent(
+			createFakeTui(),
+			currentModel,
+			harness.session.modelRuntime,
+			[],
+			() => {},
+			() => {},
+		);
+
+		const selectedRow = (): string | undefined =>
+			stripAnsi(selector.render(120).join("\n"))
+				.split("\n")
+				.find((line) => line.startsWith("→"));
+
+		// A detached TUI has no terminal height, so one page is the fixed 10-row budget.
+		selector.handleInput(PAGE_DOWN);
+		expect(selectedRow()).toContain("model-10");
+
+		selector.handleInput(PAGE_UP);
+		expect(selectedRow()).toContain("model-00");
+		selector.dispose();
 	});
 });

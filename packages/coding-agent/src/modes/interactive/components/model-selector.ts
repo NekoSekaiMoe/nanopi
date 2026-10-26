@@ -1,5 +1,16 @@
 import { type Model, modelsAreEqual } from "@nanopi/pi-ai";
-import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text, type TUI } from "@nanopi/pi-tui";
+import {
+	Container,
+	type Focusable,
+	fuzzyFilter,
+	getKeybindings,
+	Input,
+	pageStep,
+	Spacer,
+	Text,
+	type TUI,
+	windowStart,
+} from "@nanopi/pi-tui";
 import type { ModelRuntime } from "../../../core/model-runtime.ts";
 import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
 import { getModelSelectorSearchText } from "../model-search.ts";
@@ -323,10 +334,7 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.listContainer.clear();
 
 		const maxVisible = this.listRows();
-		const startIndex = Math.max(
-			0,
-			Math.min(this.selectedIndex - Math.floor(maxVisible / 2), this.filteredModels.length - maxVisible),
-		);
+		const startIndex = windowStart(this.selectedIndex, this.filteredModels.length, maxVisible);
 		const endIndex = Math.min(startIndex + maxVisible, this.filteredModels.length);
 
 		// Show visible slice of filtered models
@@ -430,6 +438,16 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		else if (kb.matches(keyData, "tui.select.down")) {
 			if (this.filteredModels.length === 0) return;
 			this.selectedIndex = this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
+			this.updateList();
+		}
+		// PageUp/PageDown - move by a screen of models, wrapping like the arrows do
+		else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
+			if (this.filteredModels.length === 0) return;
+			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
+			this.selectedIndex = pageStep(this.selectedIndex, this.filteredModels.length, direction, {
+				pageSize: this.listRows(),
+				wrap: true,
+			});
 			this.updateList();
 		}
 		// Enter

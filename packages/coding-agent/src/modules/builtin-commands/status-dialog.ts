@@ -10,7 +10,7 @@
  * indented comma-separated lists, wrapped to the dialog width.
  */
 
-import { Key, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { clampScrollOffset, Key, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
 
 export type StatusRow = {
@@ -82,9 +82,14 @@ function sectionLines(theme: any, section: StatusSection, contentWidth: number):
 	return lines;
 }
 
-/** Interactive /status dialog: static rows + resource sections, Esc closes, ↑/↓ scrolls on overflow. */
+/** Interactive /status dialog: static rows + resource sections, Esc closes, ↑/↓/PgUp/PgDn scroll on overflow. */
 export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, data: StatusDialogData): Promise<void> {
 	let scrollOffset = 0;
+	// Rows the last render could show. Key handling runs before the next render, so
+	// keyboard paging needs the size the body already had.
+	let pageRows = 1;
+	// Body rows from the last render, so key handling clamps against the real length.
+	let totalRows = 0;
 
 	await ctx.ui.custom(
 		(tui, theme, _keybindings, done) => {
@@ -96,12 +101,22 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 						return;
 					}
 					if (matchesKey(input, Key.up)) {
-						scrollOffset = Math.max(0, scrollOffset - 1);
+						scrollOffset = clampScrollOffset(scrollOffset - 1, totalRows, pageRows);
 						tui.requestRender();
 						return;
 					}
 					if (matchesKey(input, Key.down)) {
-						scrollOffset += 1;
+						scrollOffset = clampScrollOffset(scrollOffset + 1, totalRows, pageRows);
+						tui.requestRender();
+						return;
+					}
+					if (matchesKey(input, "pageUp")) {
+						scrollOffset = clampScrollOffset(scrollOffset - pageRows, totalRows, pageRows);
+						tui.requestRender();
+						return;
+					}
+					if (matchesKey(input, "pageDown")) {
+						scrollOffset = clampScrollOffset(scrollOffset + pageRows, totalRows, pageRows);
 						tui.requestRender();
 						return;
 					}
@@ -126,7 +141,9 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 					const rows = Math.max(1, tui.terminal.rows);
 					const chrome = 4; // rule + title + rule + hint
 					const pageSize = Math.max(1, rows - 1 - chrome);
-					scrollOffset = Math.min(scrollOffset, Math.max(0, allRows.length - pageSize));
+					pageRows = pageSize;
+					totalRows = allRows.length;
+					scrollOffset = clampScrollOffset(scrollOffset, allRows.length, pageSize);
 					const visible = allRows.slice(scrollOffset, scrollOffset + pageSize);
 					if (scrollOffset > 0 && visible.length > 0) visible[0] = theme.fg("dim", "↑");
 					if (scrollOffset + pageSize < allRows.length && visible.length > 0) {
@@ -140,7 +157,7 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 						...visible,
 						"",
 						rule(theme, width),
-						hintRow(theme, "↑/↓ to scroll · Esc to close", width),
+						hintRow(theme, "↑/↓ PgUp/PgDn to scroll · Esc to close", width),
 					];
 				},
 			};

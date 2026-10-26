@@ -438,6 +438,36 @@ describe("TreeSelectorComponent", () => {
 		const ALT_LEFT = "\x1b[1;3D";
 		const ALT_RIGHT = "\x1b[1;3C";
 
+		test("pages through a tree taller than the visible rows", () => {
+			const entries = Array.from({ length: 12 }, (_, index) =>
+				userMessage(`user-${index}`, index === 0 ? null : `user-${index - 1}`, `message ${index}`),
+			);
+			const selector = new TreeSelectorComponent(
+				buildTree(entries),
+				"user-0",
+				5,
+				() => {},
+				() => {},
+			);
+			const list = selector.getTreeList();
+			expect(list.getSelectedNode()?.entry.id).toBe("user-0");
+
+			// Ctrl+Left doubles as page up outside of a fold, so PgDn/PgUp use the tree's own
+			// visible-row count instead of a hardcoded step.
+			selector.handleInput("\u001b[6~");
+			expect(list.getSelectedNode()?.entry.id).toBe("user-5");
+
+			selector.handleInput("\u001b[6~");
+			expect(list.getSelectedNode()?.entry.id).toBe("user-10");
+
+			// The end of the list stops instead of wrapping past it.
+			selector.handleInput("\u001b[6~");
+			expect(list.getSelectedNode()?.entry.id).toBe("user-11");
+
+			selector.handleInput("\u001b[5~");
+			expect(list.getSelectedNode()?.entry.id).toBe("user-6");
+		});
+
 		// Tree structure:
 		//
 		// user-1
