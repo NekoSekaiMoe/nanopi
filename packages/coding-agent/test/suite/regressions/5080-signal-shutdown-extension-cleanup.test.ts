@@ -24,6 +24,7 @@ type ShutdownThis = {
 	themeController: { dispose: () => void };
 	clearNextPromptSuggestion: () => void;
 	stop: () => void;
+	writeDiagnosticBundle: (phase: "startup" | "exit") => Promise<undefined>;
 	sessionManager: SessionManager;
 };
 
@@ -91,6 +92,8 @@ function createContext(order: string[], sessionManager = createSessionManager())
 		},
 		themeController: { dispose: vi.fn() },
 		clearNextPromptSuggestion: vi.fn(),
+		// Off by default (`NANOPI_DEBUG` unset), so this is a no-op on the shutdown path.
+		writeDiagnosticBundle: vi.fn(async () => undefined),
 		stop: vi.fn(() => {
 			order.push("stop");
 		}),
@@ -154,6 +157,7 @@ describe("InteractiveMode.shutdown ordering (#5080)", () => {
 		await callShutdown(context);
 
 		expect(order).toEqual(["drainInput", "stop", "dispose"]);
+		expect(context.writeDiagnosticBundle).toHaveBeenCalledWith("exit");
 		expect(stdoutWrite).toHaveBeenCalledWith(
 			`${chalk.dim("To resume this session:")} ${APP_NAME} --session test-session\n`,
 		);
