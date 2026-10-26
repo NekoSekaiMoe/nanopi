@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Destructive git guard (issue #200): shell calls that would hit this checkout's index or working tree — `reset --hard`, a bare `reset`, `stash`, `clean -f`, `add -A`/`add .`, `checkout .`, `restore`, `commit --no-verify`, `push --force` — now go through the permission gate with a hazard line, even when the tool was already allowed for the session, and the refusal appended to the tool result tells the model what it tried to destroy. The analysis walks past quoting, `cd`, `bash -c`, `$(...)`/backticks and shell operators, and is checkout-aware: `git -C <other worktree> …` and `git worktree add` count as isolation, so a subagent's own tree is not gated. `/gitguard off` disables it. New exports: `analyzeShellCommand`, `analyzeGitInvocation`, `collectGitInvocations`, `listWorktrees`, `checkoutRoot`, `gitGuardNotice`
+
 ## [20261022]
 
 ### Added

@@ -11,6 +11,11 @@ export interface PermissionCallInfo {
 	args: unknown;
 	/** First shell word for shell tools; keys the AI-decide class. */
 	firstCommand?: string;
+	/**
+	 * A hazard the command will definitely cause here (destructive git today).
+	 * Present, it is the reason the call is gated whatever the first command is.
+	 */
+	hazard?: string;
 }
 
 /** Result of gating one call. */

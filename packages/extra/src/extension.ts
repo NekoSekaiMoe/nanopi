@@ -22,6 +22,7 @@ import type {
 	ExtraToolCallEvent,
 	ExtraToolCallResult,
 } from "./extension-api.ts";
+import { analyzeShellCommand, gitGuardNotice, listWorktrees } from "./git-guard.ts";
 import { isMcpToolName, MCP_MAIN_AGENT_BLOCK_REASON, MCP_SUBAGENT_ONLY_GUIDELINE } from "./mcp-policy.ts";
 import { modeEngine } from "./mode-engine.ts";
 import type { PermissionCallInfo, PermissionDecision, PermissionPrompter } from "./permissions.ts";
@@ -108,6 +109,22 @@ function summarizeCall(event: ExtraToolCallEvent): { summary: string; firstComma
 	return { summary: `${event.toolName} ${target}`.trim(), firstCommand: undefined };
 }
 
+/**
+ * The guard's one-line hazard for a shell call, or undefined when the command is
+ * not a destructive git command reaching this checkout. Outside a permission
+ * gate (headless runs, `--yolo`) nothing calls this.
+ */
+function destructiveGitHazard(event: ExtraToolCallEvent, cwd: string): string | undefined {
+	const command =
+		typeof (event.input as Record<string, unknown>)?.command === "string"
+			? ((event.input as Record<string, unknown>).command as string)
+			: undefined;
+	if (command === undefined) return undefined;
+	const verdict = analyzeShellCommand(command, cwd);
+	if (!verdict.checked || !verdict.hit) return undefined;
+	return gitGuardNotice(verdict.hit, listWorktrees(cwd));
+}
+
 /** Ask over the TUI/RPC dialog primitives. */
 function makeDialogPrompter(ctx: ExtraExtensionContext): PermissionPrompter {
 	return async (info) => {
@@ -120,12 +137,19 @@ function makeDialogPrompter(ctx: ExtraExtensionContext): PermissionPrompter {
 	};
 }
 
+/** Destructive git prompting, on unless the user turned it off with `/gitguard off`. */
+function gitGuardEnabled(cwd: string): boolean {
+	return loadExtraSettings(cwd).settings.gitGuard ?? true;
+}
+
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
 	let sessionCtx: ExtraExtensionContext | undefined;
 	let gate: PermissionGate | undefined;
 	/** /plan runs settle into the exit-confirmation flow. */
 	let planIntroActive = false;
+	/** Read once per session start; `/gitguard` re-applies it. */
+	let gitGuardOn = true;
 
 	/** Push the current mode badges through the footer status channel. */
 	function applyModeStatus(): void {
@@ -352,6 +376,25 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		nanopi.setActiveTools([...active]);
 	}
 
+	// --- CLI command: /gitguard [on|off] ---
+	nanopi.registerCommand("gitguard", {
+		description: "Show or configure the destructive git guard (on | off)",
+		handler: async (args, ctx) => {
+			const requested = args.trim().toLowerCase();
+			if (requested === "") {
+				ctx.ui.notify(`Git guard: ${gitGuardOn ? "on" : "off"}`, "info");
+				return;
+			}
+			if (requested !== "on" && requested !== "off") {
+				ctx.ui.notify("Usage: /gitguard [on|off]", "error");
+				return;
+			}
+			saveExtraSettings({ gitGuard: requested === "on" });
+			gitGuardOn = requested === "on";
+			ctx.ui.notify(`Git guard ${requested}`, "info");
+		},
+	});
+
 	// --- Session lifecycle ---
 	nanopi.on("session_start", (event, ctx) => {
 		sessionCtx = ctx;
@@ -370,6 +413,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 		// Rebuilt on every start so a reloaded settings file (and /sandbox) applies.
 		applySandbox(ctx.cwd);
+		gitGuardOn = gitGuardEnabled(ctx.cwd);
 		// Fresh permission memory per session.
 		const prompter: PermissionPrompter | undefined =
 			ctx.mode === "webui" ? extraBridge.permissions.prompter : ctx.hasUI ? makeDialogPrompter(ctx) : undefined;
@@ -466,14 +510,23 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			return undefined;
 		}
 		const { summary, firstCommand } = summarizeCall(event);
+		const hazard =
+			gitGuardOn && SHELL_TOOL_NAMES.has(event.toolName)
+				? destructiveGitHazard(event, sessionCtx?.cwd ?? process.cwd())
+				: undefined;
 		const outcome = await gate.check({
 			callId: event.toolCallId,
 			toolName: event.toolName,
 			summary,
 			args: event.input,
 			firstCommand,
+			hazard,
 		});
-		if (outcome.action === "deny") return { block: true, reason: outcome.reason };
+		if (outcome.action === "deny") {
+			// The model has to learn the rule from the refusal itself: prompt text
+			// alone is what let this happen in the first place.
+			return { block: true, reason: hazard ? `${outcome.reason}\n\n${hazard}` : outcome.reason };
+		}
 		return undefined;
 	});
 }
