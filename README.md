@@ -19,7 +19,32 @@ In an era where coding agent frameworks are blindly bloating into complex micros
 
 ## Installation
 
-Download bundle js in release.
+Download bundle js in release, or let `install.js` fetch one for you:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
+```
+
+That writes `nanopi.js` (the `full` bundle) to the current directory; start it with `node nanopi.js`.
+`install.js` takes the same arguments either way:
+
+```bash
+# a smaller bundle: base or minimal
+curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node - --sku=minimal
+
+# a specific release instead of the latest one
+curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node - --version=v20261013
+
+# keep it as a script and pass arguments without the `-`
+curl -fsSLO https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js
+node install.js --sku=base --out=./nanopi.js
+```
+
+- `--sku=full|base|minimal` (default `full`) picks the flavor; see the flavor table in `buildconfig.json` for what each carries.
+- `--version=<tag>` (default: latest release) accepts the tag with or without the leading `v`.
+- `--out=<path>` (default `./<asset name>`) is where the bundle is written.
+
+The download is checked against the release's `SHA256SUMS` and fails on a mismatch. Run `node install.js --help` for the same summary.
 
 ## Session export
 
