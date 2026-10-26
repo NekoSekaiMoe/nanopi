@@ -12,7 +12,25 @@ issue #262 要的是第五个答案：选中后 AI 解释这次调用做什么�
 
 ## Decision
 
-两层，都在 `packages/extra`，core 只加了一处传话。
+### 答案的三种时效
+
+弹窗的答案不是「四个平级按钮」，而是三种时效：
+
+- **单次**（`allow_once`、`deny`）：只针对这一次调用，gate 不留记忆，下次同类调用照旧弹窗。
+- **本会话**（`allow_session`）：记住这个工具，之后同工具的调用不再问（危险命令除外）。
+- **一直**（`ai_decide`）：这一类调用交给模型裁决，裁决缓存在会话里，不再问。
+
+解释完点「继续」落到**单次**上：用户刚读懂这次调用，只放行这一次才符合他按下说明时的心理。
+所以弹窗和继续之后的呈现都写明时效——选项文字直接带范围（`Allow once (this call only)`、
+`Allow this session (every call of this tool)`、`Reject (this call only)`、`Let the AI decide (this kind, from now on)`），
+联想字是「继续（只放行这一次，下次还会问）」，终端标题同样写明下一次还会问。
+
+`allow_once` 在 gate 里的效果与 `allow` 完全相同（跑一次、不留记忆），保留成两个答案是因为它们是两处不同的
+用户动作：一个是弹窗上的「允许一次」，一个是读完解释后的继续。文档和类型注释里都标了这一层。
+
+### 两层实现
+
+两层都在 `packages/extra`，core 只加了传话（弹窗 `description`、联想的 fallback）。
 
 1. **gate 知道「一次性放行」**（`permissions.ts`）。新增 `approveOnce(callId)`：把 callId 记成一张票，
    `check()` 认票即放行并删票。票是 callId 而不是工具名，所以过期或猜来的票没法重放。
@@ -33,7 +51,17 @@ issue #262 要的是第五个答案：选中后 AI 解释这次调用做什么�
 扩展经 `extraBridge.continueSuggestion()` 告诉 TUI 这一轮该给「继续」，TUI 把它当联想字的兜底
 （模型没给建议、或联想被关掉时用它），终端标题同时写明「继续」能放行这次调用。
 
-webui 走同一条 gate：`ai_decide` 早被服务端接受，卡片上却一直没有按钮，这次补上。
+webui 走同一条 gate，但卡片没有输入框可以敲「继续」，所以它的「解释」走另一条路。gate 侧多一个
+`explain(info)`：它多挂一次 prompt，这次允许「解释」作为答案（`explanationPrompter`），
+拿到 `"explain"` 就返回 `undefined`——调用继续挂着。卡片 POST `decision: "explain"` 交给
+`PermissionBroker.answer`，它**不**结算 prompt（条目仍是 active），而是置位 `explanationGranted`、
+把 `"explain"` 交给挂起的那次等待，并发 `explain` 事件；服务端转成 SSE `permission_explained`。
+用户读完解释后卡片还在，点「只允许这一次 / 本次会话允许 / 拒绝」才是真正的答案。同一次 prompt 只允许解释一次，
+避免两个回合叠在一次调用上。`tool_call` 处因此写成 `gate.explain(info) ?? gate.check(info)`：解释完什么也没跑，
+下一轮 `check()` 重新问一次，拿到真答案。
+
+卡片因此补齐了两个按钮：`allow_once`（只允许这一次）和 `explain`（解释这次调用），并加了一行时效说明；
+前端 `PendingPermission` 原来读 `pending.args`，服务端发的是 `arguments`，参数预览一直是空的，这次一并修好。
 
 ## Alternatives considered
 
@@ -55,4 +83,7 @@ webui 走同一条 gate：`ai_decide` 早被服务端接受，卡片上却一直
 - 代价：解释是一次真实的模型调用，会花时间与 token；解释回合里模型被要求不调用受门禁覆盖的工具，
   它若不听话，用户会再看到一个弹窗——行为仍然安全，只是不顺。
 - 票以 callId 为键存在 gate 内，不落盘、不跨会话：进程重启或换会话后调用必须重新确认。
-- webui 还没有「解释」入口：卡片协议要先支持「解释文本单独推送、调用继续挂起」，属于后续工作。
+- webui 的解释不是 TUI 那条「输入继续」，而是「解释推送 + 卡片继续等答案」：两条路共用 gate 的
+  `explain()`，但前端的交互不同（TUI 有编辑器，webui 只有卡片）。
+- 解释这条路只覆盖 webui 与 TUI；headless（无 UI）没有 prompter，`explain()` 直接返回 `undefined`，
+  行为与以前一样。

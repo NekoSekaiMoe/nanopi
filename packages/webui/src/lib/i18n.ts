@@ -216,6 +216,12 @@ const EN: Record<string, string> = {
 	"验证": "verify",
 	"展开步骤": "Show steps",
 	"收起步骤": "Hide steps",
+	"只允许这一次": "Allow once",
+	"拒绝和只允许这一次都只针对这一次调用；本次会话允许会记住这个工具；让 AI 决定则由模型裁决这一类调用。":
+		"Reject and Allow once apply to this call only; Allow this session remembers the tool; Let the AI decide rules on this kind of call.",
+	"解释这次调用": "Explain what this does",
+	"解释如下，读完后在这里决定：只允许这一次、本次会话允许，或拒绝。":
+		"Explanation above. Decide here once you have read it: allow once, allow this session, or reject.",
 };
 
 export function t(zh: string): string {

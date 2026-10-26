@@ -22,8 +22,17 @@ import {
 import { randomId } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
-/** Answers a permission card can send; `ai_decide` lets the model rule on the call. */
-export type PermissionAnswer = "allow" | "deny" | "allow_session" | "ai_decide";
+/**
+ * Answers a permission card can send.
+ *
+ * `allow_once` runs the call the card is about and nothing else; `deny` is
+ * single-shot too. `allow_session` remembers the tool, and `ai_decide` hands this
+ * kind of call to the model for the rest of the session.
+ */
+export type PermissionAnswer = "allow" | "deny" | "allow_session" | "allow_once" | "ai_decide";
+
+/** Asking the model to describe the call: not an answer, it pauses the prompt. */
+export type PermissionRequest = PermissionAnswer | "explain";
 
 export interface TextBlock {
 	kind: "text";
@@ -71,8 +80,13 @@ export interface PendingPermission {
 	toolName: string;
 	reason: string;
 	callId: string;
-	args: unknown;
+	/** Raw arguments of the call the card is about, shown verbatim. */
+	arguments: unknown;
 	allowAllBash?: boolean;
+	/** The prompt can be paused for an explanation of the call before it is answered. */
+	explainable?: boolean;
+	/** An explanation was asked for; the card stays up until it is answered. */
+	explaining?: boolean;
 }
 
 interface UseChatOptions {
@@ -441,9 +455,17 @@ export function useChat({
 					toolName: event.tool_name,
 					reason: event.reason,
 					callId: event.call_id,
-					args: event.arguments,
+					arguments: event.arguments,
 					allowAllBash: event.allow_all_bash,
+					explainable: event.explainable,
 				});
+				break;
+			case "permission_explained":
+				// The prompt is still pending: the explanation arrives as an assistant
+				// message, and the card is answered once it has been read.
+				setPermission((pending) =>
+					pending && pending.callId === event.call_id ? { ...pending, explaining: true } : pending,
+				);
 				break;
 			case "user_input_request":
 				setUserInput(event);
@@ -670,9 +692,25 @@ export function useChat({
 	}, [onSessionsChanged]);
 
 	const answerPermission = useCallback(
-		async (decision: PermissionAnswer) => {
+		async (decision: PermissionRequest) => {
 			const pending = permission;
 			if (!pending) return;
+			// Explaining is not an answer: the prompt has to stay up for the real
+			// answer once the explanation lands.
+			if (decision === "explain") {
+				try {
+					await respondPermission(
+						pending.sessionId || sessionIdRef.current || "",
+						decision,
+						pending.toolName,
+						pending.callId,
+					);
+					setPermission((current) => (current ? { ...current, explaining: true } : current));
+				} catch (cause) {
+					setError(turnErrorFrom(cause));
+				}
+				return;
+			}
 			setPermission(null);
 			try {
 				await respondPermission(

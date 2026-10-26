@@ -1053,15 +1053,27 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// POST /chat/permission answers them (see handleApi).
 		const unsubscribeBroker = extraBridge.available
 			? extraBridge.permissions.subscribe((event) => {
-					if (event.type !== "prompt") return;
-					emit({
-						type: "permission_request",
-						session_id: session.sessionId,
-						tool_name: event.info.toolName,
-						reason: event.info.summary,
-						call_id: event.info.callId,
-						arguments: event.info.args,
-					});
+					if (event.type === "prompt") {
+						emit({
+							type: "permission_request",
+							session_id: session.sessionId,
+							tool_name: event.info.toolName,
+							reason: event.info.summary,
+							call_id: event.info.callId,
+							arguments: event.info.args,
+							explainable: true,
+						});
+						return;
+					}
+					// The card asked for an explanation: nothing ran, and the card is
+					// still waiting for a real answer once the explanation lands.
+					if (event.type === "explain") {
+						emit({
+							type: "permission_explained",
+							tool_name: event.info.toolName,
+							call_id: event.info.callId,
+						});
+					}
 				})
 			: undefined;
 		// Structured input (ask_user_question) renders in the same composer seat.

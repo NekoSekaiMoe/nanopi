@@ -147,6 +147,47 @@ describe("PermissionGate", () => {
 		expect(asked).toBe(2);
 	});
 
+	test("allow_once runs one call and is asked again next time", async () => {
+		const answers: Array<PermissionDecision | undefined> = ["allow_once", "allow_once", undefined];
+		let asked = 0;
+		const gate = new PermissionGate(
+			async () => answers[asked++],
+			async () => ({ action: "allow" }),
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		// Nothing was remembered: the next call of the same kind prompts again.
+		await expect(gate.check(info({ callId: "call-2" }))).resolves.toEqual({ action: "allow" });
+		expect(asked).toBe(2);
+		const dismissed = await gate.check(info({ callId: "call-3" }));
+		expect(dismissed.action).toBe("deny");
+	});
+
+	test("allow_once is single-shot even for a hazard", async () => {
+		const gate = new PermissionGate(
+			async () => "allow_once" as PermissionDecision,
+			async () => ({ action: "allow" }),
+		);
+		const hazardous = info({ hazard: "git reset --hard discards uncommitted changes" });
+		await expect(gate.check(hazardous)).resolves.toEqual({ action: "allow" });
+		// A hazard is not covered by a session allowance, and allow_once made none:
+		// the next call of the same kind goes back to the prompt.
+		await expect(gate.check(hazardous)).resolves.toEqual({ action: "allow" });
+	});
+
+	test("ai_decide keeps covering the class after the answer", async () => {
+		let judged = 0;
+		const gate = new PermissionGate(
+			async () => "ai_decide" as PermissionDecision,
+			async () => {
+				judged++;
+				return { action: "allow" };
+			},
+		);
+		await expect(gate.check(info())).resolves.toEqual({ action: "allow" });
+		await expect(gate.check(info({ callId: "call-2" }))).resolves.toEqual({ action: "allow" });
+		expect(judged).toBe(1);
+	});
+
 	test("a hazard gets its own judgment class", async () => {
 		let judged = 0;
 		const gate = new PermissionGate(
@@ -186,6 +227,26 @@ describe("PermissionBroker", () => {
 		expect(broker.answer(undefined, "bash", "allow_session")).toBe(true);
 		await expect(second).resolves.toBe("allow_session");
 		expect(events).toEqual(["prompt", "resolved", "prompt", "resolved"]);
+	});
+
+	test("explain pauses the prompt, and the card's next answer settles it", async () => {
+		const broker = new PermissionBroker();
+		const events: string[] = [];
+		broker.subscribe((event) => events.push(event.type));
+
+		const pending = broker.prompter(info({ callId: "a" }));
+		await Promise.resolve();
+		const paused = broker.explanationPrompter(info({ callId: "a" }));
+
+		expect(broker.answer("a", undefined, "explain")).toBe(true);
+		await expect(paused).resolves.toBe("explain");
+		// A second explanation on the same prompt would stack turns on one call.
+		expect(broker.answer("a", undefined, "explain")).toBe(false);
+
+		// The prompt is still outstanding: the answer after the explanation is.
+		expect(broker.answer("a", undefined, "allow_once")).toBe(true);
+		await expect(pending).resolves.toBe("allow_once");
+		expect(events).toEqual(["prompt", "explain", "resolved"]);
 	});
 
 	test("cancelAll resolves pending prompts as dismissed", async () => {

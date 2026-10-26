@@ -95,8 +95,15 @@ export class ExtraBridge {
 		return this.extensionHooks?.continueSuggestion?.();
 	}
 
-	/** Validate and answer the outstanding permission prompt. */
+	/**
+	 * Validate and answer the outstanding permission prompt.
+	 *
+	 * `"explain"` is not a decision: it pauses the prompt and asks the model to
+	 * describe the call. It is accepted here only when a permission prompt is
+	 * actually waiting, which `PermissionBroker.answer` checks.
+	 */
 	answerPermission(decision: string, callId: string | undefined, toolName: string | undefined): boolean {
+		if (decision === "explain") return this.permissions.answer(callId, toolName, decision);
 		if (!isPermissionDecision(decision)) return false;
 		return this.permissions.answer(callId, toolName, decision);
 	}
