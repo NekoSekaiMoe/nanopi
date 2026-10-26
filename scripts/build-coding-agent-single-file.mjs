@@ -40,6 +40,7 @@ import {
 	resolveBuildCommit,
 	SINGLE_FILE_EXTERNAL_PACKAGES,
 	SINGLE_FILE_BANNER,
+	selfReferencePlugin,
 	validateExternalImports,
 } from "./esbuild-shared.mjs";
 import { createApiStubPlugin, validateStubs } from "./build-apis.mjs";
@@ -323,7 +324,7 @@ const { payload: assetsPayload, rawBytes: assetCount, skipped: assetsSkipped } =
 const collectedSidecars = collectSidecarFiles();
 const sidecarManifest = buildSidecarManifest(collectedSidecars);
 const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
-const version = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).version;
+const { name: packageName, version } = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8"));
 // A flavor without assets embeds no package.json, so config.ts (which reads the
 // version from the package dir it starts in) needs the version compiled in.
 const embedsPackageJson = assetsSkipped === false;
@@ -367,6 +368,8 @@ const { plugin: apiStubPlugin, disabledApis, disabledProviders } = createApiStub
 	builtinProviderIds,
 });
 const plugins = [
+	// The bundled extras import the SDK by package name (see selfReferencePlugin).
+	selfReferencePlugin({ packageName: packageName, packageDir: codingAgentDir }),
 	apiStubPlugin,
 	componentStubPlugin,
 	createLazyImportDropPlugin({ components }),
