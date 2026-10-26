@@ -4,7 +4,8 @@ import { join } from "node:path";
 import { Agent } from "@nanopi/pi-agent-core";
 import type { Model } from "@nanopi/pi-ai";
 import { getModel, streamSimple } from "@nanopi/pi-ai/compat";
-import { getBuiltinModels, getBuiltinProviders } from "@nanopi/pi-ai/providers/all";
+import type { BuiltinProvider } from "@nanopi/pi-ai/providers/all";
+import { getBuiltinModels } from "@nanopi/pi-ai/providers/all";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
@@ -717,14 +718,10 @@ describe("default model selection", () => {
 		expect(defaultModelPerProvider.cerebras).toBe("gpt-oss-120b");
 	});
 
-	test("built-in chat providers have defaults in their generated catalogs", () => {
-		for (const provider of getBuiltinProviders()) {
-			const chatModels = getBuiltinModels(provider);
-			const defaultId = defaultModelPerProvider[provider];
-			if (chatModels.length === 0) {
-				expect(defaultId, `${provider} has no chat models and should have no chat default`).toBeUndefined();
-				continue;
-			}
+	test("pinned default models parse for cataloged providers", () => {
+		// Most cataloged providers are generated from models.dev without a curated default.
+		for (const [provider, defaultId] of Object.entries(defaultModelPerProvider)) {
+			const chatModels = getBuiltinModels(provider as BuiltinProvider);
 			expect(
 				chatModels.some((model) => model.id === defaultId),
 				`${provider} default ${defaultId} should exist in its generated catalog`,
