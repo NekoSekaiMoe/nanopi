@@ -7,7 +7,9 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 
-const script = fileURLToPath(new URL("./mirror-tags.mjs", import.meta.url));
+const script = fileURLToPath(new URL("./mirror.mjs", import.meta.url));
+// 镜像的唯一入口是 scripts/mirror.mjs，两个子命令共用一个文件。
+const COMMAND = "tags";
 
 // 隔离 fixture 仓库与开发者的全局 git 配置（签名、hooks、模板），保证提交可复现。
 const gitEnv = {
@@ -63,7 +65,7 @@ function commit(cwd, file, content, message) {
 }
 
 function mirror(cwd, remote) {
-	return spawnSync(process.execPath, [script, "--remote", remote], { cwd, encoding: "utf8", env: gitEnv });
+	return spawnSync(process.execPath, [script, COMMAND, "--remote", remote], { cwd, encoding: "utf8", env: gitEnv });
 }
 
 test("a new annotated tag is mirrored, then converges to a no-op", async (t) => {
