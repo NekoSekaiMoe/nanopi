@@ -59,7 +59,7 @@ Use `/export [path]` to write the current session as Markdown (`.md`), HTML (`.h
 
 Need a PDF? Open the exported `.html` file in a browser and print it to PDF (Print > Save as PDF). The template styles the printout: collapsed tool output, thinking blocks and compaction detail are revealed, and the interaction bar is hidden, so the paper copy holds the same conversation as the page. nanopi itself has no PDF writer and needs no browser to export.
 
-Which formats a build carries depends on its flavor: `full` exports Markdown and HTML, `base` only Markdown, `minimal` none (it still copies the `.jsonl` session file). A build that drops a format says so instead of writing an empty file.
+Which formats a build carries depends on its flavor: `full` exports Markdown and HTML, `base` only Markdown, `minimal` none (the `.jsonl` export is ungated). A build that drops a format says so instead of writing an empty file. With `--export <session.jsonl>` and no path, Markdown and HTML get the input's basename, while a `.jsonl` export asks for a destination instead of rewriting the session it reads.
 
 Use `/share` to upload the session and get a viewer link. nanopi uses a Radius artifact when Radius authentication is configured; otherwise, it uses a private GitHub gist.
 

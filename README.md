@@ -29,7 +29,7 @@ Download bundle js in release.
 - `.md` — a plain transcript; tool calls and tool results are kept
 - `.jsonl` — the session file itself
 
-Which formats a build carries follows its flavor: `full` exports Markdown and HTML, `base` only Markdown, `minimal` none (the `.jsonl` copy always works).
+Which formats a build carries follows its flavor: `full` exports Markdown and HTML, `base` only Markdown, `minimal` none (the `.jsonl` copy always works). With no `path`, the output name reuses the input's basename and the format's extension.
 
 **Need a PDF?** Open the exported `.html` file in a browser and print it to PDF (Print > Save as PDF). The template's print styles reveal the collapsed tool output, thinking blocks and compaction detail and hide the interaction bar, so the printout is the whole conversation. nanopi has no PDF writer and needs no browser installed to export.
 

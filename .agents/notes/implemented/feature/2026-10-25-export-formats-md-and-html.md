@@ -120,12 +120,24 @@ Bundle sizes: `full` 9.8 MiB, `base` 5.5 MiB, `minimal` 2.5 MiB. The Markdown
 renderer costs `base` about 3 KB of source; the print block costs `full` and
 `base` about 1 KB of CSS.
 
-`--export <session> <path>.jsonl` re-serializes the branch through
-`exportSessionToJsonl` instead of returning the input path, so the documented
-"copy the session" use still writes where the caller asked. A `.pdf` path now
-resolves to no known format and therefore falls back to HTML; the file it
-writes opens in a browser and prints, which is the workflow the README
-describes.
+A `.jsonl` export writes what it promises: the branch re-serialized through
+`exportSessionToJsonl` at the path the caller named. `exportToJsonl` (which
+`/export` and RPC `export_session` call) always did that; `--export` answered
+with the input path instead, so `nanopi --export in.jsonl out.jsonl` printed
+`Exported to: in.jsonl` and left `out.jsonl` unwritten. One rule for all three
+entry points: the output path is a file this process writes, and no entry point
+hands back the input session file as its own output.
+
+The CLI has no derived `.jsonl` name because the derivation would land on the
+input session file, which turns a copy into a rewrite of what it read. Naming a
+`.jsonl` output, or asking for `--export-format jsonl`, without a destination
+fails with "JSONL export needs an output path" instead. `/export` and RPC keep
+their timestamped default, which writes a new file.
+
+A `.pdf` path is not a fallback: `--export x.pdf`, `--export-format pdf`,
+`/export x.pdf`, and RPC `format: "pdf"` all refuse with the print-the-HTML
+hint. Writing an HTML document under a `.pdf` name is the same lie the
+extension-based format split was introduced to remove, one layer down.
 
 The cost is that a user who wants a PDF has to leave the CLI: export HTML, open
 it, print. Everything that made a built-in PDF attractive (one command, a file
