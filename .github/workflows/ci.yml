@@ -1,8 +1,11 @@
 name: CI
 
 on:
-  # 只有 pull_request：merge-result 是「PR 合进 main 会不会丢东西」，push 事件下
-  # 没有可比的 base；GitHub 侧是直推 main，那边由 sync-to-cnb 的镜像兜底。
+  # push 也要跑：直推 main 的提交（含从 CNB 镜像过来的合并提交）同样要过
+  # build/check/test。merge-result 是「PR 合进 main 会不会丢东西」，push 事件下
+  # 没有可比的 base，那一步按 base 是否存在分流，见下。
+  push:
+    branches: [main]
   pull_request:
     branches: [main]
 
@@ -47,6 +50,10 @@ jobs:
       - name: Check merge result
         # 用 PR 合并后的提交与 base 比：base 有的文件在结果里必须还在（#242 的
         # b3ffe400 用旧树盖掉了 c897cdf2，父链没断，只有比树才看得出来）。
+        #
+        # push 上没有 base：github.base_ref 为空时这个步骤不跑，省得用空 ref 让脚本
+        # 退出 2（#258）。直推 main 的回退由 CNB 侧 mirror-main.mjs 拦。
+        if: github.base_ref != ''
         run: node scripts/check-merge-result.mjs --base "refs/remotes/origin/${{ github.base_ref }}"
 
       - name: Check
