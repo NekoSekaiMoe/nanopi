@@ -113,6 +113,8 @@ export interface ModuleUIDialogOptions {
 	signal?: AbortSignal;
 	/** Timeout in milliseconds. Dialog auto-dismisses with live countdown display. */
 	timeout?: number;
+	/** Extra caption line under the title (`select` only). */
+	description?: string;
 }
 
 /** Placement for extension widgets. */

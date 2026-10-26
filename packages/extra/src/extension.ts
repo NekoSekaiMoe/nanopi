@@ -72,12 +72,61 @@ export function planModeVerdict(toolName: string, input: unknown): string | unde
 const MINIMAL_GUIDELINE =
 	"You are in MINIMAL MODE: only the shell (bash) tool is available. Accomplish the task through shell commands.";
 
-const DECISION_LABELS: Array<{ label: string; decision: PermissionDecision }> = [
-	{ label: "Allow once", decision: "allow" },
-	{ label: "Allow this session", decision: "allow_session" },
-	{ label: "Reject", decision: "deny" },
-	{ label: "Let the AI decide", decision: "ai_decide" },
+/**
+ * Labels the prompt offers, in order. The last one does not answer: it pauses the
+ * turn and hands the user to the model for an explanation of the call (see
+ * `explainCall`). Every label says how far its answer reaches, because the only
+ * difference between the first three is the scope: this call, this session, or
+ * until the AI thinks otherwise.
+ */
+const DECISION_LABELS: Array<{ label: string; decision: PermissionDecision | "explain" }> = [
+	{ label: "Allow once (this call only)", decision: "allow" },
+	{ label: "Allow this session (every call of this tool)", decision: "allow_session" },
+	{ label: "Reject (this call only)", decision: "deny" },
+	{ label: "Let the AI decide (this kind, from now on)", decision: "ai_decide" },
+	{ label: "Explain what this does", decision: "explain" },
 ];
+
+/**
+ * The dialog's caption: the selector fades the line dim, so no markdown styling
+ * survives. It carries the scope note too, since the labels above stop at one
+ * line each.
+ */
+const PROMPT_CAPTION =
+	"Answer the prompt below, or pick Explain to have the call described before it runs. Rejecting a call is always single-shot; letting the AI decide covers this kind of call for the rest of the session.";
+
+/** The word the next-prompt suggestion falls back to while an explanation is pending. */
+const CONTINUE_WORD = "继续";
+
+/**
+ * What the input box shows while an explanation is pending.
+ *
+ * The prompt the user just read was not answered, so the word has to say which
+ * of the answers it stands for: the explained call runs, and the next call of the
+ * same kind asks again.
+ */
+const CONTINUE_SUGGESTION = `${CONTINUE_WORD}（只放行这一次，下次还会问）`;
+
+/**
+ * What the model is asked after the user picks "Explain what this does".
+ *
+ * The gate keeps the call pending, so the message has to tell the model not to
+ * retry it: any gated call it makes now prompts again, and a retry would land the
+ * user back at the dialog they just left.
+ */
+function explainPrompt(info: PermissionCallInfo): string {
+	return [
+		"The user asked for this tool call to be explained before it runs, so nothing has executed yet.",
+		"Explain what it does and why: the command or edit in plain terms, what it touches, and what could go wrong.",
+		"Be concise, then stop. Do not call this tool again (or any other gated tool) in this turn;",
+		"the user will press continue in the input box to run it.",
+		"",
+		`Tool: ${info.toolName}`,
+		`Call: ${info.summary}`,
+		`Arguments: ${JSON.stringify(info.args)}`,
+		...(info.hazard ? [`Hazard already detected: ${info.hazard}`] : []),
+	].join("\n");
+}
 
 function subsystemTools(allToolNames: string[], key: SubsystemKey): string[] {
 	switch (key) {
@@ -126,14 +175,41 @@ function destructiveGitHazard(event: ExtraToolCallEvent, cwd: string): string | 
 }
 
 /** Ask over the TUI/RPC dialog primitives. */
-function makeDialogPrompter(ctx: ExtraExtensionContext): PermissionPrompter {
+function makeDialogPrompter(
+	ctx: ExtraExtensionContext,
+	onExplain: (info: PermissionCallInfo) => void,
+): PermissionPrompter {
 	return async (info) => {
-		const title = `Allow ${info.toolName}?\n${info.summary}`;
+		const title = `Allow ${info.toolName}? ${info.summary}`;
 		const choice = await ctx.ui.select(
 			title,
 			DECISION_LABELS.map((entry) => entry.label),
+			{ description: PROMPT_CAPTION },
 		);
-		return DECISION_LABELS.find((entry) => entry.label === choice)?.decision;
+		const picked = DECISION_LABELS.find((entry) => entry.label === choice)?.decision;
+		// Explaining is not an answer: the gate stays blocked while the model
+		// writes, and the user continues from the input box.
+		if (picked === "explain") {
+			onExplain(info);
+			return undefined;
+		}
+		return picked;
+	};
+}
+
+/**
+ * Ask the model to explain a call in the webui, where the card has no editor to
+ * type "继续" into: the explanation lands as an assistant message, and the user
+ * answers the still-pending card (allow once / allow this session / reject).
+ */
+function makeWebuiPrompter(onExplain: (info: PermissionCallInfo) => void): PermissionPrompter {
+	return async (info) => {
+		const choice = await extraBridge.permissions.explanationPrompter(info);
+		if (choice === "explain") {
+			onExplain(info);
+			return undefined;
+		}
+		return choice;
 	};
 }
 
@@ -150,6 +226,48 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let planIntroActive = false;
 	/** Read once per session start; `/gitguard` re-applies it. */
 	let gitGuardOn = true;
+	/** Calls the user asked to have explained, waiting for that explanation to land. */
+	const explainedCalls = new Map<string, PermissionCallInfo>();
+
+	/**
+	 * Pause the turn and ask the model to explain one gated call.
+	 *
+	 * The gate stays blocked on that call, which makes this a simple handshake: the
+	 * explanation is a normal turn, the blocked `tool_call` handler returns right
+	 * after `sendUserMessage`, and the call runs only when the user continues. The
+	 * turn ending settles that same call with `approveOnce()`, so a bare "继续"
+	 * does not pop the dialog again. Nothing is remembered past that call: the
+	 * next one asks as usual.
+	 */
+	function explainCall(info: PermissionCallInfo, nanopi: ExtraExtensionAPI): void {
+		explainedCalls.set(info.callId, info);
+		// The dialog owns the editor slot, so the title is where the instruction
+		// survives: until the explanation ends, this call runs on "继续" alone.
+		sessionCtx?.ui.setTitle(
+			`${CONTINUE_WORD}: run the explained ${info.toolName} call once (the next one asks again)`,
+		);
+		nanopi.sendUserMessage(explainPrompt(info));
+	}
+
+	/** Settle explained calls whose explanation turn has ended. */
+	function approveExplainedCalls(): void {
+		const pending = [...explainedCalls.keys()];
+		explainedCalls.clear();
+		sessionCtx?.ui.setTitle(undefined);
+		for (const callId of pending) gate?.approveOnce(callId);
+	}
+
+	/** Drop explained calls whose turn was interrupted: they are not waiting to continue. */
+	function forgetExplainedCalls(): void {
+		if (explainedCalls.size === 0) return;
+		explainedCalls.clear();
+		sessionCtx?.ui.setTitle(undefined);
+	}
+
+	/** The word offered in the input box while an explanation is pending, if any. */
+	function continueSuggestion(): string | undefined {
+		return explainedCalls.size > 0 ? CONTINUE_SUGGESTION : undefined;
+	}
 
 	/**
 	 * Apply a mode switch wherever it came from: the footer badge in the TUI, the
@@ -430,10 +548,18 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		gitGuardOn = gitGuardEnabled(ctx.cwd);
 		// Fresh permission memory per session.
 		const prompter: PermissionPrompter | undefined =
-			ctx.mode === "webui" ? extraBridge.permissions.prompter : ctx.hasUI ? makeDialogPrompter(ctx) : undefined;
+			ctx.mode === "webui"
+				? makeWebuiPrompter((info) => explainCall(info, nanopi))
+				: ctx.hasUI
+					? makeDialogPrompter(ctx, (info) => explainCall(info, nanopi))
+					: undefined;
 		const judge = (info: PermissionCallInfo) =>
 			judgeWithModel(info, ctx.model, ctx.modelRegistry as unknown as JudgeModelRegistry, { cwd: ctx.cwd });
-		gate = new PermissionGate(prompter ?? (async () => undefined), judge);
+		gate = new PermissionGate(
+			prompter ?? (async () => undefined),
+			judge,
+			ctx.mode === "webui" ? extraBridge.permissions.explanationPrompter : undefined,
+		);
 		if (ctx.mode === "tui") {
 			applyModeStatus();
 		}
@@ -442,6 +568,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				subsystemStatus: () => subsystemStatus(),
 				applySubsystem: (key, enabled) => applySubsystem(key, enabled),
 				applyModeToolSet: () => applyModeToolSet(),
+				continueSuggestion,
 			},
 			ctx.cwd,
 			{
@@ -454,11 +581,16 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 	nanopi.on("session_shutdown", () => {
 		extraBridge.permissions.cancelAll();
+		forgetExplainedCalls();
 		planIntroActive = false;
 	});
 
 	// --- /plan exit confirmation ---
-	nanopi.on("agent_settled", () => {
+	nanopi.on("agent_settled", (event) => {
+		// An explanation is a whole turn, so this also ends it: the call the user
+		// asked about may now run on a bare "继续".
+		if (event.aborted) forgetExplainedCalls();
+		else approveExplainedCalls();
 		if (!planIntroActive || engine.mode !== "plan") return;
 		planIntroActive = false;
 		const ctx = sessionCtx;
@@ -529,14 +661,19 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			gitGuardOn && SHELL_TOOL_NAMES.has(event.toolName)
 				? destructiveGitHazard(event, sessionCtx?.cwd ?? process.cwd())
 				: undefined;
-		const outcome = await gate.check({
+		const info: PermissionCallInfo = {
 			callId: event.toolCallId,
 			toolName: event.toolName,
 			summary,
 			args: event.input,
 			firstCommand,
 			hazard,
-		});
+		};
+		// Webui cards answer "explain" while the prompt is up: nothing ran, and the
+		// call asks once more after the explanation turn. Both paths end in a real
+		// answer, so this is one `check()` from the model's point of view.
+		const explained = await gate.explain(info);
+		const outcome = explained ?? (await gate.check(info));
 		if (outcome.action === "deny") {
 			// The model has to learn the rule from the refusal itself: prompt text
 			// alone is what let this happen in the first place.

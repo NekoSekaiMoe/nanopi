@@ -467,7 +467,11 @@ export type SSEEvent =
 			call_id: string;
 			arguments: unknown;
 			allow_all_bash?: boolean;
+			/** The card may ask the model for an explanation before it is answered. */
+			explainable?: boolean;
 	  }
+	/** The card's explanation request was accepted; the answer is on its way. */
+	| { type: "permission_explained"; tool_name: string; call_id: string }
 	| UserInputRequestEvent
 	| {
 			type: "done";
@@ -582,7 +586,7 @@ export async function streamChat(
 
 export async function respondPermission(
 	sessionId: string,
-	decision: "allow" | "deny" | "allow_session" | "ai_decide",
+	decision: "allow" | "deny" | "allow_session" | "allow_once" | "ai_decide" | "explain",
 	toolName?: string,
 	callId?: string,
 ): Promise<{ success: boolean }> {
