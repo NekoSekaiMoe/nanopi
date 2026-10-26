@@ -25,7 +25,7 @@ Download bundle js in release, or let `install.js` fetch one for you:
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
 
-That writes `nanopi.js` (the `full` bundle) to the current directory; start it with `node nanopi.js`.
+That installs the `full` bundle as `~/.local/bin/nanopi.js` and puts a `nanopi` shim beside it, so `nanopi` runs once `~/.local/bin` is on `PATH` (`install.js` says so when it is not).
 `install.js` takes the same arguments either way:
 
 ```bash
@@ -37,16 +37,19 @@ curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js
 
 # keep it as a script and pass arguments without the `-`
 curl -fsSLO https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js
-node install.js --sku=base --out=./nanopi.js
+node install.js --sku=base
 
-# install into a prefix, like npm: writes <prefix>/bin/nanopi.js
-node install.js --prefix=~/.local
+# a different prefix, like npm's
+node install.js --prefix=/usr/local
+
+# just the bundle file, no shim, no directory
+node install.js --out=./nanopi.js
 ```
 
 - `--sku=full|base|minimal` (default `full`) picks the flavor; see the flavor table in `buildconfig.json` for what each carries.
 - `--version=<tag>` (default: latest release) accepts the tag with or without the leading `v`.
-- `--out=<path>` (default `./<asset name>`) is where the bundle is written.
-- `--prefix=<dir>` writes the bundle to `<dir>/bin/<asset name>` instead, creating the directory. It installs nothing else: no wrapper script, no symlink, so start it with `node <dir>/bin/nanopi.js`. It cannot be combined with `--out`.
+- `--prefix=<dir>` (default `~/.local`) installs into `<dir>/bin`: the bundle as `<asset name>` plus a `nanopi` shim (`nanopi.cmd` on Windows) that runs `node <dir>/bin/<asset name>`. Run it with `nanopi`.
+- `--out=<path>` writes the bundle to exactly that path and nothing else. It cannot be combined with `--prefix`.
 
 The download is checked against the release's `SHA256SUMS` and fails on a mismatch. Run `node install.js --help` for the same summary.
 

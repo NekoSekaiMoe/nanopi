@@ -2,12 +2,12 @@
 // Downloads a NanoPi bundle from the latest (or a given) GitHub release.
 //
 //   curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
-//   node install.js --sku=minimal --version=v20261013 --out=./nanopi.js
+//   node install.js --sku=minimal --version=v20261013 --prefix=~/.local
 
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, join, resolve } from "node:path";
+import { basename, delimiter, join, resolve } from "node:path";
 import { styleText } from "node:util";
 
 const REPOSITORY = "NekoSekaiMoe/nanopi";
@@ -15,6 +15,10 @@ const REPOSITORY = "NekoSekaiMoe/nanopi";
 // and with the flavor table in buildconfig.json.
 const SKUS = { full: "nanopi.js", base: "nanopi-base.js", minimal: "nanopi-minimal.js" };
 const DEFAULT_TIMEOUT_MS = 120_000;
+// Where the bundle goes when neither --prefix nor --out is given: the XDG user
+// executable directory, which is on PATH in the common Linux desktop setups and
+// is writable without root.
+const DEFAULT_PREFIX = "~/.local";
 
 class InstallError extends Error {}
 
@@ -68,23 +72,23 @@ const parseArguments = (arguments_) => {
 	return options;
 };
 
-const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--out=<path>] [--prefix=<dir>]
+const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--prefix=<dir>] [--out=<path>]
 
   --sku       bundle to download: full (default), base, minimal
   --version   release tag, with or without the leading v (default: latest)
-  --out       where to write the bundle (default: ./<asset name>)
-  --prefix    install directory, like npm's prefix; the bundle goes to
-              <prefix>/bin/<asset name> and nothing else is installed
+  --prefix    install directory, like npm's prefix (default: ${DEFAULT_PREFIX});
+              the bundle goes to <prefix>/bin and a \`nanopi\` shim to <prefix>/bin
+  --out       write the bundle to this path and nothing else
   --help      print this summary
 
   --out and --prefix are mutually exclusive. Without either, the bundle is
-  written to the current directory.
+  installed under ${DEFAULT_PREFIX}.
 
 Examples:
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node - --sku=minimal
-  node install.js --version=v20261013 --out=./nanopi.js
-  node install.js --prefix=~/.local`;
+  node install.js --version=v20261013 --prefix=~/.local
+  node install.js --out=./nanopi.js`;
 
 const releaseTag = async (version) => {
 	if (version !== "latest") return version.startsWith("v") ? version : `v${version}`;
@@ -98,7 +102,23 @@ const releaseTag = async (version) => {
 // `~/x` survives the shell inside `--prefix=~/x` but not outside it, so expand it here.
 const expandHome = (path) => (path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path);
 
-const absoluteUrl = (url) => (url.startsWith("http://") || url.startsWith("https://") ? url : `https://${url}`);
+// The shim re-runs the bundle with `node`, which is what the bundle is: a JS
+// file. It stays a three-line script instead of a symlink so the bundle itself
+// remains runnable and relocatable.
+const writeShims = (directory, asset) => {
+	const script = `#!/bin/sh\nexec node "$(dirname "$0")/${asset}" "$@"\n`;
+	const names = process.platform === "win32" ? ["nanopi.cmd"] : ["nanopi"];
+	for (const name of names) {
+		const path = join(directory, name);
+		writeFileSync(path, process.platform === "win32" ? `@echo off\r\nnode "%~dp0${asset}" %*\r\n` : script);
+		if (process.platform !== "win32") chmodSync(path, 0o755);
+	}
+	return join(directory, names[0]);
+};
+
+// Reporting a PATH miss is the whole point: installing into a directory the
+// shell never looks at is indistinguishable from a failed install.
+const isOnPath = (directory) => (process.env.PATH ?? "").split(delimiter).some((entry) => resolve(entry === "" ? "." : entry) === directory);
 
 const main = async () => {
 	const options = parseArguments(process.argv.slice(2));
@@ -128,19 +148,25 @@ const main = async () => {
 	if (actual !== expected) throw new InstallError(`${asset} checksum mismatch: expected ${expected}, got ${actual}`);
 
 	const name = basename(url);
-	let out;
-	if (options.prefix === undefined) {
-		out = resolve(options.out ?? name);
-	} else {
-		// npm-style layout: <prefix>/bin. No shim, so the bundle is run as `node <prefix>/bin/nanopi.js`.
-		const directory = resolve(expandHome(options.prefix), "bin");
-		mkdirSync(directory, { recursive: true });
-		out = join(directory, name);
-	}
+	// A plain --out writes the one file it names; both defaults go through the
+	// npm-style layout: <prefix>/bin/nanopi.js plus a `nanopi` shim beside it. A
+	// bundle on its own is not on PATH, and a shell resolving a bare directory
+	// gets ERR_UNSUPPORTED_DIR_IMPORT from node instead of the program.
+	const onlyBundle = options.out !== undefined;
+	const directory = onlyBundle ? undefined : resolve(expandHome(options.prefix ?? DEFAULT_PREFIX), "bin");
+	const out = onlyBundle ? resolve(options.out) : join(directory, name);
+	if (directory) mkdirSync(directory, { recursive: true });
 	writeFileSync(out, bytes);
 	chmodSync(out, 0o755);
 	process.stdout.write(`${styleText("green", "Downloaded")} ${asset} (${bytes.byteLength} bytes) from ${tag}\n${out}\n`);
-	process.stdout.write(`Run it with \`node ${out}\`\n`);
+	if (!directory) {
+		process.stdout.write(`Run it with \`node ${out}\`\n`);
+		return 0;
+	}
+	process.stdout.write(`Run it with \`${writeShims(directory, name)}\`\n`);
+	if (!isOnPath(directory)) {
+		process.stdout.write(`${styleText("yellow", "Note")} ${directory} is not on PATH; add it to run \`nanopi\` by name\n`);
+	}
 	return 0;
 };
 

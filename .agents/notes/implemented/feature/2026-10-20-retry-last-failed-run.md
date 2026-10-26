@@ -73,8 +73,11 @@ spend tokens without consent.
 - A session file now holds one `custom` run record per attempt. They are the first entries of that
   type on every branch, so tests that assert exact transcript shapes filter them out; two existing
   tests needed that adjustment.
-- A failed run shows `Run failed after N attempts: <error>. /retry replays it.` in the chat. The
-  row is registered as an entry renderer rather than as a message, so it never reaches a model.
+- A failed run shows `Run failed after N attempts. /retry replays it.` in the chat (an aborted run
+  shows `Run was aborted.`, since a cancel is not a failure). The row names no reason: the failed
+  assistant message already ends with the same text and a tool call records its own error, so
+  repeating it echoed a multi-line provider error twice. The row is registered as an entry renderer
+  rather than as a message, so it never reaches a model.
 - `/retry` refuses while the agent streams or compacts, and when the newest run did not fail. Both
   errors reach the user as a normal command error rather than a silent no-op.
 - Attempt accounting for a replay relies on `_retryAttempt` being restored before the run starts.
