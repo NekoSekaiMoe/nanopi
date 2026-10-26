@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- A run mode switched outside the TUI now re-derives the session's tool set: the engine subscription applies the mode's tool filtering before drawing the badge, so a webui switch to `minimal` actually narrows the tools instead of leaving every tool active, and `extraBridge.setMode()` also applies it directly for a caller bound before any session started. A webui session also stops resetting the live mode to `defaultMode` on every new session (issue [#194](https://cnb.cool/shinytale/nanopi/-/issues/194))
+
 ## [20261022]
 
 ### Added

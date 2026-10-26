@@ -292,6 +292,93 @@ export async function resolveSession(id: string): Promise<SessionMetaWithProject
 
 export type ApprovalMode = "plan" | "minimal" | "standard";
 
+/** Current run mode of the daemon session (the engine the turns run on). */
+export async function getApprovalMode(): Promise<ApprovalMode | null> {
+	const response = await fetch("/approval_mode", { headers: authHeaders() });
+	// A build without the extra module has no run modes; the settings page hides them.
+	if (response.status === 404) return null;
+	if (!response.ok) throw await failure(response);
+	const body = (await response.json()) as { mode?: unknown };
+	return isApprovalMode(body.mode) ? body.mode : null;
+}
+
+/**
+ * Switch the run mode of the daemon session. This is the switch that takes
+ * effect: the mode belongs to the process, so it applies to the next turn and to
+ * resumes of existing sessions in this tab.
+ */
+export async function setApprovalMode(mode: ApprovalMode): Promise<ApprovalMode> {
+	const response = await fetch("/approval_mode", {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify({ mode }),
+	});
+	const body = await readJson<{ mode?: unknown; error?: string }>(response);
+	if (!isApprovalMode(body.mode)) throw new Error(body.error ?? "the daemon returned no run mode");
+	return body.mode;
+}
+
+function isApprovalMode(value: unknown): value is ApprovalMode {
+	return value === "plan" || value === "minimal" || value === "standard";
+}
+
+export interface ApprovalModeEvent {
+	mode: ApprovalMode;
+	/** Why the mode changed ("webui", "session default", "plan approved", ...). */
+	reason?: string;
+}
+
+/**
+ * Follow the daemon run mode as it changes. The first event carries the current
+ * mode, so this both seeds the highlight and keeps it honest when a turn leaves
+ * plan mode on its own. Reconnects once if the daemon drops the stream.
+ */
+export function streamApprovalMode(
+	onMode: (event: ApprovalModeEvent) => void,
+	signal: AbortSignal,
+): Promise<void> {
+	return followModeStream(onMode, signal, true);
+}
+
+async function followModeStream(
+	onMode: (event: ApprovalModeEvent) => void,
+	signal: AbortSignal,
+	retry: boolean,
+): Promise<void> {
+	const response = await fetch("/mode/stream", { headers: authHeaders(), signal });
+	if (response.status === 404) return;
+	if (!response.ok) throw await failure(response);
+	const reader = response.body?.getReader();
+	if (!reader) return;
+	const decoder = new TextDecoder();
+	let buffer = "";
+	for (;;) {
+		const { done, value } = await reader.read();
+		if (done) break;
+		buffer += decoder.decode(value, { stream: true });
+		const parts = buffer.split("\n\n");
+		buffer = parts.pop() ?? "";
+		for (const part of parts) {
+			const dataLine = part.split("\n").find((line) => line.startsWith("data:"));
+			if (!dataLine) continue;
+			try {
+				const parsed = JSON.parse(dataLine.slice("data:".length).trim()) as {
+					mode?: unknown;
+					reason?: unknown;
+				};
+				if (!isApprovalMode(parsed.mode)) continue;
+				onMode({
+					mode: parsed.mode,
+					...(typeof parsed.reason === "string" ? { reason: parsed.reason } : {}),
+				});
+			} catch {
+				/* keepalive or partial line */
+			}
+		}
+	}
+	if (retry && !signal.aborted) return followModeStream(onMode, signal, false);
+}
+
 export interface TurnStats {
 	duration_ms: number;
 	rounds: number;
