@@ -6,6 +6,7 @@ import type { Theme } from "../../modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../../utils/ansi.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { sanitizeBinaryOutput } from "../../utils/shell.ts";
+import { pendingHighlightLanguages } from "../../utils/syntax-highlight.ts";
 
 export function shortenPath(path: unknown): string {
 	if (typeof path !== "string") return "";
@@ -50,6 +51,12 @@ export interface StreamingHighlight {
 	highlighted: string[];
 	/** False when some lines were highlighted one at a time, without multi-line context. */
 	exact: boolean;
+	/**
+	 * Grammar loads the last highlight started. A grammar loads lazily, so the block renders plain
+	 * first; a caller that repaints once these settle shows it colored without waiting for another
+	 * render. The promises resolve, never reject.
+	 */
+	loads: Promise<void>[];
 }
 
 /**
@@ -75,7 +82,12 @@ export function updateStreamingHighlight(
 	const reusable = previous !== undefined && previous.language === language && previous.theme === theme;
 	if (reusable && previous.source === source && (previous.exact || !complete)) return previous;
 	if (reusable && !complete && source.startsWith(previous.source)) {
-		const highlightLine = (line: string) => highlight(line)[0] ?? "";
+		const highlightLines = (code: string) => {
+			const styled = highlight(code);
+			previous.loads = pendingHighlightLanguages();
+			return styled;
+		};
+		const highlightLine = (line: string) => highlightLines(line)[0] ?? "";
 		const { lines, highlighted } = previous;
 		const added = replaceTabs(normalizeDisplayText(source.slice(previous.source.length))).split("\n");
 		const last = lines.length - 1;
@@ -86,14 +98,16 @@ export function updateStreamingHighlight(
 			highlighted.push(highlightLine(added[i]));
 		}
 		const prefixCount = Math.min(STREAMING_FULL_HIGHLIGHT_PREFIX_LINES, lines.length);
-		const prefix = highlight(lines.slice(0, prefixCount).join("\n"));
+		const prefix = highlightLines(lines.slice(0, prefixCount).join("\n"));
 		for (let i = 0; i < prefixCount; i++) highlighted[i] = prefix[i] ?? highlighted[i];
 		previous.source = source;
 		previous.exact = prefixCount === lines.length;
 		return previous;
 	}
 	const lines = replaceTabs(normalizeDisplayText(source)).split("\n");
-	return { source, language, theme, lines, highlighted: highlight(lines.join("\n")), exact: true };
+	const highlighted = highlight(lines.join("\n"));
+	const loads = pendingHighlightLanguages();
+	return { source, language, theme, lines, highlighted, exact: true, loads };
 }
 
 export function getTextOutput(
