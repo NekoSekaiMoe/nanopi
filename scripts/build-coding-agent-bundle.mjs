@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { dirname, join, relative, resolve } from "node:path";
@@ -12,6 +12,7 @@ import {
 	buildDefines,
 	NODE_ESM_BANNER,
 	resolveBuildCommit,
+	selfReferencePlugin,
 	validateExternalImports,
 } from "./esbuild-shared.mjs";
 import {
@@ -77,6 +78,8 @@ const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin
 });
 
 const buildCommit = resolveBuildCommit(repoRoot);
+// The bundled extras import the SDK by package name (see selfReferencePlugin).
+const PACKAGE_NAME = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).name;
 const allowedExternalPackages = new Set(BUNDLE_EXTERNAL_PACKAGES);
 
 const lazyJitiPlugin = {

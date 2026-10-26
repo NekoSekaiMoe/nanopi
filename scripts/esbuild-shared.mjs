@@ -11,7 +11,9 @@
  */
 
 import { execFileSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { isBuiltin } from "node:module";
+import { join } from "node:path";
 
 /** Node banner: the bundle is ESM but the dependency graph may call `require`. */
 export const NODE_ESM_BANNER = {
@@ -134,6 +136,51 @@ export function generatedModulePlugin({ name, filter, namespace, contents }) {
 		setup(build) {
 			build.onResolve({ filter }, () => ({ path: namespace, namespace }));
 			build.onLoad({ filter: /.*/, namespace }, () => ({ contents, loader: "js", resolveDir: process.cwd() }));
+		},
+	};
+}
+
+/**
+ * Resolves the coding-agent's own package name to its compiled entry point.
+ *
+ * The bundled modules inside `packages/coding-agent/src/extras` import values
+ * (`DynamicBorder`, `getMarkdownTheme`) from `@nanopi/pi-coding-agent` — the
+ * public SDK surface — instead of reaching into `src/`. That is an ordinary
+ * self-reference, and Node resolves it through the package's `exports` map.
+ * esbuild does the same, but only when the package is reachable on disk under
+ * its own name: `packages/coding-agent/node_modules/@nanopi/pi-coding-agent`
+ * does not exist (pnpm links a package into its *dependents*, never into
+ * itself), so on a fresh checkout the import falls through to
+ * `ERR_PACKAGE_PATH_NOT_EXPORTED` — the package.json is found, the `dist`
+ * files the `exports` map points at are not, and esbuild reports
+ * "Could not resolve".
+ *
+ * Resolving the specifier explicitly keeps the build independent of how the
+ * workspace happens to be linked: the entry point is `dist/index.js` in both
+ * builds, so the bundle stays one copy of the package instead of pulling a
+ * second copy (or a second `dist`) into the graph.
+ *
+ * Only the exact package name is claimed; `@nanopi/pi-coding-agent/rpc-entry`
+ * and every other subpath keep esbuild's default resolution.
+ *
+ * @param {{ packageName: string, packageDir: string }} options
+ * @returns {import("esbuild").Plugin}
+ */
+export function selfReferencePlugin({ packageName, packageDir }) {
+	const filter = new RegExp(`^${packageName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`);
+	const entry = join(packageDir, "dist", "index.js");
+	return {
+		name: "self-reference",
+		setup(build) {
+			build.onResolve({ filter }, (args) => {
+				if (args.path !== packageName) return undefined;
+				if (!existsSync(entry)) {
+					throw new Error(
+						`${packageName} resolved to ${entry}, which does not exist. Build the workspace packages first.`,
+					);
+				}
+				return { path: entry };
+			});
 		},
 	};
 }
