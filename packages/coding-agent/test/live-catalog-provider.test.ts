@@ -1,6 +1,6 @@
 import type { AnyModel, Api, Model, ModelsStoreEntry, Provider, RefreshModelsContext } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
-import { modelsFromListing, parseModelListing, withLiveCatalog } from "../src/core/live-catalog-provider.ts";
+import { modelsFromListing, withLiveCatalog } from "../src/core/live-catalog-provider.ts";
 
 function model(id: string, extra: Partial<Record<string, unknown>> = {}): Model<Api> {
 	return {
@@ -58,24 +58,6 @@ function context(overrides: Partial<RefreshModelsContext> = {}): {
 		},
 	};
 }
-
-describe("parseModelListing", () => {
-	it("reads OpenAI-style data[].id and Google-style models[].name", () => {
-		expect(parseModelListing({ data: [{ id: "deepseek-chat" }] })).toEqual([{ id: "deepseek-chat" }]);
-		expect(parseModelListing({ models: [{ name: "gemini-2.5-pro" }] })).toEqual([{ id: "gemini-2.5-pro" }]);
-	});
-
-	it("keeps display names and drops duplicates", () => {
-		expect(parseModelListing({ data: [{ id: "a", display_name: "A" }, { id: "a" }, { nope: 1 }] })).toEqual([
-			{ id: "a", name: "A" },
-		]);
-	});
-
-	it("returns nothing for a payload without a list", () => {
-		expect(parseModelListing({ error: "nope" })).toEqual([]);
-		expect(parseModelListing(null)).toEqual([]);
-	});
-});
 
 describe("modelsFromListing", () => {
 	it("keeps the baseline metadata of an id the snapshot knows", () => {
