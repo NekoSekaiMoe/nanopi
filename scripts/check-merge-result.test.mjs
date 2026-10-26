@@ -71,8 +71,24 @@ test("a stale tree that drops a newer file is reported", async (t) => {
 	assert.match(result.stderr, /keep\.txt/);
 });
 
-// 检查按路径比内容，改名会被当成删除：旧版本数 `D` 状态，同内容的改名是 `R`，
-// 所以放行。判据是「main 的文件还在不在」，改名后旧路径确实没了。
+// 判据是「main 的路径还在不在」：改掉一个 base 上的文件与把它回退成旧内容，在树里
+// 长得一模一样（git 不存「谁改过谁」），所以内容改动只能放行，否则每个正常的修改
+// 都会变红（#253）。
+test("a file the branch rewrites is a modification, not a deletion", async (t) => {
+	const cwd = await repo(t, "modify");
+	commit(cwd, { "a.txt": "one" }, "base");
+	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	commit(cwd, { "a.txt": "one, but longer" }, "reword a");
+
+	const result = check(cwd);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /rewrites 1 file/);
+	assert.match(result.stdout, /a\.txt/);
+	assert.match(result.stdout, /no file from main disappears/);
+});
+
+// 改名仍然是删除：旧路径确实没了。旧版本数 `D` 状态，同内容的改名是 `R`，所以放行；
+// 按路径比对才拦得住。
 test("a rename is reported, not waved through", async (t) => {
 	const cwd = await repo(t, "rename");
 	commit(cwd, { "a.txt": "same content so git pairs it as a rename" }, "base");
