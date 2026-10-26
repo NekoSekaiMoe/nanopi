@@ -12,6 +12,7 @@ import {
 	BUILD_FLAVOR_ENV,
 	loadBuildConfig,
 	NO_PROVIDERS,
+	PROVIDERS_COMPONENT,
 	resolveBuildFlavor,
 } from "../../../scripts/buildconfig.mjs";
 import {
@@ -164,24 +165,41 @@ function flavorProviderSelection(): ReadonlySet<string> | undefined {
 /**
  * Replaces the full provider set in buildconfig.json with the catalogs this
  * run wrote. Another flavor reading the same config must not name a provider
- * whose catalog no longer exists.
+ * whose catalog no longer exists, and a catalog no set names fails the build
+ * (see validateFlavorProviders).
+ *
+ * Only a run that writes every catalog records anything: an unflavored run
+ * does, a trimmed one narrows its own shards on purpose. The set to record
+ * carries the `__ALL__` marker, or, once a previous run replaced the marker
+ * with concrete ids, is the set the default flavor ships; that flavor is what
+ * wrote the catalog. Recording is not optional in the second case: a provider
+ * models.dev adds would otherwise leave the config naming a catalog set that
+ * no longer exists, and the next build fails in validateFlavorProviders.
  */
 function recordFullProviderSet(providerIds: readonly string[]): void {
 	const configPath = join(repoRoot, BUILD_CONFIG_FILENAME);
 	const config = loadBuildConfig(repoRoot);
-	const full = Object.entries(config.providerSets).find(([, set]) => set.providers.includes(ALL_PROVIDERS));
-	if (!full) return;
-	const [name, set] = full;
+	// A trimmed run narrows the catalog on purpose and leaves the full set alone.
+	// `flavorProviderSelection` returns a set only for such a run, so the check
+	// is the same one the selection made.
+	if (generatorOptions.providers !== undefined) return;
 	const next = [...providerIds].sort();
-	if (set.providers.length === next.length && set.providers.every((providerId, index) => providerId === next[index])) {
-		return;
-	}
+	// The marker, if a set still carries one, names the full set. Otherwise the
+	// set the default flavor ships does, because that flavor is the one that
+	// writes every catalog.
+	const markerSet = Object.entries(config.providerSets).find(([, set]) => set.providers.includes(ALL_PROVIDERS));
+	const shipped = markerSet?.[0] ?? config.flavors[config.defaultFlavor]?.components[PROVIDERS_COMPONENT];
+	if (typeof shipped !== "string") return;
+	const set = config.providerSets[shipped];
+	if (set === undefined) return;
+	const current = [...set.providers].sort();
+	if (current.length === next.length && current.every((providerId, index) => providerId === next[index])) return;
 	const raw = JSON.parse(readFileSync(configPath, "utf8")) as {
 		providerSets: Record<string, { description?: string; providers: string[] }>;
 	};
-	raw.providerSets[name] = { ...set, providers: next };
+	raw.providerSets[shipped] = { ...set, providers: next };
 	writeFileSync(configPath, `${JSON.stringify(raw, null, "\t")}\n`);
-	console.log(`Recorded ${next.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${name}".`);
+	console.log(`Recorded ${next.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${shipped}".`);
 }
 
 /**

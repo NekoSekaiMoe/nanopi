@@ -223,6 +223,8 @@ import * as IMPORT_MODELSCOPE from "./providers/modelscope.models.ts";
 import * as IMPORT_MOONSHOTAI from "./providers/moonshotai.models.ts";
 // provider-id: moonshotai-cn
 import * as IMPORT_MOONSHOTAI_CN from "./providers/moonshotai-cn.models.ts";
+// provider-id: morph
+import * as IMPORT_MORPH from "./providers/morph.models.ts";
 // provider-id: munito
 import * as IMPORT_MUNITO from "./providers/munito.models.ts";
 // provider-id: munito-eu
@@ -524,6 +526,7 @@ export const MODELS: {
 	readonly "modelscope": typeof IMPORT_MODELSCOPE["MODELSCOPE_MODELS"];
 	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_MODELS"];
 	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_MODELS"];
+	readonly "morph": typeof IMPORT_MORPH["MORPH_MODELS"];
 	readonly "munito": typeof IMPORT_MUNITO["MUNITO_MODELS"];
 	readonly "munito-eu": typeof IMPORT_MUNITO_EU["MUNITO_EU_MODELS"];
 	readonly "nan": typeof IMPORT_NAN["NAN_MODELS"];
@@ -730,6 +733,7 @@ export const MODELS: {
 	"modelscope": IMPORT_MODELSCOPE.value["MODELSCOPE_MODELS"],
 	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_MODELS"],
 	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_MODELS"],
+	"morph": IMPORT_MORPH.value["MORPH_MODELS"],
 	"munito": IMPORT_MUNITO.value["MUNITO_MODELS"],
 	"munito-eu": IMPORT_MUNITO_EU.value["MUNITO_EU_MODELS"],
 	"nan": IMPORT_NAN.value["NAN_MODELS"],
@@ -938,6 +942,7 @@ export const IMAGE_MODELS: {
 	readonly "modelscope": typeof IMPORT_MODELSCOPE["MODELSCOPE_IMAGE_MODELS"];
 	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_IMAGE_MODELS"];
 	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_IMAGE_MODELS"];
+	readonly "morph": typeof IMPORT_MORPH["MORPH_IMAGE_MODELS"];
 	readonly "munito": typeof IMPORT_MUNITO["MUNITO_IMAGE_MODELS"];
 	readonly "munito-eu": typeof IMPORT_MUNITO_EU["MUNITO_EU_IMAGE_MODELS"];
 	readonly "nan": typeof IMPORT_NAN["NAN_IMAGE_MODELS"];
@@ -1144,6 +1149,7 @@ export const IMAGE_MODELS: {
 	"modelscope": IMPORT_MODELSCOPE.value["MODELSCOPE_IMAGE_MODELS"],
 	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_IMAGE_MODELS"],
 	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_IMAGE_MODELS"],
+	"morph": IMPORT_MORPH.value["MORPH_IMAGE_MODELS"],
 	"munito": IMPORT_MUNITO.value["MUNITO_IMAGE_MODELS"],
 	"munito-eu": IMPORT_MUNITO_EU.value["MUNITO_EU_IMAGE_MODELS"],
 	"nan": IMPORT_NAN.value["NAN_IMAGE_MODELS"],
@@ -1352,6 +1358,7 @@ export const CLASSIFIER_MODELS: {
 	readonly "modelscope": typeof IMPORT_MODELSCOPE["MODELSCOPE_CLASSIFIER_MODELS"];
 	readonly "moonshotai": typeof IMPORT_MOONSHOTAI["MOONSHOTAI_CLASSIFIER_MODELS"];
 	readonly "moonshotai-cn": typeof IMPORT_MOONSHOTAI_CN["MOONSHOTAI_CN_CLASSIFIER_MODELS"];
+	readonly "morph": typeof IMPORT_MORPH["MORPH_CLASSIFIER_MODELS"];
 	readonly "munito": typeof IMPORT_MUNITO["MUNITO_CLASSIFIER_MODELS"];
 	readonly "munito-eu": typeof IMPORT_MUNITO_EU["MUNITO_EU_CLASSIFIER_MODELS"];
 	readonly "nan": typeof IMPORT_NAN["NAN_CLASSIFIER_MODELS"];
@@ -1558,6 +1565,7 @@ export const CLASSIFIER_MODELS: {
 	"modelscope": IMPORT_MODELSCOPE.value["MODELSCOPE_CLASSIFIER_MODELS"],
 	"moonshotai": IMPORT_MOONSHOTAI.value["MOONSHOTAI_CLASSIFIER_MODELS"],
 	"moonshotai-cn": IMPORT_MOONSHOTAI_CN.value["MOONSHOTAI_CN_CLASSIFIER_MODELS"],
+	"morph": IMPORT_MORPH.value["MORPH_CLASSIFIER_MODELS"],
 	"munito": IMPORT_MUNITO.value["MUNITO_CLASSIFIER_MODELS"],
 	"munito-eu": IMPORT_MUNITO_EU.value["MUNITO_EU_CLASSIFIER_MODELS"],
 	"nan": IMPORT_NAN.value["NAN_CLASSIFIER_MODELS"],
