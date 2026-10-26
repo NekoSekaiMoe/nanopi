@@ -37,6 +37,18 @@ For a built-in AI provider, run `/login` inside nanopi to connect a subscription
 
 See the [documentation](docs/index.md) for full setup and usage instructions.
 
+## Export a session
+
+`/export [path]` writes the current session; the path extension picks the format:
+
+- `.md` - Markdown, rendered in Node (tool calls and tool output included)
+- `.html` - the styled document, and the default when the path names no extension
+- `.jsonl` - the session file itself
+
+Need a PDF? Export HTML, open the file in a browser, and print it. The print stylesheet expands everything the page keeps behind a click (tool output, thinking, compaction), so the PDF is the whole transcript rather than the collapsed preview. There is no built-in PDF writer: a PDF engine plus fonts would cost every build more than the export is worth.
+
+A `minimal` build carries neither format and drops `/export`; `base` carries Markdown and HTML.
+
 ## Share your OSS coding agent sessions
 
 If you use nanopi for open source work, please share your coding agent sessions.

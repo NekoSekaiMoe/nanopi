@@ -97,15 +97,15 @@ function resolveExportFormat(outputPath: string | undefined): SessionExportForma
 
 /** The path an export writes to when the caller named none. */
 function defaultExportPath(inputPath: string, format: SessionExportFormat): string | undefined {
-	if (format === "html" || format === "jsonl") return undefined;
+	if (format !== "md") return undefined;
 	const basename = inputPath.replace(/\.[^./\\]+$/, "").replace(/^.*[\\/]/, "");
-	return `${basename}.${format}`;
+	return `${basename}.md`;
 }
 
 /**
- * Write a session file in the requested format. HTML keeps using exportFromFile,
- * which renders the browser document from the templates; the Markdown branch
- * renders the transcript in Node.
+ * Write a session file in the requested format. HTML is rendered from the
+ * templates by exportFromFile; Markdown is rendered in Node, so it opens the
+ * session through SessionManager instead.
  */
 async function exportSessionFile(
 	inputPath: string,

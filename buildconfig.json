@@ -5,10 +5,10 @@
 			"description": "Browser UI served by `nanopi webui` (packages/webui, copied to dist/webui and embedded in single-file builds)"
 		},
 		"export-html": {
-			"description": "HTML export templates and vendored assets (dist/core/export-html)"
+			"description": "HTML export templates and vendored assets (dist/core/export-html). Also the print source of a PDF: the README tells users to open the exported HTML in a browser and print it"
 		},
 		"export-markdown": {
-			"description": "Session export to Markdown (the /export command, --export-format md, and the RPC export_session command). Dropping it leaves HTML export, which renders in the browser from the template's own data payload"
+			"description": "Session export to Markdown (the /export command, --export-format md, and the RPC export_session command). Dropping it leaves the HTML export, which renders in the browser from the template's own data payload"
 		},
 		"docs": {
 			"description": "In-package documentation (embedded in single-file builds; the npm package always ships it)"
@@ -228,6 +228,7 @@
 				"providers": "core",
 				"apis": "all",
 				"jiti-modules": true,
+				"export-html": true,
 				"export-markdown": true
 			}
 		},
@@ -256,6 +257,7 @@
 				"syntax-highlight": false,
 				"embedded-code": false,
 				"jiti-modules": false,
+				"export-html": false,
 				"export-markdown": false
 			}
 		}

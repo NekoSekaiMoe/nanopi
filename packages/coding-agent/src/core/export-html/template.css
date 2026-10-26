@@ -1060,33 +1060,37 @@
       }
     }
 
-    @media print {
-      #sidebar, #sidebar-resizer, #sidebar-toggle { display: none !important; }
-      body { background: white; color: black; }
-      #content { max-width: none; }
-    }
-
     /*
-     * Attachments (PDF and paper) have no click target, so everything the page
-     * keeps behind a click is revealed when printing: collapsed tool output,
-     * the thinking block, and the compaction detail. A PDF that keeps only the
-     * collapsed preview loses the half of the conversation that did the work.
+     * Paper is where a PDF comes from: the export is the document a browser
+     * prints, so the print rules have to keep the whole conversation. Anything
+     * the page hides behind a click (collapsed tool output, the thinking block,
+     * the compaction detail) is revealed here, and the controls that need a
+     * pointer leave. What stays hidden is the sidebar: it is a navigation
+     * device, not part of the transcript.
      */
     @media print {
-      #hamburger, #sidebar-overlay, .copy-link-btn { display: none !important; }
-      /* The help bar is interaction: keyboard hints, toggle buttons and the
-         JSONL download do nothing on paper, and the print rules below already
-         expand what they would have revealed. */
-      .help-bar { display: none !important; }
+      #hamburger, #sidebar, #sidebar-resizer, #sidebar-overlay { display: none !important; }
       #app { display: block; }
-      /* The toggle writes an inline display on these, so the override needs
-         the flag or printing a collapsed page keeps it collapsed. */
+      .help-bar, .copy-link-btn { display: none !important; }
+      body { background: white; color: black; }
+      #content { max-width: none; padding: 0; }
+      #content > * { max-width: none; }
+
+      /* The toggles write an inline display on these, so the override needs the
+         flag or printing a collapsed page keeps it collapsed. */
       .tool-output.expandable .output-preview { display: none !important; }
       .tool-output.expandable .output-full { display: block !important; }
       .thinking-collapsed { display: none !important; }
       .thinking-text { display: block !important; }
       .compaction .compaction-collapsed { display: none !important; }
       .compaction .compaction-content { display: block !important; }
+      .system-prompt .system-prompt-preview,
+      .system-prompt .system-prompt-expand-hint { display: none !important; }
+      .system-prompt .system-prompt-full { display: block !important; }
+
+      /* Long lines wrap instead of running off the page, and a tool call stays
+         on one page. */
       .markdown-content pre, .tool-output { white-space: pre-wrap; word-break: break-word; }
-      .tool-execution, .compaction { break-inside: avoid; }
+      .tool-execution, .compaction, .system-prompt { break-inside: avoid; }
+      .markdown-content h1, .markdown-content h2, .markdown-content h3 { break-after: avoid; }
     }

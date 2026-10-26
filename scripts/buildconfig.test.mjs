@@ -532,8 +532,9 @@ describe("real flavors", () => {
 		strictEqual(resolveFlavorComponents(config, "minimal")["syntax-highlight"], false);
 	});
 
-	// Export is the SKU ladder: minimal writes no document, base writes MD, full
-	// adds HTML. `full` inherits both from its `*: true`.
+	// Export is the SKU ladder: minimal writes no document, base writes MD and
+	// HTML, full inherits both from its `*: true`. There is no PDF component:
+	// a PDF is the HTML printed by the browser.
 	it("splits export across the flavors", () => {
 		const full = resolveFlavorComponents(config, "full");
 		strictEqual(full["export-markdown"], true);
@@ -541,7 +542,7 @@ describe("real flavors", () => {
 
 		const base = resolveFlavorComponents(config, "base");
 		strictEqual(base["export-markdown"], true);
-		strictEqual(base["export-html"], false);
+		strictEqual(base["export-html"], true);
 
 		const minimal = resolveFlavorComponents(config, "minimal");
 		strictEqual(minimal["export-markdown"], false);
