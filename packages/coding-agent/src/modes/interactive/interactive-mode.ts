@@ -10,6 +10,7 @@ import * as path from "node:path";
 import type { AgentMessage, ThinkingLevel } from "@nanopi/pi-agent-core";
 import type { AuthEvent, AuthPrompt } from "@nanopi/pi-ai";
 import type { AssistantMessage, ImageContent, Message, Model, Usage } from "@nanopi/pi-ai/compat";
+import { extraBridge } from "@nanopi/pi-extra";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -1547,23 +1548,46 @@ export class InteractiveMode {
 	 * Request a model-generated next-prompt suggestion and show it as ghost
 	 * text in the (empty) input box. Best-effort: skipped while streaming or
 	 * when the editor holds text; failures silently leave the placeholder.
+	 *
+	 * `fallback` stands in when the model has nothing to offer and suggestions are
+	 * off: the permission gate uses it for the word that runs the call it holds.
 	 */
-	private async requestNextPromptSuggestion(): Promise<void> {
-		if (!this.settingsManager.getNextPromptSuggestions()) return;
-		if (this.session.isStreaming || this.editor !== this.defaultEditor || !this.defaultEditor.isEmpty()) return;
+	private async requestNextPromptSuggestion(fallback?: string): Promise<void> {
+		const canShow = () => this.editor === this.defaultEditor && this.defaultEditor.isEmpty();
+		if (!canShow()) return;
+		if (!this.settingsManager.getNextPromptSuggestions()) {
+			this.showFallbackSuggestion(fallback);
+			return;
+		}
+		if (this.session.isStreaming) {
+			this.showFallbackSuggestion(fallback);
+			return;
+		}
 
 		this.nextPromptSuggestionAbort?.abort();
 		const controller = new AbortController();
 		this.nextPromptSuggestionAbort = controller;
 		try {
 			const suggestion = await this.session.generateNextPromptSuggestion({ signal: controller.signal });
-			if (controller.signal.aborted || !suggestion) return;
-			if (this.session.isStreaming || this.editor !== this.defaultEditor || !this.defaultEditor.isEmpty()) return;
+			if (controller.signal.aborted) return;
+			if (this.session.isStreaming || !canShow()) return;
+			if (!suggestion) {
+				this.showFallbackSuggestion(fallback, controller.signal);
+				return;
+			}
 			this.defaultEditor.setGhostSuggestion(suggestion);
 			this.ui.requestRender();
 		} catch {
 			// Suggestions are opportunistic; ignore failures.
+			this.showFallbackSuggestion(fallback);
 		}
+	}
+
+	private showFallbackSuggestion(text: string | undefined, signal?: AbortSignal): void {
+		if (!text || signal?.aborted) return;
+		if (this.session.isStreaming || this.editor !== this.defaultEditor || !this.defaultEditor.isEmpty()) return;
+		this.defaultEditor.setGhostSuggestion(text);
+		this.ui.requestRender();
 	}
 
 	private async handleFatalRuntimeError(prefix: string, error: unknown): Promise<never> {
@@ -2082,7 +2106,12 @@ export class InteractiveMode {
 					this.hideExtensionSelector();
 					resolve(undefined);
 				},
-				{ tui: this.ui, timeout: opts?.timeout, onToggleToolsExpanded: () => this.toggleToolOutputExpansion() },
+				{
+					tui: this.ui,
+					timeout: opts?.timeout,
+					description: opts?.description,
+					onToggleToolsExpanded: () => this.toggleToolOutputExpansion(),
+				},
 			);
 
 			this.disposeActiveSelector();
@@ -3021,7 +3050,9 @@ export class InteractiveMode {
 			case "agent_settled":
 				await this.checkShutdownRequested();
 				if (!event.aborted) {
-					void this.requestNextPromptSuggestion();
+					// The extra module knows when a permission prompt is holding a call;
+					// its word runs that call instead of guessing the next message.
+					void this.requestNextPromptSuggestion(extraBridge.continueSuggestion?.());
 				}
 				break;
 

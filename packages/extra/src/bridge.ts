@@ -29,6 +29,8 @@ export interface BridgeExtensionHooks {
 	applySubsystem(key: SubsystemKey, enabled: boolean): void;
 	/** Re-derive the active tool set from the current mode (minimal narrows it). */
 	applyModeToolSet(): void;
+	/** The prompt the input box should offer while the gate holds a call, if any. */
+	continueSuggestion?(): string | undefined;
 }
 
 /** Session-side judge inputs the extension binds for webui-mode AI decisions. */
@@ -83,8 +85,25 @@ export class ExtraBridge {
 		return { ok: true };
 	}
 
-	/** Validate and answer the outstanding permission prompt. */
+	/**
+	 * Prompt to offer in the input box while a permission prompt is holding a call.
+	 *
+	 * Feature-detected by the caller: a build flavor that excludes this module
+	 * substitutes `{}` for the bridge, so the method is absent rather than inert.
+	 */
+	continueSuggestion?(): string | undefined {
+		return this.extensionHooks?.continueSuggestion?.();
+	}
+
+	/**
+	 * Validate and answer the outstanding permission prompt.
+	 *
+	 * `"explain"` is not a decision: it pauses the prompt and asks the model to
+	 * describe the call. It is accepted here only when a permission prompt is
+	 * actually waiting, which `PermissionBroker.answer` checks.
+	 */
 	answerPermission(decision: string, callId: string | undefined, toolName: string | undefined): boolean {
+		if (decision === "explain") return this.permissions.answer(callId, toolName, decision);
 		if (!isPermissionDecision(decision)) return false;
 		return this.permissions.answer(callId, toolName, decision);
 	}
