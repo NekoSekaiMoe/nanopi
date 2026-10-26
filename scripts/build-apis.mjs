@@ -24,7 +24,7 @@
  * export" error.
  */
 
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { ALL_APIS, ALL_PROVIDERS } from "./buildconfig.mjs";
 
@@ -57,12 +57,30 @@ const API_IMPLEMENTATIONS = {
 	"bedrock-mantle-openai-responses": "bedrock-mantle-openai-responses.ts",
 };
 
-/** Provider ids with a generated catalog under packages/ai/src/providers. */
+/**
+ * Provider ids with a catalog under packages/ai/src/providers.
+ *
+ * The shards are gitignored build products, so a checkout reads the stand-ins
+ * instead: `generate-models.ts` writes one per shard, in the same pass and from
+ * the same provider set, which is exactly the pair `validateStubs` compares.
+ * A built tree has the shards, and those are the authority.
+ */
 export function readProviderModuleIds(aiDir) {
-	return readdirSync(join(aiDir, "src", "providers"))
+	const providersDir = join(aiDir, "src", "providers");
+	const shardIds = readdirSync(providersDir)
 		.filter((entry) => entry.endsWith(MODELS_SUFFIX))
-		.map((entry) => entry.slice(0, -MODELS_SUFFIX.length))
-		.sort();
+		.map((entry) => entry.slice(0, -MODELS_SUFFIX.length));
+	if (shardIds.length > 0) return shardIds.sort();
+	const stubIds = readdirSync(join(providersDir, "disabled"))
+		.filter((entry) => entry.endsWith(`${DISABLED_MODELS_SUFFIX}`))
+		.map((entry) => entry.slice(0, -DISABLED_MODELS_SUFFIX.length));
+	if (stubIds.length === 0) {
+		throw new Error(
+			`No provider catalog under ${providersDir} and no stand-in under ${join(providersDir, "disabled")}: ` +
+				"run `pnpm run generate:models`.",
+		);
+	}
+	return stubIds.sort();
 }
 
 /** Export names declared by a module (values only: types erase). */
@@ -85,24 +103,37 @@ function apiModulePath(apiId) {
 }
 
 function assertStubs({ aiDir, ids, stubDir, sourcePath, stubSuffix, label }) {
-	const details = [];
-	const stubIds = new Set(
+	const stubNamesByFile = new Map(
 		readdirSync(join(aiDir, stubDir))
 			.filter((entry) => entry.endsWith(stubSuffix))
-			.map((entry) => entry.slice(0, -stubSuffix.length)),
+			.map((entry) => [
+				entry.slice(0, -stubSuffix.length),
+				exportedValueNames(readFileSync(join(aiDir, stubDir, entry), "utf8")),
+			]),
 	);
+	const details = [];
 	for (const id of ids) {
-		if (!stubIds.has(id)) {
+		const stubNames = stubNamesByFile.get(id);
+		if (stubNames === undefined) {
 			details.push(`${id}: no ${stubDir}/${id}${stubSuffix}`);
 			continue;
 		}
-		const sourceNames = exportedValueNames(readFileSync(join(aiDir, "src", sourcePath(id)), "utf8"));
-		const stubNames = exportedValueNames(readFileSync(join(aiDir, stubDir, `${id}${stubSuffix}`), "utf8"));
+		// The shard is a build product, so a checkout without one still has its
+		// stand-in to check: the shard's export names are the ones the stand-in
+		// carries, and generating both is what keeps them aligned.
+		const sourceFile = join(aiDir, "src", sourcePath(id));
+		if (!existsSync(sourceFile)) continue;
+		const sourceNames = exportedValueNames(readFileSync(sourceFile, "utf8"));
 		const missing = [...sourceNames].filter((name) => !stubNames.has(name));
 		if (missing.length > 0) details.push(`${id}: stub is missing ${missing.join(", ")}`);
 	}
 	if (details.length > 0) {
-		throw new Error(`${label} under packages/ai/${stubDir} are out of sync: ${details.join("; ")}`);
+		// One entry per module: the list is per provider, and models.dev adds
+		// providers often enough that a single line would name a hundred.
+		throw new Error(
+			`${label} under packages/ai/${stubDir} are out of sync (${details.length}):\n` +
+				details.map((detail) => `  ${detail}`).join("\n"),
+		);
 	}
 }
 
@@ -196,12 +227,18 @@ export function createApiStubPlugin({ aiDir, apis, builtinProviderIds }) {
  * until the plugin claims the import.
  */
 function resolveModulePath(args, aiDir) {
+	// The `.js` extension is dropped like the map keys are. The package form
+	// arrives without one: the bundle rewrites `@nanopi/pi-ai/providers/x.models`
+	// to the same module as a relative `./x.models.js`, and esbuild hands the
+	// plugin whichever form the importer wrote. Matching only the extension form
+	// left the package one unmatched, so a trimmed build kept the shard it meant
+	// to swap.
+	const own = (path) => (path.endsWith(".js") ? path.slice(0, -3) : path);
 	if (args.path.startsWith("@nanopi/pi-ai/api/") || args.path.startsWith("@nanopi/pi-ai/providers/")) {
-		return join(aiDir, "dist", args.path.slice("@nanopi/pi-ai/".length));
+		return own(join(aiDir, "dist", args.path.slice("@nanopi/pi-ai/".length)));
 	}
 	if (!args.path.startsWith(".")) return undefined;
-	const joined = join(args.resolveDir ?? aiDir, args.path);
-	return joined.endsWith(".js") ? joined.slice(0, -3) : joined;
+	return own(join(args.resolveDir ?? aiDir, args.path));
 }
 
 function inertPlugin() {
