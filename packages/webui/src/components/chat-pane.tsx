@@ -15,7 +15,7 @@ import type {
 	UserInputResponse,
 } from "@/lib/api";
 import { type Poem, randomPoem } from "@/lib/greeting";
-import type { PendingPermission, PermissionAnswer, TurnError, UiMessage } from "@/lib/use-chat";
+import type { PendingPermission, PermissionRequest, TurnError, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
 import { getLocale, t } from "@/lib/i18n";
 
@@ -82,7 +82,7 @@ export function ChatPane({
 	onDismissNotice: () => void;
 	onSend: () => void;
 	onStop: () => void;
-	onAnswerPermission: (decision: PermissionAnswer) => void;
+	onAnswerPermission: (decision: PermissionRequest) => void;
 	onAnswerUserInput: (answer: UserInputResponse) => void;
 	composer: string;
 	onComposer: (value: string) => void;
