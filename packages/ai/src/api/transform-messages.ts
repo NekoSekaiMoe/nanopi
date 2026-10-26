@@ -177,6 +177,16 @@ export function transformMessages<TApi extends Api>(
 					const toolCall = block as ToolCall;
 					let normalizedToolCall: ToolCall = toolCall;
 
+					// The raw arguments text lives in `argumentsError`, and no provider accepts it
+					// on a replayed call: adapters serialize `arguments` (`{}` for a malformed
+					// call), so keeping the field would only leak a describe-the-failure string
+					// into the request. Dropping it here means the next turn sees the same `{}`
+					// the wire carried, for every adapter, instead of `{}` plus a stray field.
+					if (toolCall.argumentsError !== undefined) {
+						normalizedToolCall = { ...toolCall };
+						delete (normalizedToolCall as { argumentsError?: string }).argumentsError;
+					}
+
 					if (!isSameModel && toolCall.thoughtSignature) {
 						normalizedToolCall = { ...toolCall };
 						delete (normalizedToolCall as { thoughtSignature?: string }).thoughtSignature;
