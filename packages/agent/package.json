@@ -24,7 +24,7 @@
 	},
 	"dependencies": {
 		"@nanopi/pi-ai": "^20261022.0.0",
-		"typebox": "1.3.27"
+		"typebox": "1.4.3"
 	},
 	"keywords": [
 		"ai",
@@ -44,7 +44,7 @@
 		"node": ">=22.19.0"
 	},
 	"devDependencies": {
-		"@types/node": "22.19.19",
-		"vitest": "4.1.12"
+		"@types/node": "22.20.5",
+		"vitest": "5.0.5"
 	}
 }
