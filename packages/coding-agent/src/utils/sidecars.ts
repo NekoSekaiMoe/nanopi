@@ -203,10 +203,10 @@ async function downloadTo(url: string, destPath: string): Promise<void> {
 	if (!response.ok || !response.body) {
 		throw new Error(`download failed: HTTP ${response.status} for ${url}`);
 	}
-	// WHATWG streams come from two declaration sets here: `fetch` is typed with
-	// undici's `ReadableStream`, `Readable.fromWeb` wants `node:stream/web`'s.
-	// They disagree only on the BYOB reader's generic bound, so name the type.
-	await pipeline(Readable.fromWeb(response.body as unknown as NodeWebReadableStream), createWriteStream(destPath));
+	// `fetch` is typed against undici's `ReadableStream`, `Readable.fromWeb` takes
+	// `node:stream/web`'s. They differ only in the BYOB reader's generic bound,
+	// which no `fromWeb` caller can observe, so the cast is the whole seam.
+	await pipeline(Readable.fromWeb(response.body as NodeWebReadableStream), createWriteStream(destPath));
 }
 
 /**
