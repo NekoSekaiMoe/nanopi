@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- The webui permission prompt is shown before a call can be paused for an explanation: `PermissionGate.check()` runs the prompt first and only pauses on an `"explain"` answer, so `PermissionBroker.explanationPrompter` has an active entry to park on. Previously the gate paused first, found nothing outstanding, and read the pause as a dismissal — every gated call in `nanopi webui` failed with "the permission prompt for this bash call was dismissed" and the browser never received a `permission_request` (issue [#293](https://cnb.cool/shinytale/nanopi/-/issues/293))
 - A run mode switched outside the TUI now re-derives the session's tool set: the engine subscription applies the mode's tool filtering before drawing the badge, so a webui switch to `minimal` actually narrows the tools instead of leaving every tool active, and `extraBridge.setMode()` also applies it directly for a caller bound before any session started. A webui session also stops resetting the live mode to `defaultMode` on every new session (issue [#194](https://cnb.cool/shinytale/nanopi/-/issues/194))
 
 ## [20261022]

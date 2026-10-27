@@ -22,10 +22,16 @@ import type { PermissionDecision } from "./types.ts";
 
 export type { PermissionCallInfo, PermissionDecision, PermissionOutcome };
 
-/** How the gate asks. Returns undefined when the prompt was dismissed or cannot be shown. */
-export type PermissionPrompter = (info: PermissionCallInfo) => Promise<PermissionDecision | undefined>;
+/**
+ * How the gate asks.
+ *
+ * Resolves `undefined` when the prompt was dismissed or cannot be shown, and
+ * `"explain"` for a UI whose prompt offers that answer: the call is then paused
+ * (see `PermissionGate.explain`) and the gate asks again afterwards.
+ */
+export type PermissionPrompter = (info: PermissionCallInfo) => Promise<PermissionDecision | "explain" | undefined>;
 
-/** The same prompt, for a UI that can also answer `"explain"` (see `PermissionGate.explain`). */
+/** The prompt to reuse while a call is paused: it delivers the answer given after the explanation. */
 export type PermissionExplanationPrompter = (
 	info: PermissionCallInfo,
 ) => Promise<PermissionDecision | "explain" | undefined>;
@@ -87,11 +93,14 @@ export class PermissionGate {
 	/**
 	 * Pause a call for an explanation, keeping the call itself pending.
 	 *
-	 * Returns the answer to the prompt afterwards, so the caller can ask again for
-	 * a UI whose answer may be "explain" — that answer arrives, nothing runs, and
-	 * the same call asks once more when the user has read the explanation. Only
-	 * one pause per call: a second "explain" for the same callId is refused, which
-	 * keeps two explanation turns from stacking on one blocked call.
+	 * Called from `check()` *after* the prompt was shown, never before it: the
+	 * pause is an answer the prompt offers ("explain"), so a caller that pauses
+	 * first parks on a prompt nobody has seen and the card never appears.
+	 *
+	 * Resolves `undefined` for a pause or a dismissal (nothing ran, the call still
+	 * waits for its answer and `check()` asks again), or the outcome the prompt
+	 * settled with. Only one pause per call: a second "explain" for the same
+	 * callId is refused, which keeps two explanation turns off one blocked call.
 	 */
 	async explain(info: PermissionCallInfo): Promise<PermissionOutcome | undefined> {
 		const prompter = this.explanationPrompter;
@@ -99,15 +108,27 @@ export class PermissionGate {
 		// Claimed before the wait so a second pause cannot start while this one
 		// is in flight.
 		if (!this.explainedCalls.add(info.callId)) return undefined;
-		const decision = await prompter(info);
-		if (decision === "explain") {
-			// Nothing ran: the call still waits for its answer, and the same call
-			// may be paused again after the user reads the explanation.
+		try {
+			const decision = await prompter(info);
+			// `undefined` covers "explain" too: the webui prompter turns that answer
+			// into a pause, not an answer. Nothing ran and the call still waits.
+			if (decision === "explain" || decision === undefined) return undefined;
+			if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
+			return this.settle(info, decision);
+		} finally {
 			this.explainedCalls.delete(info.callId);
-			return undefined;
 		}
-		if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
+	}
+
+	/** The one place a decision turns into an outcome, shared by both prompters. */
+	private async settle(
+		info: PermissionCallInfo,
+		decision: PermissionDecision | undefined,
+	): Promise<PermissionOutcome> {
 		switch (decision) {
+			// `allow_once` is the same outcome as `allow` — run this call, remember
+			// nothing — and stays a separate answer because the flow offers it after
+			// an explanation, where "once" is what the user just agreed to.
 			case "allow_once":
 			case "allow":
 				return { action: "allow" };
@@ -142,32 +163,21 @@ export class PermissionGate {
 		const judged = this.judgedClasses.get(key);
 		if (judged) return judged;
 
-		const decision = await this.prompter(info);
-		// An approval for this call that arrived while the prompt was up (the user
-		// read the explanation and continued) wins: no second prompt, no memory.
-		if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
-		switch (decision) {
-			// `allow_once` is the same outcome as `allow` — run this call, remember
-			// nothing — and stays a separate answer because the flow offers it after
-			// an explanation, where "once" is what the user just agreed to.
-			case "allow_once":
-			case "allow":
-				return { action: "allow" };
-			case "allow_session":
-				this.sessionAllowedTools.add(info.toolName);
-				return { action: "allow" };
-			case "ai_decide": {
-				const verdict = await this.judge(info);
-				this.judgedClasses.set(key, verdict);
-				return verdict;
+		// The prompt is what carries the "explain" answer, so a UI that can pause
+		// for one gets the chance here, after the prompt is up. A pause resolves
+		// `undefined` and the loop asks again for the real answer, which is the
+		// card's next message.
+		for (;;) {
+			const decision = await this.prompter(info);
+			// An approval for this call that arrived while the prompt was up (the
+			// user read the explanation and continued) wins: no second prompt.
+			if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
+			if (decision === "explain") {
+				const paused = await this.explain(info);
+				if (paused) return paused;
+				continue;
 			}
-			case "deny":
-				return { action: "deny", reason: `The user declined this ${info.toolName} call` };
-			default:
-				return {
-					action: "deny",
-					reason: `The permission prompt for this ${info.toolName} call was dismissed`,
-				};
+			return this.settle(info, decision);
 		}
 	}
 }
@@ -185,7 +195,7 @@ export type PermissionBrokerEvent =
 interface BrokerEntry {
 	info: PermissionCallInfo;
 	/** Ordinary answer path: the gate settles the call with it. */
-	resolve: (decision: PermissionDecision | undefined) => void;
+	resolve: (decision: PermissionPromptAnswer | undefined) => void;
 	/** Explanation path: the card's answer, delivered to `explanationPrompter`. */
 	resolveChoice: (answer: PermissionPromptAnswer | undefined) => void;
 	explanationGranted?: boolean;
@@ -208,28 +218,38 @@ export class PermissionBroker {
 		return () => this.listeners.delete(listener);
 	}
 
-	/** Prompter used by the gate when no interactive UI exists (webui sessions). */
+	/**
+	 * Prompter used by the gate when no interactive UI exists (webui sessions).
+	 *
+	 * Queues the card and resolves with whatever answer settles it, `"explain"`
+	 * included: that answer keeps the entry active, so the gate pauses the call
+	 * and the card's real answer arrives through `explanationPrompter`.
+	 */
 	readonly prompter: PermissionPrompter = (info) =>
 		new Promise((resolve) => {
-			this.queue.push({ info, resolve, resolveChoice: () => {} });
+			this.queue.push({
+				info,
+				resolve: (decision) => resolve(decision),
+				resolveChoice: () => {},
+			});
 			this.pump();
 		});
 
 	/**
 	 * Prompter behind the gate's `explain()`: resolves with the card's next
-	 * answer, which may be `"explain"`. The entry stays active across the
+	 * answer, which may be another "explain". The entry stays active across the
 	 * explanation turn, so the card keeps waiting for its real answer, and that
 	 * answer lands here.
 	 */
-	readonly explanationPrompter: PermissionExplanationPrompter = (info) =>
-		new Promise((resolve) => {
-			const active = this.active;
-			if (!active || active.info.callId !== info.callId) {
-				resolve(undefined);
-				return;
-			}
+	readonly explanationPrompter: PermissionExplanationPrompter = (info) => {
+		const active = this.active;
+		// Nothing outstanding for this call: the prompt was settled between the
+		// pause and now, so the gate has its answer already.
+		if (!active || active.info.callId !== info.callId) return Promise.resolve(undefined);
+		return new Promise((resolve) => {
 			active.resolveChoice = resolve;
 		});
+	};
 
 	private pump(): void {
 		if (this.active || this.queue.length === 0) return;
@@ -241,9 +261,10 @@ export class PermissionBroker {
 	/**
 	 * Answer the outstanding prompt. Returns false when nothing matches.
 	 *
-	 * `"explain"` does not settle the prompt: it flags the entry and emits
-	 * `explain`, so the listener can hand the card over to the explanation while
-	 * the call stays gated.
+	 * `"explain"` does not settle the prompt: it hands `"explain"` to the gate,
+	 * which pauses the call on it, and emits `explain` so the listener can put
+	 * the card into its explained state. The entry stays active for the real
+	 * answer.
 	 */
 	answer(callId: string | undefined, toolName: string | undefined, decision: PermissionPromptAnswer): boolean {
 		const active = this.active;
@@ -255,12 +276,12 @@ export class PermissionBroker {
 			// same blocked call.
 			if (active.explanationGranted) return false;
 			active.explanationGranted = true;
-			// The gate is parked on this prompt and learns "explain" here; a prompt
-			// nobody is waiting on has no one to explain to.
-			const paused = active.resolveChoice;
-			active.resolveChoice = () => {};
+			// The gate is waiting on the prompt and learns "explain" here; it then
+			// parks on `explanationPrompter` for the card's real answer.
+			const pending = active.resolve;
+			active.resolve = () => {};
 			this.emit({ type: "explain", info: active.info });
-			paused(decision);
+			pending(decision);
 			return true;
 		}
 		this.active = undefined;

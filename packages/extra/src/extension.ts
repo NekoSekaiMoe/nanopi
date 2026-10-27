@@ -204,11 +204,10 @@ function makeDialogPrompter(
  */
 function makeWebuiPrompter(onExplain: (info: PermissionCallInfo) => void): PermissionPrompter {
 	return async (info) => {
-		const choice = await extraBridge.permissions.explanationPrompter(info);
-		if (choice === "explain") {
-			onExplain(info);
-			return undefined;
-		}
+		const choice = await extraBridge.permissions.prompter(info);
+		// The card asked for an explanation: the gate pauses the call on this
+		// answer, queues the next turn, and asks again for the real one.
+		if (choice === "explain") onExplain(info);
 		return choice;
 	};
 }
@@ -669,11 +668,10 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			firstCommand,
 			hazard,
 		};
-		// Webui cards answer "explain" while the prompt is up: nothing ran, and the
-		// call asks once more after the explanation turn. Both paths end in a real
-		// answer, so this is one `check()` from the model's point of view.
-		const explained = await gate.explain(info);
-		const outcome = explained ?? (await gate.check(info));
+		// The prompt carries every answer, "explain" included: `check()` pauses the
+		// call on that answer and asks again once the user has read the
+		// explanation, so this is one `check()` from the model's point of view.
+		const outcome = await gate.check(info);
 		if (outcome.action === "deny") {
 			// The model has to learn the rule from the refusal itself: prompt text
 			// alone is what let this happen in the first place.
