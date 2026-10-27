@@ -75,3 +75,15 @@ NanoPi is a fork of [Pi Coding Agent](https://github.com/Earendil-Works/pi): the
 and the minimalist philosophy are Pi's work, and the parts this fork removed are easier to list than
 the parts it kept. The WebUI's visual language follows Memoh's documented design system, reimplemented
 clean-room (no code copied).
+
+## LINUX DO
+
+<p align="center">
+  <a href="https://linux.do/">
+    <img src="./docs/assets/linux-do.png" width="42%" alt="LINUX DO">
+  </a>
+</p>
+
+<p align="center">
+  <strong>For all things AI, head to <a href="https://linux.do/">LINUX DO</a>. Wishing the community ever greater success.</strong>
+</p>
