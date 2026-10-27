@@ -14,8 +14,10 @@
 // #242 的 b3ffe400 就是这样过去的），而它拿不到 PR 的代码，所以源分支得自己
 // fetch 进来自合一次。
 //
-// 方向：工作树是目标分支 tip，合并后 HEAD 是结果，HEAD~1 是基线。反过来把 PR
-// 分支当基线会让 PR 新增的每个文件都成为「被删掉」（#255）。
+// 方向：工作树是目标分支 tip，合并后 HEAD 是结果，HEAD 的第一父是基线。反过来把
+// PR 分支当基线会让 PR 新增的每个文件都成为「被删掉」（#255）。基线不往外传，
+// check-merge-result.mjs 自己取第一父（#279：那里默认拿远端 main 当基线，会把
+// PR 分支历史上的删除误判成回退）。
 
 import { execFileSync } from "node:child_process";
 import { dirname, join } from "node:path";
@@ -56,4 +58,4 @@ execFileSync("git", ["merge", "--no-edit", "refs/remotes/pr/head"], {
 	env: { ...process.env, GIT_AUTHOR_NAME: "npc", GIT_AUTHOR_EMAIL: "npc@cnb.cool", GIT_COMMITTER_NAME: "npc", GIT_COMMITTER_EMAIL: "npc@cnb.cool" },
 });
 
-execFileSync(process.execPath, [CHECK, "--base", "HEAD~1"], { stdio: "inherit" });
+execFileSync(process.execPath, [CHECK], { stdio: "inherit" });
