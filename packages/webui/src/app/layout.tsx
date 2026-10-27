@@ -6,9 +6,10 @@ export const metadata: Metadata = {
 	title: "NanoPi",
 	description: "Browser UI for nanopi.",
 	manifest: "/manifest.webmanifest",
+	// Same artwork as public/logo.png and the manifest icons.
 	icons: {
-		icon: "/favicon.png",
-		apple: "/icon-192.png",
+		icon: [{ url: "/favicon.png", type: "image/png", sizes: "96x96" }],
+		apple: [{ url: "/icon-192.png", sizes: "192x192" }],
 	},
 };
 
