@@ -28,7 +28,9 @@ Status: implemented
 镜像因此可能变红，这是有意的：红一次好过悄悄丢一次改动。
 
 **预合并结果（`scripts/check-merge-result.mjs`）**：检查「本次改动合进 base 之后，
-base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`；改名报 `R`，不算。
+base 上原有的文件是否还在」。按路径逐条比 `ls-tree`，路径消失即候选删除；删除是否
+放行另看意图证据（`deletes:` 白名单，或合并提交那一跳里的 `D`）。那层的细节见
+[merge-result-accounts-for-intended-deletes](2026-10-27-merge-result-accounts-for-intended-deletes.md)。
 
 接了两处：
 
@@ -66,7 +68,7 @@ base 上原有的文件是否还在」。同样用 `git diff --raw`，只报 `D`
 ## Consequences
 
 - 镜子推不动时留给人一条明确动作：`git merge` 对端 main。脚本不替人做这个决定。
-- 显式删除文件（确实要删）会被 `check-merge-result` 拦。这是已知的误报，处理办法是在
-  PR 描述里说明，而不是给检查开豁免 —— 一旦有豁免，回退也会走这条路。
+- 显式删除文件（确实要删）默认仍会被 `check-merge-result` 拦，现在有据可查了：PR 描述
+  或提交消息里逐条写 `deletes: <path>` 即放行，只认点名的路径。
 - `pull_request.target` 的流水线在 CNB 上要真正阻止合并，还需要 main 是保护分支并勾选
   「需要通过状态检查」。仓库当前只有 5 个成员、合并都由人点，这条检查的作用是留痕加报警。

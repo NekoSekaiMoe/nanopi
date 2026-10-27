@@ -51,10 +51,24 @@ jobs:
         # 用 PR 合并后的提交与 base 比：base 有的文件在结果里必须还在（#242 的
         # b3ffe400 用旧树盖掉了 c897cdf2，父链没断，只有比树才看得出来）。
         #
+        # 路径消失不再一律红（#296）：PR 描述里逐条写了 `deletes: <path>` 的放行。
+        # 描述从事件载荷里取，脚本本身不联网。提交消息那侧交给 --commit：结果提交是
+        # GitHub 造的合并提交，`deletes:` 只会写在 PR 的提交上，所以指到 github.sha
+        # （PR 分支 tip）而不是 HEAD。
+        #
         # push 上没有 base：github.base_ref 为空时这个步骤不跑，省得用空 ref 让脚本
         # 退出 2（#258）。直推 main 的回退由 CNB 侧 mirror-main.mjs 拦。
         if: github.base_ref != ''
-        run: node scripts/check-merge-result.mjs --base "refs/remotes/origin/${{ github.base_ref }}"
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+          desc=$(mktemp)
+          printf '%s\n' "$PR_BODY" > "$desc"
+          node scripts/check-merge-result.mjs \
+            --base "refs/remotes/origin/${{ github.base_ref }}" \
+            --description-file "$desc" \
+            --commit "${{ github.event.pull_request.head.sha }}"
 
       - name: Check
         run: pnpm run check

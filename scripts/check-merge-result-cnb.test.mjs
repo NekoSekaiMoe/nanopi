@@ -120,6 +120,24 @@ test("a PR that deletes a file from the target branch fails", async (t) => {
 	assert.match(result.stderr, /a\.txt/);
 });
 
+// #296 A：PR 描述里的 `deletes:` 由本脚本落地成临时文件交给判定脚本，判定本身不联网。
+test("a deletes: claim in CNB_PULL_REQUEST_DESC excuses the deletion", async (t) => {
+	const { root, remote, seed } = await fixture(t, "claimed");
+	git(seed, ["checkout", "--quiet", "-b", "pr"]);
+	git(seed, ["rm", "-q", "a.txt"]);
+	git(seed, ["commit", "-q", "--no-gpg-sign", "-m", "drop a"]);
+	pushBranch(root, seed, remote, "pr");
+	const cwd = checkoutMain(t, root, remote, "work");
+
+	const result = run(cwd, {
+		CNB_PULL_REQUEST_BRANCH: "pr",
+		CNB_PULL_REQUEST_DESC: "drop the dead fixture\n\ndeletes: a.txt\n",
+	});
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /a\.txt/);
+	assert.match(result.stdout, /accounted for/);
+});
+
 test("a missing CNB_PULL_REQUEST_BRANCH exits 2 instead of passing", async (t) => {
 	const { root, remote } = await fixture(t, "unset");
 	const cwd = checkoutMain(t, root, remote, "work");
