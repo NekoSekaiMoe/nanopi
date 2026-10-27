@@ -49,8 +49,10 @@ export const bashToolSystemPromptContribution = {
 		"You can inspect NANOPI_* environment variables for current model and session details.",
 		"Chain shell commands instead of asking the user to run them",
 		// Without this the shell reports the printer's exit code: `pnpm test | tail -50` exits 0
-		// because `tail` did, and the failure disappears from both the status and the digest.
-		"Avoid piping a command whose exit status matters into `tail`/`head`/`grep`: the pipeline reports the last command's status, so a failed test looks like a pass. Run it bare, or `set -o pipefail` first.",
+		// because `tail` did, and the failure disappears from both the status and the digest. No
+		// pipefail countermeasure: asserting the exit status of each stage (`$?` / `PIPESTATUS`) makes
+		// the shell, not the test runner, exit non-zero, and the digest then reads the failures as prose.
+		"Avoid piping a command whose exit status matters into `tail`/`head`/`grep`: the pipeline reports the last command's status, so a failed test looks like a pass. Run it bare; the result is already truncated to its tail.",
 	],
 } as const;
 
@@ -406,9 +408,9 @@ export function createShellToolDefinition(
 				return snapshot;
 			};
 
-			const formatOutput = (snapshot: Awaited<ReturnType<typeof finishOutput>>, emptyText = "(no output)") => {
+			const formatOutput = (snapshot: Awaited<ReturnType<typeof finishOutput>>) => {
 				const truncation = snapshot.truncation;
-				const text = snapshot.content || emptyText;
+				const text = snapshot.content || "(no output)";
 				let details: BashToolDetails | undefined;
 				let notice = "";
 				if (truncation.truncated) {
@@ -428,27 +430,27 @@ export function createShellToolDefinition(
 			};
 
 			/**
-			 * The model-facing result of a failed command.
+			 * The model-facing text of a failed command.
 			 *
-			 * Order matters: log body, truncation notice, status, digest. Results are cut from the head
-			 * when they do not fit, so a digest anywhere else is the first thing lost. The digest is
-			 * sized to fit the result budget on its own for the same reason: it and the log are both
-			 * tail-truncated, so the tail survives whether or not the head does.
+			 * Digest only, no log body: the status line and the digest already say what failed, and the
+			 * tail of `pnpm test` is a test count, not a failure. Repeating the log doubled the tokens a
+			 * failing run costs to say the same thing twice, and it pushed the digest out of the budget
+			 * whenever the log filled it. The body is still in `structuredContent.output`, so a caller
+			 * that wants it reads it from there.
 			 *
-			 * A timeout or abort keeps the budget for the log alone: a digest there would point at
-			 * failures the command never reached.
+			 * `block` is sized to the whole result budget and sits last, so head truncation cannot reach
+			 * it. A command that matched no rule keeps its log tail instead: there the log is all the
+			 * model has.
 			 */
-			const formatFailure = (snapshot: Awaited<ReturnType<typeof finishOutput>>, status: string, fill: boolean) => {
-				const { text, notice, details } = formatOutput(snapshot, fill ? "" : "(no output)");
+			const formatFailure = (snapshot: Awaited<ReturnType<typeof finishOutput>>, status: string) => {
+				const { notice, details } = formatOutput(snapshot);
 				const digest = digestFailures(snapshot.fullText ?? "");
 				const block = digest
 					? formatFailureDigest(digest, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES })
 					: undefined;
-				// No extra truncation: the accumulator already cut the head, and its trailing notice is the
-				// message the renderer and the model both read. The digest goes after it, where head
-				// truncation cannot reach.
+				const body = block ? undefined : snapshot.content;
 				return {
-					text: [text || "(no output)", notice, status, block?.text].filter(Boolean).join("\n\n"),
+					text: [body, notice, status, block?.text].filter(Boolean).join("\n\n"),
 					details,
 					failures: block?.digest.failures,
 				};
@@ -469,12 +471,12 @@ export function createShellToolDefinition(
 				} catch (err) {
 					const snapshot = await finishOutput();
 					if (err instanceof Error && err.message === "aborted") {
-						const { text } = formatFailure(snapshot, describeAbort(signal, "Command"), true);
+						const { text } = formatFailure(snapshot, describeAbort(signal, "Command"));
 						throw new Error(text);
 					}
 					if (err instanceof Error && err.message.startsWith("timeout:")) {
 						const timeoutSecs = err.message.split(":")[1];
-						const { text } = formatFailure(snapshot, `Command timed out after ${timeoutSecs} seconds`, true);
+						const { text } = formatFailure(snapshot, `Command timed out after ${timeoutSecs} seconds`);
 						throw new Error(text);
 					}
 					throw err;
@@ -485,15 +487,11 @@ export function createShellToolDefinition(
 				const executedOn = (ops as { backend?: string }).backend;
 				const fullOutput = await output.readFullOutput(STRUCTURED_OUTPUT_MAX_BYTES);
 				if (exitCode === null) {
-					const { text } = formatFailure(snapshot, "Command terminated without an exit code", false);
+					const { text } = formatFailure(snapshot, "Command terminated without an exit code");
 					throw new Error(text);
 				}
 				if (exitCode !== 0) {
-					const { text, details, failures } = formatFailure(
-						snapshot,
-						`Command exited with code ${exitCode}`,
-						false,
-					);
+					const { text, details, failures } = formatFailure(snapshot, `Command exited with code ${exitCode}`);
 					return {
 						content: [{ type: "text", text }],
 						details,
