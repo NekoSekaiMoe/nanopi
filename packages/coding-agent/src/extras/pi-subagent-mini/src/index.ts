@@ -1057,11 +1057,11 @@ export default function subagentMini(pi: ModuleApi): void {
 		promptSnippet:
 			"Delegate self-contained tasks to an isolated subagent; result arrives via completion notification",
 		promptGuidelines: [
-			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) to subagent spawn with read-only tools; keep only the final report in this conversation. Add write/edit to tools only when the subagent should modify files.",
-			"Write every spawn brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess.",
-			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree (the tool creates it, merges the branch when the job completes, and drops it when the job fails).",
-			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle with their reports already in its brief, so do not copy them into it. A failed dependency blocks it. Set `onFailure: \"retry\"` for flaky work; the retry limit is fixed at 3 attempts and not something to enforce in the brief.",
-			"Use `action: \"continue\"` to keep working in a child's own session. The child keeps its transcript, so the brief only has to say what changed; the previous report is passed along automatically.",
+			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) with read-only tools; keep only the final report here. Add write/edit to tools only when the subagent should modify files.",
+			"Write every brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess.",
+			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree.",
+			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle, with their reports already in its brief, so do not copy them in. `onFailure: \"retry\"` retries a failed attempt (3 attempts total).",
+			"`action: \"continue\"` runs another turn on a child's own session; the transcript and the previous report are kept, so the brief only says what changed.",
 		],
 		// The tool list is a contract, not a free-form string: a listed tool that
 		// does not exist in this loadout is dropped instead of silently failing in

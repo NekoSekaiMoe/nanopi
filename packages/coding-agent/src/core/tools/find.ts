@@ -114,7 +114,7 @@ export function createFindToolDefinition(
 	return {
 		name: "find",
 		label: "find",
-		description: `Search for files by glob pattern. Returns matching file paths relative to the search directory. Respects .gitignore. Output is truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
+		description: `Find files by glob pattern; returns paths relative to the search directory. Respects .gitignore. Truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 		promptSnippet: findToolSystemPromptContribution.snippet,
 		parameters: findSchema,
 		async execute(

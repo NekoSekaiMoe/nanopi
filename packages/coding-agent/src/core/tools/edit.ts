@@ -153,7 +153,7 @@ export function createEditToolDefinition(
 		name: "edit",
 		label: "edit",
 		description:
-			"Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. Merge changes to the same block or nearby lines into one edit, and do not pad oldText with large unchanged regions.",
+			"Edit a file by exact text replacement. Each edits[].oldText must match a unique, non-overlapping region of the original file. Merge nearby changes into one edit; do not pad oldText with large unchanged regions.",
 		promptSnippet: editToolSystemPromptContribution.snippet,
 		promptGuidelines: [...editToolSystemPromptContribution.guidelines],
 		parameters: editSchema,
