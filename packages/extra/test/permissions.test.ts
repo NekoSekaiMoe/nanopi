@@ -217,7 +217,7 @@ describe("PermissionBroker", () => {
 		const first = broker.prompter(info({ callId: "a" }));
 		const second = broker.prompter(info({ callId: "b" }));
 
-		await Promise.resolve();
+		await settle();
 		expect(events).toEqual(["prompt"]);
 
 		expect(broker.answer("b", undefined, "allow")).toBe(false); // wrong call id
@@ -235,25 +235,122 @@ describe("PermissionBroker", () => {
 		broker.subscribe((event) => events.push(event.type));
 
 		const pending = broker.prompter(info({ callId: "a" }));
-		await Promise.resolve();
-		const paused = broker.explanationPrompter(info({ callId: "a" }));
+		await settle();
 
+		// "explain" reaches the gate as an answer of its own, not as a decision:
+		// the gate pauses on it and asks again through `explanationPrompter`.
 		expect(broker.answer("a", undefined, "explain")).toBe(true);
-		await expect(paused).resolves.toBe("explain");
+		await expect(pending).resolves.toBe("explain");
+		const paused = broker.explanationPrompter(info({ callId: "a" }));
 		// A second explanation on the same prompt would stack turns on one call.
 		expect(broker.answer("a", undefined, "explain")).toBe(false);
 
 		// The prompt is still outstanding: the answer after the explanation is.
 		expect(broker.answer("a", undefined, "allow_once")).toBe(true);
-		await expect(pending).resolves.toBe("allow_once");
+		await expect(paused).resolves.toBe("allow_once");
 		expect(events).toEqual(["prompt", "explain", "resolved"]);
 	});
 
 	test("cancelAll resolves pending prompts as dismissed", async () => {
 		const broker = new PermissionBroker();
 		const pending = broker.prompter(info());
-		await Promise.resolve();
+		await settle();
 		broker.cancelAll();
 		await expect(pending).resolves.toBeUndefined();
 	});
 });
+
+// The webui has no editor, so its "explain" answer arrives through the broker
+// while the gate is parked on the card. Regressions behind issue #293: the pause
+// was taken before the prompt was shown (so the card never appeared) and an
+// unanswered pause was read as a dismissal, which failed every gated call with
+// "the permission prompt for this bash call was dismissed".
+describe("webui explanation handshake", () => {
+	/** Exactly what extension.ts wires for a webui session. */
+	function webuiGate() {
+		const broker = new PermissionBroker();
+		const events: string[] = [];
+		broker.subscribe((event) => events.push(event.type));
+		const gate = new PermissionGate(
+			broker.prompter,
+			async () => ({ action: "deny", reason: "no" }),
+			broker.explanationPrompter,
+		);
+		return { broker, events, gate };
+	}
+
+	test("the card is shown and its first answer settles the call", async () => {
+		const { broker, events, gate } = webuiGate();
+		const run = gate.check(info({ callId: "call-1" }));
+		await settle();
+		expect(events).toEqual(["prompt"]);
+
+		expect(broker.answer("call-1", "bash", "allow_once")).toBe(true);
+		await expect(run).resolves.toEqual({ action: "allow" });
+		expect(events).toEqual(["prompt", "resolved"]);
+	});
+
+	test("explain pauses the call, and the answer after it still runs once", async () => {
+		const { broker, events, gate } = webuiGate();
+		const run = gate.check(info({ callId: "call-1" }));
+		await settle();
+
+		expect(broker.answer("call-1", "bash", "explain")).toBe(true);
+		await settle();
+		expect(events).toEqual(["prompt", "explain"]);
+		// Nothing ran while the explanation was in flight, and the card cannot
+		// be asked to explain itself twice.
+		expect(broker.answer("call-1", "bash", "explain")).toBe(false);
+
+		expect(broker.answer("call-1", "bash", "allow_once")).toBe(true);
+		await expect(run).resolves.toEqual({ action: "allow" });
+		expect(events).toEqual(["prompt", "explain", "resolved"]);
+	});
+
+	test("allow once after an explanation leaves the next call gated", async () => {
+		const { broker, events, gate } = webuiGate();
+		const first = gate.check(info({ callId: "call-1" }));
+		await settle();
+		broker.answer("call-1", "bash", "allow_once");
+		await expect(first).resolves.toEqual({ action: "allow" });
+
+		const second = gate.check(info({ callId: "call-2" }));
+		await settle();
+		expect(events).toEqual(["prompt", "resolved", "prompt"]);
+		broker.answer("call-2", "bash", "deny");
+		await expect(second).resolves.toMatchObject({ action: "deny", reason: expect.stringContaining("declined") });
+	});
+
+	test("allow this session after an explanation remembers the tool", async () => {
+		const { broker, gate } = webuiGate();
+		const first = gate.check(info({ callId: "call-1" }));
+		await settle();
+		broker.answer("call-1", "bash", "explain");
+		await settle();
+		broker.answer("call-1", "bash", "allow_session");
+		await expect(first).resolves.toEqual({ action: "allow" });
+		await expect(gate.check(info({ callId: "call-9" }))).resolves.toEqual({ action: "allow" });
+	});
+
+	test("a settled prompt is not paused again", async () => {
+		const { broker, events, gate } = webuiGate();
+		const run = gate.check(info({ callId: "call-1" }));
+		await settle();
+		broker.answer("call-1", "bash", "explain");
+		await settle();
+		// A late "explain" for a prompt that is gone must not start a pause.
+		expect(await gate.explain(info({ callId: "missing" }))).toBeUndefined();
+		expect(broker.answer("call-1", "bash", "allow_once")).toBe(true);
+		await expect(run).resolves.toEqual({ action: "allow" });
+		expect(events).toEqual(["prompt", "explain", "resolved"]);
+	});
+});
+
+/**
+ * Let the call reach its prompt: `explain()` awaits the prompter before it can
+ * land on one, and the broker's prompter queues the entry synchronously, so one
+ * macrotask is enough for the card to be outstanding.
+ */
+function settle(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
