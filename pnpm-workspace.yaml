@@ -13,7 +13,12 @@ linkWorkspacePackages: true
 overrides:
   protobufjs: 7.6.6
 
+# 2 天冷却期，挡住刚发布的供应链投毒版本。
+# ignoreMissingTime: 少数包（如 @biomejs/cli-android-arm64@2.6.3）的 manifest
+# 没带 version 级发布时间字段，pnpm 会按"版本不在 manifest 里"拒绝安装。
+# 这类包仍受 integrity、签名、tarball URL 绑定校验，所以放行仍然安全。
 minimumReleaseAge: 2
+minimumReleaseAgeIgnoreMissingTime: true
 
 allowBuilds:
   '@google/genai': true
