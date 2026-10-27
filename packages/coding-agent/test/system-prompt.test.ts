@@ -109,6 +109,34 @@ describe("buildSystemPrompt", () => {
 			expect(prompt).toContain(expected);
 		});
 
+		test("prefers the dedicated file tools over shell equivalents when both exist", () => {
+			const prompt = buildSystemPrompt({
+				selectedTools: ["read", "bash", "grep", "find", "ls"],
+				contextFiles: [],
+				skills: [],
+				cwd: process.cwd(),
+			});
+
+			expect(prompt).toContain(
+				"- Prefer the read for file contents, grep for searching file contents, find for locating files by name, ls for listing directories tools over shell equivalents",
+			);
+			expect(prompt).toContain("use shell commands for running programs, not for inspecting files");
+			// The shell-only fallback rule and the preference rule are mutually exclusive.
+			expect(prompt).not.toContain("Use bash for file operations");
+		});
+
+		test("names only the file tools that are actually available", () => {
+			const prompt = buildSystemPrompt({
+				selectedTools: ["read", "bash"],
+				contextFiles: [],
+				skills: [],
+				cwd: process.cwd(),
+			});
+
+			expect(prompt).toContain("- Prefer the read for file contents tools over shell equivalents");
+			expect(prompt).not.toContain("grep for searching file contents");
+		});
+
 		test("instructs models to resolve nanopi docs and examples under absolute base paths", () => {
 			const prompt = buildSystemPrompt({
 				contextFiles: [],
@@ -230,6 +258,7 @@ describe("buildSystemPrompt", () => {
 			expect(prompt).not.toContain("- read: ");
 			expect(prompt).not.toContain("Use read for files.");
 			expect(prompt).not.toContain("Use bash for file operations");
+			expect(prompt).not.toContain("read for file contents");
 			expect(prompt).toContain("- Prefer run.");
 		});
 
