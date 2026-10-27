@@ -26,7 +26,7 @@ describe("plan mode tool policy", () => {
 	});
 
 	test("blocks every mutating tool", () => {
-		for (const toolName of ["edit", "write", "subagent", "todo", "lsp_rename", "lsp_delete"]) {
+		for (const toolName of ["edit", "write", "subagent", "todo", "lsp_edit"]) {
 			expect(planModeVerdict(toolName, {})).toContain(`blocked ${toolName}`);
 		}
 	});

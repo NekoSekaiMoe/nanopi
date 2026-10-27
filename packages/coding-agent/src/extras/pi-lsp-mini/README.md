@@ -1,9 +1,9 @@
 # pi-lsp-mini
 
 Lean LSP extension for the [pi](https://github.com/earendil-works/pi) coding agent.
-Four features, minimal prompt footprint (all 5 tools measured at 2966 characters
-of JSON schema + descriptions + snippets, ~740 tokens; zero injected system
-instructions):
+Four features, minimal prompt footprint (all 5 tools measured at 3370 characters
+of JSON schema + descriptions + snippets + guidance, ~840 tokens; zero injected
+system instructions):
 
 - **Signatures** — `lsp_hover` and `lsp_definition`: what a symbol's type is and
   where it is declared, without reading the file for either.
@@ -20,7 +20,7 @@ instructions):
   cleanup). Both dry-run unless `apply=true`.
 
 Also: `lsp_query` with `kind: "references"` (the default), `/lsp` command,
-post-edit auto re-check after rename/delete.
+post-edit auto re-check after `lsp_edit`.
 
 ## Tools
 
@@ -239,8 +239,8 @@ language-server binaries you want are on PATH (or configured in
 
 ## Notes
 
-- Prompt budget: all 5 tools cost ~740 request tokens (2966 characters of
-  serialized schema, description and snippet). Tool texts live in
+- Prompt budget: all 5 tools cost 3370 characters (~840 request tokens) of
+  serialized schema, description, snippet and guidance. Tool texts live in
   `src/schemas.ts` — keep them lean when editing, and put "when to use this"
   in `promptSnippet` instead of repeating it in `description`.
 
@@ -253,11 +253,11 @@ language-server binaries you want are on PATH (or configured in
 - Delete heuristics: only *standalone* statement lines (`foo(x);`, `await foo()`,
   `defer foo()`, multi-line argument lists) are removed automatically. Usages in
   assignments, arguments, or callbacks are reported as `✋ manual`.
-- Rename/delete re-open changed files on the server and re-run diagnostics,
-  reporting new errors introduced by the change. Both live in `lsp_edit`
-  because they share that lifecycle, and both need `apply=true`: a workspace
-  edit that a model did not ask to be written is not recoverable from a tool
-  message, and the preview costs one extra call.
+- `lsp_edit` re-opens changed files on the server and re-runs diagnostics,
+  reporting new errors introduced by the change. Rename and delete share one
+  tool because they share that lifecycle, and both need `apply=true`: a
+  workspace edit a model did not ask to be written is not recoverable from a
+  tool message, and the preview costs one extra call.
 - The post-`edit` check waits for a publish it can prove is new. Servers that
   only re-publish on `didSave` therefore report nothing there — that is the
   intended trade: silence instead of a stale error blamed on the edit.

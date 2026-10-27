@@ -48,9 +48,10 @@ lsp_edit { path, line, character,
 | | before | after |
 | --- | --- | --- |
 | tools | 6 | 5 |
-| schema characters | 2563 | 2385 |
+| schema characters | 3050 | 2789 |
 | text characters | 714 | 581 |
-| prompt tokens | ~820 | ~740 |
+| guidance characters | 2162 | 1660 |
+| prompt tokens | ~940 | ~840 |
 
 - **Breaking for behavior, not just naming.** A session that called
   `lsp_rename` and relied on it writing now gets a preview. That is the intended

@@ -214,12 +214,6 @@ async function callGraph(
 // lsp_edit branches
 // ---------------------------------------------------------------------------
 
-/** `apply` is opt-in for both branches: a workspace edit is destructive and the
- *  model can preview it for one extra call. */
-function willApply(params: { apply?: boolean }): boolean {
-  return params.apply === true;
-}
-
 function dryRunHint(kind: string): string {
   return `\n\nre-run with apply=true to execute this ${kind}.`;
 }
@@ -253,7 +247,7 @@ async function renameSymbol(
 
   const header = `rename to '${newName}': ${total} edit(s) in ${usable.length} file(s)`;
   const body = [plan, ...notes].filter(Boolean).join("\n");
-  if (!willApply(params)) return textResult(`dry-run: ${header}\n${body}${dryRunHint("rename")}`);
+  if (params.apply !== true) return textResult(`dry-run: ${header}\n${body}${dryRunHint("rename")}`);
 
   for (const fe of usable) {
     const text = await fs.readFile(fe.file, "utf8");
@@ -314,7 +308,7 @@ async function deleteSymbol(
     ...plans.sort(),
     ...(manual.length > 0 ? ["", "needs MANUAL cleanup (not standalone statements):", ...manual.sort().map((m) => `  ✋ ${m}`)] : []),
   ].join("\n");
-  if (!willApply(params)) return textResult(`dry-run: ${header}\n${body}${dryRunHint("delete")}`);
+  if (params.apply !== true) return textResult(`dry-run: ${header}\n${body}${dryRunHint("delete")}`);
 
   const changed: string[] = [];
   for (const [f, ranges] of rangesByFile) {
@@ -540,11 +534,9 @@ export default function lspMiniExtension(pi: ModuleApi): void {
   });
 
   // --- edit (rename / delete symbol) ---------------------------------------
-  // Both branches are destructive, workspace-wide, need a dry-run first, and
-  // change the files the server already has open, so they share one tool: the
-  // shared invariants (position resolution, outside-project skip, sequential
-  // execution, post-change rescan) have one place to live instead of two that
-  // have to be kept in sync by comment.
+  // Both branches write workspace-wide and must be previewable first, so they
+  // are one tool: position resolution, the outside-project skip, sequential
+  // execution and the post-change rescan have one owner instead of two.
   pi.registerTool({
     name: "lsp_edit",
     label: "LSP Edit",
