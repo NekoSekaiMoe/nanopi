@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { getNativeModuleCandidates } from "../src/native-module-path.ts";
+import { getNativeModuleCandidates, getNativeModulePath } from "../src/native-module-path.ts";
+
+test("every platform uses the same prebuild file name", () => {
+	for (const platform of ["darwin", "linux", "win32"]) {
+		for (const arch of ["arm64", "x64"]) {
+			const nativePath = getNativeModulePath(platform, arch).replaceAll("\\", "/");
+			assert.equal(nativePath, `native/${platform}/prebuilds/${platform}-${arch}/tui-platform.node`);
+			assert.ok(getNativeModuleCandidates(nativePath).some((candidate) => candidate.endsWith(nativePath)));
+		}
+	}
+});
 
 test("sidecar root env var adds a candidate path", () => {
 	const previous = process.env.NANOPI_TUI_NATIVE_ROOT;
 	try {
-		const nativePath = "native/darwin/prebuilds/darwin-arm64/darwin-platform.node";
+		const nativePath = "native/darwin/prebuilds/darwin-arm64/tui-platform.node";
 		const without = getNativeModuleCandidates(nativePath);
 		process.env.NANOPI_TUI_NATIVE_ROOT = "/tmp/sidecar-root";
 		const withRoot = getNativeModuleCandidates(nativePath);

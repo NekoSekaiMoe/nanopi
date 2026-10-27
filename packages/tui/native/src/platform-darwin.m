@@ -1,8 +1,6 @@
-#import <AppKit/AppKit.h>
-#import <CoreGraphics/CoreGraphics.h>
-#import <Foundation/Foundation.h>
 #define NANOPI_CLIPBOARD_WRITE
-#include "../../clipboard.h"
+#include "napi-loader.h"
+#include "clipboard.h"
 
 static CGEventFlags modifier_mask_for_name(const char* name) {
     if (strcmp(name, "shift") == 0) return kCGEventFlagMaskShift;

@@ -223,11 +223,14 @@ function collectSidecarFiles() {
 		content: photonContent,
 	};
 
-	// TUI native prebuilds: one .node file per platform/arch.
+	// TUI native prebuilds: one .node file per platform/arch. The sources are
+	// shared and the platform is a compile-time flag, so only the prebuild
+	// directories carry a platform name.
 	const tuiVersion = JSON.parse(readFileSync(join(repoRoot, "packages", "tui", "package.json"), "utf8")).version;
 	const tuiFiles = [];
 	for (const os of readdirSync(tuiNativeDir)) {
 		const prebuildsRoot = join(tuiNativeDir, os, "prebuilds");
+		if (!statSync(join(tuiNativeDir, os), { throwIfNoEntry: false })?.isDirectory()) continue;
 		if (!existsSync(prebuildsRoot)) continue;
 		for (const platformArch of readdirSync(prebuildsRoot)) {
 			const [platform, arch] = platformArch.split("-");

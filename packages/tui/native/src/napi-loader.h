@@ -2,9 +2,9 @@
 #define NANOPI_NAPI_LOADER_H
 
 // Resolve the small N-API surface we use from Node or Bun, without Node headers
-// or a link-time dependency on a particular runtime. This is the only pair of
-// headers that sees platform SDK headers, and it is included by the platform
-// translation unit after them.
+// or a link-time dependency on a particular runtime. The platform preload plus
+// these macros are the only place OS headers are visible, and every platform
+// translation unit includes this header first.
 #include "napi.h"
 #ifdef _WIN32
 #include <windows.h>

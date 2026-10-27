@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { type ChildProcessWithoutNullStreams, execFile, execFileSync, spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { once } from "node:events";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { createServer, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -13,6 +13,9 @@ import { promisify } from "node:util";
 const exec = promisify(execFile);
 const fixtures = fileURLToPath(new URL("./fixtures/", import.meta.url));
 const native = fileURLToPath(new URL("../native/linux/", import.meta.url));
+const nativeSources = fileURLToPath(new URL("../native/src/", import.meta.url));
+const WORKER_BLOCK_START = "#define WORKER_WAIT_SECONDS";
+const WORKER_BLOCK_END = "static void read_clipboard(clipboard_job* job) {\n    x11_clipboard clipboard;";
 const supported = process.platform === "linux" && ["arm64", "x64"].includes(process.arch);
 const dependenciesAvailable =
 	supported &&
@@ -60,7 +63,7 @@ async function readClipboard(method: string, env: NodeJS.ProcessEnv): Promise<Re
 		process.execPath,
 		[
 			join(fixtures, "clipboard-reader.cjs"),
-			join(native, "prebuilds", `linux-${process.arch}`, "linux-platform-x11.node"),
+			join(native, "prebuilds", `linux-${process.arch}`, "tui-platform.node"),
 			method,
 		],
 		{ env, timeout: 6000 },
@@ -112,6 +115,20 @@ describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 6000
 
 	it("validates X11 incremental property metadata before accumulating bytes", () => {
 		assert.equal(execFileSync(join(directory, "x11-test"), ["metadata"], { encoding: "utf8" }).trim(), "validated");
+	});
+
+	it("keeps the worker fixture's copy of the executor in sync with the unit", () => {
+		// The fixture copies the executor block out of platform-linux.c to compile it
+		// without X11. A silent copy would pass the worker tests against dead code.
+		const unit = readFileSync(join(nativeSources, "platform-linux.c"), "utf8");
+		const start = unit.indexOf(WORKER_BLOCK_START);
+		const end = unit.indexOf(WORKER_BLOCK_END, start);
+		assert.ok(start >= 0 && end > start, "executor block markers missing from platform-linux.c");
+		const block = unit.slice(start, end);
+		assert.ok(
+			readFileSync(join(fixtures, "clipboard-worker-stub.c"), "utf8").includes(block),
+			"clipboard-worker-stub.c no longer matches the executor in platform-linux.c",
+		);
 	});
 
 	for (const mode of ["concurrent", "process-exit", "worker-exit"]) {
