@@ -1,13 +1,16 @@
 # pi-lsp-mini
 
 Lean LSP extension for the [pi](https://github.com/earendil-works/pi) coding agent.
-Three features, minimal prompt footprint (~660 tokens measured: full JSON
-schemas + descriptions + snippets of all 5 tools; zero injected system
+Four features, minimal prompt footprint (~990 tokens measured: full JSON
+schemas + descriptions + snippets of all 7 tools; zero injected system
 instructions):
 
-- **Diagnostics** — `lsp_diagnostics` on a file or a whole directory; issues are
-  also appended automatically after every `write`, and after every `edit` when
-  the opt-in [`editDiagnostics`](#diagnostics-after-edit) check is enabled.
+- **Signatures** — `lsp_hover` and `lsp_definition`: what a symbol's type is and
+  where it is declared, without reading the file for either.
+- **Diagnostics** — `lsp_diagnostics` on a file or a whole directory; existing
+  errors are also appended to every `read` ([`readDiagnostics`](#diagnostics-before-read)),
+  issues are appended after every `write`, and after every `edit` when the
+  opt-in [`editDiagnostics`](#diagnostics-after-edit) check is enabled.
 - **Call relations** — `lsp_callgraph` walks incoming/outgoing call hierarchy
   recursively (who calls this function / what it calls).
 - **Batch replace / delete** — `lsp_rename` (scope-aware workspace rename) and
@@ -22,6 +25,8 @@ rename/delete.
 | Tool | What it does |
 | --- | --- |
 | `lsp_diagnostics` | Errors/warnings for a file or directory (`severity` filter). Omit `path` to scan cwd. |
+| `lsp_hover` | Signature and doc comment at a position, or of a named `symbol`. |
+| `lsp_definition` | `file:line` where the symbol at a position (or a named `symbol`) is declared. |
 | `lsp_callgraph` | Callers/callees tree around a function (`direction`, `depth` 1-4). |
 | `lsp_references` | All usages of a symbol. |
 | `lsp_rename` | Workspace rename. `apply=false` for dry-run. Applies + re-checks diagnostics. |
@@ -29,6 +34,20 @@ rename/delete.
 
 All positions are 1-based (`line`, `character`); columns are auto-snapped to the
 nearest identifier, so off-by-one is tolerated.
+
+`lsp_hover` and `lsp_definition` also accept `symbol` instead of
+`line`/`character`. A model that asks "what does `parseConfig` take" knows a
+name, not a column, and demanding the column would send it back to reading the
+file — exactly what these two tools exist to avoid. The name is resolved by the
+server's own `textDocument/documentSymbol` (so a class, method, or a qualified
+`Class.method` all work), with a text scan as the fallback for servers that do
+not implement it. A name no source can place is reported as not found instead of
+guessed: a hover answered for the wrong symbol costs more than no answer.
+
+Hover output is capped at 1600 characters on a line boundary, because pyright
+and tsserver answer with the entire doc comment and rust-analyzer with the
+item's attributes, which at full length costs more than the file read it
+replaces.
 
 ## Language servers
 
@@ -147,6 +166,34 @@ just stop waiting for it. Two things follow:
 A tool call never blocks for longer than its budget, and no request it abandoned
 is left running on the server.
 
+## Diagnostics before read
+
+`read` carries the errors a file already has, so a session that is about to edit
+a broken file sees that in the same message as the code instead of one round
+later (from a post-edit report, or from a test run that was failing before it
+started). On by default; `~/.nanopi/agent/lsp.json`:
+
+```json
+{
+  "readDiagnostics": { "enabled": true, "maxSeverity": 1, "timeoutMs": 4000, "maxDiagnostics": 8, "maxFileBytes": 524288 }
+}
+```
+
+| key | default | meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Run the check at all. `false` turns it off. |
+| `maxSeverity` | `1` | 1 reports errors only, 2 adds warnings. Warnings on a freshly opened file are mostly style noise. |
+| `timeoutMs` | `4000` | Total budget. On expiry the read result is returned unchanged. |
+| `maxDiagnostics` | `8` | Cap on reported diagnostics per read. |
+| `maxFileBytes` | `524288` | Larger files are skipped: a big file is usually not the one being edited. |
+
+A clean file reports nothing, and a report is never newer than the read: the
+check records the publish counter before opening the file and only accepts a
+publish after it, so a server that answers `didOpen` with an older snapshot
+produces no output rather than stale errors. Nothing here can fail a `read` —
+no matching server, a crashed one, a timeout, and an unreadable file all mean
+"no report".
+
 ## Diagnostics after edit
 
 `write` always reports what the server says about the file it just wrote. `edit`
@@ -193,7 +240,7 @@ language-server binaries you want are on PATH (or configured in
 
 ## Notes
 
-- Prompt budget: all 5 tools cost ~660 request tokens (schemas serialized).
+- Prompt budget: all 7 tools cost ~990 request tokens (schemas serialized).
   Tool texts live in `src/schemas.ts` — keep them lean when editing.
 
 - TypeScript note: neither `tsserver` nor `tsc` is an LSP server — `tsserver

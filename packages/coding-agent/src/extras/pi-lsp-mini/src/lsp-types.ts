@@ -23,6 +23,25 @@ export interface TextEdit {
 	newText: string;
 }
 
+export interface MarkupContent {
+	kind: "plaintext" | "markdown";
+	value: string;
+}
+
+/** A code block with its language, as opposed to a markdown document. */
+export interface MarkedString {
+	language?: string;
+	value: string;
+}
+
+/** The `contents` field accepts a bare string per the spec (a markdown snippet). */
+export type HoverContents = MarkupContent | MarkedString | string;
+
+export interface Hover {
+	contents: HoverContents | HoverContents[];
+	range?: Range;
+}
+
 export interface Diagnostic {
 	range: Range;
 	severity?: number; // 1 Error, 2 Warning, 3 Information, 4 Hint
@@ -83,4 +102,6 @@ export const Methods = {
 	outgoingCalls: "callHierarchy/outgoingCalls",
 	rename: "textDocument/rename",
 	documentSymbol: "textDocument/documentSymbol",
+	hover: "textDocument/hover",
+	definition: "textDocument/definition",
 } as const;

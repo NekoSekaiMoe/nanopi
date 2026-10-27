@@ -2,13 +2,17 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import { LspManager, formatDiagnostic, severityRank, delay, findProjectRoot } from "./manager.ts";
+import { uriToFilePath } from "./client.ts";
 import { loadServers, requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import { createBudget } from "./budget.ts";
-import { DIAGNOSTICS, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
+import { DIAGNOSTICS, HOVER, DEFINITION, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
+import { clampHover, hoverText } from "./hover.ts";
+import { resolveTarget } from "./symbol-target.ts";
 import { callGraphReport, type Direction } from "./callgraph.ts";
 import { appendReport, collectEditDiagnostics } from "./edit-diagnostics.ts";
-import { loadEditDiagnosticsSettings } from "./settings.ts";
+import { collectReadDiagnostics } from "./read-diagnostics.ts";
+import { loadEditDiagnosticsSettings, loadReadDiagnosticsSettings } from "./settings.ts";
 import {
   applyLineRangeDeletes,
   applyTextEdits,
@@ -122,14 +126,23 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     await manager.shutdownAll();
   });
 
-  // after write/edit, opt-in for `edit`: report the diagnostics of the content
-  // that was just written (lsp.json `editDiagnostics.enabled`). The `write`
-  // report below covers the always-on behaviour and stays unguarded.
+  // A language server answers in the same message as the file content, both
+  // before the model starts editing (`read`) and after it writes, so the errors
+  // it inherited and the errors it introduced arrive with the code itself.
   pi.on("tool_result", async (event, ctx) => {
-    if (event.toolName !== "edit" && event.toolName !== "write") return undefined;
     if (event.isError) return undefined;
     const inputPath = (event.input as { path?: string } | undefined)?.path;
     if (!inputPath) return undefined;
+
+    // Before a file is opened: the errors it already has travel with the
+    // content, so a session does not spend a turn finding out that the file it
+    // just started editing was broken before it touched it.
+    if (event.toolName === "read") {
+      const report = await collectReadDiagnostics(manager, ctx, inputPath, loadReadDiagnosticsSettings());
+      return report.lines.length === 0 ? undefined : { content: appendReport(event.content, report) };
+    }
+
+    if (event.toolName !== "edit" && event.toolName !== "write") return undefined;
 
     const editDiagnostics = loadEditDiagnosticsSettings();
     if (event.toolName === "edit" && editDiagnostics.enabled) {
@@ -239,6 +252,59 @@ export default function lspMiniExtension(pi: ModuleApi): void {
       const count = sections.filter((line) => /^[EWHI] /.test(line)).length;
       if (sections.length === 0) return textResult(`✅ no LSP issues (>= ${params.severity ?? "warning"}) in ${scanned} file(s)`);
       return textResult(`LSP diagnostics (${count} issue(s) in ${scanned} file(s)):\n${sections.join("\n")}`);
+    },
+  });
+
+  // --- hover ---------------------------------------------------------------
+  pi.registerTool({
+    name: "lsp_hover",
+    label: "LSP Hover",
+    description: HOVER.description,
+    promptSnippet: HOVER.promptSnippet,
+    parameters: HOVER.parameters,
+    async execute(_id, params, signal, _u, ctx) {
+      const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
+      if (!target) return textResult(`no language server matches ${params.path}`);
+      const file = path.resolve(ctx.cwd, params.path);
+      const resolved = await resolveTarget(target.client, file, params, perCall(target.match, params.timeoutMs, signal));
+      if (!resolved) {
+        return textResult(`no symbol '${params.symbol ?? ""}' in ${path.relative(ctx.cwd, file)}; pass line/character instead`);
+      }
+      if (!target.client.supportsHover) return textResult(`${target.match.server.id} does not support hover`);
+      const hover = await target.client.hover(file, resolved.cursor.line, resolved.cursor.character, perCall(target.match, params.timeoutMs, signal));
+      const text = hoverText(hover).trim();
+      if (!text) return textResult(`no hover information at ${path.relative(ctx.cwd, file)}:${resolved.label}`);
+      return textResult(clampHover(text));
+    },
+  });
+
+  // --- definition ----------------------------------------------------------
+  pi.registerTool({
+    name: "lsp_definition",
+    label: "LSP Definition",
+    description: DEFINITION.description,
+    promptSnippet: DEFINITION.promptSnippet,
+    parameters: DEFINITION.parameters,
+    async execute(_id, params, signal, _u, ctx) {
+      const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
+      if (!target) return textResult(`no language server matches ${params.path}`);
+      const file = path.resolve(ctx.cwd, params.path);
+      const resolved = await resolveTarget(target.client, file, params, perCall(target.match, params.timeoutMs, signal));
+      if (!resolved) {
+        return textResult(`no symbol '${params.symbol ?? ""}' in ${path.relative(ctx.cwd, file)}; pass line/character instead`);
+      }
+      if (!target.client.supportsDefinition) return textResult(`${target.match.server.id} does not support definition`);
+      const answer = await target.client.definition(file, resolved.cursor.line, resolved.cursor.character, perCall(target.match, params.timeoutMs, signal));
+      const locations = !answer ? [] : Array.isArray(answer) ? answer : [answer];
+      if (locations.length === 0) {
+        return textResult(`no definition found for ${resolved.label} at ${path.relative(ctx.cwd, file)}:${resolved.cursor.line + 1}`);
+      }
+      const lines = locations.slice(0, 10).map((location) => {
+        const declaredIn = uriToFilePath(location.uri);
+        return `${path.relative(ctx.cwd, declaredIn) || path.basename(declaredIn)}:${location.range.start.line + 1}`;
+      });
+      const more = locations.length > lines.length ? `\n(${locations.length - lines.length} more)` : "";
+      return textResult(`definition of ${resolved.label}:\n${lines.join("\n")}${more}`);
     },
   });
 

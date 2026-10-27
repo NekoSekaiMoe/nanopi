@@ -2,6 +2,14 @@ import { Type } from "typebox";
 
 /** Shared, token-lean parameter schemas + tool texts (measured: see README). */
 
+/** Exact position, or a `symbol` name the server is asked to locate first. */
+const AT = {
+  path: Type.String(),
+  line: Type.Optional(Type.Number({ description: "1-based line" })),
+  character: Type.Optional(Type.Number({ description: "1-based column" })),
+  symbol: Type.Optional(Type.String({ description: "symbol name, used when line/character are omitted" })),
+};
+
 const POSITION = {
   path: Type.String(),
   line: Type.Number({ description: "1-based line" }),
@@ -19,6 +27,18 @@ export const DIAGNOSTICS = {
     severity: Type.Optional(Type.Union([Type.Literal("error"), Type.Literal("warning"), Type.Literal("information")], { description: "min severity (default warning)" })),
     timeoutMs: TIMEOUT,
   }),
+};
+
+export const HOVER = {
+  description: "Type signature and doc comment of the symbol at a position, without reading the file.",
+  promptSnippet: "Read a symbol's signature/doc at a position",
+  parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
+};
+
+export const DEFINITION = {
+  description: "Where the symbol at a position is defined (file:line), without grepping for it.",
+  promptSnippet: "Jump to a symbol's definition",
+  parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
 };
 
 export const REFERENCES = {

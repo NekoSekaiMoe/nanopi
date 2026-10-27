@@ -1,7 +1,7 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import path from "node:path";
 import { RpcConnection } from "./jsonrpc.ts";
-import { Methods, type CallHierarchyItem, type Diagnostic, type DocumentSymbol, type Location, type SymbolInformation, type TextEdit, type WorkspaceEdit } from "./lsp-types.ts";
+import { Methods, type CallHierarchyItem, type Diagnostic, type DocumentSymbol, type Hover, type Location, type SymbolInformation, type TextEdit, type WorkspaceEdit } from "./lsp-types.ts";
 import { requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import type { Budget } from "./budget.ts";
 
@@ -49,6 +49,8 @@ function deadlineSignal(signal: AbortSignal | undefined, timeoutMs: number | und
 interface ServerCapabilitiesLike {
 	callHierarchyProvider?: unknown;
 	renameProvider?: unknown;
+	hoverProvider?: unknown;
+	definitionProvider?: unknown;
 	textDocumentSync?: number | { save?: unknown };
 }
 
@@ -92,6 +94,14 @@ export class LspClient {
 
 	get supportsRename(): boolean {
 		return !!this.capabilities?.renameProvider;
+	}
+
+	get supportsHover(): boolean {
+		return !!this.capabilities?.hoverProvider;
+	}
+
+	get supportsDefinition(): boolean {
+		return !!this.capabilities?.definitionProvider;
 	}
 
 	async ensureStarted(signal?: AbortSignal): Promise<void> {
@@ -161,6 +171,8 @@ export class LspClient {
 					rename: {},
 					documentSymbol: {},
 					callHierarchy: {},
+					hover: { contentFormat: ["markdown", "plaintext"] },
+					definition: {},
 				},
 			},
 			initializationOptions: this.server.initializationOptions ?? {},
@@ -295,6 +307,20 @@ export class LspClient {
 			textDocument: { uri: filePathToUri(file) },
 			position: { line, character },
 			newName,
+		}, budget);
+	}
+
+	async hover(file: string, line: number, character: number, budget?: Budget): Promise<Hover | null> {
+		return this.req<Hover | null>(`${this.server.id} hover`, Methods.hover, {
+			textDocument: { uri: filePathToUri(file) },
+			position: { line, character },
+		}, budget);
+	}
+
+	async definition(file: string, line: number, character: number, budget?: Budget): Promise<Location | Location[] | null> {
+		return this.req<Location | Location[] | null>(`${this.server.id} definition`, Methods.definition, {
+			textDocument: { uri: filePathToUri(file) },
+			position: { line, character },
 		}, budget);
 	}
 
