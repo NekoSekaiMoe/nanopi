@@ -6,27 +6,54 @@
 static atomic_int allocations, reads;
 static atomic_bool released;
 
-static void* tracked_calloc(size_t count, size_t size) {
-    void* pointer = calloc(count, size);
+// Reuse the production headers and the production executor without pulling in
+// X11: only the private-thread plumbing is under test, so the unit's X11 read
+// is replaced with the stub below.
+#include "../../native/src/napi-loader.h"
+#include "../../native/src/clipboard.h"
+
+// The fixture exercises the executor only, so the modifier query is never
+// reached; clipboard.h still requires the unit to answer for it.
+static bool clipboard_modifier_pressed(const char* name) {
+    (void)name;
+    return false;
+}
+
+// Count only what the executor allocates. The overrides below are textual, so
+// the real libc calls are reached through differently named wrappers, and the
+// prototypes have to exist before the executor block calls them.
+static void* tracked_allocate(size_t count, size_t size);
+static void tracked_free(void* pointer);
+static void read_clipboard(clipboard_job* job);
+
+static void* real_calloc(size_t count, size_t size) {
+    return calloc(count, size);
+}
+
+static void real_free(void* pointer) {
+    free(pointer);
+}
+
+#define calloc tracked_allocate
+#define free tracked_free
+#include "clipboard-worker-stub.c"
+#undef calloc
+#undef free
+
+static void* tracked_allocate(size_t count, size_t size) {
+    void* pointer = real_calloc(count, size);
     if (pointer) atomic_fetch_add(&allocations, 1);
     return pointer;
 }
 
 static void tracked_free(void* pointer) {
     if (pointer) atomic_fetch_sub(&allocations, 1);
-    free(pointer);
+    real_free(pointer);
 }
 
-// Reuse the production headers and the production executor without pulling in
-// X11: only the private-thread plumbing is under test, so the unit's X11 read
-// is replaced with the stub below.
-#include "../../native/src/napi-loader.h"
-#include "../../native/src/clipboard.h"
-#include "clipboard-worker-stub.c"
-
 // Exercise the production executor with a controlled blocking callback, without X11.
-static void read_clipboard(clipboard_job* job) {
-    job->data = tracked_calloc(5, 1);
+static void fixture_read(clipboard_job* job) {
+    job->data = tracked_allocate(5, 1);
     assert(job->data);
     memcpy(job->data, "text", 4);
     job->length = 4;
@@ -36,6 +63,11 @@ static void read_clipboard(clipboard_job* job) {
         struct timespec delay = {.tv_nsec = 1000000};
         nanosleep(&delay, 0);
     }
+}
+
+// The overrides cover the executor block only, so they stop before this one.
+static void read_clipboard(clipboard_job* job) {
+    fixture_read(job);
 }
 
 static napi_value release_reader(napi_env env, napi_callback_info info) {

@@ -1,4 +1,7 @@
+// An X11 property buffer is a plain malloc block, so the hooks keep the POSIX
+// defaults, and the transfer is read-only in both directions.
 #include "napi-loader.h"
+#include "clipboard.h"
 
 #define MAX_CLIPBOARD_BYTES (50u * 1024u * 1024u)
 #define CLIPBOARD_TIMEOUT_MS 2000
@@ -377,6 +380,10 @@ static void clipboard_execute(clipboard_job* job) {
                 job->length = worker_result.length;
                 job->format = worker_result.format;
                 job->error = worker_result.error;
+                // Clear worker_waiting before anyone else signals: left set, the
+                // next detached read treats the published buffer as a timed-out
+                // leftover and frees it, and the helper stays busy.
+                worker_waiting = false;
                 worker_busy = false;
             }
         } else {

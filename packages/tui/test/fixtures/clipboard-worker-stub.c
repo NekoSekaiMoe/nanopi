@@ -2,16 +2,16 @@
 // platform-linux.c that only depends on clipboard.h, so the worker test compiles
 // that block instead of pulling in X11. Keep it a verbatim copy of the block in
 // platform-linux.c: test/native-clipboard-linux.test.ts fails when they drift.
+#include <pthread.h>
+#include <time.h>
 
 // X requests block on the server, so each read runs on a private thread and the
 // caller waits on a condition variable for at most WORKER_WAIT_SECONDS. A read
 // that outlives that wait keeps the helper busy until it returns; callers in the
 // meantime report the clipboard as unavailable instead of queueing behind it.
 
-// The stub unit has no X11 path, so a read can only be issued against it by mistake.
-static void read_clipboard(clipboard_job* job) {
-    (void)job;
-}
+// read_clipboard stays undefined here: the fixture supplies the blocking
+// callback. The executor block only needs its declaration.
 
 #define WORKER_WAIT_SECONDS 3 // Allow the two-second transfer deadline to report its own error first.
 
@@ -71,6 +71,10 @@ static void clipboard_execute(clipboard_job* job) {
                 job->length = worker_result.length;
                 job->format = worker_result.format;
                 job->error = worker_result.error;
+                // Clear worker_waiting before anyone else signals: left set, the
+                // next detached read treats the published buffer as a timed-out
+                // leftover and frees it, and the helper stays busy.
+                worker_waiting = false;
                 worker_busy = false;
             }
         } else {

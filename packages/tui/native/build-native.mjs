@@ -95,6 +95,11 @@ function buildLinux(arch) {
 
 	const { directory, output } = buildDirectory("linux", arch);
 	run(compiler, [
+		// -x c, because the unit is reached through a .h preload: gcc would
+		// otherwise infer c-header, compile it to a precompiled header, and link
+		// nothing, producing a .node with no exports at all.
+		"-x",
+		"c",
 		"-std=c11",
 		"-D_POSIX_C_SOURCE=200809L",
 		...platformFlags.linux,

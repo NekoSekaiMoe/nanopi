@@ -5,6 +5,8 @@
 #include <assert.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Track only allocations made by the clipboard implementation, not libxcb.
 // This makes the partial-transfer leak regression deterministic, unlike RSS.
