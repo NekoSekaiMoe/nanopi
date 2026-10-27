@@ -136,6 +136,18 @@ describe("Coding Agent Tools", () => {
 			expect(output).toMatch(/\[Showing lines 1-\d+ of 500 \(.* limit\)\. Use offset=\d+ to continue\.\]/);
 		});
 
+		it("should point at grep instead of a shell one-liner when the first line exceeds the limit", async () => {
+			const testFile = join(testDir, "single-long-line.txt");
+			writeFileSync(testFile, "x".repeat(60 * 1024));
+
+			const result = await readTool.execute("test-call-4b", { path: testFile });
+			const output = getTextOutput(result);
+
+			expect(output).toContain("cannot be shown in full");
+			expect(output).toContain("grep tool");
+			expect(output).not.toContain("sed -n");
+		});
+
 		it("should handle offset parameter", async () => {
 			const testFile = join(testDir, "offset-test.txt");
 			const lines = Array.from({ length: 100 }, (_, i) => `Line ${i + 1}`);

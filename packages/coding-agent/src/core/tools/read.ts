@@ -209,9 +209,13 @@ export function createReadToolDefinition(
 								const truncation = truncateHead(selectedContent);
 								let outputText: string;
 								if (truncation.firstLineExceedsLimit) {
-									// First line alone exceeds the byte limit. Point the model at a bash fallback.
+									// First line alone exceeds the byte limit, and truncateHead never
+									// returns part of a line, so there is no cheap way to show it. Say
+									// which line it is and let the model decide (grep for a pattern
+									// inside it, or edit around it) instead of handing out a shell
+									// one-liner for what the read tool should have done.
 									const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
-									outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds ${formatSize(DEFAULT_MAX_BYTES)} limit. Use bash: sed -n '${startLineDisplay}p' ${path} | head -c ${DEFAULT_MAX_BYTES}]`;
+									outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds the ${formatSize(DEFAULT_MAX_BYTES)} read limit, so it cannot be shown in full. Search for a pattern inside it with the grep tool, or edit around it with offset=${startLineDisplay}.]`;
 									details = { truncation };
 								} else if (truncation.truncated) {
 									// Truncation occurred. Build an actionable continuation notice.

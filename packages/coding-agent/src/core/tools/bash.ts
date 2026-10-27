@@ -44,7 +44,7 @@ const bashSchema = Type.Object({
 });
 
 export const bashToolSystemPromptContribution = {
-	snippet: "Execute bash commands (ls, grep, find, etc.)",
+	snippet: "Execute shell commands (builds, tests, git, package managers)",
 	guidelines: [
 		"You can inspect NANOPI_* environment variables for current model and session details.",
 		"Chain shell commands instead of asking the user to run them",

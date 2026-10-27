@@ -100,19 +100,35 @@ function buildRules(
 		rules.push(normalized);
 	};
 
-	const hasBash = selectedTools.includes("bash");
-	const hasPowerShell = selectedTools.includes("powershell");
+	const hasShell = selectedTools.includes("bash") || selectedTools.includes("powershell");
+	const hasRead = selectedTools.includes("read");
 	const hasGrep = selectedTools.includes("grep");
 	const hasFind = selectedTools.includes("find");
 	const hasLs = selectedTools.includes("ls");
 
-	if ((hasBash || hasPowerShell) && !hasGrep && !hasFind && !hasLs) {
-		if (hasBash && hasPowerShell) {
+	if (hasShell && !hasRead && !hasGrep && !hasFind && !hasLs) {
+		if (selectedTools.includes("bash") && selectedTools.includes("powershell")) {
 			addRule("Use bash or PowerShell for file operations like listing, searching, and finding files");
-		} else if (hasPowerShell) {
+		} else if (selectedTools.includes("powershell")) {
 			addRule("Use PowerShell for file operations like listing, searching, and finding files");
 		} else {
 			addRule("Use bash for file operations like ls, rg, find");
+		}
+	} else if (hasRead || hasGrep || hasFind || hasLs) {
+		// The dedicated tools exist, so name them: without this the model keeps
+		// reaching for the shell command it knows best (`cat -n`, `sed -n`, `grep -r`)
+		// and loses gitignore handling, truncation notices, and stable line numbers.
+		const preferred: string[] = [];
+		if (hasRead) preferred.push("read for file contents");
+		if (hasGrep) preferred.push("grep for searching file contents");
+		if (hasFind) preferred.push("find for locating files by name");
+		if (hasLs) preferred.push("ls for listing directories");
+		// `rg`, `fd`, `cat`, `sed`, and `grep` keep their non-read uses (package
+		// scripts, pipes, process output), so this is a preference, not a ban.
+		if (preferred.length > 0) {
+			addRule(
+				`Prefer the ${preferred.join(", ")} tools over shell equivalents (cat, head, tail, sed -n, grep, rg, find, fd); use shell commands for running programs, not for inspecting files`,
+			);
 		}
 	}
 
