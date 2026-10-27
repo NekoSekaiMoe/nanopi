@@ -86,7 +86,7 @@ function summarizeBoundary(branchEntries: SessionEntry[]): number {
 	}
 	if (previous?.type !== "compaction" || !previous.firstKeptEntryId) return 0;
 	const index = branchEntries.findIndex((entry) => entry.id === previous.firstKeptEntryId);
-	return index >= 0 ? index : 0;
+	return Math.max(index, 0);
 }
 
 export interface RetentionPlan {

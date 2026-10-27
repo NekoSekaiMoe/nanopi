@@ -228,6 +228,9 @@ export function resolveJsonSchemaStrictSampling(
 	isUnsupportedKeyword?: UnsupportedStrictSchemaKeywordCheck,
 ): boolean | undefined {
 	const config = tool.constrainedSampling;
+	// `constrainedSampling` is `false | ConstrainedSamplingConfig`, so this check also rules out `false`;
+	// an optional chain would leave `false` in the narrowed type.
+	// biome-ignore lint/complexity/useOptionalChain: narrowing a `false | T` union, not a nullish check
 	if (!config || config.type !== "json_schema") return undefined;
 
 	if (supportsStrictMode) {
@@ -253,6 +256,8 @@ export function resolveGrammarConstrainedSampling(
 	supportsOpenAIGrammarTools: boolean,
 ): GrammarConstrainedSampling | undefined {
 	const config = tool.constrainedSampling;
+	// See `resolveJsonSchemaStrictSampling`: this rejects `false` as well as `undefined`.
+	// biome-ignore lint/complexity/useOptionalChain: narrowing a `false | T` union, not a nullish check
 	if (!config || config.type !== "grammar") {
 		return undefined;
 	}

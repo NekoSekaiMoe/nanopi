@@ -53,13 +53,41 @@ minor 里那些本该当天进 main 的补丁也跟着停。而 `pnpm run check`
 
 ## Consequences
 
-- `pnpm run check` 的全量链路里，`biome check` 仍然红：2.6.3 新增的
+- `pnpm run check` 的全量链路里，`biome check` 当时仍然红：2.6.3 新增的
   `lint/complexity/useOptionalChain` 报了约 30 处既有代码，`noProto` 报了 3 处，
   加上 `biome.json` 的 schema 版本与 `recommended` → `preset` 迁移。
   这类「新规则命中老代码」的告警不能混进依赖 PR，否则改动无法和规则调整分开看。
-  留给单独一条清理。
+  已在后续 PR 单独清理（见下方 [`biome 2.6.3 规则清理`](#biome-263-规则清理)）。
 - 剩余 major 清单：`next`（webui）、`diff`、`highlight.js`、`hosted-git-info`、
   `vitest`、`@xterm/headless`、`protobufjs`（`pnpm-workspace.yaml` 里还钉着 override）、
   node v24、github artifact actions、`pnpm/action-setup` v6。
 - 验证：`pnpm run typecheck`、`node ./test.mjs`（ai 1418 / coding-agent 2419 通过）、
   `packages/webui` 的 `typecheck` 与 `next build` 全部通过。
+
+## biome 2.6.3 规则清理
+
+依赖 PR 留下的那条尾巴，单独一个提交，不碰任何依赖版本。
+
+实测基线（`biome check --max-diagnostics=200`）：34 条 lint、7 个文件的格式漂移。
+修完 `biome check` 全绿，`pnpm run check` 整条链路通过。
+
+逐条处理的判断：
+
+- `useOptionalChain` 28 处里 26 处是标准的 `!x || x.y !== z`，`--write --unsafe`
+  机械替换成 `x?.y !== z`，语义等价（`undefined` 走同一分支）。
+- `constrained-sampling.ts` 的两处**必须手工还原**。`Tool.constrainedSampling` 的类型是
+  `false | ConstrainedSamplingConfig`，`config?.type` 只会把 `undefined` 收窄掉，
+  `false` 留在联合类型里，后面 `config.strict` / `config.variants` 就是 TS2339。
+  这不是风格问题：`!config` 在这里同时否定 `false` 和 `undefined`。保留原写法并
+  `biome-ignore` 加注释，说明这是 `false | T` 的收窄而不是 nullish 检查。
+- `noProto` 3 处全在测试里，且断言的就是**调用方传入的 `__proto__` 必须作为自身键留下**。
+  `Object.getPrototypeOf()` 会把断言变成相反的意思，所以关规则加注释，不改写法。
+- `useMathMinMax` 2 处是 `index >= 0 ? index : 0`，等价于 `Math.max(index, 0)`。
+- `noUnsafeOptionalChaining` 1 处是 `(x?.content as TextPart[])[0]`，`as` 断言盖住了
+  `undefined`，改成 `as TextPart[] | undefined` 后再 `?.[0]`。
+
+`biome.json` 用 `biome migrate` 迁移：schema 2.3.5 → 2.6.3，`rules.recommended: true` →
+`rules.preset: "recommended"`。两项都是等价的写法替换，不改变启用的规则集。
+
+验证：`pnpm run check` 全绿；`node ./test.mjs` 全部通过（ai 1418 / coding-agent 2419 /
+agent 96 / extra 95）。

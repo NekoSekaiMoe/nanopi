@@ -176,7 +176,10 @@ describe("TypeSafe System One", () => {
 		expect(result.stopReason).toBe("stop");
 		expect(Object.keys(result.answers)).toEqual(["__proto__"]);
 		expect(Object.hasOwn(result.answers, "__proto__")).toBe(true);
+		// `__proto__` here is an own answer key, not the prototype accessor.
+		// biome-ignore lint/suspicious/noProto: reading the own `__proto__` key on purpose
 		expect(result.answers.__proto__).toEqual({ type: "bool", probability: 0.75 });
+		// biome-ignore lint/suspicious/noProto: reading the own `__proto__` key on purpose
 		expect(serializedAnswers.__proto__).toEqual({ type: "bool", probability: 0.75 });
 	});
 

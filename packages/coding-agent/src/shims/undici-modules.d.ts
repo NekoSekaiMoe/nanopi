@@ -10,18 +10,21 @@
 
 declare module "undici/lib/dispatcher/client.js" {
 	import type ClientClass from "undici/types/client";
+
 	const Client: typeof ClientClass;
 	export default Client;
 }
 
 declare module "undici/lib/dispatcher/env-http-proxy-agent.js" {
 	import type EnvHttpProxyAgentClass from "undici/types/env-http-proxy-agent";
+
 	const EnvHttpProxyAgent: typeof EnvHttpProxyAgentClass;
 	export default EnvHttpProxyAgent;
 }
 
 declare module "undici/lib/dispatcher/pool.js" {
 	import type PoolClass from "undici/types/pool";
+
 	const Pool: typeof PoolClass;
 	export default Pool;
 }

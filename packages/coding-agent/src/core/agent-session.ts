@@ -1532,7 +1532,7 @@ export class AgentSession {
 	private _appendRunRecord(data: RunRecordData): void {
 		const entryId = this.sessionManager.appendCustomEntry(RUN_RECORD_CUSTOM_TYPE, data);
 		const entry = this.sessionManager.getEntry(entryId);
-		if (!entry || entry.type !== "custom") return;
+		if (entry?.type !== "custom") return;
 		this._runRecord = { id: entry.id, timestamp: entry.timestamp };
 		if (data.lastEntryId) this._lastRunLastEntryId = data.lastEntryId;
 		this._emit({ type: "entry_appended", entry });
@@ -2469,7 +2469,7 @@ export class AgentSession {
 		const selectedModel = this.model;
 		if (!selectedModel || options.signal?.aborted) return undefined;
 		const lastMessage = this.messages.at(-1);
-		if (!lastMessage || lastMessage.role !== "assistant") return undefined;
+		if (lastMessage?.role !== "assistant") return undefined;
 
 		const transcript = serializeConversation(convertToLlm(this.messages).slice(-NEXT_PROMPT_SUGGESTION_MAX_MESSAGES));
 		if (!transcript.trim()) return undefined;

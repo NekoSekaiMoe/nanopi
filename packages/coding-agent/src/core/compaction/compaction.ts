@@ -1336,7 +1336,7 @@ export function evaluateInContextCompaction(input: InContextCompactionInput): In
 
 	const estimate = estimateProjectedContextTokens(projection, branchEntries);
 	const usageMessage = estimate.lastUsageIndex === null ? undefined : projection.messages[estimate.lastUsageIndex];
-	if (!usageMessage || usageMessage.role !== "assistant") {
+	if (usageMessage?.role !== "assistant") {
 		return { use: false, reason: "no provider usage for the current context" };
 	}
 	if (usageMessage.provider !== model.provider || usageMessage.model !== model.id) {
