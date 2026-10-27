@@ -25,8 +25,12 @@ Install Termux from [GitHub or F-Droid](https://github.com/termux/termux-app#ins
 3. Install nanopi:
 
    ```bash
-   npm install -g --ignore-scripts @nanopi/pi-coding-agent
+   curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
    ```
+
+   The npm package lives in GitHub Packages, which needs a token with
+   `read:packages` in `~/.npmrc` (see [Quickstart](quickstart.md#1-install-nanopi));
+   the one-liner above needs no account.
 
 4. Verify the installation:
 

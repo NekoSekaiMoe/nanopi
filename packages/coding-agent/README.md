@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://www.npmjs.com/package/@nanopi/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@nanopi/pi-coding-agent?style=flat-square&logo=npm&logoColor=white" /></a>
+  <a href="https://github.com/NekoSekaiMoe/nanopi/releases/latest"><img alt="release" src="https://img.shields.io/github/v/release/NekoSekaiMoe/nanopi?style=flat-square" /></a>
 </p>
 
 > New issues and PRs from new contributors are closed automatically. Maintainers review closed submissions daily. See [CONTRIBUTING.md](https://github.com/NekoSekaiMoe/nanopi/blob/main/CONTRIBUTING.md).
@@ -16,13 +16,31 @@ Use nanopi [interactively](docs/usage.md), automate it in [print or JSON mode](d
 
 ## Getting started
 
-Install the command-line interface with npm:
+Install the command-line interface with npm. The package lives in the GitHub
+Packages registry, which GitHub only serves to authenticated clients, so name the
+registry and a token that carries `read:packages` first:
 
 ```bash
-npm install -g --ignore-scripts @nanopi/pi-coding-agent
+# ~/.npmrc
+@nekosekaimoe:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${GITHUB_TOKEN}
 ```
 
-nanopi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed. nanopi does not require dependency lifecycle scripts for a normal npm installation.
+```bash
+npm install -g --ignore-scripts @nekosekaimoe/nanopi
+```
+
+`GITHUB_TOKEN` is any token in the environment with `read:packages`; the scope
+line only redirects `@nekosekaimoe` packages, every other npm package keeps
+installing from npmjs.
+
+nanopi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed, and the `install.js` one-liner needs no registry token at all:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
+```
+
+nanopi does not require dependency lifecycle scripts for a normal npm installation.
 
 On macOS and Linux, Nix users can install the latest release with `nix profile add github:NekoSekaiMoe/nanopi/stable`. See the [quickstart](docs/quickstart.md#1-install-nanopi) for updating and pinning releases.
 
