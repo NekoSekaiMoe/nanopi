@@ -1,6 +1,44 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    ":semanticCommits",
+    ":semanticCommitScopeDisabled"
+  ],
+  "dependencyDashboard": false,
+  "branchConcurrentLimit": 1,
+  "prConcurrentLimit": 1,
+  "prHourlyLimit": 0,
+  "separateMajorMinor": false,
+  "separateMultipleMajor": false,
+  "separateMinorPatch": false,
+  "rangeStrategy": "pin",
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "description": "One group, one branch, one PR per run: no approval, automerge into main.",
+      "matchPackageNames": ["*"],
+      "groupName": "all dependencies",
+      "groupSlug": "all-dependencies",
+      "automerge": true,
+      "automergeType": "branch",
+      "platformAutomerge": true
+    }
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "GitHub Actions `uses:` pins (sha # vX.Y.Z) live in the workflows.",
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "uses:\\s+(?<depName>[^\\s@]+)@(?<currentDigest>[0-9a-f]{40})\\s+#\\s+v?(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+      ],
+      "datasourceTemplate": "github-releases",
+      "versioningTemplate": "semver"
+    }
   ]
 }
