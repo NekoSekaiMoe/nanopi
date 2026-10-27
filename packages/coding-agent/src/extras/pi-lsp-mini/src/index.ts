@@ -402,12 +402,17 @@ export default function lspMiniExtension(pi: ModuleApi): void {
   });
 
   // --- diagnostics ---------------------------------------------------------
+  // The LSP_GUIDANCE paragraph is registered once, here, and not repeated in the
+  // other four declarations: `buildRules` dedups it in <rules>, but every other
+  // reader of these declarations (getAllTools, the docs) paid for five copies of
+  // one sentence. DIAGNOSTICS already carries it as its first guideline.
+  const sharedGuidelines = DIAGNOSTICS.promptGuidelines;
   pi.registerTool({
     name: "lsp_diagnostics",
     label: "LSP Diagnostics",
     description: DIAGNOSTICS.description,
     promptSnippet: DIAGNOSTICS.promptSnippet,
-    promptGuidelines: DIAGNOSTICS.promptGuidelines,
+    promptGuidelines: sharedGuidelines,
     parameters: DIAGNOSTICS.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = path.resolve(ctx.cwd, params.path ?? ".");

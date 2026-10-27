@@ -12,8 +12,12 @@ import { createHarness, getToolResult } from "../harness.ts";
  *
  * - a brief missing STOP RULES is passed through verbatim instead of being
  *   silently patched or refused, and
- * - the description the model reads names all four sections, so dropping one
+ * - the declaration the model reads names all four sections, so dropping one
  *   from the prompt fails a test rather than quietly degrading child output.
+ *
+ * The four section names live in the `task` parameter, not in the description:
+ * the task field is where the model writes the brief, and the description that
+ * repeated them cost ~600 characters per request on top of the schema.
  */
 
 describe("subagent brief contract", () => {
@@ -58,9 +62,11 @@ describe("subagent description", () => {
 	test("names every section the brief contract requires", async () => {
 		const { default: subagent } = await import("../../../src/extras/pi-subagent-mini/src/index.ts");
 		const descriptions: string[] = [];
+		const toolTexts: string[] = [];
 		const pi = {
-			registerTool(tool: { description: string }) {
+			registerTool(tool: { description: string; parameters: unknown }) {
 				descriptions.push(tool.description);
+				toolTexts.push(JSON.stringify(tool.parameters));
 			},
 			on() {
 				return () => undefined;
@@ -71,8 +77,9 @@ describe("subagent description", () => {
 		} as unknown as ModuleApi;
 		subagent(pi);
 		const description = descriptions[0] ?? "";
+		const declaration = `${description}\n${toolTexts[0] ?? ""}`;
 		for (const section of ["GOAL", "CONTEXT", "EXPECTED OUTPUT", "STOP RULES"]) {
-			expect(description).toContain(section);
+			expect(declaration).toContain(section);
 		}
 		// The child cannot see the parent's conversation; that is what makes a
 		// self-contained brief mandatory rather than a style preference.

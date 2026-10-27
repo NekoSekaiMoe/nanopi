@@ -64,28 +64,27 @@ const WRITE_TOOLS = /^(write|edit)$/;
 /** `write,edit` etc. — anything that can mutate the working tree. */
 const canWrite = (tools: string): boolean => tools.split(",").some((name) => WRITE_TOOLS.test(name.trim()));
 
+/*
+ * The declaration is what a child reads, and a child is the only reader of the
+ * contract: the parent learns the brief format from `<rules>`. That is why the
+ * description carries only what the child needs to produce a readable report
+ * and the brief schema lives in the `task` parameter, while the parent-facing
+ * spawn/wait/continue/dependsOn semantics live in `promptGuidelines`. Both used
+ * to be stated in both places, which cost ~1.3k characters per declaration.
+ */
 const DESCRIPTION_PREAMBLE =
 	"You are a subagent, not the main agent: execute the task yourself, do not delegate or spawn subagents. " +
 	"Your final message is relayed verbatim and is the only thing the main agent reads; nothing else you write reaches it.";
-
-const DESCRIPTION_CONTRACT =
-	"The `task` field carries the whole brief, in these four sections:\n" +
-	"GOAL: one sentence, the outcome.\n" +
-	"CONTEXT: file paths, facts already established, constraints.\n" +
-	"EXPECTED OUTPUT: report shape, or the files the subagent must change.\n" +
-	"STOP RULES: when to stop and report or ask instead of guessing.";
 
 const DESCRIPTION_RESULT =
 	"Report back with `Scope:` (what you were asked), then Result, Key files, Files changed, Issues. " +
 	"No progress narration, no tool-call commentary, under 500 words unless the brief asks for more.";
 
 const DESCRIPTION_TAIL =
-	"spawn returns a jobId immediately; keep working meanwhile and the report arrives as a subagent-complete notification. " +
 	"wait blocks (default 120s), status shows state, kill stops it, continue runs another turn on the same child session. " +
-	"`dependsOn` holds a job until the jobs it names settle and pastes their reports into its brief, " +
-	"`isolated: true` gives it its own git worktree, " +
-	"`onFailure: \"retry\"` retries up to 3 attempts. " +
-	"MCP tools (mcp__server__tool) exist only inside subagents and are not in the default child tool list: name them in `tools` when a child needs one. For a single MCP call use the `mcp` tool instead, which owns that brief.";
+	"MCP tools (mcp__server__tool) exist only inside subagents and are not in the default child tool list: name them in `tools` when a child needs one.";
+
+const SUBAGENT_DESCRIPTION = `${DESCRIPTION_PREAMBLE}\n\n${DESCRIPTION_RESULT}\n\n${DESCRIPTION_TAIL}`;
 
 /**
  * Built-in modules a child must not load: `pi-ui` renders a TUI footer and
@@ -1053,12 +1052,12 @@ export default function subagentMini(pi: ModuleApi): void {
 	pi.registerTool({
 		name: "subagent",
 		label: "Subagent",
-		description: `${DESCRIPTION_PREAMBLE}\n\n${DESCRIPTION_CONTRACT}\n\n${DESCRIPTION_RESULT}\n\n${DESCRIPTION_TAIL}`,
+		description: SUBAGENT_DESCRIPTION,
 		promptSnippet:
 			"Delegate self-contained tasks to an isolated subagent; result arrives via completion notification",
 		promptGuidelines: [
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) with read-only tools; keep only the final report here. Add write/edit to tools only when the subagent should modify files.",
-			"Write every brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess.",
+			"Write every brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess, because the child sees none of this conversation.",
 			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree.",
 			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle, with their reports already in its brief, so do not copy them in. `onFailure: \"retry\"` retries a failed attempt (3 attempts total).",
 			"`action: \"continue\"` runs another turn on a child's own session; the transcript and the previous report are kept, so the brief only says what changed.",
@@ -1083,7 +1082,7 @@ export default function subagentMini(pi: ModuleApi): void {
 			if (notes.length === 0) return undefined;
 			return {
 				descriptions: {
-					subagent: `${DESCRIPTION_PREAMBLE}\n\n${DESCRIPTION_CONTRACT}\n\n${notes.join(". ")}.\n\n${DESCRIPTION_RESULT}\n\n${DESCRIPTION_TAIL}`,
+					subagent: `${DESCRIPTION_PREAMBLE}\n\n${notes.join(". ")}.\n\n${DESCRIPTION_RESULT}\n\n${DESCRIPTION_TAIL}`,
 				},
 			};
 		},
@@ -1099,7 +1098,10 @@ export default function subagentMini(pi: ModuleApi): void {
 				{ description: "default flow: spawn, then wait for the notification" },
 			),
 			task: Type.Optional(
-				Type.String({ description: "spawn/continue: the brief, as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES" }),
+				Type.String({
+					description:
+						"spawn: the whole brief, since the child sees nothing of this conversation. Four sections: GOAL: one sentence, the outcome. CONTEXT: file paths, facts already established, constraints. EXPECTED OUTPUT: report shape, or the files it must change. STOP RULES: when to stop and report or ask instead of guessing. continue: only what changed; the child keeps its transcript.",
+				}),
 			),
 			description: Type.Optional(
 				Type.String({

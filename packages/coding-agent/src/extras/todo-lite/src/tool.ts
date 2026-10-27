@@ -258,8 +258,8 @@ export function registerTodoTool(
 		label: "Todo",
 		description:
 			"Manage the session todo list. actions: add(texts[], isVerification?) | update(id/status/text) or update(updates[]) batch | delete(ids[]) | list | clear. statuses: pending/in_progress/completed/cancelled.",
-		// One line: the snippet and the rule say the same thing, and both land in the
-		// system prompt of every request.
+		// No snippet beyond the rule below: both land in the system prompt of every
+		// request, and the rule is the line that says when to reach for the tool.
 		promptGuidelines: [
 			"Break multi-step work (3+ steps) into todos; mark checks like running tests isVerification; batch-update via updates[].",
 		],

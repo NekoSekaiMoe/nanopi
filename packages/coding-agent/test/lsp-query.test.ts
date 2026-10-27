@@ -93,13 +93,17 @@ it("tells the model to prefer lsp_ over opening the file, not just over grep", (
 	expect(LSP_GUIDANCE).toMatch(/definition/i);
 });
 
-// Every lsp_ tool pays for this guidance on every request, so two tools must not
-// hand the model two spellings of one rule.
-it("registers the shared guidance once per tool, without duplicates", () => {
-	for (const tool of [DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT]) {
+// The shared paragraph is one sentence for the whole group: <rules> dedups it,
+// but the declarations are read one by one too, so only the first tool carries
+// it and every tool keeps at most one copy of anything.
+it("carries the shared guidance once for the group, without duplicates", () => {
+	const tools: Array<{ promptGuidelines?: readonly string[] }> = [DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT];
+	const carriers = tools.filter((tool) => [...(tool.promptGuidelines ?? [])].includes(LSP_GUIDANCE));
+	expect(carriers).toEqual([DIAGNOSTICS]);
+	for (const tool of tools) {
 		const guidelines = tool.promptGuidelines ?? [];
-		expect(guidelines.length).toBeGreaterThan(0);
 		expect(new Set(guidelines).size).toBe(guidelines.length);
-		expect(guidelines).toContain(LSP_GUIDANCE);
 	}
+	// A tool with no rule of its own is one whose declaration already says it.
+	expect(HOVER.promptGuidelines?.length ?? 0).toBeGreaterThan(0);
 });
