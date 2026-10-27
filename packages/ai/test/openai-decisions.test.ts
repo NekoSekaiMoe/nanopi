@@ -229,6 +229,8 @@ describe("OpenAI Decisions", () => {
 
 		expect(result.stopReason).toBe("stop");
 		expect(Object.hasOwn(result.answers, "__proto__")).toBe(true);
+		// The classifier must keep a caller-supplied `__proto__` answer as an own key; a prototype read is what this asserts.
+		// biome-ignore lint/suspicious/noProto: reading the own `__proto__` key on purpose
 		expect(result.answers.__proto__).toEqual({ type: "bool", probability: 0.75 });
 	});
 

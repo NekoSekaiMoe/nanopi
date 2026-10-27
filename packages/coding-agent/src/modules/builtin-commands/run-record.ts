@@ -18,7 +18,7 @@ function renderRunRecord(
 	theme: Theme,
 ): Text | undefined {
 	const data = getRunRecordData(entry);
-	if (!data || data.outcome !== "failed") return undefined;
+	if (data?.outcome !== "failed") return undefined;
 	const reason = data.stopReason === "aborted" || !data.errorMessage ? "Run was aborted" : "Run failed";
 	const attempts = data.attempts > 0 ? ` after ${data.attempts} attempt${data.attempts === 1 ? "" : "s"}` : "";
 	return new Text(theme.fg("dim", `${reason}${attempts}. /retry replays it.`), 0, 0);

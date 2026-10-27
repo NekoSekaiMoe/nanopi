@@ -75,7 +75,7 @@ export function findRecoverableRun(branch: SessionEntry[]): RecoverableRun | und
 	const record = findLastRunRecord(branch);
 	if (!record) return undefined;
 	const data = getRunRecordData(record);
-	if (!data || data.outcome !== "failed" || !data.lastEntryId) return undefined;
+	if (data?.outcome !== "failed" || !data.lastEntryId) return undefined;
 
 	const index = branch.findIndex((entry) => entry.id === record.id);
 	const failed = branch.find((entry) => entry.id === data.lastEntryId);
