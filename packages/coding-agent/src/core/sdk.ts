@@ -138,19 +138,19 @@ export type { PromptTemplate } from "./prompt-templates.ts";
 export type { Skill } from "./skills.ts";
 export type { Tool } from "./tools/index.ts";
 
+// Tool factories (for custom cwd)
 export {
-	withFileMutationQueue,
-	// Tool factories (for custom cwd)
-	createCodingTools,
-	createReadOnlyTools,
-	createReadTool,
 	createBashTool,
+	createCodingTools,
 	createEditTool,
-	createWriteTool,
-	createGrepTool,
 	createFindTool,
+	createGrepTool,
 	createLsTool,
 	createPowerShellTool,
+	createReadOnlyTools,
+	createReadTool,
+	createWriteTool,
+	withFileMutationQueue,
 };
 
 // Helper Functions
