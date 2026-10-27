@@ -686,8 +686,8 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     label: "Background Bash",
     description:
       "Run shell commands with adaptive foreground/background execution and job control. " +
-      "action=run (recommended) blocks like the bash tool for up to timeout seconds and returns the output inline if the command finishes in time; if it is still running, it automatically moves to the background and returns a jobId, with a bash-bg-complete notification (a new turn) on completion. " +
-      "action=start backgrounds immediately (ack now). action=status returns a live snapshot + output tail; action=wait blocks an existing job until done or timeout; action=kill terminates the job's process tree; action=list shows all jobs. " +
+      "action=run (recommended) blocks like bash for up to timeout seconds and returns the output inline if the command finishes; otherwise it backgrounds the job, returns a jobId, and notifies you (bash-bg-complete) on completion. " +
+      "action=start backgrounds immediately; status shows a live snapshot + output tail; wait blocks on an existing job; kill stops the job's process tree; list shows all jobs. " +
       "Example: { action: \"run\", command: \"npm run build\", timeout: 60 }.",
     promptSnippet: "Run shell commands adaptively: action=run blocks like bash then auto-backgrounds on timeout; start/status/wait/kill/list for job control, with a completion notification that triggers a new turn.",
     promptGuidelines: [
