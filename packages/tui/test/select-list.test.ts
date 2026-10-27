@@ -143,6 +143,30 @@ describe("SelectList", () => {
 		assert.equal(list.getSelectedItem()?.value, "item-0");
 	});
 
+	it("wraps the mouse wheel at the ends like the arrows do", () => {
+		const items = Array.from({ length: 3 }, (_, index) => ({ value: `item-${index}`, label: `item-${index}` }));
+		const list = new SelectList(items, 5, testTheme);
+		list.setSelectedIndex(2);
+
+		// One notch past the last row used to be a no-op while ↓ jumped back to the top.
+		const result = list.handleMouse({
+			type: "wheel",
+			button: "none",
+			x: 0,
+			y: 0,
+			screenX: 0,
+			screenY: 0,
+			width: 20,
+			height: 5,
+			shift: false,
+			alt: false,
+			ctrl: false,
+			wheelDelta: 1,
+		});
+		assert.equal(result?.render, true);
+		assert.equal(list.getSelectedItem()?.value, "item-0");
+	});
+
 	it("notifies selection changes from paging", () => {
 		const items = Array.from({ length: 20 }, (_, index) => ({ value: `item-${index}`, label: `item-${index}` }));
 		const list = new SelectList(items, 5, testTheme);

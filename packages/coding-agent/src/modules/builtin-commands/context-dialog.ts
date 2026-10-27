@@ -12,14 +12,23 @@
  *      ■ Memory             ...        (selected → selectedBg)
  *
  *   ───────────────────────────────────────────
- *    Enter to preview · ↑/↓ to navigate · Esc to close
+ *    Enter to preview · ↑/↓ PgUp/PgDn to navigate · Esc to close
  *
  * Dialog conventions: bottom-center anchor, width 100%, fixed chrome top/bottom,
  * scrollable middle region with ↑/↓ overflow markers, one-line hint footer,
  * pure keyboard interaction.
  */
 
-import { clampScrollOffset, Key, Markdown, matchesKey, pageStep, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import {
+	clampScrollOffset,
+	Key,
+	Markdown,
+	matchesKey,
+	pageScrollOffset,
+	pageStep,
+	truncateToWidth,
+	visibleWidth,
+} from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
 import { getMarkdownTheme } from "../../modes/interactive/theme/theme.ts";
 
@@ -50,6 +59,12 @@ export function padLine(text: string, width: number): string {
 	const truncated = truncateToWidth(text, width, "…");
 	return truncated + " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 }
+
+/** Rows the list dialog draws outside the part list: 5 above it, 4 below. */
+const CONTEXT_LIST_CHROME_ROWS = 9;
+
+/** Rows the preview dialog draws outside the markdown view: top rule + title, bottom rule + hint. */
+const PREVIEW_CHROME_ROWS = 4;
 
 const OVERFLOW_UP = "↑";
 const OVERFLOW_DOWN = "↓";
@@ -186,10 +201,10 @@ export async function showContextDialog(ctx: Pick<ModuleCommandContext, "ui">, d
 							return part.label === selectedLabel ? theme.bg("selectedBg", row) : row;
 						});
 
-						// On tiny terminals drop blank rows first, then clip part rows.
+						// Chrome around the list: rule, title, blank, bar, blank above it and
+						// blank, rule, hint below — nine rows in total.
 						const rows = Math.max(1, tui.terminal.rows);
-						const chrome = 6; // rule + title + bar + rule + hint + one blank
-						const maxParts = Math.max(1, rows - chrome - 1);
+						const maxParts = Math.max(1, Math.min(rows - CONTEXT_LIST_CHROME_ROWS, partRows.length));
 						pageRows = maxParts;
 						const shownParts =
 							partRows.length > maxParts
@@ -266,20 +281,24 @@ export async function showTextPreview(
 					}
 					if (matchesKey(input, Key.up)) scrollTo(scrollOffset - 1);
 					else if (matchesKey(input, Key.down)) scrollTo(scrollOffset + 1);
-					else if (keybindings.matches(input, "tui.editor.pageUp")) scrollTo(scrollOffset - pageSize);
-					else if (keybindings.matches(input, "tui.editor.pageDown")) scrollTo(scrollOffset + pageSize);
-					else if (matchesKey(input, Key.home)) scrollTo(0);
+					else if (keybindings.matches(input, "tui.editor.pageUp")) {
+						scrollTo(pageScrollOffset(scrollOffset, totalLines, pageSize, -1));
+					} else if (keybindings.matches(input, "tui.editor.pageDown")) {
+						scrollTo(pageScrollOffset(scrollOffset, totalLines, pageSize, 1));
+					} else if (matchesKey(input, Key.home)) scrollTo(0);
 					else if (matchesKey(input, Key.end)) scrollTo(totalLines - pageSize);
 				},
 				render(width: number) {
-					// Fixed chrome: top rule + title + bottom rule + hint row.
+					// The body is the text rows between the title and the bottom rule: the rules,
+					// the title and the hint stay fixed, so only the text counts against the page.
 					const rows = Math.max(1, tui.terminal.rows);
-					const chromeRows = 4;
-					pageSize = Math.max(3, rows - 1 - chromeRows);
 
 					const bodyWidth = Math.max(1, width - 4);
 					const wrapped = stripFenceMarkers(markdownView.render(bodyWidth));
 					totalLines = wrapped.length;
+					// The page cannot outgrow the lines it would scroll: on a short file a page
+					// counted in terminal rows leaves the view with nothing to move.
+					pageSize = Math.max(1, Math.min(rows - PREVIEW_CHROME_ROWS, totalLines));
 					scrollOffset = clampScrollOffset(scrollOffset, totalLines, pageSize);
 
 					const visible = wrapped.slice(scrollOffset, scrollOffset + pageSize);

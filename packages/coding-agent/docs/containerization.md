@@ -71,9 +71,29 @@ Expose only the working folder, credentials, and network destinations needed for
 
 Plain Docker provides the simplest whole-process container boundary.
 
-### Build the image
+### Use the published image
 
-Create `Dockerfile.nanopi`:
+Each release tag publishes `ghcr.io/nekosekaimoe/nanopi` (amd64 and arm64). Run it
+from the working folder you want nanopi to access:
+
+```bash
+docker run --rm -it \
+  -e ANTHROPIC_API_KEY \
+  -v "$PWD:/workspace" \
+  -v nanopi-agent-home:/home/nanopi/.nanopi/agent \
+  ghcr.io/nekosekaimoe/nanopi:latest
+```
+
+`latest` follows release tags; pin a tag (`:v20261022`) to keep a version. The image
+ships `node`, `git` and `ripgrep` so the read-only tools work inside the container,
+and runs as the non-root user `nanopi`, whose agent directory is
+`/home/nanopi/.nanopi/agent`.
+
+### Build your own image
+
+The published image is `node:24-bookworm-slim` plus the release bundle (see
+`Dockerfile` in the repository root). If you need a different base, download the
+bundle and copy it in:
 
 ```dockerfile
 FROM node:24-bookworm-slim
@@ -81,28 +101,18 @@ FROM node:24-bookworm-slim
 RUN apt-get update \
   && apt-get install -y --no-install-recommends bash ca-certificates git ripgrep \
   && rm -rf /var/lib/apt/lists/*
-RUN npm install -g --ignore-scripts @nanopi/pi-coding-agent
+
+COPY nanopi.js /opt/nanopi/nanopi.js
 
 WORKDIR /workspace
-ENTRYPOINT ["nanopi"]
+ENTRYPOINT ["node", "/opt/nanopi/nanopi.js"]
 ```
 
-Build it from the directory containing the file:
+Download the bundle with `install.js` (it lands in `~/.local/bin` by default, so pass
+`--out nanopi.js` to get the single file), then build from that directory:
 
 ```bash
-docker build -t nanopi-sandbox -f Dockerfile.nanopi .
-```
-
-### Start nanopi
-
-From the working folder you want nanopi to access, run:
-
-```bash
-docker run --rm -it \
-  -e ANTHROPIC_API_KEY \
-  -v "$PWD:/workspace" \
-  -v nanopi-agent-home:/root/.nanopi/agent \
-  nanopi-sandbox
+docker build -t nanopi-sandbox .
 ```
 
 Replace `ANTHROPIC_API_KEY` with the credential required by your provider. The named `nanopi-agent-home` volume keeps container-local settings, credentials, and sessions between runs.

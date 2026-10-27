@@ -47,6 +47,12 @@ export class SettingsList implements Component {
 	private onCancel: () => void;
 	private searchInput?: Input;
 	private searchEnabled: boolean;
+	/**
+	 * Rows the last render actually showed. Equal to `maxVisible` until the selected item
+	 * grows a wrapped description, which takes rows away from the list: PgDn then has to
+	 * step by what is on screen, not by the requested height.
+	 */
+	private visibleRows: number;
 
 	// Submenu state
 	private submenuComponent: Component | null = null;
@@ -68,6 +74,7 @@ export class SettingsList implements Component {
 		this.onChange = onChange;
 		this.onCancel = onCancel;
 		this.searchEnabled = options.enableSearch ?? false;
+		this.visibleRows = maxVisible;
 		if (this.searchEnabled) {
 			this.searchInput = new Input();
 		}
@@ -128,6 +135,7 @@ export class SettingsList implements Component {
 
 		// Calculate visible range with scrolling
 		const { startIndex, endIndex } = this.getVisibleRange(displayItems);
+		this.visibleRows = endIndex - startIndex;
 
 		// Calculate max label width for alignment
 		const maxLabelWidth = Math.min(36, Math.max(...this.items.map((item) => visibleWidth(item.label))));
@@ -194,9 +202,8 @@ export class SettingsList implements Component {
 		const displayItems = this.getDisplayItems();
 		if (displayItems.length === 0) return undefined;
 		if (event.type === "wheel" && event.wheelDelta) {
-			const delta = event.wheelDelta < 0 ? -1 : 1;
 			const previousIndex = this.selectedIndex;
-			this.selectedIndex = Math.max(0, Math.min(displayItems.length - 1, this.selectedIndex + delta));
+			this.moveSelection(event.wheelDelta < 0 ? -1 : 1, displayItems.length);
 			return { handled: true, render: this.selectedIndex !== previousIndex };
 		}
 		// Hover must not change selection: the visible range is centered on it.
@@ -232,23 +239,13 @@ export class SettingsList implements Component {
 		const kb = getKeybindings();
 		const displayItems = this.getDisplayItems();
 		if (kb.matches(data, "tui.select.up")) {
-			if (displayItems.length === 0) return;
-			this.selectedIndex = this.selectedIndex === 0 ? displayItems.length - 1 : this.selectedIndex - 1;
+			this.moveSelection(-1, displayItems.length);
 		} else if (kb.matches(data, "tui.select.down")) {
-			if (displayItems.length === 0) return;
-			this.selectedIndex = this.selectedIndex === displayItems.length - 1 ? 0 : this.selectedIndex + 1;
+			this.moveSelection(1, displayItems.length);
 		} else if (kb.matches(data, "tui.select.pageUp")) {
-			if (displayItems.length === 0) return;
-			this.selectedIndex = pageStep(this.selectedIndex, displayItems.length, -1, {
-				pageSize: this.maxVisible,
-				wrap: true,
-			});
+			this.moveSelection(-1, displayItems.length, "page");
 		} else if (kb.matches(data, "tui.select.pageDown")) {
-			if (displayItems.length === 0) return;
-			this.selectedIndex = pageStep(this.selectedIndex, displayItems.length, 1, {
-				pageSize: this.maxVisible,
-				wrap: true,
-			});
+			this.moveSelection(1, displayItems.length, "page");
 		} else if (
 			kb.matches(data, "tui.select.confirm") ||
 			(data === " " && (!this.searchEnabled || this.searchInput?.getValue().length === 0))
@@ -260,6 +257,14 @@ export class SettingsList implements Component {
 			this.searchInput.handleInput(data);
 			this.applyFilter(this.searchInput.getValue());
 		}
+	}
+
+	/** Move the selection by one row or one window, wrapping at the ends. */
+	private moveSelection(direction: -1 | 1, itemCount: number, step: "row" | "page" = "row"): void {
+		this.selectedIndex = pageStep(this.selectedIndex, itemCount, direction, {
+			pageSize: step === "page" ? this.visibleRows : 1,
+			wrap: true,
+		});
 	}
 
 	private getDisplayItems(): SettingItem[] {

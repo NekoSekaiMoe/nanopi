@@ -5,8 +5,14 @@
 // Usage:
 //   node scripts/check-merge-result.mjs [--base <ref>]
 //
-// 默认 base 是 refs/remotes/origin/main，需要一个包含远端 main 的 checkout
-// （`actions/checkout` 的 fetch-depth: 0 或 CNB 的完整 clone 都满足）。
+// 默认 base 是 HEAD 的第一父提交，也就是「把分支合进来之前的目标分支 tip」：
+// 脚本的用法总是「HEAD 是合并结果，它的第一父是基线」。指定 --base 时以参数为准
+// （`actions/checkout` 的 fetch-depth: 0 或 CNB 的完整 clone 才能用 refs/remotes/origin/main）。
+//
+// 不用 refs/remotes/origin/main 当默认值：那要求基线与合并结果同时可得，而
+// check-merge-result-cnb.mjs 里合并提交的第一父本来就是合并前抓到的目标分支 tip。
+// #279 用远端 main 当基线时，PR 分支自己历史里的删除（在分支上先加后撤的笔记）
+// 被算成了「这次合进 main 会丢掉 main 上的文件」——那个文件 main 上从来没有过。
 //
 // 背景：#241 之前，`b3ffe400` 是一个「父是远端 tip、树是本地旧 HEAD」的合成提交，
 // 它把 main 的树整体换回了旧快照，#235 的四处改动随之消失。父链没断，`git log`
@@ -36,15 +42,18 @@ function git(args) {
 }
 
 function parseArgs(argv) {
-	let base = "refs/remotes/origin/main";
+	let base;
 	for (let index = 0; index < argv.length; index += 1) {
 		if (argv[index] === "--base") base = argv[index + 1];
 	}
 	return { base };
 }
 
-const { base } = parseArgs(process.argv.slice(2));
+const { base: explicitBase } = parseArgs(process.argv.slice(2));
 const head = git(["rev-parse", "HEAD"]);
+// 第一父恒为基线：合并提交记的原始 tip 就是它，父链上不可能出现「分支自己合进
+// 自己」的假象，也躲开了远端 main 可能已被别人推进的问题。
+const base = explicitBase ?? git(["rev-parse", `${head}^1`]);
 
 // 没有可比的 base（浅 clone、刚建的分支）时不能静默放过：这正是要查的东西。
 try {

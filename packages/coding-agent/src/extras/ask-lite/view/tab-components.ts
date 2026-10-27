@@ -9,7 +9,7 @@ export interface TabBodyHeights {
 }
 
 export interface TabComponents {
-	optionList: StatefulView<OptionListViewProps>;
+	optionList: StatefulView<OptionListViewProps> & { pageSize: number };
 	preview: PreviewPane;
 	multiSelect?: MultiSelectView;
 	bodyHeights: (width: number) => TabBodyHeights;

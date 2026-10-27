@@ -1020,13 +1020,13 @@ class TreeList implements Component {
 				this.selectedIndex = this.findBranchSegmentStart("down");
 			}
 		} else if (kb.matches(keyData, "tui.editor.cursorLeft") || kb.matches(keyData, "tui.select.pageUp")) {
-			// Page up
+			// Page up - one visible window, stopping at the top
 			this.selectedIndex = pageStep(this.selectedIndex, this.filteredNodes.length, -1, {
 				pageSize: this.maxVisibleLines,
 				wrap: false,
 			});
 		} else if (kb.matches(keyData, "tui.editor.cursorRight") || kb.matches(keyData, "tui.select.pageDown")) {
-			// Page down
+			// Page down - one visible window, stopping at the bottom
 			this.selectedIndex = pageStep(this.selectedIndex, this.filteredNodes.length, 1, {
 				pageSize: this.maxVisibleLines,
 				wrap: false,
@@ -1226,7 +1226,10 @@ class TreeHelp implements Component {
 
 const TREE_HELP_ITEMS: Array<{ keys: Keybinding[]; label: string; labelFirst?: boolean }> = [
 	{ keys: ["tui.select.up", "tui.select.down"], label: "move" },
-	{ keys: ["tui.editor.cursorLeft", "tui.editor.cursorRight"], label: "page" },
+	{
+		keys: ["tui.editor.cursorLeft", "tui.editor.cursorRight", "tui.select.pageUp", "tui.select.pageDown"],
+		label: "page",
+	},
 	{ keys: ["app.tree.foldOrUp", "app.tree.unfoldOrDown"], label: "branch" },
 	{ keys: ["app.message.copy"], label: "copy" },
 	{ keys: ["app.tree.editLabel"], label: "label" },

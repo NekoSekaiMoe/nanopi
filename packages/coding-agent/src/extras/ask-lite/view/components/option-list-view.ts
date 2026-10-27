@@ -47,6 +47,11 @@ export class OptionListView implements StatefulView<OptionListViewProps> {
 		});
 	}
 
+	/** Rows one page shows; the key router asks for this when PgUp/PgDn arrive. */
+	get pageSize(): number {
+		return this.select.pageSize;
+	}
+
 	setProps(props: OptionListViewProps): void {
 		this.select.setSelectedIndex(props.selectedIndex);
 		this.select.setFocused(props.focused);

@@ -317,6 +317,16 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		this.updateList();
 	}
 
+	/** Move the selection by one row or one screen of rows, wrapping like the arrows do. */
+	moveSelection(direction: -1 | 1, step: "row" | "page"): void {
+		if (this.filteredModels.length === 0) return;
+		this.selectedIndex = pageStep(this.selectedIndex, this.filteredModels.length, direction, {
+			pageSize: step === "page" ? this.listRows() : 1,
+			wrap: true,
+		});
+		this.updateList();
+	}
+
 	/** Visible rows, keeping the list inside a short terminal. */
 	private listRows(): number {
 		// A detached TUI (tests, embedded hosts) has no terminal size; keep the fixed budget.
@@ -428,27 +438,15 @@ export class ModelSelectorComponent extends Container implements Focusable {
 			}
 			return;
 		}
-		// Up arrow - wrap to bottom when at top
+		// Up/Down move one row, PageUp/PageDown one screen of rows; both wrap at the ends.
 		if (kb.matches(keyData, "tui.select.up")) {
-			if (this.filteredModels.length === 0) return;
-			this.selectedIndex = this.selectedIndex === 0 ? this.filteredModels.length - 1 : this.selectedIndex - 1;
-			this.updateList();
-		}
-		// Down arrow - wrap to top when at bottom
-		else if (kb.matches(keyData, "tui.select.down")) {
-			if (this.filteredModels.length === 0) return;
-			this.selectedIndex = this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
-			this.updateList();
-		}
-		// PageUp/PageDown - move by a screen of models, wrapping like the arrows do
-		else if (kb.matches(keyData, "tui.select.pageUp") || kb.matches(keyData, "tui.select.pageDown")) {
-			if (this.filteredModels.length === 0) return;
-			const direction = kb.matches(keyData, "tui.select.pageUp") ? -1 : 1;
-			this.selectedIndex = pageStep(this.selectedIndex, this.filteredModels.length, direction, {
-				pageSize: this.listRows(),
-				wrap: true,
-			});
-			this.updateList();
+			this.moveSelection(-1, "row");
+		} else if (kb.matches(keyData, "tui.select.down")) {
+			this.moveSelection(1, "row");
+		} else if (kb.matches(keyData, "tui.select.pageUp")) {
+			this.moveSelection(-1, "page");
+		} else if (kb.matches(keyData, "tui.select.pageDown")) {
+			this.moveSelection(1, "page");
 		}
 		// Enter
 		else if (kb.matches(keyData, "tui.select.confirm")) {

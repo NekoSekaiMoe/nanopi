@@ -22,26 +22,19 @@ main:
             apt-get update && apt-get install nodejs -y && corepack enable npm && npm install -g pnpm
             node scripts/check-commit-trailers.mjs "$CNB_BEFORE_SHA" "$CNB_COMMIT"
 
-        - name: push main
-          # 镜像逻辑在 scripts/mirror-main.mjs：GitHub 的连接偶尔被中途掐断
-          # （GnuTLS handshake failed: The TLS connection was non-properly
-          # terminated），传输层失败要重试，而「树相同 / 非快进」这类本地判定
-          # 重试没有意义。脚本里分得清这两类，内联 bash 分不清。
+        # main 与 tag 各跑一次镜像。判定在 scripts/mirror-main.mjs 与
+        # scripts/mirror-tags.mjs（与 GitHub 侧共用），入口是 scripts/mirror.mjs。
+        # 传输层失败要重试（GitHub 偶尔在中途掐断：GnuTLS handshake failed:
+        # The TLS connection was non-properly terminated），「树相同 / 非快进 /
+        # tag 已指向别的 commit」这类判定重试没有意义，脚本里分得清这两类，
+        # 内联 bash 分不清。凭据由入口自己落进一个进程私有的 credential store：
+        # 远端 URL 不带 token，token 也不经过这里的 shell 与 ~/.git-credentials。
+        - name: mirror main and tags
           script: |
             set -euo pipefail
-            git config --global credential.helper store
-            printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
-            node scripts/mirror-main.mjs --remote https://github.com/NekoSekaiMoe/nanopi.git
-
-        - name: push tags
-          # 逻辑在 scripts/mirror-tags.mjs，与 GitHub 侧的 Push tags to CNB 共用。
-          # tag 判定（已存在且指向同一 commit 就跳过、指向不同就报错）重试没有
-          # 意义，传输层失败才有，脚本里分得清这两类。
-          script: |
-            set -euo pipefail
-            git config --global credential.helper store
-            printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
-            node scripts/mirror-tags.mjs --remote https://github.com/NekoSekaiMoe/nanopi.git
+            remote=https://github.com/NekoSekaiMoe/nanopi.git
+            node scripts/mirror.mjs main --remote "$remote" --token-user x-access-token --token-env GH_KEY
+            node scripts/mirror.mjs tags --remote "$remote" --token-user x-access-token --token-env GH_KEY
 
 # PR 的预合并结果检查：这次改动合进 main 会不会丢东西。
 #
@@ -62,22 +55,13 @@ main:
         cpus: 2
       stages:
         - name: check-merge-result
+          # fetch PR 分支、合并、比对都在 scripts/check-merge-result-cnb.mjs 里。
+          # 退出码：0 通过，1 这次合并会丢 main 上已有的文件，2 base 缺失。
           script: |
             set -euo pipefail
-            cp -a . /tmp/base
-            cd /tmp/base
-            # 两侧都是 CNB 上的仓库，checkout 自带的只读令牌够用。
-            git fetch --no-tags origin "+refs/heads/$CNB_PULL_REQUEST_BRANCH:refs/remotes/pr/head"
-            # 默认构建镜像里没有 node（cnb-4u8-1k5s1gkfc 报 sh: node: command not found），
-            # 每一步各装一次，不依赖上一步留下的环境。
+            # 默认构建镜像里没有 node（cnb-4u8-1k5s1gkfc 报 sh: node: command not found）。
             apt-get update && apt-get install nodejs -y
-            # 这里的工作树是目标分支（main）的 tip，不是预合并结果：pull_request.target
-            # 拿不到 PR 的代码。所以基线只能是工作树，PR 分支要合进来当结果——
-            # 反过来把 PR 分支当基线（#255），PR 新增的每个文件都成了「被删掉」。
-            git config user.email npc@cnb.cool
-            git config user.name npc
-            git merge --no-edit "refs/remotes/pr/head"
-            node scripts/check-merge-result.mjs --base HEAD~1
+            node scripts/check-merge-result-cnb.mjs
 
 # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
 #

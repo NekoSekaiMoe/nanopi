@@ -10,7 +10,7 @@
  * indented comma-separated lists, wrapped to the dialog width.
  */
 
-import { clampScrollOffset, Key, matchesKey, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { clampScrollOffset, Key, matchesKey, pageScrollOffset, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
 
 export type StatusRow = {
@@ -56,6 +56,9 @@ export function wrapStatusText(text: string, width: number): string[] {
 	return lines;
 }
 
+/** Rows the dialog draws outside the scrollable body: 3 above, 3 below. */
+const STATUS_CHROME_ROWS = 6;
+
 /** Overlay placement: full-width, docked to the bottom edge (matches /context). */
 const OVERLAY_OPTIONS = {
 	anchor: "bottom-center",
@@ -86,7 +89,10 @@ function sectionLines(theme: any, section: StatusSection, contentWidth: number):
 export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, data: StatusDialogData): Promise<void> {
 	let scrollOffset = 0;
 	// Rows the last render could show. Key handling runs before the next render, so
-	// keyboard paging needs the size the body already had.
+	// keyboard paging needs the size the body already had. `render()` derives it from
+	// the rows it draws and the terminal height, and caps it at the body length: a
+	// terminal taller than the overlay otherwise yields a page longer than the body,
+	// and one PgDn then jumps past every row.
 	let pageRows = 1;
 	// Body rows from the last render, so key handling clamps against the real length.
 	let totalRows = 0;
@@ -111,12 +117,12 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 						return;
 					}
 					if (matchesKey(input, "pageUp")) {
-						scrollOffset = clampScrollOffset(scrollOffset - pageRows, totalRows, pageRows);
+						scrollOffset = pageScrollOffset(scrollOffset, totalRows, pageRows, -1);
 						tui.requestRender();
 						return;
 					}
 					if (matchesKey(input, "pageDown")) {
-						scrollOffset = clampScrollOffset(scrollOffset + pageRows, totalRows, pageRows);
+						scrollOffset = pageScrollOffset(scrollOffset, totalRows, pageRows, 1);
 						tui.requestRender();
 						return;
 					}
@@ -138,15 +144,16 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 					}
 					const allRows = [...rowLines, ...body];
 
+					// Chrome the dialog draws around the body: rule + title + blank above, blank +
+					// rule + hint below. The body never grows past what the overlay can show.
 					const rows = Math.max(1, tui.terminal.rows);
-					const chrome = 4; // rule + title + rule + hint
-					const pageSize = Math.max(1, rows - 1 - chrome);
-					pageRows = pageSize;
+					const pageLimit = Math.max(1, rows - STATUS_CHROME_ROWS);
+					pageRows = Math.max(1, Math.min(pageLimit, allRows.length));
 					totalRows = allRows.length;
-					scrollOffset = clampScrollOffset(scrollOffset, allRows.length, pageSize);
-					const visible = allRows.slice(scrollOffset, scrollOffset + pageSize);
+					scrollOffset = clampScrollOffset(scrollOffset, allRows.length, pageRows);
+					const visible = allRows.slice(scrollOffset, scrollOffset + pageRows);
 					if (scrollOffset > 0 && visible.length > 0) visible[0] = theme.fg("dim", "↑");
-					if (scrollOffset + pageSize < allRows.length && visible.length > 0) {
+					if (scrollOffset + pageRows < allRows.length && visible.length > 0) {
 						visible[visible.length - 1] = theme.fg("dim", "↓");
 					}
 

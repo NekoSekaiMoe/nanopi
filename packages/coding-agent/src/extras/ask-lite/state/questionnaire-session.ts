@@ -62,6 +62,7 @@ export class QuestionnaireSession {
 	private readonly notesInput: Input;
 	private readonly inlineInput: Input;
 	private readonly viewAdapter: QuestionnairePropsAdapter;
+	private readonly optionPageSize: () => number;
 
 	private readonly tui: QuestionnaireSessionConfig["tui"];
 	private readonly done: QuestionnaireSessionConfig["done"];
@@ -90,6 +91,7 @@ export class QuestionnaireSession {
 		this.notesInput = built.notesInput;
 		this.inlineInput = built.inlineInput;
 		this.viewAdapter = built.adapter;
+		this.optionPageSize = built.optionPageSize;
 
 		const theme = config.theme;
 		// Collapsed render: a single dim row at the bottom of the overlay. pi-tui sizes
@@ -183,6 +185,7 @@ export class QuestionnaireSession {
 			isMulti: this.isMulti,
 			currentItem: this.currentItem(),
 			items: this.itemsByTab[this.state.currentTab] ?? [],
+			visibleRows: this.optionPageSize(),
 		};
 	}
 

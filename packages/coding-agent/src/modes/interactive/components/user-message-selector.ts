@@ -39,6 +39,14 @@ class UserMessageList implements Component {
 		// No cached state to invalidate currently
 	}
 
+	/** Move the selection by one message or one screen of messages, wrapping at the ends. */
+	private moveSelection(direction: -1 | 1, step: "row" | "page"): void {
+		this.selectedIndex = pageStep(this.selectedIndex, this.messages.length, direction, {
+			pageSize: step === "page" ? this.maxVisible : 1,
+			wrap: true,
+		});
+	}
+
 	render(width: number): string[] {
 		const lines: string[] = [];
 
@@ -86,25 +94,15 @@ class UserMessageList implements Component {
 
 	handleInput(keyData: string): void {
 		const kb = getKeybindings();
-		// Up arrow - go to previous (older) message, wrap to bottom when at top
+		// Up/Down move one message, PageUp/PageDown one screen of them; both wrap at the ends.
 		if (kb.matches(keyData, "tui.select.up")) {
-			this.selectedIndex = this.selectedIndex === 0 ? this.messages.length - 1 : this.selectedIndex - 1;
-		}
-		// Down arrow - go to next (newer) message, wrap to top when at bottom
-		else if (kb.matches(keyData, "tui.select.down")) {
-			this.selectedIndex = this.selectedIndex === this.messages.length - 1 ? 0 : this.selectedIndex + 1;
-		}
-		// PageUp/PageDown - move by a screen of messages, wrapping like the arrows do
-		else if (kb.matches(keyData, "tui.select.pageUp")) {
-			this.selectedIndex = pageStep(this.selectedIndex, this.messages.length, -1, {
-				pageSize: this.maxVisible,
-				wrap: true,
-			});
+			this.moveSelection(-1, "row");
+		} else if (kb.matches(keyData, "tui.select.down")) {
+			this.moveSelection(1, "row");
+		} else if (kb.matches(keyData, "tui.select.pageUp")) {
+			this.moveSelection(-1, "page");
 		} else if (kb.matches(keyData, "tui.select.pageDown")) {
-			this.selectedIndex = pageStep(this.selectedIndex, this.messages.length, 1, {
-				pageSize: this.maxVisible,
-				wrap: true,
-			});
+			this.moveSelection(1, "page");
 		}
 		// Enter - select message and branch
 		else if (kb.matches(keyData, "tui.select.confirm")) {

@@ -15,6 +15,7 @@
 
 ### Fixed
 
+- Fixed OpenCode's `deepseek-v4.1-flash` still sending `prompt_cache_retention` on a long-retention request: the generator's rejection list is keyed by `provider:model` id, so the rename from `deepseek-v4-flash` left the entry matching nothing and the route lost its `supportsLongCacheRetention: false`. `cache-retention.test.ts` now pins the whole list against live catalog entries, so the next rename fails the suite instead of silently re-enabling the field
 - Fixed malformed tool-call arguments leaking into a replayed request: `transformMessages` now drops `ToolCall.argumentsError` on every adapter's history, not just `nanopi-messages`. The raw arguments text stayed on the assistant message, so a retried call was sent as `arguments: {}` plus a stray describe-the-failure field; the next turn now sees the same `{}` the wire carried
 - Fixed whitespace-only tool output (for example a bare `\r\n` from bash) being sent verbatim to OpenAI Completions, OpenAI Responses, and Google, where providers reject it; those results now use the existing no-output placeholders ([#8720](https://github.com/earendil-works/pi/issues/8720)).
 

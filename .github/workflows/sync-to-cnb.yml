@@ -3,7 +3,7 @@
 #
 # 双向镜像都不用 force push：两侧只推「远端 tip 之上的合成提交」或快进，
 # 互相不覆盖。main 和 tag 的镜像逻辑与 .cnb.yml 共用 scripts/mirror-main.mjs
-# 与 scripts/mirror-tags.mjs。
+# 与 scripts/mirror-tags.mjs，入口都是 scripts/mirror.mjs。
 # CNB_KEY 配置在 GitHub 仓库 Settings > Secrets and variables > Actions。
 
 name: Sync to CNB
@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   mirror:
-    name: Push main to CNB
+    name: Mirror main and tags
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
@@ -31,23 +31,20 @@ jobs:
           # merge-base --is-ancestor 需要完整历史
           fetch-depth: 0
 
-      - name: Push main to CNB
+      # main 与 tag 各跑一次镜像，判定在 scripts/mirror-main.mjs 与
+      # scripts/mirror-tags.mjs（与 .cnb.yml 的 mirror-to-github 共用同一份逻辑）：
+      # main 按树内容判定并在推送后回读比对，tag 是「远端已存在且指向同一 commit
+      # 就跳过、指向不同 commit 就报错」。两者都只重试传输层失败，判定失败第一次
+      # 就返回。
+      #
+      # 远端 URL 不带 token：CNB 对海外 IP 的匿名读返 401，所以 fetch 也必须带
+      # 凭据，但 token 不该出现在 argv 与报错里。凭据由入口自己落进一个进程私有的
+      # credential store（scripts/mirror.mjs），这里不碰 ~/.git-credentials。
+      - name: Push main and tags to CNB
         env:
           CNB_KEY: ${{ secrets.CNB_KEY }}
         run: |
           set -euo pipefail
-          # CNB 对海外 IP 的匿名读会返 401，fetch 也必须带凭据。
-          node scripts/mirror-main.mjs --remote "https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git"
-
-      # tag 同步与 main 是两件事：main 按内容判定加推送后树比对，tag 是「远端
-      # 已存在且指向同一 commit 就跳过、指向不同 commit 就报错」。逻辑在
-      # scripts/mirror-tags.mjs，与 .cnb.yml 的 push tags 共用；它和 mirror-main
-      # 一样分清传输层失败（重试）与判定失败（不重试）。
-      - name: Push tags to CNB
-        env:
-          CNB_KEY: ${{ secrets.CNB_KEY }}
-        run: |
-          set -euo pipefail
-          git config --global credential.helper store
-          printf 'https://cnb:%s@cnb.cool\n' "${CNB_KEY}" > ~/.git-credentials
-          node scripts/mirror-tags.mjs --remote "https://cnb:${CNB_KEY}@cnb.cool/shinytale/nanopi.git"
+          remote=https://cnb.cool/shinytale/nanopi.git
+          node scripts/mirror.mjs main --remote "$remote" --token-user cnb --token-env CNB_KEY
+          node scripts/mirror.mjs tags --remote "$remote" --token-user cnb --token-env CNB_KEY
