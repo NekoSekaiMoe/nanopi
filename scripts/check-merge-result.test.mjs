@@ -84,12 +84,12 @@ function check(cwd, base = "main", extra = []) {
 test("a branch that only adds files passes", async (t) => {
 	const cwd = await repo(t, "add");
 	commit(cwd, { "a.txt": "one" }, "base");
-	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	const base = pinBase(cwd);
 	commit(cwd, { "b.txt": "two" }, "add b");
 
-	const result = check(cwd);
+	const result = check(cwd, base);
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /no file from main disappears/);
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
 });
 
 // 关键用例：树被换回旧快照。父链是连着的（分支从 base 出发），只有内容消失。
@@ -97,30 +97,30 @@ test("a stale tree that drops a newer file is reported", async (t) => {
 	const cwd = await repo(t, "stale");
 	commit(cwd, { "a.txt": "one" }, "base");
 	commit(cwd, { "keep.txt": "three" }, "newer work on the base");
-	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	pinBase(cwd);
 	git(cwd, ["reset", "-q", "--hard", "HEAD~1"]);
 	commit(cwd, { "b.txt": "two" }, "work on the stale branch");
 
-	const result = check(cwd);
+	const result = check(cwd, "base");
 	assert.notEqual(result.status, 0);
 	assert.match(result.stderr, /drops 1 file/);
 	assert.match(result.stderr, /keep\.txt/);
 });
 
-// 判据是「main 的路径还在不在」：改掉一个 base 上的文件与把它回退成旧内容，在树里
+// 判据是「base 的路径还在不在」：改掉一个 base 上的文件与把它回退成旧内容，在树里
 // 长得一模一样（git 不存「谁改过谁」），所以内容改动只能放行，否则每个正常的修改
 // 都会变红（#253）。
 test("a file the branch rewrites is a modification, not a deletion", async (t) => {
 	const cwd = await repo(t, "modify");
 	commit(cwd, { "a.txt": "one" }, "base");
-	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	const base = pinBase(cwd);
 	commit(cwd, { "a.txt": "one, but longer" }, "reword a");
 
-	const result = check(cwd);
+	const result = check(cwd, base);
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /rewrites 1 file/);
 	assert.match(result.stdout, /a\.txt/);
-	assert.match(result.stdout, /no file from main disappears/);
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
 });
 
 // 改名是一次提交里的删除：单个父的那一跳说明不了意图（回退型的提交也是 D），
@@ -133,7 +133,7 @@ test("a rename in a single-parent commit is reported, not waved through", async 
 	git(cwd, ["mv", "a.txt", "b.txt"]);
 	git(cwd, ["commit", "-q", "--no-gpg-sign", "-m", "rename"]);
 
-	const result = check(cwd);
+	const result = check(cwd, "base");
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /a\.txt/);
 	assert.doesNotMatch(result.stderr, /accounted for/);
@@ -152,7 +152,7 @@ test("a deletes: claim in the description excuses the path on a single-parent co
 	writeFileSync(claim, "drop a, it is dead\n\ndeletes: a.txt\n");
 	const result = check(cwd, base, ["--description-file", claim]);
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /1 file\(s\) from base are gone and accounted for/);
+	assert.match(result.stdout, /1 file\(s\) from [0-9a-f]{40} are gone and accounted for/);
 	assert.match(result.stdout, /a\.txt/);
 });
 
@@ -269,11 +269,48 @@ test("the same deletion is judged by its claim, not by its parent count", async 
 	assert.equal(claimed.status, 0, claimed.stderr);
 });
 
+// 按 ref 名传进来的基线一定要解析得到：调用方把它当「这次合并的起点」。这里让 ref 名
+// 落在原地（main 是分支起点），PR 那一侧已经往前走了——照 A 比就是「PR 新增的文件全被
+// 删掉」，与 #314 的现场一致。基线取对了（第一父）才绿。
+test("a --base ref that points somewhere else falls back to the first parent", async (t) => {
+	const cwd = await repo(t, "stale-ref");
+	commit(cwd, { "a.txt": "one" }, "base");
+	git(cwd, ["branch", "-f", "main", "HEAD"]);
+	commit(cwd, { "note.txt": "written on the topic" }, "add a note on the topic");
+
+	// 单父形态：最新的提交就是加 note.txt 那一跳。照 main 比会把它读成删除，但这一跳
+	// 只有一个父，判据只看「base 的路径还在不在」，note.txt 是新增，所以绿。
+	const topic = check(cwd, "main");
+	assert.equal(topic.status, 0, topic.stderr);
+	assert.doesNotMatch(topic.stderr, /note\.txt/);
+
+	// 合并形态（CNB 的现场）：main 在分叉后又往前走了一格，第一父不再等于 main。
+	mergeIntoTarget(cwd);
+	const merged = check(cwd, "main");
+	assert.equal(merged.status, 0, merged.stderr);
+	assert.doesNotMatch(merged.stderr, /note\.txt/);
+});
+
+// CNB 的工作树里没有远端跟踪分支：ref 名解析不到不是错误，退回第一父照常判。
+test("a --base ref that does not resolve here falls back to the first parent", async (t) => {
+	const cwd = await repo(t, "missing-ref");
+	commit(cwd, { "a.txt": "one" }, "base");
+	const base = pinBase(cwd);
+	commit(cwd, { "b.txt": "two" }, "add b");
+
+	const result = check(cwd, "refs/remotes/origin/main");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /does not resolve here/);
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
+	assert.notEqual(git(cwd, ["rev-parse", base]), git(cwd, ["rev-parse", "HEAD"]));
+});
+
+// 连第一父都取不到（根提交、浅 clone 的第一层）时不能静默放过：这正是要查的东西。
 test("a missing base fails instead of passing silently", async (t) => {
 	const cwd = await repo(t, "missing");
 	commit(cwd, { "a.txt": "one" }, "base");
 
 	const result = check(cwd, "does-not-exist");
 	assert.equal(result.status, 2);
-	assert.match(result.stderr, /is missing/);
+	assert.match(result.stderr, /no first parent/);
 });
