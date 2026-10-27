@@ -27,16 +27,14 @@ main:
         # 传输层失败要重试（GitHub 偶尔在中途掐断：GnuTLS handshake failed:
         # The TLS connection was non-properly terminated），「树相同 / 非快进 /
         # tag 已指向别的 commit」这类判定重试没有意义，脚本里分得清这两类，
-        # 内联 bash 分不清。凭据只写进 credential store：远端 URL 不带 token，
-        # 免得它出现在任何一条 git 命令的 argv 或报错里。
+        # 内联 bash 分不清。凭据由入口自己落进一个进程私有的 credential store：
+        # 远端 URL 不带 token，token 也不经过这里的 shell 与 ~/.git-credentials。
         - name: mirror main and tags
           script: |
             set -euo pipefail
-            git config --global credential.helper store
-            printf 'https://x-access-token:%s@github.com\n' "$GH_KEY" > ~/.git-credentials
             remote=https://github.com/NekoSekaiMoe/nanopi.git
-            node scripts/mirror.mjs main --remote "$remote"
-            node scripts/mirror.mjs tags --remote "$remote"
+            node scripts/mirror.mjs main --remote "$remote" --token-user x-access-token --token-env GH_KEY
+            node scripts/mirror.mjs tags --remote "$remote" --token-user x-access-token --token-env GH_KEY
 
 # PR 的预合并结果检查：这次改动合进 main 会不会丢东西。
 #
