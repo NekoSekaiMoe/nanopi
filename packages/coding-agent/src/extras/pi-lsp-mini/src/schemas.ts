@@ -30,30 +30,26 @@ export const DIAGNOSTICS = {
 };
 
 export const HOVER = {
-  description: "Type signature and doc comment of the symbol at a position, without reading the file.",
-  promptSnippet: "Read a symbol's signature/doc at a position",
+  description: "Type signature and doc comment of the symbol at a position.",
+  promptSnippet: "Read a symbol's signature/doc, without reading the file",
   parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
 };
 
 export const DEFINITION = {
-  description: "Where the symbol at a position is defined (file:line), without grepping for it.",
-  promptSnippet: "Jump to a symbol's definition",
+  description: "Where the symbol at a position is defined (file:line).",
+  promptSnippet: "Jump to a symbol's definition, without grepping for it",
   parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
 };
 
-export const REFERENCES = {
-  description: "All references (usages) of the symbol at a 1-based line/column.",
-  promptSnippet: "Find all usages of a symbol",
-  parameters: Type.Object({ ...POSITION, timeoutMs: TIMEOUT }),
-};
-
-export const CALLGRAPH = {
-  description: "Call relations of the function at a 1-based position: callers and callees, recursive.",
-  promptSnippet: "Trace callers/callees of a function",
+/** One read-only query, two granularities: who uses the symbol, and who calls the function. */
+export const QUERY = {
+  description: "Usages or call relations of the symbol at a 1-based line/column.",
+  promptSnippet: "Find usages of a symbol, or trace callers/callees of a function",
   parameters: Type.Object({
     ...POSITION,
-    direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], { description: "default both" })),
-    depth: Type.Optional(Type.Number({ description: "1-4, default 2" })),
+    kind: Type.Optional(Type.Union([Type.Literal("references"), Type.Literal("callgraph")], { description: "default references" })),
+    direction: Type.Optional(Type.Union([Type.Literal("incoming"), Type.Literal("outgoing"), Type.Literal("both")], { description: "callgraph only; default both" })),
+    depth: Type.Optional(Type.Number({ description: "callgraph only, 1-4, default 2" })),
     timeoutMs: TIMEOUT,
   }),
 };

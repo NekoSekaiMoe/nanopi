@@ -30,6 +30,7 @@
 
 ### Removed
 
+- `pi-lsp-mini` folds `lsp_references` and `lsp_callgraph` into one `lsp_query` tool (`kind: "references"` by default, `kind: "callgraph"` for callers/callees). They are the same question at two granularities on identical position parameters, and `callgraph` already fell back to references on servers without call hierarchy, so the two names made the model pick a tool where it meant to pick a detail. A tool named `kind` still has to say what it does, so `promptSnippet` now carries "find usages ... or trace callers/callees" the way the old tool names did. The description/snippet duplication went with it: "without reading the file" / "without grepping for it" said what `promptSnippet` already said, so each text now has one job (description = how to call it, snippet = when). Measured: 6 tools instead of 7, 3277 characters of serialized schema+text instead of 3378, ~820 request tokens instead of ~990
 - The pi-fake-codex `apply_patch` tool alias is gone. It was a byte-for-byte clone of `edit` under a Codex name, scoped to the impersonated Responses APIs, and it bought nothing: `edit` already handles exact replacement, and models reached over the plain `openai-completions` protocol (which never saw the alias) confused the two names anyway. The module now only does what its name says: Codex identity headers, `openai-responses` body normalization, and the Codex-compatible hook adapter (issue [#292](https://cnb.cool/shinytale/nanopi/-/issues/292))
 
 ### Fixed
