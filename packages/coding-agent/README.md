@@ -34,7 +34,7 @@ npm install -g --ignore-scripts @nekosekaimoe/nanopi
 line only redirects `@nekosekaimoe` packages, every other npm package keeps
 installing from npmjs.
 
-nanopi requires Node.js 22.19 or newer. The macOS, Linux, and Windows installers can install it if needed, and the `install.js` one-liner needs no registry token at all:
+nanopi requires Node.js 24 or newer. The macOS, Linux, and Windows installers can install it if needed, and the `install.js` one-liner needs no registry token at all:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node

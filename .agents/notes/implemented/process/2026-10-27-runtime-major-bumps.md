@@ -74,5 +74,5 @@ protobufjs 8 也说不通：那是 `^7.5.4` 之外的版本，上游未验证的
   干净 `main` 上同样报（已 stash 本次改动复验过）。
 - `node ./test.mjs`：ai 1418、coding-agent 2419、agent 96、extra 95 全过，
   `packages/tui` 1117 过；`packages/webui` 的 `typecheck` 与 `next build` 通过。
-- 剩余 major 清单收缩为：node v24（`engines.node` 从 `>=22.19.0` 起跳）、
-  `protobufjs` v8（等 `@google/genai` 放行）。
+- 剩余 major 清单收缩为 `protobufjs` v8（等 `@google/genai` 放行）。
+  node v24 已在 [node 24 floor](./2026-10-27-node-24-floor.md) 里落地。

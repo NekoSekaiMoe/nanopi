@@ -7,7 +7,7 @@ For native Windows setup, read [Windows Setup](windows.md). For Android, read [T
 ## 1. Install nanopi
 
 The bundle installs with one command and needs no registry account. This requires
-Node.js 22.19 or newer:
+Node.js 24 or newer:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node

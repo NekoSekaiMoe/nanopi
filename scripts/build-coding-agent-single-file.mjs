@@ -2,7 +2,7 @@
 /**
  * Builds the single-file nanopi.js distribution.
  *
- * One self-contained ESM file, zero runtime dependencies (Node >= 22.19):
+ * One self-contained ESM file, zero runtime dependencies (Node >= 24):
  * - the full CLI graph bundled by esbuild, including jiti and photon's JS
  *   glue (the wasm itself is a runtime sidecar, see below)
  * - package assets (export-html templates, webui, docs, examples,
@@ -441,7 +441,7 @@ try {
 		plugins,
 		sourcemap: false,
 		splitting: false,
-		target: "node22.19",
+		target: "node24",
 		// Do not apply the monorepo's source-oriented path aliases while bundling
 		// compiled output; resolve the same package entries as an installed package.
 		tsconfigRaw: { compilerOptions: {} },
