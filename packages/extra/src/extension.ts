@@ -53,7 +53,7 @@ const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
  * answer questions that grepping cannot, and blocking them left the model with
  * `read` as its only way to look at code.
  *
- * `lsp_rename` and `lsp_delete` are deliberately absent — they rewrite files.
+ * `lsp_edit` is deliberately absent — it rewrites files.
  */
 const PLAN_ALLOWED_LSP_TOOLS = new Set(["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_query"]);
 

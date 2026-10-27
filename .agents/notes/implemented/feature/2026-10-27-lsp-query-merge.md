@@ -68,10 +68,11 @@ Measured on the serialized schemas, descriptions and snippets:
   longer disagree about off-by-one columns.
 - `lsp_query` gained no behavior. Its two branches are the two handlers that
   existed, extracted into functions so the tool definition stays a router.
-- The tool surface is now one place where a future merge of `rename`/`delete`
-  would land; that change is separate because it moves a destructive default
-  (`apply`), and a reviewer should not have to read a text edit and a behavior
-  change in the same diff.
+- The tool surface is now one place where the `rename`/`delete` merge lands. It
+  is a separate change — see
+  [2026-10-27-lsp-edit-merge](./2026-10-27-lsp-edit-merge.md) — because it moves
+  a destructive default (`apply`), and a reviewer should not have to read a text
+  edit and a behavior change in the same diff.
 
 ## Alternatives considered
 
