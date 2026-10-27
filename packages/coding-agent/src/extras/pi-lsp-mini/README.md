@@ -1,8 +1,8 @@
 # pi-lsp-mini
 
 Lean LSP extension for the [pi](https://github.com/earendil-works/pi) coding agent.
-Four features, minimal prompt footprint (~990 tokens measured: full JSON
-schemas + descriptions + snippets of all 7 tools; zero injected system
+Four features, minimal prompt footprint (all 6 tools measured at 3277 characters
+of JSON schema + descriptions + snippets, ~820 tokens; zero injected system
 instructions):
 
 - **Signatures** — `lsp_hover` and `lsp_definition`: what a symbol's type is and
@@ -11,14 +11,15 @@ instructions):
   errors are also appended to every `read` ([`readDiagnostics`](#diagnostics-before-read)),
   issues are appended after every `write`, and after every `edit` when the
   opt-in [`editDiagnostics`](#diagnostics-after-edit) check is enabled.
-- **Call relations** — `lsp_callgraph` walks incoming/outgoing call hierarchy
-  recursively (who calls this function / what it calls).
+- **Call relations** — `lsp_query` with `kind: "callgraph"` walks
+  incoming/outgoing call hierarchy recursively (who calls this function / what
+  it calls); a server without call hierarchy answers with references instead.
 - **Batch replace / delete** — `lsp_rename` (scope-aware workspace rename) and
   `lsp_delete` (removes a function plus every standalone call-site line;
   non-standalone usages are listed for manual cleanup, dry-run by default).
 
-Also: `lsp_references`, `/lsp` command, post-edit auto re-check after
-rename/delete.
+Also: `lsp_query` with `kind: "references"` (the default), `/lsp` command,
+post-edit auto re-check after rename/delete.
 
 ## Tools
 
@@ -27,8 +28,7 @@ rename/delete.
 | `lsp_diagnostics` | Errors/warnings for a file or directory (`severity` filter). Omit `path` to scan cwd. |
 | `lsp_hover` | Signature and doc comment at a position, or of a named `symbol`. |
 | `lsp_definition` | `file:line` where the symbol at a position (or a named `symbol`) is declared. |
-| `lsp_callgraph` | Callers/callees tree around a function (`direction`, `depth` 1-4). |
-| `lsp_references` | All usages of a symbol. |
+| `lsp_query` | `kind: "references"` (default) lists all usages of a symbol; `kind: "callgraph"` walks callers/callees (`direction`, `depth` 1-4). |
 | `lsp_rename` | Workspace rename. `apply=false` for dry-run. Applies + re-checks diagnostics. |
 | `lsp_delete` | Delete declaration + standalone call lines. Dry-run by default, `apply=true` executes. |
 
@@ -139,9 +139,8 @@ takes longer than a fixed default, and the only thing the model saw for that was
 "tool failed" — no way to tell "no results" from "still working". Raising the
 deadline is the fix; retrying a request that was still running was never one.
 
-`lsp_references`, `lsp_callgraph`, `lsp_rename` and `lsp_delete` also take a
-per-call `timeoutMs`, so one expensive call can be given room without changing
-the setting. On `lsp_diagnostics` the same value replaces the wait allowance
+`lsp_query`, `lsp_rename` and `lsp_delete` also take a per-call `timeoutMs`, so
+one expensive call can be given room without changing the setting. On `lsp_diagnostics` the same value replaces the wait allowance
 (`diagnosticsWaitMs`), which is how a directory scan of a large project is given
 more time to settle.
 
@@ -155,8 +154,8 @@ just stop waiting for it. Two things follow:
   it gave up on (`jsonrpc.ts`), so the server drops it. Without that, a retry
   queues behind an answer nobody will read, and a bigger deadline only widens
   the window in which that happens.
-- **A multi-request tool gets one budget, not one per request.** `lsp_callgraph`
-  walks the graph breadth-first; `depth=3` on a wide graph is dozens of
+- **A multi-request tool gets one budget, not one per request.** A `lsp_query`
+  call with `kind: "callgraph"` walks the graph breadth-first; `depth=3` on a wide graph is dozens of
   sequential requests, and a per-request deadline would make the tool call's
   real ceiling `depth x fan-out x timeout`. The per-call `timeoutMs` is spent
   once, shared by every hop (`budget.ts`); when it runs out the report keeps what
@@ -240,8 +239,10 @@ language-server binaries you want are on PATH (or configured in
 
 ## Notes
 
-- Prompt budget: all 7 tools cost ~990 request tokens (schemas serialized).
-  Tool texts live in `src/schemas.ts` — keep them lean when editing.
+- Prompt budget: all 6 tools cost ~820 request tokens (3277 characters of
+  serialized schema, description and snippet). Tool texts live in
+  `src/schemas.ts` — keep them lean when editing, and put "when to use this"
+  in `promptSnippet` instead of repeating it in `description`.
 
 - TypeScript note: neither `tsserver` nor `tsc` is an LSP server — `tsserver
   --stdio` speaks tsserver's own protocol, not LSP, and an LSP client will

@@ -18,7 +18,9 @@ edit, and then had to work out which half was its own.
 
 ## Decision
 
-Four tools become seven, and one hook becomes two.
+Four tools become seven, and one hook becomes two. (A later change folded
+`lsp_references` and `lsp_callgraph` into `lsp_query`, so the count is six — see
+[2026-10-27-lsp-query-merge](./2026-10-27-lsp-query-merge.md).)
 
 **`lsp_hover` / `lsp_definition`** take `path` plus either `line`/`character` or a
 `symbol` name. The name resolves through the server's `textDocument/documentSymbol`
