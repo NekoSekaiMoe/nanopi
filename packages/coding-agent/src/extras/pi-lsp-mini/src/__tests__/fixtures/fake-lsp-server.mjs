@@ -24,6 +24,14 @@
  *
  * `textDocument/prepareCallHierarchy` / `callHierarchy/incomingCalls` answer
  * FAKE_LSP_FANOUT callers (default 0), so a call-graph walk can be steered.
+ *
+ * `textDocument/documentSymbol` reports every identifier of the file as a
+ * function symbol, `textDocument/hover` echoes the identifier under the cursor,
+ * and `textDocument/definition` points at the first line of the file - enough
+ * for a test to tell which cursor the client resolved.
+ *
+ * FAKE_LSP_NO_SYMBOLS=1 makes documentSymbol fail with an error, which is how a
+ * test covers a server that does not implement it.
  */
 import { Buffer } from "node:buffer";
 import { appendFileSync } from "node:fs";
@@ -38,6 +46,7 @@ const delayMs = Number(process.env.FAKE_LSP_DELAY_MS ?? 0);
 const slowMs = Number(process.env.FAKE_LSP_SLOW_MS ?? 0);
 const logFile = process.env.FAKE_LSP_LOG;
 const fanout = Number(process.env.FAKE_LSP_FANOUT ?? 0);
+const noSymbols = process.env.FAKE_LSP_NO_SYMBOLS === "1";
 
 function send(payload) {
 	const body = Buffer.from(JSON.stringify(payload), "utf8");
@@ -80,6 +89,32 @@ function hierarchyItem(uri, name, line) {
 	return { name, kind: 12, uri, range, selectionRange: range };
 }
 
+/** Every identifier on its own line, as a function symbol. */
+function documentSymbols(uri, text) {
+	const lines = text.split(/\r?\n/);
+	const symbols = [];
+	lines.forEach((line, index) => {
+		for (const match of line.matchAll(/[A-Za-z_$][A-Za-z0-9_$]*/g)) {
+			const start = { line: index, character: match.index };
+			const end = { line: index, character: match.index + match[0].length };
+			symbols.push({ name: match[0], kind: 12, range: { start, end }, selectionRange: { start, end } });
+		}
+	});
+	return symbols;
+}
+
+/** The identifier at the cursor, so a test can read back which position was resolved. */
+function wordAt(uri, position) {
+	const text = documents.get(uri) ?? "";
+	const line = text.split(/\r?\n/)[Number(position.line)] ?? "";
+	const match = /[A-Za-z_$][A-Za-z0-9_$]*/g;
+	for (const token of line.matchAll(match)) {
+		const end = token.index + token[0].length;
+		if (position.character >= token.index && position.character <= end) return token[0];
+	}
+	return "";
+}
+
 function dispatch(message) {
 	const { id, method, params } = message;
 	if (method === "$/cancelRequest") {
@@ -87,7 +122,38 @@ function dispatch(message) {
 		return;
 	}
 	if (method === "initialize") {
-		send({ jsonrpc: "2.0", id, result: { capabilities: { textDocumentSync: 1, callHierarchyProvider: true } } });
+		send({
+			jsonrpc: "2.0",
+			id,
+			result: {
+				capabilities: {
+					textDocumentSync: 1,
+					callHierarchyProvider: true,
+					hoverProvider: true,
+					definitionProvider: true,
+					...(noSymbols ? {} : { documentSymbolProvider: true }),
+				},
+			},
+		});
+		return;
+	}
+	if (method === "textDocument/documentSymbol") {
+		if (noSymbols) {
+			send({ jsonrpc: "2.0", id, error: { code: -32601, message: "method not found" } });
+			return;
+		}
+		send({ jsonrpc: "2.0", id, result: documentSymbols(params.textDocument.uri, documents.get(params.textDocument.uri) ?? "") });
+		return;
+	}
+	if (method === "textDocument/hover") {
+		const word = wordAt(params.textDocument.uri, params.position);
+		send({ jsonrpc: "2.0", id, result: word ? { contents: { kind: "markdown", value: `hover: ${word}` } } : null });
+		return;
+	}
+	if (method === "textDocument/definition") {
+		const word = wordAt(params.textDocument.uri, params.position);
+		const range = { start: { line: 0, character: 0 }, end: { line: 0, character: word.length } };
+		send({ jsonrpc: "2.0", id, result: word ? [{ uri: params.textDocument.uri, range }] : null });
 		return;
 	}
 	if (method === "textDocument/prepareCallHierarchy") {
