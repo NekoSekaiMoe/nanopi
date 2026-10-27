@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { writeFileSync } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ import test from "node:test";
 // 入口层的契约：子命令选对了脚本，判定失败要以非零退出码传出去。判定本身由
 // mirror-main.test.mjs / mirror-tags.test.mjs 覆盖。
 const script = fileURLToPath(new URL("./mirror.mjs", import.meta.url));
+const credentialsScript = fileURLToPath(new URL("./mirror-credentials.mjs", import.meta.url));
 
 const gitEnv = {
 	...process.env,
@@ -136,4 +137,37 @@ test("a failed mirror neither prints the token nor leaves the credential dir beh
 
 	const leaked = spawnSync("bash", ["-c", "ls -d /tmp/nanopi-mirror-credentials-* 2>/dev/null | wc -l"], { encoding: "utf8" });
 	assert.equal(leaked.stdout.trim(), "0");
+});
+
+// 凭据必须落在 store helper 会去读的位置：它认的是 $XDG_CONFIG_HOME/git/credentials，
+// 而不是 $XDG_CONFIG_HOME/git-credentials。写错位置时目录建好了、文件也写了，但每个
+// 请求仍然匿名，第一次 push 就报 could not read Username。
+// 这里不读文件，直接让 store 走一遍 credential fill：那才是 git 真正会走的路。
+test("installed credentials are what the store helper returns", async (t) => {
+	const home = await mkdtemp(join(tmpdir(), "nanopi-mirror-xdg-"));
+	t.after(() => rm(home, { force: true, recursive: true }));
+
+	const probe = `
+		import { spawnSync } from "node:child_process";
+		import { installCredential, clearCredential } from ${JSON.stringify(credentialsScript)};
+
+		process.env.XDG_CONFIG_HOME = ${JSON.stringify(home)};
+		installCredential("https://github.com/nanopi-probe/x.git", "x-access-token", "s3cret");
+		const filled = spawnSync("git", ["credential", "fill"], {
+			input: "protocol=https\\nhost=github.com\\n\\n",
+			encoding: "utf8",
+			env: process.env,
+		});
+		clearCredential();
+		console.log(JSON.stringify({ stdout: filled.stdout, stderr: filled.stderr }));
+	`;
+	const result = spawnSync(process.execPath, ["--input-type=module", "-e", probe], {
+		cwd: process.cwd(),
+		encoding: "utf8",
+		env: gitEnv,
+	});
+	assert.equal(result.status, 0, result.stderr);
+	const filled = JSON.parse(result.stdout.trim().split("\n").at(-1));
+	assert.match(filled.stdout, /username=x-access-token/);
+	assert.match(filled.stdout, /password=s3cret/, filled.stderr);
 });
