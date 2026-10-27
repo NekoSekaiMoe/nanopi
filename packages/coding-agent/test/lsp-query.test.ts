@@ -2,15 +2,7 @@ import { rmSync } from "node:fs";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { resetServersCache } from "../src/extras/pi-lsp-mini/src/config.ts";
 import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
-import {
-	DEFINITION,
-	DELETE,
-	DIAGNOSTICS,
-	HOVER,
-	LSP_GUIDANCE,
-	QUERY,
-	RENAME,
-} from "../src/extras/pi-lsp-mini/src/schemas.ts";
+import { DEFINITION, DIAGNOSTICS, EDIT, HOVER, LSP_GUIDANCE, QUERY } from "../src/extras/pi-lsp-mini/src/schemas.ts";
 import { lspTools, project, run } from "./helpers/pi-lsp-tools.ts";
 
 const savedEnv = { ...process.env };
@@ -51,7 +43,7 @@ it("registers one query tool instead of references and callgraph", () => {
 	expect(tools.has("lsp_query")).toBe(true);
 	expect(tools.has("lsp_references")).toBe(false);
 	expect(tools.has("lsp_callgraph")).toBe(false);
-	expect(tools.size).toBe(6);
+	expect(tools.size).toBe(5);
 });
 
 it("lists uses of the symbol under the cursor with the source line", async () => {
@@ -104,7 +96,7 @@ it("tells the model to prefer lsp_ over opening the file, not just over grep", (
 // Every lsp_ tool pays for this guidance on every request, so two tools must not
 // hand the model two spellings of one rule.
 it("registers the shared guidance once per tool, without duplicates", () => {
-	for (const tool of [DIAGNOSTICS, HOVER, DEFINITION, QUERY, RENAME, DELETE]) {
+	for (const tool of [DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT]) {
 		const guidelines = tool.promptGuidelines ?? [];
 		expect(guidelines.length).toBeGreaterThan(0);
 		expect(new Set(guidelines).size).toBe(guidelines.length);

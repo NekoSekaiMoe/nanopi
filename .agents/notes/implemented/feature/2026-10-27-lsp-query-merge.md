@@ -60,8 +60,7 @@ Measured on the serialized schemas, descriptions and snippets:
 | prompt tokens | ~990 | ~820 |
 
 - The character budget above counts schema, description and snippet. A later
-  change added per-tool `promptGuidelines`, which took the six tools to 4543
-  characters — see
+  change added per-tool `promptGuidelines` — see
   [LSP 工具要跟 `read` 竞争](../../implemented/bug-fix/2026-10-27-lsp-tools-lose-to-read.md).
   The reasoning in *this* note (do not state the efficiency argument twice)
   still holds; it just turned out that "efficiency" was never the gap.
@@ -74,10 +73,11 @@ Measured on the serialized schemas, descriptions and snippets:
   longer disagree about off-by-one columns.
 - `lsp_query` gained no behavior. Its two branches are the two handlers that
   existed, extracted into functions so the tool definition stays a router.
-- The tool surface is now one place where a future merge of `rename`/`delete`
-  would land; that change is separate because it moves a destructive default
-  (`apply`), and a reviewer should not have to read a text edit and a behavior
-  change in the same diff.
+- The tool surface is now one place where the `rename`/`delete` merge lands. It
+  is a separate change — see
+  [2026-10-27-lsp-edit-merge](./2026-10-27-lsp-edit-merge.md) — because it moves
+  a destructive default (`apply`), and a reviewer should not have to read a text
+  edit and a behavior change in the same diff.
 
 ## Alternatives considered
 

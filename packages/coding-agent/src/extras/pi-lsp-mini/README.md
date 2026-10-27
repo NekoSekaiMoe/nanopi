@@ -1,8 +1,8 @@
 # pi-lsp-mini
 
 Lean LSP extension for the [pi](https://github.com/earendil-works/pi) coding agent.
-Four features, minimal prompt footprint (all 6 tools measured at 4543 characters
-of JSON schema + descriptions + snippets + guidelines, ~1140 tokens, all of it on
+Four features, minimal prompt footprint (all 5 tools measured at 3988 characters
+of JSON schema + descriptions + snippets + guidelines, ~1000 tokens, all of it on
 the tool declarations themselves):
 
 - **Signatures** — `lsp_hover` and `lsp_definition`: what a symbol's type is and
@@ -14,12 +14,13 @@ the tool declarations themselves):
 - **Call relations** — `lsp_query` with `kind: "callgraph"` walks
   incoming/outgoing call hierarchy recursively (who calls this function / what
   it calls); a server without call hierarchy answers with references instead.
-- **Batch replace / delete** — `lsp_rename` (scope-aware workspace rename) and
-  `lsp_delete` (removes a function plus every standalone call-site line;
-  non-standalone usages are listed for manual cleanup, dry-run by default).
+- **Batch replace / delete** — `lsp_edit` with `kind: "rename"` (scope-aware
+  workspace rename) or `kind: "delete"` (removes a function plus every
+  standalone call-site line; non-standalone usages are listed for manual
+  cleanup). Both dry-run unless `apply=true`.
 
 Also: `lsp_query` with `kind: "references"` (the default), `/lsp` command,
-post-edit auto re-check after rename/delete.
+post-edit auto re-check after `lsp_edit`.
 
 ## Tools
 
@@ -29,8 +30,7 @@ post-edit auto re-check after rename/delete.
 | `lsp_hover` | Signature and doc comment at a position, or of a named `symbol`. |
 | `lsp_definition` | `file:line` where the symbol at a position (or a named `symbol`) is declared. |
 | `lsp_query` | `kind: "references"` (default) lists all usages of a symbol; `kind: "callgraph"` walks callers/callees (`direction`, `depth` 1-4). |
-| `lsp_rename` | Workspace rename. `apply=false` for dry-run. Applies + re-checks diagnostics. |
-| `lsp_delete` | Delete declaration + standalone call lines. Dry-run by default, `apply=true` executes. |
+| `lsp_edit` | `kind: "rename"` (`newName`) or `kind: "delete"`. Dry-run unless `apply=true`; applies + re-checks diagnostics. |
 
 All positions are 1-based (`line`, `character`); columns are auto-snapped to the
 nearest identifier, so off-by-one is tolerated.
@@ -139,7 +139,7 @@ takes longer than a fixed default, and the only thing the model saw for that was
 "tool failed" — no way to tell "no results" from "still working". Raising the
 deadline is the fix; retrying a request that was still running was never one.
 
-`lsp_query`, `lsp_rename` and `lsp_delete` also take a per-call `timeoutMs`, so
+`lsp_query` and `lsp_edit` also take a per-call `timeoutMs`, so
 one expensive call can be given room without changing the setting. On `lsp_diagnostics` the same value replaces the wait allowance
 (`diagnosticsWaitMs`), which is how a directory scan of a large project is given
 more time to settle.
@@ -239,11 +239,11 @@ language-server binaries you want are on PATH (or configured in
 
 ## Notes
 
-- Prompt budget: all 6 tools cost ~1140 request tokens (2563 characters of
-  serialized schema, 705 of descriptions and snippets, 1275 in the `<tools>` and
-  `<rules>` sections). Tool texts live in `src/schemas.ts` — keep them lean when
-  editing, and put "when to use this" in `promptSnippet` instead of repeating it
-  in `description`.
+- Prompt budget: all 5 tools cost 3988 characters (~1000 request tokens):
+  2385 of serialized schema, 572 of descriptions and snippets, 321 in the
+  `<tools>` list and 710 in `<rules>`. Tool texts live in `src/schemas.ts` — keep
+  them lean when editing, and split the two jobs: `promptSnippet` says what the
+  tool is for, `promptGuidelines` says when to reach for it.
 
 - Guidance competes with `read`, not just with `grep`. The shared rule
   (`LSP_GUIDANCE`) is attached to every tool and names the moment to reach for
@@ -264,8 +264,11 @@ language-server binaries you want are on PATH (or configured in
 - Delete heuristics: only *standalone* statement lines (`foo(x);`, `await foo()`,
   `defer foo()`, multi-line argument lists) are removed automatically. Usages in
   assignments, arguments, or callbacks are reported as `✋ manual`.
-- Rename/delete re-open changed files on the server and re-run diagnostics,
-  reporting new errors introduced by the change.
+- `lsp_edit` re-opens changed files on the server and re-runs diagnostics,
+  reporting new errors introduced by the change. Rename and delete share one
+  tool because they share that lifecycle, and both need `apply=true`: a
+  workspace edit a model did not ask to be written is not recoverable from a
+  tool message, and the preview costs one extra call.
 - The post-`edit` check waits for a publish it can prove is new. Servers that
   only re-publish on `didSave` therefore report nothing there — that is the
   intended trade: silence instead of a stale error blamed on the edit.

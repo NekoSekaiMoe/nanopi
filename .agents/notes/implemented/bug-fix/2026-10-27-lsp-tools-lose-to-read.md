@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-`pi-lsp-mini` 的六个工具在正常模式下几乎不被调用，模型宁愿 `read` 整个文件去
+`pi-lsp-mini` 的工具在正常模式下几乎不被调用，模型宁愿 `read` 整个文件去
 回答"这个函数的签名是什么"。生产环境观察到的行为，不是猜测。
 
 前两篇笔记把这件事当成"文案效率问题"处理过：`lsp-query-merge` 删掉了
@@ -49,16 +49,22 @@ description 里的效率论证（认为"有 read 和 LSP 摆在面前时，省�
   句："What a symbol's signature/doc is, by name or position"。原来的写法把这
   个工具定位成一个可选的优化技巧，而 `read` 的 snippet 是干巴巴的 "Read file
   contents" —— 在模型眼里前者像捷径，后者像正事。
-- **六个工具统一从 `schemas.ts` 取 `promptGuidelines`**，注册处不再硬编码
+- **每个工具统一从 `schemas.ts` 取 `promptGuidelines`**，注册处不再硬编码
   `[LSP_GUIDANCE]`，这样"何时用"和参数语义待在同一份声明里。`buildRules`
   对重复规则去重，所以共享那条在渲染后的 `<rules>` 里只出现一次。
 
 ## Consequences
 
-`<rules>` 里 lsp 相关的规则从 1 条（约 460 字符）变成 5 条（807 字符），加
-上 `<tools>` 的 468 字符，六个工具的 prompt 总量从 3277 字符（约 820 tokens）
-涨到 4543 字符（约 1140 tokens）。多出的约 320 tokens 是每请求都付的代价，买
-的是工具真的会被选。
+`pi-lsp-mini` 合并到五个工具（`lsp_edit` 吃掉了 `lsp_rename`/`lsp_delete`）后
+的实测：prompt 总量（序列化 schema + description + snippet + 渲染后的 `<tools>`
+和 `<rules>`）从 3804 字符涨到 3988 字符，约 950 → 1000 tokens。多出的约 45
+tokens 是每请求都付的代价，买的是工具真的会被选。
+
+涨得比直觉少，是因为 `buildRules` 去重：五个工具各自 `promptGuidelines` 数组
+的第一条都是同一句 `LSP_GUIDANCE`，渲染后只出现一次。每个工具真正新增的成本
+只是它自己那一句（规则文本 + 列表符和换行），共 4 句约 184 字符。**换句话说，
+共享那条已经是沉没成本，往后给单个工具补一句"什么时候用我"几乎不花钱** ——
+这条是这次测量里最值得记住的一点，因为它反过来支持"多写具体场景"这个方向。
 
 代价里有一条要盯住：规则变长会稀释后面的规则。这 5 条都放在 `<rules>`
 里且每条都指向具体工具，没有一条只是"LSP 很好"。如果之后有人想再加一条解
@@ -83,7 +89,7 @@ body; the lsp_ tools answer questions about symbols"）。更对称，也不用�
 才行。
 
 **把提示塞进 system prompt 的固定段落**（而不是挂在工具声明上）。那样就不
-用为六个工具各存一份。否掉：`pi-lsp-mini` 是一个可在运行时被关掉的模块，
+用为每个工具各存一份。否掉：`pi-lsp-mini` 是一个可在运行时被关掉的模块，
 固定段落无法随模块消失而收回，会留下指向不存在工具的规则。
 
 **调大 `promptSnippet` 而不加 `promptGuidelines`**。snippet 只进 `<tools>`

@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModuleApi, ModuleToolContext, ToolDefinition } from "../../src/core/modules/types.ts";
@@ -36,6 +36,11 @@ export function lspTools(): Map<string, ToolDefinition> {
 	} as unknown as ModuleApi;
 	lspMiniExtension(stub);
 	return tools;
+}
+
+/** The file's content after a tool ran: a dry-run must leave it untouched. */
+export function contents(file: string): string {
+	return readFileSync(file, "utf8");
 }
 
 /** A project whose only language server is the fake one. `env` steers that server. */

@@ -85,25 +85,15 @@ export const QUERY = {
   }),
 };
 
-export const RENAME = {
-  description: "Rename a symbol across the workspace (scope-aware batch replace). apply=false previews.",
-  promptSnippet: "Rename a symbol workspace-wide",
+export const EDIT = {
+  description: "Rename or delete a symbol across the workspace. scope-aware; dry-run unless apply=true.",
+  promptSnippet: "Rename/delete a symbol workspace-wide (dry-run first)",
   promptGuidelines: [LSP_GUIDANCE],
   parameters: Type.Object({
     ...POSITION,
-    newName: Type.String(),
-    apply: Type.Optional(Type.Boolean({ description: "default true" })),
-    timeoutMs: TIMEOUT,
-  }),
-};
-
-export const DELETE = {
-  description: "Delete a function and its standalone call-statement lines; other usages are listed as manual. Dry-run unless apply=true.",
-  promptSnippet: "Delete a function and its call sites",
-  promptGuidelines: [LSP_GUIDANCE],
-  parameters: Type.Object({
-    ...POSITION,
-    apply: Type.Optional(Type.Boolean({ description: "default false" })),
+    kind: Type.Union([Type.Literal("rename"), Type.Literal("delete")], { description: "rename needs newName" }),
+    newName: Type.Optional(Type.String({ description: "target name for kind=rename" })),
+    apply: Type.Optional(Type.Boolean({ description: "default false: preview only" })),
     timeoutMs: TIMEOUT,
   }),
 };
