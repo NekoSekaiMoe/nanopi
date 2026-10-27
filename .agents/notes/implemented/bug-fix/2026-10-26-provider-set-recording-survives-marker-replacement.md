@@ -86,6 +86,10 @@ so the checkout matches what the generator writes.
   alongside it.
 - The build's cross-check is unchanged: unreachable catalog still fails, unknown
   provider in a set still fails.
+- The fallback this note introduced was withdrawn once curating the catalog left
+  every set holding concrete ids: it then wrote the whole catalog into the
+  default flavor's set, which is the 3.5 MiB the curation removed. See
+  [curated catalog survives generation](2026-10-27-curated-catalog-survives-generation.md).
 
 ## Testing
 
