@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- `pi-lsp-mini`'s `lsp_rename` and `lsp_delete` are now one `lsp_edit` tool with `kind: "rename"` (plus `newName`) or `kind: "delete"`. They are the same lifecycle — destructive, workspace-wide, sequential, then a server rescan — and keeping them apart meant two copies of the dry-run, outside-project-skip, and post-change-check logic that had to be kept in sync by comment. **`apply` now defaults to `false` for both branches**, where `rename` used to default to `true`: one tool cannot keep two defaults, and a workspace edit a model did not ask to be written is not recoverable from a tool message. A rename therefore costs one extra call (preview, then `apply=true`) and no longer writes anything by accident
+
 ### Added
 
 - `pi-lsp-mini` gained `lsp_hover` and `lsp_definition`, the two LSP requests that save the most context per call: a signature or a doc comment is one short answer instead of a whole file read, and a definition is a `file:line` instead of a grep. Both take `line`/`character` *or* a `symbol` name that the server's own document symbols are asked to locate, so a model that knows the name does not have to read the file to find the column; a server without `textDocument/documentSymbol` falls back to the file text, and hover output is capped at 1600 characters so a 4k doc comment does not undo the saving. `read` now also carries the errors a file already has (`readDiagnostics` in `~/.nanopi/agent/lsp.json`, on by default, errors only, 4s budget): the model learns a file was broken before it started editing it instead of after, and nothing is reported when the file is clean, no server matches, or the publish is not newer than the `didOpen` for that read (issue [#333](https://cnb.cool/shinytale/nanopi/-/issues/333))
@@ -30,6 +34,7 @@
 
 ### Removed
 
+- `pi-lsp-mini` folds `lsp_rename` and `lsp_delete` into one `lsp_edit` tool, so the shared destructive-workspace-edit invariants (dry-run, outside-project skip, `executionMode: "sequential"`, post-change rescan) have one owner. Tool count is 5 instead of 7 (with `lsp_query`), 2966 characters of serialized schema+text instead of 3378, ~740 request tokens instead of ~990
 - `pi-lsp-mini` folds `lsp_references` and `lsp_callgraph` into one `lsp_query` tool (`kind: "references"` by default, `kind: "callgraph"` for callers/callees). They are the same question at two granularities on identical position parameters, and `callgraph` already fell back to references on servers without call hierarchy, so the two names made the model pick a tool where it meant to pick a detail. A tool named `kind` still has to say what it does, so `promptSnippet` now carries "find usages ... or trace callers/callees" the way the old tool names did. The description/snippet duplication went with it: "without reading the file" / "without grepping for it" said what `promptSnippet` already said, so each text now has one job (description = how to call it, snippet = when). Measured: 6 tools instead of 7, 3277 characters of serialized schema+text instead of 3378, ~820 request tokens instead of ~990
 - The pi-fake-codex `apply_patch` tool alias is gone. It was a byte-for-byte clone of `edit` under a Codex name, scoped to the impersonated Responses APIs, and it bought nothing: `edit` already handles exact replacement, and models reached over the plain `openai-completions` protocol (which never saw the alias) confused the two names anyway. The module now only does what its name says: Codex identity headers, `openai-responses` body normalization, and the Codex-compatible hook adapter (issue [#292](https://cnb.cool/shinytale/nanopi/-/issues/292))
 

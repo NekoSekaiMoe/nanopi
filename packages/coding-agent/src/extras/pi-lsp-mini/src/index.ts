@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
 import {
   LspManager,
+  type Ctx,
   formatDiagnostic,
   severityRank,
   delay,
@@ -12,7 +13,7 @@ import {
 import { uriToFilePath, type LspClient } from "./client.ts";
 import { loadServers, requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import { createBudget } from "./budget.ts";
-import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, RENAME, DELETE } from "./schemas.ts";
+import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { clampHover, hoverText } from "./hover.ts";
 import { resolveTarget } from "./symbol-target.ts";
@@ -194,6 +195,123 @@ async function callGraph(
     budget,
   );
   return textResult(report);
+}
+
+// ---------------------------------------------------------------------------
+// lsp_edit branches
+// ---------------------------------------------------------------------------
+
+/** `apply` is opt-in for both branches: a workspace edit is destructive and the
+ *  model can preview it for one extra call. */
+function willApply(params: { apply?: boolean }): boolean {
+  return params.apply === true;
+}
+
+function dryRunHint(kind: string): string {
+  return `\n\nre-run with apply=true to execute this ${kind}.`;
+}
+
+async function renameSymbol(
+  target: Opened,
+  file: string,
+  p: { line: number; character: number },
+  newName: string,
+  params: { apply?: boolean; timeoutMs?: number },
+  request: Ctx,
+): Promise<ToolResult> {
+  if (!target.client.supportsRename) return textResult(`${target.match.server.id} does not support rename`);
+  const ws = await target.client.rename(file, p.line, p.character, newName, perCall(target.match, params.timeoutMs, request.signal));
+  const { fileEdits, skipped } = normalizeWorkspaceEdit(ws);
+  if (fileEdits.length === 0) {
+    return textResult(`cannot rename at ${path.relative(request.cwd, file)} (no edits returned${skipped.length ? `; skipped: ${skipped.join(", ")}` : ""})`);
+  }
+  const root = target.match.root;
+  const outside = fileEdits.filter((fe) => {
+    const rel = path.relative(root, fe.file);
+    return rel.startsWith("..") && path.relative(request.cwd, fe.file).startsWith("..");
+  });
+  const usable = fileEdits.filter((fe) => !outside.includes(fe));
+
+  const total = usable.reduce((sum, fe) => sum + fe.edits.length, 0);
+  const plan = usable.map((fe) => `  ${path.relative(request.cwd, fe.file)}: ${fe.edits.length} edit(s)`).join("\n");
+  const notes: string[] = [];
+  if (outside.length > 0) notes.push(`skipped (outside project): ${outside.map((fe) => path.relative(request.cwd, fe.file)).join(", ")}`);
+  if (skipped.length > 0) notes.push(`unsupported ops skipped: ${skipped.join(", ")}`);
+
+  const header = `rename to '${newName}': ${total} edit(s) in ${usable.length} file(s)`;
+  const body = [plan, ...notes].filter(Boolean).join("\n");
+  if (!willApply(params)) return textResult(`dry-run: ${header}\n${body}${dryRunHint("rename")}`);
+
+  for (const fe of usable) {
+    const text = await fs.readFile(fe.file, "utf8");
+    await fs.writeFile(fe.file, applyTextEdits(text, fe.edits));
+  }
+  const report = await rescan(request, usable.map((fe) => fe.file));
+  return textResult([`✓ renamed to '${newName}': ${total} edit(s) in ${usable.length} file(s)`, body, report ? `\npost-rename check:\n${report}` : ""].filter(Boolean).join("\n"));
+}
+
+async function deleteSymbol(
+  target: Opened,
+  file: string,
+  p: { line: number; character: number },
+  params: { apply?: boolean; timeoutMs?: number },
+  request: Ctx,
+): Promise<ToolResult> {
+  const cwd = request.cwd;
+  const symbols = await target.client.documentSymbol(file, perCall(target.match, undefined, request.signal));
+  const decl = findSymbolAt(symbols, p.line, p.character);
+  if (!decl) return textResult(`no symbol found at ${path.relative(cwd, file)}:${p.line + 1} — place the position on the declaration name`);
+
+  const declRange = expandOverDocLines(await readLines(file), {
+    start: decl.range.start.line,
+    end: decl.range.end.line,
+  });
+
+  const refs = (await target.client.references(file, p.line, p.character, false, perCall(target.match, params.timeoutMs, request.signal))) ?? [];
+  const usages = refs.filter((ref) => !(fmtLoc(ref) === `${file}:${decl.range.start.line + 1}`));
+
+  const plans: string[] = [];
+  const rangesByFile = new Map<string, LineRange[]>();
+  const addRange = (f: string, range: LineRange) => rangesByFile.set(f, [...(rangesByFile.get(f) ?? []), range]);
+  addRange(file, declRange);
+  const kindName = decl.kind === 12 ? "function" : decl.kind === 6 ? "variable" : decl.kind === 13 ? "method" : "symbol";
+  plans.push(`declaration: ${path.relative(cwd, file)}:${declRange.start + 1}-${declRange.end + 1}  delete ${kindName} '${decl.name}' (${declRange.end - declRange.start + 1} line(s))`);
+
+  const manual: string[] = [];
+  const cacheLines = new Map<string, string[]>();
+  const linesOf = async (f: string): Promise<string[]> => {
+    if (!cacheLines.has(f)) cacheLines.set(f, await readLines(f));
+    return cacheLines.get(f)!;
+  };
+
+  for (const ref of usages) {
+    const f = fmtLoc(ref).replace(/:\d+$/, "");
+    if (f === file && ref.range.start.line >= declRange.start && ref.range.start.line <= declRange.end) continue;
+    const plan = planUsage(await linesOf(f), ref);
+    if (plan.kind === "delete") {
+      addRange(f, plan.lines);
+      plans.push(`usage: ${path.relative(cwd, f)}:${plan.lines.start + 1}${plan.lines.end > plan.lines.start ? `-${plan.lines.end + 1}` : ""}  delete line(s)`);
+    } else {
+      manual.push(`${path.relative(cwd, f)}:${ref.range.start.line + 1}  ${plan.snippet}`);
+    }
+  }
+
+  const header = `delete '${decl.name}': ${usages.length} usage(s)`;
+  const body = [
+    ...plans.sort(),
+    ...(manual.length > 0 ? ["", "needs MANUAL cleanup (not standalone statements):", ...manual.sort().map((m) => `  ✋ ${m}`)] : []),
+  ].join("\n");
+  if (!willApply(params)) return textResult(`dry-run: ${header}\n${body}${dryRunHint("delete")}`);
+
+  const changed: string[] = [];
+  for (const [f, ranges] of rangesByFile) {
+    const lines = await linesOf(f);
+    const out = applyLineRangeDeletes(lines, mergeLineRanges(lines, ranges));
+    await fs.writeFile(f, out.join(dominantEolOf(await fs.readFile(f, "utf8"))));
+    changed.push(f);
+  }
+  const report = await rescan(request, changed);
+  return textResult([`✓ deleted '${decl.name}': ${changed.length} file(s) changed`, body, report ? `\npost-delete check:\n${report}` : ""].filter(Boolean).join("\n"));
 }
 
 // ---------------------------------------------------------------------------
@@ -404,138 +522,30 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     },
   });
 
-  // --- rename (batch replace) ----------------------------------------------
+  // --- edit (rename / delete symbol) ---------------------------------------
+  // Both branches are destructive, workspace-wide, need a dry-run first, and
+  // change the files the server already has open, so they share one tool: the
+  // shared invariants (position resolution, outside-project skip, sequential
+  // execution, post-change rescan) have one place to live instead of two that
+  // have to be kept in sync by comment.
   pi.registerTool({
-    name: "lsp_rename",
-    label: "LSP Rename",
-    description: RENAME.description,
-    promptSnippet: RENAME.promptSnippet,
+    name: "lsp_edit",
+    label: "LSP Edit",
+    description: EDIT.description,
+    promptSnippet: EDIT.promptSnippet,
     executionMode: "sequential",
-    parameters: RENAME.parameters,
+    parameters: EDIT.parameters,
     async execute(_id, params, signal, _u, ctx) {
-      const file = path.resolve(ctx.cwd, params.path);
+      if (params.kind === "rename" && !params.newName?.trim()) return textResult("kind=rename needs newName");
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
       if (!target) return textResult(`no language server matches ${params.path}`);
-      if (!target.client.supportsRename) return textResult(`${target.match.server.id} does not support rename`);
-      const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
-      const ws = await target.client.rename(file, p.line, p.character, params.newName, perCall(target.match, params.timeoutMs, signal));
-      const { fileEdits, skipped } = normalizeWorkspaceEdit(ws);
-      if (fileEdits.length === 0) {
-        return textResult(`cannot rename at ${path.relative(ctx.cwd, file)}:${params.line} (no edits returned${skipped.length ? `; skipped: ${skipped.join(", ")}` : ""})`);
-      }
-      const root = target.match.root;
-      const outside = fileEdits.filter((fe) => {
-        const rel = path.relative(root, fe.file);
-        return rel.startsWith("..") && path.relative(ctx.cwd, fe.file).startsWith("..");
-      });
-      const usable = fileEdits.filter((fe) => !outside.includes(fe));
-
-      const total = usable.reduce((sum, fe) => sum + fe.edits.length, 0);
-      const plan = usable.map((fe) => `  ${path.relative(ctx.cwd, fe.file)}: ${fe.edits.length} edit(s)`).join("\n");
-      const notes: string[] = [];
-      if (outside.length > 0) notes.push(`skipped (outside project): ${outside.map((fe) => path.relative(ctx.cwd, fe.file)).join(", ")}`);
-      if (skipped.length > 0) notes.push(`unsupported ops skipped: ${skipped.join(", ")}`);
-
-      if (params.apply === false) {
-        return textResult(`dry-run: rename to '${params.newName}' would apply ${total} edit(s) in ${usable.length} file(s)\n${plan}${notes.length ? `\n${notes.join("\n")}` : ""}`);
-      }
-
-      for (const fe of usable) {
-        const text = await fs.readFile(fe.file, "utf8");
-        await fs.writeFile(fe.file, applyTextEdits(text, fe.edits));
-      }
-      const rescan1 = await rescan({ cwd: ctx.cwd, signal }, usable.map((fe) => fe.file));
-      return textResult(
-        [
-          `✓ renamed to '${params.newName}': ${total} edit(s) in ${usable.length} file(s)`,
-          plan,
-          ...notes,
-          rescan1 ? `\npost-rename check:\n${rescan1}` : "",
-        ].filter(Boolean).join("\n"),
-      );
-    },
-  });
-
-  // --- delete symbol (batch delete) ----------------------------------------
-  pi.registerTool({
-    name: "lsp_delete",
-    label: "LSP Delete Symbol",
-    description: DELETE.description,
-    promptSnippet: DELETE.promptSnippet,
-    executionMode: "sequential",
-    parameters: DELETE.parameters,
-    async execute(_id, params, signal, _u, ctx) {
       const file = path.resolve(ctx.cwd, params.path);
-      const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
-
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
-      const symbols = await target.client.documentSymbol(file, perCall(target.match, undefined, signal));
-      const decl = findSymbolAt(symbols, p.line, p.character);
-      if (!decl) return textResult(`no symbol found at ${path.relative(ctx.cwd, file)}:${params.line} — place the position on the declaration name`);
-
-      const declLines = await readLines(file);
-      const declRange = expandOverDocLines(declLines, {
-        start: decl.range.start.line,
-        end: decl.range.end.line,
-      });
-
-      const refs = (await target.client.references(file, p.line, p.character, false, perCall(target.match, params.timeoutMs, signal))) ?? [];
-      const usages = refs.filter((ref) => !(fmtLoc(ref) === `${file}:${decl.range.start.line + 1}`));
-
-      const plans = [];
-      const rangesByFile = new Map<string, LineRange[]>();
-      const addRange = (f: string, range: LineRange) => rangesByFile.set(f, [...(rangesByFile.get(f) ?? []), range]);
-      addRange(file, declRange);
-      const kindName = decl.kind === 12 ? "function" : decl.kind === 6 ? "variable" : decl.kind === 13 ? "method" : "symbol";
-      plans.push(`declaration: ${path.relative(ctx.cwd, file)}:${declRange.start + 1}-${declRange.end + 1}  delete ${kindName} '${decl.name}' (${declRange.end - declRange.start + 1} line(s))`);
-
-      const manual: string[] = [];
-      const cacheLines = new Map<string, string[]>();
-      const linesOf = async (f: string): Promise<string[]> => {
-        if (!cacheLines.has(f)) cacheLines.set(f, await readLines(f));
-        return cacheLines.get(f)!;
-      };
-
-      for (const ref of usages) {
-        const f = fmtLoc(ref).replace(/:\d+$/, "");
-        if (f === file && ref.range.start.line >= declRange.start && ref.range.start.line <= declRange.end) continue;
-        const lines = await linesOf(f);
-        const plan = planUsage(lines, ref);
-        if (plan.kind === "delete") {
-          addRange(f, plan.lines);
-          plans.push(`usage: ${path.relative(ctx.cwd, f)}:${plan.lines.start + 1}${plan.lines.end > plan.lines.start ? `-${plan.lines.end + 1}` : ""}  delete line(s)`);
-        } else {
-          manual.push(`${path.relative(ctx.cwd, f)}:${ref.range.start.line + 1}  ${plan.snippet}`);
-        }
+      const request = { cwd: ctx.cwd, signal };
+      if (params.kind === "rename") {
+        return renameSymbol(target, file, p, params.newName!.trim(), params, request);
       }
-
-      const header = `${params.apply ? "executing" : "dry-run"}: delete '${decl.name}' (${usages.length} usage(s))`;
-      const body = [
-        ...plans.sort(),
-        ...(manual.length > 0 ? ["", "needs MANUAL cleanup (not standalone statements):", ...manual.sort().map((m) => `  ✋ ${m}`)] : []),
-      ].join("\n");
-
-      if (!params.apply) {
-        return textResult(`${header}\n${body}\n\nre-run with apply=true to execute.`);
-      }
-
-      const changed: string[] = [];
-      for (const [f, ranges] of rangesByFile) {
-        const lines = await linesOf(f);
-        const merged = mergeLineRanges(lines, ranges);
-        const out = applyLineRangeDeletes(lines, merged);
-        await fs.writeFile(f, out.join(dominantEolOf(await fs.readFile(f, "utf8"))));
-        changed.push(f);
-      }
-      const rescan2 = await rescan({ cwd: ctx.cwd, signal }, changed);
-      return textResult(
-        [
-          `✓ deleted '${decl.name}': ${changed.length} file(s) changed`,
-          body,
-          rescan2 ? `\npost-delete check:\n${rescan2}` : "",
-        ].filter(Boolean).join("\n"),
-      );
+      return deleteSymbol(target, file, p, params, request);
     },
   });
 }

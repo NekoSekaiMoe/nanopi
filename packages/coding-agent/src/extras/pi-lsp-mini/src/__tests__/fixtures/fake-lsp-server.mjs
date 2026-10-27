@@ -37,6 +37,10 @@
  * cursor per line of the file, on that line. FAKE_LSP_NO_CALL_HIERARCHY=1 drops
  * callHierarchyProvider from the capabilities, which is how a test covers a
  * server that only knows references.
+ *
+ * `textDocument/rename` renames the identifier on the cursor's line, as one
+ * edit of that line - enough for a test to tell the applied file from the
+ * preview. FAKE_LSP_NO_RENAME=1 drops renameProvider.
  */
 import { Buffer } from "node:buffer";
 import { appendFileSync } from "node:fs";
@@ -53,6 +57,7 @@ const logFile = process.env.FAKE_LSP_LOG;
 const fanout = Number(process.env.FAKE_LSP_FANOUT ?? 0);
 const noSymbols = process.env.FAKE_LSP_NO_SYMBOLS === "1";
 const noCallHierarchy = process.env.FAKE_LSP_NO_CALL_HIERARCHY === "1";
+const noRename = process.env.FAKE_LSP_NO_RENAME === "1";
 
 function send(payload) {
 	const body = Buffer.from(JSON.stringify(payload), "utf8");
@@ -135,6 +140,7 @@ function dispatch(message) {
 				capabilities: {
 					textDocumentSync: 1,
 					...(noCallHierarchy ? {} : { callHierarchyProvider: true }),
+					...(noRename ? {} : { renameProvider: true }),
 					hoverProvider: true,
 					definitionProvider: true,
 					...(noSymbols ? {} : { documentSymbolProvider: true }),
@@ -176,6 +182,30 @@ function dispatch(message) {
 			});
 		});
 		send({ jsonrpc: "2.0", id, result: usages });
+		return;
+	}
+	if (method === "textDocument/rename") {
+		const uri = params.textDocument.uri;
+		const line = documents.get(uri)?.split(/\r?\n/)[Number(params.position.line)] ?? "";
+		const word = wordAt(uri, params.position);
+		const column = line.indexOf(word);
+		send({
+			jsonrpc: "2.0",
+			id,
+			result: {
+				changes: {
+					[uri]: [
+						{
+							range: {
+								start: { line: params.position.line, character: column },
+								end: { line: params.position.line, character: column + word.length },
+							},
+							newText: params.newName,
+						},
+					],
+				},
+			},
+		});
 		return;
 	}
 	if (method === "textDocument/prepareCallHierarchy") {

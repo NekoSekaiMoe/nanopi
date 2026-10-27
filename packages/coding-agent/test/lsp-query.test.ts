@@ -43,7 +43,7 @@ it("registers one query tool instead of references and callgraph", () => {
 	expect(tools.has("lsp_query")).toBe(true);
 	expect(tools.has("lsp_references")).toBe(false);
 	expect(tools.has("lsp_callgraph")).toBe(false);
-	expect(tools.size).toBe(6);
+	expect(tools.size).toBe(5);
 });
 
 it("lists uses of the symbol under the cursor with the source line", async () => {
