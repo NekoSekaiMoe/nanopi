@@ -1,8 +1,35 @@
+# CNB 上的失败构建要有人接着修（#319）。
+#
+# 平台没有「构建失败时跑一段」的事件，但每条 pipeline 都有 endStages：stages 跑完
+# 它都会跑，而且它自己的结论不影响构建状态。钩子挂在 endStages 上，而不是在每条
+# 流水线里各写一段——后者一定会漏掉没人想起来的那条。
+#
+# 报不报由脚本自己判（读构建状态），报什么由脚本里的提交标记去重：同一条分支的
+# 同一个提交只报一次。endStages 不继承 stages 的结论，所以不能靠 `if` 只让失败时跑，
+# 这也是「全部流水线都挂」不会刷屏的原因。
+
 # 将 CNB 仓库上的改动镜像推送到 GitHub（NekoSekaiMoe/nanopi）。
 #
 # 只在 main 的 push 事件触发；GitHub 侧的反向镜像见
 # .github/workflows/sync-to-cnb.yml。为避免互相覆盖，两侧都不用 force push。
 # GH_KEY 由密钥仓库 shinytale/keys 的 env.yml 注入。
+
+# 每个 job 的 endStages 都用这一段（锚点在 YAML 里必须先定义后引用）。
+# allowFailure：钩子自己出错不能把构建状态改成失败，更不能盖掉原来的失败信息。
+#
+# 镜像里没有 node（默认构建镜像是 alpine，见 check-merge-result 那一段的注释），
+# 也没有 cnb：脚本要用 cnb 读构建状态、写 Issue，所以先装。
+# CNB_TOKEN 在 endStages 里默认只有构建详情只读，写 Issue 要显式加 scope。
+x-notify-failure: &notify-failure
+  - name: report-failure
+    allowFailure: true
+    env:
+      CNB_TOKEN_SCOPE: repo-issue:rw,repo-notes:rw,repo-cnb-history:r
+    script: |
+      set -uo pipefail
+      apt-get update && apt-get install nodejs -y
+      corepack enable npm && npm install -g pnpm @cnbcool/cnb-cli
+      node scripts/report-failed-check.mjs
 
 main:
   push:
@@ -13,6 +40,7 @@ main:
         cpus: 2
       imports:
         - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
+      endStages: *notify-failure
       stages:
         # CNB 不执行本地 git hooks，也没有修改已推送提交的 API，所以
         # Change-Id 只能在 CI 里检查，补不了；这里只报告不拦截。
@@ -53,6 +81,7 @@ main:
       runner:
         tags: cnb:arch:amd64
         cpus: 2
+      endStages: *notify-failure
       stages:
         - name: check-merge-result
           # fetch PR 分支、合并、比对都在 scripts/check-merge-result-cnb.mjs 里。
@@ -63,15 +92,24 @@ main:
             apt-get update && apt-get install nodejs -y
             node scripts/check-merge-result-cnb.mjs
 
-# AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
-#
-# install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
-# 而 pnpm install 的 --ignore-scripts 会把 prepare 一起跳过。hooks 装不上时
-# .husky/commit-msg 不会运行，NPC 提交就没有 Change-Id。
+# 兜底：没被上面的 main 规则接住的事件（新分支的 push、手动触发）也要有钩子。
+# `$` 的匹配是在 glob 之后，两类规则不会互相顶掉。
 $:
+  push:
+    - endStages: *notify-failure
+  pull_request.target:
+    - endStages: *notify-failure
+  pull_request.merged:
+    - endStages: *notify-failure
+  # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
+  #
+  # install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
+  # 而 pnpm install 的 --ignore-scripts 会把 prepare 一起跳过。hooks 装不上时
+  # .husky/commit-msg 不会运行，NPC 提交就没有 Change-Id。
   issue.comment@npc:
     - runner:
         cpus: 2
+      endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
       stages:
@@ -85,6 +123,7 @@ $:
   pull_request.comment@npc:
     - runner:
         cpus: 2
+      endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
       stages:
