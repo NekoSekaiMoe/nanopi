@@ -32,6 +32,11 @@
  *
  * FAKE_LSP_NO_SYMBOLS=1 makes documentSymbol fail with an error, which is how a
  * test covers a server that does not implement it.
+ *
+ * `textDocument/references` answers one usage of the identifier under the
+ * cursor per line of the file, on that line. FAKE_LSP_NO_CALL_HIERARCHY=1 drops
+ * callHierarchyProvider from the capabilities, which is how a test covers a
+ * server that only knows references.
  */
 import { Buffer } from "node:buffer";
 import { appendFileSync } from "node:fs";
@@ -47,6 +52,7 @@ const slowMs = Number(process.env.FAKE_LSP_SLOW_MS ?? 0);
 const logFile = process.env.FAKE_LSP_LOG;
 const fanout = Number(process.env.FAKE_LSP_FANOUT ?? 0);
 const noSymbols = process.env.FAKE_LSP_NO_SYMBOLS === "1";
+const noCallHierarchy = process.env.FAKE_LSP_NO_CALL_HIERARCHY === "1";
 
 function send(payload) {
 	const body = Buffer.from(JSON.stringify(payload), "utf8");
@@ -128,7 +134,7 @@ function dispatch(message) {
 			result: {
 				capabilities: {
 					textDocumentSync: 1,
-					callHierarchyProvider: true,
+					...(noCallHierarchy ? {} : { callHierarchyProvider: true }),
 					hoverProvider: true,
 					definitionProvider: true,
 					...(noSymbols ? {} : { documentSymbolProvider: true }),
@@ -154,6 +160,22 @@ function dispatch(message) {
 		const word = wordAt(params.textDocument.uri, params.position);
 		const range = { start: { line: 0, character: 0 }, end: { line: 0, character: word.length } };
 		send({ jsonrpc: "2.0", id, result: word ? [{ uri: params.textDocument.uri, range }] : null });
+		return;
+	}
+	if (method === "textDocument/references") {
+		const word = wordAt(params.textDocument.uri, params.position);
+		const text = documents.get(params.textDocument.uri) ?? "";
+		const usages = [];
+		text.split(/\r?\n/).forEach((line, index) => {
+			if (!word) return;
+			const column = line.indexOf(word);
+			if (column < 0) return;
+			usages.push({
+				uri: params.textDocument.uri,
+				range: { start: { line: index, character: column }, end: { line: index, character: column + word.length } },
+			});
+		});
+		send({ jsonrpc: "2.0", id, result: usages });
 		return;
 	}
 	if (method === "textDocument/prepareCallHierarchy") {

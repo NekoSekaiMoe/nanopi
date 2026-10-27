@@ -1,11 +1,18 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
-import { LspManager, formatDiagnostic, severityRank, delay, findProjectRoot } from "./manager.ts";
-import { uriToFilePath } from "./client.ts";
+import {
+  LspManager,
+  formatDiagnostic,
+  severityRank,
+  delay,
+  findProjectRoot,
+  type MatchedServer,
+} from "./manager.ts";
+import { uriToFilePath, type LspClient } from "./client.ts";
 import { loadServers, requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import { createBudget } from "./budget.ts";
-import { DIAGNOSTICS, HOVER, DEFINITION, REFERENCES, CALLGRAPH, RENAME, DELETE } from "./schemas.ts";
+import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { clampHover, hoverText } from "./hover.ts";
 import { resolveTarget } from "./symbol-target.ts";
@@ -115,6 +122,78 @@ async function rescan(ctx: { cwd: string; signal?: AbortSignal }, files: string[
     }
   }
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// lsp_query branches
+// ---------------------------------------------------------------------------
+
+type Opened = { client: LspClient; match: MatchedServer };
+type ToolResult = ReturnType<typeof textResult>;
+
+/** Who uses the symbol at the cursor, one block per file with the line's text. */
+async function references(
+  target: Opened,
+  file: string,
+  p: { line: number; character: number },
+  timeoutMs: number | undefined,
+  signal: AbortSignal | undefined,
+  cwd: string,
+): Promise<ToolResult> {
+  const refs = await target.client.references(file, p.line, p.character, false, perCall(target.match, timeoutMs, signal));
+  if (!refs || refs.length === 0) return textResult("no references found");
+  const byFile = new Map<string, Location[]>();
+  for (const ref of refs) {
+    const name = fmtLoc(ref).replace(/:\d+$/, "");
+    byFile.set(name, [...(byFile.get(name) ?? []), ref]);
+  }
+  const lines = [`symbol used in ${refs.length} place(s):`];
+  for (const [name, locations] of byFile) {
+    lines.push(`\n${path.relative(cwd, name)}`);
+    const fileLines = await readLines(name);
+    for (const location of locations) {
+      const ln = location.range.start.line;
+      lines.push(`  ${ln + 1}: ${fileLines[ln]?.trim().slice(0, 120) ?? ""}`);
+    }
+  }
+  return textResult(lines.join("\n"));
+}
+
+/**
+ * Callers/callees of the function at the cursor. A server without call
+ * hierarchy answers with references instead of nothing: the same question
+ * ("who touches this") at a coarser granularity, which is what the model would
+ * otherwise have to ask for in a second call.
+ */
+async function callGraph(
+  target: Opened,
+  file: string,
+  p: { line: number; character: number },
+  params: { direction?: string; depth?: number; timeoutMs?: number },
+  signal: AbortSignal | undefined,
+  cwd: string,
+): Promise<ToolResult> {
+  if (!target.client.supportsCallHierarchy) {
+    return references(target, file, p, params.timeoutMs, signal, cwd);
+  }
+  // One deadline for the whole walk (see budget.ts): with `both` and depth 3
+  // this is dozens of sequential hops, and per-hop timeouts add up to minutes.
+  const budget = createBudget({
+    timeoutMs: params.timeoutMs,
+    defaultTimeoutMs: requestTimeoutFor(target.match.server),
+    signal,
+  });
+  const items = await target.client.prepareCallHierarchy(file, p.line, p.character, budget);
+  const root: CallHierarchyItem | undefined = items?.[0];
+  if (!root) return textResult("no callable symbol at that position");
+  const report = await callGraphReport(
+    target.client,
+    root,
+    (params.direction ?? "both") as Direction,
+    Math.min(4, Math.max(1, params.depth ?? 2)),
+    budget,
+  );
+  return textResult(report);
 }
 
 // ---------------------------------------------------------------------------
@@ -308,70 +387,20 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     },
   });
 
-  // --- references ----------------------------------------------------------
+  // --- query (references / call graph) -------------------------------------
   pi.registerTool({
-    name: "lsp_references",
-    label: "LSP References",
-    description: REFERENCES.description,
-    promptSnippet: REFERENCES.promptSnippet,
-    parameters: REFERENCES.parameters,
+    name: "lsp_query",
+    label: "LSP Query",
+    description: QUERY.description,
+    promptSnippet: QUERY.promptSnippet,
+    parameters: QUERY.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
       if (!target) return textResult(`no language server matches ${params.path}`);
       const file = path.resolve(ctx.cwd, params.path);
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
-      const refs = await target.client.references(file, p.line, p.character, false, perCall(target.match, params.timeoutMs, signal));
-      if (!refs || refs.length === 0) return textResult("no references found");
-      const byFile = new Map<string, Location[]>();
-      for (const ref of refs) {
-        const file = fmtLoc(ref).replace(/:\d+$/, "");
-        byFile.set(file, [...(byFile.get(file) ?? []), ref]);
-      }
-      const lines = [`symbol used in ${refs.length} place(s):`];
-      for (const [file, locations] of byFile) {
-        lines.push(`\n${path.relative(ctx.cwd, file)}`);
-        for (const location of locations) {
-          const ln = location.range.start.line;
-          lines.push(`  ${ln + 1}: ${(await readLines(file))[ln]?.trim().slice(0, 120) ?? ""}`);
-        }
-      }
-      return textResult(lines.join("\n"));
-    },
-  });
-
-  // --- call graph ----------------------------------------------------------
-  pi.registerTool({
-    name: "lsp_callgraph",
-    label: "LSP Call Graph",
-    description: CALLGRAPH.description,
-    promptSnippet: CALLGRAPH.promptSnippet,
-    parameters: CALLGRAPH.parameters,
-    async execute(_id, params, signal, _u, ctx) {
-      const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
-      if (!target.client.supportsCallHierarchy) {
-        return textResult(`${target.match.server.id} does not support call hierarchy; use lsp_references instead`);
-      }
-      const p = snapPos((await fs.readFile(path.resolve(ctx.cwd, params.path), "utf8")).split(/\r?\n/), pos(params));
-      // One deadline for the whole walk (see budget.ts): with `both` and
-      // depth 3 this is dozens of sequential hops, and per-hop timeouts add up
-      // to minutes.
-      const budget = createBudget({
-        timeoutMs: params.timeoutMs,
-        defaultTimeoutMs: requestTimeoutFor(target.match.server),
-        signal,
-      });
-      const items = await target.client.prepareCallHierarchy(path.resolve(ctx.cwd, params.path), p.line, p.character, budget);
-      const root: CallHierarchyItem | undefined = items?.[0];
-      if (!root) return textResult("no callable symbol at that position");
-      const report = await callGraphReport(
-        target.client,
-        root,
-        (params.direction ?? "both") as Direction,
-        Math.min(4, Math.max(1, params.depth ?? 2)),
-        budget,
-      );
-      return textResult(report);
+      if (params.kind === "callgraph") return callGraph(target, file, p, params, signal, ctx.cwd);
+      return references(target, file, p, params.timeoutMs, signal, ctx.cwd);
     },
   });
 
