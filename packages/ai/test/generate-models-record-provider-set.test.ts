@@ -79,21 +79,49 @@ function providerIdsOf(configPath: string, setName: string): string[] {
 }
 
 describe("recordFullProviderSet", () => {
-	// Issue #219: the full set holds concrete ids after the first recording run,
-	// so the old marker lookup found nothing and the generator stopped writing
-	// buildconfig.json at all. A provider models.dev added then left the config
-	// naming a catalog set that no longer matched, and every following build
-	// failed in validateFlavorProviders with "No provider set lists: <new id>".
-	it("records a new catalog in the full set once the marker is gone", () => {
+	// Issue #329: a curated config lists concrete ids in every set, and the
+	// generator used to write the whole catalog into the default flavor's set
+	// because no marker was left. `full` ships that set, so one generation run
+	// turned the curated 30 catalogs into every catalog models.dev lists and the
+	// next `full` build put ~3.5 MiB of model data back in the artifact.
+	it("leaves a curated config alone instead of widening it", () => {
 		const buildConfig = {
 			defaultFlavor: "full",
 			components: { providers: { description: "Provider set" } },
 			providerSets: {
-				all: { description: "Every catalog", providers: ["anthropic"] },
+				presets: { description: "Curated catalog", providers: ["anthropic"] },
 				none: { description: "No catalog", providers: ["__NONE__"] },
 			},
 			flavors: {
-				full: { components: { "*": true, providers: "all" } },
+				full: { components: { "*": true, providers: "presets" } },
+				minimal: { components: { "*": false, providers: "none" } },
+			},
+		};
+		const { fixtureRoot, isolatedPackageRoot, configPath } = createFixture(buildConfig);
+		const preloadPath = writeModelsDevPreload(fixtureRoot);
+		const before = readFileSync(configPath, "utf8");
+
+		runGenerator(isolatedPackageRoot, preloadPath);
+
+		// The shard is still generated: only the config stays curated.
+		expect(existsSync(join(isolatedPackageRoot, "src", "providers", "morph.models.ts"))).toBe(true);
+		expect(readFileSync(configPath, "utf8")).toBe(before);
+		expect(providerIdsOf(configPath, "presets")).toEqual(["anthropic"]);
+	});
+
+	// The marker is where the catalog is recorded; a curated set beside it is a
+	// shipping decision, not a record of what exists.
+	it("records a new catalog in the set carrying the marker", () => {
+		const buildConfig = {
+			defaultFlavor: "full",
+			components: { providers: { description: "Provider set" } },
+			providerSets: {
+				all: { description: "Every catalog", providers: ["__ALL__"] },
+				presets: { description: "Curated catalog", providers: ["anthropic"] },
+				none: { description: "No catalog", providers: ["__NONE__"] },
+			},
+			flavors: {
+				full: { components: { "*": true, providers: "presets" } },
 				minimal: { components: { "*": false, providers: "none" } },
 			},
 		};
@@ -101,10 +129,10 @@ describe("recordFullProviderSet", () => {
 		const preloadPath = writeModelsDevPreload(fixtureRoot);
 
 		const result = runGenerator(isolatedPackageRoot, preloadPath);
+
 		expect(`${result.stdout}\n${result.stderr}`).toContain('in buildconfig.json provider set "all"');
-		// The new catalog is in the config, so the next build's
-		// validateFlavorProviders finds it instead of failing.
 		expect(providerIdsOf(configPath, "all")).toContain("morph");
+		expect(providerIdsOf(configPath, "presets")).toEqual(["anthropic"]);
 	});
 
 	it("leaves the config alone for a call that ships one explicit set", () => {

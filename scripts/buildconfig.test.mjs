@@ -10,6 +10,7 @@ import {
 	NO_PROVIDERS,
 	loadBuildConfig,
 	parseFlavorArg,
+	providerSetRecord,
 	resolveBuildFlavor,
 	resolveBuiltinApiIds,
 	resolveBuiltinProviderIds,
@@ -559,5 +560,33 @@ describe("real flavors", () => {
 		const minimal = resolveFlavorComponents(config, "minimal");
 		strictEqual(minimal["export-markdown"], false);
 		strictEqual(minimal["export-html"], false);
+	});
+});
+
+describe("providerSetRecord", () => {
+	// Regression for the curated catalog being overwritten: `full` ships the
+	// curated `presets` list, and a generation run used to write all 207
+	// catalogs back into it because no set carried `__ALL__` any more. That is
+	// ~3.5 MiB of model data the flavor deliberately left out.
+	it("leaves a curated config alone", () => {
+		strictEqual(providerSetRecord({ presets: { providers: ["openai", "anthropic"] } }, ["openai", "anthropic", "groq"]), undefined);
+	});
+
+	it("records the run in the set carrying the marker", () => {
+		deepStrictEqual(providerSetRecord({ all: { providers: [ALL_PROVIDERS] } }, ["openai", "anthropic"]), {
+			name: "all",
+			providers: ["anthropic", "openai"],
+		});
+	});
+
+	it("reports nothing when the marker set already matches", () => {
+		strictEqual(providerSetRecord({ all: { providers: ["openai"] } }, ["openai"]), undefined);
+	});
+
+	// A curated `presets` next to a marker set is left untouched: the marker
+	// says where the catalog is recorded, not the default flavor's set.
+	it("does not touch a curated set beside a marker set", () => {
+		const sets = { presets: { providers: ["openai"] }, all: { providers: [ALL_PROVIDERS] } };
+		deepStrictEqual(providerSetRecord(sets, ["openai", "groq"]), { name: "all", providers: ["groq", "openai"] });
 	});
 });

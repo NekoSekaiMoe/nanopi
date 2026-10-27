@@ -12,8 +12,8 @@ import {
 	BUILD_FLAVOR_ENV,
 	loadBuildConfig,
 	NO_PROVIDERS,
-	PROVIDERS_COMPONENT,
 	resolveBuildFlavor,
+	providerSetRecord,
 } from "../../../scripts/buildconfig.mjs";
 import {
 	CLOUDFLARE_AI_GATEWAY_ANTHROPIC_BASE_URL,
@@ -169,37 +169,30 @@ function flavorProviderSelection(): ReadonlySet<string> | undefined {
  * (see validateFlavorProviders).
  *
  * Only a run that writes every catalog records anything: an unflavored run
- * does, a trimmed one narrows its own shards on purpose. The set to record
- * carries the `__ALL__` marker, or, once a previous run replaced the marker
- * with concrete ids, is the set the default flavor ships; that flavor is what
- * wrote the catalog. Recording is not optional in the second case: a provider
- * models.dev adds would otherwise leave the config naming a catalog set that
- * no longer exists, and the next build fails in validateFlavorProviders.
+ * does, a trimmed one narrows its own shards on purpose. The set to record is
+ * the one carrying the `__ALL__` marker; a config whose sets all list concrete
+ * ids is curated on purpose and is left alone. Writing the whole catalog into
+ * the default flavor's set instead (what this did once no marker was left)
+ * turns a curated 30-catalog `presets` into every catalog models.dev lists, so
+ * the next `full` build ships ~3.5 MiB of model data nobody asked for. A
+ * provider models.dev adds is not silently dropped either: it is in no set, so
+ * `validateFlavorProviders` fails the build and names it.
  */
 function recordFullProviderSet(providerIds: readonly string[]): void {
-	const configPath = join(repoRoot, BUILD_CONFIG_FILENAME);
-	const config = loadBuildConfig(repoRoot);
 	// A trimmed run narrows the catalog on purpose and leaves the full set alone.
 	// `flavorProviderSelection` returns a set only for such a run, so the check
 	// is the same one the selection made.
 	if (generatorOptions.providers !== undefined) return;
-	const next = [...providerIds].sort();
-	// The marker, if a set still carries one, names the full set. Otherwise the
-	// set the default flavor ships does, because that flavor is the one that
-	// writes every catalog.
-	const markerSet = Object.entries(config.providerSets).find(([, set]) => set.providers.includes(ALL_PROVIDERS));
-	const shipped = markerSet?.[0] ?? config.flavors[config.defaultFlavor]?.components[PROVIDERS_COMPONENT];
-	if (typeof shipped !== "string") return;
-	const set = config.providerSets[shipped];
-	if (set === undefined) return;
-	const current = [...set.providers].sort();
-	if (current.length === next.length && current.every((providerId, index) => providerId === next[index])) return;
+	const configPath = join(repoRoot, BUILD_CONFIG_FILENAME);
+	const config = loadBuildConfig(repoRoot);
+	const record = providerSetRecord(config.providerSets, providerIds);
+	if (record === undefined) return;
 	const raw = JSON.parse(readFileSync(configPath, "utf8")) as {
 		providerSets: Record<string, { description?: string; providers: string[] }>;
 	};
-	raw.providerSets[shipped] = { ...set, providers: next };
+	raw.providerSets[record.name] = { ...config.providerSets[record.name], providers: record.providers };
 	writeFileSync(configPath, `${JSON.stringify(raw, null, "\t")}\n`);
-	console.log(`Recorded ${next.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${shipped}".`);
+	console.log(`Recorded ${record.providers.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${record.name}".`);
 }
 
 /**

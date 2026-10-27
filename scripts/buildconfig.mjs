@@ -463,6 +463,32 @@ function resolveFlavor(config, flavorName) {
 }
 
 /**
+ * The provider-set rewrite a full model generation implies, or undefined when
+ * the config already says it.
+ *
+ * Only a set carrying the `__ALL__` marker records the run: it is the one
+ * declaring "these are the catalogs that exist". A config whose sets all list
+ * concrete ids is curated on purpose and is left alone. Rewriting the default
+ * flavor's set instead — what this used to do once no marker was left — turns a
+ * curated 30-catalog `presets` into every catalog models.dev lists, and the
+ * next `full` build ships ~3.5 MiB of model data nobody asked for. A provider
+ * models.dev adds is not lost either way: it is in no set, so
+ * `validateFlavorProviders` fails the build and names it.
+ *
+ * @returns {{ name: string, providers: string[] } | undefined}
+ */
+export function providerSetRecord(providerSets, providerIds) {
+	const markerSet = Object.entries(providerSets).find(([, set]) => set.providers.includes(ALL_PROVIDERS));
+	if (markerSet === undefined) return undefined;
+	const next = [...providerIds].sort();
+	const current = [...markerSet[1].providers].sort();
+	if (current.length === next.length && current.every((providerId, index) => providerId === next[index])) {
+		return undefined;
+	}
+	return { name: markerSet[0], providers: next };
+}
+
+/**
  * The tool set a flavor selects (`standard` when it names none).
  *
  * @returns {string}
