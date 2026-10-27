@@ -16,12 +16,25 @@ const POSITION = {
   character: Type.Number({ description: "1-based column" }),
 };
 
+/**
+ * Shared guidance attached to every lsp_ tool, so the declaration itself says
+ * when to reach for LSP instead of grep/read. The tools are registered by an
+ * extra that can disappear at runtime (subsystem switch), which is why the hint
+ * lives on the tool and not in the system prompt.
+ */
+export const LSP_GUIDANCE =
+  "lsp_ tools answer from the language server, which already parsed the project and resolved imports and types. Reach for them before grepping for text that a compiler resolves better: hover for a signature or doc comment, definition to jump to where a symbol is declared, query for real usages or a call graph, diagnostics for errors.";
+
 /** Per-call deadline override; a cold server on a large repo outlives the default. */
 const TIMEOUT = Type.Optional(Type.Number({ description: "request timeout in ms (default from lsp.json)" }));
 
 export const DIAGNOSTICS = {
   description: "LSP errors/warnings for a file or directory. Omit path to scan cwd.",
   promptSnippet: "Check code errors via LSP",
+  promptGuidelines: [
+    LSP_GUIDANCE,
+    "Prefer lsp_diagnostics over guessing at type errors: it asks the language server that already indexes the project, and a directory scan covers the whole tree in one call.",
+  ],
   parameters: Type.Object({
     path: Type.Optional(Type.String({ description: "file or dir (default .)" })),
     severity: Type.Optional(Type.Union([Type.Literal("error"), Type.Literal("warning"), Type.Literal("information")], { description: "min severity (default warning)" })),

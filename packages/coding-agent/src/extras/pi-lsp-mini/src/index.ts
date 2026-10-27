@@ -13,7 +13,7 @@ import {
 import { uriToFilePath, type LspClient } from "./client.ts";
 import { loadServers, requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import { createBudget } from "./budget.ts";
-import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT } from "./schemas.ts";
+import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT, LSP_GUIDANCE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { clampHover, hoverText } from "./hover.ts";
 import { resolveTarget } from "./symbol-target.ts";
@@ -40,6 +40,19 @@ function perCall(match: { server: LspServerConfig }, timeoutMs: number | undefin
 
 function textResult(text: string) {
   return { content: [{ type: "text" as const, text }], details: {} };
+}
+
+/**
+ * What the model is told when no installed server handles the path.
+ *
+ * A bare "no language server matches" reads like "this tool does not work here",
+ * and the model stops calling the whole family for the rest of the session.
+ * Naming the cause and the alternative keeps the failure local to one file.
+ */
+function noServer(file: string) {
+  return textResult(
+    `no language server matches ${file}: no installed server handles this language. Use read/grep instead, and mention the missing server to the user (/lsp lists configured-but-not-installed ones).`,
+  );
 }
 
 function pos(params: { line: number; character?: number }) {
@@ -400,6 +413,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Diagnostics",
     description: DIAGNOSTICS.description,
     promptSnippet: DIAGNOSTICS.promptSnippet,
+    promptGuidelines: DIAGNOSTICS.promptGuidelines,
     parameters: DIAGNOSTICS.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = path.resolve(ctx.cwd, params.path ?? ".");
@@ -418,7 +432,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
       };
       if (stat.isFile()) {
         const match = await manager.matchServer(target, ctx.cwd);
-        if (!match) return textResult(`no language server matches ${target}`);
+        if (!match) return noServer(target);
         await manager.openFile(ctx, target);
         await delay(waitFor(match.server, 1500), signal);
         const sections: string[] = [];
@@ -458,10 +472,11 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Hover",
     description: HOVER.description,
     promptSnippet: HOVER.promptSnippet,
+    promptGuidelines: [LSP_GUIDANCE],
     parameters: HOVER.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
+      if (!target) return noServer(params.path);
       const file = path.resolve(ctx.cwd, params.path);
       const resolved = await resolveTarget(target.client, file, params, perCall(target.match, params.timeoutMs, signal));
       if (!resolved) {
@@ -481,10 +496,11 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Definition",
     description: DEFINITION.description,
     promptSnippet: DEFINITION.promptSnippet,
+    promptGuidelines: [LSP_GUIDANCE],
     parameters: DEFINITION.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
+      if (!target) return noServer(params.path);
       const file = path.resolve(ctx.cwd, params.path);
       const resolved = await resolveTarget(target.client, file, params, perCall(target.match, params.timeoutMs, signal));
       if (!resolved) {
@@ -511,10 +527,11 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Query",
     description: QUERY.description,
     promptSnippet: QUERY.promptSnippet,
+    promptGuidelines: [LSP_GUIDANCE],
     parameters: QUERY.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
+      if (!target) return noServer(params.path);
       const file = path.resolve(ctx.cwd, params.path);
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
       if (params.kind === "callgraph") return callGraph(target, file, p, params, signal, ctx.cwd);
@@ -533,12 +550,13 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Edit",
     description: EDIT.description,
     promptSnippet: EDIT.promptSnippet,
+    promptGuidelines: [LSP_GUIDANCE],
     executionMode: "sequential",
     parameters: EDIT.parameters,
     async execute(_id, params, signal, _u, ctx) {
       if (params.kind === "rename" && !params.newName?.trim()) return textResult("kind=rename needs newName");
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
-      if (!target) return textResult(`no language server matches ${params.path}`);
+      if (!target) return noServer(params.path);
       const file = path.resolve(ctx.cwd, params.path);
       const p = snapPos((await fs.readFile(file, "utf8")).split(/\r?\n/), pos(params));
       const request = { cwd: ctx.cwd, signal };

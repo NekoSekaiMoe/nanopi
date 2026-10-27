@@ -45,9 +45,17 @@ const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
 const GATED_TOOL_NAMES = new Set(["edit", "write", "bash", "powershell"]);
 
 const PLAN_GUIDELINE =
-	"You are in PLAN MODE: exploration and planning only. Only the read tool, the ask_user_question tool, and the ls, find, and pwd shell commands are available; every other call is blocked. Investigate, ask about anything ambiguous, then produce a concrete step-by-step plan. Do not attempt modifications.";
+	"You are in PLAN MODE: exploration and planning only. The read tool, the ask_user_question tool, the read-only LSP tools (lsp_hover, lsp_definition, lsp_query, lsp_diagnostics), and the ls, find, and pwd shell commands are available; every other call is blocked. Investigate, ask about anything ambiguous, then produce a concrete step-by-step plan. Do not attempt modifications.";
 /** Tools plan mode allows besides `read`, in addition to the ls/find/pwd shell commands. */
 const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
+/**
+ * LSP tools that only read. They belong in plan mode: hover/definition/references
+ * answer questions that grepping cannot, and blocking them left the model with
+ * `read` as its only way to look at code.
+ *
+ * `lsp_rename` and `lsp_delete` are deliberately absent — they rewrite files.
+ */
+const PLAN_ALLOWED_LSP_TOOLS = new Set(["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_query"]);
 
 /**
  * Plan-mode verdict for one tool call, or undefined to allow it.
@@ -57,7 +65,8 @@ const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
  * the repository.
  */
 export function planModeVerdict(toolName: string, input: unknown): string | undefined {
-	if (toolName === "read" || PLAN_ALLOWED_TOOLS.has(toolName)) return undefined;
+	if (toolName === "read" || PLAN_ALLOWED_TOOLS.has(toolName) || PLAN_ALLOWED_LSP_TOOLS.has(toolName))
+		return undefined;
 	if (SHELL_TOOL_NAMES.has(toolName)) {
 		const command =
 			typeof (input as Record<string, unknown>)?.command === "string"
@@ -67,7 +76,7 @@ export function planModeVerdict(toolName: string, input: unknown): string | unde
 		if (analysis.allowed) return undefined;
 		return analysis.reason ?? "command not allowed in plan mode";
 	}
-	return `plan mode allows only the read and ask_user_question tools and the ls, find, and pwd commands (blocked ${toolName})`;
+	return `plan mode allows only the read, ask_user_question, and read-only lsp_ tools and the ls, find, and pwd commands (blocked ${toolName})`;
 }
 const MINIMAL_GUIDELINE =
 	"You are in MINIMAL MODE: only the shell (bash) tool is available. Accomplish the task through shell commands.";

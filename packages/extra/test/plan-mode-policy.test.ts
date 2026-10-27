@@ -17,8 +17,16 @@ describe("plan mode tool policy", () => {
 		expect(planModeVerdict("powershell", { command: "Remove-Item -Recurse build" })).toBeDefined();
 	});
 
+	test("allows the read-only lsp tools", () => {
+		// Regression: the whole lsp_ family was blocked, so a plan-mode session
+		// could not hover, jump to a definition, or find real usages.
+		for (const toolName of ["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_query"]) {
+			expect(planModeVerdict(toolName, { path: "src/index.ts" })).toBeUndefined();
+		}
+	});
+
 	test("blocks every mutating tool", () => {
-		for (const toolName of ["edit", "write", "subagent", "todo", "lsp_rename"]) {
+		for (const toolName of ["edit", "write", "subagent", "todo", "lsp_rename", "lsp_delete"]) {
 			expect(planModeVerdict(toolName, {})).toContain(`blocked ${toolName}`);
 		}
 	});
