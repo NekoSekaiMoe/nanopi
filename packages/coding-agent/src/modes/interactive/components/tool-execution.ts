@@ -123,6 +123,8 @@ export class ToolExecutionComponent extends Container {
 			toolCallId: this.toolCallId,
 			invalidate: () => {
 				this.invalidate();
+				// Optional: a host that only repaints the tree has no separate invalidate pass.
+				this.ui.invalidate?.();
 				this.ui.requestRender();
 			},
 			lastComponent,

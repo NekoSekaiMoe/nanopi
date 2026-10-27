@@ -12,6 +12,7 @@ import { createWriteToolDefinition } from "../src/core/tools/write.ts";
 import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
 import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
+import { pendingHighlightLanguages } from "../src/utils/syntax-highlight.ts";
 
 function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
 	return {
@@ -289,7 +290,16 @@ describe("ToolExecutionComponent parity", () => {
 		expect(render(false)).toContain("Took 4.2s");
 	});
 
-	test("bash renderer highlights heredoc bodies and collapses long ones", () => {
+	// #252: grammars load lazily, so a body whose grammar is not loaded yet renders plain first and
+	// the renderer repaints once the load settles.
+	test("bash renderer highlights heredoc bodies and collapses long ones", async () => {
+		let invalidated = 0;
+		const tui = {
+			requestRender: () => {},
+			invalidate: () => {
+				invalidated++;
+			},
+		} as unknown as TUI;
 		const body = Array.from({ length: 15 }, (_, i) => `import mod${i + 1}`).join("\n");
 		const command = `cd repo && python3 - <<'EOF'\n${body}\nEOF\ncargo test`;
 		const component = new ToolExecutionComponent(
@@ -298,7 +308,7 @@ describe("ToolExecutionComponent parity", () => {
 			{ command },
 			{},
 			createBashToolDefinition(process.cwd(), { exposeSessionEnvironment: false }),
-			createFakeTui(),
+			tui,
 			process.cwd(),
 		);
 
@@ -310,8 +320,15 @@ describe("ToolExecutionComponent parity", () => {
 		expect(plain.some((line) => line.startsWith(" ... (5 more lines,"))).toBe(true);
 		expect(plain).toContain(" EOF");
 		expect(plain).toContain(" cargo test");
-		const bodyLine = collapsed[plain.indexOf(" import mod1")];
-		expect(bodyLine).toContain(theme.fg("syntaxKeyword", "import"));
+
+		// The grammar loads lazily, so the body is plain at first and the renderer asks the host to
+		// repaint once the load settles.
+		const loads = pendingHighlightLanguages();
+		expect(loads.length).toBeGreaterThan(0);
+		await vi.waitFor(async () => {
+			await Promise.all(loads);
+			expect(invalidated).toBeGreaterThan(0);
+		});
 
 		component.setExpanded(true);
 		const expanded = component.render(120).map((line) => stripAnsi(line).trimEnd());

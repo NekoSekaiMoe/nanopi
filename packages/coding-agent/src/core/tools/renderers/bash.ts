@@ -73,6 +73,10 @@ class ShellCallRenderComponent extends Text {
 	rendered: string | undefined;
 	/** Highlights of the embedded segments of `command`, in order. */
 	embedded: StreamingHighlight[] = [];
+	/** Grammar loads this component is waiting on, unset once they settled. */
+	repaintingFor: Promise<void>[] | undefined;
+	/** The last loads this component already repainted for, so one load repaints once. */
+	repaintedFor: Promise<void>[] | undefined;
 
 	constructor() {
 		super("", 0, 0);
@@ -83,7 +87,13 @@ function formatShellCall(
 	component: ShellCallRenderComponent,
 	args: { command?: string; timeout?: number } | undefined,
 	prompt: string,
-	options: { expanded: boolean; embeddedCode: boolean; argsComplete: boolean },
+	options: {
+		expanded: boolean;
+		embeddedCode: boolean;
+		argsComplete: boolean;
+		/** Set when the highlight started a grammar load that this call repaints for. */
+		onGrammarsLoad: (loads: Promise<void>[]) => void;
+	},
 ): string {
 	const command = str(args?.command);
 	const timeout = args?.timeout as number | undefined;
@@ -129,6 +139,7 @@ function formatShellCall(
 			highlight: (code) => styleEmbeddedLines(code, language),
 		});
 		embedded.push(highlight);
+		if (highlight.loads.length > 0) options.onGrammarsLoad(highlight.loads);
 		append(formatEmbeddedCode(highlight.highlighted, options.expanded));
 	}
 
@@ -240,6 +251,21 @@ export function createShellRenderers(
 				expanded: context.expanded,
 				embeddedCode,
 				argsComplete: context.argsComplete,
+				// A grammar loads lazily, so an embedded body is plain on its first render. Repaint once
+				// the loads settle: `invalidate` is what tells the host this call has more to show.
+				onGrammarsLoad: (loads) => {
+					// One pending repaint per component: a render invalidated from inside this callback
+					// renders again and must not start a second wait.
+					if (component.repaintedFor === loads) return;
+					component.repaintedFor = loads;
+					component.repaintingFor = loads;
+					void Promise.all(loads).then(() => {
+						if (component.repaintingFor !== loads) return;
+						component.repaintingFor = undefined;
+						component.rendered = undefined;
+						context.invalidate();
+					});
+				},
 			});
 			// setText drops the wrapped-line cache, so skip it when output updates leave the call unchanged.
 			if (text !== previous) component.setText(text);
