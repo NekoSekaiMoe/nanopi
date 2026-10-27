@@ -1,6 +1,6 @@
 # NanoPi
 
-NanoPi is a lightweight agent harness deeply trimmed and tailored from the Pi Coding Agent, featuring both a CLI and a WebUI.
+NanoPi is a lightweight agent harness deeply trimmed and tailored from the Pi Coding Agent, featuring both a CLI and a WebUI. Pi is the upstream: NanoPi keeps its core and drops most of what surrounds it.
 
 In an era where coding agent frameworks are blindly bloating into complex microservices and over-engineered platforms, NanoPi retreats back to a pure, controllable core guided by four fundamental philosophies:
 
@@ -69,7 +69,9 @@ Which formats a build carries follows its flavor: `full` exports Markdown and HT
 
 **NanoPi** is distributed under MIT License from Pi Coding Agent.
 
-## Acknowledgements
+## Credits
 
-- **[Pi Coding Agent](https://github.com/...)**: Upstream base runtime and original minimalist philosophy.
-- **Memoh**: Visual design reference for the Next.js WebUI rewrite (clean-room reimplementation).
+NanoPi is a fork of [Pi Coding Agent](https://github.com/Earendil-Works/pi): the runtime, the tools,
+and the minimalist philosophy are Pi's work, and the parts this fork removed are easier to list than
+the parts it kept. The WebUI's visual language follows Memoh's documented design system, reimplemented
+clean-room (no code copied).
