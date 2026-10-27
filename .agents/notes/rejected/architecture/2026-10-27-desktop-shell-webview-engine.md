@@ -1,6 +1,6 @@
 # Agent Note: 桌面壳的 WebView 引擎选型（需求 = 双击启动 + 托盘，结论 Tauri）
 
-Status: proposed
+Status: rejected — 桌面版搁置（ISSUE #338）。现阶段维护者用不到它，真正要用的是托盘与全局快捷键；有用户提出需求时再拿出来，重启条件与前置步骤见 [Why not 现在做？](#why-not-现在做)。
 
 ## Problem
 
@@ -43,6 +43,21 @@ agent 继续跑在 Node（`packages/ai` / `packages/extra` 运行时从盘上加
 
 ## Alternatives considered
 
+### Why not 现在做？
+
+ISSUE #338 的结论：桌面版先搁置。理由不是上面那些选型判断被推翻，而是**需求不存在**——维护者现阶段用不到双击启动和托盘，为不存在的需求维护一条 Rust 构建链、一套 WebKitGTK 兼容面、一整套窗口生命周期契约，是纯负债。上面所有分析留给下一个被真实需求推着走的人，省一次从零论证。
+
+改动量最大的一步也最好在需求出现后再做：`packages/webui/src/lib` 的 transport 抽象是 Tauri / Electron / Wails / `no-shell` 四个方案的公共前置，它只取决于"要不要有第二个宿主"，不取决于选谁。没有第二个宿主时抽出来的接口只能靠猜，猜错的抽象比没有抽象更贵——所以这条前置必须**跟着真实宿主一起做**，不做预埋。
+
+重启条件（任一成立就重开）：
+
+- 有用户明确要桌面双击启动 / 托盘 / 全局快捷键，且能说清要哪一种；
+- 或者需求退回成只要双击启动、不要托盘——那时首选 [no-shell 方案](#why-not-不加壳desktop--app-脚本--打开浏览器)，几十行脚本，别碰本笔记里的框架选型。
+
+### Why not 不加壳（`.desktop` / `.app` 脚本 + 打开浏览器）?
+
+这是最便宜的方案，几十行、零新运行时，但它只解决需求 1。需求 2 一起来，托盘、全局快捷键、壳的通知一个都拿不到，`AuthGate` 与 token 也全留着。**如果将来需求退回成"只要双击启动"，这是首选**——记在这里，别下次又从头论证一遍。
+
 ### Why not Electron?
 
 - **体积与重复 runtime。** Electron = Chromium + Node + 应用，冷压百 MB 量级。`nanopi` 的前置条件本来就是 Node 24，等于把同一个 runtime 再塞一遍，外加一个浏览器，与 README 的 radically minimalism 自相矛盾。这也是"用 sidecar 起 `nanopi webui`"那条反对项的更严重版本。
@@ -57,11 +72,9 @@ agent 继续跑在 Node（`packages/ai` / `packages/extra` 运行时从盘上加
 - **transport 侧还要多写一层**：Wails 的 Go↔JS 绑定是运行时注入的 JS 全局，Tauri 是显式 `invoke` 命令清单，做抽象时前者得再包一层 shim。
 - 唯一成立的理由是团队本来写 Go——这里不成立。
 
-### Why not 不加壳（`.desktop` / `.app` 脚本 + 打开浏览器）?
-
-这是最便宜的方案，几十行、零新运行时，但它只解决需求 1。需求 2 一起来，托盘、全局快捷键、壳的通知一个都拿不到，`AuthGate` 与 token 也全留着。**如果将来需求退回成"只要双击启动"，这是首选**——记在这里，别下次又从头论证一遍。
-
 ## Acceptance criteria
+
+需求重启后，实现这套方案要满足：
 
 1. `packages/webui/src/lib` 有 transport 抽象，默认实现与今天的行为逐字节等价，`pnpm run check` 与 `check:browser-smoke` 绿。
 2. 桌面壳跑起来后，`webui-server.ts` 的 Bearer 校验、`?token=` / `sec-websocket-protocol` 捞 token、`lib/api.ts` 的 `sessionStorage` 与 `AuthGate` 在桌面构建里均不再参与。
@@ -71,6 +84,7 @@ agent 继续跑在 Node（`packages/ai` / `packages/extra` 运行时从盘上加
 
 ## Risks
 
+- **需求可能永远不会来。** 搁置的提案最大的风险不是选错框架，是下次捡起来时框架生态已经换了代（Tauri 2 的托盘/快捷键 API、WebKitGTK 的版本下限都会漂），届时选型得重新对一遍事实，本笔记只保证"问题怎么拆"没过期。
 - WebKitGTK 版本矩阵是新增兼容面：Linux 上老发行版的 webkitgtk 可能达不到 webui README 写的 Chrome 111+ / Safari 16.4+ 基线，需要实测定下限。
 - 多窗口 / 多会话语义未定：现在是"浏览器开一堆标签页"，`/projects/:hash/sessions` 的多项目切换在原生壳里怎么表达（窗口菜单？侧栏？）比引擎选型更影响工作量。
 - 壳的通知替换掉 `components/app-client.tsx:100` 的浏览器 `new Notification` 之后，跨平台通知的权限与点击行为要各自实测。
