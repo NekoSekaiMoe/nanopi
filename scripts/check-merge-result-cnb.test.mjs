@@ -84,7 +84,9 @@ test("a PR that only adds files passes", async (t) => {
 
 	const result = run(cwd, { CNB_PULL_REQUEST_BRANCH: "pr" });
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /no file from HEAD~1 disappears/);
+	// 基线由脚本自己取（合并提交的第一父），所以这里只能断言「没丢东西」，
+	// 不能写死某个 ref 名：写死 HEAD~1 的那版在 #279 把基线改成第一父之后就红了。
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
 });
 
 // #255 现场：把方向反过来时，PR 新增的文件会被读成「删除」。这里正着跑，只要
@@ -99,7 +101,8 @@ test("a PR that rewrites an existing file still passes", async (t) => {
 
 	const result = run(cwd, { CNB_PULL_REQUEST_BRANCH: "pr" });
 	assert.equal(result.status, 0, result.stderr);
-	assert.match(result.stdout, /rewrites 1 file\(s\) that HEAD~1 has/);
+	// 同理，只断言「改写了 1 个文件」这件事本身。
+	assert.match(result.stdout, /rewrites 1 file\(s\) that [0-9a-f]{40} has/);
 	assert.doesNotMatch(result.stderr, /drops \d+ file/);
 });
 
