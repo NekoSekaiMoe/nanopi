@@ -80,7 +80,7 @@ clean-room (no code copied).
 
 <p align="center">
   <a href="https://linux.do/">
-    <img src="./docs/assets/linux-do.png" width="42%" alt="LINUX DO">
+    <img src="./packages/coding-agent/docs/images/linux-do.png" width="42%" alt="LINUX DO">
   </a>
 </p>
 
