@@ -7,7 +7,9 @@
 // Usage:
 //   node scripts/check-merge-result-cnb.mjs [--remote <name>]
 //
-// 需要环境变量 CNB_PULL_REQUEST_BRANCH（CNB 提供）。
+// 需要环境变量 CNB_PULL_REQUEST_BRANCH（CNB 提供）。PR 的描述（CNB_PULL_REQUEST_DESC，
+// 没有就按 CNB_PULL_REQUEST_IID 现取）写进临时文件交给判定脚本，那是 `deletes:`
+// 白名单的来源——判定本身仍只读 git 对象与这个文件，不联网。
 //
 // 为什么不能直接用事件给的提交：pull_request.target 用的是合并前目标分支的最新
 // 提交（pull_request 给的是预合并结果，按定义已含 main 的树，回退永远查不出来，
@@ -20,6 +22,8 @@
 // PR 分支历史上的删除误判成回退）。
 
 import { execFileSync } from "node:child_process";
+import { mkdtempSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -37,6 +41,20 @@ function parseArgs(argv) {
 		if (argv[index] === "--remote") remote = argv[index + 1];
 	}
 	return { remote };
+}
+
+// PR 描述：CNB 给了现成的变量就用它，没有就按 IID 现取。两者都拿不到时留空——
+// 判定照样跑，只是没有 `deletes:` 可认，删除一律红（比静默放行安全）。
+function pullRequestDescription() {
+	const fromEnv = process.env.CNB_PULL_REQUEST_DESC;
+	if (fromEnv) return fromEnv;
+	const iid = process.env.CNB_PULL_REQUEST_IID;
+	if (!iid) return "";
+	try {
+		return execFileSync("cnb", ["pulls", "get", "--number", iid], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+	} catch {
+		return "";
+	}
 }
 
 const { remote } = parseArgs(process.argv.slice(2));
@@ -58,4 +76,12 @@ execFileSync("git", ["merge", "--no-edit", "refs/remotes/pr/head"], {
 	env: { ...process.env, GIT_AUTHOR_NAME: "npc", GIT_AUTHOR_EMAIL: "npc@cnb.cool", GIT_COMMITTER_NAME: "npc", GIT_COMMITTER_EMAIL: "npc@cnb.cool" },
 });
 
-execFileSync(process.execPath, [CHECK], { stdio: "inherit" });
+const description = pullRequestDescription();
+const checkArgs = [CHECK];
+if (description) {
+	const file = join(mkdtempSync(join(tmpdir(), "pr-desc-")), "description.md");
+	writeFileSync(file, description);
+	checkArgs.push("--description-file", file);
+}
+
+execFileSync(process.execPath, checkArgs, { stdio: "inherit" });
