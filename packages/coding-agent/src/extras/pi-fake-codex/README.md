@@ -2,7 +2,7 @@
 
 A compatibility extension for the [Pi coding agent](https://github.com/earendil-works/pi-coding-agent) that makes OpenAI Responses-style requests resemble traffic from the official OpenAI Codex CLI (`codex_cli_rs`).
 
-The package also registers an `apply_patch` editing alias and executes opt-in Codex-compatible project hooks. These are separate features packaged together; none adds a slash command.
+The package also executes opt-in Codex-compatible project hooks. The two features are separate and packaged together; neither adds a slash command.
 
 ## Installation
 
@@ -98,45 +98,7 @@ The transformer shallow-clones the body before editing it. Every structure-sensi
 
 The matching is based on `model.api`, not the provider name. Requests made independently by subprocesses, MCP servers, or tools are outside this extension's provider hooks.
 
-## Feature 3: `apply_patch`
-
-The package registers an LLM-callable tool named `apply_patch`. It is an alias built from Pi's normal edit-tool definition, so it shares the same:
-
-- parameter schema;
-- exact-replacement semantics;
-- file-mutation queue;
-- validation behavior; and
-- result renderer.
-
-Example shape:
-
-```json
-{
-  "path": "src/index.ts",
-  "edits": [
-    {
-      "oldText": "const enabled = false;",
-      "newText": "const enabled = true;"
-    }
-  ]
-}
-```
-
-Despite its name, this tool does **not** accept unified diff text. Each `oldText` must match exactly and uniquely according to Pi's edit-tool rules. Multiple disjoint replacements for one file should be sent in one call, and all replacements are matched against the original file content.
-
-### API-scoped declaration
-
-The alias is declared only to models whose `model.api` is `openai-responses` or `openai-codex-responses` — the same scope as the identity headers. On other protocols (Anthropic, Google, Bedrock, …) the tool is removed from the active tool set at session start and on every model switch, so non-Responses models never see it in their tool list. Switching back re-declares it.
-
-The tool remains registered and callable while hidden; only the model-facing declaration is gated. Re-activation only happens when this extension was the one that removed it, so explicitly disabling `apply_patch` (via `/tools`, `--tools`, or settings) stays disabled across model switches.
-
-### Mutual exclusion with `edit`
-
-While `apply_patch` is declared, a `prepareLoadout` hook hides the built-in `edit` tool's declaration, so requests and the system prompt's tool list and rules carry exactly one editing tool: `apply_patch`. `edit` stays registered, active, and callable (a stray `edit` call still executes), and its declaration returns automatically whenever `apply_patch` is undeclared — on other protocols via the API-scoped removal above, or after an explicit user deactivation. No bookkeeping distinguishes who removed `edit`, because the hook only runs while `apply_patch` itself is in the declared set.
-
-The alias is useful for Codex-oriented prompts that expect an `apply_patch` tool name. Its declaration is scoped to the impersonated APIs described above.
-
-## Feature 4: Codex-compatible command hooks
+## Feature 3: Codex-compatible command hooks
 
 If the current working directory contains `.pi/hooks.json`, the extension maps supported Codex hook events onto Pi lifecycle and tool events.
 
@@ -195,10 +157,9 @@ Hook output is capped at 1 MB. Timed-out command hooks have their process tree t
 ## Internal flow
 
 ```text
-src/index.ts          registers provider hooks, apply_patch, and hook adapter
+src/index.ts          registers provider hooks and the hook adapter
 src/headers.ts        builds and sanitizes Codex identity values
 src/payload.ts        defensively normalizes openai-responses bodies
-src/apply-patch.ts    registers the edit-tool alias
 src/hooks/adapter.ts  maps Pi events to the hook engine
 src/hooks/runner.ts   runs command hooks and enforces limits/timeouts
 src/hooks/schema.ts   parses hook configuration and protocol values
