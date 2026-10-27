@@ -34,7 +34,7 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain("Show file paths clearly");
+			expect(prompt).toContain("Be concise; show file paths clearly");
 		});
 	});
 
@@ -118,9 +118,9 @@ describe("buildSystemPrompt", () => {
 			});
 
 			expect(prompt).toContain(
-				"- Prefer the read for file contents, grep for searching file contents, find for locating files by name, ls for listing directories tools over shell equivalents",
+				"- Prefer read for file contents, grep for searching file contents, find for locating files by name, ls for listing directories over shell equivalents",
 			);
-			expect(prompt).toContain("use shell commands for running programs, not for inspecting files");
+			expect(prompt).toContain("the shell runs programs, not file inspection");
 			// The shell-only fallback rule and the preference rule are mutually exclusive.
 			expect(prompt).not.toContain("Use bash for file operations");
 		});
@@ -133,7 +133,7 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain("- Prefer the read for file contents tools over shell equivalents");
+			expect(prompt).toContain("- Prefer read for file contents over shell equivalents");
 			expect(prompt).not.toContain("grep for searching file contents");
 		});
 
@@ -144,7 +144,7 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain(`- Start at ${getDocsPath()}/index.md (topic index); overview: ${getReadmePath()}`);
+			expect(prompt).toContain(`- Index: ${getDocsPath()}/index.md; overview: ${getReadmePath()}`);
 			expect(prompt).toContain("Resolve docs/... and examples/... against those directories");
 			expect(prompt).toContain("not the cwd");
 			// The topic-to-file map is not inlined; the docs index carries it.

@@ -69,10 +69,10 @@ export function registerWebsearchTools(pi: ModuleApi): void {
 		name: "web_search",
 		label: "Web search",
 		description:
-			"Search the web. Runs on a failover chain that needs no account: Firecrawl's keyless allowance first, then Keenable, then any keyed engine you configured (Tavily, Exa). Multi-key engines rotate keys on auth, rate-limit, or quota failures before the chain moves on. Returns ranked results with URLs and snippets; read the items, they are the evidence. Do not answer from memory when the question is about something current.",
-		promptSnippet: "Search the web (keyless failover chain)",
+			"Search the web through a failover chain (Firecrawl keyless allowance, Keenable, then any keyed engine configured). Returns ranked results with URLs and snippets.",
+		promptSnippet: "Search the web",
 		promptGuidelines: [
-			"Use web_search for anything current: releases, prices, news, API changes. Cite the URL you used.",
+			"Use web_search for anything current: releases, prices, news, API changes. Read the returned items, they are the evidence; do not answer from memory, and cite the URL you used.",
 		],
 		annotations: { readOnlyHint: true, openWorldHint: true },
 		parameters: searchParams,
@@ -136,7 +136,7 @@ export function registerWebsearchTools(pi: ModuleApi): void {
 		name: "read_page",
 		label: "Read page",
 		description:
-			"Read one web page as markdown, through the same failover chain as web_search (Firecrawl keyless first). Use it when a message points at a specific http(s) URL whose content matters: docs, an article, a changelog, an issue. Returns the extracted text, truncated at 60000 characters, so read a page you actually need instead of guessing at it.",
+			"Read one web page as markdown through the same failover chain as web_search. Use it when a message points at a specific http(s) URL whose content matters. Truncated at 60000 characters.",
 		promptSnippet: "Read a web page as markdown",
 		annotations: { readOnlyHint: true, openWorldHint: true },
 		parameters: fetchParams,

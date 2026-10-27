@@ -257,7 +257,7 @@ export function registerTodoTool(
 		name: "todo",
 		label: "Todo",
 		description:
-			"Manage the session todo list. actions: add(texts[], isVerification?) | update(id/status/text) or update(updates[]) batch | delete(ids[]) | list | clear. statuses: pending/in_progress/completed/cancelled.",
+			"Manage the session todo list. add(texts[]) | update(id+status/text or updates[]) | delete(ids[]) | list | clear. add takes texts and delete takes ids, never a singular text/id.",
 		// No snippet beyond the rule below: both land in the system prompt of every
 		// request, and the rule is the line that says when to reach for the tool.
 		promptGuidelines: [

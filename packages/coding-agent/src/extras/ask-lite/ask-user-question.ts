@@ -107,7 +107,7 @@ export function buildItemsForQuestion(question: QuestionData): WrappingSelectIte
 	return items;
 }
 
-export const DEFAULT_PROMPT_SNIPPET = `Ask the user up to ${MAX_QUESTIONS} structured questions (${MIN_OPTIONS}-${MAX_OPTIONS} options each) when requirements are ambiguous`;
+export const DEFAULT_PROMPT_SNIPPET = `Ask the user structured questions when requirements are ambiguous`;
 /*
  * The declaration and this rule used to spell the same call shape twice (counts,
  * option fields, previews, recommended-first). The declaration keeps the shape so
@@ -124,7 +124,7 @@ export function registerAskUserQuestionTool(pi: ModuleApi): void {
 	pi.registerTool({
 		name: "ask_user_question",
 		label: "Ask User Question",
-		description: `Ask the user 1-${MAX_QUESTIONS} structured questions (${MIN_OPTIONS}-${MAX_OPTIONS} options each, options may carry markdown previews, multiSelect allows several answers) when requirements are ambiguous; group all questions into one call.`,
+		description: `Ask the user 1-${MAX_QUESTIONS} structured questions (${MIN_OPTIONS}-${MAX_OPTIONS} options each, options may carry markdown previews, multiSelect allows several answers), all in one call.`,
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES,
 		parameters: QuestionParamsSchema,
