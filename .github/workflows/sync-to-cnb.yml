@@ -37,15 +37,14 @@ jobs:
       # 就跳过、指向不同 commit 就报错」。两者都只重试传输层失败，判定失败第一次
       # 就返回。
       #
-      # 凭据只写进 credential store，远端 URL 不带 token：CNB 对海外 IP 的匿名读
-      # 返 401，所以 fetch 也必须带凭据，但 token 不该出现在 argv 与报错里。
+      # 远端 URL 不带 token：CNB 对海外 IP 的匿名读返 401，所以 fetch 也必须带
+      # 凭据，但 token 不该出现在 argv 与报错里。凭据由入口自己落进一个进程私有的
+      # credential store（scripts/mirror.mjs），这里不碰 ~/.git-credentials。
       - name: Push main and tags to CNB
         env:
           CNB_KEY: ${{ secrets.CNB_KEY }}
         run: |
           set -euo pipefail
-          git config --global credential.helper store
-          printf 'https://cnb:%s@cnb.cool\n' "${CNB_KEY}" > ~/.git-credentials
           remote=https://cnb.cool/shinytale/nanopi.git
-          node scripts/mirror.mjs main --remote "$remote"
-          node scripts/mirror.mjs tags --remote "$remote"
+          node scripts/mirror.mjs main --remote "$remote" --token-user cnb --token-env CNB_KEY
+          node scripts/mirror.mjs tags --remote "$remote" --token-user cnb --token-env CNB_KEY

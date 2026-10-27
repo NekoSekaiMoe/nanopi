@@ -24,8 +24,8 @@ function git(cwd, args) {
 	return result.stdout.trim();
 }
 
-function mirror(cwd, args) {
-	return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8", env: gitEnv });
+function mirror(cwd, args, extraEnv = {}) {
+	return spawnSync(process.execPath, [script, ...args], { cwd, encoding: "utf8", env: { ...gitEnv, ...extraEnv } });
 }
 
 async function fixture(t, name) {
@@ -67,7 +67,7 @@ test("an unknown subcommand prints usage and exits 2", () => {
 test("main without --remote prints usage and exits 2", () => {
 	const result = mirror(process.cwd(), ["main"]);
 	assert.equal(result.status, 2);
-	assert.match(result.stderr, /Usage: node scripts\/mirror\.mjs main --remote <url>/);
+	assert.match(result.stderr, /Usage: node scripts\/mirror\.mjs <main\|tags> --remote <url>/);
 });
 
 test("main mirrors the checkout, tags is a no-op when there is nothing to send", async (t) => {
@@ -97,4 +97,43 @@ test("a refusal from the tag mirror surfaces as exit code 1", async (t) => {
 	const result = mirror(local, ["tags", "--remote", remote]);
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /tag v0 points to different commits on both sides/);
+});
+
+// 凭据由入口自己落盘：workflow 只给环境变量名。缺 token 时不静默走匿名，
+// 因为匿名推送到 GitHub / CNB 只会拿回 401，报错信息里看不出是漏了 secret。
+test("a missing token environment variable is a usage error", () => {
+	const env = { ...gitEnv };
+	delete env.MIRROR_TEST_TOKEN;
+	const result = spawnSync(
+		process.execPath,
+		[script, "main", "--remote", "https://example.invalid/x.git", "--token-user", "cnb", "--token-env", "MIRROR_TEST_TOKEN"],
+		{ cwd: process.cwd(), encoding: "utf8", env },
+	);
+	assert.equal(result.status, 2);
+	assert.match(result.stderr, /MIRROR_TEST_TOKEN is unset/);
+});
+
+test("--token-user and --token-env must come together", () => {
+	const result = mirror(process.cwd(), ["main", "--remote", "https://example.invalid/x.git", "--token-env", "MIRROR_TEST_TOKEN"]);
+	assert.equal(result.status, 2);
+	assert.match(result.stderr, /Usage: node scripts\/mirror\.mjs <main\|tags> --remote <url>/);
+});
+
+// token 不能出现在输出里，临时凭据目录也不能留下：镜像失败的路径同样要清掉。
+test("a failed mirror neither prints the token nor leaves the credential dir behind", async (t) => {
+	// example.invalid 解析不了，fetch 必然失败；这里只关心失败路径也清干净。
+	const run = mirror(process.cwd(), [
+		"main",
+		"--remote",
+		"https://example.invalid/x.git",
+		"--token-user",
+		"cnb",
+		"--token-env",
+		"MIRROR_TEST_TOKEN",
+	], { MIRROR_TEST_TOKEN: "s3cret" });
+	assert.notEqual(run.status, 0);
+	assert.doesNotMatch(run.stdout + run.stderr, /s3cret/);
+
+	const leaked = spawnSync("bash", ["-c", "ls -d /tmp/nanopi-mirror-credentials-* 2>/dev/null | wc -l"], { encoding: "utf8" });
+	assert.equal(leaked.stdout.trim(), "0");
 });
