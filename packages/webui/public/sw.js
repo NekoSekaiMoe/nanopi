@@ -37,11 +37,14 @@ function offlinePage(acceptLanguage) {
 <html lang="${t.lang}"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${t.title}</title>
+<link rel="icon" href="/favicon.png" type="image/png">
+<link rel="apple-touch-icon" href="/icon-192.png">
 <style>
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
          font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: #f7f7f5; color: #222; }
   @media (prefers-color-scheme: dark) { body { background: #1e1e1e; color: #ddd; } .card { background: #262626; border-color: #3a3a3a; } }
   .card { max-width: 560px; margin: 24px; padding: 28px 32px; background: #fff; border: 1px solid #ddd; border-radius: 10px; }
+  .mark { display: block; width: 36px; height: 36px; margin-bottom: 14px; border-radius: 22%; }
   h1 { font-size: 1.25rem; margin: 0 0 12px; }
   p, li { line-height: 1.65; }
   code { padding: 1px 6px; border-radius: 4px; background: rgba(128,128,128,0.18); }
@@ -49,6 +52,7 @@ function offlinePage(acceptLanguage) {
   button { margin-top: 8px; padding: 8px 16px; border-radius: 6px; border: 1px solid #c2410c; background: #c2410c; color: #fff; cursor: pointer; }
 </style></head>
 <body><div class="card">
+  <img class="mark" src="/icon-192.png" alt="">
   <h1>${t.title}</h1>
   <p>${t.lead}</p>
   <ul><li>${t.standalone}</li><li>${t.inSession}</li></ul>
