@@ -26,6 +26,10 @@
 - A single-file flavor without an asset component (`minimal`: no docs, examples, webui or export templates) embeds no assets at all instead of a lone `package.json`, so it no longer extracts a cache directory or overrides `NANOPI_PACKAGE_DIR`
 - The in-app bug reporter is gone. `/bug` produced a zip archive addressed to a Radius gateway that no longer exists, so the command, its `core/bug-report.ts` collectors, `summarizeForBugReport()`, and the startup `/bug` hints are removed; bug reports go to the GitHub tracker (https://github.com/NekoSekaiMoe/nanopi/issues/new?template=bug.yml) instead
 
+### Removed
+
+- The pi-fake-codex `apply_patch` tool alias is gone. It was a byte-for-byte clone of `edit` under a Codex name, scoped to the impersonated Responses APIs, and it bought nothing: `edit` already handles exact replacement, and models reached over the plain `openai-completions` protocol (which never saw the alias) confused the two names anyway. The module now only does what its name says: Codex identity headers, `openai-responses` body normalization, and the Codex-compatible hook adapter (issue [#292](https://cnb.cool/shinytale/nanopi/-/issues/292))
+
 ### Fixed
 
 - The chat row a failed run leaves behind no longer repeats the error: it says `Run failed. /retry replays it.` (was `Run failed: <error>. /retry replays it.`). The failed assistant message already ends with the same text, and a tool call records its own error, so a multi-line provider error such as a 402 was printed twice. The attempt count stays, and a cancelled run now reads `Run was aborted.` instead of `Run failed` (issue [#235](https://cnb.cool/shinytale/nanopi/-/issues/235))
@@ -171,8 +175,7 @@
 - Changed single-file sidecars to buildconfig-gated builtins: flavors enabling `sidecar/tui-native` / `sidecar/photon-wasm` (both on in `full`) embed the files in `nanopi.js` and install the platform-matching ones to the agent bin directory offline with sha256 verification; disabled components keep the on-demand download fallback
 
 - Changed the interactive editor to a Codex-style borderless composer: a `› ` prompt prefix on the first line (colored by thinking level), continuation lines aligned under the prefix, and blank padding rows instead of horizontal rules; the embedded working status and scroll indicators share those blank rows, and the slash-command autocomplete menu opens above the composer. Shell mode swaps the prompt glyph to `$`, hides the typed `!` (submission still receives `!command`), keeps the composer gray, and marks the mode with a yellow right-aligned `shell` label on the footer line; the `bashMode` theme color is now that yellow shell accent instead of the old editor border green
-- Changed the pi-fake-codex `apply_patch` alias to be mutually exclusive with `edit`: while `apply_patch` is declared, its `prepareLoadout` hook hides `edit`'s declaration, so requests and the system-prompt tool list and rules carry exactly one editing tool on Codex-impersonated APIs. `edit` stays registered, active, and callable, and its declaration returns automatically whenever `apply_patch` is undeclared
-- Trimmed the model-facing prompt surface: the docs section now points at the README, the docs index, and the examples directory with path-resolution rules instead of inlining the topic-to-file map, and the `edit` tool keeps its full usage contract in its declaration with a two-bullet rules summary (the `apply_patch` alias mirrors both)
+- Trimmed the model-facing prompt surface: the docs section now points at the README, the docs index, and the examples directory with path-resolution rules instead of inlining the topic-to-file map, and the `edit` tool keeps its full usage contract in its declaration with a two-bullet rules summary
 ### Fixed
 
 - Fixed the embedded working/retry/compaction spinner sitting directly on top of the composer input in the interactive TUI: a blank row is now kept between the status line and the input (mouse hit-testing accounts for the extra row)

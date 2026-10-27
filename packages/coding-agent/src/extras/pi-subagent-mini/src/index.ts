@@ -60,7 +60,7 @@ const ARCHIVE_VERSION = 2;
 const ARCHIVE_TYPE = "subagent-job";
 /** Status-bar key for the subagent summary line; see `setStatus` in session_start. */
 const STATUS_KEY = "subagent-async";
-const WRITE_TOOLS = /^(write|edit|apply_patch)$/;
+const WRITE_TOOLS = /^(write|edit)$/;
 /** `write,edit` etc. — anything that can mutate the working tree. */
 const canWrite = (tools: string): boolean => tools.split(",").some((name) => WRITE_TOOLS.test(name.trim()));
 

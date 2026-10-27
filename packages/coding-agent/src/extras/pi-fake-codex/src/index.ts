@@ -50,12 +50,12 @@
  */
 
 import type { ModuleApi } from "@nanopi/pi-coding-agent";
-import { CODEX_APIS, registerApplyPatchTool } from "./apply-patch.ts";
 import { buildOriginator, buildUserAgent } from "./headers.ts";
 import { registerCodexHookAdapter } from "./hooks/adapter.ts";
 import { codexifyResponsesPayload } from "./payload.ts";
 
-export { CODEX_APIS };
+/** APIs whose traffic we impersonate as Codex CLI. */
+export const CODEX_APIS = new Set(["openai-responses", "openai-codex-responses"]);
 
 export default function (pi: ModuleApi): void {
   // `before_provider_headers` fires after request headers are assembled and
@@ -83,12 +83,6 @@ export default function (pi: ModuleApi): void {
     }
     return codexifyResponsesPayload(event.payload);
   });
-
-  // Register an `apply_patch` editing tool alias (same behavior as Pi's
-  // built-in `edit`, just named `apply_patch`), declared only while the
-  // session's model uses one of the Codex-impersonated Responses APIs above.
-  // See `apply-patch.ts`.
-  registerApplyPatchTool(pi);
 
   // Codex-compatible hooks: executes `.pi/hooks.json` command hooks on Pi
   // lifecycle/tool events (SessionStart, UserPromptSubmit, PreToolUse,
