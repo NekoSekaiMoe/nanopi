@@ -1,9 +1,9 @@
 # pi-lsp-mini
 
 Lean LSP extension for the [pi](https://github.com/earendil-works/pi) coding agent.
-Four features, minimal prompt footprint (all 5 tools measured at 3370 characters
-of JSON schema + descriptions + snippets + guidance, ~840 tokens; zero injected
-system instructions):
+Four features, minimal prompt footprint (all 5 tools measured at 3988 characters
+of JSON schema + descriptions + snippets + guidelines, ~1000 tokens, all of it on
+the tool declarations themselves):
 
 - **Signatures** — `lsp_hover` and `lsp_definition`: what a symbol's type is and
   where it is declared, without reading the file for either.
@@ -239,10 +239,21 @@ language-server binaries you want are on PATH (or configured in
 
 ## Notes
 
-- Prompt budget: all 5 tools cost 3370 characters (~840 request tokens) of
-  serialized schema, description, snippet and guidance. Tool texts live in
-  `src/schemas.ts` — keep them lean when editing, and put "when to use this"
-  in `promptSnippet` instead of repeating it in `description`.
+- Prompt budget: all 5 tools cost 3988 characters (~1000 request tokens):
+  2385 of serialized schema, 572 of descriptions and snippets, 321 in the
+  `<tools>` list and 710 in `<rules>`. Tool texts live in `src/schemas.ts` — keep
+  them lean when editing, and split the two jobs: `promptSnippet` says what the
+  tool is for, `promptGuidelines` says when to reach for it.
+
+- Guidance competes with `read`, not just with `grep`. The shared rule
+  (`LSP_GUIDANCE`) is attached to every tool and names the moment to reach for
+  LSP: before opening a file to answer what a symbol is or where it comes from.
+  An earlier version only argued "try LSP before grepping", and models kept
+  opening whole files to answer a signature — `read` was the tool they were
+  reaching for, and "use read to examine files" was the only rule that named a
+  way to look at code. Each tool also carries one sentence for the case its own
+  parameters make possible (`symbol` on hover/definition, usages before a
+  rename).
 
 - TypeScript note: neither `tsserver` nor `tsc` is an LSP server — `tsserver
   --stdio` speaks tsserver's own protocol, not LSP, and an LSP client will

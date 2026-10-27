@@ -2,7 +2,7 @@ import { rmSync } from "node:fs";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { resetServersCache } from "../src/extras/pi-lsp-mini/src/config.ts";
 import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
-import { QUERY } from "../src/extras/pi-lsp-mini/src/schemas.ts";
+import { DEFINITION, DIAGNOSTICS, EDIT, HOVER, LSP_GUIDANCE, QUERY } from "../src/extras/pi-lsp-mini/src/schemas.ts";
 import { lspTools, project, run } from "./helpers/pi-lsp-tools.ts";
 
 const savedEnv = { ...process.env };
@@ -82,4 +82,24 @@ it("keeps the no-read/no-grep argument in the snippet only", () => {
 	expect(QUERY.description).not.toMatch(/without (reading|grepping)/i);
 	expect(QUERY.promptSnippet).not.toMatch(/without (reading|grepping)/i);
 	expect(texts).not.toContain("callers and callees");
+});
+
+// `read` is the tool the model actually reached for, not `grep`: it opened a
+// whole file to answer what a signature was. Guidance that only competes with
+// grep loses to the "use read to examine files" rule before the choice is made.
+it("tells the model to prefer lsp_ over opening the file, not just over grep", () => {
+	expect(LSP_GUIDANCE).toMatch(/before opening a file/i);
+	expect(LSP_GUIDANCE).toMatch(/hover/i);
+	expect(LSP_GUIDANCE).toMatch(/definition/i);
+});
+
+// Every lsp_ tool pays for this guidance on every request, so two tools must not
+// hand the model two spellings of one rule.
+it("registers the shared guidance once per tool, without duplicates", () => {
+	for (const tool of [DIAGNOSTICS, HOVER, DEFINITION, QUERY, EDIT]) {
+		const guidelines = tool.promptGuidelines ?? [];
+		expect(guidelines.length).toBeGreaterThan(0);
+		expect(new Set(guidelines).size).toBe(guidelines.length);
+		expect(guidelines).toContain(LSP_GUIDANCE);
+	}
 });
