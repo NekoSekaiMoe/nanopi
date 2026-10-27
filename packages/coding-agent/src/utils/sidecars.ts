@@ -13,6 +13,7 @@ import {
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import type { ReadableStream as NodeWebReadableStream } from "node:stream/web";
 import { gunzipSync } from "node:zlib";
 import { getBinDir } from "../config.ts";
 import { fetchWithRetry } from "./management-http.ts";
@@ -202,7 +203,10 @@ async function downloadTo(url: string, destPath: string): Promise<void> {
 	if (!response.ok || !response.body) {
 		throw new Error(`download failed: HTTP ${response.status} for ${url}`);
 	}
-	await pipeline(Readable.fromWeb(response.body as ReadableStream<Uint8Array>), createWriteStream(destPath));
+	// WHATWG streams come from two declaration sets here: `fetch` is typed with
+	// undici's `ReadableStream`, `Readable.fromWeb` wants `node:stream/web`'s.
+	// They disagree only on the BYOB reader's generic bound, so name the type.
+	await pipeline(Readable.fromWeb(response.body as unknown as NodeWebReadableStream), createWriteStream(destPath));
 }
 
 /**
