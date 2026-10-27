@@ -10,6 +10,7 @@ import {
 	buildDiagnosticMetadata,
 	buildDiagnosticReport,
 	diagnosticBundleFiles,
+	diagnosticBundleInput,
 	redactJsonValue,
 	redactUrl,
 	writeDiagnosticBundle,
@@ -175,5 +176,43 @@ describe("diagnostic bundle contents", () => {
 			if (previous === undefined) rmSync(logPath, { force: true });
 			else writeFileSync(logPath, previous);
 		}
+	});
+});
+
+describe("on-demand diagnostic bundle", () => {
+	it("labels a manually requested bundle so it is distinguishable from the automatic ones", async () => {
+		const cwd = tempDir();
+		const agentDir = tempDir();
+		const { sessionManager, input: bundleInput } = await input({ cwd, agentDir });
+		sessionManager.appendMessage(userMsg("hello"));
+
+		const written = await writeDiagnosticBundle({ ...bundleInput, phase: "manual" });
+		expect(written?.directory.endsWith("-manual")).toBe(true);
+		const metadata = JSON.parse(readFileSync(join(written?.directory ?? "", "diagnostics.json"), "utf8"));
+		expect(metadata.phase).toBe("manual");
+	});
+
+	it("builds the same input from sources as the session path does", async () => {
+		const cwd = tempDir();
+		const agentDir = tempDir();
+		const { sessionManager, input: bundleInput } = await input({ cwd, agentDir });
+		sessionManager.appendMessage(userMsg("hello"));
+
+		const fromSources = diagnosticBundleInput("manual", {
+			cwd,
+			sessionManager,
+			modelRuntime: bundleInput.modelRuntime,
+			thinkingLevel: bundleInput.thinkingLevel,
+			modules: bundleInput.modules,
+			settings: bundleInput.settings,
+			crashes: [],
+			agentDir,
+		});
+
+		expect(fromSources.phase).toBe("manual");
+		expect(fromSources.cwd).toBe(cwd);
+		expect(fromSources.agentDir).toBe(agentDir);
+		// The branch is serialized while building, so an ephemeral session still ships its transcript.
+		expect(fromSources.sessionJsonl).toContain("hello");
 	});
 });

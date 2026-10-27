@@ -31,6 +31,7 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
 	{ name: "copy", description: "Copy last agent message to clipboard" },
 	{ name: "name", description: "Set session display name" },
 	{ name: "session", description: "Show session info and stats" },
+	{ name: "diagnose", description: "Write a diagnostic bundle of this moment (NANOPI_DEBUG=1)" },
 	{ name: "status", description: "Show the current model, session, and usage" },
 	{ name: "changelog", description: "Show changelog entries" },
 	{ name: "hotkeys", description: "Show all keyboard shortcuts" },
@@ -57,6 +58,11 @@ const ALL_BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
  * component (the minimal flavor) has nothing to export to. The JSONL export is
  * the session file itself and is not gated, so only a build with no export
  * component at all loses the command.
+ *
+ * `/diagnose` is gated on `NANOPI_DEBUG` at runtime instead of at build time: the
+ * bundle it writes only exists in debug mode, and a command that answers "nothing
+ * to collect" is worse than no command. Its handler still reports that instead of
+ * failing silently when reached anyway (a script, an old keybinding).
  */
 export function builtinSlashCommands(): ReadonlyArray<BuiltinSlashCommand> {
 	const commands = hasOAuthFlows()

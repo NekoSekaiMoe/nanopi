@@ -75,6 +75,7 @@ import { findExtensionStackMatches, readCrashLog, recordCrash, takeUnnotifiedCra
 import { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "../../core/defaults.ts";
 import {
 	type DiagnosticBundleInput,
+	diagnosticBundleInput,
 	type WrittenDiagnosticBundle,
 	writeDiagnosticBundle,
 } from "../../core/diagnostic-bundle.ts";
@@ -110,7 +111,6 @@ import type {
 import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../core/resource-listing.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
 import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
-import { serializeSessionBranch } from "../../core/session-export.ts";
 import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
@@ -688,11 +688,14 @@ export class InteractiveMode {
 
 	private createBaseAutocompleteProvider(): AutocompleteProvider {
 		// Define commands for autocomplete
-		const slashCommands: SlashCommand[] = builtinSlashCommands().map((command) => ({
-			name: command.name,
-			description: command.description,
-			...(command.argumentHint && { argumentHint: command.argumentHint }),
-		}));
+		const slashCommands: SlashCommand[] = builtinSlashCommands()
+			// `/diagnose` is a debug-mode tool: without the flag it has no bundle to write.
+			.filter((command) => command.name !== "diagnose" || isDebugEnabled())
+			.map((command) => ({
+				name: command.name,
+				description: command.description,
+				...(command.argumentHint && { argumentHint: command.argumentHint }),
+			}));
 
 		const modelCommand = slashCommands.find((command) => command.name === "model");
 		if (modelCommand) {
@@ -1010,24 +1013,22 @@ export class InteractiveMode {
 		if (!isDebugEnabled()) return Promise.resolve(undefined);
 		const agentDir = getAgentDir();
 		const session = this.session;
-		const input: DiagnosticBundleInput = {
-			phase,
-			cwd: this.sessionManager.getCwd(),
-			sessionManager: this.sessionManager,
-			...(session.model ? { model: session.model } : {}),
-			modelRuntime: session.modelRuntime,
-			thinkingLevel: session.thinkingLevel,
-			modules: session.resourceLoader.getModules(),
-			settings: {
-				global: this.settingsManager.getGlobalSettings(),
-				project: this.settingsManager.getProjectSettings(),
-			},
-			crashes: readCrashLog(path.join(agentDir, "crashes.json")),
-			// An ephemeral session has no file of its own; the branch is still worth keeping.
-			sessionJsonl: serializeSessionBranch(this.sessionManager),
-			agentDir,
-		};
-		return writeDiagnosticBundle(input);
+		return writeDiagnosticBundle(
+			diagnosticBundleInput(phase, {
+				cwd: this.sessionManager.getCwd(),
+				sessionManager: this.sessionManager,
+				...(session.model ? { model: session.model } : {}),
+				modelRuntime: session.modelRuntime,
+				thinkingLevel: session.thinkingLevel,
+				modules: session.resourceLoader.getModules(),
+				settings: {
+					global: this.settingsManager.getGlobalSettings(),
+					project: this.settingsManager.getProjectSettings(),
+				},
+				crashes: readCrashLog(path.join(agentDir, "crashes.json")),
+				agentDir,
+			}),
+		);
 	}
 
 	/**
@@ -2700,6 +2701,11 @@ export class InteractiveMode {
 				const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
 				this.editor.setText("");
 				await this.handleCompactCommand(customInstructions);
+				return;
+			}
+			if (text === "/diagnose") {
+				this.editor.setText("");
+				await this.handleDiagnoseCommand();
 				return;
 			}
 			if (text === "/debug") {
@@ -5940,6 +5946,37 @@ export class InteractiveMode {
 		this.chatContainer.addChild(new Spacer(1));
 		const displayName = sessionName ?? name;
 		this.chatContainer.addChild(new ThemedText(() => theme.fg("dim", `Session name set: ${displayName}`), 1, 0));
+		this.ui.requestRender();
+	}
+
+	/**
+	 * `/diagnose` writes the bundle a debug run would have written at exit, now, because
+	 * "it hangs at this exact moment" is the report that never reaches disk otherwise.
+	 * The phase is `manual` so a bundle in an issue says which of the three it is.
+	 */
+	private async handleDiagnoseCommand(): Promise<void> {
+		if (!isDebugEnabled()) {
+			this.showWarning(
+				`Nothing to bundle: /diagnose needs ${theme.bold("NANOPI_DEBUG=1")} before starting ${APP_NAME}.`,
+			);
+			return;
+		}
+		this.showStatus("Writing diagnostic bundle");
+		const bundle = await this.writeDiagnosticBundle("manual");
+		if (!bundle) {
+			this.showWarning("Diagnostic bundle could not be written. See the debug log for the failure.");
+			return;
+		}
+		this.chatContainer.addChild(new Spacer(1));
+		const archive = bundle.archivePath ? `\n${theme.fg("muted", bundle.archivePath)}` : "";
+		this.chatContainer.addChild(
+			new ThemedText(
+				() =>
+					`${theme.fg("accent", "✓ Diagnostic bundle written")}\n${theme.fg("muted", bundle.directory)}${archive}\n${theme.fg("dim", `files: ${bundle.files.join(", ")}`)}`,
+				1,
+				1,
+			),
+		);
 		this.ui.requestRender();
 	}
 
