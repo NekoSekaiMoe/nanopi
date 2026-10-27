@@ -142,7 +142,7 @@ function commonBuildOptions() {
 			httpsProxyAgentNamedExportPlugin(repoRoot),
 		],
 		sourcemap: false,
-		target: "node22.19",
+		target: "node24",
 		// Do not apply the monorepo's source-oriented path aliases while bundling
 		// compiled output. Release builds must resolve the same package entries as
 		// an installed npm package.
