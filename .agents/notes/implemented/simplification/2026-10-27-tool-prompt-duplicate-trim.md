@@ -6,7 +6,9 @@ Status: implemented
 
 Issue #347 的测量：默认全量模块下每个请求要付 18195 字符的工具声明和
 7081 字符的 system prompt（约 4549 + 1770 tokens）。占大头的不是 schema，
-而是同一件事被写了两遍。
+而是同一件事被写了两遍。顺带一提，同一 issue 上先合入的 #350 已经把各处的
+框架性废话（"whichever is hit first" 之类）压过一轮，这次动的是结构性重复，
+两条线不重叠。
 
 三处具体的重复，都是可数的字符：
 
@@ -52,19 +54,20 @@ Issue #347 的测量：默认全量模块下每个请求要付 18195 字符的�
 
 ## Consequences
 
-同一套真实模块注册（`createHarness` + 全部 `BUILTIN_MODULES`）的实测：
+同一套真实模块注册（`createHarness` + 全部 `BUILTIN_MODULES`）的实测。合并
+#350 之后的基线是 17550 字符声明 / 6453 字符 prompt，落到：
 
-- 工具声明 18195 → 17550 字符（~4549 → ~4388 tokens）。
-- system prompt 7081 → 6394 字符（~1770 → ~1598 tokens），其中 `<rules>`
-  4818 → 4244，`<tools>` 1428 → 1314。
-- 合计每请求少 ~1180 字符 / ~330 tokens。
+- 工具声明 17550 → 17248 字符（~4388 → ~4312 tokens）。
+- system prompt 6453 → 5840 字符（~1613 → ~1460 tokens）。
+- 相对本次开工前的原始基线（18195 / 7081），合计少 2136 字符，约 530 tokens
+  每请求；其中本 PR 承担的是 915 字符左右。
 
-单看 `<rules>` 少了 574 字符，正好等于被删掉的那组重复 guideline 之和；也就是
-说这次省下来的全是"同一句话"，没有一条规则的内容是新的，也没有一条真的被删
-掉语义。剩下的大头是 `subagent`（description 678 + guideline 1306）和
-`ask_user_question`（description 197 + guideline 197）。前者是四个动作加五条
-路由规则，后者是一条规则加一份调用形状，都还是有内容的。**下一步能砍的只有
-`subagent` 的 guideline 里 `dependsOn` 那条**（约 260 字符），前提是先接受
+省下来的全是"同一句话"：没有一条规则的内容是新的，也没有一条语义被删掉，
+`lsp_` 的四份重复与 `ask_user_question`/`mcp`/`bash_bg`/`subagent` 的重合句
+加起来就是差额本身。剩下的大头是 `subagent`（description 678 + guideline
+1001）和 `ask_user_question`（description 197 + guideline 197）。前者是四个
+动作加五条路由规则，后者是一条规则加一份调用形状，都还有内容。**下一步能砍的
+只有 `subagent` 的 guideline 里 `dependsOn` 那条**（约 260 字符），前提是接受
 "模型会自己看参数描述"。
 
 代价：`subagent` 的 brief 契约从 description 挪到 `task` 参数，读 prompt 的人

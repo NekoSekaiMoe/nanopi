@@ -144,11 +144,9 @@ describe("buildSystemPrompt", () => {
 				cwd: process.cwd(),
 			});
 
-			expect(prompt).toContain(
-				`- Main documentation: ${getReadmePath()} (overview) and ${getDocsPath()}/index.md (topic index)`,
-			);
-			expect(prompt).toContain("Resolve docs/... and examples/... against");
-			expect(prompt).toContain("not the current working directory");
+			expect(prompt).toContain(`- Start at ${getDocsPath()}/index.md (topic index); overview: ${getReadmePath()}`);
+			expect(prompt).toContain("Resolve docs/... and examples/... against those directories");
+			expect(prompt).toContain("not the cwd");
 			// The topic-to-file map is not inlined; the docs index carries it.
 			expect(prompt).not.toContain("When asked about:");
 		});
@@ -223,7 +221,7 @@ describe("buildSystemPrompt", () => {
 			expect(prompt).toContain("<skills>");
 			expect(prompt).toContain("<available_skills>");
 			expect(prompt).toContain("<name>test-skill</name>");
-			expect(prompt).toContain("Use bash to load a skill's file");
+			expect(prompt).toContain("Load a skill's file with bash when the task matches its description");
 		});
 
 		test("omits skills without read or bash", () => {
@@ -263,9 +261,9 @@ describe("buildSystemPrompt", () => {
 		});
 
 		test("keeps skills without naming a hidden reader", () => {
-			expect(build(["read", "bash"])).toContain("\nLoad a skill's file when the task matches its description.");
-			expect(build(["read"])).toContain("Use bash to load a skill's file");
-			expect(build([])).toContain("Use the read tool to load a skill's file");
+			expect(build(["read", "bash"])).toContain("\nLoad a skill's file when the task matches its description");
+			expect(build(["read"])).toContain("Load a skill's file with bash when the task matches its description");
+			expect(build([])).toContain("Read a skill's file when the task matches its description");
 		});
 	});
 });

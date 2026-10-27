@@ -685,8 +685,11 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     name: "bash_bg",
     label: "Background Bash",
     description:
-      "Run a shell command that outlives the usual call: action=run blocks up to timeout seconds and returns the output if it finished, otherwise backgrounds the job and returns a jobId; a bash-bg-complete notification starts a new turn when it ends. " +
-      "start backgrounds immediately, status is a live snapshot plus output tail, wait blocks until done or timeout, kill ends the process tree, list shows every job.",
+      "Run shell commands with adaptive foreground/background execution and job control. " +
+      "action=run (recommended) blocks like bash for up to timeout seconds and returns the output inline if the command finishes; otherwise it backgrounds the job, returns a jobId, and notifies you (bash-bg-complete) on completion. " +
+      "action=start backgrounds immediately; status shows a live snapshot + output tail; wait blocks on an existing job; kill stops the job's process tree; list shows all jobs.",
+    // The snippet is what the <tools> list shows; the <rules> bullets below say
+    // when to choose it, so it does not restate the action table here.
     promptSnippet:
       "Run an unbounded or long shell command (dev server, watcher, long build); action=run blocks then auto-backgrounds, completion arrives as a new turn",
     promptGuidelines: [

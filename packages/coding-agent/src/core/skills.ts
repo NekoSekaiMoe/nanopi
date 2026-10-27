@@ -362,24 +362,28 @@ export function formatSkillsForPrompt(skills: Skill[], fileReadTool: "read" | "b
 		return "";
 	}
 
+	// Two lines of framing cost twice as much as the skill list itself, so the
+	// loader sentence and the path rule share one line: `path` is resolved against
+	// the skill directory, and nothing else in the prompt has to say so.
+	const loader =
+		fileReadTool === "read"
+			? "Read a skill's file when the task matches its description; resolve a relative path against the skill directory (the parent of SKILL.md)."
+			: fileReadTool === "bash"
+				? "Load a skill's file with bash when the task matches its description; resolve a relative path against the skill directory (the parent of SKILL.md)."
+				: "Load a skill's file when the task matches its description; resolve a relative path against the skill directory (the parent of SKILL.md).";
 	const lines = [
 		"\n\nThe following skills provide specialized instructions for specific tasks.",
-		fileReadTool === "read"
-			? "Use the read tool to load a skill's file when the task matches its description."
-			: fileReadTool === "bash"
-				? "Use bash to load a skill's file when the task matches its description."
-				: "Load a skill's file when the task matches its description.",
-		"When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
+		loader,
 		"",
 		"<available_skills>",
 	];
 
+	// One line per skill: indentation inside the block is the first thing a model
+	// stops needing once it has seen the shape twice, and every skill repeats it.
 	for (const skill of visibleSkills) {
-		lines.push("  <skill>");
-		lines.push(`    <name>${escapeXml(skill.name)}</name>`);
-		lines.push(`    <description>${escapeXml(skill.description)}</description>`);
-		lines.push(`    <location>${escapeXml(skill.filePath)}</location>`);
-		lines.push("  </skill>");
+		lines.push(
+			`<skill><name>${escapeXml(skill.name)}</name><description>${escapeXml(skill.description)}</description><location>${escapeXml(skill.filePath)}</location></skill>`,
+		);
 	}
 
 	lines.push("</available_skills>");

@@ -181,20 +181,19 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		// what it leaves out: the tool list and the docs section.
 	} else {
 		promptSections.preamble =
-			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
+			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You help users by reading files, running commands, editing code, and writing new files.";
 		const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
 		const tools =
 			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
-		promptSections.tools = `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
+		promptSections.tools = `${tools}\n\nOther custom tools may be available depending on the project.`;
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
 		// A flavor that drops the docs and examples trees has no files to point
 		// at, so the section would be dead weight in every prompt.
 		if (isBuildComponentEnabled("docs")) {
 			promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI):
-- Main documentation: ${getReadmePath()} (overview) and ${getDocsPath()}/index.md (topic index)
+- Start at ${getDocsPath()}/index.md (topic index); overview: ${getReadmePath()}
 - Examples: ${getExamplesPath()}
-- Resolve docs/... and examples/... against ${getDocsPath()} and ${getExamplesPath()}, not the current working directory
-- Follow .md cross-references and read referenced files completely before implementing`;
+- Resolve docs/... and examples/... against those directories, not the cwd; follow .md cross-references and read referenced files completely before implementing`;
 		}
 	}
 

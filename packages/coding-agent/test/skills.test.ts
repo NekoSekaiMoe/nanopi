@@ -262,7 +262,8 @@ describe("skills", () => {
 			const introText = result.substring(0, xmlStart);
 
 			expect(introText).toContain("The following skills provide specialized instructions");
-			expect(introText).toContain("Use the read tool to load a skill's file");
+			expect(introText).toContain("Read a skill's file when the task matches its description");
+			expect(introText).toContain("resolve a relative path against the skill directory");
 		});
 
 		it("should escape XML special characters", () => {
