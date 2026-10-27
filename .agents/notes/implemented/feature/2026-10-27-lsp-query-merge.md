@@ -59,6 +59,12 @@ Measured on the serialized schemas, descriptions and snippets:
 | text characters | 811 | 714 |
 | prompt tokens | ~990 | ~820 |
 
+- The character budget above counts schema, description and snippet. A later
+  change added per-tool `promptGuidelines`, which took the six tools to 4543
+  characters — see
+  [LSP 工具要跟 `read` 竞争](../../implemented/bug-fix/2026-10-27-lsp-tools-lose-to-read.md).
+  The reasoning in *this* note (do not state the efficiency argument twice)
+  still holds; it just turned out that "efficiency" was never the gap.
 - A session that used to call `lsp_callgraph` now calls `lsp_query` with
   `kind: "callgraph"`. There is no alias: the old names are gone, so the model
   reaches for whichever name the current tool list shows.

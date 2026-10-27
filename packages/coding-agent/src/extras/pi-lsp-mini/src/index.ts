@@ -12,7 +12,7 @@ import {
 import { uriToFilePath, type LspClient } from "./client.ts";
 import { loadServers, requestTimeoutFor, type LspServerConfig } from "./config.ts";
 import { createBudget } from "./budget.ts";
-import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, RENAME, DELETE, LSP_GUIDANCE } from "./schemas.ts";
+import { DIAGNOSTICS, HOVER, DEFINITION, QUERY, RENAME, DELETE } from "./schemas.ts";
 import type { CallHierarchyItem, Diagnostic, DocumentSymbol, Location, Range, SymbolInformation } from "./lsp-types.ts";
 import { clampHover, hoverText } from "./hover.ts";
 import { resolveTarget } from "./symbol-target.ts";
@@ -354,7 +354,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Hover",
     description: HOVER.description,
     promptSnippet: HOVER.promptSnippet,
-    promptGuidelines: [LSP_GUIDANCE],
+    promptGuidelines: HOVER.promptGuidelines,
     parameters: HOVER.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
@@ -378,7 +378,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Definition",
     description: DEFINITION.description,
     promptSnippet: DEFINITION.promptSnippet,
-    promptGuidelines: [LSP_GUIDANCE],
+    promptGuidelines: DEFINITION.promptGuidelines,
     parameters: DEFINITION.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
@@ -409,7 +409,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Query",
     description: QUERY.description,
     promptSnippet: QUERY.promptSnippet,
-    promptGuidelines: [LSP_GUIDANCE],
+    promptGuidelines: QUERY.promptGuidelines,
     parameters: QUERY.parameters,
     async execute(_id, params, signal, _u, ctx) {
       const target = await manager.openFile({ cwd: ctx.cwd, signal }, params.path);
@@ -427,7 +427,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Rename",
     description: RENAME.description,
     promptSnippet: RENAME.promptSnippet,
-    promptGuidelines: [LSP_GUIDANCE],
+    promptGuidelines: RENAME.promptGuidelines,
     executionMode: "sequential",
     parameters: RENAME.parameters,
     async execute(_id, params, signal, _u, ctx) {
@@ -480,7 +480,7 @@ export default function lspMiniExtension(pi: ModuleApi): void {
     label: "LSP Delete Symbol",
     description: DELETE.description,
     promptSnippet: DELETE.promptSnippet,
-    promptGuidelines: [LSP_GUIDANCE],
+    promptGuidelines: DELETE.promptGuidelines,
     executionMode: "sequential",
     parameters: DELETE.parameters,
     async execute(_id, params, signal, _u, ctx) {
