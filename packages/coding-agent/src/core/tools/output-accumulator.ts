@@ -1,4 +1,5 @@
 import type { WriteStream } from "node:fs";
+import { readFileSync } from "node:fs";
 import { open } from "node:fs/promises";
 import { createOutputFileStream } from "../../utils/output-files.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, type TruncationResult, truncateTail } from "./truncate.ts";
@@ -13,6 +14,8 @@ export interface OutputSnapshot {
 	content: string;
 	truncation: TruncationResult;
 	fullOutputPath?: string;
+	/** The complete output. Only populated by `snapshot({ fullText: true })`, and only after `finish()`. */
+	fullText?: string;
 }
 
 export interface FullOutput {
@@ -88,7 +91,7 @@ export class OutputAccumulator {
 		}
 	}
 
-	snapshot(options: { persistIfTruncated?: boolean } = {}): OutputSnapshot {
+	snapshot(options: { persistIfTruncated?: boolean; fullText?: boolean } = {}): OutputSnapshot {
 		const tailTruncation = truncateTail(this.getSnapshotText(), {
 			maxLines: this.maxLines,
 			maxBytes: this.maxBytes,
@@ -115,6 +118,7 @@ export class OutputAccumulator {
 			content: truncation.content,
 			truncation,
 			fullOutputPath: this.tempFilePath,
+			...(options.fullText && this.finished ? { fullText: this.getFullText() } : {}),
 		};
 	}
 
@@ -225,6 +229,22 @@ export class OutputAccumulator {
 		this.tailStartsAtLineBoundary = start === 0 ? this.tailStartsAtLineBoundary : buffer[start - 1] === 0x0a;
 		this.tailText = buffer.subarray(start).toString("utf-8");
 		this.tailBytes = byteLength(this.tailText);
+	}
+
+	/**
+	 * The complete decoded output, for callers that scan all of it. `readFullOutput()` needs an
+	 * await and a file read; a build-time caller that only greps for failure lines can use this,
+	 * at the cost of holding the whole output in memory.
+	 */
+	private getFullText(): string {
+		if (!this.tempFilePath) {
+			return this.tailText;
+		}
+		try {
+			return readFileSync(this.tempFilePath, "utf8");
+		} catch {
+			return this.tailText;
+		}
 	}
 
 	private getSnapshotText(): string {

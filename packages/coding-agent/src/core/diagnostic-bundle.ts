@@ -30,7 +30,8 @@ import { writeZipArchive } from "../utils/zip.ts";
 import type { CrashRecord } from "./crash-log.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import type { LoadModulesResult } from "./modules/types.ts";
-import type { ReadonlySessionManager } from "./session-manager.ts";
+import { serializeSessionBranch } from "./session-export.ts";
+import type { ReadonlySessionManager, SessionManager } from "./session-manager.ts";
 import type { Settings } from "./settings-manager.ts";
 
 export const DIAGNOSTIC_SCHEMA_VERSION = 1;
@@ -160,8 +161,12 @@ function describeExtension(module: LoadModulesResult["modules"][number]) {
 }
 
 export interface DiagnosticBundleInput {
-	/** `startup` or `exit`; only labels where in the session lifetime the bundle was taken. */
-	phase: "startup" | "exit";
+	/**
+	 * Where in the session lifetime the bundle was taken: at startup, at exit, or on demand while the
+	 * session is still running — the third one exists because "it hangs right now" is the moment a
+	 * bundle is worth having, and neither of the automatic two is due yet.
+	 */
+	phase: "startup" | "exit" | "manual";
 	cwd: string;
 	sessionManager: ReadonlySessionManager;
 	model?: Model<Api>;
@@ -209,6 +214,44 @@ export function buildDiagnosticMetadata(input: DiagnosticBundleInput) {
 }
 
 export type DiagnosticMetadata = ReturnType<typeof buildDiagnosticMetadata>;
+
+/**
+ * What a caller needs to hand over for a bundle: the session's view of the world, nothing
+ * mutated. Split out so interactive mode and an on-demand `/diagnose` build the same bundle
+ * instead of two drifting copies.
+ */
+export interface DiagnosticBundleSources {
+	cwd: string;
+	sessionManager: ReadonlySessionManager;
+	model?: Model<Api>;
+	modelRuntime: ModelRuntime;
+	thinkingLevel: ThinkingLevel;
+	modules: LoadModulesResult;
+	settings: { global: Settings; project: Settings };
+	crashes: readonly CrashRecord[];
+	agentDir: string;
+}
+
+/** Assemble the bundle input: the loose session branch is serialized here, in one place. */
+export function diagnosticBundleInput(
+	phase: DiagnosticBundleInput["phase"],
+	sources: DiagnosticBundleSources,
+): DiagnosticBundleInput {
+	return {
+		phase,
+		cwd: sources.cwd,
+		sessionManager: sources.sessionManager,
+		...(sources.model ? { model: sources.model } : {}),
+		modelRuntime: sources.modelRuntime,
+		thinkingLevel: sources.thinkingLevel,
+		modules: sources.modules,
+		settings: sources.settings,
+		crashes: sources.crashes,
+		// An ephemeral session has no file of its own; the branch is still worth keeping.
+		sessionJsonl: serializeSessionBranch(sources.sessionManager as SessionManager),
+		agentDir: sources.agentDir,
+	};
+}
 
 /** Failed assistant turns, without collecting conversation content. */
 export function buildDiagnosticReport(input: DiagnosticBundleInput) {

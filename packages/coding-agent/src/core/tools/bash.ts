@@ -14,6 +14,7 @@ import {
 	untrackDetachedChildPid,
 } from "../../utils/shell.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
+import { digestFailures, type FailureLine, formatFailureDigest } from "./failure-digest.ts";
 import { OutputAccumulator } from "./output-accumulator.ts";
 import { BASH_UPDATE_THROTTLE_MS, createShellRenderers } from "./renderers/bash.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -47,6 +48,9 @@ export const bashToolSystemPromptContribution = {
 	guidelines: [
 		"You can inspect NANOPI_* environment variables for current model and session details.",
 		"Chain shell commands instead of asking the user to run them",
+		// Without this the shell reports the printer's exit code: `pnpm test | tail -50` exits 0
+		// because `tail` did, and the failure disappears from both the status and the digest.
+		"Avoid piping a command whose exit status matters into `tail`/`head`/`grep`: the pipeline reports the last command's status, so a failed test looks like a pass. Run it bare, or `set -o pipefail` first.",
 	],
 } as const;
 
@@ -64,6 +68,16 @@ const bashOutputSchema = Type.Object({
 	wall_time_seconds: Type.Number(),
 	/** Backend that ran the command when it was not the local shell, e.g. `sandbox`. */
 	executed_on: Type.Optional(Type.String()),
+	/** Lines that name a failure, for callers that would otherwise re-parse `output`. Absent when no rule matched. */
+	failures: Type.Optional(
+		Type.Array(
+			Type.Object({
+				line: Type.Number({ description: "1-based line number in the full output" }),
+				text: Type.String({ description: "The line as the command wrote it" }),
+				source: Type.String({ description: "Framework or compiler that produced the line" }),
+			}),
+		),
+	),
 });
 
 export type BashToolOutput = Static<typeof bashOutputSchema>;
@@ -387,32 +401,59 @@ export function createShellToolDefinition(
 				output.finish();
 				clearUpdateTimer();
 				emitOutputUpdate();
-				const snapshot = output.snapshot({ persistIfTruncated: true });
+				const snapshot = output.snapshot({ persistIfTruncated: true, fullText: true });
 				await output.closeTempFile();
 				return snapshot;
 			};
 
 			const formatOutput = (snapshot: Awaited<ReturnType<typeof finishOutput>>, emptyText = "(no output)") => {
 				const truncation = snapshot.truncation;
-				let text = snapshot.content || emptyText;
+				const text = snapshot.content || emptyText;
 				let details: BashToolDetails | undefined;
+				let notice = "";
 				if (truncation.truncated) {
 					details = { truncation, fullOutputPath: snapshot.fullOutputPath };
 					const startLine = truncation.totalLines - truncation.outputLines + 1;
 					const endLine = truncation.totalLines;
 					if (truncation.lastLinePartial) {
 						const lastLineSize = formatSize(output.getLastLineBytes());
-						text += `\n\n[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${snapshot.fullOutputPath}]`;
+						notice = `[Showing last ${formatSize(truncation.outputBytes)} of line ${endLine} (line is ${lastLineSize}). Full output: ${snapshot.fullOutputPath}]`;
 					} else if (truncation.truncatedBy === "lines") {
-						text += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${snapshot.fullOutputPath}]`;
+						notice = `[Showing lines ${startLine}-${endLine} of ${truncation.totalLines}. Full output: ${snapshot.fullOutputPath}]`;
 					} else {
-						text += `\n\n[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${snapshot.fullOutputPath}]`;
+						notice = `[Showing lines ${startLine}-${endLine} of ${truncation.totalLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Full output: ${snapshot.fullOutputPath}]`;
 					}
 				}
-				return { text, details };
+				return { text, notice, details };
 			};
 
-			const appendStatus = (text: string, status: string) => `${text ? `${text}\n\n` : ""}${status}`;
+			/**
+			 * The model-facing result of a failed command.
+			 *
+			 * Order matters: log body, truncation notice, status, digest. Results are cut from the head
+			 * when they do not fit, so a digest anywhere else is the first thing lost. The digest is
+			 * sized to fit the result budget on its own for the same reason: it and the log are both
+			 * tail-truncated, so the tail survives whether or not the head does.
+			 *
+			 * A timeout or abort keeps the budget for the log alone: a digest there would point at
+			 * failures the command never reached.
+			 */
+			const formatFailure = (snapshot: Awaited<ReturnType<typeof finishOutput>>, status: string, fill: boolean) => {
+				const { text, notice, details } = formatOutput(snapshot, fill ? "" : "(no output)");
+				const digest = digestFailures(snapshot.fullText ?? "");
+				const block = digest
+					? formatFailureDigest(digest, { maxLines: DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES })
+					: undefined;
+				// No extra truncation: the accumulator already cut the head, and its trailing notice is the
+				// message the renderer and the model both read. The digest goes after it, where head
+				// truncation cannot reach.
+				return {
+					text: [text || "(no output)", notice, status, block?.text].filter(Boolean).join("\n\n"),
+					details,
+					failures: block?.digest.failures,
+				};
+			};
+
 			const startedAt = performance.now();
 
 			try {
@@ -427,25 +468,50 @@ export function createShellToolDefinition(
 					exitCode = result.exitCode;
 				} catch (err) {
 					const snapshot = await finishOutput();
-					const { text } = formatOutput(snapshot, "");
 					if (err instanceof Error && err.message === "aborted") {
-						throw new Error(appendStatus(text, describeAbort(signal, "Command")));
+						const { text } = formatFailure(snapshot, describeAbort(signal, "Command"), true);
+						throw new Error(text);
 					}
 					if (err instanceof Error && err.message.startsWith("timeout:")) {
 						const timeoutSecs = err.message.split(":")[1];
-						throw new Error(appendStatus(text, `Command timed out after ${timeoutSecs} seconds`));
+						const { text } = formatFailure(snapshot, `Command timed out after ${timeoutSecs} seconds`, true);
+						throw new Error(text);
 					}
 					throw err;
 				}
 
 				const snapshot = await finishOutput();
-				const { text: outputText, details } = formatOutput(snapshot);
-				if (exitCode === null) {
-					throw new Error(appendStatus(outputText, "Command terminated without an exit code"));
-				}
 				const wallTimeSeconds = Math.round((performance.now() - startedAt) / 100) / 10;
 				const executedOn = (ops as { backend?: string }).backend;
 				const fullOutput = await output.readFullOutput(STRUCTURED_OUTPUT_MAX_BYTES);
+				if (exitCode === null) {
+					const { text } = formatFailure(snapshot, "Command terminated without an exit code", false);
+					throw new Error(text);
+				}
+				if (exitCode !== 0) {
+					const { text, details, failures } = formatFailure(
+						snapshot,
+						`Command exited with code ${exitCode}`,
+						false,
+					);
+					return {
+						content: [{ type: "text", text }],
+						details,
+						structuredContent: {
+							output: fullOutput.content,
+							truncated: fullOutput.truncated,
+							...(fullOutput.truncated && snapshot.fullOutputPath
+								? { full_output_path: snapshot.fullOutputPath }
+								: {}),
+							exit_code: exitCode,
+							wall_time_seconds: wallTimeSeconds,
+							...(executedOn ? { executed_on: executedOn } : {}),
+							...(failures ? { failures: failures as FailureLine[] } : {}),
+						} satisfies BashToolOutput,
+						isError: true,
+					};
+				}
+				const { text, notice, details } = formatOutput(snapshot);
 				const structuredContent: BashToolOutput = {
 					output: fullOutput.content,
 					truncated: fullOutput.truncated,
@@ -456,15 +522,11 @@ export function createShellToolDefinition(
 					wall_time_seconds: wallTimeSeconds,
 					...(executedOn ? { executed_on: executedOn } : {}),
 				};
-				if (exitCode !== 0) {
-					return {
-						content: [{ type: "text", text: appendStatus(outputText, `Command exited with code ${exitCode}`) }],
-						details,
-						structuredContent,
-						isError: true,
-					};
-				}
-				return { content: [{ type: "text", text: outputText }], details, structuredContent };
+				return {
+					content: [{ type: "text", text: [text, notice].filter(Boolean).join("\n\n") }],
+					details,
+					structuredContent,
+				};
 			} finally {
 				clearUpdateTimer();
 			}
