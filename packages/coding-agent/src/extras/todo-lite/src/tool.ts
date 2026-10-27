@@ -258,7 +258,7 @@ export function registerTodoTool(
 		label: "Todo",
 		description:
 			"Manage the session todo list. actions: add(texts[], isVerification?) | update(id/status/text) or update(updates[]) batch | delete(ids[]) | list | clear. statuses: pending/in_progress/completed/cancelled.",
-		promptSnippet: "Use todo when breaking multi-step work into trackable items. Add verification todos (isVerification=true) for checks like running tests.",
+		promptSnippet: "Track multi-step work as a todo list; isVerification marks the checks",
 		promptGuidelines: [
 			"Break multi-step work (3+ steps) into todos; create verification todos (isVerification) for checks like running tests; batch-update via updates[].",
 		],

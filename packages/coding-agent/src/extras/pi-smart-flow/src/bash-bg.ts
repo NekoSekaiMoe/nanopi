@@ -685,15 +685,13 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     name: "bash_bg",
     label: "Background Bash",
     description:
-      "Run shell commands with adaptive foreground/background execution and job control. " +
-      "action=run (recommended) blocks like the bash tool for up to timeout seconds and returns the output inline if the command finishes in time; if it is still running, it automatically moves to the background and returns a jobId, with a bash-bg-complete notification (a new turn) on completion. " +
-      "action=start backgrounds immediately (ack now). action=status returns a live snapshot + output tail; action=wait blocks an existing job until done or timeout; action=kill terminates the job's process tree; action=list shows all jobs. " +
-      "Example: { action: \"run\", command: \"npm run build\", timeout: 60 }.",
-    promptSnippet: "Run shell commands adaptively: action=run blocks like bash then auto-backgrounds on timeout; start/status/wait/kill/list for job control, with a completion notification that triggers a new turn.",
+      "Run a shell command that outlives the usual call: action=run blocks up to timeout seconds and returns the output if it finished, otherwise backgrounds the job and returns a jobId; a bash-bg-complete notification starts a new turn when it ends. " +
+      "start backgrounds immediately, status is a live snapshot plus output tail, wait blocks until done or timeout, kill ends the process tree, list shows every job.",
+    promptSnippet:
+      "Run an unbounded or long shell command (dev server, watcher, long build); action=run blocks then auto-backgrounds, completion arrives as a new turn",
     promptGuidelines: [
-      "Default to the bash tool for ordinary commands — blocking for tens of seconds is fine. Reach for bash_bg when a command is unbounded (dev server, watcher, tail -f), expected to run for minutes, or you want to keep working concurrently.",
-      "When unsure how long a command will take, use bash_bg action=run: it blocks like bash for up to timeout seconds and returns output inline if fast, otherwise auto-backgrounds and notifies you (bash-bg-complete, a new turn) when done — no up-front guess required.",
-      "Use action=start to background immediately without blocking. After a job backgrounds, do not poll; wait for the notification or call action=wait once. action=status peeks at output and action=kill stops a job.",
+      "Default to the bash tool for ordinary commands — blocking for tens of seconds is fine. Reach for bash_bg when a command is unbounded (dev server, watcher, tail -f), expected to run for minutes, or you want to keep working concurrently. When unsure, action=run settles it without an up-front guess.",
+      "After a job backgrounds, do not poll: wait for the notification, or call action=wait once.",
     ],
     parameters: BashBgParams,
     async execute(_id, params, signal): Promise<AgentToolResult<BashBgDetails>> {

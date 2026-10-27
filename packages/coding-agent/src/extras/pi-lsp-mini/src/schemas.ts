@@ -17,16 +17,21 @@ const POSITION = {
 };
 
 /**
- * Shared guidance attached to every lsp_ tool, so the declaration itself says
- * when to reach for LSP. The tools are registered by an extra that can
- * disappear at runtime (subsystem switch), which is why the hint lives on the
- * tool and not in the system prompt.
+ * Shared guidance for the lsp_ tool group, carried by the first declaration.
+ * The tools are registered by an extra that can disappear at runtime (subsystem
+ * switch), which is why the hint lives on the tool and not in the system prompt.
  *
  * The wording names `read` first on purpose. An earlier version only said "try
  * LSP before grepping", and the model still opened whole files to answer what a
  * signature was: grep was never the tool it was reaching for, `read` was. The
  * competing rule it had was "use read to examine files", so this one has to be
  * about files, not about grep.
+ *
+ * `buildRules` dedups identical bullets, so the rendered <rules> carries it
+ * once. The per-tool lists are read elsewhere too (`getAllTools()`, the docs),
+ * where five copies measured 1520 of the 1959 characters this module
+ * contributes: `index.ts` attaches `DIAGNOSTICS.promptGuidelines` — the only
+ * list that carries the shared sentence — and gives the other four their own.
  */
 export const LSP_GUIDANCE =
   "Before opening a file to answer what a symbol is or where it comes from, use the lsp_ tool for that question: hover for a signature or doc, definition for where it is declared, query for usages or callers, diagnostics for errors. The server already resolved imports and types, so these questions do not need a read.";
@@ -49,20 +54,16 @@ export const DIAGNOSTICS = {
 };
 
 export const HOVER = {
-  description: "Type signature and doc comment of the symbol at a position.",
+  description: "Type signature and doc comment of the symbol at a 1-based position, or of a named `symbol`.",
   promptSnippet: "What a symbol's signature/doc is, by name or position",
-  promptGuidelines: [
-    LSP_GUIDANCE,
-    "Pass `symbol` when you know the name but not the position.",
-  ],
+  promptGuidelines: ["Pass `symbol` when you know the name but not the position."],
   parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
 };
 
 export const DEFINITION = {
-  description: "Where the symbol at a position is defined (file:line).",
+  description: "Where the symbol at a 1-based position, or a named `symbol`, is declared (file:line).",
   promptSnippet: "Where a symbol is declared, by name or position",
   promptGuidelines: [
-    LSP_GUIDANCE,
     "A same-named symbol in another file is not a false positive here; grep returns all of them.",
   ],
   parameters: Type.Object({ ...AT, timeoutMs: TIMEOUT }),
@@ -73,7 +74,6 @@ export const QUERY = {
   description: "Usages or call relations of the symbol at a 1-based line/column.",
   promptSnippet: "Find usages of a symbol, or trace callers/callees of a function",
   promptGuidelines: [
-    LSP_GUIDANCE,
     "Before a rename, signature change, or delete, query separates real usages from matches in strings and comments.",
   ],
   parameters: Type.Object({
@@ -86,9 +86,9 @@ export const QUERY = {
 };
 
 export const EDIT = {
-  description: "Rename or delete a symbol across the workspace. scope-aware; dry-run unless apply=true.",
+  description: "Rename or delete a symbol across the workspace, scope-aware; dry-run unless apply=true.",
   promptSnippet: "Rename/delete a symbol workspace-wide (dry-run first)",
-  promptGuidelines: [LSP_GUIDANCE],
+  promptGuidelines: [],
   parameters: Type.Object({
     ...POSITION,
     kind: Type.Union([Type.Literal("rename"), Type.Literal("delete")], { description: "rename needs newName" }),

@@ -108,8 +108,15 @@ export function buildItemsForQuestion(question: QuestionData): WrappingSelectIte
 }
 
 export const DEFAULT_PROMPT_SNIPPET = `Ask the user up to ${MAX_QUESTIONS} structured questions (${MIN_OPTIONS}-${MAX_OPTIONS} options each) when requirements are ambiguous`;
+/*
+ * The declaration and this rule used to spell the same call shape twice (counts,
+ * option fields, previews, recommended-first). The declaration keeps the shape so
+ * it is there when the model builds the call; the rule keeps only the decision of
+ * when to stop guessing, which is what the model has to weigh against asking in
+ * prose.
+ */
 export const DEFAULT_PROMPT_GUIDELINES: string[] = [
-	`Use ask_user_question when the request is underspecified and you need concrete decisions (up to ${MAX_QUESTIONS} questions in one call, each with ${MIN_OPTIONS}-${MAX_OPTIONS} options: concise label + explanatory description). Options may carry a markdown preview for side-by-side comparison (single-select only); multiSelect allows several answers; put your recommended option first with "(Recommended)".`,
+	`Ask instead of guessing when the request is underspecified and the answer changes what you build; one call carries every open question, with your recommended option first and "(Recommended)" on it.`,
 ];
 
 export function registerAskUserQuestionTool(pi: ModuleApi): void {
@@ -117,7 +124,7 @@ export function registerAskUserQuestionTool(pi: ModuleApi): void {
 	pi.registerTool({
 		name: "ask_user_question",
 		label: "Ask User Question",
-		description: "Ask the user 1-4 structured questions (2-4 options each) when requirements are ambiguous; options may carry markdown previews; group all questions into one call.",
+		description: `Ask the user 1-${MAX_QUESTIONS} structured questions (${MIN_OPTIONS}-${MAX_OPTIONS} options each, options may carry markdown previews, multiSelect allows several answers) when requirements are ambiguous; group all questions into one call.`,
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES,
 		parameters: QuestionParamsSchema,
