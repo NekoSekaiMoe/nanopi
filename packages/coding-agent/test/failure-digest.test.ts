@@ -178,7 +178,36 @@ describe("bash failure digest wiring", () => {
 		expect(text.indexOf("Command exited with code 1")).toBeLessThan(text.indexOf("[failures]"));
 	});
 
-	it("keeps the failure list out of the model-facing text", async () => {
+	it("sends the digest instead of the log, not both", async () => {
+		const definition = createBashToolDefinition(process.cwd(), { operations: failing });
+		const result = await definition.execute("t", { command: "pnpm test" }, undefined, undefined, undefined as never);
+		const text = result.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+
+		// The runner header and the passing case line are in the log the digest replaced.
+		expect(text).not.toContain("RUN  v2.1.0");
+		expect(text).not.toContain("× adds numbers");
+		expect(text.startsWith("Command exited with code 1")).toBe(true);
+		// Still readable to a caller that wants the whole log.
+		expect((result.structuredContent as { output: string }).output).toContain("RUN  v2.1.0");
+	});
+
+	it("keeps the log when no rule matched the failure", async () => {
+		const unmatched: BashOperations = {
+			exec: async (_command, _cwd, { onData }) => {
+				onData(Buffer.from("something odd went wrong\n"));
+				return { exitCode: 1 };
+			},
+		};
+		const definition = createBashToolDefinition(process.cwd(), { operations: unmatched });
+		const result = await definition.execute("t", { command: "make" }, undefined, undefined, undefined as never);
+		const text = result.content.map((block) => (block.type === "text" ? block.text : "")).join("");
+
+		// The log keeps its own trailing newline, so the separator adds nothing.
+		expect(text).toBe("something odd went wrong\n\n\nCommand exited with code 1");
+		expect((result.structuredContent as { failures?: unknown }).failures).toBeUndefined();
+	});
+
+	it("reports the failure list in structured content", async () => {
 		const definition = createBashToolDefinition(process.cwd(), { operations: failing });
 		const result = await definition.execute("t", { command: "pnpm test" }, undefined, undefined, undefined as never);
 		const structured = result.structuredContent as { failures?: { source: string }[] };
