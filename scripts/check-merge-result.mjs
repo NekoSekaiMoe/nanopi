@@ -6,8 +6,16 @@
 //   node scripts/check-merge-result.mjs [--base <ref>] [--description-file <path>] [--commit <ref>]
 //
 // 默认 base 是 HEAD 的第一父提交，也就是「把分支合进来之前的目标分支 tip」：
-// 脚本的用法总是「HEAD 是合并结果，它的第一父是基线」。指定 --base 时以参数为准
-// （`actions/checkout` 的 fetch-depth: 0 或 CNB 的完整 clone 才能用 refs/remotes/origin/main）。
+// 脚本的用法总是「HEAD 是合并结果，它的第一父是基线」。
+//
+// 指定 --base 时以它为准：调用方（check-merge-result-cnb.mjs / GitHub 的 workflow）
+// 手上有「这次合并是从哪儿长出来的」，比 HEAD 的父更可信——普通提交与合并提交两种
+// 形态它都认得。按 ref 名传进来时（`refs/remotes/origin/main`、`refs/remotes/pr/head`）
+// 只核对一件事：这个 ref 现在还解析得到。CNB 复制出来的工作树不带 refspec，
+// `git fetch origin <分支>` 只写 FETCH_HEAD、不建远端跟踪分支，那里的 ref 名可能
+// 根本不存在；取不到就退回 HEAD 的第一父，不因为一个不存在的东西把整条检查判死。
+// 它指向哪儿不在这里管（#314 的教训是：拿一个「看着像 base」的 ref 名去比，等于让
+// 命名决定结论）。
 //
 // 不用 refs/remotes/origin/main 当默认值：那要求基线与合并结果同时可得，而
 // check-merge-result-cnb.mjs 里合并提交的第一父本来就是合并前抓到的目标分支 tip。
@@ -86,13 +94,33 @@ const { base: explicitBase, descriptionFile, commit } = parseArgs(process.argv.s
 const head = git(["rev-parse", "HEAD"]);
 // 第一父恒为基线：合并提交记的原始 tip 就是它，父链上不可能出现「分支自己合进
 // 自己」的假象，也躲开了远端 main 可能已被别人推进的问题。
-const base = explicitBase ?? git(["rev-parse", `${head}^1`]);
-
-// 没有可比的 base（浅 clone、刚建的分支）时不能静默放过：这正是要查的东西。
+let firstParent = null;
 try {
-	git(["rev-parse", "--verify", `${base}^{commit}`]);
+	firstParent = git(["rev-parse", `${head}^1`]);
 } catch {
-	console.error(`${base} is missing; fetch it first (shallow clones cannot spot a revert)`);
+	// 根提交没有父，那是「基线没取到」，交给下面按 2 退出。
+}
+
+function commitOf(revision) {
+	try {
+		return git(["rev-parse", "--verify", `${revision}^{commit}`]);
+	} catch {
+		return null;
+	}
+}
+
+// 基线：调用方指定了就用它，按 ref 名给且解析不到时退回第一父（CNB 的 clone 不建
+// 远端跟踪分支，ref 名指不到东西是常态，不是错误）。第一父是最后一道：普通提交与
+// 合并提交都成立，只是后者才真的是「合进来之前的目标分支 tip」。
+let base = explicitBase === undefined ? firstParent : commitOf(explicitBase);
+if (base === null) {
+	console.log(`--base ${explicitBase} does not resolve here; comparing against the first parent of ${head} instead`);
+	base = firstParent;
+}
+
+// 没有可比的 base（浅 clone、刚建的分支、根提交）时不能静默放过：这正是要查的东西。
+if (base === null) {
+	console.error(`${explicitBase ?? head} has no first parent to compare against; fetch the target branch first (shallow clones cannot spot a revert)`);
 	process.exit(2);
 }
 
