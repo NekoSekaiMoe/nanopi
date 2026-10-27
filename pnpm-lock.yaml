@@ -137,8 +137,8 @@ importers:
         specifier: 0.2.3
         version: 0.2.3
       highlight.js:
-        specifier: 10.7.3
-        version: 10.7.3
+        specifier: 11.12.0
+        version: 11.12.0
       hosted-git-info:
         specifier: 9.0.3
         version: 9.0.3
@@ -1876,8 +1876,9 @@ packages:
   hast-util-whitespace@3.0.0:
     resolution: {integrity: sha512-88JUN06ipLwsnv+dVn+OIYOvAuvBMy/Qoi6O7mQHxdPXpjy+Cd6xRkWwux7DKO+4sYILtLBRIKgsdpS2gQc7qw==}
 
-  highlight.js@10.7.3:
-    resolution: {integrity: sha512-tzcUFauisWKNHaRkN4Wjl/ZA07gENAjFl3J/c480dprkGTg5EQstgaNFqBfUqCq54kZRIEcreTsAgF/m2quD7A==}
+  highlight.js@11.12.0:
+    resolution: {integrity: sha512-nbfWpyRMcMrPMmDwJB+dhX/eiaPKtc2RB+0QZskqJ3WjRA/FDS0e9hZrx8EC/lbEv8gXy98FcDbNa/dspAaJMg==}
+    engines: {node: '>=12.0.0'}
 
   hosted-git-info@9.0.3:
     resolution: {integrity: sha512-Hc+ghLoSt6QaYZUv0WBiIvmMDZuZZ7oaDvdH8MbfOO4lOsxdXLEvuC6ePoGs9H1X9oCLyq6+NVN0MKqD+ydxyg==}
@@ -4279,7 +4280,7 @@ snapshots:
     dependencies:
       '@types/hast': 3.0.5
 
-  highlight.js@10.7.3: {}
+  highlight.js@11.12.0: {}
 
   hosted-git-info@9.0.3:
     dependencies:

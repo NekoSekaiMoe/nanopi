@@ -1,4 +1,5 @@
-import hljs from "highlight.js/lib/core.js";
+import type { LanguageFn } from "highlight.js";
+import hljs from "highlight.js/lib/core";
 import { decodeHtmlEntityAt } from "./html.ts";
 
 /**
@@ -13,7 +14,7 @@ const BUNDLED_LANGUAGES = new Set(
 		"1c abnf accesslog actionscript ada angelscript",
 		"apache applescript arcade arduino armasm xml",
 		"asciidoc aspectj autohotkey autoit avrasm awk",
-		"axapta bash basic bnf brainfuck c-like",
+		"axapta bash basic bnf brainfuck c",
 		"c cal capnproto ceylon clean clojure",
 		"clojure-repl cmake coffeescript coq cos cpp",
 		"crmsh crystal csharp csp css d",
@@ -23,7 +24,7 @@ const BUNDLED_LANGUAGES = new Set(
 		"excel fix flix fortran fsharp gams",
 		"gauss gcode gherkin glsl gml go",
 		"golo gradle groovy haml handlebars haskell",
-		"haxe hsp htmlbars http hy inform7",
+		"haxe hsp http hy inform7",
 		"ini irpf90 isbl java javascript jboss-cli",
 		"json julia julia-repl kotlin lasso latex",
 		"ldif leaf less lisp livecodeserver livescript",
@@ -37,7 +38,7 @@ const BUNDLED_LANGUAGES = new Set(
 		"q qml r reasonml rib roboconf",
 		"routeros rsl ruleslanguage rust sas scala",
 		"scheme scilab scss shell smali smalltalk",
-		"sml sqf sql_more sql stan stata",
+		"sml sqf sql stan stata",
 		"step21 stylus subunit swift taggerscript yaml",
 		"tap tcl thrift tp twig typescript",
 		"vala vbnet vbscript vbscript-html verilog vhdl",
@@ -68,389 +69,383 @@ function preloadLanguage(name: string): void {
 	const load = (): Promise<unknown> => {
 		switch (name) {
 			case "1c":
-				return import("highlight.js/lib/languages/1c.js");
+				return import("highlight.js/lib/languages/1c");
 			case "abnf":
-				return import("highlight.js/lib/languages/abnf.js");
+				return import("highlight.js/lib/languages/abnf");
 			case "accesslog":
-				return import("highlight.js/lib/languages/accesslog.js");
+				return import("highlight.js/lib/languages/accesslog");
 			case "actionscript":
-				return import("highlight.js/lib/languages/actionscript.js");
+				return import("highlight.js/lib/languages/actionscript");
 			case "ada":
-				return import("highlight.js/lib/languages/ada.js");
+				return import("highlight.js/lib/languages/ada");
 			case "angelscript":
-				return import("highlight.js/lib/languages/angelscript.js");
+				return import("highlight.js/lib/languages/angelscript");
 			case "apache":
-				return import("highlight.js/lib/languages/apache.js");
+				return import("highlight.js/lib/languages/apache");
 			case "applescript":
-				return import("highlight.js/lib/languages/applescript.js");
+				return import("highlight.js/lib/languages/applescript");
 			case "arcade":
-				return import("highlight.js/lib/languages/arcade.js");
+				return import("highlight.js/lib/languages/arcade");
 			case "arduino":
-				return import("highlight.js/lib/languages/arduino.js");
+				return import("highlight.js/lib/languages/arduino");
 			case "armasm":
-				return import("highlight.js/lib/languages/armasm.js");
+				return import("highlight.js/lib/languages/armasm");
 			case "xml":
-				return import("highlight.js/lib/languages/xml.js");
+				return import("highlight.js/lib/languages/xml");
 			case "asciidoc":
-				return import("highlight.js/lib/languages/asciidoc.js");
+				return import("highlight.js/lib/languages/asciidoc");
 			case "aspectj":
-				return import("highlight.js/lib/languages/aspectj.js");
+				return import("highlight.js/lib/languages/aspectj");
 			case "autohotkey":
-				return import("highlight.js/lib/languages/autohotkey.js");
+				return import("highlight.js/lib/languages/autohotkey");
 			case "autoit":
-				return import("highlight.js/lib/languages/autoit.js");
+				return import("highlight.js/lib/languages/autoit");
 			case "avrasm":
-				return import("highlight.js/lib/languages/avrasm.js");
+				return import("highlight.js/lib/languages/avrasm");
 			case "awk":
-				return import("highlight.js/lib/languages/awk.js");
+				return import("highlight.js/lib/languages/awk");
 			case "axapta":
-				return import("highlight.js/lib/languages/axapta.js");
+				return import("highlight.js/lib/languages/axapta");
 			case "bash":
-				return import("highlight.js/lib/languages/bash.js");
+				return import("highlight.js/lib/languages/bash");
 			case "basic":
-				return import("highlight.js/lib/languages/basic.js");
+				return import("highlight.js/lib/languages/basic");
 			case "bnf":
-				return import("highlight.js/lib/languages/bnf.js");
+				return import("highlight.js/lib/languages/bnf");
 			case "brainfuck":
-				return import("highlight.js/lib/languages/brainfuck.js");
-			case "c-like":
-				return import("highlight.js/lib/languages/c-like.js");
+				return import("highlight.js/lib/languages/brainfuck");
 			case "c":
-				return import("highlight.js/lib/languages/c.js");
+				return import("highlight.js/lib/languages/c");
 			case "cal":
-				return import("highlight.js/lib/languages/cal.js");
+				return import("highlight.js/lib/languages/cal");
 			case "capnproto":
-				return import("highlight.js/lib/languages/capnproto.js");
+				return import("highlight.js/lib/languages/capnproto");
 			case "ceylon":
-				return import("highlight.js/lib/languages/ceylon.js");
+				return import("highlight.js/lib/languages/ceylon");
 			case "clean":
-				return import("highlight.js/lib/languages/clean.js");
+				return import("highlight.js/lib/languages/clean");
 			case "clojure":
-				return import("highlight.js/lib/languages/clojure.js");
+				return import("highlight.js/lib/languages/clojure");
 			case "clojure-repl":
-				return import("highlight.js/lib/languages/clojure-repl.js");
+				return import("highlight.js/lib/languages/clojure-repl");
 			case "cmake":
-				return import("highlight.js/lib/languages/cmake.js");
+				return import("highlight.js/lib/languages/cmake");
 			case "coffeescript":
-				return import("highlight.js/lib/languages/coffeescript.js");
+				return import("highlight.js/lib/languages/coffeescript");
 			case "coq":
-				return import("highlight.js/lib/languages/coq.js");
+				return import("highlight.js/lib/languages/coq");
 			case "cos":
-				return import("highlight.js/lib/languages/cos.js");
+				return import("highlight.js/lib/languages/cos");
 			case "cpp":
-				return import("highlight.js/lib/languages/cpp.js");
+				return import("highlight.js/lib/languages/cpp");
 			case "crmsh":
-				return import("highlight.js/lib/languages/crmsh.js");
+				return import("highlight.js/lib/languages/crmsh");
 			case "crystal":
-				return import("highlight.js/lib/languages/crystal.js");
+				return import("highlight.js/lib/languages/crystal");
 			case "csharp":
-				return import("highlight.js/lib/languages/csharp.js");
+				return import("highlight.js/lib/languages/csharp");
 			case "csp":
-				return import("highlight.js/lib/languages/csp.js");
+				return import("highlight.js/lib/languages/csp");
 			case "css":
-				return import("highlight.js/lib/languages/css.js");
+				return import("highlight.js/lib/languages/css");
 			case "d":
-				return import("highlight.js/lib/languages/d.js");
+				return import("highlight.js/lib/languages/d");
 			case "markdown":
-				return import("highlight.js/lib/languages/markdown.js");
+				return import("highlight.js/lib/languages/markdown");
 			case "dart":
-				return import("highlight.js/lib/languages/dart.js");
+				return import("highlight.js/lib/languages/dart");
 			case "delphi":
-				return import("highlight.js/lib/languages/delphi.js");
+				return import("highlight.js/lib/languages/delphi");
 			case "diff":
-				return import("highlight.js/lib/languages/diff.js");
+				return import("highlight.js/lib/languages/diff");
 			case "django":
-				return import("highlight.js/lib/languages/django.js");
+				return import("highlight.js/lib/languages/django");
 			case "dns":
-				return import("highlight.js/lib/languages/dns.js");
+				return import("highlight.js/lib/languages/dns");
 			case "dockerfile":
-				return import("highlight.js/lib/languages/dockerfile.js");
+				return import("highlight.js/lib/languages/dockerfile");
 			case "dos":
-				return import("highlight.js/lib/languages/dos.js");
+				return import("highlight.js/lib/languages/dos");
 			case "dsconfig":
-				return import("highlight.js/lib/languages/dsconfig.js");
+				return import("highlight.js/lib/languages/dsconfig");
 			case "dts":
-				return import("highlight.js/lib/languages/dts.js");
+				return import("highlight.js/lib/languages/dts");
 			case "dust":
-				return import("highlight.js/lib/languages/dust.js");
+				return import("highlight.js/lib/languages/dust");
 			case "ebnf":
-				return import("highlight.js/lib/languages/ebnf.js");
+				return import("highlight.js/lib/languages/ebnf");
 			case "elixir":
-				return import("highlight.js/lib/languages/elixir.js");
+				return import("highlight.js/lib/languages/elixir");
 			case "elm":
-				return import("highlight.js/lib/languages/elm.js");
+				return import("highlight.js/lib/languages/elm");
 			case "ruby":
-				return import("highlight.js/lib/languages/ruby.js");
+				return import("highlight.js/lib/languages/ruby");
 			case "erb":
-				return import("highlight.js/lib/languages/erb.js");
+				return import("highlight.js/lib/languages/erb");
 			case "erlang-repl":
-				return import("highlight.js/lib/languages/erlang-repl.js");
+				return import("highlight.js/lib/languages/erlang-repl");
 			case "erlang":
-				return import("highlight.js/lib/languages/erlang.js");
+				return import("highlight.js/lib/languages/erlang");
 			case "excel":
-				return import("highlight.js/lib/languages/excel.js");
+				return import("highlight.js/lib/languages/excel");
 			case "fix":
-				return import("highlight.js/lib/languages/fix.js");
+				return import("highlight.js/lib/languages/fix");
 			case "flix":
-				return import("highlight.js/lib/languages/flix.js");
+				return import("highlight.js/lib/languages/flix");
 			case "fortran":
-				return import("highlight.js/lib/languages/fortran.js");
+				return import("highlight.js/lib/languages/fortran");
 			case "fsharp":
-				return import("highlight.js/lib/languages/fsharp.js");
+				return import("highlight.js/lib/languages/fsharp");
 			case "gams":
-				return import("highlight.js/lib/languages/gams.js");
+				return import("highlight.js/lib/languages/gams");
 			case "gauss":
-				return import("highlight.js/lib/languages/gauss.js");
+				return import("highlight.js/lib/languages/gauss");
 			case "gcode":
-				return import("highlight.js/lib/languages/gcode.js");
+				return import("highlight.js/lib/languages/gcode");
 			case "gherkin":
-				return import("highlight.js/lib/languages/gherkin.js");
+				return import("highlight.js/lib/languages/gherkin");
 			case "glsl":
-				return import("highlight.js/lib/languages/glsl.js");
+				return import("highlight.js/lib/languages/glsl");
 			case "gml":
-				return import("highlight.js/lib/languages/gml.js");
+				return import("highlight.js/lib/languages/gml");
 			case "go":
-				return import("highlight.js/lib/languages/go.js");
+				return import("highlight.js/lib/languages/go");
 			case "golo":
-				return import("highlight.js/lib/languages/golo.js");
+				return import("highlight.js/lib/languages/golo");
 			case "gradle":
-				return import("highlight.js/lib/languages/gradle.js");
+				return import("highlight.js/lib/languages/gradle");
 			case "groovy":
-				return import("highlight.js/lib/languages/groovy.js");
+				return import("highlight.js/lib/languages/groovy");
 			case "haml":
-				return import("highlight.js/lib/languages/haml.js");
+				return import("highlight.js/lib/languages/haml");
 			case "handlebars":
-				return import("highlight.js/lib/languages/handlebars.js");
+				return import("highlight.js/lib/languages/handlebars");
 			case "haskell":
-				return import("highlight.js/lib/languages/haskell.js");
+				return import("highlight.js/lib/languages/haskell");
 			case "haxe":
-				return import("highlight.js/lib/languages/haxe.js");
+				return import("highlight.js/lib/languages/haxe");
 			case "hsp":
-				return import("highlight.js/lib/languages/hsp.js");
-			case "htmlbars":
-				return import("highlight.js/lib/languages/htmlbars.js");
+				return import("highlight.js/lib/languages/hsp");
 			case "http":
-				return import("highlight.js/lib/languages/http.js");
+				return import("highlight.js/lib/languages/http");
 			case "hy":
-				return import("highlight.js/lib/languages/hy.js");
+				return import("highlight.js/lib/languages/hy");
 			case "inform7":
-				return import("highlight.js/lib/languages/inform7.js");
+				return import("highlight.js/lib/languages/inform7");
 			case "ini":
-				return import("highlight.js/lib/languages/ini.js");
+				return import("highlight.js/lib/languages/ini");
 			case "irpf90":
-				return import("highlight.js/lib/languages/irpf90.js");
+				return import("highlight.js/lib/languages/irpf90");
 			case "isbl":
-				return import("highlight.js/lib/languages/isbl.js");
+				return import("highlight.js/lib/languages/isbl");
 			case "java":
-				return import("highlight.js/lib/languages/java.js");
+				return import("highlight.js/lib/languages/java");
 			case "javascript":
-				return import("highlight.js/lib/languages/javascript.js");
+				return import("highlight.js/lib/languages/javascript");
 			case "jboss-cli":
-				return import("highlight.js/lib/languages/jboss-cli.js");
+				return import("highlight.js/lib/languages/jboss-cli");
 			case "json":
-				return import("highlight.js/lib/languages/json.js");
+				return import("highlight.js/lib/languages/json");
 			case "julia":
-				return import("highlight.js/lib/languages/julia.js");
+				return import("highlight.js/lib/languages/julia");
 			case "julia-repl":
-				return import("highlight.js/lib/languages/julia-repl.js");
+				return import("highlight.js/lib/languages/julia-repl");
 			case "kotlin":
-				return import("highlight.js/lib/languages/kotlin.js");
+				return import("highlight.js/lib/languages/kotlin");
 			case "lasso":
-				return import("highlight.js/lib/languages/lasso.js");
+				return import("highlight.js/lib/languages/lasso");
 			case "latex":
-				return import("highlight.js/lib/languages/latex.js");
+				return import("highlight.js/lib/languages/latex");
 			case "ldif":
-				return import("highlight.js/lib/languages/ldif.js");
+				return import("highlight.js/lib/languages/ldif");
 			case "leaf":
-				return import("highlight.js/lib/languages/leaf.js");
+				return import("highlight.js/lib/languages/leaf");
 			case "less":
-				return import("highlight.js/lib/languages/less.js");
+				return import("highlight.js/lib/languages/less");
 			case "lisp":
-				return import("highlight.js/lib/languages/lisp.js");
+				return import("highlight.js/lib/languages/lisp");
 			case "livecodeserver":
-				return import("highlight.js/lib/languages/livecodeserver.js");
+				return import("highlight.js/lib/languages/livecodeserver");
 			case "livescript":
-				return import("highlight.js/lib/languages/livescript.js");
+				return import("highlight.js/lib/languages/livescript");
 			case "llvm":
-				return import("highlight.js/lib/languages/llvm.js");
+				return import("highlight.js/lib/languages/llvm");
 			case "lsl":
-				return import("highlight.js/lib/languages/lsl.js");
+				return import("highlight.js/lib/languages/lsl");
 			case "lua":
-				return import("highlight.js/lib/languages/lua.js");
+				return import("highlight.js/lib/languages/lua");
 			case "makefile":
-				return import("highlight.js/lib/languages/makefile.js");
+				return import("highlight.js/lib/languages/makefile");
 			case "mathematica":
-				return import("highlight.js/lib/languages/mathematica.js");
+				return import("highlight.js/lib/languages/mathematica");
 			case "matlab":
-				return import("highlight.js/lib/languages/matlab.js");
+				return import("highlight.js/lib/languages/matlab");
 			case "maxima":
-				return import("highlight.js/lib/languages/maxima.js");
+				return import("highlight.js/lib/languages/maxima");
 			case "mel":
-				return import("highlight.js/lib/languages/mel.js");
+				return import("highlight.js/lib/languages/mel");
 			case "mercury":
-				return import("highlight.js/lib/languages/mercury.js");
+				return import("highlight.js/lib/languages/mercury");
 			case "mipsasm":
-				return import("highlight.js/lib/languages/mipsasm.js");
+				return import("highlight.js/lib/languages/mipsasm");
 			case "mizar":
-				return import("highlight.js/lib/languages/mizar.js");
+				return import("highlight.js/lib/languages/mizar");
 			case "perl":
-				return import("highlight.js/lib/languages/perl.js");
+				return import("highlight.js/lib/languages/perl");
 			case "mojolicious":
-				return import("highlight.js/lib/languages/mojolicious.js");
+				return import("highlight.js/lib/languages/mojolicious");
 			case "monkey":
-				return import("highlight.js/lib/languages/monkey.js");
+				return import("highlight.js/lib/languages/monkey");
 			case "moonscript":
-				return import("highlight.js/lib/languages/moonscript.js");
+				return import("highlight.js/lib/languages/moonscript");
 			case "n1ql":
-				return import("highlight.js/lib/languages/n1ql.js");
+				return import("highlight.js/lib/languages/n1ql");
 			case "nginx":
-				return import("highlight.js/lib/languages/nginx.js");
+				return import("highlight.js/lib/languages/nginx");
 			case "nim":
-				return import("highlight.js/lib/languages/nim.js");
+				return import("highlight.js/lib/languages/nim");
 			case "nix":
-				return import("highlight.js/lib/languages/nix.js");
+				return import("highlight.js/lib/languages/nix");
 			case "node-repl":
-				return import("highlight.js/lib/languages/node-repl.js");
+				return import("highlight.js/lib/languages/node-repl");
 			case "nsis":
-				return import("highlight.js/lib/languages/nsis.js");
+				return import("highlight.js/lib/languages/nsis");
 			case "objectivec":
-				return import("highlight.js/lib/languages/objectivec.js");
+				return import("highlight.js/lib/languages/objectivec");
 			case "ocaml":
-				return import("highlight.js/lib/languages/ocaml.js");
+				return import("highlight.js/lib/languages/ocaml");
 			case "openscad":
-				return import("highlight.js/lib/languages/openscad.js");
+				return import("highlight.js/lib/languages/openscad");
 			case "oxygene":
-				return import("highlight.js/lib/languages/oxygene.js");
+				return import("highlight.js/lib/languages/oxygene");
 			case "parser3":
-				return import("highlight.js/lib/languages/parser3.js");
+				return import("highlight.js/lib/languages/parser3");
 			case "pf":
-				return import("highlight.js/lib/languages/pf.js");
+				return import("highlight.js/lib/languages/pf");
 			case "pgsql":
-				return import("highlight.js/lib/languages/pgsql.js");
+				return import("highlight.js/lib/languages/pgsql");
 			case "php":
-				return import("highlight.js/lib/languages/php.js");
+				return import("highlight.js/lib/languages/php");
 			case "php-template":
-				return import("highlight.js/lib/languages/php-template.js");
+				return import("highlight.js/lib/languages/php-template");
 			case "plaintext":
-				return import("highlight.js/lib/languages/plaintext.js");
+				return import("highlight.js/lib/languages/plaintext");
 			case "pony":
-				return import("highlight.js/lib/languages/pony.js");
+				return import("highlight.js/lib/languages/pony");
 			case "powershell":
-				return import("highlight.js/lib/languages/powershell.js");
+				return import("highlight.js/lib/languages/powershell");
 			case "processing":
-				return import("highlight.js/lib/languages/processing.js");
+				return import("highlight.js/lib/languages/processing");
 			case "profile":
-				return import("highlight.js/lib/languages/profile.js");
+				return import("highlight.js/lib/languages/profile");
 			case "prolog":
-				return import("highlight.js/lib/languages/prolog.js");
+				return import("highlight.js/lib/languages/prolog");
 			case "properties":
-				return import("highlight.js/lib/languages/properties.js");
+				return import("highlight.js/lib/languages/properties");
 			case "protobuf":
-				return import("highlight.js/lib/languages/protobuf.js");
+				return import("highlight.js/lib/languages/protobuf");
 			case "puppet":
-				return import("highlight.js/lib/languages/puppet.js");
+				return import("highlight.js/lib/languages/puppet");
 			case "purebasic":
-				return import("highlight.js/lib/languages/purebasic.js");
+				return import("highlight.js/lib/languages/purebasic");
 			case "python":
-				return import("highlight.js/lib/languages/python.js");
+				return import("highlight.js/lib/languages/python");
 			case "python-repl":
-				return import("highlight.js/lib/languages/python-repl.js");
+				return import("highlight.js/lib/languages/python-repl");
 			case "q":
-				return import("highlight.js/lib/languages/q.js");
+				return import("highlight.js/lib/languages/q");
 			case "qml":
-				return import("highlight.js/lib/languages/qml.js");
+				return import("highlight.js/lib/languages/qml");
 			case "r":
-				return import("highlight.js/lib/languages/r.js");
+				return import("highlight.js/lib/languages/r");
 			case "reasonml":
-				return import("highlight.js/lib/languages/reasonml.js");
+				return import("highlight.js/lib/languages/reasonml");
 			case "rib":
-				return import("highlight.js/lib/languages/rib.js");
+				return import("highlight.js/lib/languages/rib");
 			case "roboconf":
-				return import("highlight.js/lib/languages/roboconf.js");
+				return import("highlight.js/lib/languages/roboconf");
 			case "routeros":
-				return import("highlight.js/lib/languages/routeros.js");
+				return import("highlight.js/lib/languages/routeros");
 			case "rsl":
-				return import("highlight.js/lib/languages/rsl.js");
+				return import("highlight.js/lib/languages/rsl");
 			case "ruleslanguage":
-				return import("highlight.js/lib/languages/ruleslanguage.js");
+				return import("highlight.js/lib/languages/ruleslanguage");
 			case "rust":
-				return import("highlight.js/lib/languages/rust.js");
+				return import("highlight.js/lib/languages/rust");
 			case "sas":
-				return import("highlight.js/lib/languages/sas.js");
+				return import("highlight.js/lib/languages/sas");
 			case "scala":
-				return import("highlight.js/lib/languages/scala.js");
+				return import("highlight.js/lib/languages/scala");
 			case "scheme":
-				return import("highlight.js/lib/languages/scheme.js");
+				return import("highlight.js/lib/languages/scheme");
 			case "scilab":
-				return import("highlight.js/lib/languages/scilab.js");
+				return import("highlight.js/lib/languages/scilab");
 			case "scss":
-				return import("highlight.js/lib/languages/scss.js");
+				return import("highlight.js/lib/languages/scss");
 			case "shell":
-				return import("highlight.js/lib/languages/shell.js");
+				return import("highlight.js/lib/languages/shell");
 			case "smali":
-				return import("highlight.js/lib/languages/smali.js");
+				return import("highlight.js/lib/languages/smali");
 			case "smalltalk":
-				return import("highlight.js/lib/languages/smalltalk.js");
+				return import("highlight.js/lib/languages/smalltalk");
 			case "sml":
-				return import("highlight.js/lib/languages/sml.js");
+				return import("highlight.js/lib/languages/sml");
 			case "sqf":
-				return import("highlight.js/lib/languages/sqf.js");
-			case "sql_more":
-				return import("highlight.js/lib/languages/sql_more.js");
+				return import("highlight.js/lib/languages/sqf");
 			case "sql":
-				return import("highlight.js/lib/languages/sql.js");
+				return import("highlight.js/lib/languages/sql");
 			case "stan":
-				return import("highlight.js/lib/languages/stan.js");
+				return import("highlight.js/lib/languages/stan");
 			case "stata":
-				return import("highlight.js/lib/languages/stata.js");
+				return import("highlight.js/lib/languages/stata");
 			case "step21":
-				return import("highlight.js/lib/languages/step21.js");
+				return import("highlight.js/lib/languages/step21");
 			case "stylus":
-				return import("highlight.js/lib/languages/stylus.js");
+				return import("highlight.js/lib/languages/stylus");
 			case "subunit":
-				return import("highlight.js/lib/languages/subunit.js");
+				return import("highlight.js/lib/languages/subunit");
 			case "swift":
-				return import("highlight.js/lib/languages/swift.js");
+				return import("highlight.js/lib/languages/swift");
 			case "taggerscript":
-				return import("highlight.js/lib/languages/taggerscript.js");
+				return import("highlight.js/lib/languages/taggerscript");
 			case "yaml":
-				return import("highlight.js/lib/languages/yaml.js");
+				return import("highlight.js/lib/languages/yaml");
 			case "tap":
-				return import("highlight.js/lib/languages/tap.js");
+				return import("highlight.js/lib/languages/tap");
 			case "tcl":
-				return import("highlight.js/lib/languages/tcl.js");
+				return import("highlight.js/lib/languages/tcl");
 			case "thrift":
-				return import("highlight.js/lib/languages/thrift.js");
+				return import("highlight.js/lib/languages/thrift");
 			case "tp":
-				return import("highlight.js/lib/languages/tp.js");
+				return import("highlight.js/lib/languages/tp");
 			case "twig":
-				return import("highlight.js/lib/languages/twig.js");
+				return import("highlight.js/lib/languages/twig");
 			case "typescript":
-				return import("highlight.js/lib/languages/typescript.js");
+				return import("highlight.js/lib/languages/typescript");
 			case "vala":
-				return import("highlight.js/lib/languages/vala.js");
+				return import("highlight.js/lib/languages/vala");
 			case "vbnet":
-				return import("highlight.js/lib/languages/vbnet.js");
+				return import("highlight.js/lib/languages/vbnet");
 			case "vbscript":
-				return import("highlight.js/lib/languages/vbscript.js");
+				return import("highlight.js/lib/languages/vbscript");
 			case "vbscript-html":
-				return import("highlight.js/lib/languages/vbscript-html.js");
+				return import("highlight.js/lib/languages/vbscript-html");
 			case "verilog":
-				return import("highlight.js/lib/languages/verilog.js");
+				return import("highlight.js/lib/languages/verilog");
 			case "vhdl":
-				return import("highlight.js/lib/languages/vhdl.js");
+				return import("highlight.js/lib/languages/vhdl");
 			case "vim":
-				return import("highlight.js/lib/languages/vim.js");
+				return import("highlight.js/lib/languages/vim");
 			case "x86asm":
-				return import("highlight.js/lib/languages/x86asm.js");
+				return import("highlight.js/lib/languages/x86asm");
 			case "xl":
-				return import("highlight.js/lib/languages/xl.js");
+				return import("highlight.js/lib/languages/xl");
 			case "xquery":
-				return import("highlight.js/lib/languages/xquery.js");
+				return import("highlight.js/lib/languages/xquery");
 			case "zephir":
-				return import("highlight.js/lib/languages/zephir.js");
+				return import("highlight.js/lib/languages/zephir");
 			default:
-				return import("highlight.js/lib/index.js");
+				return import("highlight.js/lib/common");
 		}
 	};
 	grammarLoads.set(
@@ -461,7 +456,7 @@ function preloadLanguage(name: string): void {
 				// module itself through a runner that resolves it: unwrap, then require a
 				// function before handing it to highlight.js.
 				const grammar: unknown = (module as { default?: unknown }).default ?? module;
-				if (typeof grammar === "function") hljs.registerLanguage(name, grammar as HighlightJsLanguageFactory);
+				if (typeof grammar === "function") hljs.registerLanguage(name, grammar as LanguageFn);
 			})
 			.catch(() => {
 				// A grammar that will not load renders plain, like an unknown language.

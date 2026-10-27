@@ -104,7 +104,7 @@ describe("createComponentStubPlugin", () => {
 			components: { "syntax-highlight": false },
 			codingAgentDir: fixture(),
 		});
-		strictEqual(resolveWith(plugin, { path: "highlight.js/lib/core.js", resolveDir: "/repo" }), undefined);
+		strictEqual(resolveWith(plugin, { path: "highlight.js/lib/core", resolveDir: "/repo" }), undefined);
 	});
 });
 

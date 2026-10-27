@@ -8,7 +8,7 @@ import {
 	supportsLanguage,
 } from "../src/utils/syntax-highlight.ts";
 
-const bundledLanguages = ["python", "typescript", "bash", "rust", "xml", "coq", "sql_more"];
+const bundledLanguages = ["python", "typescript", "bash", "rust", "xml", "coq", "csharp"];
 const bundledLanguagesReportedAtStartup = bundledLanguages.every(supportsLanguage);
 
 describe("syntax highlight renderer", () => {

@@ -24,8 +24,8 @@ paid, and paid it in the common case.
 ## Decision
 
 `utils/syntax-highlight.ts` imports no grammar at module scope. It carries
-`BUNDLED_LANGUAGES`, the 191 language tags highlight.js 10.7.3 bundles, and one
-`import("highlight.js/lib/languages/<name>.js")` per tag inside
+`BUNDLED_LANGUAGES`, the 188 language tags highlight.js 11.12.0 bundles, and one
+`import("highlight.js/lib/languages/<name>")` per tag inside
 `preloadLanguage`'s switch. esbuild emits one 4 KiB chunk per grammar plus a
 4 KiB chunk for `index.js`; none of them is in the entry graph.
 
@@ -71,7 +71,7 @@ session is actually showing.
 - A language never rendered costs nothing, in heap or in chunks read. Reading
   one costs ~0.4 ms of module load (0.6 ms for the largest grammar).
 - `BUNDLED_LANGUAGES` and the switch are two lists to keep in step; the
-  `syntax-highlight` test loads a sample of them, including `sql_more`, so a
+  `syntax-highlight` test loads a sample of them, including `csharp`, so a
   name that does not resolve to a module fails the suite.
 - The disabled component stub keeps the same export names, so a build without
   `syntax-highlight` still swaps cleanly.
