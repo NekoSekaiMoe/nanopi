@@ -460,6 +460,9 @@ export function mapStopReason(reason: FinishReason): StopReason {
 		case FinishReason.UNEXPECTED_TOOL_CALL:
 		case FinishReason.TOO_MANY_TOOL_CALLS:
 		case FinishReason.NO_IMAGE:
+		// The model ran out of its output window and asked to continue. `automaticContinuation`
+		// handles it inside the SDK when enabled; on its own it is an incomplete turn, not a stop.
+		case FinishReason.CONTINUATION:
 			return "error";
 		default: {
 			const _exhaustive: never = reason;
