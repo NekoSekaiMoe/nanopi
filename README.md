@@ -11,7 +11,7 @@ In an era where coding agent frameworks are blindly bloating into complex micros
 
 ---
 
-> ![note]
+> [!NOTE]
 > 
 > NanoPi is a personal tool built strictly around my own workflow. No feature requests will be accepted.
 >
