@@ -38,6 +38,7 @@ import {
 	type SandboxConfig,
 } from "./sandbox.ts";
 import { loadExtraSettings, saveExtraSettings } from "./settings-store.ts";
+import { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
 import { SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
 const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
@@ -226,6 +227,33 @@ function gitGuardEnabled(cwd: string): boolean {
 	return loadExtraSettings(cwd).settings.gitGuard ?? true;
 }
 
+/** File-inspection refusal, on unless the user turned it off with `/shellguard off`. */
+function shellGuardEnabled(cwd: string): boolean {
+	return loadExtraSettings(cwd).settings.shellGuard ?? true;
+}
+
+/**
+ * The refusal for a shell call whose line only reads files through commands the
+ * read/grep tools do better, or undefined.
+ *
+ * The refusal is only true when the substitute exists in this session: without a
+ * `read` tool, `cat file` has no replacement to point at.
+ */
+function shellGuardHazard(event: ExtraToolCallEvent, cwd: string, activeTools: readonly string[]): string | undefined {
+	const command =
+		typeof (event.input as Record<string, unknown>)?.command === "string"
+			? ((event.input as Record<string, unknown>).command as string)
+			: undefined;
+	if (command === undefined) return undefined;
+	const verdict = analyzeFileInspection(command, cwd);
+	if (!verdict.checked || !verdict.hit) return undefined;
+	// `read` replaces cat/sed/head, `grep` replaces grep/rg; either hint is a lie
+	// when the tool it names is not declared.
+	const needed = verdict.hit.words[0] === "grep" || verdict.hit.words[0] === "rg" ? "grep" : "read";
+	if (!activeTools.includes(needed)) return undefined;
+	return shellGuardNotice(verdict.hit);
+}
+
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
 	let sessionCtx: ExtraExtensionContext | undefined;
@@ -234,6 +262,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let planIntroActive = false;
 	/** Read once per session start; `/gitguard` re-applies it. */
 	let gitGuardOn = true;
+	/** Read once per session start; `/shellguard` re-applies it. */
+	let shellGuardOn = true;
 	/** Calls the user asked to have explained, waiting for that explanation to land. */
 	const explainedCalls = new Map<string, PermissionCallInfo>();
 
@@ -533,6 +563,25 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		},
 	});
 
+	// --- CLI command: /shellguard [on|off] ---
+	nanopi.registerCommand("shellguard", {
+		description: "Show or configure the file-inspection guard (on | off)",
+		handler: async (args, ctx) => {
+			const requested = args.trim().toLowerCase();
+			if (requested === "") {
+				ctx.ui.notify(`Shell guard: ${shellGuardOn ? "on" : "off"}`, "info");
+				return;
+			}
+			if (requested !== "on" && requested !== "off") {
+				ctx.ui.notify("Usage: /shellguard [on|off]", "error");
+				return;
+			}
+			saveExtraSettings({ shellGuard: requested === "on" });
+			shellGuardOn = requested === "on";
+			ctx.ui.notify(`Shell guard ${requested}`, "info");
+		},
+	});
+
 	// --- Session lifecycle ---
 	nanopi.on("session_start", (event, ctx) => {
 		sessionCtx = ctx;
@@ -554,6 +603,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		// Rebuilt on every start so a reloaded settings file (and /sandbox) applies.
 		applySandbox(ctx.cwd);
 		gitGuardOn = gitGuardEnabled(ctx.cwd);
+		shellGuardOn = shellGuardEnabled(ctx.cwd);
 		// Fresh permission memory per session.
 		const prompter: PermissionPrompter | undefined =
 			ctx.mode === "webui"
@@ -657,6 +707,13 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 		if (engine.mode === "minimal" && !SHELL_TOOL_NAMES.has(event.toolName)) {
 			return { block: true, reason: `minimal mode provides only the shell tools (blocked ${event.toolName})` };
+		}
+
+		// The shell guard is a refusal, not a prompt: the model has to see the rule
+		// in the tool result, which is the only thing it reads on the next turn.
+		if (shellGuardOn && SHELL_TOOL_NAMES.has(event.toolName)) {
+			const refusal = shellGuardHazard(event, sessionCtx?.cwd ?? process.cwd(), nanopi.getActiveTools());
+			if (refusal !== undefined) return { block: true, reason: refusal };
 		}
 
 		const sandboxNote = sandboxConfig ? describeSandboxCall(sandboxConfig, event.toolName) : undefined;
