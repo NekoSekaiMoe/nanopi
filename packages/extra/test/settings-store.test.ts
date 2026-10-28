@@ -37,6 +37,22 @@ describe("extra settings store", () => {
 		});
 	});
 
+	test("the shell guard switch persists and a project file can override it", () => {
+		withTempHome(() => {
+			const projectDir = join(tmpdir(), `pi-extra-shell-${Math.random().toString(36).slice(2)}`);
+			mkdirSync(join(projectDir, ".nanopi", "extra"), { recursive: true });
+			try {
+				expect(loadExtraSettings(projectDir).settings.shellGuard).toBeUndefined();
+				saveExtraSettings({ shellGuard: false });
+				expect(loadExtraSettings(projectDir).settings.shellGuard).toBe(false);
+				writeFileSync(join(projectDir, ".nanopi", "extra", "settings.json"), JSON.stringify({ shellGuard: true }));
+				expect(loadExtraSettings(projectDir).settings.shellGuard).toBe(true);
+			} finally {
+				rmSync(projectDir, { recursive: true, force: true });
+			}
+		});
+	});
+
 	test("null subsystem entries remove the override", () => {
 		withTempHome(() => {
 			saveExtraSettings({ subsystems: { mcp: false } });

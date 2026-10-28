@@ -56,6 +56,12 @@ export interface ExtraSettings {
 	 * AGENTS.md forbids prompt for permission instead of running unannounced.
 	 */
 	gitGuard?: boolean;
+	/**
+	 * File-inspection guard (`/shellguard`). Undefined means enabled: `cat`,
+	 * `head`, `tail`, `sed -n` and recursive `grep`/`rg` on real files are refused
+	 * in favour of the read/grep tools.
+	 */
+	shellGuard?: boolean;
 }
 
 export const DEFAULT_EXTRA_SETTINGS: ExtraSettings = {
@@ -80,7 +86,14 @@ export function normalizeExtraSettings(value: unknown): ExtraSettings {
 	}
 	const sandbox = record?.sandbox === undefined ? undefined : normalizeSandboxConfig(record.sandbox);
 	const gitGuard = typeof record?.gitGuard === "boolean" ? record.gitGuard : undefined;
-	return { defaultMode, subsystems, ...(sandbox ? { sandbox } : {}), ...(gitGuard === undefined ? {} : { gitGuard }) };
+	const shellGuard = typeof record?.shellGuard === "boolean" ? record.shellGuard : undefined;
+	return {
+		defaultMode,
+		subsystems,
+		...(sandbox ? { sandbox } : {}),
+		...(gitGuard === undefined ? {} : { gitGuard }),
+		...(shellGuard === undefined ? {} : { shellGuard }),
+	};
 }
 
 /** Status of one subsystem switch, as reported to the webui. */

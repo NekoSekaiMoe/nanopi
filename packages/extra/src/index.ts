@@ -57,6 +57,8 @@ export {
 	projectExtraSettingsPath,
 	saveExtraSettings,
 } from "./settings-store.ts";
+export type { ShellGuardReason, ShellGuardVerdict } from "./shell-guard.ts";
+export { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
 export type {
 	ExtraSettings,
 	ExtraStatePayload,
