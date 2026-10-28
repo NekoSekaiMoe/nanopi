@@ -239,8 +239,38 @@ describe("slash commands for the mode switches", () => {
 		expect(modeEngine.yolo).toBe(false);
 		await fake.run("yolo", "on");
 		expect(modeEngine.yolo).toBe(true);
-		expect(await fake.run("yolo")).toBe("Yolo mode: on");
-		await fake.run("yolo", "off");
+		expect(await fake.run("yolo")).toBe("Yolo mode off");
 		expect(modeEngine.yolo).toBe(false);
+	});
+
+	test("a bare /yolo flips the switch instead of reporting it", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(await fake.run("yolo")).toBe("Yolo mode on");
+		expect(modeEngine.yolo).toBe(true);
+		expect(await fake.run("yolo")).toBe("Yolo mode off");
+		expect(modeEngine.yolo).toBe(false);
+	});
+
+	test("/minimal typed twice names the way out", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(await fake.run("minimal")).toBe("Switched to minimal mode");
+		// "Already in minimal mode" left the user with no exit: there is no
+		// /standard, so the notice has to name the one that exists.
+		expect(await fake.run("minimal")).toContain("webui");
+		fake.api.setActiveTools(TOOLS);
+	});
+
+	test("/minimal from plan mode says plan was left", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		await fake.run("plan");
+		expect(await fake.run("minimal")).toBe("Switched to minimal mode (left plan mode)");
+		expect(modeEngine.mode).toBe("minimal");
+		fake.api.setActiveTools(TOOLS);
 	});
 });
