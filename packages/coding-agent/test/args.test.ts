@@ -155,7 +155,7 @@ describe("parseArgs", () => {
 
 	// Issue #9045
 	describe("--output flag", () => {
-		// `--mode` is gone: run modes own that word (`/mode minimal`), so the
+		// `--mode` is gone: run modes are spelled `--plan` / `--minimal`, so the
 		// output interface got a name of its own instead of a second meaning.
 		test.each(["text", "json", "rpc"] as const)("parses --output %s", (output) => {
 			const result = parseArgs(["--output", output]);

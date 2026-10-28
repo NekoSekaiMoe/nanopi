@@ -41,6 +41,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 	api: ExtraExtensionAPI;
 	active: () => string[];
 	start: (mode: string, reason?: "startup" | "new") => void;
+	has: (name: string) => boolean;
 	run: (name: string, args?: string) => Promise<string | undefined>;
 } {
 	let active = [...TOOLS];
@@ -66,6 +67,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 	return {
 		api,
 		active: () => active,
+		has: (name) => handlers.has(`command:${name}`),
 		run: async (name, args = "") => {
 			const ctx = {
 				cwd: home,
@@ -211,6 +213,15 @@ describe("run-mode CLI flags", () => {
 });
 
 describe("slash commands for the mode switches", () => {
+	test("/mode is not registered: one command per mode, no dispatcher", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(fake.has("mode")).toBe(false);
+		expect(fake.has("plan")).toBe(true);
+		expect(fake.has("minimal")).toBe(true);
+	});
+
 	test("/minimal switches the mode and narrows the tool set", async () => {
 		const fake = fakeApi();
 		createExtraExtension(fake.api);

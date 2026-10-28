@@ -454,9 +454,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		type: "boolean",
 		description: "Skip permission prompts and the folder-trust confirmation for this run",
 	});
-	// Run modes are settable for one run as well: typing `/mode minimal` after
-	// launch is a worse answer to `nanopi --minimal` than a flag, and the mode
-	// only existed as a slash command and a webui switch.
+	// Run modes are settable for one run as well: typing `/minimal` after launch
+	// is a worse answer to `nanopi --minimal` than a flag.
 	//
 	// There is deliberately no `--mode <run-mode>`: the CLI spells the output
 	// interface `--output` (text | json | rpc), and run modes get one flag per
@@ -470,12 +469,13 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		description: "Start in minimal mode (shell tool only)",
 	});
 
-	// --- Mode switches: /plan, /minimal, /mode ---
+	// --- Mode switches: /plan, /minimal ---
 	//
-	// One handler per mode so every entry is reachable: `/p` + Tab reaches
-	// /plan, and /minimal used to exist only behind `/mode minimal`. The
-	// argument is optional everywhere — `/plan <task>` switches and asks for a
-	// plan of that task, which is why /plan is not just `setMode(choice)`.
+	// One command per mode a user can enter, so `/p` + Tab reaches /plan and
+	// `/mi` reaches /minimal. The argument is optional: `/plan <task>` switches
+	// and asks for a plan of that task, which is why /plan is not just
+	// `setMode(mode)`. Leaving plan or minimal is `/plan`-then-approve or the
+	// webui switch; there is no `/standard`.
 	function modeCommand(mode: RunMode): (args: string, ctx: ExtraExtensionContext) => Promise<void> {
 		return async (args, ctx) => {
 			if (engine.mode === mode) {
@@ -527,26 +527,6 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			}
 			engine.setYolo(requested === "on");
 			ctx.ui.notify(`Yolo mode ${requested}`, "info");
-		},
-	});
-
-	// --- CLI command: /mode [plan|minimal|standard] ---
-	nanopi.registerCommand("mode", {
-		description: "Show or switch the run mode (plan | minimal | standard)",
-		handler: async (args, ctx) => {
-			const requested = args.trim().toLowerCase();
-			if (requested === "") {
-				const choice = await ctx.ui.select(`Run mode (current: ${engine.mode})`, ["plan", "minimal", "standard"]);
-				if (choice === "plan" || choice === "minimal" || choice === "standard") {
-					engine.setMode(choice, "/mode");
-				}
-				return;
-			}
-			if (requested !== "plan" && requested !== "minimal" && requested !== "standard") {
-				ctx.ui.notify(`Unknown mode "${requested}" (plan | minimal | standard)`, "error");
-				return;
-			}
-			engine.setMode(requested, "/mode");
 		},
 	});
 
