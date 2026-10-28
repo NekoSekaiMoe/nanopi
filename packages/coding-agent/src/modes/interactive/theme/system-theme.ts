@@ -52,6 +52,7 @@ const FAMILIES = {
 	green: { hue: 158.68, saturation: { min: 0.1, max: 0.76 }, slot: 2 },
 	red: { hue: 20, saturation: { min: 0.1, max: 0.92 }, slot: 1 },
 	yellow: { hue: 82.36, saturation: { min: 0.5, max: 1 }, slot: 3 },
+	modeYellow: { hue: 82.36, saturation: { min: 0.5, max: 1 }, slot: 3 },
 	orange: { hue: 52, saturation: { min: 0.12, max: 0.85 }, slot: 3 },
 	violet: { hue: 295, saturation: { min: 0.2, max: 0.6 }, slot: 5 },
 	calamine: { hue: 202.43, saturation: { min: 0.1, max: 0.74 }, slot: 6 },
@@ -61,6 +62,9 @@ const FAMILIES = {
 	thinkingViolet: { hue: 295, saturation: { min: 0.4, max: 0.75 }, slot: 5 },
 	thinkingMagenta: { hue: 337.5, saturation: { min: 0.5, max: 0.85 }, slot: 13 },
 	thinkingRed: { hue: 20, saturation: { min: 0.95, max: 1 }, slot: 1 },
+	modeRed: { hue: 20, saturation: { min: 0.9, max: 0.9 }, slot: 1 },
+	modeGreen: { hue: 158.68, saturation: { min: 0.7, max: 0.7 }, slot: 2 },
+	modeBlue: { hue: 231.49, saturation: { min: 0.68, max: 0.68 }, slot: 4 },
 } satisfies Record<string, Family>;
 
 type FamilyName = keyof typeof FAMILIES;
@@ -106,6 +110,9 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 	mdCodeBlock: "green",
 	toolDiffAdded: "green",
 	bashMode: "yellow",
+	modeYolo: "modeRed",
+	modePlan: "modeGreen",
+	modeMinimal: "modeBlue",
 	syntaxNumber: "green",
 	error: "red",
 	toolDiffRemoved: "red",
@@ -251,6 +258,30 @@ const PANELS: ThemeBg[] = [
 	"selectedBg",
 	"customMessageBg",
 ];
+/**
+ * Fixed colors that keep their hue instead of following the terminal's palette: the footer's mode badges
+ * (yolo red, plan green, minimal blue) and the yellow every footer draws shell mode in. One hue per mode is
+ * the whole message, so a palette whose slot 3 is not yellow must not repaint `shell`, and minimal must not
+ * inherit whatever family `warning` sits in.
+ *
+ * Lightness and saturation are picked from the contrast rules like every other token; only the hue and the
+ * saturation's shape are fixed.
+ */
+const FIXED_TOKENS: Partial<Record<ThemeToken, FamilyName>> = {
+	bashMode: "modeYellow",
+	modeYolo: "modeRed",
+	modePlan: "modeGreen",
+	modeMinimal: "modeBlue",
+};
+
+/** The ANSI index a fixed token falls back to when the terminal reports no colors. */
+const FIXED_SLOTS: Partial<Record<ThemeToken, number>> = {
+	bashMode: 3,
+	modeYolo: 1,
+	modePlan: 2,
+	modeMinimal: 4,
+};
+
 const THINKING: ThemeColor[] = [
 	"thinkingOff",
 	"thinkingMinimal",
@@ -312,7 +343,7 @@ const RULES: Rule[] = [
 		["background", ...MESSAGE_PANELS, ...TOOL_PANELS],
 		"readable",
 	),
-	...each(["bashMode", "border", "borderAccent"], ["background"], "readable"),
+	...each(["bashMode", "modeYolo", "modePlan", "modeMinimal", "border", "borderAccent"], ["background"], "readable"),
 	{ token: "borderMuted", on: ["background"], level: "subtle" },
 	...each(["mdQuoteBorder", "mdHr"], ["background", ...MESSAGE_PANELS, ...TOOL_PANELS], "readable"),
 	...THINKING.map((token, index): Rule => ({ token, on: ["background"], level: THINKING_LEVELS[index] })),
@@ -460,8 +491,9 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
 	 */
 	const paint = (token: ThemeToken, oklabL: number): RgbColor => {
 		const lightness = oklabToOkhslLightness(oklabL);
-		const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
-		if (!palette) {
+		const fixed = FIXED_TOKENS[token];
+		const family: Family = FAMILIES[fixed ?? TOKEN_FAMILIES[token]];
+		if (!palette || fixed) {
 			const { min, max } = family.saturation;
 			return okhslColor(family.hue, (min + (max - min) * bellWeight(lightness)) * saturation, lightness);
 		}
@@ -618,7 +650,8 @@ function withTextContrast(color: RgbColor, surfaces: RgbColor[], lighter: boolea
 /**
  * Colors for terminals that reported nothing: the terminal renders ANSI indices 0-15 and the default
  * colors with its own theme, so they fit any background. Neutral tokens below body text are faint (SGR 2)
- * instead of bright black, which some themes make nearly invisible. Panels have no background.
+ * instead of bright black, which some themes make nearly invisible. Panels have no background. Fixed tokens
+ * keep their own index, since the palette is what they are pinned against.
  */
 function indexedColors(saturation: number, appearance: ThemeAppearance | undefined): SystemThemeColors {
 	const colors = {} as Record<ThemeToken, string | number>;
@@ -629,7 +662,8 @@ function indexedColors(saturation: number, appearance: ThemeAppearance | undefin
 			continue;
 		}
 		const neutral = familyName === "neutral";
-		colors[token] = !neutral && saturation > 0 ? (TOKEN_SLOTS[token] ?? FAMILIES[familyName].slot) : "";
+		colors[token] =
+			!neutral && saturation > 0 ? (FIXED_SLOTS[token] ?? TOKEN_SLOTS[token] ?? FAMILIES[familyName].slot) : "";
 		if (neutral && !FOREGROUND_TOKENS.includes(token as ThemeColor)) dim.push(token as ThemeColor);
 	}
 	return { colors, dim, appearance };

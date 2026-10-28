@@ -15,9 +15,11 @@ import type { RunMode } from "./types.ts";
 /**
  * The colors the footer needs. `fg` takes the real theme token names, so a
  * badge carries the color of what it means instead of borrowing `error`.
+ * `modeYolo`/`modePlan`/`modeMinimal` are fixed hues (red, green, blue): each
+ * mode owns one, and none of them moves with the terminal's palette.
  */
 export interface BadgeThemeSlice {
-	fg(color: "error" | "success" | "warning" | "bashMode", text: string): string;
+	fg(color: "modeYolo" | "modePlan" | "modeMinimal" | "bashMode", text: string): string;
 }
 
 /**
@@ -40,9 +42,8 @@ export function badgeLabels(engine: ModeEngine): Array<RunMode | "yolo"> {
  * Colored badge text for the status channel, or undefined when no badge applies.
  *
  * Shell mode (`!` at the composer) takes the whole slot: its yellow `shell`
- * label says more about what the next command will do than the mode does, and
- * the badge was right behind it in the same color, so the footer read as two
- * yellow words. The badge returns when the composer leaves shell mode.
+ * label says more about what the next command will do than the mode does. The
+ * badge returns when the composer leaves shell mode.
  */
 export function modeBadgeText(engine: ModeEngine, theme: BadgeThemeSlice, shellMode = false): string | undefined {
 	if (shellMode) return undefined;
@@ -57,8 +58,8 @@ export function shellLabel(theme: BadgeThemeSlice): string {
 }
 
 /** yolo red, plan green, minimal blue: one hue per mode, none of them shared. */
-function badgeColor(label: RunMode | "yolo"): "error" | "success" | "warning" {
-	if (label === "yolo") return "error";
-	if (label === "plan") return "success";
-	return "warning";
+function badgeColor(label: RunMode | "yolo"): "modeYolo" | "modePlan" | "modeMinimal" {
+	if (label === "yolo") return "modeYolo";
+	if (label === "plan") return "modePlan";
+	return "modeMinimal";
 }
