@@ -273,6 +273,24 @@ export function narrowsToItself(toolNames: readonly string[]): boolean {
 
 const NOTHING_TO_NARROW = "This build ships only the shell tools, so minimal mode has nothing to narrow";
 
+/**
+ * Answer for a mode command the session is already in.
+ *
+ * Staying is always possible (the mode is already on), so the notice points at
+ * the exit instead of restating the state: plan ends with the approval prompt
+ * `/plan` opens, minimal has `/plan` and `/yolo` as its neighbours but no
+ * `/standard`, so the webui switch or `/plan` are the ways out.
+ */
+function alreadyInModeNotice(mode: RunMode, nanopi: ExtraExtensionAPI): string {
+	if (mode === "plan") {
+		return "Already in plan mode: the approval prompt after the next turn leaves it (`/plan <task>` restarts it)";
+	}
+	const escapable = nanopi.getCommands?.().some((command) => command.name === "plan");
+	return escapable
+		? "Already in minimal mode: `/plan` enters plan mode, or switch the run mode in the webui settings"
+		: "Already in minimal mode: switch the run mode in the webui settings";
+}
+
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
 	let sessionCtx: ExtraExtensionContext | undefined;
@@ -493,23 +511,28 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	// One command per mode a user can enter, so `/p` + Tab reaches /plan and
 	// `/mi` reaches /minimal. The argument is optional: `/plan <task>` switches
 	// and asks for a plan of that task, which is why /plan is not just
-	// `setMode(mode)`. Leaving plan or minimal is `/plan`-then-approve or the
-	// webui switch; there is no `/standard`.
+	// `setMode(mode)`. Entering a mode the session is already in used to answer
+	// "Already in <mode> mode" and say nothing else, which reads as a broken
+	// command: it now names the way out.
 	function modeCommand(mode: RunMode): (args: string, ctx: ExtraExtensionContext) => Promise<void> {
 		return async (args, ctx) => {
 			if (engine.mode === mode) {
-				ctx.ui.notify(`Already in ${mode} mode`, "info");
+				ctx.ui.notify(alreadyInModeNotice(mode, nanopi), "info");
 				return;
 			}
 			if (mode === "minimal" && minimalModeNarrowsNothing()) {
 				ctx.ui.notify(NOTHING_TO_NARROW, "info");
 				return;
 			}
+			const previous = engine.mode;
 			engine.setMode(mode, `/${mode}`);
 			// Only /plan opens the exit-confirmation flow: it is the mode that ends
 			// in "execute this", and the reason /plan also sends a first turn.
 			if (mode !== "plan") {
-				ctx.ui.notify(`Switched to ${mode} mode`, "info");
+				// Minimal narrows the loadout, so leaving plan for it drops plan's
+				// whitelist: say so, or the model keeps promising read-only work.
+				const hint = previous === "plan" ? " (left plan mode)" : "";
+				ctx.ui.notify(`Switched to ${mode} mode${hint}`, "info");
 				return;
 			}
 			planIntroActive = true;
@@ -537,17 +560,30 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	// property of the run (and of the folder-trust answer it implies), not a
 	// setting a later session should inherit.
 	nanopi.registerCommand("yolo", {
-		description: "Show or switch yolo mode (on | off): skip permission prompts",
+		description: "Toggle yolo mode, or set it (on | off): skip permission prompts",
+		getArgumentCompletions: (prefix) =>
+			["on", "off"]
+				.filter((value) => value.startsWith(prefix))
+				.map((value) => ({
+					value,
+					label: value,
+					description: value === "on" ? "skip permission prompts" : "prompt for gated calls again",
+				})),
 		handler: async (args, ctx) => {
 			const requested = args.trim().toLowerCase();
+			// A bare `/yolo` toggles: it is the switch users type after looking at
+			// the footer, and answering with the current state made them type the
+			// same command twice to flip it.
 			if (requested === "") {
-				ctx.ui.notify(`Yolo mode: ${engine.yolo ? "on" : "off"}`, "info");
+				engine.setYolo(!engine.yolo);
+				ctx.ui.notify(`Yolo mode ${engine.yolo ? "on" : "off"}`, "info");
 				return;
 			}
 			if (requested !== "on" && requested !== "off") {
 				ctx.ui.notify("Usage: /yolo [on|off]", "error");
 				return;
 			}
+			// Set explicitly: unlike a toggle, this answers the state that was asked for.
 			engine.setYolo(requested === "on");
 			ctx.ui.notify(`Yolo mode ${requested}`, "info");
 		},

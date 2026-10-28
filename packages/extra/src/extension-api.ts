@@ -11,6 +11,13 @@
 
 import type { BadgeThemeSlice } from "./badges.ts";
 
+/** One slash-argument suggestion, in the shape the host autocomplete wants. */
+export interface ExtraArgumentCompletion {
+	value: string;
+	label: string;
+	description?: string;
+}
+
 export interface ExtraUIDialogOptions {
 	signal?: AbortSignal;
 	timeout?: number;
@@ -82,6 +89,10 @@ export interface ExtraExtensionAPI {
 		name: string,
 		options: {
 			description?: string;
+			/** Slash-argument suggestions; the host offers them after `/name `. */
+			getArgumentCompletions?: (
+				argumentPrefix: string,
+			) => ExtraArgumentCompletion[] | null | Promise<ExtraArgumentCompletion[] | null>;
 			handler: (args: string, ctx: ExtraExtensionContext) => Promise<void>;
 		},
 	): void;
@@ -120,6 +131,8 @@ export interface ExtraExtensionAPI {
 		},
 	): void;
 	sendUserMessage(content: string): void;
+	/** Slash commands the host offers, used to name an exit that actually exists. */
+	getCommands?(): Array<{ name: string }>;
 	getAllTools(): Array<{ name: string }>;
 	getActiveTools(): string[];
 	setActiveTools(toolNames: string[]): void;

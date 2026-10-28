@@ -7,7 +7,7 @@ const fakeTheme: BadgeThemeSlice = {
 };
 
 describe("mode badges", () => {
-	test("yolo and plan badges can show together", () => {
+	test("yolo and the run mode show together", () => {
 		const engine = new ModeEngine();
 		expect(badgeLabels(engine)).toEqual([]);
 		engine.setYolo(true);
@@ -15,15 +15,31 @@ describe("mode badges", () => {
 		engine.setMode("plan");
 		expect(badgeLabels(engine)).toEqual(["yolo", "plan"]);
 		engine.setMode("minimal");
-		expect(badgeLabels(engine)).toEqual(["yolo"]);
+		expect(badgeLabels(engine)).toEqual(["yolo", "minimal"]);
 	});
 
-	test("badge text colors yolo red and plan green", () => {
+	test("minimal is a badge on its own", () => {
+		const engine = new ModeEngine();
+		expect(modeBadgeText(engine, fakeTheme)).toBeUndefined();
+		engine.setMode("minimal");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<warning>minimal</warning>");
+	});
+
+	test("standard shows no mode badge: it is the mode nothing was chosen", () => {
+		const engine = new ModeEngine();
+		engine.setMode("plan");
+		engine.setMode("standard");
+		expect(badgeLabels(engine)).toEqual([]);
+	});
+
+	test("badge text colors yolo sticky-note style, plan green, minimal yellow", () => {
 		const engine = new ModeEngine();
 		expect(modeBadgeText(engine, fakeTheme)).toBeUndefined();
 		engine.setYolo(true);
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<error>yolo</error>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<accent>yolo</accent>");
 		engine.setMode("plan");
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<error>yolo</error> <success>plan</success>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<accent>yolo</accent> <success>plan</success>");
+		engine.setMode("minimal");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<accent>yolo</accent> <warning>minimal</warning>");
 	});
 });

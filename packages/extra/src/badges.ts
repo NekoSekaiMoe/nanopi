@@ -11,15 +11,26 @@
 
 import type { ModeEngine } from "./mode-engine.ts";
 
+/**
+ * The colors a badge needs. `fg` takes the real theme token names, so yolo
+ * keeps the theme's accent color instead of borrowing `error`.
+ */
 export interface BadgeThemeSlice {
-	fg(color: "error" | "success", text: string): string;
+	fg(color: "accent" | "success" | "warning", text: string): string;
 }
 
-/** Badge labels for the current engine state (exposed for tests). */
+/**
+ * Badge labels for the current engine state (exposed for tests).
+ *
+ * `yolo` and the run mode are orthogonal (yolo off does not leave plan or
+ * minimal), so both may show at once. `standard` is the absence of a mode
+ * badge: it is what every session starts in, and a badge that is always on
+ * says nothing.
+ */
 export function badgeLabels(engine: ModeEngine): string[] {
 	const badges: string[] = [];
 	if (engine.yolo) badges.push("yolo");
-	if (engine.mode === "plan") badges.push("plan");
+	if (engine.mode !== "standard") badges.push(engine.mode);
 	return badges;
 }
 
@@ -27,5 +38,10 @@ export function badgeLabels(engine: ModeEngine): string[] {
 export function modeBadgeText(engine: ModeEngine, theme: BadgeThemeSlice): string | undefined {
 	const labels = badgeLabels(engine);
 	if (labels.length === 0) return undefined;
-	return labels.map((label) => theme.fg(label === "yolo" ? "error" : "success", label)).join(" ");
+	return labels.map((label) => theme.fg(badgeColor(label), label)).join(" ");
+}
+
+function badgeColor(label: string): "accent" | "success" | "warning" {
+	if (label === "yolo") return "accent";
+	return label === "plan" ? "success" : "warning";
 }
