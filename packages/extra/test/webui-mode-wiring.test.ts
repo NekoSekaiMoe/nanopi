@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
@@ -6,6 +6,7 @@ import { ExtraBridge } from "../src/bridge.ts";
 import { createExtraExtension } from "../src/extension.ts";
 import type { ExtraExtensionAPI, ExtraExtensionContext } from "../src/extension-api.ts";
 import { modeEngine } from "../src/mode-engine.ts";
+import { globalExtraSettingsPath } from "../src/settings-store.ts";
 
 // The webui switches the process-wide mode engine, so the session's tool set has
 // to follow the engine for every frontend, and a session start must not reset a
@@ -36,7 +37,7 @@ function resetEngine(): void {
 	modeEngine.setPreMinimalTools(undefined);
 }
 
-function fakeApi(): {
+function fakeApi(flags: Record<string, boolean | string> = {}): {
 	api: ExtraExtensionAPI;
 	active: () => string[];
 	start: (mode: string, reason?: "startup" | "new") => void;
@@ -56,7 +57,7 @@ function fakeApi(): {
 		setActiveTools: (names: string[]) => {
 			active = [...names];
 		},
-		getFlag: () => undefined,
+		getFlag: (name: string) => flags[name],
 	} as unknown as ExtraExtensionAPI;
 	return {
 		api,
@@ -68,7 +69,12 @@ function fakeApi(): {
 				cwd: home,
 				model: undefined,
 				modelRegistry: undefined,
-				ui: { select: async () => undefined, notify: () => undefined, setStatus: () => undefined },
+				ui: {
+					select: async () => undefined,
+					notify: () => undefined,
+					setStatus: () => undefined,
+					theme: { fg: (_color: string, text: string) => text },
+				},
 				getContextUsage: () => undefined,
 			} as unknown as ExtraExtensionContext;
 			void handlers.get("session_start")?.({ type: "session_start", reason }, ctx);
@@ -142,6 +148,41 @@ describe("webui mode switching", () => {
 		createExtraExtension(fake.api);
 		fake.start("webui");
 		modeEngine.setMode("plan", "webui");
+		fake.start("tui", "new");
+		expect(modeEngine.mode).toBe("standard");
+	});
+});
+
+describe("run-mode CLI flags", () => {
+	test("--minimal starts a session in minimal mode", () => {
+		const fake = fakeApi({ minimal: true });
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(modeEngine.mode).toBe("minimal");
+		expect(fake.active()).toEqual(["bash"]);
+		fake.api.setActiveTools(TOOLS);
+	});
+
+	test("--plan starts a session in plan mode", () => {
+		const fake = fakeApi({ plan: true });
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(modeEngine.mode).toBe("plan");
+	});
+
+	test("--mode <name> wins over --plan and over the configured default", () => {
+		// The settings file still says plan; the flag is the more specific request.
+		mkdirSync(join(home, "extra"), { recursive: true });
+		writeFileSync(globalExtraSettingsPath(), JSON.stringify({ defaultMode: "plan", subsystems: {} }), "utf8");
+		const fake = fakeApi({ mode: "standard", plan: true });
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(modeEngine.mode).toBe("standard");
+	});
+
+	test("an invalid --mode value falls back to the settings default", () => {
+		const fake = fakeApi({ mode: "bogus" });
+		createExtraExtension(fake.api);
 		fake.start("tui", "new");
 		expect(modeEngine.mode).toBe("standard");
 	});

@@ -39,7 +39,7 @@ import {
 } from "./sandbox.ts";
 import { loadExtraSettings, saveExtraSettings } from "./settings-store.ts";
 import { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
-import { SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
+import { isRunMode, type RunMode, SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
 const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
 /** Tools that prompt for permission when not in yolo or plan mode. */
@@ -449,11 +449,40 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 	const initMd = resolveInitMd(process.cwd());
 
-	// --- CLI flag: --yolo ---
+	// --- CLI flags: --yolo, --plan, --minimal, --mode ---
 	nanopi.registerFlag("yolo", {
 		type: "boolean",
 		description: "Skip permission prompts and the folder-trust confirmation for this run",
 	});
+	// Run modes are settable for one run as well: typing `/mode minimal` after
+	// launch is a worse answer to `pi --minimal` than a flag, and the mode only
+	// existed as a slash command and a webui switch.
+	nanopi.registerFlag("plan", {
+		type: "boolean",
+		description: "Start in plan mode (read-only exploration, then a plan)",
+	});
+	nanopi.registerFlag("minimal", {
+		type: "boolean",
+		description: "Start in minimal mode (shell tool only)",
+	});
+	nanopi.registerFlag("mode", {
+		type: "string",
+		description: "Start in a run mode: plan, minimal, or standard",
+	});
+
+	/** Run mode requested on the command line, or undefined to use the settings default. */
+	function requestedMode(
+		getFlag: (name: string) => boolean | string | undefined,
+	): { mode: RunMode; reason: string } | undefined {
+		const named = getFlag("mode");
+		if (named !== undefined && named !== true) {
+			if (!isRunMode(named)) return undefined;
+			return { mode: named, reason: "--mode" };
+		}
+		if (getFlag("plan") === true) return { mode: "plan", reason: "--plan" };
+		if (getFlag("minimal") === true) return { mode: "minimal", reason: "--minimal" };
+		return undefined;
+	}
 
 	// --- CLI command: /plan ---
 	nanopi.registerCommand("plan", {
@@ -592,7 +621,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			// it live, so resetting here wiped the mode the user had just picked
 			// (the SPA creates a session on the first send, after the switch).
 			const settings = loadExtraSettings(ctx.cwd).settings;
-			if (ctx.mode !== "webui") engine.setMode(settings.defaultMode, "session default");
+			if (ctx.mode !== "webui") {
+				const requested = requestedMode((name) => nanopi.getFlag(name));
+				if (requested) engine.setMode(requested.mode, requested.reason);
+				else engine.setMode(settings.defaultMode, "session default");
+			}
 			applyModeToolSet();
 			// Persisted subsystem switches apply to fresh sessions too, not just
 			// when toggled live from the webui settings page.
