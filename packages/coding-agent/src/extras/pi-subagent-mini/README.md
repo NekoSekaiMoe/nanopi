@@ -119,7 +119,7 @@ serialized unless they are isolated, which gives each one its own tree.
 - Child tools default to the parent's declared order, matching its `<rules>`
   block. Tool order is the tail of the Anthropic cached prefix, so a different
   order means a full cache miss on every child turn.
-- Uses the same subprocess mechanism as the big suites (`--mode json` NDJSON
+- Uses the same subprocess mechanism as the big suites (`--output json` NDJSON
   events), just without the orchestration/TUI/config layers.
 - Interactive mode shows a live `subagent-async` widget (one row per active job,
   refreshed every second). It deliberately reuses the same widget key as

@@ -39,7 +39,7 @@ import {
 } from "./sandbox.ts";
 import { loadExtraSettings, saveExtraSettings } from "./settings-store.ts";
 import { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
-import { SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
+import { type RunMode, SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
 const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
 /** Tools that prompt for permission when not in yolo or plan mode. */
@@ -449,21 +449,46 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 	const initMd = resolveInitMd(process.cwd());
 
-	// --- CLI flag: --yolo ---
+	// --- CLI flags: --yolo, --plan, --minimal ---
 	nanopi.registerFlag("yolo", {
 		type: "boolean",
 		description: "Skip permission prompts and the folder-trust confirmation for this run",
 	});
+	// Run modes are settable for one run as well: typing `/mode minimal` after
+	// launch is a worse answer to `nanopi --minimal` than a flag, and the mode
+	// only existed as a slash command and a webui switch.
+	//
+	// There is deliberately no `--mode <run-mode>`: the CLI spells the output
+	// interface `--output` (text | json | rpc), and run modes get one flag per
+	// mode, `--plan` / `--minimal`, so no word carries two meanings.
+	nanopi.registerFlag("plan", {
+		type: "boolean",
+		description: "Start in plan mode (read-only exploration, then a plan)",
+	});
+	nanopi.registerFlag("minimal", {
+		type: "boolean",
+		description: "Start in minimal mode (shell tool only)",
+	});
 
-	// --- CLI command: /plan ---
-	nanopi.registerCommand("plan", {
-		description: "Enter plan mode, draft an execution plan, then offer to execute it",
-		handler: async (args, ctx) => {
-			if (engine.mode === "plan") {
-				ctx.ui.notify("Already in plan mode", "info");
+	// --- Mode switches: /plan, /minimal, /mode ---
+	//
+	// One handler per mode so every entry is reachable: `/p` + Tab reaches
+	// /plan, and /minimal used to exist only behind `/mode minimal`. The
+	// argument is optional everywhere — `/plan <task>` switches and asks for a
+	// plan of that task, which is why /plan is not just `setMode(choice)`.
+	function modeCommand(mode: RunMode): (args: string, ctx: ExtraExtensionContext) => Promise<void> {
+		return async (args, ctx) => {
+			if (engine.mode === mode) {
+				ctx.ui.notify(`Already in ${mode} mode`, "info");
 				return;
 			}
-			engine.setMode("plan", "/plan");
+			engine.setMode(mode, `/${mode}`);
+			// Only /plan opens the exit-confirmation flow: it is the mode that ends
+			// in "execute this", and the reason /plan also sends a first turn.
+			if (mode !== "plan") {
+				ctx.ui.notify(`Switched to ${mode} mode`, "info");
+				return;
+			}
 			planIntroActive = true;
 			const task = args.trim();
 			nanopi.sendUserMessage(
@@ -471,6 +496,37 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 					? `${task}\n\n(We are in plan mode: explore read-only and produce a step-by-step plan for this task.)`
 					: "Explore the repository read-only and produce a step-by-step plan for the task at hand. Do not attempt modifications.",
 			);
+		};
+	}
+
+	nanopi.registerCommand("plan", {
+		description: "Enter plan mode, draft an execution plan, then offer to execute it",
+		handler: modeCommand("plan"),
+	});
+
+	nanopi.registerCommand("minimal", {
+		description: "Enter minimal mode (shell tool only)",
+		handler: modeCommand("minimal"),
+	});
+
+	// --- CLI command: /yolo [on|off] ---
+	// Same shape as /gitguard and /shellguard, minus persistence: yolo is a
+	// property of the run (and of the folder-trust answer it implies), not a
+	// setting a later session should inherit.
+	nanopi.registerCommand("yolo", {
+		description: "Show or switch yolo mode (on | off): skip permission prompts",
+		handler: async (args, ctx) => {
+			const requested = args.trim().toLowerCase();
+			if (requested === "") {
+				ctx.ui.notify(`Yolo mode: ${engine.yolo ? "on" : "off"}`, "info");
+				return;
+			}
+			if (requested !== "on" && requested !== "off") {
+				ctx.ui.notify("Usage: /yolo [on|off]", "error");
+				return;
+			}
+			engine.setYolo(requested === "on");
+			ctx.ui.notify(`Yolo mode ${requested}`, "info");
 		},
 	});
 
@@ -516,6 +572,20 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			engine.setPreMinimalTools(undefined);
 			nanopi.setActiveTools(restore);
 		}
+	}
+
+	/**
+	 * Run mode requested on the command line, or undefined to use the settings
+	 * default. `--plan` and `--minimal` are independent flags rather than one
+	 * `--mode <name>`: `--mode` is the CLI's output mode (see the flag comment).
+	 * A session that runs `--plan` never opens /plan's exit confirmation — the
+	 * user asked for a mode, not for a turn — and minimal's restore point is the
+	 * full tool set, since the session never ran with anything else.
+	 */
+	function requestedMode(): { mode: RunMode; reason: string } | undefined {
+		if (nanopi.getFlag("plan") === true) return { mode: "plan", reason: "--plan" };
+		if (nanopi.getFlag("minimal") === true) return { mode: "minimal", reason: "--minimal" };
+		return undefined;
 	}
 
 	function subsystemStatus(): SubsystemStatus[] {
@@ -592,7 +662,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			// it live, so resetting here wiped the mode the user had just picked
 			// (the SPA creates a session on the first send, after the switch).
 			const settings = loadExtraSettings(ctx.cwd).settings;
-			if (ctx.mode !== "webui") engine.setMode(settings.defaultMode, "session default");
+			if (ctx.mode !== "webui") {
+				const requested = requestedMode();
+				if (requested) engine.setMode(requested.mode, requested.reason);
+				else engine.setMode(settings.defaultMode, "session default");
+			}
 			applyModeToolSet();
 			// Persisted subsystem switches apply to fresh sessions too, not just
 			// when toggled live from the webui settings page.

@@ -154,44 +154,53 @@ describe("parseArgs", () => {
 	});
 
 	// Issue #9045
-	describe("--mode flag", () => {
-		test.each(["text", "json", "rpc"] as const)("parses --mode %s", (mode) => {
-			const result = parseArgs(["--mode", mode]);
-			expect(result.mode).toBe(mode);
+	describe("--output flag", () => {
+		// `--mode` is gone: run modes own that word (`/mode minimal`), so the
+		// output interface got a name of its own instead of a second meaning.
+		test.each(["text", "json", "rpc"] as const)("parses --output %s", (output) => {
+			const result = parseArgs(["--output", output]);
+			expect(result.output).toBe(output);
 			expect(result.diagnostics).toEqual([]);
 		});
 
-		test.each(["yaml", ""])("rejects invalid --mode value %j", (mode) => {
-			const result = parseArgs(["--mode", mode, "--version"]);
-			expect(result.mode).toBeUndefined();
+		test.each(["yaml", ""])("rejects invalid --output value %j", (output) => {
+			const result = parseArgs(["--output", output, "--version"]);
+			expect(result.output).toBeUndefined();
 			expect(result.version).toBe(true);
 			expect(result.messages).toEqual([]);
 			expect(result.unknownFlags.size).toBe(0);
 			expect(result.diagnostics).toEqual([
-				{ type: "error", message: `Invalid mode "${mode}". Valid values: text, json, rpc` },
+				{ type: "error", message: `Invalid output "${output}". Valid values: text, json, rpc` },
 			]);
 		});
 
-		test("reports a missing --mode value", () => {
-			const result = parseArgs(["--mode"]);
-			expect(result.mode).toBeUndefined();
+		test("reports a missing --output value", () => {
+			const result = parseArgs(["--output"]);
+			expect(result.output).toBeUndefined();
 			expect(result.unknownFlags.size).toBe(0);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--mode requires text, json, or rpc" }]);
+			expect(result.diagnostics).toEqual([{ type: "error", message: "--output requires text, json, or rpc" }]);
 		});
 
-		test("does not consume another option as a --mode value", () => {
-			const result = parseArgs(["--mode", "--version"]);
-			expect(result.mode).toBeUndefined();
+		test("does not consume another option as an --output value", () => {
+			const result = parseArgs(["--output", "--version"]);
+			expect(result.output).toBeUndefined();
 			expect(result.version).toBe(true);
 			expect(result.unknownFlags.size).toBe(0);
-			expect(result.diagnostics).toEqual([{ type: "error", message: "--mode requires text, json, or rpc" }]);
+			expect(result.diagnostics).toEqual([{ type: "error", message: "--output requires text, json, or rpc" }]);
 		});
 
-		test("reports an invalid --mode value after a valid one", () => {
-			const result = parseArgs(["--mode", "json", "--mode", "yaml"]);
+		test("reports an invalid --output value after a valid one", () => {
+			const result = parseArgs(["--output", "json", "--output", "yaml"]);
 			expect(result.diagnostics).toEqual([
-				{ type: "error", message: 'Invalid mode "yaml". Valid values: text, json, rpc' },
+				{ type: "error", message: 'Invalid output "yaml". Valid values: text, json, rpc' },
 			]);
+		});
+
+		test("no longer accepts --mode", () => {
+			const result = parseArgs(["--mode", "json"]);
+			expect(result.output).toBeUndefined();
+			expect(result.diagnostics).toEqual([]);
+			expect(result.unknownFlags.get("mode")).toBe("json");
 		});
 	});
 
@@ -513,7 +522,7 @@ describe("--modules", () => {
 		// which exists any more. The parse errors aborted the child, and the
 		// orphaned `-e` value became `parsed.messages[0]` -- the child's prompt.
 		const childArgs = [
-			"--mode",
+			"--output",
 			"json",
 			"-p",
 			"--no-session",

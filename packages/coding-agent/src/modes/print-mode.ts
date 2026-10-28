@@ -3,7 +3,7 @@
  *
  * Used for:
  * - `nanopi -p "prompt"` - text output
- * - `nanopi --mode json "prompt"` - JSON event stream
+ * - `nanopi --output json "prompt"` - JSON event stream
  */
 
 import type { AssistantMessage, ImageContent } from "@nanopi/pi-ai";

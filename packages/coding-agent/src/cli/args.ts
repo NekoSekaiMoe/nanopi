@@ -9,7 +9,8 @@ import type { ModuleFlag } from "../core/modules/types.ts";
 import { parseExportFormat, pdfExportHint, type SessionExportFormat } from "../core/session-export-formats.ts";
 import { getToolListError } from "../core/settings-manager.ts";
 
-export type Mode = "text" | "json" | "rpc";
+/** `--output <mode>`: which output interface the process speaks. */
+export type OutputMode = "text" | "json" | "rpc";
 
 export interface Args {
 	provider?: string;
@@ -22,7 +23,7 @@ export interface Args {
 	resume?: boolean;
 	help?: boolean;
 	version?: boolean;
-	mode?: Mode;
+	output?: OutputMode;
 	name?: string;
 	noSession?: boolean;
 	session?: string;
@@ -97,21 +98,21 @@ export function parseArgs(args: string[]): Args {
 			result.help = true;
 		} else if (arg === "--version" || arg === "-v") {
 			result.version = true;
-		} else if (arg === "--mode") {
-			const mode = args[i + 1];
-			if (mode === undefined || mode.startsWith("-")) {
-				result.diagnostics.push({ type: "error", message: "--mode requires text, json, or rpc" });
+		} else if (arg === "--output") {
+			const output = args[i + 1];
+			if (output === undefined || output.startsWith("-")) {
+				result.diagnostics.push({ type: "error", message: "--output requires text, json, or rpc" });
 				continue;
 			}
 			i++;
-			if (mode !== "text" && mode !== "json" && mode !== "rpc") {
+			if (output !== "text" && output !== "json" && output !== "rpc") {
 				result.diagnostics.push({
 					type: "error",
-					message: `Invalid mode "${mode}". Valid values: text, json, rpc`,
+					message: `Invalid output "${output}". Valid values: text, json, rpc`,
 				});
 				continue;
 			}
-			result.mode = mode;
+			result.output = output;
 		} else if (arg === "--continue" || arg === "-c") {
 			result.continue = true;
 		} else if (arg === "--resume" || arg === "-r") {
@@ -293,7 +294,7 @@ ${chalk.bold("Options:")}
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: coding assistant prompt)
   --append-system-prompt <text>  Append text or file contents to the system prompt (can be used multiple times)
-  --mode <mode>                  Output mode: text (default), json, or rpc
+  --output <mode>                Output interface: text (default), json, or rpc
   --print, -p                    Non-interactive mode: process prompt and exit
   --continue, -c                 Continue previous session
   --resume, -r                   Select a session to resume

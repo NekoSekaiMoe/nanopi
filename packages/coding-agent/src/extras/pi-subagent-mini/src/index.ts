@@ -15,7 +15,7 @@ import { killProcessTree } from "../../../utils/shell.ts";
 /**
  * pi-subagent-mini — one tool, five actions.
  *
- * Children run `nanopi --mode json -p` with their own session file, so a child is
+ * Children run `nanopi --output json -p` with their own session file, so a child is
  * resumable: `action: "continue"` runs another turn on the same transcript instead
  * of briefing a fresh agent from scratch. The final output of each round comes back
  * as a custom message that starts a turn only when nobody else is running.
@@ -535,7 +535,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		// "the entry the parent is running", which no path guessed from the
 		// package layout can (the single-file build runs from an asset cache).
 		const child = ctx.resolveHostEntry();
-		const args = [...child.args, "--mode", "json", "-p", "--no-skills", "--no-prompt-templates"];
+		const args = [...child.args, "--output", "json", "-p", "--no-skills", "--no-prompt-templates"];
 		// A child session is a file we own: `--session <id>` reuses the same id and
 		// directory the tool recorded, so a later `continue` appends to the growing
 		// transcript instead of meeting the id in a different project directory.
@@ -678,7 +678,7 @@ export default function subagentMini(pi: ModuleApi): void {
 		// `close` (not `exit`) so the stdout pipe is drained before the report is read.
 		proc.on("close", (code, signal) => {
 			if (attemptSettled) return;
-			// A zero exit code does not mean the child succeeded: in `--mode json` an
+			// A zero exit code does not mean the child succeeded: in `--output json` an
 			// API/auth failure arrives as an assistant message with stopReason "error"
 			// and no content, and print mode only maps that to a nonzero exit in
 			// text mode. Check the message itself instead of trusting the code.

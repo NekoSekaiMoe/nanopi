@@ -12,7 +12,7 @@ For an in-process Node.js or Bun integration, prefer the [SDK](sdk.md). For a su
 ## Start RPC mode
 
 ```bash
-nanopi --mode rpc --no-session
+nanopi --output rpc --no-session
 ```
 
 Normal CLI options still select the working folder, model, tools, resources, and session behavior. Common choices include `--provider`, `--model`, `--name`, `--no-session`, and `--session-dir`. See [Command Line](cli.md) for the complete, version-specific interface; `nanopi --help` is authoritative for the installed version.
@@ -103,7 +103,7 @@ import json
 import subprocess
 
 process = subprocess.Popen(
-    ["nanopi", "--mode", "rpc", "--no-session"],
+    ["nanopi", "--output", "rpc", "--no-session"],
     stdin=subprocess.PIPE,
     stdout=subprocess.PIPE,
 )
