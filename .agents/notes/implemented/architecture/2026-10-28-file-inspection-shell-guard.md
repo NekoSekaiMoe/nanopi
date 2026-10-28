@@ -56,8 +56,37 @@ Status: implemented
 收益：模型想读文件时，第一次 `cat` 会被顶回 `read`，并且只有这一条路；提示词不用再为
 这条偏好付预算，精简时也不怕它被删掉。
 
-代价与已知漏口：`bash -c 'cat f'`、`sudo -u x cat f`、`$(cat f)` 没进判定器——它们比直接写
-`cat f` 少见得多，要覆盖就得再维护一层 shell 语法模型，眼下不值得。真的漏多了再加。
+代价与已知漏口：`$(cat f)`、`bash script.sh` 里的读没进判定器——它们比直接写 `cat f`
+少见得多，要覆盖就得再维护一层 shell 语法模型，眼下不值得。真的漏多了再加。
+
+`bash -c 'cat f'` 曾经也在这份名单里，但它不是长尾：shell 工具天生邀请这种写法，模型一被拦
+就顺手包一层，接着 `cat` 又变成习惯。所以脚本按普通命令行走同一个判定器：`bash -c 'cat f'`
+就是 `cat f`，管道、`sed -i` 之类照旧放行。`sudo -u x cat f` 一起被覆盖了——`sudo`、`env`
+本来就在包装词里，`-u x` 只是 `cat` 前面的参数，之前没拦住是因为整条命令没被当成 `cat`。
+
+## shell-only 构建：这里没有 read 可指
+
+`minimal` flavor 的 `toolset: "bash"` 只发 bash 和 powershell（minimal SKU），`read` 和
+`grep` 都不存在。这条守卫在那儿是死路而不是策略：拒绝理由让模型去找一个装不上的工具。
+判定器本身没错——错在接线没有问构建。
+
+现在 `packages/coding-agent/src/modules/index.ts` 在 shell-only 构建里不注册 `modules/extra`
+（`isBashOnlyBuild()`，从构建的**工具名**读，不是从 flavor 名读）。顺带解决的还有
+`/mode minimal`：它在只有 bash 的构建里会「把工具集收窄到 bash」，也就是收窄到自己。
+`module/extra` 这个 buildconfig 开关不变，flavor 里的 `module/*` 仍然照字面生效。
+
+为什么不在 `shell-guard.ts` 里判：那条判断要知道构建，而 `pi-extra` 刻意不依赖
+`pi-coding-agent`（`extension-api.ts` 的注释写了原因：包构建顺序会成环）。给 API 加一个
+`isShellOnlyBuild()` 再让两个测试替身都实现它，是把一个构建事实变成运行时契约；不注册更省，
+也不给测试留一个常常漏实现的可选方法。
+
+## 另一处坑：源码进程读不到 build define
+
+`NANOPI_BUILD_*` 是 esbuild define，只有 bundle 里存在。源码进程（`node nanopi-test.mjs`、
+直接跑测试）读它得到的是 `typeof NANOPI_BUILD_TOOLSET === "undefined"`——那不是「未定义」，
+是「读一个不存在的全局名」，ReferenceError。也就是说任何从源码跑的进程早就断了，只是没人
+走到那行。`source-resolver.ts`（源码运行时的 preload）现在把这五个名字装成 `undefined`，
+也就是「全量构建」，和 bundle 的全量构建同义。
 
 另一个代价只在非危险意义上成立：有人用 `cat` 看二进制或长尾输出时会被顶回 `read`，
 `read` 对非普通文件会明确拒绝并指向 bash，所以这条路是通的，只是多一跳。

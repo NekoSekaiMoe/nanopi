@@ -48,6 +48,16 @@ export interface ShellGuardReason {
 
 /** Words that precede the command in a simple command (`FOO=1 sudo cat f`). */
 const WRAPPERS = new Set(["command", "exec", "nohup", "sudo", "time", "builtin", "env"]);
+
+/**
+ * Shells whose `-c 'script'` is a wrapper, not the command: the script is the
+ * real command line and gets analyzed on its own.
+ *
+ * `bash -c 'cat f'` is the documented way around the guard, and a shell tool
+ * invites it. Only the `-c` form counts; `bash script.sh` runs a file this
+ * analyzer has not read.
+ */
+const SHELLS = new Set(["bash", "sh", "zsh", "dash"]);
 const SHELL_CONTROL_WORDS = new Set(["if", "then", "else", "elif", "fi", "for", "do", "done", "while", "until", "!"]);
 
 class Unsupported extends Error {}
@@ -63,7 +73,7 @@ export function analyzeFileInspection(command: string, cwd: string): ShellGuardV
 		if (segments.length === 0) return { checked: false };
 		let hit: ShellGuardReason | undefined;
 		for (const segment of segments) {
-			const words = skipWrappers(segment.words);
+			const words = unwrapShellScript(skipWrappers(segment.words));
 			if (words.length === 0) continue;
 			const verdict = classify(words, segment.piped, cwd);
 			if (verdict === "passthrough") return { checked: true };
@@ -227,6 +237,34 @@ function isRegularFile(file: string, cwd: string): boolean {
 		return statSync(resolve(cwd, file.startsWith("~/") ? `${homedir()}/${file.slice(2)}` : file)).isFile();
 	} catch {
 		return false;
+	}
+}
+
+/**
+ * `bash -c 'cat f'` → the script as its own words. Anything else (no `-c`, no
+ * script after it, an unknown long flag) is left alone: the words still name
+ * the shell, `classify` passes it through, and the line runs.
+ */
+function unwrapShellScript(words: readonly string[]): readonly string[] {
+	if (!SHELLS.has(words[0] ?? "")) return words;
+	let index = 1;
+	for (; index < words.length; index++) {
+		const arg = words[index] ?? "";
+		if (arg === "-c") break;
+		// `-x`/`-e`/`-l` change how the script runs; `--norc` style flags are
+		// unknown shapes, and `-` alone reads stdin.
+		if (arg.startsWith("--") || !/^-[a-zA-Z]+$/.test(arg)) return words;
+	}
+	if (index >= words.length - 1) return words;
+	// The script is a command line of its own: split it the same way, so
+	// `bash -c 'cat f'` is weighed as `cat f`. A script the splitter cannot
+	// state (or one holding several commands, which may pipe or redirect)
+	// keeps the shell as its program and passes through.
+	try {
+		const segments = splitSegments(words.slice(index + 1).join(" "));
+		return segments.length === 1 ? (segments[0]?.words ?? words) : words;
+	} catch {
+		return words;
 	}
 }
 

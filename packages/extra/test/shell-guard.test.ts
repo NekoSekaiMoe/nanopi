@@ -43,6 +43,16 @@ describe("shell guard: file reads the tools do better", () => {
 		expect(hit("sudo cat src/a.ts")).toBe("cat src/a.ts");
 		expect(hit("FOO=1 cat src/a.ts")).toBe("cat src/a.ts");
 	});
+
+	test("a shell's -c script is weighed as the command it runs", () => {
+		expect(hit("bash -c 'cat src/a.ts'")).toBe("cat src/a.ts");
+		expect(hit("sh -c \"sed -n '1,5p' src/a.ts\"")).toBe("sed src/a.ts");
+		// No -c, or no script after it: nothing to unwrap.
+		expect(hit("bash script.sh")).toBeUndefined();
+		expect(hit("bash -c")).toBeUndefined();
+		// A script with a pipe is not an inspection.
+		expect(hit("bash -c 'cat src/a.ts | wc -l'")).toBeUndefined();
+	});
 });
 
 describe("shell guard: what must keep running", () => {
