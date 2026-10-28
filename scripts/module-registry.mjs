@@ -5,7 +5,10 @@
  * The file is parsed, not imported: importing it would pull the whole
  * coding-agent graph (and @nanopi/pi-extra, which a flavor may be excluding)
  * into the build process. Every entry in BUILTIN_MODULES is one object literal
- * on its own line with a quoted `name`, which is all this needs.
+ * on its own line with a quoted `name`, plus the spread entries that register a
+ * module conditionally (`...extraModule()`, which drops `extra` from a
+ * shell-only build). The spread's helper is then read for its literal `name:
+ * "<x>"`, so `extra` is a module the config has to know about like any other.
  */
 
 import { readFileSync } from "node:fs";
@@ -15,9 +18,16 @@ import { specifierFor } from "./build-modules.mjs";
 const codingAgentDir = join("packages", "coding-agent");
 const codingAgentSrcDir = join(codingAgentDir, "src");
 
-const ENTRY = /^\t\{ name: "([^"]+)"[^\n]*\},?$/gm;
+const LITERAL_NAME = /\{\s*name: "([^"]+)"/g;
 
-/** @returns {string[]} module names in registration order */
+/**
+ * Module names in `BUILTIN_MODULES` registration order. Entries are read in
+ * source order and a spread entry contributes the literal `name` from the
+ * helper it calls, so `...extraModule()` still counts `extra` (see the
+ * file-level comment for why the file is parsed instead of imported).
+ *
+ * @returns {string[]}
+ */
 export function readBuiltinModuleNames(repoRoot) {
 	const path = join(repoRoot, codingAgentSrcDir, "modules", "index.ts");
 	const source = readFileSync(path, "utf8");
@@ -25,7 +35,34 @@ export function readBuiltinModuleNames(repoRoot) {
 	if (start === -1) throw new Error(`${path} no longer exports BUILTIN_MODULES`);
 	const end = source.indexOf("\n];", start);
 	if (end === -1) throw new Error(`${path}: could not find the end of BUILTIN_MODULES`);
-	return [...source.slice(start, end).matchAll(ENTRY)].map((match) => match[1]);
+	const body = source.slice(start, end);
+	const names = [];
+	for (const line of body.split("\n")) {
+		const entry = /^\t\{ name: "([^"]+)"/.exec(line);
+		if (entry) {
+			names.push(entry[1]);
+			continue;
+		}
+		const spread = /^\t\.\.\.([A-Za-z0-9_$]+)\(\)/.exec(line);
+		if (!spread) continue;
+		const helper = readHelperModuleName(source, path, spread[1]);
+		if (helper === undefined) {
+			throw new Error(`${path}: cannot read the module name out of ${spread[1]}()`);
+		}
+		names.push(helper);
+	}
+	return names;
+}
+
+/** The literal `name: "<x>"` a `...helper()` spread registers, if it has one. */
+function readHelperModuleName(source, path, helper) {
+	const declaration = source.indexOf(`function ${helper}(`);
+	if (declaration === -1) throw new Error(`${path}: ${helper}() is spread into BUILTIN_MODULES but not declared`);
+	const body = /^function [A-Za-z0-9_$]+\([^)]*\)[^{]*\{([\s\S]*?)^\}/m.exec(source.slice(declaration));
+	if (body === null) throw new Error(`${path}: could not read the body of ${helper}()`);
+	LITERAL_NAME.lastIndex = 0;
+	const literal = LITERAL_NAME.exec(body[1]);
+	return literal?.[1];
 }
 
 /**
