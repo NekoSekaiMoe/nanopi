@@ -274,15 +274,14 @@ export function narrowsToItself(toolNames: readonly string[]): boolean {
 const NOTHING_TO_NARROW = "This build ships only the shell tools, so minimal mode has nothing to narrow";
 
 /**
- * Answer for a run mode the session is already in.
+ * Answer for plan mode entered while already in plan mode.
  *
- * Staying is always possible (the mode is already on), so the notice only
- * restates which mode it is and what that mode does; the exit is `/standard`.
+ * Plan is the one run mode that does not toggle: it ends in "execute this", so
+ * a second `/plan` is a fresh request for a plan, not a request to leave. The
+ * other two are switches, and a switch typed while on is a request to turn it
+ * off (see `modeCommand`).
  */
-function alreadyInModeNotice(mode: RunMode): string {
-	if (mode === "plan") return "Already in plan mode (read-only until the plan is approved): `/standard` leaves it";
-	return "Already in minimal mode (shell tools only): `/standard` leaves it";
-}
+const ALREADY_IN_PLAN = "Already in plan mode (read-only until the plan is approved): the exit prompt follows the plan";
 
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
@@ -511,18 +510,29 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		description: "Start in minimal mode (shell tool only)",
 	});
 
-	// --- Mode switches: /plan, /minimal, /standard ---
+	// --- Mode switches: /plan, /minimal ---
 	//
-	// One command per run mode, so `/p` + Tab reaches /plan, `/mi` reaches
-	// /minimal and `/s` reaches /standard. The modes replace each other (each is
-	// a different tool set), so exactly one is in effect and each has its own
-	// command to enter it: without /standard, leaving plan or minimal had no
-	// command at all. The argument is optional: `/plan <task>` switches and asks
-	// for a plan of that task, which is why /plan is not just `setMode(mode)`.
+	// One command per run mode, so `/p` + Tab reaches /plan and `/mi` reaches
+	// /minimal. The modes replace each other (each is a different tool set), so
+	// exactly one is in effect, and `standard` — the full tool set every session
+	// starts in — has no command: a restriction is turned off by the command that
+	// turned it on. `/minimal` typed in minimal mode leaves it; the same keystroke
+	// is the way in and the way out, which is what users typed anyway.
+	//
+	// `/plan` is the exception. It ends in "execute this" rather than in a
+	// restricted tool set, so a second `/plan` asks for a plan again (with an
+	// optional task argument) instead of leaving the mode, and the way out is the
+	// exit prompt the plan itself ends with.
 	function modeCommand(mode: RunMode): (args: string, ctx: ExtraExtensionContext) => Promise<void> {
 		return async (args, ctx) => {
 			if (engine.mode === mode) {
-				ctx.ui.notify(alreadyInModeNotice(mode), "info");
+				if (mode !== "minimal") {
+					ctx.ui.notify(ALREADY_IN_PLAN, "info");
+					return;
+				}
+				// Leaving minimal restores the loadout captured on entry.
+				leaveMinimalMode("/minimal");
+				ctx.ui.notify("Left minimal mode", "info");
 				return;
 			}
 			if (mode === "minimal" && minimalModeNarrowsNothing()) {
@@ -534,8 +544,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			// Only /plan opens the exit-confirmation flow: it is the mode that ends
 			// in "execute this", and the reason /plan also sends a first turn.
 			if (mode !== "plan") {
-				// The other two swaps drop a restriction (plan's whitelist, minimal's
-				// loadout), so the notice names the mode that was left.
+				// Minimal drops plan's whitelist, so the notice names the mode that
+				// was left.
 				const hint = previous === "standard" ? "" : ` (left ${previous} mode)`;
 				ctx.ui.notify(`Switched to ${mode} mode${hint}`, "info");
 				return;
@@ -556,13 +566,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	});
 
 	nanopi.registerCommand("minimal", {
-		description: "Enter minimal mode (shell tool only)",
+		description: "Enter minimal mode (shell tool only); type it again to leave",
 		handler: modeCommand("minimal"),
-	});
-
-	nanopi.registerCommand("standard", {
-		description: "Leave plan or minimal mode and run with the full tool set",
-		handler: modeCommand("standard"),
 	});
 
 	// --- CLI command: /yolo [on|off] ---
@@ -570,7 +575,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	// property of the run (and of the folder-trust answer it implies), not a
 	// setting a later session should inherit.
 	nanopi.registerCommand("yolo", {
-		description: "Toggle yolo mode, or set it (on | off): skip permission prompts",
+		description: "Toggle yolo mode, or set it (on | off): skip permission prompts. /yolo again leaves it",
 		getArgumentCompletions: (prefix) =>
 			["on", "off"]
 				.filter((value) => value.startsWith(prefix))
@@ -583,10 +588,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			const requested = args.trim().toLowerCase();
 			// A bare `/yolo` toggles: it is the switch users type after looking at
 			// the footer, and answering with the current state made them type the
-			// same command twice to flip it.
+			// same command twice to flip it. The same keystroke turns it off, so
+			// leaving needs no second command either.
 			if (requested === "") {
 				engine.setYolo(!engine.yolo);
-				ctx.ui.notify(`Yolo mode ${engine.yolo ? "on" : "off"}`, "info");
+				ctx.ui.notify(engine.yolo ? "Yolo mode on" : "Left yolo mode", "info");
 				return;
 			}
 			if (requested !== "on" && requested !== "off") {
@@ -595,7 +601,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			}
 			// Set explicitly: unlike a toggle, this answers the state that was asked for.
 			engine.setYolo(requested === "on");
-			ctx.ui.notify(`Yolo mode ${requested}`, "info");
+			ctx.ui.notify(requested === "on" ? "Yolo mode on" : "Left yolo mode", "info");
 		},
 	});
 
@@ -610,17 +616,33 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	function applyModeToolSet(): void {
 		const all = nanopi.getAllTools().map((tool) => tool.name);
 		if (engine.mode === "minimal") {
-			// Capture only when entering: the snapshot survives a same-mode reapply,
-			// and the narrowed set below must not be captured as the restore point.
+			// Capture only when entering: the narrowed set below must never become
+			// the restore point.
 			if (!engine.preMinimalTools) engine.setPreMinimalTools(nanopi.getActiveTools());
 			nanopi.setActiveTools(
 				nanopi.getActiveTools().filter((name) => all.includes(name) && SHELL_TOOL_NAMES.has(name)),
 			);
-		} else if (engine.preMinimalTools) {
-			const restore = engine.preMinimalTools.filter((name) => all.includes(name));
-			engine.setPreMinimalTools(undefined);
-			nanopi.setActiveTools(restore);
 		}
+		// Restoring is not done here: `setMode` drops the snapshot before it emits,
+		// so by the time this listener runs the restore point is gone. Leaving
+		// minimal goes through `leaveMinimalMode()` instead.
+	}
+
+	/**
+	 * Leave minimal mode, restoring the loadout captured on entry.
+	 *
+	 * The restore point cannot be read from `setMode`'s listener: that call drops
+	 * the snapshot before it emits, so the listener sees `undefined` for every
+	 * frontend switch. Restoring here also covers the case the snapshot was never
+	 * taken (a mode switched through the webui bridge before any session start):
+	 * the full tool set is what minimal narrowed away from.
+	 */
+	function leaveMinimalMode(reason: string): void {
+		const all = nanopi.getAllTools().map((tool) => tool.name);
+		const restore = (engine.preMinimalTools ?? all).filter((name) => all.includes(name));
+		engine.setMode("standard", reason);
+		engine.setPreMinimalTools(undefined);
+		nanopi.setActiveTools(restore);
 	}
 
 	function minimalModeNarrowsNothing(): boolean {
@@ -755,6 +777,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				subsystemStatus: () => subsystemStatus(),
 				applySubsystem: (key, enabled) => applySubsystem(key, enabled),
 				applyModeToolSet: () => applyModeToolSet(),
+				leaveMinimalMode: (reason) => leaveMinimalMode(reason),
 				continueSuggestion,
 			},
 			ctx.cwd,
@@ -793,7 +816,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			]);
 			if (choice === "Exit plan mode and execute") {
 				engine.setMode("standard", "plan approved");
-				nanopi.sendUserMessage("The plan above is approved. Execute it now in standard mode.");
+				nanopi.sendUserMessage("The plan above is approved. Execute it now.");
 			} else {
 				ctx.ui.notify("Staying in plan mode (read-only exploration).", "info");
 			}

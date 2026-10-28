@@ -10,17 +10,20 @@ describe("ModeEngine", () => {
 		expect(engine.snapshot()).toEqual({ mode: "standard", yolo: false, reason: undefined });
 	});
 
-	test("setMode notifies subscribers and clears the minimal snapshot", () => {
+	test("setMode notifies subscribers and drops the minimal snapshot on use", () => {
 		const engine = new ModeEngine();
 		const seen: string[] = [];
 		engine.subscribe((snapshot) => seen.push(snapshot.mode));
-		engine.setPreMinimalTools(["read", "bash"]);
 		engine.setMode("minimal");
+		// Captured by the listener while entering: it survives the switch it was
+		// taken on, which is the whole point of the field.
+		engine.setPreMinimalTools(["read", "bash"]);
 		expect(engine.preMinimalTools).toEqual(["read", "bash"]);
-		engine.setMode("standard");
-		expect(engine.preMinimalTools).toBeUndefined();
+		// Any other mode drops the restore point, so no session keeps a loadout it
+		// is no longer restricted to (the restore itself reads it before this call).
 		engine.setMode("plan", "/plan");
-		expect(seen).toEqual(["minimal", "standard", "plan"]);
+		expect(engine.preMinimalTools).toBeUndefined();
+		expect(seen).toEqual(["minimal", "plan"]);
 		expect(engine.reason).toBe("/plan");
 	});
 

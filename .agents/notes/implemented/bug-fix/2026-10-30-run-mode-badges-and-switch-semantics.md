@@ -23,10 +23,9 @@ short session:
    standard session in the footer — the one mode whose effect is invisible
    until a tool call is refused. `plan` had `◆ 1 checkpoint plan`-style company
    on the footer; `minimal` and `yolo` had nothing but their own absence.
-3. "Already in minimal mode" named no exit. There was no `/standard` in this
-   module (leaving plan was the approval prompt, leaving minimal the webui
-   switch), so the notice left the user with a command that repeats itself and
-   no stated way out.
+3. "Already in minimal mode" named no exit. Leaving plan was the approval
+   prompt and leaving minimal only the webui switch, so the notice left the user
+   with a command that repeats itself and no stated way out.
 
 Issue #364 then reported what those answers produced in practice: `◆ 1
 checkpoint yolo minimal` on one footer line. Two labels 14 columns wide for one
@@ -47,15 +46,21 @@ on the footer.
   `warning` (blue — `warning` is a name, not a hue: the system theme maps it to
   the yellow family, and a theme file may point it anywhere). `BadgeThemeSlice`
   also exposes `bashMode`, the yellow every footer draws shell mode in.
-- A bare `/yolo` toggles; `/yolo on|off` still sets the value explicitly, and
-  both complete after `/yolo ` through `registerCommand`'s
-  `getArgumentCompletions` (a new optional field on the extension-API slice,
-  already supported by the host and by pi-memory).
-- Every run mode has its own command — `/plan`, `/minimal`, `/standard` — so
-  leaving plan or minimal is a slash command instead of only the webui switch.
-  A mode command typed while already in that mode names `/standard` as the way
-  out; entering one mode from another reports which mode was left
+- A bare `/yolo` toggles, and toggles back off; `/yolo on|off` still sets the
+  value explicitly, and both complete after `/yolo ` through
+  `registerCommand`'s `getArgumentCompletions` (a new optional field on the
+  extension-API slice, already supported by the host and by pi-memory).
+- Two run modes keep a command of their own: `/plan` and `/minimal`. A second
+  `/minimal` leaves minimal mode (`Left minimal mode`, loadout restored), and a
+  bare `/yolo` in yolo mode leaves that too: the switch that turns a mode on is
+  the switch that turns it off. `standard` has no command — it is the tool set
+  every session starts in, and it is reached by typing the mode being left.
+  Entering one mode from another reports which mode was left
   (`Switched to minimal mode (left plan mode)`).
+- `/plan` is not a switch in that sense. It ends in "execute this" rather than
+  in a restricted tool set, it accepts an optional task argument, and its exit
+  is the confirmation prompt the plan itself ends with, so a second `/plan`
+  asks for a plan again instead of leaving the mode.
 - The producer owns the whole footer slot: in shell mode (`!` at the composer)
   it pushes the yellow `shell` label *instead of* the badges, and the badges
   return when the composer leaves shell mode. The composer's text only reaches
@@ -90,12 +95,18 @@ on the footer.
 - Cost: `warning` is a token name, not a color. The system theme draws it
   yellow, so minimal's blue is the reporter's terminal palette slot 3, not a
   fixed blue.
+- Leaving minimal restores the loadout through `leaveMinimalMode()`: `setMode`
+  drops the restore point before it emits, so the listener cannot read it. The
+  same omission made `/minimal` typed in minimal mode a trap — the handler
+  re-filtered the already-narrowed set, and the session stayed on the shell
+  tools after the mode was off.
 - Cost: the status line is now edge-triggered. A mid-typing exit from shell
   mode (backspace past the `!`) keeps the label until the next mode change,
   session start or turn end — the extension never sees the keystroke.
 - Testing: `packages/extra/test/badges.test.ts` (labels for every mode,
   standard badge-less, one run mode at a time, shell mode taking the slot) and
-  `packages/extra/test/webui-mode-wiring.test.ts` (bare `/yolo` toggles, a mode
-  command names `/standard`, `/standard` leaves the mode and clears the badge).
+  `packages/extra/test/webui-mode-wiring.test.ts` (bare `/yolo` toggles and
+  leaves, `/minimal` typed twice leaves and restores the tools, `/plan` typed
+  twice stays in plan mode, no `standard` command is registered).
   `packages/coding-agent/test/pi-ui-footer-status.test.ts` covers the footer no
   longer doubling the shell label.

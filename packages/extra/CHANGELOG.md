@@ -4,14 +4,13 @@
 
 ### Added
 
-- `/standard` leaves plan or minimal mode: before, the only ways out were the plan exit prompt and the webui settings switch, so a session that entered minimal from the composer had no slash command to leave it (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 - Destructive git guard (issue #200): shell calls that would hit this checkout's index or working tree — `reset --hard`, a bare `reset`, `stash`, `clean -f`, `add -A`/`add .`, `checkout .`, `restore`, `commit --no-verify`, `push --force` — now go through the permission gate with a hazard line, even when the tool was already allowed for the session, and the refusal appended to the tool result tells the model what it tried to destroy. The analysis walks past quoting, `cd`, `bash -c`, `$(...)`/backticks and shell operators, and is checkout-aware: `git -C <other worktree> …` and `git worktree add` count as isolation, so a subagent's own tree is not gated. `/gitguard off` disables it. New exports: `analyzeShellCommand`, `analyzeGitInvocation`, `collectGitInvocations`, `listWorktrees`, `checkoutRoot`, `gitGuardNotice`
 
 ### Changed
 - The footer mode badges ask the theme for `modeYolo`/`modePlan`/`modeMinimal` instead of `error`/`success`/`warning`. The old tokens made each badge follow the terminal's palette, so `minimal` was only blue when the palette painted index 3 warm; the new ones are fixed red/green/blue in the system theme (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 
-- A bare `/yolo` toggles the mode instead of printing its state: the switch is what a user types after reading the footer, and answering with "Yolo mode: off" made them retype the same command to flip it. `/yolo on|off` still sets it explicitly, and both values now complete after `/yolo `
-- A mode command typed while already in that mode names `/standard` as the way out, and entering one mode from another reports which mode was left (`Switched to minimal mode (left plan mode)`)
+- A bare `/yolo` toggles the mode instead of printing its state: the switch is what a user types after reading the footer, and answering with "Yolo mode: off" made them retype the same command to flip it. Typing it again leaves the mode, so no separate exit command is needed. `/yolo on|off` still sets it explicitly, and both values now complete after `/yolo `
+- `/minimal` typed while in minimal mode leaves it (`Left minimal mode`, tools restored): the mode's own command is both the way in and the way out, and there is no `/standard`. `/plan` keeps its exit prompt and still accepts a task argument, so a second `/plan` asks for a plan again. Entering one mode from another reports which mode was left (`Switched to minimal mode (left plan mode)`)
 - Shell mode takes the whole footer slot: the yellow `shell` label replaces the mode badges instead of following them, and the badges come back when the composer leaves shell mode. Both were the same yellow, so `minimal shell` read as one word (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 
 ### Fixed
@@ -21,6 +20,10 @@
 - `/minimal` and `--minimal` say so instead of narrowing to themselves in a shell-only build (`toolset: "bash"`, the minimal SKU): the tool set minimal narrows to is the one the build already has, so entering the mode changed nothing and leaving it restored a snapshot equal to the current loadout. `/plan` and the permission gate stay ([#354](https://cnb.cool/shinytale/nanopi/-/issues/354))
 - The webui permission prompt is shown before a call can be paused for an explanation: `PermissionGate.check()` runs the prompt first and only pauses on an `"explain"` answer, so `PermissionBroker.explanationPrompter` has an active entry to park on. Previously the gate paused first, found nothing outstanding, and read the pause as a dismissal — every gated call in `nanopi webui` failed with "the permission prompt for this bash call was dismissed" and the browser never received a `permission_request` (issue [#293](https://cnb.cool/shinytale/nanopi/-/issues/293))
 - A run mode switched outside the TUI now re-derives the session's tool set: the engine subscription applies the mode's tool filtering before drawing the badge, so a webui switch to `minimal` actually narrows the tools instead of leaving every tool active, and `extraBridge.setMode()` also applies it directly for a caller bound before any session started. A webui session also stops resetting the live mode to `defaultMode` on every new session (issue [#194](https://cnb.cool/shinytale/nanopi/-/issues/194))
+
+### Removed
+
+- `/standard`: `standard` is the tool set every session starts in, and it is reached by typing the command of the mode being left. The run mode value `standard` stays in the settings and the wire payloads
 
 ## [20261022]
 
@@ -37,7 +40,6 @@
 
 - Mode badges (red `yolo`, green `plan`) were invisible in the default TUI: `ctx.ui.setFooter()` is a replacing setter and pi-ui installs its own footer later in every session start, silently dropping the extra's badge footer. Badges now flow through the `ctx.ui.setStatus()` channel under the `mode` key, with colors embedded by the producer via `theme.fg()`, and render right-aligned in whatever footer is installed.
 
-### Removed
 
 - Removed the `createBadgeFooter`/`renderFooterLine`/`renderBadges` exports (`src/footer.ts`); `src/badges.ts` exports `modeBadgeText` and `badgeLabels` instead, and the extension no longer calls `ctx.ui.setFooter()`.
 
