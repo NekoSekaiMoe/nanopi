@@ -904,6 +904,7 @@ export async function main(args: string[], options?: MainOptions) {
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
+				preset: parsed.preset,
 			},
 		});
 		const { settingsManager, modelRuntime, resourceLoader } = services;

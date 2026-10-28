@@ -115,6 +115,17 @@ describe("parseArgs", () => {
 			expect(result.appendSystemPrompt).toEqual(["Context A", "Context B"]);
 		});
 
+		test("parses --preset", () => {
+			const result = parseArgs(["--preset", "review"]);
+			expect(result.preset).toBe("review");
+		});
+
+		test("keeps --preset and --append-system-prompt independent", () => {
+			const result = parseArgs(["--preset", "review", "--append-system-prompt", "extra"]);
+			expect(result.preset).toBe("review");
+			expect(result.appendSystemPrompt).toEqual(["extra"]);
+		});
+
 		test("parses --session", () => {
 			const result = parseArgs(["--session", "/path/to/session.jsonl"]);
 			expect(result.session).toBe("/path/to/session.jsonl");

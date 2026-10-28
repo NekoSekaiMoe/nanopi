@@ -18,6 +18,8 @@ export interface Args {
 	apiKey?: string;
 	systemPrompt?: string;
 	appendSystemPrompt?: string[];
+	/** `--preset <file|name>`: preset prompt file, appended after the base prompt. */
+	preset?: string;
 	thinking?: ThinkingLevel;
 	continue?: boolean;
 	resume?: boolean;
@@ -128,6 +130,8 @@ export function parseArgs(args: string[]): Args {
 		} else if (arg === "--append-system-prompt" && i + 1 < args.length) {
 			result.appendSystemPrompt = result.appendSystemPrompt ?? [];
 			result.appendSystemPrompt.push(args[++i]);
+		} else if (arg === "--preset" && i + 1 < args.length) {
+			result.preset = args[++i];
 		} else if (arg === "--name" || arg === "-n") {
 			if (i + 1 < args.length) {
 				result.name = args[++i];
@@ -294,6 +298,7 @@ ${chalk.bold("Options:")}
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: coding assistant prompt)
   --append-system-prompt <text>  Append text or file contents to the system prompt (can be used multiple times)
+  --preset <file|name>           Append a preset prompt file; a bare name resolves to presets/<name>.md
   --output <mode>                Output interface: text (default), json, or rpc
   --print, -p                    Non-interactive mode: process prompt and exit
   --continue, -c                 Continue previous session

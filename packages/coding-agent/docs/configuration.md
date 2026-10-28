@@ -17,6 +17,7 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `<agent-dir>/AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, or `CLAUDE.MD` | User instructions applied across working directories. |
 | `<agent-dir>/SYSTEM.md` | Replaces nanopi’s default system prompt. |
 | `<agent-dir>/APPEND_SYSTEM.md` | Adds instructions to nanopi’s system prompt. |
+| `<agent-dir>/PRESET_PROMPTS.md` | Default [preset prompt](#preset-prompts) appended to the system prompt. |
 | `<agent-dir>/skills/` | User [skills](skills.md) and supporting files. |
 | `<agent-dir>/prompts/` | User [prompt templates](prompt-templates.md) exposed as slash commands. |
 
@@ -27,10 +28,19 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `.nanopi/settings.json` | Project-level [settings](settings.md), resource paths, and nanopi package declarations. |
 | `.nanopi/SYSTEM.md` | Replaces the system prompt for the project. |
 | `.nanopi/APPEND_SYSTEM.md` | Adds project-specific instructions to the system prompt. |
+| `.nanopi/PRESET_PROMPTS.md` | Default [preset prompt](#preset-prompts) for the project. |
 | `.nanopi/skills/` | Project skills and supporting files. |
 | `.nanopi/prompts/` | Project prompt templates exposed as slash commands. |
 
-For `SYSTEM.md` and `APPEND_SYSTEM.md`, the trusted project file takes precedence over the corresponding agent-directory file. Files with the same name are not combined.
+For `SYSTEM.md`, `APPEND_SYSTEM.md`, and `PRESET_PROMPTS.md`, the trusted project file takes precedence over the corresponding agent-directory file. Files with the same name are not combined.
+
+### Preset prompts
+
+A preset prompt is one block of instructions appended to the system prompt, chosen per run instead of per project. `--preset <file>` loads that file; `--preset <name>` loads `presets/<name>.md` from the project, then from the agent directory. With no `--preset`, the trusted `.nanopi/PRESET_PROMPTS.md` applies, then `<agent-dir>/PRESET_PROMPTS.md`.
+
+The preset lands in the `<addendum>` section before any `--append-system-prompt` text, so `--append-system-prompt` can refine a preset for one run without editing the file. Unlike `--system-prompt` and `SYSTEM.md`, a preset does not replace the default preamble, so the tool list, rules, and skills sections stay intact. A missing preset name is reported and ignored rather than appended as literal text.
+
+The preset file is read when the session loads resources, so editing it takes effect at the next start, like `SYSTEM.md` and `APPEND_SYSTEM.md`.
 
 <a id="repo-local-modules"></a>
 

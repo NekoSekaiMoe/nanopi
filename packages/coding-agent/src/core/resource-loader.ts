@@ -167,6 +167,8 @@ export interface DefaultResourceLoaderOptions {
 	noContextFiles?: boolean;
 	systemPrompt?: string;
 	appendSystemPrompt?: string[];
+	/** Preset prompt file or preset name; appended before any `appendSystemPrompt` entry. */
+	preset?: string;
 	/** Replace or filter the loaded module set (tests use this). */
 	modulesOverride?: (base: LoadModulesResult) => LoadModulesResult;
 	skillsOverride?: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
@@ -197,6 +199,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private noContextFiles: boolean;
 	private systemPromptSource?: string;
 	private appendSystemPromptSource?: string[];
+	private presetSource?: string;
 	private modulesOverride?: (base: LoadModulesResult) => LoadModulesResult;
 	private modulesLoaded = false;
 	private diskModuleErrors: Array<{ path: string; error: string }> = [];
@@ -243,6 +246,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 		this.noContextFiles = options.noContextFiles ?? false;
 		this.systemPromptSource = options.systemPrompt;
 		this.appendSystemPromptSource = options.appendSystemPrompt;
+		this.presetSource = options.preset;
 		this.modulesOverride = options.modulesOverride;
 		this.skillsOverride = options.skillsOverride;
 		this.promptsOverride = options.promptsOverride;
@@ -463,6 +467,9 @@ export class DefaultResourceLoader implements ResourceLoader {
 		this.systemPromptSourcePath =
 			systemPromptSource && existsSync(systemPromptSource) ? resolvePath(systemPromptSource) : undefined;
 
+		const presetSource = this.resolvePresetSource();
+		const presetContent = presetSource ? resolvePromptInput(presetSource, "preset prompt") : undefined;
+
 		let appendSources = this.appendSystemPromptSource;
 		if (!appendSources) {
 			const discoveredAppendSystemPromptFile = this.discoverAppendSystemPromptFile();
@@ -471,10 +478,11 @@ export class DefaultResourceLoader implements ResourceLoader {
 		const baseAppend = appendSources
 			.map((s) => resolvePromptInput(s, "append system prompt"))
 			.filter((s): s is string => s !== undefined);
-		this.appendSystemPrompt = this.appendSystemPromptOverride
-			? this.appendSystemPromptOverride(baseAppend)
-			: baseAppend;
-		this.appendSystemPromptSourcePaths = appendSources
+		// The preset is the base block; explicit appends follow it so a per-run
+		// instruction can correct it without editing the preset file.
+		const appended = presetContent === undefined ? baseAppend : [presetContent, ...baseAppend];
+		this.appendSystemPrompt = this.appendSystemPromptOverride ? this.appendSystemPromptOverride(appended) : appended;
+		this.appendSystemPromptSourcePaths = (presetSource ? [presetSource, ...appendSources] : appendSources)
 			.filter((source) => existsSync(source))
 			.map((source) => resolvePath(source));
 	}
@@ -726,6 +734,47 @@ export class DefaultResourceLoader implements ResourceLoader {
 		}
 
 		const globalPath = join(this.agentDir, "SYSTEM.md");
+		if (existsSync(globalPath)) {
+			return globalPath;
+		}
+
+		return undefined;
+	}
+
+	/**
+	 * Resolve `--preset`: an existing path wins, otherwise the value is a name
+	 * looked up under `presets/` in the project, then the agent directory.
+	 */
+	private resolvePresetSource(): string | undefined {
+		if (!this.presetSource) {
+			return this.discoverPresetFile();
+		}
+
+		if (existsSync(this.presetSource)) {
+			return this.presetSource;
+		}
+
+		const name = this.presetSource.endsWith(".md") ? this.presetSource : `${this.presetSource}.md`;
+		const candidates = [join(this.cwd, CONFIG_DIR_NAME, "presets", name), join(this.agentDir, "presets", name)];
+		for (const candidate of candidates) {
+			if (existsSync(candidate)) return candidate;
+		}
+
+		// A preset name is not prompt text: falling back to it would inject the
+		// literal name into the prompt, so report and skip instead.
+		console.error(
+			chalk.yellow(`Warning: preset "${this.presetSource}" matched no file; tried ${candidates.join(", ")}`),
+		);
+		return undefined;
+	}
+
+	private discoverPresetFile(): string | undefined {
+		const projectPath = join(this.cwd, CONFIG_DIR_NAME, "PRESET_PROMPTS.md");
+		if (this.settingsManager.isProjectTrusted() && existsSync(projectPath)) {
+			return projectPath;
+		}
+
+		const globalPath = join(this.agentDir, "PRESET_PROMPTS.md");
 		if (existsSync(globalPath)) {
 			return globalPath;
 		}

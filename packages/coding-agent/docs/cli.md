@@ -174,6 +174,8 @@ See [Configuration](configuration.md) for saved configuration, [Security](securi
   Replaces the default system prompt with text or the contents of an existing file.
 - `--append-system-prompt <text|path>`<br>
   Appends text or an existing file to the system prompt and is repeatable.
+- `--preset <path|name>`<br>
+  Appends a preset prompt file. A bare name resolves to `presets/<name>.md` in the project, then in the agent directory; without the flag, `.nanopi/PRESET_PROMPTS.md` or `<agent-dir>/PRESET_PROMPTS.md` applies. See [Preset prompts](configuration.md#preset-prompts).
 - `--verbose`<br>
   Shows verbose interactive startup information, overriding `quietStartup`.
 - `-a`, `--approve`<br>
