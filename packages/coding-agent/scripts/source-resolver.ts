@@ -6,11 +6,6 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // Node strips TypeScript natively, but it does not apply the workspace source
 // aliases from tsconfig.json. Internal source processes preload this resolver so
 // they cannot silently fall through to stale package dist files.
-//
-// It also installs the build-time `NANOPI_BUILD_*` globals as undefined, the
-// value the bundle scripts give a full build. Without them the sources read the
-// name of an undeclared global, which throws when a module (or a test that
-// imports one) runs in source instead of in a bundle.
 
 interface TsConfig {
 	readonly compilerOptions?: {
@@ -46,28 +41,6 @@ const aliases: SourceAlias[] = Object.entries(paths)
 		};
 	})
 	.sort((left, right) => right.pattern.length - left.pattern.length);
-
-// Declared with `var` so the loaded modules see one global binding; a module
-// that reads `NANOPI_BUILD_TOOLSET` resolves it here without a local declare.
-declare global {
-	var NANOPI_BUILD_COMPONENTS: Record<string, boolean> | undefined;
-	var NANOPI_BUILD_TOOLSET: string | undefined;
-	var NANOPI_BUILD_PROVIDERS: string[] | undefined;
-	var NANOPI_BUILD_APIS: string[] | undefined;
-	var NANOPI_BUILD_TOOLS: string[] | undefined;
-}
-
-/** The build defines a source checkout has no bundle to inject. */
-function installBuildDefines(): void {
-	const globals = globalThis as unknown as Record<string, undefined>;
-	globals.NANOPI_BUILD_COMPONENTS = undefined;
-	globals.NANOPI_BUILD_TOOLSET = undefined;
-	globals.NANOPI_BUILD_PROVIDERS = undefined;
-	globals.NANOPI_BUILD_APIS = undefined;
-	globals.NANOPI_BUILD_TOOLS = undefined;
-}
-
-installBuildDefines();
 
 registerHooks({
 	resolve(specifier, context, nextResolve) {

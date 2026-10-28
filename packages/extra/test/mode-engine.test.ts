@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { judgeWithModel } from "../src/ai-judge.ts";
+import { narrowsToItself } from "../src/extension.ts";
 import { ModeEngine } from "../src/mode-engine.ts";
 import type { PermissionCallInfo } from "../src/permission-types.ts";
 
@@ -78,5 +79,18 @@ describe("judgeWithModel", () => {
 		await expect(judgeWithModel(info, {}, throwing)).resolves.toMatchObject({ action: "deny" });
 		const garbage = { complete: async () => ({ content: [{ type: "text", text: "sure thing" }] }) };
 		await expect(judgeWithModel(info, {}, garbage)).resolves.toMatchObject({ action: "deny" });
+	});
+});
+
+// `/minimal` narrows the loadout to the shell tools. In a shell-only build
+// (`toolset: "bash"`, the minimal SKU) that is the set it already has, so the
+// mode would narrow to itself: no tools removed on entry, and a snapshot equal
+// to the current loadout to "restore" on exit.
+describe("minimal mode in a shell-only build", () => {
+	test("narrows to itself only when every tool is a shell tool", () => {
+		expect(narrowsToItself(["bash", "powershell"])).toBe(true);
+		expect(narrowsToItself(["bash", "read"])).toBe(false);
+		// No tools at all is `--no-tools`, not a shell-only build.
+		expect(narrowsToItself([])).toBe(false);
 	});
 });

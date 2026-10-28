@@ -12,8 +12,8 @@
  */
 
 import { extraInlineExtension } from "@nanopi/pi-extra";
-import { isBashOnlyBuild, isBuildComponentEnabled } from "../build-components.ts";
-import type { ModuleFactory, SessionModule } from "../core/modules/types.ts";
+import { isBuildComponentEnabled } from "../build-components.ts";
+import type { SessionModule } from "../core/modules/types.ts";
 import askLite from "../extras/ask-lite/index.ts";
 import mcpLite from "../extras/mcp-lite/src/index.ts";
 import piFakeCodex from "../extras/pi-fake-codex/src/index.ts";
@@ -36,9 +36,8 @@ import llamaExtension from "./llama/index.ts";
 export const BUILTIN_MODULES: SessionModule[] = [
 	// Modes/permissions module (packages/extra). Build flavors excluding the
 	// "module/extra" component alias @nanopi/pi-extra to an inert stub whose
-	// factory registers nothing; a shell-only build leaves it out entirely,
-	// because the shell guard has no read tool to point at (see extraModule).
-	...extraModule(),
+	// factory registers nothing.
+	{ name: "extra", factory: extraInlineExtension.factory, hidden: true },
 	{ name: "llama.cpp", factory: llamaExtension },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
@@ -57,23 +56,6 @@ export const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "todo-lite", factory: todoLite },
 	{ name: "websearch", factory: websearch },
 ];
-
-/**
- * The `extra` module, or nothing at all in a shell-only build
- * (buildconfig.json `toolset: "bash"`, which is what a minimal SKU ships).
- *
- * A shell-only build keeps bash alone, so every rule the module owns is a dead
- * end or a contradiction: the shell guard refuses `cat` in favour of a `read`
- * the build does not carry, and a minimal run mode removes the very tools it
- * narrows to. Nothing is lost by dropping the module — `/plan`, `/minimal` and
- * the permission prompt have nothing to act on when no restricted tool
- * exists — and the buildconfig component stays, so the flavors' `module/*`
- * switch still means what it says.
- */
-function extraModule(): SessionModule[] {
-	const factory: ModuleFactory | undefined = isBashOnlyBuild() ? undefined : extraInlineExtension.factory;
-	return factory ? [{ name: "extra", factory, hidden: true }] : [];
-}
 
 /**
  * The modules this build carries, in `BUILTIN_MODULES` order. Callers pass the

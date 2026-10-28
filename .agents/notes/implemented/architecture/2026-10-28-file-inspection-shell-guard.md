@@ -67,26 +67,32 @@ Status: implemented
 ## shell-only 构建：这里没有 read 可指
 
 `minimal` flavor 的 `toolset: "bash"` 只发 bash 和 powershell（minimal SKU），`read` 和
-`grep` 都不存在。这条守卫在那儿是死路而不是策略：拒绝理由让模型去找一个装不上的工具。
-判定器本身没错——错在接线没有问构建。
+`grep` 都不存在。拒绝理由要是点名它们，模型就被送去找一个装不上的工具。
 
-现在 `packages/coding-agent/src/modules/index.ts` 在 shell-only 构建里不注册 `modules/extra`
-（`isBashOnlyBuild()`，从构建的**工具名**读，不是从 flavor 名读）。顺带解决的还有
-`/mode minimal`：它在只有 bash 的构建里会「把工具集收窄到 bash」，也就是收窄到自己。
-`module/extra` 这个 buildconfig 开关不变，flavor 里的 `module/*` 仍然照字面生效。
+判定本来就不需要知道构建。`shellGuardHazard` 只在替代工具**真的在 active tools 里**时才
+拒绝：`read` 不在，`cat` 就没有替代品可指，直接放行。shell-only 构建的 active tools 就是
+`bash`/`powershell`，所以守卫在那里自己让路，一条构建判断都不用加。
 
-为什么不在 `shell-guard.ts` 里判：那条判断要知道构建，而 `pi-extra` 刻意不依赖
-`pi-coding-agent`（`extension-api.ts` 的注释写了原因：包构建顺序会成环）。给 API 加一个
-`isShellOnlyBuild()` 再让两个测试替身都实现它，是把一个构建事实变成运行时契约；不注册更省，
-也不给测试留一个常常漏实现的可选方法。
+曾经试过更重的一刀：在 `modules/index.ts` 里让 shell-only 构建整个不注册 `modules/extra`。
+这条已撤回。代价与收益不成比例——`extra` 同时在发 `/sandbox`、`/plan`、`/minimal`、
+`/yolo`、`/gitguard`、`/shellguard`、权限门和 webui bridge，为一条本来就不会触发的守卫把
+它们全砍掉，等于用「少一个死路」换「少一堆命令」。
 
-## 另一处坑：源码进程读不到 build define
+同一个根因真正落在别处：`/minimal` 在 shell-only 构建里「把工具集收窄到 bash」，也就是收窄
+到自己——进入时什么也没变，退出时还原的快照等于当前集合。现在 `/minimal` 和 `--minimal`
+在那样的构建里直接说明「这个构建只有 shell 工具，minimal 没有可收窄的」
+（`narrowsToItself()`，`packages/extra/src/extension.ts`），`/plan` 和权限门照旧保留。
 
-`NANOPI_BUILD_*` 是 esbuild define，只有 bundle 里存在。源码进程（`node nanopi-test.mjs`、
-直接跑测试）读它得到的是 `typeof NANOPI_BUILD_TOOLSET === "undefined"`——那不是「未定义」，
-是「读一个不存在的全局名」，ReferenceError。也就是说任何从源码跑的进程早就断了，只是没人
-走到那行。`source-resolver.ts`（源码运行时的 preload）现在把这五个名字装成 `undefined`，
-也就是「全量构建」，和 bundle 的全量构建同义。
+## 另一处坑：源码进程里的 build define（结论：不需要补）
+
+`NANOPI_BUILD_*` 是 esbuild define，只有 bundle 里存在。源码进程读它走的是
+`typeof NANOPI_BUILD_TOOLSET === "undefined"` 这个形态，也就是「全量构建」。这里不需要任何
+preload 兜底：`typeof` 对未声明的全局名是安全的，它返回 `"undefined"` 而不是抛错；只有不带
+`typeof` 的裸读才 `ReferenceError`，而这几处都带着守卫。
+
+`source-resolver.ts` 曾经装过这五个名字（值为 `undefined`）。已撤回，因为它不只是多余的：
+装全局等于让 `declare const` 变成一个真的全局可写绑定，任何裸读从「立刻报错」变成读到
+`undefined`。把一个编译期常量变成运行时可改的全局，是为了修一个不存在的错误。
 
 另一个代价只在非危险意义上成立：有人用 `cat` 看二进制或长尾输出时会被顶回 `read`，
 `read` 对非普通文件会明确拒绝并指向 bash，所以这条路是通的，只是多一跳。

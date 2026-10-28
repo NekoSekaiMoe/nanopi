@@ -239,7 +239,11 @@ function shellGuardEnabled(cwd: string): boolean {
  * The refusal is only true when the substitute exists in this session: without a
  * `read` tool, `cat file` has no replacement to point at.
  */
-function shellGuardHazard(event: ExtraToolCallEvent, cwd: string, activeTools: readonly string[]): string | undefined {
+export function shellGuardHazard(
+	event: ExtraToolCallEvent,
+	cwd: string,
+	activeTools: readonly string[],
+): string | undefined {
 	const command =
 		typeof (event.input as Record<string, unknown>)?.command === "string"
 			? ((event.input as Record<string, unknown>).command as string)
@@ -253,6 +257,21 @@ function shellGuardHazard(event: ExtraToolCallEvent, cwd: string, activeTools: r
 	if (!activeTools.includes(needed)) return undefined;
 	return shellGuardNotice(verdict.hit);
 }
+
+/**
+ * Whether `/minimal` would narrow the loadout to itself, which is what a
+ * shell-only build does (buildconfig.json `toolset: "bash"`, the minimal SKU):
+ * the set it narrows to is the set it starts from, so entering the mode changes
+ * nothing and leaving it restores a snapshot equal to the current loadout.
+ *
+ * `/plan` and the permission gate still mean something there, so the module and
+ * its commands stay; only the mode that has nothing to narrow says so.
+ */
+export function narrowsToItself(toolNames: readonly string[]): boolean {
+	return toolNames.length > 0 && toolNames.every((name) => SHELL_TOOL_NAMES.has(name));
+}
+
+const NOTHING_TO_NARROW = "This build ships only the shell tools, so minimal mode has nothing to narrow";
 
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
@@ -482,6 +501,10 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				ctx.ui.notify(`Already in ${mode} mode`, "info");
 				return;
 			}
+			if (mode === "minimal" && minimalModeNarrowsNothing()) {
+				ctx.ui.notify(NOTHING_TO_NARROW, "info");
+				return;
+			}
 			engine.setMode(mode, `/${mode}`);
 			// Only /plan opens the exit-confirmation flow: it is the mode that ends
 			// in "execute this", and the reason /plan also sends a first turn.
@@ -554,6 +577,10 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 	}
 
+	function minimalModeNarrowsNothing(): boolean {
+		return narrowsToItself(nanopi.getAllTools().map((tool) => tool.name));
+	}
+
 	/**
 	 * Run mode requested on the command line, or undefined to use the settings
 	 * default. `--plan` and `--minimal` are independent flags rather than one
@@ -564,7 +591,9 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	 */
 	function requestedMode(): { mode: RunMode; reason: string } | undefined {
 		if (nanopi.getFlag("plan") === true) return { mode: "plan", reason: "--plan" };
-		if (nanopi.getFlag("minimal") === true) return { mode: "minimal", reason: "--minimal" };
+		if (nanopi.getFlag("minimal") === true && !minimalModeNarrowsNothing()) {
+			return { mode: "minimal", reason: "--minimal" };
+		}
 		return undefined;
 	}
 

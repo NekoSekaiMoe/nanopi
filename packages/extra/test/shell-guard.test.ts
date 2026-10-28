@@ -2,6 +2,8 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, test } from "vitest";
+import { shellGuardHazard } from "../src/extension.ts";
+import type { ExtraToolCallEvent } from "../src/extension-api.ts";
 import { analyzeFileInspection, shellGuardNotice } from "../src/shell-guard.ts";
 
 const root = mkdtempSync(join(tmpdir(), "shellguard-"));
@@ -89,5 +91,28 @@ describe("shell guard: what must keep running", () => {
 		expect(hit("pnpm test")).toBeUndefined();
 		expect(hit("git status")).toBeUndefined();
 		expect(hit("ls -la")).toBeUndefined();
+	});
+});
+
+// A shell-only build (buildconfig.json `toolset: "bash"`, the minimal SKU) ships
+// no `read` and no `grep`, so a refusal that names one of them sends the model
+// after a tool the build does not have. The guard is silent there.
+/** A `tool_call` for a shell command, with the fields the guard reads. */
+function call(command: string): ExtraToolCallEvent {
+	return { type: "tool_call", toolCallId: "call-1", toolName: "bash", input: { command } };
+}
+
+describe("shell guard: no substitute, no refusal", () => {
+	test("a shell-only loadout lets the read through", () => {
+		expect(shellGuardHazard(call("cat src/a.ts"), root, ["bash", "powershell"])).toBeUndefined();
+	});
+
+	test("a loadout carrying read refuses it and names the tool", () => {
+		expect(shellGuardHazard(call("cat src/a.ts"), root, ["bash", "read"])).toContain("read src/a.ts");
+	});
+
+	test("grep is its own substitute", () => {
+		expect(shellGuardHazard(call("rg foo"), root, ["bash", "read"])).toBeUndefined();
+		expect(shellGuardHazard(call("rg foo"), root, ["bash", "grep"])).toContain("grep pattern");
 	});
 });
