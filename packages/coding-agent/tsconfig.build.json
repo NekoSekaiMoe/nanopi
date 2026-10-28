@@ -20,6 +20,8 @@
 		"src/client",
 		"src/experimental",
 		"src/cli/experimental",
-		"src/extras/**/__tests__/**"
+		"src/extras/**/__tests__/**",
+		"src/extras/**/*.test.ts",
+		"src/extras/**/vitest.config.ts"
 	]
 }

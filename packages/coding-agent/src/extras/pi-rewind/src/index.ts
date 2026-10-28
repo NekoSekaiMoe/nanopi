@@ -71,12 +71,11 @@ export default function (pi: ModuleApi) {
       return;
     }
 
-    state.repoRoot = await getRepoRoot(ctx.cwd);
-    const repoRoot = state.repoRoot;
+    const repoRoot = await getRepoRoot(ctx.cwd);
+    const sessionId = ctx.sessionManager.getSessionId();
     if (!repoRoot) return;
-    state.sessionId = ctx.sessionManager.getSessionId();
-    const sessionId = state.sessionId;
-    if (!sessionId) return;
+    state.repoRoot = repoRoot;
+    state.sessionId = sessionId;
 
     // Rebuild checkpoint cache from existing git refs (for resumed sessions)
     try {
@@ -130,8 +129,6 @@ export default function (pi: ModuleApi) {
       // Fork: just update session ID for new checkpoint tagging
       if (!state.gitAvailable) return;
       state.sessionId = ctx.sessionManager.getSessionId();
-    const sessionId = state.sessionId;
-    if (!sessionId) return;
       return;
     }
     // startup, reload, new, resume: full re-initialization

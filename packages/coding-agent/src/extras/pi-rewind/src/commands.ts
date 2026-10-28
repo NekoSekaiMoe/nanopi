@@ -309,4 +309,37 @@ export function registerCommands(pi: ModuleApi, state: RewindState): void {
     },
   });
 
+  // Upstream binds Esc+Esc, but a shortcut id is a single KeyId here and double
+  // Esc already belongs to the host (doubleEscapeAction), so bind a plain key.
+  pi.registerShortcut("ctrl+shift+r", {
+    description: "Rewind (same as /rewind)",
+    handler: async (ctx) => {
+      // Shortcut handler gets ModuleContext, not CommandContext.
+      // We can't call navigateTree from here, so do files-only quick rewind.
+      if (!state.gitAvailable || !state.repoRoot || !state.sessionId) {
+        ctx.ui.notify("Rewind not available", "warning");
+        return;
+      }
+
+      const checkpoints = [...state.checkpoints.values()]
+        .sort((a, b) => b.timestamp - a.timestamp)
+        .slice(0, 25);
+
+      if (checkpoints.length === 0) {
+        ctx.ui.notify("No checkpoints available", "warning");
+        return;
+      }
+
+      const currentBranch = await git("rev-parse --abbrev-ref HEAD", state.repoRoot).catch(() => "unknown");
+      const items = checkpoints.map((cp, i) => formatCheckpointLabel(cp, i, state, currentBranch));
+      const choice = await ctx.ui.select("Quick rewind (files only):", items);
+      if (!choice) return;
+
+      const idx = items.indexOf(choice);
+      if (idx < 0) return;
+
+      await performRestore(state, { ui: ctx.ui }, checkpoints[idx], "files");
+      ctx.ui.notify(`Files rewound to checkpoint #${idx + 1}`, "info");
+    },
+  });
 }

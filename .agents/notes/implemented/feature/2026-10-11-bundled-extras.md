@@ -91,6 +91,10 @@ fixed rather than patching the packages:
 - The `"pi"` manifest fallback also benefits user-installed pi-ecosystem
   packages, restoring behavior the rebrand dropped while the import aliases
   were kept.
+- Fact update 2026-10-28: pi-rewind and pi-simplify were re-synced against
+  upstream `HEAD`; the remaining deltas are the module-API renames plus
+  upstream bug fixes, and pi-simplify now keeps its upstream test suite. See
+  [vendored extra tests and HEAD sync](../process/2026-10-28-vendored-extra-tests-and-head-sync.md).
 
 Related: [build flavors via buildconfig.json](../process/2026-10-11-build-flavors-buildconfig.md)
 (the component system this builds on),
