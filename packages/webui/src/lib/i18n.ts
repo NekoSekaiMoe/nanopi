@@ -222,6 +222,26 @@ const EN: Record<string, string> = {
 	"解释这次调用": "Explain what this does",
 	"解释如下，读完后在这里决定：只允许这一次、本次会话允许，或拒绝。":
 		"Explanation above. Decide here once you have read it: allow once, allow this session, or reject.",
+	"添加附件": "Add attachment",
+	"添加图片或文档": "Add image or document",
+	"附件": "Attachments",
+	"移除附件": "Remove attachment",
+	"当前模型不支持图片，请换一个视觉模型": "This model does not accept images; pick a vision model",
+	"图片只支持 PNG、JPEG、WebP、GIF": "Images must be PNG, JPEG, WebP or GIF",
+	"图片过大，请压缩后再上传": "Image is too large; compress it and try again",
+	"文件过大": "File is too large",
+	"读不了这个文件": "Could not read this file",
+	"这个文件里没有可读的文本": "This file has no readable text",
+	"个附件": "attachments",
+	"不支持这种文件": "unsupported file type",
+	"最多 8 张图片": "at most 8 images",
+	"内容过长，已截断": "truncated",
+	"标准模式允许全部工具": "Standard allows every tool",
+	"计划模式会先规划再问你要不要执行": "Plan mode plans first and asks before executing",
+	"最小模式只有 shell 工具": "Minimal exposes only shell tools",
+	"切换到计划模式": "Switch to plan mode",
+	"切换到标准模式": "Switch to standard mode",
+	"切换到最小模式": "Switch to minimal mode",
 };
 
 export function t(zh: string): string {

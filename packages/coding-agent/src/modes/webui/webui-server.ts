@@ -84,6 +84,8 @@ interface WebuiModelInfo {
 	model: string;
 	provider_type: string;
 	is_default: boolean;
+	/** The catalog entry accepts image input, so the composer may attach an image to a turn. */
+	supports_image: boolean;
 	effort_applicable: boolean;
 	reasoning_effort: string | null;
 	effort_levels: string[];
@@ -1370,6 +1372,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					model: model.id,
 					provider_type: model.provider,
 					is_default: defaultKey ? key === defaultKey : current ? active : false,
+					supports_image: model.input.includes("image"),
 					effort_applicable: levels.length > 0,
 					reasoning_effort: effective ?? (levels.length > 0 ? null : "off"),
 					effort_levels: levels,
@@ -1654,6 +1657,18 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			// mode decides the tool set the turn runs with. An invalid value is
 			// ignored rather than failing the turn, which already has a user prompt in it.
 			if (chatBody.approval_mode) extraBridge.setMode(chatBody.approval_mode);
+			// The provider adapters drop images for a model without image input and
+			// send a placeholder instead (transform-messages.ts), so a turn with an
+			// attachment on such a model costs tokens and answers nothing. Refuse it
+			// here, where the browser can say which model to switch to.
+			const turnModel = runtime.session.model;
+			if (chatBody.images?.length && turnModel && !turnModel.input.includes("image")) {
+				json(res, 400, {
+					error: `${turnModel.id} does not accept images; switch to a vision model and resend`,
+					code: "model_without_image",
+				});
+				return;
+			}
 			turnActive = true;
 			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
 			return;

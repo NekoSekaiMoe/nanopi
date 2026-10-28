@@ -8,12 +8,14 @@ import { PermissionCard } from "@/components/permission-card";
 import { PlanCard } from "@/components/plan-card";
 import { UserInputCard } from "@/components/user-input-card";
 import type {
+	ApprovalMode,
 	ImageData,
 	ModelInfo,
 	PlanItem,
 	UserInputRequestEvent,
 	UserInputResponse,
 } from "@/lib/api";
+import type { TextAttachment } from "@/lib/attachments";
 import { type Poem, randomPoem } from "@/lib/greeting";
 import type { PendingPermission, PermissionRequest, TurnError, UiMessage } from "@/lib/use-chat";
 import { cn } from "@/lib/utils";
@@ -49,6 +51,8 @@ export function ChatPane({
 	onProvider,
 	effort,
 	onEffort,
+	approvalMode,
+	onApprovalMode,
 	onConfigure,
 	onDismissError,
 	onDismissNotice,
@@ -60,6 +64,9 @@ export function ChatPane({
 	onComposer,
 	images,
 	onImages,
+	files,
+	onFiles,
+	onNotice,
 	sessionName,
 	modelSheetOpen,
 	onModelSheet,
@@ -77,6 +84,8 @@ export function ChatPane({
 	onProvider: (provider: string) => void;
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
+	approvalMode: ApprovalMode;
+	onApprovalMode: (mode: ApprovalMode) => void;
 	onConfigure: () => void;
 	onDismissError: () => void;
 	onDismissNotice: () => void;
@@ -88,6 +97,10 @@ export function ChatPane({
 	onComposer: (value: string) => void;
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
+	files: TextAttachment[];
+	onFiles: (files: TextAttachment[]) => void;
+	/** One-shot line for something the turn swallowed (a rejected attachment). */
+	onNotice: (message: string) => void;
 	sessionName: string;
 	/** The model sheet is collapsed into the bottom dock, below the composer. */
 	modelSheetOpen: boolean;
@@ -211,9 +224,14 @@ export function ChatPane({
 							onProvider={onProvider}
 							effort={effort}
 							onEffort={onEffort}
+							approvalMode={approvalMode}
+							onApprovalMode={onApprovalMode}
 							onConfigure={onConfigure}
 							images={images}
 							onImages={onImages}
+							files={files}
+							onFiles={onFiles}
+							onNotice={onNotice}
 							disabled={models.length === 0}
 							modelLabel={modelLabel}
 							sheetOpen={modelSheetOpen}

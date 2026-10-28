@@ -28,6 +28,7 @@ import {
 	resolveSession,
 	setReasoningEffort,
 } from "@/lib/api";
+import { type TextAttachment, promptWithAttachments } from "@/lib/attachments";
 import { useChat } from "@/lib/use-chat";
 import { getLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -62,6 +63,7 @@ export function AppClient() {
 	const [navOpen, setNavOpen] = useState(false);
 	const [composer, setComposer] = useState("");
 	const [images, setImages] = useState<ImageData[]>([]);
+	const [files, setFiles] = useState<TextAttachment[]>([]);
 	const [bootError, setBootError] = useState<string | null>(null);
 	const [booted, setBooted] = useState(false);
 	const [authRequired, setAuthRequired] = useState(false);
@@ -343,18 +345,23 @@ export function AppClient() {
 	}, [title]);
 
 	const onSend = useCallback(() => {
-		const text = composer;
+		// The prompt carries the documents; only images have a wire type of their
+		// own. Both are cleared now, so a failed send does not leave them stranded
+		// in the composer next to the error banner.
+		const text = promptWithAttachments(composer, files);
 		const pendingImages = images;
 		if (!text.trim() && pendingImages.length === 0) return;
 		setComposer("");
 		setImages([]);
+		setFiles([]);
 		void chat.send(text, pendingImages);
-	}, [chat, composer, images]);
+	}, [chat, composer, files, images]);
 
 	const onNew = useCallback(() => {
 		chat.newSession();
 		setComposer("");
 		setImages([]);
+		setFiles([]);
 		setNavOpen(false);
 	}, [chat]);
 
@@ -363,6 +370,7 @@ export function AppClient() {
 			setNavOpen(false);
 			setComposer("");
 			setImages([]);
+			setFiles([]);
 			void chat.loadSession(session.id);
 		},
 		[chat],
@@ -524,6 +532,8 @@ export function AppClient() {
 						onProvider={setProvider}
 						effort={effort}
 						onEffort={(level) => void onChangeEffort(level)}
+						approvalMode={chat.approvalMode}
+						onApprovalMode={chat.setApprovalMode}
 						onConfigure={openSettings}
 						onDismissError={() => chat.setError(null)}
 						onDismissNotice={() => chat.setNotice(null)}
@@ -535,6 +545,9 @@ export function AppClient() {
 						onComposer={setComposer}
 						images={images}
 						onImages={setImages}
+						files={files}
+						onFiles={setFiles}
+						onNotice={chat.setNotice}
 						sessionName={title}
 						modelSheetOpen={modelSheetOpen}
 						onModelSheet={(open) => {
@@ -602,8 +615,6 @@ export function AppClient() {
 				provider={provider}
 				onProvider={setProvider}
 				project={project}
-				approvalMode={chat.approvalMode}
-				onApprovalMode={chat.setApprovalMode}
 				config={config}
 				onRefreshProviders={refreshProviders}
 				onChangeDir={onWorkspaceChange}
