@@ -30,6 +30,8 @@ export interface ExtraUIContext {
 	notify(message: string, type?: "info" | "warning" | "error"): void;
 	/** Footer status channel: badge text under "mode", rendered by the installed footer. */
 	setStatus(key: string, text: string | undefined): void;
+	/** Current composer text; used to tell shell mode (`!`) from a prompt. */
+	getEditorText(): string;
 	/** Terminal title; `undefined` restores the app's own title. */
 	setTitle(title: string | undefined): void;
 	readonly theme: BadgeThemeSlice;

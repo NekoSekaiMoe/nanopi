@@ -15,6 +15,11 @@ import { globalExtraSettingsPath } from "../src/settings-store.ts";
 
 const TOOLS = ["read", "write", "edit", "bash", "grep"];
 
+/** Status key the extension writes its footer line under. */
+const MODE_STATUS_KEY = "mode";
+/** Last footer status the extension pushed, captured from the status channel. */
+let modeStatus: string | undefined;
+
 let home = "";
 let previousAgentDir: string | undefined;
 
@@ -35,6 +40,7 @@ afterEach(() => {
 function resetEngine(): void {
 	modeEngine.setMode("standard");
 	modeEngine.setPreMinimalTools(undefined);
+	modeStatus = undefined;
 }
 
 function fakeApi(flags: Record<string, boolean | string> = {}): {
@@ -43,6 +49,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 	start: (mode: string, reason?: "startup" | "new") => void;
 	has: (name: string) => boolean;
 	run: (name: string, args?: string) => Promise<string | undefined>;
+	status: () => string | undefined;
 } {
 	let active = [...TOOLS];
 	const handlers = new Map<string, (event: unknown, ctx: ExtraExtensionContext) => unknown>();
@@ -68,14 +75,19 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 		api,
 		active: () => active,
 		has: (name) => handlers.has(`command:${name}`),
+		status: () => modeStatus,
 		run: async (name, args = "") => {
 			const ctx = {
+				mode: "tui",
 				cwd: home,
 				hasUI: false,
 				ui: {
 					select: async () => undefined,
 					notify: (message: string) => notes.push(message),
-					setStatus: () => undefined,
+					setStatus: (key: string, text: string | undefined) => {
+						if (key === MODE_STATUS_KEY) modeStatus = text;
+					},
+					getEditorText: () => "",
 					setTitle: () => undefined,
 					theme: { fg: (_color: string, text: string) => text },
 				},
@@ -93,7 +105,10 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 				ui: {
 					select: async () => undefined,
 					notify: () => undefined,
-					setStatus: () => undefined,
+					setStatus: (key: string, text: string | undefined) => {
+						if (key === MODE_STATUS_KEY) modeStatus = text;
+					},
+					getEditorText: () => "",
 					theme: { fg: (_color: string, text: string) => text },
 				},
 				getContextUsage: () => undefined,
@@ -253,14 +268,12 @@ describe("slash commands for the mode switches", () => {
 		expect(modeEngine.yolo).toBe(false);
 	});
 
-	test("/minimal typed twice names the way out", async () => {
+	test("/minimal typed twice names the exit that exists", async () => {
 		const fake = fakeApi();
 		createExtraExtension(fake.api);
 		fake.start("tui", "new");
 		expect(await fake.run("minimal")).toBe("Switched to minimal mode");
-		// "Already in minimal mode" left the user with no exit: there is no
-		// /standard, so the notice has to name the one that exists.
-		expect(await fake.run("minimal")).toContain("webui");
+		expect(await fake.run("minimal")).toBe("Already in minimal mode (shell tools only): `/standard` leaves it");
 		fake.api.setActiveTools(TOOLS);
 	});
 
@@ -272,5 +285,25 @@ describe("slash commands for the mode switches", () => {
 		expect(await fake.run("minimal")).toBe("Switched to minimal mode (left plan mode)");
 		expect(modeEngine.mode).toBe("minimal");
 		fake.api.setActiveTools(TOOLS);
+	});
+
+	test("/standard leaves a mode instead of leaving it to the webui", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		await fake.run("minimal");
+		expect(fake.active()).toEqual(["bash"]);
+		expect(fake.status()).toBe("minimal");
+		expect(await fake.run("standard")).toBe("Switched to standard mode (left minimal mode)");
+		expect(modeEngine.mode).toBe("standard");
+		// The badge goes with the mode: standard is the absence of one.
+		expect(fake.status()).toBeUndefined();
+	});
+
+	test("/standard in standard mode says so and changes nothing", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		fake.start("tui", "new");
+		expect(await fake.run("standard")).toContain("`/standard`");
 	});
 });
