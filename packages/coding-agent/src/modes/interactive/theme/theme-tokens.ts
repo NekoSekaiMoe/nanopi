@@ -78,6 +78,9 @@ export const THEME_TOKENS = defineThemeTokens({
 		fallback: "thinkingXhigh",
 	},
 	bashMode: { slot: "foreground", description: "Shell mode accent (footer shell label, bash tool rows)" },
+	modeYolo: { slot: "foreground", description: "Footer badge: yolo mode (fixed red)" },
+	modePlan: { slot: "foreground", description: "Footer badge: plan mode (fixed green)" },
+	modeMinimal: { slot: "foreground", description: "Footer badge: minimal mode (fixed blue)" },
 });
 
 export type ThemeToken = keyof typeof THEME_TOKENS;

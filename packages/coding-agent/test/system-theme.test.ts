@@ -97,6 +97,27 @@ describe("generateSystemThemeColors", () => {
 		}
 	});
 
+	it("keeps the mode badges and the shell label at fixed hues", () => {
+		const hue = ({ r, g, b }: RgbColor) => colorToOklch(rgbColor(r, g, b)).h;
+		const hueGap = (first: number, second: number) => Math.abs(((first - second + 540) % 360) - 180);
+		// A palette whose slot 3 is a pastel purple, like Dracula's fourth color: the shell label is yellow
+		// because it says "shell", not because the palette happens to color index 3 warm.
+		for (const input of [DRACULA, TERMINALS.backgroundOnly, TERMINALS.solarizedLight]) {
+			const modeYolo = hue(resolved(input, "modeYolo"));
+			const modePlan = hue(resolved(input, "modePlan"));
+			const modeMinimal = hue(resolved(input, "modeMinimal"));
+			expect(hueGap(modeYolo, 20), "yolo is red").toBeLessThan(10);
+			expect(hueGap(modePlan, 158.68), "plan is green").toBeLessThan(10);
+			expect(hueGap(modeMinimal, 231.49), "minimal is blue").toBeLessThan(10);
+			expect(hueGap(hue(resolved(input, "bashMode")), 82.36), "shell is yellow").toBeLessThan(10);
+		}
+	});
+
+	it("falls back to fixed palette indices for the mode badges", () => {
+		const { colors } = generateSystemThemeColors({});
+		expect([colors.modeYolo, colors.modePlan, colors.modeMinimal, colors.bashMode]).toEqual([1, 2, 4, 3]);
+	});
+
 	it("renders grayscale at zero saturation", () => {
 		const { colors } = generateSystemThemeColors({ ...DRACULA, saturation: 0 });
 		expect(colorToOklch(parseColor(colors.error as string)).c).toBeLessThan(0.005);

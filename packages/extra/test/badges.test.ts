@@ -22,7 +22,7 @@ describe("mode badges", () => {
 		const engine = new ModeEngine();
 		expect(modeBadgeText(engine, fakeTheme)).toBeUndefined();
 		engine.setMode("minimal");
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<warning>minimal</warning>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<modeMinimal>minimal</modeMinimal>");
 	});
 
 	test("standard shows no badge: it is the absence of a run mode", () => {
@@ -45,11 +45,11 @@ describe("mode badges", () => {
 		const engine = new ModeEngine();
 		expect(modeBadgeText(engine, fakeTheme)).toBeUndefined();
 		engine.setYolo(true);
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<error>yolo</error>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<modeYolo>yolo</modeYolo>");
 		engine.setMode("plan");
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<error>yolo</error> <success>plan</success>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<modeYolo>yolo</modeYolo> <modePlan>plan</modePlan>");
 		engine.setMode("minimal");
-		expect(modeBadgeText(engine, fakeTheme)).toBe("<error>yolo</error> <warning>minimal</warning>");
+		expect(modeBadgeText(engine, fakeTheme)).toBe("<modeYolo>yolo</modeYolo> <modeMinimal>minimal</modeMinimal>");
 	});
 
 	test("shell mode takes the slot; the badge comes back when it ends", () => {
@@ -58,6 +58,6 @@ describe("mode badges", () => {
 		engine.setMode("plan");
 		expect(modeBadgeText(engine, fakeTheme, true)).toBeUndefined();
 		expect(shellLabel(fakeTheme)).toBe("<bashMode>shell</bashMode>");
-		expect(modeBadgeText(engine, fakeTheme, false)).toBe("<error>yolo</error> <success>plan</success>");
+		expect(modeBadgeText(engine, fakeTheme, false)).toBe("<modeYolo>yolo</modeYolo> <modePlan>plan</modePlan>");
 	});
 });
