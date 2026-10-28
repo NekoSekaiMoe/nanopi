@@ -52,7 +52,7 @@ export const bashToolSystemPromptContribution = {
 		// because `tail` did, and the failure disappears from both the status and the digest. No
 		// pipefail countermeasure: asserting the exit status of each stage (`$?` / `PIPESTATUS`) makes
 		// the shell, not the test runner, exit non-zero, and the digest then reads the failures as prose.
-		"Avoid piping a command whose exit status matters into `tail`/`head`/`grep`: the pipeline reports the last command's status, so a failed test looks like a pass. Run it bare; the result is already truncated to its tail.",
+		"Never pipe a command whose exit status matters into `tail`/`head`/`grep`: the pipeline reports the last command's status, so a failed test looks like a pass. Output is already truncated to its tail.",
 	],
 } as const;
 

@@ -33,7 +33,7 @@ const grepSchema = Type.Object({
 });
 
 export const grepToolSystemPromptContribution = {
-	snippet: "Search file contents for patterns (respects .gitignore)",
+	snippet: "Search file contents",
 	guidelines: [],
 } as const;
 
@@ -94,7 +94,7 @@ export function createGrepToolDefinition(
 	return {
 		name: "grep",
 		label: "grep",
-		description: `Search file contents; returns matching lines with paths and line numbers. Respects .gitignore. Truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB; long lines to ${GREP_MAX_LINE_LENGTH} chars.`,
+		description: `Search file contents; respects .gitignore. Truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB; long lines to ${GREP_MAX_LINE_LENGTH} chars.`,
 		promptSnippet: grepToolSystemPromptContribution.snippet,
 		parameters: grepSchema,
 		async execute(

@@ -1,6 +1,6 @@
 // 提示词质量回归：todo tool 的 description 与 runtime 纠错文案必须是
-// "弱模型友好"的——条件必填字段要给完整 JSON 正例，双形陷阱（text/texts、
-// id/ids）要给消歧反例，失败后 throw 要带 Correct 正例让模型自我纠正。
+// "弱模型友好"的——description 要写明每个 action 的字段形态并消歧双形陷阱
+// （text/texts、id/ids），失败后 throw 要带 Correct 正例让模型自我纠正。
 //
 // 本测试用源码文本断言锁定这些约束，防止后续重构把正例/反例/纠错文案删掉或
 // 弱化。读源码而非 import，避免 mock 链（tool.ts 依赖 typebox/ModuleApi/
@@ -16,8 +16,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const TOOL_SRC = readFileSync(join(__dirname, "../tool.ts"), "utf-8");
 
 /**
- * 提取 description 拼接区（从 `description:` 到下一个 `promptSnippet:`）。
- * tool.ts 的 description 用字符串拼接（非模板字面量），故整段截取后做子串断言。
+ * 提取 description 拼接区（从 tool 的 `description:` 到下一个 `promptGuidelines:`）。
+ * tool.ts 的 description 是字面量，整段截取后做子串断言。
  */
 function extractDescriptionRegion(src: string): string {
 	// 锚定到 registerTodoTool 内的 tool description，而非 schema 字段的 description:
@@ -27,60 +27,33 @@ function extractDescriptionRegion(src: string): string {
 	if (regIdx === -1) throw new Error("registerTodoTool not found in tool.ts");
 	const start = src.indexOf("description:", regIdx);
 	if (start === -1) throw new Error("tool description: not found in registerTodoTool");
-	const end = src.indexOf("promptSnippet:", start);
-	if (end === -1) throw new Error("promptSnippet: not found in tool.ts");
+	const end = src.indexOf("promptGuidelines:", start);
+	if (end === -1) throw new Error("promptGuidelines: not found in tool.ts");
 	return src.slice(start, end);
 }
 
 const DESCRIPTION_REGION = extractDescriptionRegion(TOOL_SRC);
 
-// ── description 必须给完整 JSON 正例 ─────────────────
+// ── description 必须列出每个 action 的字段形态 ───────
 
-describe("todo description — 给完整 JSON 正例", () => {
-	it("add 正例：含 {\"action\":\"add\",\"texts\"", () => {
-		// 弱模型 add 时易误用单数 text；正例必须显式 texts 数组。
-		expect(DESCRIPTION_REGION).toContain('{"action":"add","texts"');
+describe("todo description — 每个 action 的字段形态", () => {
+	it("add 用 texts[]", () => {
+		// 弱模型 add 时易误用单数 text；描述必须写成 texts[] 数组。
+		expect(DESCRIPTION_REGION).toContain("add(texts[])");
 	});
 
-	it("add+verification 正例：含 isVerification", () => {
-		expect(DESCRIPTION_REGION).toContain('"isVerification":true');
+	it("delete 用 ids[]", () => {
+		// 弱模型 delete 时易误用单数 id；描述必须写成 ids[] 数组。
+		expect(DESCRIPTION_REGION).toContain("delete(ids[])");
 	});
 
-	it("update single 正例：含 {\"action\":\"update\",\"id\"", () => {
-		expect(DESCRIPTION_REGION).toContain('{"action":"update","id"');
+	it("update 覆盖单条与批量两条路径", () => {
+		// updates[] 批量优先是 [批量优先] 规范的核心，单条路径也要在描述里。
+		expect(DESCRIPTION_REGION).toContain("update(id+status/text or updates[])");
 	});
 
-	it("update batch 正例：含 {\"action\":\"update\",\"updates\"", () => {
-		// updates[] 批量路径是 [批量优先] 规范的核心，正例不可缺。
-		expect(DESCRIPTION_REGION).toContain('{"action":"update","updates"');
-	});
-
-	it("delete 正例：含 {\"action\":\"delete\",\"ids\"", () => {
-		// 弱模型 delete 时易误用单数 id；正例必须显式 ids 数组。
-		expect(DESCRIPTION_REGION).toContain('{"action":"delete","ids"');
-	});
-});
-
-// ── description 必须给双形陷阱反例（消歧） ──────────
-
-describe("todo description — 双形陷阱反例（消歧单复数）", () => {
-	it("Don't 段存在", () => {
-		expect(DESCRIPTION_REGION).toMatch(/Don't/);
-	});
-
-	it("反例标注：text 属于 update（add 用 texts）", () => {
-		// 反例必须含消歧词，告诉模型 text 属于 update 而非 add。
-		expect(DESCRIPTION_REGION).toContain("text is for update");
-		expect(DESCRIPTION_REGION).toContain("add uses texts");
-	});
-
-	it("反例标注：id 属于 update（delete 用 ids）", () => {
-		expect(DESCRIPTION_REGION).toContain("id is for update");
-		expect(DESCRIPTION_REGION).toContain("delete uses ids");
-	});
-
-	it("反例标注：update 缺 id", () => {
-		expect(DESCRIPTION_REGION).toContain("missing id");
+	it("给出不使用单数 text/id 的消歧句", () => {
+		expect(DESCRIPTION_REGION).toContain("never a singular text/id");
 	});
 });
 

@@ -127,7 +127,7 @@ function buildRules(
 		// scripts, pipes, process output), so this is a preference, not a ban.
 		if (preferred.length > 0) {
 			addRule(
-				`Prefer the ${preferred.join(", ")} tools over shell equivalents (cat, head, tail, sed -n, grep, rg, find, fd); use shell commands for running programs, not for inspecting files`,
+				`Prefer ${preferred.join(", ")} over shell equivalents (cat, head, tail, sed -n, grep, rg, find, fd); the shell runs programs, not file inspection`,
 			);
 		}
 	}
@@ -136,8 +136,7 @@ function buildRules(
 		for (const rule of toolGuidelines[name] ?? []) addRule(rule);
 	}
 	for (const rule of promptGuidelines) addRule(rule);
-	addRule("Be concise in your responses");
-	addRule("Show file paths clearly when working with files");
+	addRule("Be concise; show file paths clearly");
 	return rules.map((rule) => `- ${rule}`).join("\n");
 }
 
@@ -180,19 +179,17 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 		// sections) apply to both preambles, so the shell-only branch only differs in
 		// what it leaves out: the tool list and the docs section.
 	} else {
-		promptSections.preamble =
-			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You help users by reading files, running commands, editing code, and writing new files.";
+		promptSections.preamble = "You are an expert coding assistant operating inside nanopi, a coding agent harness.";
 		const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
 		const tools =
 			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
-		promptSections.tools = `${tools}\n\nOther custom tools may be available depending on the project.`;
+		promptSections.tools = `${tools}\n\nMore tools may be registered by the project.`;
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
 		// A flavor that drops the docs and examples trees has no files to point
 		// at, so the section would be dead weight in every prompt.
 		if (isBuildComponentEnabled("docs")) {
-			promptSections.docs = `nanopi documentation (read only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI):
-- Start at ${getDocsPath()}/index.md (topic index); overview: ${getReadmePath()}
-- Examples: ${getExamplesPath()}
+			promptSections.docs = `nanopi docs, only when the user asks about nanopi itself, its SDK, extensions, skills, or TUI:
+- Index: ${getDocsPath()}/index.md; overview: ${getReadmePath()}; examples: ${getExamplesPath()}
 - Resolve docs/... and examples/... against those directories, not the cwd; follow .md cross-references and read referenced files completely before implementing`;
 		}
 	}

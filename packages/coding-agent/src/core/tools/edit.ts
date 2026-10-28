@@ -21,11 +21,8 @@ import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 
 const replaceEditSchema = Type.Object(
 	{
-		oldText: Type.String({
-			description:
-				"Exact text to replace. Must be unique in the original file and not overlap other edits in this call.",
-		}),
-		newText: Type.String({ description: "Replacement text for this targeted edit." }),
+		oldText: Type.String({ description: "Exact text to replace, unique in the original file" }),
+		newText: Type.String({ description: "Replacement text" }),
 	},
 	{},
 );
@@ -33,20 +30,14 @@ const replaceEditSchema = Type.Object(
 const editSchema = Type.Object(
 	{
 		path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-		edits: Type.Array(replaceEditSchema, {
-			description:
-				"One or more targeted replacements, each matched against the original file rather than applied incrementally.",
-		}),
+		edits: Type.Array(replaceEditSchema, { description: "Replacements, each matched against the original file" }),
 	},
 	{},
 );
 
 export const editToolSystemPromptContribution = {
 	snippet: "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
-	guidelines: [
-		"Use edit for precise changes; every edits[].oldText must match the original file exactly and uniquely",
-		"Batch separate locations in one file into one edit call instead of multiple edit calls",
-	],
+	guidelines: ["Use edit for precise changes; batch separate locations in one file into one call"],
 } as const;
 
 export type EditToolInput = Static<typeof editSchema>;
@@ -153,7 +144,7 @@ export function createEditToolDefinition(
 		name: "edit",
 		label: "edit",
 		description:
-			"Edit a file by exact text replacement. Each edits[].oldText must match a unique, non-overlapping region of the original file. Merge nearby changes into one edit; do not pad oldText with large unchanged regions.",
+			"Edit a file by exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file; merge nearby changes into one edit.",
 		promptSnippet: editToolSystemPromptContribution.snippet,
 		promptGuidelines: [...editToolSystemPromptContribution.guidelines],
 		parameters: editSchema,

@@ -71,7 +71,7 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 }
 
 export const findToolSystemPromptContribution = {
-	snippet: "Find files by glob pattern (respects .gitignore)",
+	snippet: "Find files by name",
 	guidelines: [],
 } as const;
 
@@ -114,7 +114,7 @@ export function createFindToolDefinition(
 	return {
 		name: "find",
 		label: "find",
-		description: `Find files by glob pattern; returns paths relative to the search directory. Respects .gitignore. Truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
+		description: `Find files by glob pattern; respects .gitignore. Truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
 		promptSnippet: findToolSystemPromptContribution.snippet,
 		parameters: findSchema,
 		async execute(
