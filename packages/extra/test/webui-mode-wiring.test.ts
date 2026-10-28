@@ -254,7 +254,7 @@ describe("slash commands for the mode switches", () => {
 		expect(modeEngine.yolo).toBe(false);
 		await fake.run("yolo", "on");
 		expect(modeEngine.yolo).toBe(true);
-		expect(await fake.run("yolo")).toBe("Yolo mode off");
+		expect(await fake.run("yolo")).toBe("Left yolo mode");
 		expect(modeEngine.yolo).toBe(false);
 	});
 
@@ -264,17 +264,24 @@ describe("slash commands for the mode switches", () => {
 		fake.start("tui", "new");
 		expect(await fake.run("yolo")).toBe("Yolo mode on");
 		expect(modeEngine.yolo).toBe(true);
-		expect(await fake.run("yolo")).toBe("Yolo mode off");
+		expect(await fake.run("yolo")).toBe("Left yolo mode");
 		expect(modeEngine.yolo).toBe(false);
 	});
 
-	test("/minimal typed twice names the exit that exists", async () => {
+	test("/minimal typed twice leaves minimal mode", async () => {
 		const fake = fakeApi();
 		createExtraExtension(fake.api);
 		fake.start("tui", "new");
 		expect(await fake.run("minimal")).toBe("Switched to minimal mode");
-		expect(await fake.run("minimal")).toBe("Already in minimal mode (shell tools only): `/standard` leaves it");
-		fake.api.setActiveTools(TOOLS);
+		expect(fake.active()).toEqual(["bash"]);
+		// The session's restore point is read back by the exit: the engine is a
+		// process singleton reset by `beforeEach`, the session ctx is not.
+		modeEngine.setPreMinimalTools([...TOOLS]);
+		expect(await fake.run("minimal")).toBe("Left minimal mode");
+		expect(modeEngine.mode).toBe("standard");
+		expect(fake.active()).toEqual(TOOLS);
+		// The badge goes with the mode: standard is the absence of one.
+		expect(fake.status()).toBeUndefined();
 	});
 
 	test("/minimal from plan mode says plan was left", async () => {
@@ -287,23 +294,20 @@ describe("slash commands for the mode switches", () => {
 		fake.api.setActiveTools(TOOLS);
 	});
 
-	test("/standard leaves a mode instead of leaving it to the webui", async () => {
+	test("no command names standard: the mode's own command turns it off", async () => {
 		const fake = fakeApi();
 		createExtraExtension(fake.api);
 		fake.start("tui", "new");
-		await fake.run("minimal");
-		expect(fake.active()).toEqual(["bash"]);
-		expect(fake.status()).toBe("minimal");
-		expect(await fake.run("standard")).toBe("Switched to standard mode (left minimal mode)");
-		expect(modeEngine.mode).toBe("standard");
-		// The badge goes with the mode: standard is the absence of one.
-		expect(fake.status()).toBeUndefined();
+		expect(fake.has("standard")).toBe(false);
 	});
 
-	test("/standard in standard mode says so and changes nothing", async () => {
+	test("/plan typed twice asks for a plan again, it does not leave plan mode", async () => {
 		const fake = fakeApi();
 		createExtraExtension(fake.api);
 		fake.start("tui", "new");
-		expect(await fake.run("standard")).toContain("`/standard`");
+		await fake.run("plan");
+		expect(modeEngine.mode).toBe("plan");
+		expect(await fake.run("plan")).toContain("Already in plan mode");
+		expect(modeEngine.mode).toBe("plan");
 	});
 });

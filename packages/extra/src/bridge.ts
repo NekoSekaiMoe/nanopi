@@ -29,6 +29,8 @@ export interface BridgeExtensionHooks {
 	applySubsystem(key: SubsystemKey, enabled: boolean): void;
 	/** Re-derive the active tool set from the current mode (minimal narrows it). */
 	applyModeToolSet(): void;
+	/** Leave minimal mode and restore the loadout captured on entry. */
+	leaveMinimalMode?(reason: string): void;
 	/** The prompt the input box should offer while the gate holds a call, if any. */
 	continueSuggestion?(): string | undefined;
 }
@@ -66,12 +68,18 @@ export class ExtraBridge {
 
 	/**
 	 * Validate and switch the run mode (webui /approval_mode, /extra/mode, and the
-	 * `approval_mode` field of /chat). The engine notifies the extension, which
-	 * applies the tool set; the explicit call covers a bridge used before its
-	 * session bound its hooks.
+	 * `approval_mode` field of /chat).
+	 *
+	 * The engine notifies the extension, which narrows the tool set for minimal,
+	 * and the explicit call covers a bridge used before its session bound its
+	 * hooks. Leaving minimal goes through the hooks' own exit first: `setMode`
+	 * drops the restore point before it emits.
 	 */
 	setMode(value: unknown): { ok: true; mode: RunMode } | { ok: false; error: string } {
 		if (!isRunMode(value)) return { ok: false, error: `invalid run mode: ${String(value)}` };
+		if (this.extensionHooks?.leaveMinimalMode && this.engine.mode === "minimal" && value !== "minimal") {
+			this.extensionHooks.leaveMinimalMode("webui");
+		}
 		const changed = this.engine.mode !== value;
 		this.engine.setMode(value, "webui");
 		if (changed) this.extensionHooks?.applyModeToolSet();

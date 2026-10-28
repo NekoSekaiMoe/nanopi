@@ -53,7 +53,7 @@ export class ModeEngine {
 		if (this.current === mode) return;
 		this.current = mode;
 		this.currentReason = reason;
-		if (mode !== "minimal") this.minimalSnapshot = undefined;
+		this.minimalSnapshot = undefined;
 		this.emit();
 	}
 
