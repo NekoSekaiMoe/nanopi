@@ -4,15 +4,18 @@
 
 ### Added
 
+- `/standard` leaves plan or minimal mode: before, the only ways out were the plan exit prompt and the webui settings switch, so a session that entered minimal from the composer had no slash command to leave it (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 - Destructive git guard (issue #200): shell calls that would hit this checkout's index or working tree — `reset --hard`, a bare `reset`, `stash`, `clean -f`, `add -A`/`add .`, `checkout .`, `restore`, `commit --no-verify`, `push --force` — now go through the permission gate with a hazard line, even when the tool was already allowed for the session, and the refusal appended to the tool result tells the model what it tried to destroy. The analysis walks past quoting, `cd`, `bash -c`, `$(...)`/backticks and shell operators, and is checkout-aware: `git -C <other worktree> …` and `git worktree add` count as isolation, so a subagent's own tree is not gated. `/gitguard off` disables it. New exports: `analyzeShellCommand`, `analyzeGitInvocation`, `collectGitInvocations`, `listWorktrees`, `checkoutRoot`, `gitGuardNotice`
 
 ### Changed
 
 - A bare `/yolo` toggles the mode instead of printing its state: the switch is what a user types after reading the footer, and answering with "Yolo mode: off" made them retype the same command to flip it. `/yolo on|off` still sets it explicitly, and both values now complete after `/yolo `
-- `/minimal` typed while already minimal names the way out instead of answering "Already in minimal mode" and nothing else, and `/minimal` from plan mode reports that plan mode was left. The yolo badge keeps the theme accent color instead of borrowing `error`
+- A mode command typed while already in that mode names `/standard` as the way out, and entering one mode from another reports which mode was left (`Switched to minimal mode (left plan mode)`)
+- Shell mode takes the whole footer slot: the yellow `shell` label replaces the mode badges instead of following them, and the badges come back when the composer leaves shell mode. Both were the same yellow, so `minimal shell` read as one word (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 
 ### Fixed
 
+- One run mode at a time on the footer, and one hue per mode: `yolo` red, `plan` green, `minimal` blue. `yolo` and a run mode still show together because they are orthogonal, but `plan` and `minimal` replace each other instead of adding a second label, and the yolo badge no longer borrows the theme accent (violet — the same hue a blue mode would want) (issue [#364](https://cnb.cool/shinytale/nanopi/-/issues/364))
 - `minimal` gets a footer badge like `plan`: it was the one run mode a session could be in with no indication on the footer, while plan and yolo both showed
 - `/minimal` and `--minimal` say so instead of narrowing to themselves in a shell-only build (`toolset: "bash"`, the minimal SKU): the tool set minimal narrows to is the one the build already has, so entering the mode changed nothing and leaving it restored a snapshot equal to the current loadout. `/plan` and the permission gate stay ([#354](https://cnb.cool/shinytale/nanopi/-/issues/354))
 - The webui permission prompt is shown before a call can be paused for an explanation: `PermissionGate.check()` runs the prompt first and only pauses on an `"explain"` answer, so `PermissionBroker.explanationPrompter` has an active entry to park on. Previously the gate paused first, found nothing outstanding, and read the pause as a dismissal — every gated call in `nanopi webui` failed with "the permission prompt for this bash call was dismissed" and the browser never received a `permission_request` (issue [#293](https://cnb.cool/shinytale/nanopi/-/issues/293))

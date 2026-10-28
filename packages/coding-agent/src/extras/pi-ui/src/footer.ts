@@ -35,18 +35,30 @@ export function isShellMode(ctx: Pick<ModuleContext, "ui">): boolean {
 	return ctx.ui.getEditorText().trimStart().startsWith("!");
 }
 
+/**
+ * The status key whose producer needs the composer's shell-mode flag.
+ *
+ * The `mode` producer (pi-extra) draws the yellow `shell` label itself: the
+ * label has to replace the mode badges rather than join them, since both were
+ * the same yellow and two of them read as one word. Passing the flag instead of
+ * appending a second label keeps the suffix to one meaning per slot.
+ */
+const SHELL_LABEL_KEY = "mode";
+
 /** Right-aligned suffix: extension status values (producers embed their own
- * ANSI colors via `ctx.ui.theme.fg()`) plus the yellow shell label. */
+ * ANSI colors via `ctx.ui.theme.fg()`) plus the yellow shell label for a footer
+ * whose status producer does not draw it. */
 export function renderStatusSuffix(
 	footerData: ReadonlyFooterDataProvider,
 	theme: Theme,
 	shellMode: boolean,
 ): string {
+	const statuses = footerData.getExtensionStatuses();
 	const parts: string[] = [];
-	for (const status of footerData.getExtensionStatuses().values()) {
+	for (const status of statuses.values()) {
 		if (status) parts.push(status);
 	}
-	if (shellMode) parts.push(theme.fg("bashMode", "shell"));
+	if (shellMode && !statuses.get(SHELL_LABEL_KEY)) parts.push(theme.fg("bashMode", "shell"));
 	return parts.join(" ");
 }
 
