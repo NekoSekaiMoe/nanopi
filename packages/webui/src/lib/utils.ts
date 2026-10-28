@@ -48,23 +48,3 @@ export function randomId(): string {
 export function shortId(id: string): string {
 	return id.slice(0, 8);
 }
-
-export function readImageFile(file: File): Promise<{ media_type: string; data: string }> {
-	return new Promise((resolve, reject) => {
-		const reader = new FileReader();
-		reader.onload = () => {
-			const result = String(reader.result ?? "");
-			const comma = result.indexOf(",");
-			if (comma < 0) {
-				reject(new Error("could not read image"));
-				return;
-			}
-			resolve({
-				media_type: file.type || "image/png",
-				data: result.slice(comma + 1),
-			});
-		};
-		reader.onerror = () => reject(reader.error ?? new Error("could not read image"));
-		reader.readAsDataURL(file);
-	});
-}

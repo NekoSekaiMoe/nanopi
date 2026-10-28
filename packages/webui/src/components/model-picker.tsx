@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { ModelInfo } from "@/lib/api";
+import type { ApprovalMode, ModelInfo } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -12,6 +12,17 @@ import { t } from "@/lib/i18n";
  * decides whether a model can think at all has to allow for it.
  */
 const EFFORT_LADDER = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/**
+ * Run modes, in the order the sheet lists them. The order is the ladder of
+ * narrowing tool sets, not the order of the settings page: the mode decides
+ * which tools the next turn may call, and `standard` is the one that starts it.
+ */
+const RUN_MODES: readonly { value: ApprovalMode; label: string; hint: string }[] = [
+	{ value: "standard", label: t("标准"), hint: t("标准模式允许全部工具") },
+	{ value: "plan", label: t("计划"), hint: t("计划模式会先规划再问你要不要执行") },
+	{ value: "minimal", label: t("最小"), hint: t("最小模式只有 shell 工具") },
+];
 
 const EFFORT_LABELS: Record<string, string> = {
 	off: t("关闭"),
@@ -66,6 +77,9 @@ export function ModelSheet({
 	onProvider,
 	effort,
 	onEffort,
+	approvalMode,
+	onApprovalMode,
+	takesImages,
 	onConfigure,
 }: {
 	open: boolean;
@@ -75,6 +89,11 @@ export function ModelSheet({
 	onProvider: (provider: string) => void;
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
+	/** Run mode the daemon is in right now. */
+	approvalMode: ApprovalMode;
+	onApprovalMode: (mode: ApprovalMode) => void;
+	/** The selected model accepts images; the section still lists the modes either way. */
+	takesImages: boolean;
 	onConfigure: () => void;
 }) {
 	const current = models.find((model) => model.provider === provider) ?? models[0];
@@ -198,6 +217,12 @@ export function ModelSheet({
 						})
 					)}
 
+					{takesImages ? null : (
+						<p className="px-2.5 pb-1 text-caption text-muted-foreground">
+							{t("当前模型不支持图片，请换一个视觉模型")}
+						</p>
+					)}
+
 					{levels.length > 0 ? (
 						<>
 							<div className="pt-3">
@@ -229,6 +254,41 @@ export function ModelSheet({
 							</div>
 						</>
 					) : null}
+
+					{/* Run mode sits under the thinking level because it is the other
+					    per-turn switch: the level says how hard the model thinks, the
+					    mode says which tools the turn may touch. A section, not a row
+					    under 模型: switching it here closes the sheet, and the sheet
+					    reopening on a mode the engine changed underneath it (a plan
+					    turn ending in an approval) has to read as a mode, not a model. */}
+					<div className="pt-3">
+						<SheetLabel>{t("运行模式")}</SheetLabel>
+					</div>
+					<div className="py-0.5">
+						{RUN_MODES.map((mode) => {
+							const active = mode.value === approvalMode;
+							return (
+								<button
+									key={mode.value}
+									type="button"
+									aria-pressed={active}
+									onClick={() => {
+										onApprovalMode(mode.value);
+										onClose();
+									}}
+									className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover"
+								>
+									<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
+										{active ? <Check className="size-3.5 text-brand" strokeWidth={2.25} /> : null}
+									</span>
+									<span className="min-w-0 flex-1">
+										<span className="block truncate text-control text-foreground">{mode.label}</span>
+										<span className="block text-caption leading-4 text-muted-foreground">{mode.hint}</span>
+									</span>
+								</button>
+							);
+						})}
+					</div>
 				</div>
 			</div>
 		</div>

@@ -2,7 +2,7 @@
 
 import { ArrowLeft, ChevronRight, Cpu, Info, Monitor, Moon, Network, Palette, Sparkles, Sun, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import { getMcpStatus, getSkills, type ApprovalMode, type ConfigInfo, type McpStatusInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
+import { getMcpStatus, getSkills, type ConfigInfo, type McpStatusInfo, type ModelInfo, type ProjectState, type SkillInfo } from "@/lib/api";
 import { ProviderSettings } from "@/components/provider-settings";
 import { cn } from "@/lib/utils";
 import { getLocale, setLocale, t } from "@/lib/i18n";
@@ -28,8 +28,6 @@ export function SettingsOverlay({
 	provider,
 	onProvider,
 	project,
-	approvalMode,
-	onApprovalMode,
 	config,
 	onRefreshProviders,
 	onChangeDir,
@@ -45,8 +43,6 @@ export function SettingsOverlay({
 	provider: string;
 	onProvider: (provider: string) => void;
 	project: ProjectState | null;
-	approvalMode: ApprovalMode;
-	onApprovalMode: (mode: ApprovalMode) => void;
 	config: ConfigInfo | null;
 	onRefreshProviders: () => Promise<void>;
 	onChangeDir: (path: string) => Promise<void>;
@@ -240,33 +236,6 @@ export function SettingsOverlay({
 									/>
 								</div>
 
-								<h2 className="mt-8 text-[13.5px] font-medium">{t('运行模式')}</h2>
-								<p className="mt-1 text-[12px] text-muted-foreground">
-									{t("标准模式允许全部工具；计划模式只读；最小模式只开放 shell 工具。")}
-								</p>
-								<div className="mt-3 flex flex-wrap gap-1.5">
-									{(
-										[
-											["standard", t("标准")],
-											["plan", t("计划")],
-											["minimal", t("最小")],
-										] as const
-									).map(([value, label]) => (
-										<button
-											key={value}
-											type="button"
-											onClick={() => onApprovalMode(value)}
-											className={cn(
-												"h-8 rounded-full border px-3 text-[12px] transition-colors",
-												approvalMode === value
-													? "border-foreground bg-foreground text-background"
-													: "border-border text-muted-foreground hover:bg-overlay-hover hover:text-foreground",
-											)}
-										>
-											{label}
-										</button>
-									))}
-								</div>
 
 								<div className="mt-2 flex items-center justify-between gap-4 border-b border-border-soft py-4">
 									<div>

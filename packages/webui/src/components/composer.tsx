@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronDown, ImagePlus, X } from "lucide-react";
+import { ChevronDown, Paperclip, X } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { ModelSheet } from "@/components/model-picker";
-import type { ImageData, ModelInfo } from "@/lib/api";
-import { cn, readImageFile } from "@/lib/utils";
+import type { ApprovalMode, ImageData, ModelInfo } from "@/lib/api";
+import { ACCEPTED_FILES, type TextAttachment, readAttachments } from "@/lib/attachments";
+import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
 /**
@@ -33,9 +34,14 @@ export function Composer({
 	onProvider,
 	effort,
 	onEffort,
+	approvalMode,
+	onApprovalMode,
 	onConfigure,
 	images,
 	onImages,
+	files,
+	onFiles,
+	onNotice,
 	disabled,
 	docked,
 }: {
@@ -53,9 +59,17 @@ export function Composer({
 	onProvider: (provider: string) => void;
 	effort?: string | null;
 	onEffort?: (level: string | null) => void;
+	/** Run mode of the daemon, mirrored read-write in the model sheet. */
+	approvalMode: ApprovalMode;
+	onApprovalMode: (mode: ApprovalMode) => void;
 	onConfigure: () => void;
 	images: ImageData[];
 	onImages: (images: ImageData[]) => void;
+	/** Text extracted from attached documents; it rides along in the prompt. */
+	files: TextAttachment[];
+	onFiles: (files: TextAttachment[]) => void;
+	/** Surface a rejected attachment without a banner of its own. */
+	onNotice: (message: string) => void;
 	disabled?: boolean;
 	docked?: boolean;
 }) {
@@ -69,7 +83,9 @@ export function Composer({
 		element.style.height = `${Math.min(element.scrollHeight, 208)}px`;
 	}, [value]);
 
-	const canSend = (value.trim().length > 0 || images.length > 0) && !streaming && !disabled;
+	const canSend = (value.trim().length > 0 || images.length > 0 || files.length > 0) && !streaming && !disabled;
+	const currentModel = models.find((model) => model.provider === provider) ?? models[0];
+	const takesImages = currentModel?.supports_image ?? false;
 
 	return (
 		<div className="w-full">
@@ -77,10 +93,10 @@ export function Composer({
 				className={cn("composer-shell cursor-text", docked && "composer-shell-docked")}
 				onClick={() => ref.current?.focus()}
 			>
-				{images.length > 0 ? (
+				{images.length > 0 || files.length > 0 ? (
 					<div className="flex w-full flex-wrap gap-2 pb-1.5">
 						{images.map((image, index) => (
-							<div key={index} className="relative">
+							<div key={`image-${index}`} className="relative">
 								<img
 									src={`data:${image.media_type};base64,${image.data}`}
 									alt=""
@@ -94,6 +110,28 @@ export function Composer({
 										onImages(images.filter((_, cursor) => cursor !== index));
 									}}
 									className="absolute -right-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-foreground text-background"
+								>
+									<X className="size-3" />
+								</button>
+							</div>
+						))}
+						{files.map((file, index) => (
+							<div
+								key={`file-${index}`}
+								className="relative flex h-16 min-w-24 max-w-[13rem] flex-col justify-center gap-0.5 rounded-xl bg-muted px-2.5 pr-6"
+							>
+								<span className="truncate text-caption font-medium text-foreground">{file.name}</span>
+								<span className="truncate text-caption text-muted-foreground">
+									{file.kind.toUpperCase()} · {t("个附件")}
+								</span>
+								<button
+									type="button"
+									aria-label={t("移除附件")}
+									onClick={(event) => {
+										event.stopPropagation();
+										onFiles(files.filter((_, cursor) => cursor !== index));
+									}}
+									className="absolute right-1 top-1 grid size-4 place-items-center rounded-full text-muted-foreground hover:text-foreground"
 								>
 									<X className="size-3" />
 								</button>
@@ -125,27 +163,33 @@ export function Composer({
 					<input
 						ref={fileRef}
 						type="file"
-						accept="image/*"
+						accept={ACCEPTED_FILES}
 						multiple
 						hidden
 						onChange={(event) => {
-							const files = [...(event.target.files ?? [])];
+							const picked = [...(event.target.files ?? [])];
 							event.target.value = "";
-							if (files.length === 0) return;
-							void Promise.all(files.map(readImageFile)).then((next) => onImages([...images, ...next]));
+							if (picked.length === 0) return;
+							void readAttachments(picked, images.length).then((draft) => {
+								// One turn, two carriers: images go to the vision channel, the
+								// rest is text spliced into the prompt before it is sent.
+								if (draft.images.length) onImages([...images, ...draft.images]);
+								if (draft.files.length) onFiles([...files, ...draft.files]);
+								if (draft.problems.length) onNotice(draft.problems.join("；"));
+							});
 						}}
 					/>
 					<button
 						type="button"
-						aria-label={t("添加图片")}
-						title={t("添加图片")}
+						aria-label={t("添加附件")}
+						title={t("添加图片或文档")}
 						onClick={(event) => {
 							event.stopPropagation();
 							fileRef.current?.click();
 						}}
 						className="press grid size-8 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:text-foreground max-md:size-11"
 					>
-						<ImagePlus className="size-4 max-md:size-5" strokeWidth={1.75} />
+						<Paperclip className="size-4 max-md:size-5" strokeWidth={1.75} />
 					</button>
 
 					{/* Model readout, bare text: picking lives in the sheet, so the
@@ -228,6 +272,9 @@ export function Composer({
 				onProvider={onProvider}
 				effort={effort}
 				onEffort={onEffort}
+				approvalMode={approvalMode}
+				onApprovalMode={onApprovalMode}
+				takesImages={takesImages}
 				onConfigure={onConfigure}
 			/>
 		</div>

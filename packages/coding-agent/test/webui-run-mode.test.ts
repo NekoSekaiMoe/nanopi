@@ -44,7 +44,10 @@ async function writeAgentConfig(): Promise<void> {
 				api: "openai-completions",
 				baseUrl: "http://127.0.0.1:1/v1",
 				apiKey: "test",
-				models: [{ id: "alpha", reasoning: false }],
+				models: [
+					{ id: "alpha", reasoning: false, input: ["text"] },
+					{ id: "vision", reasoning: false, input: ["text", "image"] },
+				],
 			},
 		},
 	};
@@ -220,6 +223,31 @@ describe("webui run mode", () => {
 		await withTimeout(read(), 5000, "the mode change event");
 		expect(events.at(-1)).toEqual({ mode: "plan", reason: "webui" });
 		controller.abort();
+	});
+
+	it("reports which models take images", async () => {
+		// The composer has to know before it shows the attach button: a turn with
+		// an image on a text-only model would be answered around the image.
+		const { status, body } = await api("/models");
+		expect(status).toBe(200);
+		const rows = body as { model: string; supports_image: boolean }[];
+		expect(rows.find((row) => row.model === "alpha")?.supports_image).toBe(false);
+		expect(rows.find((row) => row.model === "vision")?.supports_image).toBe(true);
+	});
+
+	it("refuses an image on a model that cannot read it", async () => {
+		// The adapters drop the image and send a placeholder, so the turn would
+		// silently answer a question about a picture it never saw.
+		const request = await fetch(`${base}/chat`, {
+			method: "POST",
+			headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+			body: JSON.stringify({
+				message: "what is this",
+				images: [{ media_type: "image/png", data: "AAAA" }],
+			}),
+		});
+		expect(request.status).toBe(400);
+		expect(await request.json()).toMatchObject({ code: "model_without_image" });
 	});
 
 	it("persists the default mode for new sessions without touching the live one", async () => {

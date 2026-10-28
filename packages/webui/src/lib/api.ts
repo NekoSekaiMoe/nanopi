@@ -95,6 +95,8 @@ export interface ModelInfo {
 	effort_applicable: boolean;
 	reasoning_effort: string | null;
 	effort_levels: string[];
+	/** The model accepts image input; a turn carrying an image is refused without it. */
+	supports_image: boolean;
 	/** False for a catalog model whose provider has no credential, so it cannot run. */
 	available: boolean;
 }
