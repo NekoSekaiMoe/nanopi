@@ -11,7 +11,7 @@ import { type ImageContent, modelsAreEqual } from "@nanopi/pi-ai";
 import { setCapabilityOverrides } from "@nanopi/pi-tui";
 import chalk from "chalk";
 import { isBuildComponentEnabled } from "./build-components.ts";
-import { type Args, type Mode, normalizeSessionName, parseArgs, printHelp } from "./cli/args.ts";
+import { type Args, normalizeSessionName, type OutputMode, parseArgs, printHelp } from "./cli/args.ts";
 import {
 	type AuthCheckResult,
 	checkProviderAuth,
@@ -170,10 +170,10 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
 }
 
 function resolveAppMode(parsed: Args, stdinIsTTY: boolean, stdoutIsTTY: boolean): AppMode {
-	if (parsed.mode === "rpc") {
+	if (parsed.output === "rpc") {
 		return "rpc";
 	}
-	if (parsed.mode === "json") {
+	if (parsed.output === "json") {
 		return "json";
 	}
 	if (parsed.print || !stdinIsTTY || !stdoutIsTTY) {
@@ -182,12 +182,12 @@ function resolveAppMode(parsed: Args, stdinIsTTY: boolean, stdoutIsTTY: boolean)
 	return "interactive";
 }
 
-function toPrintOutputMode(appMode: AppMode): Exclude<Mode, "rpc"> {
+function toPrintOutputMode(appMode: AppMode): Exclude<OutputMode, "rpc"> {
 	return appMode === "json" ? "json" : "text";
 }
 
 function isPlainRuntimeMetadataCommand(parsed: Args): boolean {
-	return !parsed.print && parsed.mode === undefined && (parsed.help === true || parsed.listModels !== undefined);
+	return !parsed.print && parsed.output === undefined && (parsed.help === true || parsed.listModels !== undefined);
 }
 
 async function runAuthCommand(args: string[]): Promise<boolean> {
@@ -779,7 +779,7 @@ export async function main(args: string[], options?: MainOptions) {
 		takeOverStdout();
 	}
 
-	if (parsed.mode === "rpc" && parsed.fileArgs.length > 0) {
+	if (parsed.output === "rpc" && parsed.fileArgs.length > 0) {
 		console.error(chalk.red("Error: @file arguments are not supported in RPC mode"));
 		process.exit(1);
 	}

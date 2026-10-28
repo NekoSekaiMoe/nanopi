@@ -65,10 +65,10 @@ export const BUILTIN_MODULES: SessionModule[] = [
  * A shell-only build keeps bash alone, so every rule the module owns is a dead
  * end or a contradiction: the shell guard refuses `cat` in favour of a `read`
  * the build does not carry, and a minimal run mode removes the very tools it
- * narrows to. Nothing is lost by dropping the module — `/mode` and the
- * permission prompt have nothing to act on when no restricted tool exists — and
- * the buildconfig component stays, so the flavors' `module/*` switch still
- * means what it says.
+ * narrows to. Nothing is lost by dropping the module — `/plan`, `/minimal` and
+ * the permission prompt have nothing to act on when no restricted tool
+ * exists — and the buildconfig component stays, so the flavors' `module/*`
+ * switch still means what it says.
  */
 function extraModule(): SessionModule[] {
 	const factory: ModuleFactory | undefined = isBashOnlyBuild() ? undefined : extraInlineExtension.factory;

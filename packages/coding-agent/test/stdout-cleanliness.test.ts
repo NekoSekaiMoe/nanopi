@@ -71,8 +71,8 @@ describe("stdout cleanliness in non-interactive modes", () => {
 		expect(result.stderr).not.toContain("Usage:");
 	});
 
-	it("keeps stdout empty for --mode json --help while routing help to stderr", async () => {
-		const result = await runCli(["--mode", "json", "--help", "--approve"]);
+	it("keeps stdout empty for --output json --help while routing help to stderr", async () => {
+		const result = await runCli(["--output", "json", "--help", "--approve"]);
 
 		expect(result.code).toBe(0);
 		expect(result.stdout).toBe("");

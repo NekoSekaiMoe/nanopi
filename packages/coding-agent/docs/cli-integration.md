@@ -36,7 +36,7 @@ When no mode is selected explicitly, non-TTY stdin or stdout also selects print 
 JSON mode writes a session header followed by agent and session events as newline-delimited JSON:
 
 ```bash
-nanopi --mode json "Review this repository" > events.jsonl
+nanopi --output json "Review this repository" > events.jsonl
 ```
 
 This is structured event output, not a single JSON result or a constraint on the format of the model’s response.
@@ -56,7 +56,7 @@ Stdout is reserved for JSONL. Diagnostics and application logging are written to
 RPC mode keeps nanopi running while another process sends commands and receives responses and events:
 
 ```bash
-nanopi --mode rpc --no-session
+nanopi --output rpc --no-session
 ```
 
 Commands are JSON objects written to stdin. Responses and events are JSON objects written to stdout. Every record occupies one line.

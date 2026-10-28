@@ -3,7 +3,7 @@
 JSON mode emits structured progress for one invocation:
 
 ```bash
-nanopi --mode json "Review this repository"
+nanopi --output json "Review this repository"
 ```
 
 nanopi writes one session header followed by session events, then exits after the supplied prompts finish. RPC mode emits the same session-event shapes but has no session header because it is a bidirectional, long-lived protocol. See [RPC Mode](rpc.md).
@@ -222,5 +222,5 @@ Use the exported `JsonAgentSessionEvent` type from `@nanopi/pi-coding-agent`. It
 Print completed messages from a one-shot run:
 
 ```bash
-nanopi --mode json "List files" 2>/dev/null | jq -c 'select(.type == "message_end")'
+nanopi --output json "List files" 2>/dev/null | jq -c 'select(.type == "message_end")'
 ```

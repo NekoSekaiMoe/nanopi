@@ -18,10 +18,10 @@ nanopi auth <check|print-api-key|print-bearer-token> [options]
 nanopi
 nanopi --print "Summarize this repository"
 git diff | nanopi --print "Review this change"
-nanopi --mode json "Inspect this repository" > events.jsonl
+nanopi --output json "Inspect this repository" > events.jsonl
 ```
 
-With terminal stdin and stdout, nanopi opens the terminal UI unless `--print`, `--mode json`, or `--mode rpc` selects another interface. When either stream is redirected and neither JSON nor RPC mode is selected, nanopi uses print mode. See [CLI Integration](cli-integration.md) for choosing between interactive, print, JSON, RPC, and SDK integration.
+With terminal stdin and stdout, nanopi opens the terminal UI unless `--print`, `--output json`, or `--output rpc` selects another interface. When either stream is redirected and neither JSON nor RPC mode is selected, nanopi uses print mode. See [CLI Integration](cli-integration.md) for choosing between interactive, print, JSON, RPC, and SDK integration.
 
 | Input | Behavior |
 |---|---|
@@ -32,14 +32,14 @@ With terminal stdin and stdout, nanopi opens the terminal UI unless `--print`, `
 
 nanopi resolves `@path` from the current working directory. The working directory also controls project configuration, resource discovery, and session grouping.
 
-`--print` controls whether nanopi runs once and exits. `--mode` selects the output interface. `--mode text` does not force one-shot execution when stdin and stdout are terminals; use `--print` for that behavior.
+`--print` controls whether nanopi runs once and exits. `--output` selects the output interface. `--output text` does not force one-shot execution when stdin and stdout are terminals; use `--print` for that behavior.
 
 | Option | Behavior |
 |---|---|
 | `-p`, `--print` | Run the supplied prompts, write the final assistant text to stdout, then exit |
-| `--mode text` | Select text output; still open the terminal UI when stdin and stdout are terminals |
-| `--mode json` | Run the supplied prompts, write JSONL events to stdout, then exit |
-| `--mode rpc` | Read JSONL commands from stdin and write responses and events to stdout until shutdown |
+| `--output text` | Select text output; still open the terminal UI when stdin and stdout are terminals |
+| `--output json` | Run the supplied prompts, write JSONL events to stdout, then exit |
+| `--output rpc` | Read JSONL commands from stdin and write responses and events to stdout until shutdown |
 | `--export <input> [output]` | Export a session file and exit. The format comes from `output`'s extension (`md`, `html`, `jsonl`) and defaults to HTML; when `output` is omitted Markdown and HTML reuse the input's basename, and a `.jsonl` export fails asking for a destination rather than overwriting `<input>` |
 | `--export-format <format>` | Force the export format (`md`, `html`, `jsonl`) regardless of the output path |
 

@@ -2,7 +2,7 @@
 /**
  * What does a subagent child actually load, and what does that cost?
  *
- * `pi-subagent-mini` spawns `nanopi --mode json -p` children with the parent's
+ * `pi-subagent-mini` spawns `nanopi --output json -p` children with the parent's
  * module list minus `CHILD_MODULE_SKIP`. Issue #177 asked whether maintaining
  * that second module table is worth it, and the earlier 29 MiB/module estimate
  * came from a synthetic 1000-module process, not from this repository's modules.
@@ -74,7 +74,7 @@ function sampleProcess(pid) {
  * fails after loading the module table, which is exactly the state we measure.
  */
 function measureChild(agentDir, modules) {
-	const args = [cliPath, "--mode", "json", "-p", "ok"];
+	const args = [cliPath, "--output", "json", "-p", "ok"];
 	if (modules !== undefined) args.push("--modules", modules.join(","));
 	const child = spawn(process.execPath, args, {
 		env: { ...process.env, NANOPI_CODING_AGENT_DIR: agentDir, NANOPI_OFFLINE: "1", NANOPI_SKIP_VERSION_CHECK: "1" },
@@ -140,7 +140,7 @@ async function main() {
 		console.log(JSON.stringify({ runs: options.runs, skipped, results }, null, 2));
 		return;
 	}
-	console.log(`Subagent child (\`--mode json -p\`, peak RssAnon, median of ${options.runs} runs, MiB)\n`);
+	console.log(`Subagent child (\`--output json -p\`, peak RssAnon, median of ${options.runs} runs, MiB)\n`);
 	console.log("module set                     modules   anon    rss");
 	for (const result of results) {
 		const anon = result.anon === undefined ? "n/a" : result.anon.toFixed(1);

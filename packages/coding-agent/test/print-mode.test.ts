@@ -141,7 +141,7 @@ describe("runPrintMode", () => {
 	});
 
 	it("returns non-zero on assistant error in json mode", async () => {
-		// `--mode json` used to exit 0 on an auth/model failure, so a caller that only
+		// `--output json` used to exit 0 on an auth/model failure, so a caller that only
 		// read the exit code reported the run as a success with an empty result.
 		const runtimeHost = createRuntimeHost(
 			createAssistantMessage({ stopReason: "error", errorMessage: "invalid api key" }),
