@@ -6,7 +6,7 @@ import { describe, it, type TestContext } from "node:test";
 import { stripVTControlCharacters } from "node:util";
 import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor, wordWrapLine } from "../src/components/editor.ts";
-import { FAKE_CURSOR_START, renderFakeCursor, type TUI } from "../src/tui.ts";
+import { CURSOR_MARKER, FAKE_CURSOR_START, renderFakeCursor, type TUI } from "../src/tui.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
@@ -4543,9 +4543,13 @@ describe("Editor placeholder and ghost suggestion", () => {
 		const lines = editor.render(40);
 		const content = stripTerminalSequences(lines[1]!);
 		assert.ok(content.startsWith("Type anything..."), `placeholder visible: ${JSON.stringify(content)}`);
-		// Styled with ANSI dim as one run; the cursor sits after the text, so the
+		// Styled with ANSI dim as one run. No fake cursor is drawn over it, so the
 		// whole placeholder stays readable instead of losing its first grapheme.
-		assert.ok(lines[1]!.includes("\x1b[2mType anything...\x1b[22m"));
+		assert.ok(
+			/\x1b\[2mType anything\.\.\.\x1b_pi:c\x07\x1b\[22m/.test(lines[1]!),
+			`dim run: ${JSON.stringify(lines[1])}`,
+		);
+		assert.ok(!lines[1]!.includes(FAKE_CURSOR_START), "placeholder carries no fake cursor");
 
 		editor.handleInput("h");
 		const after = stripTerminalSequences(editor.render(40)[1]!);
@@ -4567,7 +4571,16 @@ describe("Editor placeholder and ghost suggestion", () => {
 		assert.ok(stripTerminalSequences(line).startsWith("› Type anything..."), line);
 	});
 
-	it("wraps a styled placeholder without counting escape bytes", () => {
+	it("still emits the cursor marker for IME placement", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme, { placeholder: "Type anything..." });
+		editor.focused = true;
+
+		// The placeholder draws no fake cursor, but the hardware cursor marker must stay
+		// right after the text so the IME candidate window lands where typing starts.
+		assert.ok(editor.render(40)[1]!.includes(CURSOR_MARKER));
+	});
+
+	it("wraps a long placeholder at the content width", () => {
 		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme, { placeholder: "Type anything..." });
 		editor.focused = true;
 
