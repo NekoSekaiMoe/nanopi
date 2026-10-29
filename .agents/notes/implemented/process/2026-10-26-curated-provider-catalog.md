@@ -25,7 +25,7 @@ at it — those three have hand-written integrations and still read as
 
 ## Decision
 
-**`all` is a curated list of 30 catalogs, and `full` ships it.** A catalog is in
+**`all` is a curated list of 32 catalogs, and `full` ships it.** A catalog is in
 when someone can plausibly type its key on purpose:
 
 - the assistants people reach for first: `openai`, `anthropic`, `google`,
@@ -33,16 +33,27 @@ when someone can plausibly type its key on purpose:
   (+ `zai-coding-cn`), the three `qwen-token-plan` ids, `kimi-coding`,
   `xiaomi`, `stepfun`, `stepfun-ai`;
 - the subscription plans and aggregators with a real install base:
-  `github-copilot`, `openrouter`, `vercel-ai-gateway`,
+  `github-copilot`, `openrouter`, `opencode` + `opencode-go`, `vercel-ai-gateway`,
   `ollama-cloud-token-plan`, `antigravity`, `openai-codex`;
 - the hosts a large account brings: `amazon-bedrock`, `google-vertex`, `azure`,
   `fireworks`, `groq`, `huggingface`.
 
 Everything else models.dev lists — including `cerebras`, `baseten`, `together`,
-`modal`, `nvidia`, `sensenova`, `typesafe`, both Cloudflare providers,
-`opencode`/`opencode-go`, the `siliconflow` and `alibaba-token-plan` regional
-keys, and the long tail of resellers — is a `models.json` entry away and ships
-no data.
+`modal`, `nvidia`, `sensenova`, `typesafe`, both Cloudflare providers, the
+`siliconflow` and `alibaba-token-plan` regional keys, and the long tail of
+resellers — is a `models.json` entry away and ships no data.
+
+**`opencode` and `opencode-go` moved back into the curated list.** An earlier
+revision of this note shipped them no data, on the reading that "Zen" was a
+reseller. The install base says otherwise: `opencode` is the default vendor
+people reach for after the first-party assistants, its catalog carries the free
+tier (`*-free` ids with the literal `public` key), and the client fingerprint in
+`packages/coding-agent/src/extras/pi-fake-opencode` only unlocks that tier for a
+model whose provider is `opencode`/`opencode-go` or whose base URL is
+`opencode.ai`. Leaving them out forced a hand-written `models.json` for the one
+vendor the built-in integration exists to serve. The two catalogs are 68 KiB
+of model data (48 KiB + 20 KiB), which is the price of the decision;
+`openrouter` was never dropped.
 
 **The provider modules stay compiled in.** The trim is a catalog decision, not
 a feature removal: `builtinProviders()` still registers all 48, a build that
@@ -120,11 +131,15 @@ scripts/build-coding-agent-single-file.mjs`:
 full   12.1 MiB -> 9.4 MiB   catalogs 3.33 MiB -> 0.30 MiB, 177 catalogs stubbed
 ```
 
-- The build prints `stubbed catalogs: 177`, so the trim is visible in the build
+- The build prints `stubbed catalogs: <n>`, so the trim is visible in the build
   log rather than inferred from a size.
-- `--list-models` in `full` shows 30 vendors instead of 206. `/login` shows the
-  same 30; a vendor that is not there is one `models.json` entry away, and
+- `--list-models` in `full` shows 32 vendors instead of 206. `/login` shows the
+  same 32; a vendor that is not there is one `models.json` entry away, and
   `docs/providers.md` lists the env var for each.
+- `base` adds `openrouter`, `opencode` and `opencode-go` to its `core` set, so
+  the trimmed flavor's picker has the two aggregators a user is most likely to
+  paste a key into. Its model data grows by 348 KiB (68 KiB from the two
+  opencode catalogs plus 280 KiB from `openrouter`).
 - The npm package still ships `dist/providers/data/` for the catalogs it
   generates; the generator writes only the shipped set, so the artifact and the
   package agree.

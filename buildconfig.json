@@ -220,7 +220,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi), every API implementation, and the export to Markdown and HTML; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi, openrouter, opencode), every API implementation, and the export to Markdown and HTML; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -321,6 +321,8 @@
 				"ollama-cloud-token-plan",
 				"openai",
 				"openai-codex",
+				"opencode",
+				"opencode-go",
 				"openrouter",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
@@ -336,7 +338,7 @@
 			]
 		},
 		"core": {
-			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi). Every other catalog stays a one-entry `models.json` away but ships no data, which is where ~1.5 MiB of the bundle goes. `base` ships this set; `full` ships `all`",
+			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi) plus the two subscription aggregators with a real install base (openrouter, opencode + opencode-go). Every other catalog stays a one-entry `models.json` away but ships no data, which is where the rest of the bundle's model data goes. `base` ships this set; `full` ships `all`",
 			"providers": [
 				"anthropic",
 				"google",
@@ -344,6 +346,9 @@
 				"moonshotai",
 				"moonshotai-cn",
 				"openai",
+				"opencode",
+				"opencode-go",
+				"openrouter",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
 				"qwen-token-plan-individual",
@@ -379,6 +384,8 @@
 				"ollama-cloud-token-plan",
 				"openai",
 				"openai-codex",
+				"opencode",
+				"opencode-go",
 				"openrouter",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
