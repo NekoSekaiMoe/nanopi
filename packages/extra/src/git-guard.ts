@@ -507,7 +507,7 @@ function matchingParen(raw: string, openIndex: number): number {
 	throw new Unsupported("unterminated substitution");
 }
 
-const LIST_SEPARATORS = /&&|\|\||;|\n|&/;
+const LIST_SEPARATOR = /^(?:&&|\|\||\||&|;|\n)/;
 
 /** One simple command: its raw source (for substitutions) and its unquoted words. */
 interface Segment {
@@ -561,8 +561,12 @@ function splitCommandLists(command: string): Segment[] {
 			continue;
 		}
 		// Subshell boundaries: `(cd x && git stash)` ends the segment it opens.
-		if (ch === "(" || ch === ")" || LIST_SEPARATORS.test(ch)) {
+		// Operators are matched whole so `||` and `|&` cannot leave a stray `|`
+		// behind to be read as an argument of the command before it.
+		const separator = LIST_SEPARATOR.exec(command.slice(index));
+		if (ch === "(" || ch === ")" || separator) {
 			endSegment(command.slice(segmentStart, index));
+			index += (separator?.[0].length ?? 1) - 1;
 			segmentStart = index + 1;
 			continue;
 		}

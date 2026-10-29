@@ -115,11 +115,28 @@ describe("git guard: finding the command inside the line", () => {
 			"sudo git stash",
 			"GIT_TRACE=1 git stash",
 			"(cd sub; git stash)",
+			// The `|` family: a pipe runs the command on its right, so the guard has
+			// to split on `|`, `||` and `|&` rather than only on `&&`.
+			"true | git reset --hard",
+			"false || git stash",
+			"git status | git reset --hard",
+			"git status |& git stash",
+			"git log | head -1 | git clean -fd",
+			"(git stash || true) | cat",
 		]) {
 			const verdict = analyzeShellCommand(command, cwd);
 			expect(verdict.checked, command).toBe(true);
 			if (!verdict.checked) continue;
 			expect(verdict.hit, command).toBeDefined();
+		}
+	});
+
+	test("a pipe without a destructive right side stays clean", () => {
+		for (const command of ["git log | head -1", "git diff | cat", "cat file.txt | grep git", "true || false"]) {
+			const verdict = analyzeShellCommand(command, cwd);
+			expect(verdict.checked, command).toBe(true);
+			if (!verdict.checked) continue;
+			expect(verdict.hit, command).toBeUndefined();
 		}
 	});
 
