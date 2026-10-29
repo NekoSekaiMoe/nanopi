@@ -38,6 +38,7 @@ import {
 	type SessionInfo,
 	SessionManager,
 } from "../../core/session-manager.ts";
+import { killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../../utils/shell.ts";
 import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
 	addAccountModels,
@@ -378,7 +379,8 @@ interface TerminalState {
 	running: string | undefined;
 }
 
-function startTerminal(cwd: string): TerminalSession {
+/** Exported for tests: the scratch-shell process lifecycle is not reachable over HTTP alone. */
+export function startTerminal(cwd: string): TerminalSession {
 	const shell = shellPath();
 	// Each command runs in its own `sh -c` with piped stdio. A long-lived
 	// interactive shell looked simpler, but it needs a tty to drive the command
@@ -393,9 +395,14 @@ function startTerminal(cwd: string): TerminalSession {
 				const child = spawn(shell, ["-c", command], {
 					cwd: session.cwd,
 					env: { ...process.env, TERM: "dumb" },
+					// Own process group, so cancel reaches any process the command spawns.
+					// spawns (`sh -c "make"` leaves make in the shell's group, not ours).
+					detached: process.platform !== "win32",
 					stdio: ["ignore", "pipe", "pipe"],
+					windowsHide: true,
 				});
 				session.running = child;
+				if (child.pid) trackDetachedChildPid(child.pid);
 				let output = "";
 				let truncated = false;
 				const collect = (data: Buffer) => {
@@ -410,18 +417,23 @@ function startTerminal(cwd: string): TerminalSession {
 				child.stderr.on("data", collect);
 				child.on("error", (error) => {
 					session.running = undefined;
+					if (child.pid) untrackDetachedChildPid(child.pid);
 					resolve({ output: `${output}${error.message}\n`, code: null });
 				});
 				child.on("close", (code) => {
 					session.running = undefined;
+					if (child.pid) untrackDetachedChildPid(child.pid);
 					const suffix = truncated ? "\n[output truncated]\n" : "";
 					resolve({ output: `${output}${suffix}`, code });
 				});
 			});
 		},
 		cancel() {
-			session.running?.kill("SIGKILL");
+			const child = session.running;
 			session.running = undefined;
+			if (!child?.pid) return;
+			killProcessTree(child.pid);
+			untrackDetachedChildPid(child.pid);
 		},
 		kill() {
 			session.cancel();
