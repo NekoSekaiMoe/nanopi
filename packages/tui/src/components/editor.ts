@@ -40,6 +40,11 @@ const LARGE_PASTE_CHAR_THRESHOLD = 1000;
 /** Max visible editor lines: 20% of terminal rows, at least 5. */
 const MIN_VISIBLE_LINES = 5;
 
+/** Apply the placeholder style to wrapped placeholder chunks. */
+function stylePlaceholderChunks(chunks: TextChunk[], style: (text: string) => string): TextChunk[] {
+	return chunks.map((chunk) => ({ text: style(chunk.text), startIndex: chunk.startIndex, endIndex: chunk.endIndex }));
+}
+
 /** Combined above/below scroll label, e.g. `↑ 9 · ↓ 6`. Undefined when nothing is hidden. */
 function scrollStatusLabel(hiddenAbove: number, hiddenBelow: number): string | undefined {
 	if (hiddenAbove <= 0 && hiddenBelow <= 0) return undefined;
@@ -743,17 +748,16 @@ export class Editor implements Component, Focusable {
 				// Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)
 				const marker = emitCursorMarker ? CURSOR_MARKER : "";
 
-				// Placeholder/ghost lines render in the placeholder style, except under the cursor
-				const style = (text: string): string => (layoutLine.placeholder ? this.placeholderStyle(text) : text);
-
+				// Placeholder/ghost lines carry their own placeholder styling (applied before
+				// wrapping, so ANSI bytes never shift the wrap width); real text is unstyled.
 				if (after.length > 0) {
 					// Cursor is on a character (grapheme) - replace it with highlighted version
 					// Get the first grapheme from 'after'
 					const afterGraphemes = [...this.segment(after, "grapheme")];
 					const firstGrapheme = afterGraphemes[0]?.segment || "";
 					const restAfter = after.slice(firstGrapheme.length);
-					const cursor = renderFakeCursor(style(firstGrapheme));
-					displayText = before + marker + cursor + style(restAfter);
+					const cursor = renderFakeCursor(firstGrapheme);
+					displayText = before + marker + cursor + restAfter;
 					// lineVisibleWidth stays the same - we're replacing, not adding
 				} else {
 					// Cursor is at the end - add highlighted space
@@ -765,9 +769,6 @@ export class Editor implements Component, Focusable {
 						cursorInPadding = true;
 					}
 				}
-			} else if (layoutLine.placeholder) {
-				// Continuation line of a wrapped placeholder/ghost suggestion
-				displayText = this.placeholderStyle(displayText);
 			}
 
 			// Prompt prefix on the first visible line; continuation lines align under it.
@@ -1180,12 +1181,17 @@ export class Editor implements Component, Focusable {
 			// Empty editor: render the ghost suggestion (or placeholder) in place of the text
 			const emptyDisplay = this.ghostSuggestion ?? (this.placeholderText || null);
 			if (emptyDisplay) {
-				const chunks = wordWrapLine(emptyDisplay, contentWidth);
+				// Styled before wrapping so escape bytes never count toward the wrap width.
+				// The cursor sits at the end of the placeholder: the caret is only ever
+				// visible over real text, and the full string stays readable.
+				const chunks = stylePlaceholderChunks(wordWrapLine(emptyDisplay, contentWidth), (text) =>
+					this.placeholderStyle(text),
+				);
 				for (const [chunkIndex, chunk] of chunks.entries()) {
 					layoutLines.push({
 						text: chunk.text,
 						hasCursor: chunkIndex === 0,
-						cursorPos: 0,
+						cursorPos: chunkIndex === 0 ? chunk.text.length : undefined,
 						placeholder: true,
 					});
 				}

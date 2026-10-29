@@ -63,8 +63,10 @@ export function resolveFooterUsedTokens(
 export class FooterComponent implements Component {
 	private session: AgentSession;
 	private sessionStats?: SessionStats;
-	/** Transient replacement for the footer line, e.g. the "press again to quit" reminder. */
+	/** Transient replacement for the footer line. */
 	private transientLine: string | undefined;
+	/** Transient line drawn above the footer line, e.g. the "press again to quit" reminder. */
+	private noticeLine: string | undefined;
 	/** Shell mode: right-align a yellow "shell" label on the footer line (Codex-style). */
 	private shellMode = false;
 
@@ -84,6 +86,11 @@ export class FooterComponent implements Component {
 	/** Temporarily replace the footer line; pass undefined to restore it. */
 	setTransientLine(line: string | undefined): void {
 		this.transientLine = line;
+	}
+
+	/** Line rendered above the footer line: hints that must not hide the usage line. */
+	setNoticeLine(line: string | undefined): void {
+		this.noticeLine = line;
 	}
 
 	setAutoCompactEnabled(_enabled: boolean): void {
@@ -161,8 +168,12 @@ export class FooterComponent implements Component {
 
 	render(width: number): string[] {
 		if (width <= 0) return [];
+		const notice =
+			this.noticeLine === undefined
+				? []
+				: [truncateToWidth(theme.fg("dim", this.noticeLine), width, theme.fg("dim", "…"))];
 		if (this.transientLine !== undefined) {
-			return [truncateToWidth(theme.fg("dim", this.transientLine), width, theme.fg("dim", "…"))];
+			return [...notice, truncateToWidth(theme.fg("dim", this.transientLine), width, theme.fg("dim", "…"))];
 		}
 		const state = this.session.state;
 		const { usageTotals, contextUsage } = this.getSessionStats();
@@ -171,12 +182,12 @@ export class FooterComponent implements Component {
 		const usedText = used === null ? "?" : formatTokens(used);
 		const line = `used ${usedText}/${formatTokens(contextWindow)} · / for more details`;
 		const dimLine = theme.fg("dim", line);
-		if (!this.shellMode) return [truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
+		if (!this.shellMode) return [...notice, truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
 		// Right-align the shell label; drop it when the usage line would not fit alongside.
 		const label = theme.fg("bashMode", "shell");
 		const budget = width - 1 - 5;
-		if (budget <= 0) return [truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
+		if (budget <= 0) return [...notice, truncateToWidth(dimLine, width, theme.fg("dim", "…"))];
 		const left = truncateToWidth(dimLine, budget, theme.fg("dim", "…"));
-		return [left + " ".repeat(width - visibleWidth(left) - 5) + label];
+		return [...notice, left + " ".repeat(width - visibleWidth(left) - 5) + label];
 	}
 }

@@ -4543,13 +4543,40 @@ describe("Editor placeholder and ghost suggestion", () => {
 		const lines = editor.render(40);
 		const content = stripTerminalSequences(lines[1]!);
 		assert.ok(content.startsWith("Type anything..."), `placeholder visible: ${JSON.stringify(content)}`);
-		// Styled with ANSI dim by default (the first grapheme sits under the
-		// fake cursor, so only the tail is a contiguous dim run)
-		assert.ok(lines[1]!.includes("\x1b[2mype anything...\x1b[22m"));
+		// Styled with ANSI dim as one run; the cursor sits after the text, so the
+		// whole placeholder stays readable instead of losing its first grapheme.
+		assert.ok(lines[1]!.includes("\x1b[2mType anything...\x1b[22m"));
 
 		editor.handleInput("h");
 		const after = stripTerminalSequences(editor.render(40)[1]!);
 		assert.ok(!after.includes("Type anything..."));
+	});
+
+	it("keeps the whole placeholder visible when the cursor sits past its end", () => {
+		// Regression for #373: the caret used to overwrite the placeholder's first
+		// grapheme, which rendered as "ype anything...".
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme, {
+			style: "composer",
+			prompt: "› ",
+			placeholder: "Type anything...",
+		});
+		editor.focused = true;
+
+		const line = editor.render(40)[1]!;
+		assert.ok(line.includes("› "), `prompt preserved: ${JSON.stringify(line)}`);
+		assert.ok(stripTerminalSequences(line).startsWith("› Type anything..."), line);
+	});
+
+	it("wraps a styled placeholder without counting escape bytes", () => {
+		const editor = new Editor(createTestTUI(40, 24), defaultEditorTheme, { placeholder: "Type anything..." });
+		editor.focused = true;
+
+		// Narrower than the placeholder: styled runs must not shift the wrap width.
+		const lines = editor.render(6).map(stripTerminalSequences);
+		assert.ok(lines.length > 3, `wrapped into multiple rows: ${JSON.stringify(lines)}`);
+		for (const row of lines) {
+			assert.ok(visibleWidth(row) <= 6, `row fits: ${JSON.stringify(row)}`);
+		}
 	});
 
 	it("renders the ghost suggestion while empty, accepts it on right arrow", () => {
