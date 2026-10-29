@@ -18,6 +18,7 @@ Ported from pi-maestro-flow. Six actions: `run | start | status | wait | kill | 
 - Output is captured to a temp log file (16 MB cap, 64 KB in-memory tail); `kill` terminates the whole process tree (SIGTERM → SIGKILL escalation; `taskkill /T /F` on Windows).
 - Re-announces running jobs after compaction; kills all jobs on session shutdown (no orphans).
 - Emits `bash-bg:update` / answers `bash-bg:query` events for any UI that wants a live job panel.
+- `/kill-bashbg` stops jobs without the model: no argument stops every running job, `<jobId>` stops one, `list` shows them.
 
 ## 3. `observe` — blocking observation
 
@@ -33,7 +34,7 @@ pi -e ./src/index.ts
 pi install npm:@NekoSekaiMoe/pi-smart-flow
 ```
 
-No commands, no config files. All three pieces activate on load.
+No config files. All three pieces activate on load; `/kill-bashbg` is the only command it registers.
 
 ## Attribution
 
