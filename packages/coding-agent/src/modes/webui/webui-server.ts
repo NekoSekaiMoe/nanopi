@@ -17,7 +17,7 @@ import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
 import { homedir } from "node:os";
-import { basename, extname, isAbsolute, join, normalize, resolve } from "node:path";
+import { basename, extname, isAbsolute, join, normalize, relative as relativePath, resolve } from "node:path";
 import type { AgentMessage, ThinkingLevel } from "@nanopi/pi-agent-core";
 import {
 	type AssistantMessageEvent,
@@ -240,12 +240,26 @@ function _packageSourceName(source: string): string {
 /** Largest file the viewer will read into memory. */
 const MAX_VIEWABLE_FILE_BYTES = 2 * 1024 * 1024;
 
-/** Resolve a user-supplied path against the workspace root; undefined when empty. */
+/**
+ * Resolve a user-supplied path against the workspace root; undefined when empty.
+ *
+ * `~` is expanded because the composer shows it, but the result has to stay
+ * inside `cwd`: the endpoints below list, read and write whatever they are
+ * given, and only the bearer token stood between the browser and any file the
+ * user can reach.
+ */
 function resolveWorkspacePath(requested: string, cwd: string): string | undefined {
 	const trimmed = requested.trim();
 	if (!trimmed) return undefined;
 	const expanded = trimmed.startsWith("~") ? join(homedir(), trimmed.slice(1).replace(/^\//, "")) : trimmed;
-	return normalize(isAbsolute(expanded) ? expanded : resolve(cwd, expanded));
+	const target = normalize(isAbsolute(expanded) ? expanded : resolve(cwd, expanded));
+	return isInsideWorkspace(target, cwd) ? target : undefined;
+}
+
+/** Whether `target` is the workspace root or below it. */
+function isInsideWorkspace(target: string, cwd: string): boolean {
+	const relative = relativePath(cwd, target);
+	return relative === "" || (!relative.startsWith("..") && !isAbsolute(relative));
 }
 
 async function isDirectory(target: string): Promise<boolean> {
@@ -1235,7 +1249,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (
-			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|tunnel|providers|provider-accounts|model-profiles)\b/.test(
+			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|tunnel|providers|provider-accounts|model-profiles|extra)\b/.test(
 				path,
 			)
 		) {
@@ -1900,8 +1914,16 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		// --- Filesystem browsing ---
+		// Every /fs endpoint takes a path from the browser, so all of them resolve
+		// through the workspace check: /fs/list and /fs/mkdir used to take the raw
+		// string, which made the pair a read-anywhere / create-anywhere API.
 		if (path === "/fs/list" && req.method === "GET") {
-			const target = url.searchParams.get("path") ?? runtime.cwd;
+			const requested = url.searchParams.get("path") ?? "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : runtime.cwd;
+			if (!target) {
+				json(res, 403, { error: `outside the workspace: ${requested}` });
+				return;
+			}
 			const entries = await readdir(target, { withFileTypes: true });
 			const dirs = entries
 				.filter((e) => e.isDirectory())
@@ -1916,9 +1938,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 		if (path === "/fs/mkdir" && req.method === "POST") {
 			const body = await readBody(req);
-			const target = typeof body.path === "string" ? body.path : "";
+			const requested = typeof body.path === "string" ? body.path : "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : undefined;
 			if (!target) {
-				json(res, 400, { error: "path is required" });
+				json(res, requested ? 403 : 400, {
+					error: requested ? `outside the workspace: ${requested}` : "path is required",
+				});
 				return;
 			}
 			await mkdir(target, { recursive: true });
@@ -1926,7 +1951,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (path === "/fs/search" && req.method === "GET") {
-			json(res, 200, { path: url.searchParams.get("path") ?? runtime.cwd, matches: [] });
+			const requested = url.searchParams.get("path") ?? "";
+			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : runtime.cwd;
+			if (!target) {
+				json(res, 403, { error: `outside the workspace: ${requested}` });
+				return;
+			}
+			json(res, 200, { path: target, matches: [] });
 			return;
 		}
 		// The host cannot focus an external editor, so the viewer reads files over
@@ -1937,7 +1968,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const requested = url.searchParams.get("path") ?? "";
 			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : "";
 			if (!target) {
-				json(res, 400, { error: "path is required" });
+				json(res, requested ? 403 : 400, {
+					error: requested ? `outside the workspace: ${requested}` : "path is required",
+				});
 				return;
 			}
 			let info: Awaited<ReturnType<typeof stat>>;
@@ -1977,8 +2010,14 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const requested = typeof body.path === "string" ? body.path : "";
 			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : "";
 			const content = typeof body.content === "string" ? body.content : undefined;
-			if (!target || content === undefined) {
-				json(res, 400, { error: "path and content are required" });
+			if (!target) {
+				json(res, requested ? 403 : 400, {
+					error: requested ? `outside the workspace: ${requested}` : "path is required",
+				});
+				return;
+			}
+			if (content === undefined) {
+				json(res, 400, { error: "content is required" });
 				return;
 			}
 			await writeFile(target, content, "utf8");
@@ -2002,7 +2041,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			if (!target || !(await isDirectory(target))) {
 				json(res, 400, {
 					success: false,
-					message: `not a directory: ${requested || "(empty)"}`,
+					message:
+						requested && !target
+							? `outside the workspace: ${requested}`
+							: `not a directory: ${requested || "(empty)"}`,
 					current_dir: runtime.cwd,
 					project_hash: projectHash(runtime.cwd),
 				});

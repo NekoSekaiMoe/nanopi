@@ -50,6 +50,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 	has: (name: string) => boolean;
 	run: (name: string, args?: string) => Promise<string | undefined>;
 	status: () => string | undefined;
+	handlers: () => Map<string, (event: unknown, ctx: ExtraExtensionContext) => unknown>;
 } {
 	let active = [...TOOLS];
 	const handlers = new Map<string, (event: unknown, ctx: ExtraExtensionContext) => unknown>();
@@ -75,6 +76,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 		api,
 		active: () => active,
 		has: (name) => handlers.has(`command:${name}`),
+		handlers: () => handlers,
 		status: () => modeStatus,
 		run: async (name, args = "") => {
 			const ctx = {
@@ -309,5 +311,83 @@ describe("slash commands for the mode switches", () => {
 		expect(modeEngine.mode).toBe("plan");
 		expect(await fake.run("plan")).toContain("Already in plan mode");
 		expect(modeEngine.mode).toBe("plan");
+	});
+});
+
+describe("permission prompts by frontend", () => {
+	/** Drive one `bash` tool_call through the gate and report whether it was blocked. */
+	async function runBashCall(
+		fake: ReturnType<typeof fakeApi>,
+		session: { mode: string; hasUI: boolean; select: () => Promise<string | undefined> },
+		notes: string[],
+	): Promise<{ blocked: boolean; reason?: string; asked: number }> {
+		let asked = 0;
+		const ctx = {
+			mode: session.mode,
+			hasUI: session.hasUI,
+			cwd: home,
+			model: undefined,
+			modelRegistry: undefined,
+			ui: {
+				select: async () => {
+					asked++;
+					return session.select();
+				},
+				notify: (message: string) => notes.push(message),
+				setStatus: () => undefined,
+				getEditorText: () => "",
+				setTitle: () => undefined,
+				theme: { fg: (_color: string, text: string) => text },
+			},
+			getContextUsage: () => undefined,
+		} as unknown as ExtraExtensionContext;
+		const handlers = fake.handlers();
+		await handlers.get("session_start")?.({ type: "session_start", reason: "new" }, ctx);
+		const result = (await handlers.get("tool_call")?.(
+			{ type: "tool_call", toolCallId: "call-1", toolName: "bash", input: { command: "echo hi" } },
+			ctx,
+		)) as { block?: boolean; reason?: string } | undefined;
+		return { blocked: result?.block === true, reason: result?.reason, asked };
+	}
+
+	test("a session with no prompt runs gated calls instead of denying them all", async () => {
+		// Print mode, `--output json` and every subagent land here: the fake
+		// prompter used to settle each call as dismissed, which left subagents
+		// unable to edit or write a file.
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		const notes: string[] = [];
+		const outcome = await runBashCall(fake, { mode: "print", hasUI: false, select: async () => undefined }, notes);
+		expect(outcome).toEqual({ blocked: false, reason: undefined, asked: 0 });
+	});
+
+	test("an interactive session still asks", async () => {
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		const notes: string[] = [];
+		const outcome = await runBashCall(
+			fake,
+			{ mode: "tui", hasUI: true, select: async () => "Reject (this call only)" },
+			notes,
+		);
+		expect(outcome.asked).toBe(1);
+		expect(outcome.blocked).toBe(true);
+	});
+
+	test("picking Explain in the dialog pauses the call instead of rejecting it", async () => {
+		// Explain used to return `undefined`, which the gate settled as a dismissal:
+		// the model was told the user rejected the very call they asked about. The
+		// pause is one turn plus the answer to the prompt that follows it, so the
+		// dialog answers Explain first and Allow once second.
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		const explained: string[] = [];
+		fake.api.sendUserMessage = (content: string) => explained.push(content);
+		const answers = ["Explain what this does", "Allow once (this call only)"];
+		const notes: string[] = [];
+		const outcome = await runBashCall(fake, { mode: "tui", hasUI: true, select: async () => answers.shift() }, notes);
+		expect(outcome).toEqual({ blocked: false, reason: undefined, asked: 2 });
+		expect(explained.length).toBe(1);
+		expect(explained[0]).toContain("Explain what it does and why");
 	});
 });

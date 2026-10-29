@@ -38,10 +38,15 @@ issue #262 要的是第五个答案：选中后 AI 解释这次调用做什么�
    `allow_session` 的分水岭。
 
 2. **解释是一个回合**（`extension.ts`）。弹窗加一行 `Explain what this does`；选中不是回答，而是：
-   把 callId 记进 `explainedCalls`，`sendUserMessage(explainPrompt)` 开一个新回合，弹窗的 prompter 返回
-   `undefined`。gate 因此仍卡在那次调用上——`tool_call` 处理器在这个回合里直接返回，什么都没跑。
+   把 callId 记进 `explainedCalls`，`sendUserMessage(explainPrompt)` 开一个新回合，prompter 把 `"explain"`
+   原样交回 gate。gate 因此仍卡在那次调用上——`tool_call` 处理器在这个回合里直接返回，什么都没跑。
    解释回合结束时 `agent_settled` 调 `approveOnce(callId)`，于是用户输入「继续」时那次调用放行，
    弹窗不再弹出来；下一个同类调用重新问。回合被中断（Escape）则丢掉这张票，调用照常要重新确认。
+
+   暂停本身归 gate：`check()` 收到 `"explain"` 就调 `explain(info)`，后者**先占住** `explainedCalls`
+   再经 `onExplain` 让扩展开解释回合。没有第二个 prompter 的 UI（TUI 弹窗）在暂停期间不重弹原对话框——
+   `makeDialogExplanationPrompter` 复用同一个选择器但不含「解释」这一项，于是那次调用由「继续」
+   （`approveOnce`）或用户的明确答案结算。少了这层，`check()` 会拿着同一个「解释」答案再问一遍，无限循环。
 
 为什么用「阻塞的那次调用 + 一张票」，而不是「拒绝掉这次调用，让模型重发」：重发要靠模型，模型可能不再发，
 也可能改参数；阻塞让解释和调用是同一个 callId，握手是确定的。代价是解释回合里模型不能再调任何被门禁
@@ -85,5 +90,6 @@ webui 走同一条 gate，但卡片没有输入框可以敲「继续」，所以
 - 票以 callId 为键存在 gate 内，不落盘、不跨会话：进程重启或换会话后调用必须重新确认。
 - webui 的解释不是 TUI 那条「输入继续」，而是「解释推送 + 卡片继续等答案」：两条路共用 gate 的
   `explain()`，但前端的交互不同（TUI 有编辑器，webui 只有卡片）。
-- 解释这条路只覆盖 webui 与 TUI；headless（无 UI）没有 prompter，`explain()` 直接返回 `undefined`，
-  行为与以前一样。
+- 解释这条路只覆盖 webui 与 TUI：headless（无 UI）既弹不出对话框，也没有输入框可敲「继续」，
+  `tool_call` 在那种会话里直接放行受门禁的工具（见
+  [无 UI 会话的权限](2026-10-29-unattended-session-permissions.md)）。

@@ -257,3 +257,57 @@ describe("webui run mode", () => {
 		expect(stored.defaultMode).toBe("plan");
 	});
 });
+
+describe("webui filesystem endpoints", () => {
+	it("keeps /fs/list, /fs/read and /fs/write inside the workspace", async () => {
+		// The endpoints resolved any path the browser sent and took the raw string
+		// for /fs/list, so the pair was a read-anywhere / create-anywhere API.
+		const outside = join(root, "outside");
+		await mkdir(outside, { recursive: true });
+		await writeFile(join(outside, "secret.txt"), "nope", "utf8");
+
+		const list = await api(`/fs/list?path=${encodeURIComponent(outside)}`);
+		expect(list.status).toBe(403);
+		const read = await api(`/fs/read?path=${encodeURIComponent(join(outside, "secret.txt"))}`);
+		expect(read.status).toBe(403);
+		const write = await api("/fs/write", {
+			method: "POST",
+			body: JSON.stringify({ path: join(outside, "planted.txt"), content: "x" }),
+		});
+		expect(write.status).toBe(403);
+		const mkdirResponse = await api("/fs/mkdir", {
+			method: "POST",
+			body: JSON.stringify({ path: join(outside, "planted") }),
+		});
+		expect(mkdirResponse.status).toBe(403);
+	});
+
+	it("still serves the workspace root and its files", async () => {
+		await writeFile(join(cwd, "inside.txt"), "hello", "utf8");
+		const list = await api(`/fs/list?path=${encodeURIComponent(cwd)}`);
+		expect(list.status).toBe(200);
+		expect(list.body.files).toContain("inside.txt");
+
+		const read = await api(`/fs/read?path=${encodeURIComponent(join(cwd, "inside.txt"))}`);
+		expect(read.status).toBe(200);
+		expect(read.body.content).toBe("hello");
+
+		const written = await api("/fs/write", {
+			method: "POST",
+			body: JSON.stringify({ path: join(cwd, "written.txt"), content: "ok" }),
+		});
+		expect(written.status).toBe(200);
+		expect(await readFile(join(cwd, "written.txt"), "utf8")).toBe("ok");
+	});
+
+	it("answers /extra paths as API, not with the SPA shell", async () => {
+		// The API prefix list did not include `extra`, so a GET under it fell
+		// through to the SPA fallback and answered index.html: a JSON client got
+		// HTML with 200 instead of the endpoint's own status.
+		const state = await fetch(`${base}/extra/state`, { headers: { authorization: `Bearer ${token}` } });
+		expect(state.headers.get("content-type")).toContain("application/json");
+
+		const unknown = await fetch(`${base}/extra/nope`, { headers: { authorization: `Bearer ${token}` } });
+		expect(unknown.headers.get("content-type")).not.toContain("text/html");
+	});
+});

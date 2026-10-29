@@ -55,9 +55,13 @@ export function agentLoop(
 		},
 		signal,
 		streamFn,
-	).then((messages) => {
-		stream.end(messages);
-	});
+	).then(
+		(messages) => stream.end(messages),
+		// A run that rejects is a run that ends: without this the consumer waits
+		// on a stream nobody closes, and the rejection surfaces as an unhandled
+		// one at process level.
+		() => stream.end(),
+	);
 
 	return stream;
 }
@@ -94,9 +98,11 @@ export function agentLoopContinue(
 		},
 		signal,
 		streamFn,
-	).then((messages) => {
-		stream.end(messages);
-	});
+	).then(
+		(messages) => stream.end(messages),
+		// See agentLoop(): a rejection still has to close the stream.
+		() => stream.end(),
+	);
 
 	return stream;
 }

@@ -118,6 +118,30 @@ describe("sandbox command", () => {
 	});
 });
 
+describe("seatbelt profile", () => {
+	// `(allow default)` permits the network too, so a profile that merely omits
+	// `(allow network*)` still reaches it: macOS commands ran online while
+	// describeSandboxCall reported a cut network.
+	const profile = (allowNetwork: boolean): string => {
+		const cwd = mkdtempSync(join(tmpdir(), "nanopi-seatbelt-"));
+		try {
+			const { argv } = buildSandboxCommand(
+				{ ...DEFAULT_SANDBOX_CONFIG, allowNetwork },
+				{ cwd, home: cwd },
+				{ available: true, kind: "sandbox-exec", launcher: "/usr/bin/sandbox-exec" },
+			);
+			return argv[argv.indexOf("-p") + 1] ?? "";
+		} finally {
+			rmSync(cwd, { recursive: true, force: true });
+		}
+	};
+
+	test("denies the network explicitly unless it is allowed", () => {
+		expect(profile(false)).toContain("(deny network*)");
+		expect(profile(true)).not.toContain("network");
+	});
+});
+
 describe("shellQuote", () => {
 	test("quotes spaces and embedded single quotes", () => {
 		expect(shellQuote("ls -la")).toBe("'ls -la'");

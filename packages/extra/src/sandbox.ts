@@ -157,7 +157,10 @@ function seatbeltProfile(config: SandboxConfig, options: SandboxCommandOptions):
 		.filter((dir) => existsSync(dir))
 		.map((dir) => `(subpath "${profileString(dir)}")`)
 		.join(" ");
-	const network = config.allowNetwork ? "(allow network*)" : "";
+	// `(allow default)` allows every operation, network included, so dropping the
+	// `(allow network*)` line was not a cut: it has to be denied explicitly, or
+	// `describeSandboxCall` promised a blocked network that stayed reachable.
+	const network = config.allowNetwork ? "" : "(deny network*)";
 	return `(version 1)
 (allow default)
 (deny file-write*)
