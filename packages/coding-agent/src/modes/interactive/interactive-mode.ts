@@ -3681,10 +3681,15 @@ export class InteractiveMode {
 	private static readonly QUIT_REMINDER_MS = 1000;
 	private quitReminderTimer: ReturnType<typeof setTimeout> | undefined;
 
-	/** Replace the footer with a dim "Ctrl+C again to quit" reminder, armed for {@link QUIT_REMINDER_MS}. */
+	/**
+	 * Show a dim "Ctrl+C again to quit" reminder above the footer, armed for
+	 * {@link QUIT_REMINDER_MS}. It gets its own row instead of replacing the
+	 * footer line: the footer sits below the input box, which is where the
+	 * user looks last, and overwriting it also hid the usage line.
+	 */
 	private showQuitReminder(): void {
 		this.clearQuitReminder();
-		this.footer.setTransientLine(`${formatKeyText(keyText("app.clear"), { capitalize: true })} again to quit`);
+		this.footer.setNoticeLine(`${formatKeyText(keyText("app.clear"), { capitalize: true })} again to quit`);
 		this.quitReminderTimer = setTimeout(() => this.clearQuitReminder(), InteractiveMode.QUIT_REMINDER_MS);
 		this.ui.requestRender();
 	}
@@ -3694,7 +3699,7 @@ export class InteractiveMode {
 			clearTimeout(this.quitReminderTimer);
 			this.quitReminderTimer = undefined;
 		}
-		this.footer.setTransientLine(undefined);
+		this.footer.setNoticeLine(undefined);
 		this.ui.requestRender();
 	}
 

@@ -237,7 +237,10 @@ describe("clear-on-shrink status spacing", () => {
 type CtrlCContext = {
 	lastSigintTime: number;
 	quitReminderTimer: ReturnType<typeof setTimeout> | undefined;
-	footer: { setTransientLine: (line: string | undefined) => void };
+	footer: {
+		setNoticeLine: (line: string | undefined) => void;
+		setTransientLine: (line: string | undefined) => void;
+	};
 	ui: { requestRender: () => void };
 	clearEditor: () => void;
 	shutdown: () => Promise<void>;
@@ -257,24 +260,26 @@ describe("Ctrl+C quit reminder", () => {
 		setKeybindings(new KeybindingsManager());
 		vi.useFakeTimers();
 		const shutdown = vi.fn();
-		const setTransientLine = vi.fn();
+		const setNoticeLine = vi.fn();
 		const requestRender = vi.fn();
 		const context = Object.assign(Object.create(InteractiveMode.prototype), {
 			lastSigintTime: 0,
 			quitReminderTimer: undefined,
-			footer: { setTransientLine },
+			// The reminder gets its own row; it must not overwrite the footer line.
+			footer: { setNoticeLine, setTransientLine: vi.fn() },
 			ui: { requestRender },
 			clearEditor: vi.fn(),
 			shutdown,
 		}) as unknown as CtrlCContext;
 
 		prototype.handleCtrlC.call(context);
-		expect(setTransientLine).toHaveBeenCalledWith("Ctrl+C again to quit");
+		expect(setNoticeLine).toHaveBeenCalledWith("Ctrl+C again to quit");
+		expect(context.footer.setTransientLine).not.toHaveBeenCalled();
 		expect(shutdown).not.toHaveBeenCalled();
 
 		// The reminder disappears once the window expires without a second press.
 		vi.advanceTimersByTime(1000);
-		expect(setTransientLine).toHaveBeenLastCalledWith(undefined);
+		expect(setNoticeLine).toHaveBeenLastCalledWith(undefined);
 
 		// A second press inside the window quits.
 		prototype.handleCtrlC.call(context);
