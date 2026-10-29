@@ -40,11 +40,6 @@ const LARGE_PASTE_CHAR_THRESHOLD = 1000;
 /** Max visible editor lines: 20% of terminal rows, at least 5. */
 const MIN_VISIBLE_LINES = 5;
 
-/** Apply the placeholder style to wrapped placeholder chunks. */
-function stylePlaceholderChunks(chunks: TextChunk[], style: (text: string) => string): TextChunk[] {
-	return chunks.map((chunk) => ({ text: style(chunk.text), startIndex: chunk.startIndex, endIndex: chunk.endIndex }));
-}
-
 /** Combined above/below scroll label, e.g. `↑ 9 · ↓ 6`. Undefined when nothing is hidden. */
 function scrollStatusLabel(hiddenAbove: number, hiddenBelow: number): string | undefined {
 	if (hiddenAbove <= 0 && hiddenBelow <= 0) return undefined;
@@ -250,7 +245,7 @@ interface LayoutLine {
 	text: string;
 	hasCursor: boolean;
 	cursorPos?: number;
-	/** Rendered with the placeholder style (empty-editor placeholder or ghost suggestion). */
+	/** Placeholder or ghost suggestion text: drawn dimmed, never under the fake cursor. */
 	placeholder?: boolean;
 }
 
@@ -748,8 +743,6 @@ export class Editor implements Component, Focusable {
 				// Hardware cursor marker (zero-width, emitted before fake cursor for IME positioning)
 				const marker = emitCursorMarker ? CURSOR_MARKER : "";
 
-				// Placeholder/ghost lines carry their own placeholder styling (applied before
-				// wrapping, so ANSI bytes never shift the wrap width); real text is unstyled.
 				if (after.length > 0) {
 					// Cursor is on a character (grapheme) - replace it with highlighted version
 					// Get the first grapheme from 'after'
@@ -769,6 +762,15 @@ export class Editor implements Component, Focusable {
 						cursorInPadding = true;
 					}
 				}
+			}
+
+			// Placeholder text is drawn dimmed, without a fake cursor: overlay-style editors
+			// place the caret over the first glyph, which hides it ("Type anything..." -> "ype
+			// anything..."). Placeholder lines therefore only carry the IME cursor marker.
+			if (layoutLine.placeholder) {
+				const at = layoutLine.cursorPos ?? displayText.length;
+				const marker = emitCursorMarker ? CURSOR_MARKER : "";
+				displayText = this.placeholderStyle(displayText.slice(0, at) + marker + displayText.slice(at));
 			}
 
 			// Prompt prefix on the first visible line; continuation lines align under it.
@@ -1181,18 +1183,17 @@ export class Editor implements Component, Focusable {
 			// Empty editor: render the ghost suggestion (or placeholder) in place of the text
 			const emptyDisplay = this.ghostSuggestion ?? (this.placeholderText || null);
 			if (emptyDisplay) {
-				// Styled before wrapping so escape bytes never count toward the wrap width.
-				// The cursor sits at the end of the placeholder: the caret is only ever
-				// visible over real text, and the full string stays readable.
-				const chunks = stylePlaceholderChunks(wordWrapLine(emptyDisplay, contentWidth), (text) =>
-					this.placeholderStyle(text),
-				);
+				// Wrapped as plain text: the placeholder style is applied at render time, so
+				// escape bytes never reach the wrap width and the caret never overwrites a glyph.
+				const chunks = wordWrapLine(emptyDisplay, contentWidth);
 				for (const [chunkIndex, chunk] of chunks.entries()) {
 					layoutLines.push({
 						text: chunk.text,
-						hasCursor: chunkIndex === 0,
-						cursorPos: chunkIndex === 0 ? chunk.text.length : undefined,
+						hasCursor: false,
 						placeholder: true,
+						// No fake cursor to draw, but the IME still needs a caret: the marker sits
+						// after the last glyph of the placeholder, where typing will start.
+						cursorPos: chunkIndex === chunks.length - 1 ? chunk.text.length : undefined,
 					});
 				}
 				return layoutLines;

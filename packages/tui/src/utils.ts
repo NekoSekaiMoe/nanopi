@@ -1250,7 +1250,13 @@ export function truncateToWidth(
 	}
 
 	if (!overflowed && exhaustedInput) {
-		return pad ? text + " ".repeat(Math.max(0, maxWidth - visibleSoFar)) : text;
+		if (!pad) return text;
+		// Close any style still open at the end of the text first: padding inherits it otherwise,
+		// so an unfocused fake cursor would smear reverse video across the rest of the row.
+		pooledStyleTracker.clear();
+		updateTrackerFromText(text, pooledStyleTracker);
+		if (!pooledStyleTracker.hasActiveCodes()) return text + " ".repeat(Math.max(0, maxWidth - visibleSoFar));
+		return `${text}\x1b[0m${" ".repeat(Math.max(0, maxWidth - visibleSoFar))}`;
 	}
 
 	return finalizeTruncatedResult(result, keptWidth, ellipsis, ellipsisWidth, maxWidth, pad);
