@@ -87,7 +87,7 @@ function optionValue(word: string, rest: readonly string[]): { value?: string; c
  * `cwd` is where the shell runs it, so a relative `-C`/`--work-tree` resolves there.
  */
 export function analyzeGitInvocation(words: readonly string[], cwd: string): GitGuardVerdict {
-	if (words[0] !== "git") return { checked: false };
+	if (!isGitProgram(words[0] ?? "")) return { checked: false };
 	const args = words.slice(1);
 
 	let checkoutDir = cwd;
@@ -131,6 +131,14 @@ export function analyzeGitInvocation(words: readonly string[], cwd: string): Git
 	if (hit) return { checked: true, hit };
 	if (elsewhere) return { checked: true, isolated: { path: checkoutDir } };
 	return { checked: true };
+}
+
+/**
+ * Whether a word names git. The shell runs `/usr/bin/git`, `./git` and `git` the
+ * same way, so matching the bare name alone would wave the first two through.
+ */
+function isGitProgram(word: string): boolean {
+	return word === "git" || word.endsWith("/git");
 }
 
 /**
@@ -246,9 +254,20 @@ const DESTRUCTIVE_SUBCOMMANDS: Record<
 		// -b/-B/--orphan create a branch: the positional is a name, not a pathspec.
 		if (flags.some((flag) => flag === "-b" || flag === "-B" || flag === "--orphan")) return undefined;
 		const positional = positionalArgs(args, [], []);
+		// `-f` pins that the command overwrites the working tree, so neither a
+		// missing pathspec (`git checkout -f`) nor `<commit-ish> [<pathspec>]`
+		// (`git checkout -f HEAD`) makes it a plain branch switch.
+		const forced = flags.some((flag) => /^-[a-zA-Z]*f/.test(flag) || flag === "--force");
 		// `git checkout <branch>` switches; only an explicit `.`/pathspec overwrites files.
-		if (positional.length === 1 && positional[0] !== ".") return undefined;
-		if (positional.length === 0) return undefined;
+		if (!forced && (positional.length === 0 || (positional.length === 1 && positional[0] !== "."))) {
+			return undefined;
+		}
+		if (forced) {
+			return {
+				subcommand: "checkout",
+				reason: "`git checkout -f` overwrites uncommitted working-tree changes",
+			};
+		}
 		return { subcommand: "checkout", reason: "`git checkout .` overwrites uncommitted working-tree changes" };
 	},
 	restore(args) {
@@ -419,7 +438,7 @@ function scanCommand(command: string, cwd: string, depth: number): ShellInvocati
 			currentDir = target === "~" ? homedir() : resolve(currentDir, target);
 			continue;
 		}
-		if (program === "git") {
+		if (isGitProgram(program)) {
 			found.push({ words: head, cwd: currentDir });
 			continue;
 		}

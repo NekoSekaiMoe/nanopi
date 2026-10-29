@@ -93,6 +93,34 @@ describe("git guard: destructive commands", () => {
 		}
 	});
 
+	// nanopi#376: the hazards below were reported as missed.
+	test("an absolute or relative path to git still counts as git", () => {
+		const cwd = tempDir("gitguard-plain-");
+		for (const command of [
+			"/usr/bin/git reset --hard",
+			"./git stash",
+			"command /usr/bin/git reset --hard",
+			"sudo /usr/bin/git clean -fd",
+		]) {
+			const verdict = analyzeShellCommand(command, cwd);
+			if (verdict.checked !== true) throw new Error(`${command} was not analyzed`);
+			expect(verdict.hit, command).toBeDefined();
+		}
+	});
+
+	test("checkout -f overwrites the working tree, with or without a pathspec", () => {
+		const cwd = tempDir("gitguard-plain-");
+		for (const command of ["git checkout -f", "git checkout -f HEAD", "git checkout --force main"]) {
+			const verdict = analyzeShellCommand(command, cwd);
+			if (verdict.checked !== true) throw new Error(`${command} was not analyzed`);
+			expect(verdict.hit?.subcommand, command).toBe("checkout");
+		}
+		// A plain branch switch stays free.
+		const switchBranch = analyzeShellCommand("git checkout main", cwd);
+		if (!switchBranch.checked) throw new Error("not analyzed");
+		expect(switchBranch.hit).toBeUndefined();
+	});
+
 	test("a reset that only moves the index still asks, dropping changes would not be recoverable from the index", () => {
 		const cwd = tempDir("gitguard-plain-");
 		const verdict = analyzeShellCommand("git reset", cwd);
