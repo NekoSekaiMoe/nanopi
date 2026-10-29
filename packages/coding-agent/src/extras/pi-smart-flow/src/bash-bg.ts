@@ -1,6 +1,6 @@
 // Ported from pi-maestro-flow (MIT, Copyright (c) 2026 catlog22)
 // Source: packages/pi-maestro-flow/src/tools/bash-bg.ts
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleCommandContext } from "@nanopi/pi-coding-agent";
 
 import type { AgentToolResult } from "@nanopi/pi-agent-core";
 import { Text } from "@nanopi/pi-tui";
@@ -831,6 +831,90 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         expanded: opts.expanded,
         detail: text,
       });
+    },
+  });
+
+  const stopAllJobs = async (ctx: ModuleCommandContext): Promise<void> => {
+    const running = [...jobs.values()].filter(jobIsActive);
+    if (running.length === 0) {
+      ctx.ui.notify("No running background bash jobs.", "info");
+      return;
+    }
+    // A stop that silently leaves a job alive would let the completion
+    // notification fire later as if nothing happened, so failures are reported
+    // together with the jobs that did stop.
+    const results = await Promise.allSettled(running.map((job) => terminateJob(job)));
+    const failures = results.flatMap((result, index) => {
+      if (result.status !== "rejected") return [];
+      const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      return [`${running[index].id} (pid ${running[index].pid}): ${reason}`];
+    });
+    const stopped = running.length - failures.length;
+    if (failures.length === 0) {
+      ctx.ui.notify(`Stopped ${stopped} background bash job${stopped === 1 ? "" : "s"}.`, "info");
+      return;
+    }
+    const lines = [...failures.map((line) => `failed: ${line}`), `stopped ${stopped} of ${running.length}.`];
+    ctx.ui.notify(lines.join("\n"), "error");
+  };
+
+  const killJobs = async (args: string, ctx: ModuleCommandContext): Promise<void> => {
+    const jobId = args.trim().split(/\s+/)[0];
+    if (!jobId || jobId === "all") {
+      await stopAllJobs(ctx);
+      return;
+    }
+    const job = jobs.get(jobId);
+    if (!job) {
+      ctx.ui.notify(`Unknown jobId: ${jobId}. Run /kill-bashbg list to see jobs.`, "error");
+      return;
+    }
+    if (!jobIsActive(job)) {
+      ctx.ui.notify(`Job ${jobId} already finished (${jobStatus(job)}).`, "info");
+      return;
+    }
+    try {
+      await terminateJob(job);
+      ctx.ui.notify(`Stopped job ${jobId} (pid ${job.pid}).`, "info");
+    } catch (error: unknown) {
+      const reason = error instanceof Error ? error.message : String(error);
+      ctx.ui.notify(`Failed to stop job ${jobId}: ${reason}`, "error");
+    }
+  };
+
+  const describeJobs = (): string => {
+    if (jobs.size === 0) return "No background bash jobs.";
+    return [...jobs.values()]
+      .map((job) => `${job.id}\t${jobStatus(job)}${job.done ? ` (exit ${job.exitCode})` : ""}\tpid ${job.pid}\t${job.command}`)
+      .join("\n");
+  };
+
+  // Slash command for the same registry the bash_bg tool drives: the tool is
+  // the agent's way in, this is the user's. Default (no argument) stops every
+  // running job, which is what "stop the bash background stuff" means when the
+  // terminal is full of watchers and dev servers.
+  pi.registerCommand("kill-bashbg", {
+    description: "Stop background bash jobs (no argument: all; <jobId>: one; list: show jobs)",
+    getArgumentCompletions: (prefix) => {
+      const items = [
+        { value: "all", label: "all", description: "Stop every running job" },
+        { value: "list", label: "list", description: "Show jobs without stopping anything" },
+        ...[...jobs.values()].map((job) => ({
+          value: job.id,
+          label: job.id,
+          description: `${jobStatus(job)}: ${job.command}`,
+        })),
+      ];
+      const filtered = items.filter((item) => item.value.startsWith(prefix.trim()));
+      return filtered.length > 0 ? filtered : null;
+    },
+    handler: async (args: string, ctx: ModuleCommandContext) => {
+      const sub = args.trim().split(/\s+/)[0];
+      if (sub === "list") {
+        ctx.ui.notify(describeJobs(), "info");
+        return;
+      }
+      await killJobs(args, ctx);
     },
   });
 
