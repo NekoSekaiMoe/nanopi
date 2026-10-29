@@ -2301,3 +2301,34 @@ describe("prepareRequest route headers", () => {
 		expect(seenHeaders[1]).toBeUndefined();
 	});
 });
+
+describe("agentLoop failure handling", () => {
+	// A rejected run used to leave the stream open: the consumer waited forever and
+	// the rejection surfaced as an unhandled rejection at process level.
+	it("closes the stream when the run rejects", async () => {
+		const context: AgentContext = { messages: [], tools: [] };
+		const config: AgentLoopConfig = { model: createModel(), convertToLlm: identityConverter };
+		const stream = agentLoop([createUserMessage("hi")], context, config, undefined, () => {
+			throw new Error("provider exploded");
+		});
+
+		const events: AgentEvent[] = [];
+		for await (const event of stream) events.push(event);
+
+		// The consumer is released, without an `agent_end` carrying messages.
+		expect(events.map((event) => event.type)).not.toContain("agent_end");
+	});
+
+	it("closes the stream when a continued run rejects", async () => {
+		const context: AgentContext = { messages: [createUserMessage("hi")], tools: [] };
+		const config: AgentLoopConfig = { model: createModel(), convertToLlm: identityConverter };
+		const stream = agentLoopContinue(context, config, undefined, () => {
+			throw new Error("provider exploded");
+		});
+
+		const events: AgentEvent[] = [];
+		for await (const event of stream) events.push(event);
+
+		expect(events.map((event) => event.type)).not.toContain("agent_end");
+	});
+});

@@ -54,18 +54,26 @@ export class PermissionGate {
 	/** Calls whose prompt already led to an explanation. */
 	private readonly explainedCalls = new Set<string>();
 	private readonly prompter: PermissionPrompter;
-	/** Prompter that may also answer `"explain"` (webui); see `explain()`. */
+	/**
+	 * Prompter that may also answer `"explain"`; see `explain()`. A UI without one
+	 * (the TUI dialog) still offers Explain, so the gate falls back to asking the
+	 * ordinary prompter again once the explanation landed.
+	 */
 	private readonly explanationPrompter: PermissionExplanationPrompter | undefined;
+	/** Called when the gate pauses a call on `"explain"`, before it asks again. */
+	private readonly onExplain: ((info: PermissionCallInfo) => void) | undefined;
 	private readonly judge: PermissionJudge;
 
 	constructor(
 		prompter: PermissionPrompter,
 		judge: PermissionJudge,
 		explanationPrompter?: PermissionExplanationPrompter,
+		onExplain?: (info: PermissionCallInfo) => void,
 	) {
 		this.prompter = prompter;
 		this.judge = judge;
 		this.explanationPrompter = explanationPrompter;
+		this.onExplain = onExplain;
 	}
 
 	/** Whether the UI can ask for an explanation, which is what makes `explain()` useful. */
@@ -103,13 +111,17 @@ export class PermissionGate {
 	 * callId is refused, which keeps two explanation turns off one blocked call.
 	 */
 	async explain(info: PermissionCallInfo): Promise<PermissionOutcome | undefined> {
-		const prompter = this.explanationPrompter;
-		if (!prompter) return undefined;
 		// Claimed before the wait so a second pause cannot start while this one
-		// is in flight.
+		// is in flight; a repeated claim is what `check()` reads as "paused", so an
+		// unclaimed pause would spin its retry loop forever.
 		if (!this.explainedCalls.add(info.callId)) return undefined;
 		try {
-			const decision = await prompter(info);
+			this.onExplain?.(info);
+			const prompter = this.explanationPrompter;
+			// No dedicated explanation prompter: the pause still has to end here, or
+			// `check()` asks again with the answer that caused it and spins. Nothing
+			// ran, so a dismissal is the honest outcome.
+			const decision = prompter ? await prompter(info) : undefined;
 			// `undefined` covers "explain" too: the webui prompter turns that answer
 			// into a pause, not an answer. Nothing ran and the call still waits.
 			if (decision === "explain" || decision === undefined) return undefined;

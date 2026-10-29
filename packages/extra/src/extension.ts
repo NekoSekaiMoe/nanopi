@@ -25,7 +25,12 @@ import type {
 import { analyzeShellCommand, gitGuardNotice, listWorktrees } from "./git-guard.ts";
 import { isMcpToolName, MCP_MAIN_AGENT_BLOCK_REASON, MCP_SUBAGENT_ONLY_GUIDELINE } from "./mcp-policy.ts";
 import { modeEngine } from "./mode-engine.ts";
-import type { PermissionCallInfo, PermissionDecision, PermissionPrompter } from "./permissions.ts";
+import type {
+	PermissionCallInfo,
+	PermissionDecision,
+	PermissionExplanationPrompter,
+	PermissionPrompter,
+} from "./permissions.ts";
 import { PermissionGate } from "./permissions.ts";
 import { analyzeCommandForPlan, firstShellWord } from "./plan-shell.ts";
 import {
@@ -185,10 +190,7 @@ function destructiveGitHazard(event: ExtraToolCallEvent, cwd: string): string | 
 }
 
 /** Ask over the TUI/RPC dialog primitives. */
-function makeDialogPrompter(
-	ctx: ExtraExtensionContext,
-	onExplain: (info: PermissionCallInfo) => void,
-): PermissionPrompter {
+function makeDialogPrompter(ctx: ExtraExtensionContext): PermissionPrompter {
 	return async (info) => {
 		const title = `Allow ${info.toolName}? ${info.summary}`;
 		const choice = await ctx.ui.select(
@@ -196,14 +198,35 @@ function makeDialogPrompter(
 			DECISION_LABELS.map((entry) => entry.label),
 			{ description: PROMPT_CAPTION },
 		);
-		const picked = DECISION_LABELS.find((entry) => entry.label === choice)?.decision;
-		// Explaining is not an answer: the gate stays blocked while the model
-		// writes, and the user continues from the input box.
-		if (picked === "explain") {
-			onExplain(info);
-			return undefined;
-		}
-		return picked;
+		// `explain` is handed back as an answer, not acted on here: the gate pauses
+		// the call on it and settles the pause afterwards. Driving the explanation
+		// from this closure instead settled the call as dismissed, so picking
+		// Explain rejected the very call the user asked about.
+		return DECISION_LABELS.find((entry) => entry.label === choice)?.decision;
+	};
+}
+
+/**
+ * Gather the answer to a paused call over the dialog.
+ *
+ * The explanation is a full turn, and the dialog cannot be up while the model
+ * writes, so the prompt comes back after it: the call runs on the user's next
+ * answer (or on 继续, through `approveOnce()`), never on the Explain itself.
+ */
+function makeDialogExplanationPrompter(ctx: ExtraExtensionContext): PermissionExplanationPrompter {
+	const labels = DECISION_LABELS.filter((entry) => entry.decision !== "explain");
+	return async (info) => {
+		const choice = await ctx.ui.select(
+			`Allow ${info.toolName}? ${info.summary}`,
+			labels.map((entry) => entry.label),
+			{
+				description: PROMPT_CAPTION,
+			},
+		);
+		// No Explain this time: the explanation already happened, and a second
+		// pause on the same call would leave it blocked with nothing left to ask.
+		// A dismissal is a dismissal, which `settle()` turns into a deny.
+		return labels.find((entry) => entry.label === choice)?.decision;
 	};
 }
 
@@ -295,6 +318,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let shellGuardOn = true;
 	/** Calls the user asked to have explained, waiting for that explanation to land. */
 	const explainedCalls = new Map<string, PermissionCallInfo>();
+	/**
+	 * Whether this session can answer a prompt. A session that cannot (print,
+	 * json, subagents) runs its gated calls instead of denying them all.
+	 */
+	let gated = true;
 
 	/**
 	 * Pause the turn and ask the model to explain one gated call.
@@ -387,10 +415,17 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		sandboxConfig = { ...DEFAULT_SANDBOX_CONFIG, ...configured };
 		sandboxAvailability = detectSandbox(sandboxConfig);
 		if (!sandboxAvailability.available) {
-			// Leave shell execution local instead of failing every command: the
-			// user is told why, and the next session retries.
+			// Leave shell execution local instead of failing every command, and say
+			// so: without the notice the only trace of a configured sandbox was a
+			// `/sandbox` the user had no reason to type, so commands they believed
+			// were contained ran unsandboxed. Notifying throws nowhere, so a session
+			// without a UI (`notify` is a no-op there) still ends up local.
 			nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, undefined);
 			nanopi.setActiveBashOperations?.(undefined);
+			sessionCtx?.ui.notify(
+				`Sandbox configured but not applied: ${sandboxAvailability.reason}. Shell commands run unsandboxed.`,
+				"warning",
+			);
 			return;
 		}
 		nanopi.registerBashOperations?.(
@@ -756,18 +791,36 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		gitGuardOn = gitGuardEnabled(ctx.cwd);
 		shellGuardOn = shellGuardEnabled(ctx.cwd);
 		// Fresh permission memory per session.
+		//
+		// A session with no prompt cannot answer one, so the fake prompter below
+		// used to settle every gated call as dismissed: print mode, `--output json`
+		// and every subagent (its own `-p` child) could not edit or write a single
+		// file. `gated` carries that fact to the tool_call handler, which is where
+		// the decision belongs; the gate keeps prompting an interactive session.
+		gated = ctx.mode === "webui" || ctx.hasUI;
 		const prompter: PermissionPrompter | undefined =
 			ctx.mode === "webui"
 				? makeWebuiPrompter((info) => explainCall(info, nanopi))
 				: ctx.hasUI
-					? makeDialogPrompter(ctx, (info) => explainCall(info, nanopi))
+					? makeDialogPrompter(ctx)
+					: undefined;
+		// The pause needs a second prompt to settle it: without one the gate would
+		// re-ask with the same dialog, and Explain would never resolve.
+		const explanationPrompter: PermissionExplanationPrompter | undefined =
+			ctx.mode === "webui"
+				? extraBridge.permissions.explanationPrompter
+				: ctx.hasUI
+					? makeDialogExplanationPrompter(ctx)
 					: undefined;
 		const judge = (info: PermissionCallInfo) =>
 			judgeWithModel(info, ctx.model, ctx.modelRegistry as unknown as JudgeModelRegistry, { cwd: ctx.cwd });
 		gate = new PermissionGate(
 			prompter ?? (async () => undefined),
 			judge,
-			ctx.mode === "webui" ? extraBridge.permissions.explanationPrompter : undefined,
+			explanationPrompter,
+			// The pause is the gate's own state; starting the explanation turn is the
+			// extension's, so the callback is handed over rather than the API.
+			(info) => explainCall(info, nanopi),
 		);
 		if (ctx.mode === "tui") {
 			applyModeStatus();
@@ -873,7 +926,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 
 		const sandboxNote = sandboxConfig ? describeSandboxCall(sandboxConfig, event.toolName) : undefined;
-		if (engine.yolo || gate === undefined || !GATED_TOOL_NAMES.has(event.toolName)) {
+		if (engine.yolo || gate === undefined || !gated || !GATED_TOOL_NAMES.has(event.toolName)) {
 			if (sandboxNote) sessionCtx?.ui.notify(sandboxNote, "info");
 			return undefined;
 		}
