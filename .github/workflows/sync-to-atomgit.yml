@@ -1,0 +1,37 @@
+# 将 GitHub 仓库上的改动单方向镜像推送到 AtomGit（atomgit.com/NanoPi/NanoPi）。
+# 判定逻辑与 .github/workflows/sync-to-cnb.yml 共用 scripts/mirror.mjs。
+# ATOMGIT_KEY 配置在 GitHub 仓库 Settings > Secrets and variables > Actions。
+
+name: Sync to AtomGit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: sync-to-atomgit
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    name: Mirror main and tags
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # merge-base --is-ancestor 需要完整历史
+          fetch-depth: 0
+
+      - name: Push main and tags to AtomGit
+        env:
+          ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
+        run: |
+          set -euo pipefail
+          remote=https://atomgit.com/NanoPi/NanoPi.git
+          node scripts/mirror.mjs main --remote "$remote" --token-user cnb --token-env ATOMGIT_KEY
+          node scripts/mirror.mjs tags --remote "$remote" --token-user cnb --token-env ATOMGIT_KEY
