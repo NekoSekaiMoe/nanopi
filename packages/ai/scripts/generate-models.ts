@@ -45,6 +45,7 @@ import {
 	type ModelDataStructure,
 	MODEL_DATA_MANIFEST_FILE,
 	providerArtifactName,
+	findGeneratedModelDataProviderIds,
 	readModelDataProviderIds,
 	resolveCatalogBaseUrl,
 	readModelDataStructure,
@@ -4228,10 +4229,12 @@ async function generateModels() {
 
 	const serializeJson = (value: unknown) => `${JSON.stringify(value, null, generatorOptions.pretty ? 2 : undefined)}\n`;
 	const writeJson = (path: string, value: unknown) => writeFileSync(path, serializeJson(value));
-	// A data-only run may narrow an existing catalog; the provider set has to be
-	// on disk already, because the shards and the aggregator are left alone.
+	// A data-only run may narrow an existing catalog, because the shards and the
+	// aggregator are left alone. A fresh checkout (a release tag: the catalogs are
+	// build products) has nothing to narrow, so it writes every provider instead
+	// of failing on the data directory the generator itself has not written yet.
 	const generatedDataProviderIds = generatorOptions.dataOnly
-		? selectProviderIds(readModelDataProviderIds(packageRoot))
+		? selectProviderIds(findGeneratedModelDataProviderIds(packageRoot) ?? sortedProviderIds)
 		: sortedProviderIds;
 	const missingProviderIds = generatedDataProviderIds.filter((providerId) => !jsonAllProviders[providerId]);
 	if (missingProviderIds.length > 0) {

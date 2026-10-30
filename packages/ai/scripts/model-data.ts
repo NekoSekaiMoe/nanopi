@@ -146,6 +146,19 @@ export function readModelDataProviderIds(packageRoot: string): string[] {
 }
 
 /**
+ * The provider ids a data-only run has to write, or undefined when the checkout
+ * has no generated catalog to narrow. A release checkout is fresh — the
+ * aggregator and the data files are build products — so there is nothing to
+ * preserve and the run writes every provider the build carries.
+ */
+export function findGeneratedModelDataProviderIds(packageRoot: string): string[] | undefined {
+	const aggregatorPath = join(packageRoot, "src", "models.generated.ts");
+	const dataDir = join(packageRoot, "src", "providers", "data");
+	if (!existsSync(aggregatorPath) && !existsSync(dataDir)) return undefined;
+	return readModelDataProviderIds(packageRoot);
+}
+
+/**
  * Provider ids named by the data files of a generated data directory. The
  * manifest is not consulted: it records the structure hash only, so the files
  * on disk are the record of which providers the last run wrote.

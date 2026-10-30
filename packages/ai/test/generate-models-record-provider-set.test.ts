@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -196,5 +196,38 @@ describe("recordFullProviderSet", () => {
 		expect(stub).toContain("export const MORPH_CLASSIFIER_MODELS: DisabledModelCatalog");
 		expect(stub).toContain("export const value = {");
 		expect(existsSync(orphanPath)).toBe(false);
+	});
+
+	// A release tag is a fresh checkout: the aggregator, the shards and the data
+	// files are all build products, so the release hydration step (`--data-only`)
+	// had no catalog to narrow and failed before writing anything. It now writes
+	// every provider the build carries when there is nothing on disk yet.
+	it("hydrates a checkout that has no generated catalog yet", () => {
+		const buildConfig = {
+			defaultFlavor: "full",
+			components: { providers: { description: "Provider set" } },
+			providerSets: {
+				all: { description: "Every catalog", providers: ["__ALL__"] },
+				none: { description: "No catalog", providers: ["__NONE__"] },
+			},
+			flavors: {
+				full: { components: { "*": true, providers: "all" } },
+				minimal: { components: { "*": false, providers: "none" } },
+			},
+		};
+		const { fixtureRoot, isolatedPackageRoot } = createFixture(buildConfig);
+		const providersDir = join(isolatedPackageRoot, "src", "providers");
+		rmSync(join(providersDir, "data"), { recursive: true, force: true });
+		rmSync(join(isolatedPackageRoot, "src", "models.generated.ts"), { force: true });
+		for (const entry of readdirSync(providersDir)) {
+			if (entry.endsWith(".models.ts")) rmSync(join(providersDir, entry));
+		}
+		const preloadPath = writeModelsDevPreload(fixtureRoot);
+
+		const result = runGenerator(isolatedPackageRoot, preloadPath, ["--data-only"]);
+
+		expect(`${result.stdout}\n${result.stderr}`).not.toContain("No generated model data found");
+		expect(result.status).toBe(0);
+		expect(existsSync(join(providersDir, "data", "morph.json"))).toBe(true);
 	});
 });

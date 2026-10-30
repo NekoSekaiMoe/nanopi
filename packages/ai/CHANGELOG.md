@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `--data-only` (the release model-data hydration step) failing on a checkout that has never generated the catalogs: the provider list came from the data directory the run was about to write, so a fresh tag died with `No generated model data found` before writing anything. With no generated catalog on disk the run now writes every provider the build carries, and narrowing to an existing catalog still applies when there is one
+
 ## [20261031]
 
 ### Added
