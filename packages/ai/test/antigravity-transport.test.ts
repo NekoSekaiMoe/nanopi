@@ -88,6 +88,22 @@ describe("Antigravity request envelope", () => {
 });
 
 describe("Antigravity fetch rewrite", () => {
+	it("lets request headers replace the client identity", async () => {
+		const { baseFetch, calls } = recording();
+		const fetchImpl = antigravityFetch(baseFetch, model, "access-token", "project-42", "session-1", {
+			"User-Agent": "custom-agent",
+			"X-Client-Name": null,
+		});
+
+		await fetchImpl(SDK_URL, { method: "POST", body: SDK_BODY });
+
+		const headers = calls[0]!.headers;
+		expect(headers.get("user-agent")).toBe("custom-agent");
+		expect(headers.get("x-client-name")).toBeNull();
+		// The token stays the adapter's, whatever the caller asked for.
+		expect(headers.get("authorization")).toBe("Bearer access-token");
+	});
+
 	it("posts the envelope to the fixed streamGenerateContent action", async () => {
 		const { baseFetch, calls } = recording();
 		const fetchImpl = antigravityFetch(baseFetch, model, "access-token", "project-42", "session-1");
@@ -100,6 +116,9 @@ describe("Antigravity fetch rewrite", () => {
 		expect(call.headers.get("authorization")).toBe("Bearer access-token");
 		expect(call.headers.get("user-agent")).toContain("antigravity/hub/");
 		expect(call.headers.get("x-goog-api-key")).toBeNull();
+		expect(call.headers.get("x-client-name")).toBe("antigravity");
+		expect(call.headers.get("x-client-version")).toBe("2.23.1");
+		expect(call.headers.get("x-goog-api-client")).toContain("antigravity/2.23.1");
 		expect(call.body).toMatchObject({ project: "project-42", requestType: "agent", model: "claude-sonnet-4-6" });
 	});
 

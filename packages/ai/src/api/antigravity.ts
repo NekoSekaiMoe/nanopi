@@ -25,11 +25,12 @@ import type {
 	AssistantMessageEvent,
 	AssistantMessageEventStream,
 	Model,
+	ProviderHeaders,
 	SimpleStreamOptions,
 	StreamOptions,
 	TranscriptContext,
 } from "../types.ts";
-import { buildEnvelope, ENVELOPE_ENDPOINTS, stableSessionId, USER_AGENT } from "./antigravity-request.ts";
+import { buildEnvelope, clientHeaders, ENVELOPE_ENDPOINTS, stableSessionId } from "./antigravity-request.ts";
 import { stream as geminiStream, streamSimple as geminiStreamSimple } from "./google-generative-ai.ts";
 import { lazyStream } from "./lazy.ts";
 
@@ -39,6 +40,8 @@ const GENERATE_ACTION = "/v1internal:generateContent";
 type AntigravityOptions = {
 	apiKey?: string;
 	env?: Record<string, string>;
+	/** Explicit request headers: they replace the SDK client's, not just layer on top of them. */
+	headers?: ProviderHeaders;
 };
 
 type Run = () => Promise<AsyncIterable<AssistantMessageEvent>>;
@@ -62,10 +65,11 @@ export async function withAntigravityFetch(
 	project: string,
 	context: TranscriptContext,
 	run: Run,
+	headers?: ProviderHeaders,
 	baseFetch: typeof fetch = globalThis.fetch,
 ): Promise<AsyncIterable<AssistantMessageEvent>> {
 	const sessionId = stableSessionId(context);
-	globalThis.fetch = antigravityFetch(baseFetch, model, accessToken, project, sessionId);
+	globalThis.fetch = antigravityFetch(baseFetch, model, accessToken, project, sessionId, headers);
 
 	try {
 		return await run();
@@ -84,6 +88,7 @@ export function antigravityFetch(
 	accessToken: string,
 	project: string,
 	sessionId: string,
+	headers?: ProviderHeaders,
 ): typeof fetch {
 	return (async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
 		const sdkUrl = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
@@ -93,13 +98,7 @@ export function antigravityFetch(
 		const send = (endpoint: string) =>
 			baseFetch(`${endpoint}${streaming ? STREAM_ACTION : GENERATE_ACTION}?alt=sse`, {
 				...init,
-				headers: {
-					"Content-Type": "application/json",
-					Accept: "text/event-stream",
-					"User-Agent": USER_AGENT,
-					...model.headers,
-					Authorization: `Bearer ${accessToken}`,
-				},
+				headers: requestHeaders(model, accessToken, headers),
 				body: JSON.stringify(envelope),
 			});
 		let last: Response | undefined;
@@ -113,6 +112,31 @@ export function antigravityFetch(
 	}) as typeof fetch;
 }
 
+/**
+ * The SDK client sends its own headers (`nanopi (...)` included), and those win
+ * over the ones the adapter sets, so a header that has to look like the native
+ * client's forces the client to build without headers at all (see
+ * `buildClient`); what lands here is what the request carries.
+ */
+function requestHeaders(
+	model: Model<"antigravity">,
+	accessToken: string,
+	overrides?: ProviderHeaders,
+): Record<string, string> {
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+		Accept: "text/event-stream",
+		...clientHeaders(),
+		...model.headers,
+	};
+	for (const [name, value] of Object.entries(overrides ?? {})) {
+		if (value === null) delete headers[name];
+		else headers[name] = value;
+	}
+	headers.Authorization = `Bearer ${accessToken}`;
+	return headers;
+}
+
 function startStream(
 	model: Model<"antigravity">,
 	context: TranscriptContext,
@@ -121,10 +145,19 @@ function startStream(
 ): AssistantMessageEventStream {
 	const accessToken = options?.apiKey;
 	if (!accessToken) throw new Error(`No access token for provider: ${model.provider}`);
+	const headers = options as AntigravityOptions | undefined;
+	// The Gemini adapter merges these into the SDK client, whose headers beat the
+	// ones the rewrite sets. The client is what the `Authorization` header has to
+	// carry; the identity headers are dropped here and rebuilt per request.
+	const { Authorization: _authorization, ...identity } = requestHeaders(model, accessToken, headers?.headers);
+	const clientOptions = {
+		...options,
+		headers: { ...(options as StreamOptions).headers, ...identity },
+	} as StreamOptions;
 	return lazyStream(
 		model,
-		async () => streamFn(model as unknown as Model<"google-generative-ai">, context, options as never),
-		(run) => withAntigravityFetch(model, accessToken, projectId(options as AntigravityOptions), context, run),
+		async () => streamFn(model as unknown as Model<"google-generative-ai">, context, clientOptions as never),
+		(run) => withAntigravityFetch(model, accessToken, projectId(headers), context, run, headers?.headers),
 	);
 }
 
