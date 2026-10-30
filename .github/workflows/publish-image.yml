@@ -1,0 +1,126 @@
+name: Publish Image
+
+# The container image is a separate job from the release pipeline on purpose: it
+# is the one channel that can be republished on its own when a release is already
+# out (the GitHub Release and the npm package refuse to be mutated). A workflow
+# dispatch with `asset_source: release` takes the published `nanopi.js` and
+# pushes new tags without touching the release.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. v20261031)'
+        required: true
+        type: string
+      source_ref:
+        description: 'Ref that carries the Dockerfile'
+        required: true
+        type: string
+      asset_source:
+        description: '"artifact" for the bundle this run built, "release" for the published asset'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to publish (e.g. v20261031)'
+        required: true
+        type: string
+      source_ref:
+        description: 'Ref that carries the Dockerfile'
+        required: false
+        default: main
+        type: string
+      asset_source:
+        description: 'Where the bundle comes from'
+        required: false
+        default: release
+        type: choice
+        options: [release, artifact]
+
+permissions: {}
+
+jobs:
+  publish-image:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    env:
+      RELEASE_TAG: ${{ inputs.tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.source_ref }}
+          persist-credentials: false
+
+      # GHCR requires a lowercase repository name, and the owner is mixed case.
+      - name: Resolve image name
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "IMAGE=ghcr.io/${OWNER,,}/nanopi" >> "${GITHUB_ENV}"
+
+      - name: Download release payload from the build
+        if: inputs.asset_source == 'artifact'
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: release-assets-${{ inputs.tag }}
+          path: release-assets
+
+      - name: Download release payload from the published release
+        if: inputs.asset_source != 'artifact'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release download "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --pattern nanopi.js --dir release-assets --clobber
+
+      - name: Stage bundle for the image build
+        run: cp release-assets/nanopi.js nanopi.js
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "${GH_TOKEN}" | docker login ghcr.io --username "${ACTOR}" --password-stdin
+
+      # Only a date tag pushes latest: a prerelease should not replace the stable
+      # alias.
+      - name: Resolve image tags
+        id: tags
+        env:
+          TAG: ${{ env.RELEASE_TAG }}
+        run: |
+          set -euo pipefail
+
+          version="${TAG#v}"
+          tags="${IMAGE}:${TAG}"
+          tags="${tags}"$'\n'"${IMAGE}:${version}"
+          if [[ "${version}" =~ ^[0-9]{8}(\.[0-9]+){0,2}$ ]]; then
+            tags="${tags}"$'\n'"${IMAGE}:latest"
+          fi
+          {
+            echo "list<<NANOPI_TAGS"
+            echo "${tags}"
+            echo "NANOPI_TAGS"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build and push image
+        env:
+          TAGS: ${{ steps.tags.outputs.list }}
+        run: |
+          set -euo pipefail
+
+          tag_args=()
+          while IFS= read -r tag; do
+            [[ -n "${tag}" ]] && tag_args+=("--tag" "${tag}")
+          done <<< "${TAGS}"
+
+          docker buildx build \
+            --file Dockerfile \
+            --platform linux/amd64,linux/arm64 \
+            "${tag_args[@]}" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=${RELEASE_TAG}" \
+            --push \
+            .
