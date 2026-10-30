@@ -46,6 +46,7 @@ import {
 	MODEL_DATA_MANIFEST_FILE,
 	providerArtifactName,
 	readModelDataProviderIds,
+	resolveCatalogBaseUrl,
 	readModelDataStructure,
 	validateGeneratedModelData,
 	validateModelDataDirectory,
@@ -345,6 +346,13 @@ interface ModelsDevModel {
 	};
 	provider?: {
 		npm?: string;
+		/**
+		 * The base URL that serves this model. Path-routed gateways group routes
+		 * per provider family (OpenCode Zen's `.../inference/openai/v1`,
+		 * `.../inference/anthropic/v1`, `.../inference/google/v1beta`), so the
+		 * catalog root alone does not address a model.
+		 */
+		api?: string;
 	};
 }
 
@@ -2750,8 +2758,32 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			// Zen moved completions to /inference (2026-10): the legacy /zen paths
 			// still serve GET /models but the free-tier gate rejects completion
 			// requests there. models.dev now publishes https://opencode.ai/inference/v1.
-			{ key: "opencode", provider: "opencode", basePath: "https://opencode.ai/inference" },
-			{ key: "opencode-go", provider: "opencode-go", basePath: "https://opencode.ai/inference/go" },
+			//
+			// That is the catalog root, not the route: only `<family>/v1` is served.
+			// `<base>/v1/chat/completions` answers 404 while
+			// `<base>/openai/v1/chat/completions` answers 429 (rate limited, route
+			// matched). models.dev carries the route per model in `provider.api`,
+			// which `resolveCatalogBaseUrl` prefers; `/zen` predates the family
+			// layout and takes `<base>/v1/...` as-is, so the added segment is per
+			// lane.
+			{
+				key: "opencode",
+				provider: "opencode",
+				basePath: "https://opencode.ai/inference",
+				familyRoutes: true,
+			},
+			{
+				key: "opencode-go",
+				provider: "opencode-go",
+				basePath: "https://opencode.ai/inference/go",
+				familyRoutes: true,
+			},
+			{
+				key: "opencode-zen-v1",
+				provider: "opencode",
+				basePath: "https://opencode.ai/zen",
+				familyRoutes: false,
+			},
 		] as const;
 
 		for (const variant of opencodeVariants) {
@@ -2835,6 +2867,17 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 				} else if (variant.provider === "opencode-go" && modelId === "deepseek-v4.1-flash") {
 					thinkingLevelMap = getEffortThinkingLevelMap(m.reasoning_options ?? []);
 				}
+				// The lane root above is a catalog root; the served route is per
+				// provider family. models.dev publishes the URL per model
+				// (`provider.api`, e.g. `.../inference/anthropic/v1`), so a model that
+				// carries one is addressed exactly; otherwise `resolveCatalogBaseUrl`
+				// falls back to the family layout.
+				const publishedBaseUrl =
+					variant.familyRoutes && m.provider?.api?.startsWith(variant.basePath)
+						? m.provider.api
+						: undefined;
+				baseUrl = resolveCatalogBaseUrl(api, baseUrl, publishedBaseUrl, variant.familyRoutes);
+
 				models.push({
 					id: modelId,
 					name: m.name || modelId,
