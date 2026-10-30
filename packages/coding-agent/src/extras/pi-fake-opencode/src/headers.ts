@@ -70,6 +70,39 @@ export const OPENCODE_PROVIDER_IDS = new Set(["opencode", "opencode-go"]);
 /** Base-URL substring that marks a custom provider as pointing at Zen. */
 export const OPENCODE_BASEURL_MARKER = "opencode.ai";
 
+/** The User-Agent the 1.x client sends: a bare `opencode/<version>`. */
+export const V1_OPENCODE_VERSION = "1.19.3";
+
+/** The User-Agent the 2.x CLI sends on both v2 lanes: `opencode/<channel>/<version>/<client>`. */
+export function buildV2UserAgent(): string {
+	const version = process.env.PI_FAKE_OPENCODE_VERSION?.trim() || DEFAULT_OPENCODE_VERSION;
+	return `opencode/latest/${version}/cli`;
+}
+
+/**
+ * Which request shape a base URL expects.
+ *
+ * opencode2api splits the same way (`models.IsV1Upstream`): a base URL whose
+ * path is `/inference` (nanopi's built-in Zen base, and the only origin the
+ * keyless free tier still serves) takes the 2.x shape; a base URL ending in
+ * `/zen` is the 1.x `/zen` gate, which validates the 1.x tool names instead.
+ * Anything else — `/zen/go`, a proxy, a custom host — gets the 2.x shape the
+ * captures cover.
+ */
+export function laneForBaseUrl(baseUrl: string | undefined): "v1" | "v2" {
+	const trimmed = (baseUrl ?? "").toLowerCase().replace(/\/+$/, "");
+	return trimmed.endsWith("/zen") ? "v1" : "v2";
+}
+
+/**
+ * Whether the base URL belongs to the keyless free tier's v2 origin
+ * (`/inference`). That origin groups routes by provider family, so a request
+ * posted straight at `<base>/v1/...` misses the route the 2.x client uses.
+ */
+export function isV2InferenceBaseUrl(baseUrl: string | undefined): boolean {
+	return (baseUrl ?? "").toLowerCase().replace(/\/+$/, "").endsWith("/inference");
+}
+
 const IDENTIFIER_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 /** Env vars read as truthy when set to 1/true/yes/on (case-insensitive). */
@@ -129,29 +162,33 @@ function identifierBody(descending: boolean): string {
 }
 
 /**
- * Build the OpenCode client's User-Agent string.
+ * Build the OpenCode client's User-Agent string for a lane.
  *
- * Mirrors the official client (`App.useragent` composed with the AI SDK and
- * runtime segments), e.g.:
+ * Both forms are captured from the official clients:
  *
- *   opencode/2.1.1 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14
+ *   v2 — `opencode/latest/2.1.1/cli`, the composite form the 2.x CLI sends on
+ *        `/inference` and `/zen/go`.
+ *   v1 — `opencode/1.19.3 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14`, the
+ *        1.x model-request form on `/zen`: the client version, then the AI SDK
+ *        segments its provider package appends.
  *
  * Priority:
  *   1. `PI_FAKE_OPENCODE_UA`      — full string override
  *   2. `PI_FAKE_OPENCODE_VERSION` — opencode version segment override
  *   3. Defaults above
  */
-export function buildUserAgent(): string {
-  const full = process.env.PI_FAKE_OPENCODE_UA?.trim();
-  if (full) return full;
+export function buildUserAgent(lane: "v1" | "v2" = "v2"): string {
+	const full = process.env.PI_FAKE_OPENCODE_UA?.trim();
+	if (full) return full;
 
-  const version =
-    process.env.PI_FAKE_OPENCODE_VERSION?.trim() || DEFAULT_OPENCODE_VERSION;
-  return [
-    `opencode/${version}`,
-    `ai-sdk/provider-utils/${DEFAULT_PROVIDER_UTILS_VERSION}`,
-    `runtime/bun/${DEFAULT_BUN_VERSION}`,
-  ].join(" ");
+	if (lane === "v2") return buildV2UserAgent();
+
+	const version = process.env.PI_FAKE_OPENCODE_VERSION?.trim() || V1_OPENCODE_VERSION;
+	return [
+		`opencode/${version}`,
+		`ai-sdk/provider-utils/${DEFAULT_PROVIDER_UTILS_VERSION}`,
+		`runtime/bun/${DEFAULT_BUN_VERSION}`,
+	].join(" ");
 }
 
 /** Per-pi-session cache: one stable opencode session id per pi session. */

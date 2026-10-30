@@ -123,5 +123,15 @@ Use the skill tool to load a skill when a task matches its description.
   </skill>
 </available_skills>`;
 
+/**
+ * The same prompt as the 1.x client sends on the v1 `/zen` lane. The text is
+ * identical apart from the tool names that generation uses (`bash` where the
+ * 2.x CLI says `shell`); opencode2api keeps the pair for the same reason.
+ */
+export const GATEWAY_SYSTEM_PROMPT_V1 = GATEWAY_SYSTEM_PROMPT.split("shell").join("bash");
+
 /** Tool names of the official set, in the order the CLI sends them. */
 export const GATEWAY_TOOL_ORDER = ["edit","execute","glob","grep","question","read","shell","skill","subagent","webfetch","websearch","write","patch"] as const;
+
+/** The 1.x official set: the same order, with `bash` where the 2.x CLI says `shell`. */
+export const GATEWAY_TOOL_ORDER_V1 = ["edit","execute","glob","grep","question","read","bash","skill","subagent","webfetch","websearch","write","patch"] as const;
