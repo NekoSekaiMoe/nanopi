@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- `install.js --version` completes a follow-up release line: `--version=20261031.1` fetches `v20261031.1.0`, so a same-day follow-up does not require remembering the patch part. Only the missing `.0` is filled in — a date alone (`--version=20261031`) still names that date's tag, and a full tag is used as given
+
 ## [20261031]
 
 ### New Features

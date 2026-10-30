@@ -75,7 +75,8 @@ const parseArguments = (arguments_) => {
 const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--prefix=<dir>] [--out=<path>]
 
   --sku       bundle to download: full (default), base, minimal
-  --version   release tag, with or without the leading v (default: latest)
+  --version   release tag, with or without the leading v (default: latest);
+              a follow-up line like 20261031.1 is completed to 20261031.1.0
   --prefix    install directory, like npm's prefix (default: ${DEFAULT_PREFIX});
               the bundle goes to <prefix>/bin and a \`nanopi\` shim to <prefix>/bin
   --out       write the bundle to this path and nothing else
@@ -88,10 +89,18 @@ Examples:
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node - --sku=minimal
   node install.js --version=v20261013 --prefix=~/.local
+  node install.js --version=20261031.1 --prefix=~/.local
   node install.js --out=./nanopi.js`;
 
 const releaseTag = async (version) => {
-	if (version !== "latest") return version.startsWith("v") ? version : `v${version}`;
+	if (version !== "latest") {
+		const tag = version.startsWith("v") ? version : `v${version}`;
+		// A same-day follow-up is tagged `v<YYYYMMDD>.<n>.0`, so the release line
+		// (`v20261031.1`) is unambiguous once the patch part is filled in. Only
+		// that missing `.0` is added: a date alone (`v20261031`) names the tag of
+		// that date, and nothing is guessed across releases.
+		return /^v\d{8}\.\d+$/.test(tag) ? `${tag}.0` : tag;
+	}
 	const release = JSON.parse(
 		await text(`https://api.github.com/repos/${REPOSITORY}/releases/latest`, "Resolving latest release"),
 	);
