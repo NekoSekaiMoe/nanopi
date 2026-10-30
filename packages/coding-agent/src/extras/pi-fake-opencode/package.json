@@ -2,7 +2,7 @@
   "name": "@NekoSekaiMoe/pi-fake-opencode",
   "type": "module",
   "version": "0.1.0",
-  "description": "Makes the Pi coding agent impersonate the official OpenCode client on OpenCode Zen requests by overwriting the User-Agent header, so Zen's free tier (\"FreeTierError: OpenCode's free tier can only be used from within OpenCode\") works from within Pi",
+  "description": "Makes nanopi's OpenCode Zen requests look like the official OpenCode client — identity headers plus the CLI system prompt and tool set — so Zen's free tier (\"FreeTierError\") works from within nanopi",
   "license": "BSD-2-Clause",
   "author": "NekoSekaiMoe",
   "keywords": [
