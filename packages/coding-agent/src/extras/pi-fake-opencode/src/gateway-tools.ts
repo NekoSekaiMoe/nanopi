@@ -383,3 +383,18 @@ export const GATEWAY_TOOLS: Record<string, GatewayToolDefinition> = {
 		}
 	}
 };
+
+
+/**
+ * The 1.x official set, keyed the same way. Only `bash` differs from the 2.x
+ * set; the other definitions are shared, so the pair stays one edit apart when
+ * either generation's capture is replaced.
+ */
+export const GATEWAY_TOOLS_V1: Record<string, GatewayToolDefinition> = {
+	...GATEWAY_TOOLS,
+	bash: {
+		description:
+			"Executes a bash command and returns its output. Commands run with OS: linux, Shell: bash. Quote file paths containing spaces or special characters. Prefer dedicated tools over shell commands when possible. When output is large, the full result is saved to a file and a truncated preview is returned.",
+		parameters: GATEWAY_TOOLS.shell.parameters,
+	},
+};
