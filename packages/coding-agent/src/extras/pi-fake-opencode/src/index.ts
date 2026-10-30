@@ -48,7 +48,6 @@ import {
 	buildRequestId,
 	buildSessionId,
 	buildUserAgent,
-	isV2InferenceBaseUrl,
 	laneForBaseUrl,
 	shouldSpoof,
 	userTurnFingerprint,

@@ -82,25 +82,31 @@ export function buildV2UserAgent(): string {
 /**
  * Which request shape a base URL expects.
  *
- * opencode2api splits the same way (`models.IsV1Upstream`): a base URL whose
- * path is `/inference` (nanopi's built-in Zen base, and the only origin the
- * keyless free tier still serves) takes the 2.x shape; a base URL ending in
- * `/zen` is the 1.x `/zen` gate, which validates the 1.x tool names instead.
- * Anything else — `/zen/go`, a proxy, a custom host — gets the 2.x shape the
- * captures cover.
+ * opencode2api splits the same way (`models.IsV1Upstream`): the 2.x CLI is the
+ * shape for everything Zen serves now — `/inference` (and its per-family routes
+ * such as `/inference/openai/v1`) and `/zen/go`. A base URL at or below a bare
+ * `/zen` path is the 1.x `/zen` gate, which validates the 1.x tool names
+ * instead. Anything else — a `/zen/go` base, a proxy, a custom host — gets the
+ * 2.x shape the captures cover.
  */
 export function laneForBaseUrl(baseUrl: string | undefined): "v1" | "v2" {
-	const trimmed = (baseUrl ?? "").toLowerCase().replace(/\/+$/, "");
-	return trimmed.endsWith("/zen") ? "v1" : "v2";
+	const path = pathOf(baseUrl);
+	// `/zen/go` is its own 2.x lane, not a sub-path of the 1.x gate.
+	if (path === "/zen/go" || path?.startsWith("/zen/go/")) return "v2";
+	return path === "/zen" || path?.startsWith("/zen/") ? "v1" : "v2";
 }
 
-/**
- * Whether the base URL belongs to the keyless free tier's v2 origin
- * (`/inference`). That origin groups routes by provider family, so a request
- * posted straight at `<base>/v1/...` misses the route the 2.x client uses.
- */
-export function isV2InferenceBaseUrl(baseUrl: string | undefined): boolean {
-	return (baseUrl ?? "").toLowerCase().replace(/\/+$/, "").endsWith("/inference");
+/** Path of a base URL, lower-cased and without a trailing slash. */
+function pathOf(baseUrl: string | undefined): string | undefined {
+	const trimmed = (baseUrl ?? "").trim();
+	if (!trimmed) return undefined;
+	let path = trimmed.toLowerCase();
+	try {
+		path = new URL(trimmed).pathname.toLowerCase();
+	} catch {
+		// A bare path (no scheme) is compared as written.
+	}
+	return path.replace(/\/+$/, "");
 }
 
 const IDENTIFIER_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";

@@ -393,3 +393,48 @@ export function groupProviderModelData<T extends ModelCatalogEntry>(
 	}
 	return { groups, structure };
 }
+
+/**
+ * Chat protocols served under the shared `openai` family route of a
+ * path-routed gateway (OpenCode Zen's `/inference`): chat completions and
+ * Responses both live at `<base>/openai/v1`, so both need the `openai`
+ * segment added to a base URL that stops at the gateway root.
+ */
+const OPENAI_FAMILY_APIS = new Set<string>(["openai-completions", "openai-responses"]);
+
+/**
+ * Base URL to ship for one catalog entry.
+ *
+ * `basePath` is the catalog's own base URL, built for `<basePath>/v1` routing.
+ * A gateway that routes per provider family publishes the served URL per model
+ * (OpenCode Zen's `.../inference/openai/v1`, `.../inference/anthropic/v1`,
+ * `.../inference/google/v1beta`); `publishedBaseUrl` carries it and wins, so a
+ * route the gateway serves verbatim is never guessed.
+ *
+ * Without one, `familyRoutes` says whether the gateway needs the added segment:
+ * Zen's `/inference` does — `<base>/v1/chat/completions` answers 404 while
+ * `<base>/openai/v1/chat/completions` answers 429, the route matched — and its
+ * 1.x `/zen` lane does not, so the flag travels with the lane rather than the
+ * api. Chat completions and Responses share the `openai` family route;
+ * Anthropic and Google already carry theirs in `basePath`.
+ */
+export function resolveCatalogBaseUrl(
+	api: string,
+	basePath: string,
+	publishedBaseUrl: string | undefined,
+	familyRoutes: boolean,
+): string {
+	const resolved = publishedBaseUrl ?? fallbackBaseUrl(api, basePath, familyRoutes);
+	if (api !== "anthropic-messages") return resolved;
+	// The Anthropic SDK posts to `<baseURL>/v1/messages` itself, so its base URL
+	// must stop one segment below the route the gateway publishes
+	// (`.../anthropic/v1` → `.../anthropic`); the stored form keeps the same
+	// shape every other provider's base URL has.
+	return resolved.replace(/\/v1$/, "");
+}
+
+function fallbackBaseUrl(api: string, basePath: string, familyRoutes: boolean): string {
+	if (!familyRoutes) return basePath;
+	if (OPENAI_FAMILY_APIS.has(api)) return basePath.replace(/\/(v1|v1beta)$/, "/openai/$1");
+	return basePath;
+}

@@ -142,9 +142,15 @@ describe("pi-fake-opencode headers", () => {
 
 	it("splits lanes like the gate does", () => {
 		expect(laneForBaseUrl("https://opencode.ai/inference")).toBe("v2");
+		// Zen routes its 2.x models under per-family paths.
+		expect(laneForBaseUrl("https://opencode.ai/inference/openai/v1")).toBe("v2");
+		expect(laneForBaseUrl("https://opencode.ai/inference/anthropic/v1")).toBe("v2");
+		expect(laneForBaseUrl("https://opencode.ai/inference/google/v1beta")).toBe("v2");
+		expect(laneForBaseUrl("https://opencode.ai/inference/go/openai/v1")).toBe("v2");
 		expect(laneForBaseUrl("https://opencode.ai/zen/go")).toBe("v2");
 		expect(laneForBaseUrl("https://opencode.ai/zen")).toBe("v1");
 		expect(laneForBaseUrl("https://opencode.ai/zen/")).toBe("v1");
+		expect(laneForBaseUrl("https://opencode.ai/zen/v1")).toBe("v1");
 		expect(laneForBaseUrl(undefined)).toBe("v2");
 	});
 });

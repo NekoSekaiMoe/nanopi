@@ -54,7 +54,7 @@ Each shape does three things:
 2. Renames nanopi's tools to opaque wire names (`clint_<digest>`, opencode2api's `ClientToolWireName`) and appends the official tool set in the CLI's order. nanopi's own tool names and schemas never reach the gateway. History and `tool_choice` references are renamed with them, so the request stays self-consistent.
 3. Forces `stream: true`; a chat body also gets `stream_options.include_usage` and `max_completion_tokens` (from `max_tokens` when the caller capped it).
 
-The lane picks the assets: `/zen` is the 1.x generation (`bash`, the bare User-Agent), everything else the 2.x CLI (`shell`). opencode2api splits the same way (`models.IsV1Upstream`).
+The lane picks the assets: a base URL at or below a bare `/zen` path is the 1.x generation (`bash`, the bare User-Agent), everything else the 2.x CLI (`shell`) — including Zen's per-family routes (`/inference/openai/v1`, `/inference/anthropic`, `/inference/google/v1beta`) and `/zen/go`. opencode2api splits the same way (`models.IsV1Upstream`).
 
 Authorization, the endpoint, and every other header stay exactly as nanopi and the selected provider configured them.
 
