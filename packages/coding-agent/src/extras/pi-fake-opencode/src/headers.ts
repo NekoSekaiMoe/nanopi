@@ -1,4 +1,5 @@
-import { randomBytes } from "node:crypto";
+import { execFileSync } from "node:child_process";
+import { createHash, randomBytes } from "node:crypto";
 
 /**
  * pi-fake-opencode — Identity header construction
@@ -15,13 +16,15 @@ import { randomBytes } from "node:crypto";
  *   {"type":"FreeTierError","message":"Error from provider (Console):
  *    OpenCode's free tier can only be used from within OpenCode"}
  *
- * Black-box verification (2026-10, against the 1.19.0 npm client and the
- * live gateway; details and experiment log in README) shows the gate checks
- * three things and all three must hold:
+ * The gate checks three things and all three must hold. The shape below is
+ * re-checked against opencode2api's captures of a live official client
+ * (https://github.com/jasonxu114514/opencode2api); the original 2026-10
+ * black-box experiments are recorded in README and in
+ * .agents/notes/implemented/bug-fix/2026-10-15-pi-fake-opencode-zen-fingerprint-1-19.md.
  *
  *   1. User-Agent must be the official composite form:
  *        opencode/{version} ai-sdk/provider-utils/{n} runtime/bun/{n}
- *      e.g. "opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14".
+ *      e.g. "opencode/2.1.1 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14".
  *      The 2-segment `opencode/{version}` and 4-segment
  *      `opencode/{channel}/{version}/{client}` forms are both rejected.
  *   2. `x-opencode-session` / `x-opencode-session-id` must carry a
@@ -29,9 +32,10 @@ import { randomBytes } from "node:crypto";
  *      an ASCENDING one (`ses_`/`msg_` + 12 lowercase hex of the low 48
  *      bits of (ms*0x1000 + counter), optionally NOT-ed, + 14 base62
  *      chars — opencode `packages/schema/src/identifier.ts`).
- *   3. The request's system message must START with a known official
- *      OpenCode prompt (the session title-generator prompt works; anything
- *      may be appended after it). Enforced in index.ts.
+ *   3. The body must look like an official agent request: the CLI system
+ *      prompt at the head of the system message, the official tool set in
+ *      the tool list, `stream: true` and `max_completion_tokens`. Enforced in
+ *      payload.ts.
  *
  * None of this is transport-dependent: the same request passes from curl,
  * Node/undici, and Bun once the three signals are right.
@@ -41,13 +45,13 @@ import { randomBytes } from "node:crypto";
  * OpenCode client version to impersonate.
  *
  * The gateway rejects stale versions with `UpgradeRequired`, so this must
- * track a recent OpenCode release (npm `opencode-ai` latest at the time of
- * the 2026-10 re-verification). Override at runtime with the
+ * track a recent OpenCode release (the 2.1.1 CLI is the one opencode2api
+ * replays). Override at runtime with the
  * `PI_FAKE_OPENCODE_VERSION` env var, or replace the whole User-Agent via
  * `PI_FAKE_OPENCODE_UA`, when the gateway starts rejecting older
  * fingerprints.
  */
-export const DEFAULT_OPENCODE_VERSION = "1.19.0";
+export const DEFAULT_OPENCODE_VERSION = "2.1.1";
 
 /** `ai-sdk/provider-utils` version embedded in the official User-Agent. */
 export const DEFAULT_PROVIDER_UTILS_VERSION = "4.0.23";
@@ -128,9 +132,9 @@ function identifierBody(descending: boolean): string {
  * Build the OpenCode client's User-Agent string.
  *
  * Mirrors the official client (`App.useragent` composed with the AI SDK and
- * runtime segments in the 1.19.x line), e.g.:
+ * runtime segments), e.g.:
  *
- *   opencode/1.19.0 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14
+ *   opencode/2.1.1 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14
  *
  * Priority:
  *   1. `PI_FAKE_OPENCODE_UA`      — full string override
@@ -170,12 +174,29 @@ export function buildSessionId(piSessionId: string): string {
 }
 
 /**
- * Build the `x-opencode-request` value: a fresh ASCENDING message id
- * (`msg_` + 26 chars) per request, mirroring opencode's user-message id.
+ * Build the `x-opencode-request` value: the ASCENDING id (`msg_` + 26 chars)
+ * of the current user turn.
+ *
+ * The official client mints one id per user message and repeats it on every
+ * request of that turn (the agent loop's tool steps, the title request), so the
+ * gateway keeps an id per turn rather than per HTTP call. `turn` fingerprints
+ * the turn (its position among the user turns plus its content); the id is
+ * cached per session and turn.
  */
-export function buildRequestId(): string {
-  return `msg_${identifierBody(false)}`;
+export function buildRequestId(session: string, turn: string): string {
+  const key = `${session}\u0000${turn}`;
+  const cached = requestIds.get(key);
+  if (cached) return cached;
+
+  const generated = `msg_${identifierBody(false)}`;
+  if (requestIds.size > REQUEST_ID_LIMIT) requestIds.clear();
+  requestIds.set(key, generated);
+  return generated;
 }
+
+/** One `msg_` id per user turn, bounded so a long session cannot grow it forever. */
+const requestIds = new Map<string, string>();
+const REQUEST_ID_LIMIT = 512;
 
 /**
  * The `x-opencode-client` value: opencode's client flavor flag, defaulting
@@ -186,12 +207,39 @@ export function buildClient(): string {
 }
 
 /**
- * The `x-opencode-project` value. The official CLI sends the literal
- * `global` for ad-hoc runs (observed in the 1.19.0 client's request log);
- * project-scoped runs send the resolved project id. We send `global`.
+ * The `x-opencode-project` value: the 40-hex git root commit the CLI uses as
+ * its project id, or a random id in that shape when `cwd` is not a repository.
+ *
+ * A project id is not merely cosmetic: the free tier ledges its quota per
+ * project id and egress, so one fixed value shares one bucket with every other
+ * client that sends it. Cached per directory.
  */
-export function buildProjectId(): string {
-  return "global";
+export function buildProjectId(cwd: string): string {
+  const cached = projectIds.get(cwd);
+  if (cached) return cached;
+
+  const resolved = resolveProjectId(cwd);
+  projectIds.set(cwd, resolved);
+  return resolved;
+}
+
+const projectIds = new Map<string, string>();
+const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
+
+function resolveProjectId(cwd: string): string {
+  try {
+    const commit = execFileSync("git", ["-C", cwd, "rev-list", "--max-parents=0", "HEAD"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+      timeout: 2000,
+    })
+      .trim()
+      .split("\n")[0];
+    if (commit && GIT_COMMIT_PATTERN.test(commit)) return commit;
+  } catch {
+    // Not a repository, no commits, or no git on PATH: fall through.
+  }
+  return randomBytes(20).toString("hex");
 }
 
 /**
@@ -227,4 +275,27 @@ export function shouldSpoof(
   }
 
   return false;
+}
+
+/**
+ * Fingerprint the user turn a body belongs to: how many user turns the
+ * conversation holds plus a hash of the last one. Tool results travel as
+ * `tool` messages (and as `user` blocks on the Anthropic wire), so they belong
+ * to the running turn rather than starting a new one.
+ */
+export function userTurnFingerprint(payload: unknown): string {
+  if (typeof payload !== "object" || payload === null) return "";
+  const messages = (payload as { messages?: unknown }).messages;
+  if (!Array.isArray(messages)) return "";
+  let count = 0;
+  let last = "";
+  for (const message of messages) {
+    if (typeof message !== "object" || message === null) continue;
+    const shape = message as { role?: unknown; content?: unknown };
+    if (shape.role !== "user") continue;
+    count++;
+    last = JSON.stringify(shape.content ?? "");
+  }
+  if (count === 0) return "";
+  return `${count}:${createHash("sha256").update(last).digest("hex").slice(0, 16)}`;
 }

@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> Superseded in part by [pi-fake-opencode replays the CLI's full request shape](2026-10-30-fake-opencode-free-tier-tool-shape.md): the gate now expects a current CLI (2.x) shape — the full CLI system prompt rather than the title prompt — and a tool list the model can actually drive. The `ses_`/`msg_` id formats and the ruling-out experiments below still hold.
+
 ## Problem
 
 The builtin `pi-fake-opencode` module (see `packages/coding-agent/src/extras/pi-fake-opencode/`) unlocks OpenCode Zen's anonymous free tier by making nanopi's requests look like the official OpenCode client. Around 2026-10 users started getting `FreeTierError` ("OpenCode's free tier can only be used from within OpenCode") on every free-model request, while the official open-source OpenCode client kept working from home and datacenter networks alike.
