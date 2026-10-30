@@ -46,8 +46,8 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Hydrate release model data
-        run: pnpm run hydrate:model-data
+      - name: Generate release model data
+        run: pnpm run generate:models
 
       - name: Create source archive
         run: |
@@ -306,8 +306,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
 
-      - name: Hydrate release model data
-        run: pnpm run hydrate:model-data
+      - name: Generate release model data
+        run: pnpm run generate:models
 
       - name: Build packages
         run: pnpm run build

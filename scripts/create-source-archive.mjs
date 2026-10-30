@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { createWriteStream, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { createWriteStream, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -14,9 +14,9 @@ import { exitStatus, repositoryRoot } from "./lib/node-runner.mjs";
 //   node scripts/create-source-archive.mjs --version <version> --ref <git-ref> --out <archive.tar.gz>
 //
 // The generated model catalogs are gitignored, so the archive adds the data
-// directory to a temporary index. The aggregator and the shards come from the
-// commit itself: a checkout regenerates them, and the archive carries the ones
-// the commit was verified with.
+// directory, the aggregator and the provider shards to a temporary index. They
+// are build products now: the commit carries none of them, and an archive
+// without them cannot be built after extraction.
 
 const usage = () => "Usage: node scripts/create-source-archive.mjs --version <version> [--ref <git-ref>] --out <archive.tar.gz>";
 
@@ -94,7 +94,8 @@ if (releaseDate(packageVersion) !== releaseDate(version)) {
 	);
 }
 
-const modelDataDirectory = join(repositoryRoot, "packages/ai/src/providers/data");
+const providersDirectory = join(repositoryRoot, "packages/ai/src/providers");
+const modelDataDirectory = join(providersDirectory, "data");
 const modelDataManifest = join(modelDataDirectory, ".manifest.json");
 const missingModelData = "Generated model data is missing. Run pnpm run generate:models first.";
 if (!statSync(modelDataManifest, { throwIfNoEntry: false })?.isFile()) rule(missingModelData);
@@ -102,6 +103,22 @@ const generatedModelData = readdirSync(modelDataDirectory, { withFileTypes: true
 	.filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
 	.map((entry) => join(modelDataDirectory, entry.name));
 if (generatedModelData.length === 0) rule(missingModelData);
+// The catalogs are build products too (gitignored), so the archive has to carry
+// the ones this checkout generated: without them the extracted tree cannot be
+// built, and the data alone has nothing to import it.
+const disabledDirectory = join(providersDirectory, "disabled");
+const generatedCatalog = [
+	join(repositoryRoot, "packages/ai/src/models.generated.ts"),
+	...readdirSync(providersDirectory, { withFileTypes: true })
+		.filter((entry) => entry.isFile() && entry.name.endsWith(".models.ts"))
+		.map((entry) => join(providersDirectory, entry.name)),
+	...(existsSync(disabledDirectory) ? readdirSync(disabledDirectory, { withFileTypes: true }) : [])
+		.filter((entry) => entry.isFile() && entry.name.endsWith("-models.ts"))
+		.map((entry) => join(disabledDirectory, entry.name)),
+];
+for (const path of generatedCatalog) {
+	if (!statSync(path, { throwIfNoEntry: false })?.isFile()) rule(`Generated model catalog is missing: ${path}. Run pnpm run generate:models first.`);
+}
 
 const archiveRoot = `nanopi-${version}`;
 const stagingDirectory = mkdtempSync(join(tmpdir(), "nanopi-source-archive-"));
@@ -114,7 +131,7 @@ process.on("exit", () => rmSync(stagingDirectory, { recursive: true, force: true
 const temporaryIndex = join(stagingDirectory, "index");
 const indexEnvironment = { ...process.env, GIT_INDEX_FILE: temporaryIndex };
 git(["read-tree", tree], { env: indexEnvironment });
-git(["add", "-f", "--", modelDataManifest, ...generatedModelData], { env: indexEnvironment });
+git(["add", "-f", "--", modelDataManifest, ...generatedModelData, ...generatedCatalog], { env: indexEnvironment });
 const archiveTree = git(["write-tree"], { env: indexEnvironment });
 const archiveMtime = git(["show", "-s", "--format=%ct", commit]);
 
