@@ -24,7 +24,9 @@ export const ENVELOPE_ENDPOINTS = [
 ];
 // Cloud Code rejects newer models from clients below 2.23.0, so this is a floor, not a cap.
 export const ANTIGRAVITY_VERSION = "2.23.1";
-export const USER_AGENT = `antigravity/hub/${ANTIGRAVITY_VERSION} darwin/arm64`;
+export const ANTIGRAVITY_CLIENT_NAME = "antigravity";
+export const USER_AGENT = `${ANTIGRAVITY_CLIENT_NAME}/hub/${ANTIGRAVITY_VERSION} darwin/arm64`;
+export const ANTIGRAVITY_API_CLIENT = `google-cloud-sdk vscode_cloudshelleditor/0.1 ${ANTIGRAVITY_CLIENT_NAME}/${ANTIGRAVITY_VERSION}`;
 const MAX_SESSION_SEED_CHARS = 64 * 1024;
 
 type GeminiBody = {
@@ -70,7 +72,21 @@ export function buildEnvelope(
 		model: input.modelId,
 		requestType: "agent",
 		requestId: `agent-${crypto.randomUUID()}`,
-		userAgent: "antigravity",
+		userAgent: ANTIGRAVITY_CLIENT_NAME,
 		request: normalized,
+	};
+}
+
+/**
+ * Headers the native client puts on every Cloud Code call. The Google SDK client
+ * built underneath always identifies itself as `nanopi (...)`, so the Antigravity
+ * identity has to be layered on top of it.
+ */
+export function clientHeaders(): Record<string, string> {
+	return {
+		"User-Agent": USER_AGENT,
+		"X-Client-Name": ANTIGRAVITY_CLIENT_NAME,
+		"X-Client-Version": ANTIGRAVITY_VERSION,
+		"X-Goog-Api-Client": ANTIGRAVITY_API_CLIENT,
 	};
 }
