@@ -1,0 +1,155 @@
+name: Nightly
+
+# 每天从 main 构建一次：npm 包以 nightly dist-tag 发到 GitHub Packages，镜像以
+# nightly tag 发到 GHCR。不建 GitHub Release、不打 git tag —— 日期 tag 属于正式
+# 版本，nightly 的可变引用只有 registry 上的 dist-tag 和镜像 tag。
+#
+# cron 走 UTC：0:00 UTC 是北京时间 08:00，要北京时间 0:00 就写 '0 16 * * *'。
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build bundle and image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      # nightly 版本号 = 当前包版本 + 日期，registry 上每天唯一，semver 上仍排在
+      # 对应的正式版本之下。同一天重跑会因为已存在而跳过发布。
+      - name: Resolve nightly version
+        id: version
+        run: |
+          set -euo pipefail
+          date="$(date -u +%Y%m%d)"
+          base="$(node -p "require('./packages/coding-agent/package.json').version")"
+          echo "date=$date" >> "$GITHUB_OUTPUT"
+          echo "version=$base-nightly.$date" >> "$GITHUB_OUTPUT"
+
+      - name: Generate release model data
+        run: pnpm run generate:models
+
+      # build-single-file.mjs 自己跑 pnpm install 与 build:offline，产物与正式
+      # 发布那份 nanopi.js 同一条路径。
+      - name: Build single-file bundle
+        run: node scripts/build-single-file.mjs --offline-model-data --out release-assets
+
+      - name: Smoke-test bundle
+        run: |
+          set -euo pipefail
+          node release-assets/nanopi.js --version
+          node release-assets/nanopi.js --help
+
+      # GHCR 要求仓库名小写，owner 是大小写混写的。
+      - name: Resolve image name
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: echo "IMAGE=ghcr.io/${OWNER,,}/nanopi" >> "$GITHUB_ENV"
+
+      # 镜像发 linux/amd64 与 linux/arm64；runner 是 amd64，arm64 走 QEMU。
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Log in to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: echo "$GH_TOKEN" | docker login ghcr.io --username "$ACTOR" --password-stdin
+
+      - name: Build and push nightly image
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DATE: ${{ steps.version.outputs.date }}
+        run: |
+          set -euo pipefail
+          cp release-assets/nanopi.js nanopi.js
+          docker buildx build \
+            --file Dockerfile \
+            --platform linux/amd64,linux/arm64 \
+            --tag "$IMAGE:nightly" \
+            --tag "$IMAGE:nightly-$DATE" \
+            --label "org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}" \
+            --label "org.opencontainers.image.version=$VERSION" \
+            --push \
+            .
+
+  publish-npm:
+    name: Publish nightly npm package
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
+      packages: write
+    env:
+      PACKAGE_NAME: "@nekosekaimoe/nanopi"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        run: npm install -g pnpm@12.15.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+          registry-url: 'https://npm.pkg.github.com'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Generate release model data
+        run: pnpm run generate:models
+
+      - name: Build packages
+        run: pnpm run build
+
+      - name: Repack under the GitHub Packages name
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: node scripts/make-github-package.mjs --out "$RUNNER_TEMP/github-package" --version "$VERSION"
+
+      - name: Publish package
+        working-directory: ${{ runner.temp }}/github-package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if npm view "$PACKAGE_NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "$PACKAGE_NAME@$VERSION is already published; skipping."
+            exit 0
+          fi
+          # nightly 只动 nightly dist-tag，latest 留给正式发布。
+          npm publish --ignore-scripts --tag nightly

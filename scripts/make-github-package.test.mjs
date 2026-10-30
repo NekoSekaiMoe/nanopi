@@ -38,3 +38,21 @@ test("repacks the coding-agent build under the GitHub Packages name", (t) => {
 		if (statSync(path).isFile()) readFileSync(path, "utf8");
 	}
 });
+
+// Nightly releases publish a date-suffixed prerelease of the next version, so the
+// repack has to accept a version override.
+test("repacks with a version override for nightly builds", (t) => {
+	const temporaryRoot = mkdtempSync(join(tmpdir(), "nanopi-github-package-nightly-test-"));
+	t.after(() => rmSync(temporaryRoot, { recursive: true, force: true }));
+	mkdirSync(join(packageDir, "dist", "bundle"), { recursive: true });
+	writeFileSync(join(packageDir, "dist", "bundle", "cli.js"), "#!/usr/bin/env node\n");
+
+	const outDir = join(temporaryRoot, "out");
+	execFileSync(process.execPath, [script, "--out", outDir, "--version", "20260101.0.0-nightly.20260101"], {
+		stdio: "pipe",
+	});
+
+	const repacked = JSON.parse(readFileSync(join(outDir, "package.json"), "utf8"));
+	assert.equal(repacked.name, "@nekosekaimoe/nanopi");
+	assert.equal(repacked.version, "20260101.0.0-nightly.20260101");
+});

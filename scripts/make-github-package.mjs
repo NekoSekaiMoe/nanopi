@@ -12,8 +12,17 @@ const BUILT_ENTRIES = new Set(["dist"]);
 
 const args = process.argv.slice(2);
 const outFlag = args.indexOf("--out");
-if (outFlag === -1 || !args[outFlag + 1]) throw new Error("Usage: node scripts/make-github-package.mjs --out <dir>");
+if (outFlag === -1 || !args[outFlag + 1]) {
+	throw new Error("Usage: node scripts/make-github-package.mjs --out <dir> [--version <version>]");
+}
 const outDir = resolve(args[outFlag + 1]);
+// 发布 nightly 要一个 registry 上唯一的版本号（<发布版本>-nightly.<日期>），
+// tarball 里的版本因此不能固定取 package.json。
+const versionFlag = args.indexOf("--version");
+const versionOverride = versionFlag === -1 ? undefined : args[versionFlag + 1];
+if (versionFlag !== -1 && !versionOverride) {
+	throw new Error("Usage: node scripts/make-github-package.mjs --out <dir> [--version <version>]");
+}
 
 function copyTree(source, target) {
 	mkdirSync(target, { recursive: true });
@@ -28,6 +37,7 @@ function copyTree(source, target) {
 const { name, version, publishConfig, scripts, devDependencies, ...rest } = JSON.parse(
 	readFileSync(join(PACKAGE_DIR, "package.json"), "utf8"),
 );
+const publishedVersion = versionOverride ?? version;
 rmSync(outDir, { force: true, recursive: true });
 mkdirSync(outDir, { recursive: true });
 for (const entry of rest.files) {
@@ -39,5 +49,5 @@ for (const entry of rest.files) {
 	if (statSync(source).isDirectory()) copyTree(source, join(outDir, entry));
 	else copyFileSync(source, join(outDir, entry));
 }
-writeFileSync(join(outDir, "package.json"), `${JSON.stringify({ ...rest, name: PACKAGE_NAME, version }, null, "\t")}\n`);
-console.log(`${PACKAGE_NAME}@${version}: ${outDir}`);
+writeFileSync(join(outDir, "package.json"), `${JSON.stringify({ ...rest, name: PACKAGE_NAME, version: publishedVersion }, null, "\t")}\n`);
+console.log(`${PACKAGE_NAME}@${publishedVersion}: ${outDir}`);
