@@ -42,7 +42,7 @@ importers:
   packages/agent:
     dependencies:
       '@nanopi/pi-ai':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../ai
       typebox:
         specifier: 1.4.3
@@ -110,16 +110,16 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       '@nanopi/pi-agent-core':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../agent
       '@nanopi/pi-ai':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../ai
       '@nanopi/pi-extra':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../extra
       '@nanopi/pi-tui':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../tui
       '@silvia-odwyer/photon-node':
         specifier: 0.3.4
@@ -198,7 +198,7 @@ importers:
   packages/extra:
     dependencies:
       '@nanopi/pi-tui':
-        specifier: ^20261022.0.0
+        specifier: ^20261031.0.0
         version: link:../tui
     devDependencies:
       '@types/node':

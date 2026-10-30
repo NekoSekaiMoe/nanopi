@@ -1,12 +1,13 @@
 # Changelog
 
-## [Unreleased]
+## [20261031]
 
 ### Fixed
 
 - Fixed bold and italic delimited next to CJK punctuation rendering literal asterisks, in the TUI and in HTML exports, by tokenizing emphasis with marked-cjk-friendly ([#10730](https://github.com/earendil-works/pi/pull/10730), [#3353](https://github.com/earendil-works/pi/issues/3353)).
 - Fixed an unclosed display-math block swallowing every following table ([#11159](https://github.com/earendil-works/pi/issues/11159)).
-
+- Fixed the placeholder being covered by a fake cursor: the empty buffer renders normally and the placeholder is its own dim line with no cursor, while `CURSOR_MARKER` still sits at its end so an IME candidate window keeps its position. Placeholder wrapping counts plain text only, and `truncateToWidth` closes an unterminated SGR before padding so an unfocused cursor's reverse video does not bleed into the trailing space (issue [#373](https://cnb.cool/shinytale/nanopi/-/issues/373))
+- Fixed the exit hint sharing a line with the placeholder and the placeholder swallowing the first keystroke (issue [#375](https://cnb.cool/shinytale/nanopi/-/issues/375))
 ## [20261022]
 
 ### Added

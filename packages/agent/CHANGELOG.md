@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [20261031]
+
+### Fixed
+
+- `agentLoop` and `agentLoopContinue` close their stream when the run rejects. They left the stream open, so a consumer waited on an event that never came while the rejection surfaced as an unhandled promise rejection (issue [#376](https://cnb.cool/shinytale/nanopi/-/issues/376))
 
 ## [20261022]
 

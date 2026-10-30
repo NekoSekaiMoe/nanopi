@@ -1,7 +1,7 @@
 {
 	"name": "@nanopi/webui",
 	"private": true,
-	"version": "0.0.0",
+	"version": "20261031.0.0",
 	"type": "module",
 	"description": "Next.js rewrite of the nanopi browser UI, styled after Memoh (clean-room).",
 	"scripts": {
