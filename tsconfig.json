@@ -18,6 +18,9 @@
 			"@nanopi/pi-ai/dist/*": [
 				"./packages/ai/src/*"
 			],
+			"@nanopi/pi-ai/qoder": [
+				"./packages/ai/src/qoder/index.ts"
+			],
 			"@nanopi/pi-agent-core": [
 				"./packages/agent/src/index.ts"
 			],

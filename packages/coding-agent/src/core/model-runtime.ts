@@ -71,7 +71,7 @@ import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { type CopilotAutoState, copilotAutoVirtualModel } from "./copilot-auto.ts";
-import { withLiveCatalog } from "./live-catalog-provider.ts";
+import { withLiveCatalog, withProviderCatalog } from "./live-catalog-provider.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import {
@@ -264,6 +264,11 @@ export class ModelRuntime implements Models {
 			.builtinProviders()
 			.filter((provider) => isProviderIncluded(provider.id))
 			.map((provider) => {
+				// Qoder has no packaged catalog: the account's signed model list is the
+				// only source, so the provider's own refresh fills the overlay.
+				if (provider.id === "qoder" || provider.id === "qoder-cn") {
+					return withProviderCatalog(provider);
+				}
 				// OpenRouter narrows the catalog to the models, limits and prices of the user's key.
 				if (provider.id === "openrouter") {
 					return withPersonalizedCatalog(

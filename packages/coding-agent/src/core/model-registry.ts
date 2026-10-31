@@ -10,6 +10,7 @@ import type {
 	ClassifierModel,
 	ClassifierResult,
 	Context,
+	CredentialInfo,
 	ImageApi,
 	ImageModel,
 	ImagesContext,
@@ -198,6 +199,11 @@ export class ModelRegistry {
 
 	getProviderAuth(provider: string): Promise<AuthResult | undefined> {
 		return this.runtime.getAuth(provider);
+	}
+
+	/** Stored credential metadata, without secrets: which providers are logged in. */
+	listCredentials(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
+		return this.runtime.listCredentials(options);
 	}
 
 	async getApiKeyForProvider(provider: string): Promise<string | undefined> {

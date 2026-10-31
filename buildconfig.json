@@ -76,6 +76,9 @@
 		"module/codex-compaction": {
 			"description": "Codex-style compaction and its post-compaction warning"
 		},
+		"module/qoder-checkin": {
+			"description": "Qoder daily check-in on session start (claims the campaign credits for every logged-in Qoder account)"
+		},
 		"module/ask-lite": {
 			"description": "ask_user_question tool and its dialog"
 		},
@@ -148,6 +151,9 @@
 		"oauth/openrouter": {
 			"description": "OpenRouter OAuth login flow"
 		},
+		"oauth/qoder-oauth": {
+			"description": "Qoder OAuth login flow (qoder.com and qoder.com.cn)"
+		},
 		"oauth/xai": {
 			"description": "xAI OAuth login flow"
 		}
@@ -169,6 +175,9 @@
 		},
 		"codex-compaction": {
 			"source": "packages/coding-agent/src/modules/codex-compaction/index.ts"
+		},
+		"qoder-checkin": {
+			"source": "packages/coding-agent/src/modules/qoder/index.ts"
 		},
 		"ask-lite": {
 			"source": "packages/coding-agent/src/extras/ask-lite/index.ts"
@@ -324,6 +333,8 @@
 				"opencode",
 				"opencode-go",
 				"openrouter",
+				"qoder",
+				"qoder-cn",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
 				"qwen-token-plan-individual",
@@ -387,6 +398,8 @@
 				"opencode",
 				"opencode-go",
 				"openrouter",
+				"qoder",
+				"qoder-cn",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
 				"qwen-token-plan-individual",

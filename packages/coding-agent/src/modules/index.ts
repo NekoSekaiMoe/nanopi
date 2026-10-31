@@ -30,6 +30,7 @@ import websearch from "../extras/websearch/src/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
 import llamaExtension from "./llama/index.ts";
+import qoderCheckinExtension from "./qoder/index.ts";
 
 /** Modules compiled into every nanopi build. Order matters: `extra` loads
  * first so it can answer `project_trust` for `--yolo` before anything else. */
@@ -41,6 +42,7 @@ export const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "llama.cpp", factory: llamaExtension },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
+	{ name: "qoder-checkin", factory: qoderCheckinExtension, hidden: true },
 	// Bundled extras (formerly dist/extras packages, now compiled in).
 	{ name: "ask-lite", factory: askLite },
 	{ name: "mcp-lite", factory: mcpLite, hidden: true },
