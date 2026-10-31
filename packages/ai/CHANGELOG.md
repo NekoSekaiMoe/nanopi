@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `qoder` and `qoder-cn` providers with a `/login qoder` / `/login qoder-cn` OAuth flow: the browser approval flow at `qoder.com` (`/device/selectAccounts?nonce=...&challenge=...`) polled through `/api/v1/deviceToken/poll`, stored as the device token both the gateway and the daily check-in accept. `QODER_REGION` selects the site for a credential that recorded none, and `QODER_DEVICE_TOKEN` / `QODER_CN_DEVICE_TOKEN` cover scripted use (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
+- Added the Qoder daily check-in (`@nanopi/pi-ai/qoder`): the campaign list and claim calls that pay the day's credits. The legacy `daily-check-in/claim` endpoint is not used — it answers 409 on unclaimed days and pays nothing — and a replayed claim reports "already claimed" instead of failing (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
+
 ## [20261031.1.0]
 
 ### Fixed

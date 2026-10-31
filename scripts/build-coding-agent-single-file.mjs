@@ -387,9 +387,16 @@ if (enabledFlows.length < OAUTH_FLOWS.length) {
 	const shimLines = [
 		`import { registerBundledOAuthFlowLoaders } from ${JSON.stringify(join(aiDistDir, "auth", "oauth", "load.js"))};`,
 	];
-	for (const flow of enabledFlows) {
+	// One module can back several flows (Qoder global and CN live in one file), so
+	// imports are emitted per module while the registry names every flow.
+	const enabledFlowModules = [...new Set(enabledFlows.map((flow) => flow.module))];
+	for (const moduleName of enabledFlowModules) {
+		const exports = enabledFlows
+			.filter((flow) => flow.module === moduleName)
+			.map((flow) => flow.exportName)
+			.join(", ");
 		shimLines.push(
-			`import { ${flow.exportName} } from ${JSON.stringify(join(aiDistDir, "auth", "oauth", `${flow.module}.js`))};`,
+			`import { ${exports} } from ${JSON.stringify(join(aiDistDir, "auth", "oauth", `${moduleName}.js`))};`,
 		);
 	}
 	shimLines.push("registerBundledOAuthFlowLoaders({");

@@ -197,6 +197,39 @@ function recordFullProviderSet(providerIds: readonly string[]): void {
 	console.log(`Recorded ${record.providers.length} providers in ${BUILD_CONFIG_FILENAME} provider set "${record.name}".`);
 }
 
+
+/**
+ * Qoder is not a models.dev provider. Both sites serve the same subscription
+ * catalog through an OpenAI-compatible gateway, so the list is kept by hand and
+ * every cost is zero: the plan bills a flat fee, not per token. Context windows
+ * come from Qoder's model list (`max_input_tokens`), which the endpoint only
+ * answers with a signed request.
+ */
+function qoderModels(): Model<"openai-completions">[] {
+	const cost: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	const entries = [
+		{ id: "auto", name: "Qoder Auto", contextWindow: 200000, maxTokens: 32768, reasoning: false },
+		{ id: "ultimate", name: "Qoder Ultimate", contextWindow: 200000, maxTokens: 32768, reasoning: false },
+		{ id: "performance", name: "Qoder Performance", contextWindow: 200000, maxTokens: 32768, reasoning: false },
+		{ id: "efficient", name: "Qoder Efficient", contextWindow: 200000, maxTokens: 32768, reasoning: false },
+		{ id: "lite", name: "Qoder Lite", contextWindow: 200000, maxTokens: 16384, reasoning: false },
+	];
+	const build = (provider: "qoder" | "qoder-cn", baseUrl: string): Model<"openai-completions">[] =>
+		entries.map((entry) => ({
+			id: entry.id,
+			name: entry.name,
+			api: "openai-completions",
+			provider,
+			baseUrl,
+			reasoning: entry.reasoning,
+			input: ["text"],
+			cost,
+			contextWindow: entry.contextWindow,
+			maxTokens: entry.maxTokens,
+		}));
+	return [...build("qoder", "https://openapi.qoder.sh/v1"), ...build("qoder-cn", "https://openapi.qoder.com.cn/v1")];
+}
+
 /**
  * Antigravity is not a models.dev provider. The catalog is the set of models the
  * Cloud Code Assist backend serves to the native client, kept in sync by hand.
@@ -4046,6 +4079,8 @@ async function generateModels() {
 		},
 	];
 	allModels.push(...codexModels);
+
+	allModels.push(...qoderModels());
 
 	allModels.push(...antigravityModels());
 

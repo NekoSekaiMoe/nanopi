@@ -8,6 +8,7 @@ import { metaOAuth } from "./auth/oauth/meta.ts";
 import { openaiChatGPTOAuth } from "./auth/oauth/openai-chatgpt.ts";
 import { openaiCodexOAuth } from "./auth/oauth/openai-codex.ts";
 import { openRouterOAuth } from "./auth/oauth/openrouter.ts";
+import { qoderCnOAuth, qoderOAuth } from "./auth/oauth/qoder-oauth.ts";
 import { xaiOAuth } from "./auth/oauth/xai.ts";
 
 /** Register OAuth flows statically embedded in standalone single-file bundles. */
@@ -22,6 +23,8 @@ export function registerBundledOAuthFlows(): void {
 		kimiCoding: () => kimiCodingOAuth,
 		kiro: () => kiroOAuth,
 		meta: () => metaOAuth,
+		qoder: () => qoderOAuth,
+		qoderCn: () => qoderCnOAuth,
 		xai: () => xaiOAuth,
 	});
 }

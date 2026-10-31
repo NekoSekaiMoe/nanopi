@@ -25,6 +25,7 @@ export default mergeConfig(
 		resolve: {
 			alias: [
 				{ find: /^@nanopi\/pi-ai$/, replacement: workspaceSourcePaths.aiIndex },
+				{ find: /^@nanopi\/pi-ai\/qoder$/, replacement: workspaceSourcePaths.aiQoder },
 				{ find: /^@nanopi\/pi-agent-core$/, replacement: workspaceSourcePaths.agentIndex },
 				{ find: /^@mariozechner\/pi-ai$/, replacement: workspaceSourcePaths.aiIndex },
 				{ find: /^@mariozechner\/pi-ai\/oauth$/, replacement: workspaceSourcePaths.aiOAuth },

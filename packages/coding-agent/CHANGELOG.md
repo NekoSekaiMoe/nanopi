@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### New Features
+
+- **Qoder daily check-in**: a session start claims the day's Qoder credits for every logged-in Qoder account (both sites) and reports the outcome in one status line; `/qoder-checkin` runs it on demand and `NANOPI_QODER_CHECKIN=0` turns it off (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
+
 ## [20261031.1.0]
 
 ### Changed

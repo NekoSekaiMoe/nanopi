@@ -33,6 +33,8 @@ type OAuthFlowLoaders = {
 	kimiCoding: () => OAuthAuth | Promise<OAuthAuth>;
 	kiro: () => OAuthAuth | Promise<OAuthAuth>;
 	meta: () => OAuthAuth | Promise<OAuthAuth>;
+	qoder: () => OAuthAuth | Promise<OAuthAuth>;
+	qoderCn: () => OAuthAuth | Promise<OAuthAuth>;
 	xai: () => OAuthAuth | Promise<OAuthAuth>;
 };
 
@@ -86,6 +88,16 @@ export const loadKiroOAuth = async (): Promise<OAuthAuth> => {
 export const loadMetaOAuth = async (): Promise<OAuthAuth> => {
 	if (bundledLoaders) return bundledLoaders.meta();
 	return ((await importOAuthModule("./meta.ts")) as { metaOAuth: OAuthAuth }).metaOAuth;
+};
+
+export const loadQoderOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.qoder();
+	return ((await importOAuthModule("./qoder-oauth.ts")) as { qoderOAuth: OAuthAuth }).qoderOAuth;
+};
+
+export const loadQoderCnOAuth = async (): Promise<OAuthAuth> => {
+	if (bundledLoaders) return bundledLoaders.qoderCn();
+	return ((await importOAuthModule("./qoder-oauth.ts")) as { qoderCnOAuth: OAuthAuth }).qoderCnOAuth;
 };
 
 export const loadXaiOAuth = async (): Promise<OAuthAuth> => {
