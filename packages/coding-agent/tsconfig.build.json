@@ -6,7 +6,7 @@
 			"@nanopi/pi-agent-core": ["../agent/dist/index.d.ts"],
 			"@nanopi/pi-agent-core/*": ["../agent/dist/*.d.ts"],
 			"@nanopi/pi-ai": ["../ai/dist/index.d.ts"],
-			"@nanopi/pi-ai/*": ["../ai/dist/*.d.ts", "../ai/dist/providers/*.d.ts"],
+			"@nanopi/pi-ai/*": ["../ai/dist/*.d.ts", "../ai/dist/*/index.d.ts", "../ai/dist/providers/*.d.ts"],
 			"@nanopi/pi-tui": ["../tui/dist/index.d.ts"],
 			"@nanopi/pi-tui/*": ["../tui/dist/*.d.ts", "../tui/dist/components/*.d.ts"],
 			"@nanopi/pi-coding-agent": ["./src/index.ts"]
