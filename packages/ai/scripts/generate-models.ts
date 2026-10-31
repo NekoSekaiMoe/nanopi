@@ -199,38 +199,6 @@ function recordFullProviderSet(providerIds: readonly string[]): void {
 
 
 /**
- * Qoder is not a models.dev provider. Both sites serve the same subscription
- * catalog through an OpenAI-compatible gateway, so the list is kept by hand and
- * every cost is zero: the plan bills a flat fee, not per token. Context windows
- * come from Qoder's model list (`max_input_tokens`), which the endpoint only
- * answers with a signed request.
- */
-function qoderModels(): Model<"openai-completions">[] {
-	const cost: ModelCost = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
-	const entries = [
-		{ id: "auto", name: "Qoder Auto", contextWindow: 200000, maxTokens: 32768, reasoning: false },
-		{ id: "ultimate", name: "Qoder Ultimate", contextWindow: 200000, maxTokens: 32768, reasoning: false },
-		{ id: "performance", name: "Qoder Performance", contextWindow: 200000, maxTokens: 32768, reasoning: false },
-		{ id: "efficient", name: "Qoder Efficient", contextWindow: 200000, maxTokens: 32768, reasoning: false },
-		{ id: "lite", name: "Qoder Lite", contextWindow: 200000, maxTokens: 16384, reasoning: false },
-	];
-	const build = (provider: "qoder" | "qoder-cn", baseUrl: string): Model<"openai-completions">[] =>
-		entries.map((entry) => ({
-			id: entry.id,
-			name: entry.name,
-			api: "openai-completions",
-			provider,
-			baseUrl,
-			reasoning: entry.reasoning,
-			input: ["text"],
-			cost,
-			contextWindow: entry.contextWindow,
-			maxTokens: entry.maxTokens,
-		}));
-	return [...build("qoder", "https://openapi.qoder.sh/v1"), ...build("qoder-cn", "https://openapi.qoder.com.cn/v1")];
-}
-
-/**
  * Antigravity is not a models.dev provider. The catalog is the set of models the
  * Cloud Code Assist backend serves to the native client, kept in sync by hand.
  * Subscription access bills nothing per token, so every cost is zero.
@@ -4080,8 +4048,6 @@ async function generateModels() {
 	];
 	allModels.push(...codexModels);
 
-	allModels.push(...qoderModels());
-
 	allModels.push(...antigravityModels());
 
 	allModels.push(...kiroModels());
@@ -4231,6 +4197,13 @@ async function generateModels() {
 		providers[model.provider].classifier[model.id] ??= model;
 	}
 
+	// Qoder keeps no packaged catalog (its models come from the account's list
+	// endpoint), but its provider set names it, so it still gets an empty data
+	// artifact; the ids are added before the flavor filter so a trimmed build
+	// that ships Qoder keeps them.
+	for (const providerId of ["qoder", "qoder-cn"]) {
+		providers[providerId] ??= { chat: {}, image: {}, classifier: {} };
+	}
 	const sortedProviderIds = selectProviderIds(Object.keys(providers).sort());
 	if (sortedProviderIds.length === 0) {
 		throw new Error("No provider left to generate after filtering the upstream catalogs");
@@ -4245,21 +4218,35 @@ async function generateModels() {
 	const jsonImageProviders: Record<string, Record<string, ImageModel<ImageApi>>> = {};
 	const jsonClassifierProviders: Record<string, Record<string, ClassifierModel<ClassifierApi>>> = {};
 	const jsonAllProviders: Record<string, AnyModel[]> = {};
+	// Qoder's catalog is empty on purpose (the account's list endpoint is the
+	// source). Its data file still carries one empty group, because the validator
+	// rejects a file without an API group and a real group would need a model.
+	const emptyApiGroup = (providerId: string): Record<string, Record<string, never>> =>
+		providerId === "qoder" || providerId === "qoder-cn" ? { "openai-completions": {} } : {};
 	for (const providerId of sortedProviderIds) {
-		jsonChatProviders[providerId] = Object.fromEntries(
+		const chatEntries = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].chat).sort(([left], [right]) => left.localeCompare(right)),
 		);
+		// Qoder's file shape carries one empty API group; every other provider's
+		// catalog map is empty when it ships no model.
+		const noPackagedModels = Object.keys(chatEntries).length === 0;
+		jsonChatProviders[providerId] = noPackagedModels ? emptyApiGroup(providerId) : chatEntries;
 		jsonImageProviders[providerId] = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].image).sort(([left], [right]) => left.localeCompare(right)),
 		);
 		jsonClassifierProviders[providerId] = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].classifier).sort(([left], [right]) => left.localeCompare(right)),
 		);
-		jsonAllProviders[providerId] = [
-			...Object.values(jsonChatProviders[providerId]),
-			...Object.values(jsonImageProviders[providerId]),
-			...Object.values(jsonClassifierProviders[providerId]),
-		];
+		// The placeholder group is a file shape, not a model: the structure the
+		// data validator compares against must stay empty.
+		const placeholderGroup = Object.keys(emptyApiGroup(providerId)).length > 0;
+		jsonAllProviders[providerId] = noPackagedModels && placeholderGroup
+			? []
+			: [
+					...Object.values(jsonChatProviders[providerId]),
+					...Object.values(jsonImageProviders[providerId]),
+					...Object.values(jsonClassifierProviders[providerId]),
+				];
 	}
 
 	const serializeJson = (value: unknown) => `${JSON.stringify(value, null, generatorOptions.pretty ? 2 : undefined)}\n`;
@@ -4283,6 +4270,12 @@ async function generateModels() {
 		const { groups, structure } = groupProviderModelData(providerId, jsonAllProviders[providerId]);
 		generatedDataProviders[providerId] = groups;
 		modelDataStructure[providerId] = structure;
+		// A provider with no packaged model still needs one (empty) API group: the
+		// data validator rejects a file without one, and a real group would need a
+		// model entry it does not have.
+		if (Object.keys(groups).length === 0) {
+			generatedDataProviders[providerId] = { "openai-completions": {} };
+		}
 	}
 
 	const generatedAt = new Date().toISOString();

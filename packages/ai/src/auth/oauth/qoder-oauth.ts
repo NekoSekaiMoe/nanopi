@@ -109,6 +109,8 @@ interface QoderAccountInfo {
 	userId?: string;
 	plan?: string;
 	userType?: string;
+	organizationId?: string;
+	organizationName?: string;
 }
 
 async function fetchAccount(token: string, region: QoderRegion, signal: AbortSignal): Promise<QoderAccountInfo> {
@@ -128,8 +130,10 @@ async function fetchAccount(token: string, region: QoderRegion, signal: AbortSig
 	const info: QoderAccountInfo = {
 		name: asString(body?.name),
 		email: asString(body?.email),
-		userId: asString(body?.userId) ?? asString(body?.id),
+		userId: asString(body?.id) ?? asString(body?.userId) ?? asString(body?.uid),
 		userType: asString(body?.userType),
+		organizationId: asString(body?.organization_id),
+		organizationName: asString(body?.organization_name),
 	};
 	// The plan endpoint is informational: a failure must not fail the login.
 	try {
@@ -154,16 +158,22 @@ function credentialFrom(
 	return {
 		type: "oauth",
 		access: token,
-		// The device token is not renewable through a token endpoint, so `refresh`
-		// holds the account refresh token when there is one and the device token
-		// otherwise (a re-login is the only recovery either way).
+		// `refresh` holds the account refresh token when the login returned one and
+		// the device token otherwise; the token exchange itself is a separate flow.
 		refresh: refreshToken ?? token,
 		expires: Date.now() + DEVICE_TOKEN_LIFETIME_MS - REFRESH_SKEW_MS,
+		// The account id and token travel in the env because the signed model
+		// list is fetched from the stored credential alone, without re-login.
 		env: {
 			QODER_REGION: region,
+			QODER_DEVICE_TOKEN: token,
+			...(refreshToken ? { QODER_ACCOUNT_REFRESH_TOKEN: refreshToken } : {}),
 			...(info.name ? { QODER_ACCOUNT_NAME: info.name } : {}),
 			...(info.email ? { QODER_ACCOUNT_EMAIL: info.email } : {}),
 			...(info.userId ? { QODER_ACCOUNT_ID: info.userId } : {}),
+			...(info.organizationId ? { QODER_ACCOUNT_ORG_ID: info.organizationId } : {}),
+			...(info.organizationName ? { QODER_ACCOUNT_ORG_NAME: info.organizationName } : {}),
+			...(info.userType ? { QODER_ACCOUNT_USER_TYPE: info.userType } : {}),
 			...(info.plan ? { QODER_PLAN: info.plan } : {}),
 		},
 	};
@@ -230,6 +240,9 @@ function createQoderOAuth(explicitRegion?: QoderRegion): OAuthAuth {
 		},
 
 		async toAuth(credential) {
+			// `env` is provider-scoped: keeping the account id and device token in
+			// the request environment hands them to the signed model-list refresh
+			// without a second copy in a global.
 			return { apiKey: credential.access, env: credential.env };
 		},
 	};

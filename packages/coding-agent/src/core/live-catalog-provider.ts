@@ -69,6 +69,36 @@ export function withLiveCatalog(provider: Provider): Provider {
 	};
 }
 
+/**
+ * Wrap a provider that fetches its own catalog through `refreshModels` (Qoder's
+ * signed model list) so a live overlay replaces the packaged models. Unlike
+ * `withLiveCatalog` there is no `/models` request to make: the provider's own
+ * refresh is the only source, and `stored` is what a previous refresh persisted.
+ */
+export function withProviderCatalog(provider: Provider): Provider {
+	let liveModels: readonly AnyModel[] = [];
+
+	return {
+		...provider,
+		getModels: () =>
+			liveModels.length > 0 ? liveModels.filter((model) => isModelType(model, "chat")) : provider.getModels(),
+		getAllModels: () => {
+			const base = provider.getAllModels?.() ?? provider.getModels();
+			if (liveModels.length === 0) return base;
+			return [...liveModels, ...base.filter((model) => !isModelType(model, "chat"))];
+		},
+		refreshModels: (context: RefreshModelsContext) =>
+			refreshWithLiveCatalog(
+				provider,
+				context,
+				(models) => {
+					liveModels = models;
+				},
+				false,
+			),
+	};
+}
+
 function apiKeyFromCredential(credential: Credential | undefined): string | undefined {
 	return credential?.type === "api_key" ? credential.key : undefined;
 }
@@ -77,9 +107,22 @@ async function refreshWithLiveCatalog(
 	provider: Provider,
 	context: RefreshModelsContext,
 	setLiveModels: (models: readonly AnyModel[]) => void,
+	askEndpoint = true,
 ): Promise<void> {
 	const refresh = provider.refreshModels;
 	if (refresh) await refresh(context);
+	// The provider's own refresh already fetched the catalog; there is no
+	// endpoint listing to ask on top of it.
+	if (!askEndpoint) {
+		const restored = context.stored?.models.filter((model) => model.provider === provider.id) ?? [];
+		if (restored.length === 0) return;
+		await context.publish({
+			update: () => {
+				setLiveModels(restored);
+			},
+		});
+		return;
+	}
 
 	const stored: Readonly<ModelsStoreEntry> | undefined = context.stored;
 	const restored = stored?.models.filter((model) => model.provider === provider.id) ?? [];

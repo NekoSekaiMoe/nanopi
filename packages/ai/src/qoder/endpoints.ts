@@ -15,6 +15,8 @@ export interface QoderEndpoints {
 	plan: string;
 	/** OpenAPI host that serves the daily check-in endpoints. */
 	openApiHost: string;
+	/** Signed `/algo` endpoint that lists the models the account may use. */
+	modelListUrl: string;
 }
 
 const GLOBAL_ENDPOINTS: QoderEndpoints = {
@@ -23,6 +25,7 @@ const GLOBAL_ENDPOINTS: QoderEndpoints = {
 	userInfo: "https://openapi.qoder.sh/api/v1/userinfo",
 	plan: "https://openapi.qoder.sh/api/v2/user/plan",
 	openApiHost: "openapi.qoder.sh",
+	modelListUrl: "https://api2.qoder.sh/algo/api/v2/model/list?Encode=1",
 };
 
 const CN_ENDPOINTS: QoderEndpoints = {
@@ -31,6 +34,7 @@ const CN_ENDPOINTS: QoderEndpoints = {
 	userInfo: "https://openapi.qoder.com.cn/api/v1/userinfo",
 	plan: "https://openapi.qoder.com.cn/api/v2/user/plan",
 	openApiHost: "openapi.qoder.com.cn",
+	modelListUrl: "https://gateway.qoder.com.cn/algo/api/v2/model/list?Encode=1",
 };
 
 export function qoderEndpoints(region: QoderRegion): QoderEndpoints {
