@@ -1,6 +1,6 @@
-# Agent Note: bash 工具的超时策略（无默认值，待定）
+# Agent Note: bash 工具的超时策略（不加默认上限）
 
-Status: proposed
+Status: rejected — 静默默认值会把长任务误判成超时，逃生口已经由 `/kill-bashbg` / `bash_bg` 提供，不再给 `bash` 加默认上限。
 
 ## Problem
 
@@ -48,16 +48,14 @@ Status: proposed
 占着管道"的情形。但这类情形本来就不会挂死（宽限到点就 finalize），它解决不了一个从不 exit 的
 进程。
 
-## Acceptance criteria
+### 靠 `bash_bg` / `/kill-bashbg` 兜住（采纳）
 
-- 未传 `timeout` 的 `bash` 调用在一个明确的默认上限后结束，并交出可分辨的超时结果。
-- 显式传 `timeout` 的行为不变，`MAX_TIMEOUT_SECONDS` 仍按现在的方式校验。
-- 长任务（`pnpm build` / `pnpm test`）在默认值下不被误杀，或者它们都显式传了 `timeout`。
+`extras/pi-smart-flow` 已经提供另一条出口：`bash_bg` 的 `action=run` 阻塞到 `timeout` 就自动
+转后台并返回 `jobId`，之后由用户用 `/kill-bashbg`（无参数杀全部、`<jobId>` 杀一个、`list` 列出）
+或模型用 `action=kill` 收尾。这条路把"何时停"交回调用方与用户，工具本身不需要猜一个上限：
 
-## Risks
-
-- 默认值会改变所有未传 `timeout` 的调用方语义，包括第三方 extension 的 `bash` 转发。
-- 超时淘汰掉的是"命令确实很慢"还是"命令卡住了"，工具侧分不出来；错误信息说得再清楚，用户仍
-  要自己判断该不该加时间。
-- 现状下"不设默认值"是有意为之，改它属于改契约，不是补 bug；一旦合入就不能再靠 schema 一句
-  话回退。
+- 默认值要同时对"跑得慢"和"卡住"给出同一个答案，而这两者在工具侧不可分辨；`bash_bg` 只需要
+  知道"还没结束"，语义上不含猜测。
+- `/kill-bashbg` 是人的出口，不依赖模型记得传参；模型侧则用 `bash_bg` 显式声明预算。
+- 代价是 `bash` 的既有契约不变：忘传 `timeout` 又用内建 `bash` 的调用仍会挂到进程被杀为止。
+  这一点保留为显式契约，不靠默认值兜底。
