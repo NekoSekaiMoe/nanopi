@@ -5,7 +5,7 @@
 # what the release already smoked-tested.
 #
 #   docker run --rm -it -v "$PWD:/workspace" ghcr.io/nekosekaimoe/nanopi --help
-FROM node:24-bookworm-slim
+FROM node:24.22.2-bookworm-slim
 
 # The bash tool drives these; a container without them leaves the agent unable
 # to read a repository's history or search it the way it does on a host.
