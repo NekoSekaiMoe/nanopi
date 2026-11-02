@@ -448,7 +448,11 @@ describe("InteractiveMode.showLoadedResources", () => {
 		verbose?: boolean;
 		quietStartup?: QuietStartup;
 		skills?: Array<{ filePath: string; name: string }>;
-		skillDiagnostics?: Array<{ type: "warning" | "error" | "collision"; message: string; path?: string }>;
+		skillDiagnostics?: Array<{
+			type: "warning" | "error" | "collision";
+			message: string;
+			collision?: { resourceType: "skill"; name: string; winnerPath: string; loserPath: string };
+		}>;
 	}) {
 		const fakeThis: any = {
 			options: { verbose: options.verbose ?? false },
@@ -475,6 +479,17 @@ describe("InteractiveMode.showLoadedResources", () => {
 			formatPathWithSource: (p: string) => (InteractiveMode as any).prototype.formatPathWithSource.call(fakeThis, p),
 			formatDiagnostics: (diagnostics: unknown[]) =>
 				(InteractiveMode as any).prototype.formatDiagnostics.call(fakeThis, diagnostics, new Map()),
+			addResourceDiagnosticSection: (
+				kind: "Skill" | "Prompt",
+				diagnostics: unknown[],
+				sourceInfos: Map<string, unknown>,
+			) =>
+				(InteractiveMode as any).prototype.addResourceDiagnosticSection.call(
+					fakeThis,
+					kind,
+					diagnostics,
+					sourceInfos,
+				),
 			getBuiltInCommandConflictDiagnostics: () => [],
 		};
 		return fakeThis;
@@ -490,21 +505,31 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer);
 		expect(output).toContain("[Skill warnings]");
-		expect(output).not.toContain("[Skill conflicts]");
 		expect(output).toContain("duplicate skill name");
 		expect(output).not.toContain("[Skills]");
 		expect(output).not.toContain("commit");
 	});
 
-	test("labels name collisions as conflicts and other diagnostics as warnings", () => {
+	// Ported from earendil-works/pi 1.5.0: warnings such as a missing frontmatter were
+	// reported under "[Skill conflicts]" even though nothing collided.
+	test("labels only name collisions as conflicts", () => {
 		const fakeThis = createShowLoadedResourcesThis({
+			skills: [
+				{ filePath: "/tmp/a/SKILL.md", name: "commit" },
+				{ filePath: "/tmp/b/SKILL.md", name: "commit" },
+			],
 			skillDiagnostics: [
 				{
 					type: "collision",
-					message: 'Skill name "commit" is defined twice',
-					path: "/tmp/b/SKILL.md",
+					message: "skill name collision",
+					collision: {
+						resourceType: "skill",
+						name: "commit",
+						winnerPath: "/tmp/a/SKILL.md",
+						loserPath: "/tmp/b/SKILL.md",
+					},
 				},
-				{ type: "error", message: "SKILL.md is missing a description", path: "/tmp/a/SKILL.md" },
+				{ type: "warning", message: "missing frontmatter" },
 			],
 		});
 
@@ -513,8 +538,12 @@ describe("InteractiveMode.showLoadedResources", () => {
 		const output = renderAll(fakeThis.loadedResourcesContainer);
 		expect(output).toContain("[Skill conflicts]");
 		expect(output).toContain("[Skill warnings]");
-		expect(output.indexOf("[Skill conflicts]")).toBeLessThan(output.indexOf("[Skill warnings]"));
-		expect(output).toContain("missing a description");
+		const conflictsIndex = output.indexOf("[Skill conflicts]");
+		const warningsIndex = output.indexOf("[Skill warnings]");
+		// Collisions render as a grouped "name collision" block, warnings as plain lines.
+		expect(output.indexOf('"commit" collision')).toBeGreaterThan(conflictsIndex);
+		expect(output.indexOf('"commit" collision')).toBeLessThan(warningsIndex);
+		expect(output.indexOf("missing frontmatter")).toBeGreaterThan(warningsIndex);
 	});
 
 	test("renders nothing when there are no diagnostics", () => {

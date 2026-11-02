@@ -38,8 +38,8 @@ const OSC_START = "\\u001B\\]";
 const CSI_START = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?";
 const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=~]";
 
-// `CSI <` / `CSI >` is a prefix, not a final byte: its parameters belong to the same
-// sequence, so the two spellings are alternated instead of making the params optional.
+// `CSI <` / `CSI >` is a prefix, not a final byte: the parameters and the private marker
+// belong to the same sequence, so the private form is matched as one alternation of its own.
 const CSI_BODY = `(?:${CSI_START}[<>](?:\\d{1,4}(?:[;:]\\d{0,4})*)?|${CSI_START})`;
 
 // Complete sequences. OSC is non-greedy until the first ST.

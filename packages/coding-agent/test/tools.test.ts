@@ -1052,6 +1052,25 @@ describe("Coding Agent Tools", () => {
 			expect(existsSync(marker)).toBe(false);
 		});
 
+		// Ported from earendil-works/pi#11398: splitting the file on CR as well as LF
+		// inflated the line count, so context lines were printed under wrong numbers.
+		it("should keep ripgrep line numbers for files with isolated CR characters", async () => {
+			const testFile = join(testDir, "cr.txt");
+			writeFileSync(testFile, "a\rb line1\rline2 CRLF\r\nhello\r\nworld\n");
+
+			const result = await grepTool.execute("test-call-grep-cr", {
+				pattern: "hello",
+				path: testFile,
+				context: 1,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("cr.txt:2: hello");
+			// \r is stripped from context lines; the point is the line number, not the CR.
+			expect(output).toContain("cr.txt-1- ab line1line2 CRLF");
+			expect(output).toContain("cr.txt-3- world");
+		});
+
 		// Ported from earendil-works/pi#11203: RIPGREP_CONFIG_PATH options such as
 		// --fixed-strings used to silently turn the tool's regex search into a literal one.
 		it("should ignore ambient ripgrep config", async () => {

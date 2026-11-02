@@ -169,7 +169,10 @@ export function createGrepToolDefinition(
 							if (!lines) {
 								try {
 									const content = await ops.readFile(filePath);
-									lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n");
+									// Split on \n only: ripgrep counts \n (and a lone \r it treats as one too), so
+									// turning every \r into a line break shifted every line number after an
+									// isolated CR and printed the wrong context. \r is stripped per line later.
+									lines = content.split("\n");
 								} catch {
 									lines = [];
 								}

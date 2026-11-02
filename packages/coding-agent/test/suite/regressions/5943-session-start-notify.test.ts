@@ -33,6 +33,7 @@ type LoadedResourcesContext = {
 	findSourceInfoForPath: (p: string) => undefined;
 	formatPathWithSource: (p: string) => string;
 	formatDiagnostics: (diagnostics: unknown) => string;
+	addResourceDiagnosticSection(this: LoadedResourcesContext, ...args: [unknown, unknown, unknown]): void;
 	getBuiltInCommandConflictDiagnostics: (moduleRegistry: LoadedResourcesContext["session"]["moduleRegistry"]) => [];
 };
 
@@ -196,6 +197,9 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 		findSourceInfoForPath: () => undefined,
 		formatPathWithSource: (p) => p,
 		formatDiagnostics: () => "duplicate skill name",
+		addResourceDiagnosticSection(this: LoadedResourcesContext, ...args: [unknown, unknown, unknown]) {
+			(interactiveModePrototype as any).addResourceDiagnosticSection.apply(this, args);
+		},
 		getBuiltInCommandConflictDiagnostics: () => [],
 	};
 }
