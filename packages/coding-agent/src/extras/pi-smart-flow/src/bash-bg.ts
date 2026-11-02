@@ -233,8 +233,11 @@ function processGroupRunning(pid: number): boolean {
   }
 }
 
+/** Whether this platform can address a process group, i.e. `kill(-pid)` means anything. */
+const processGroupsSupported = (): boolean => process.platform !== "win32";
+
 function jobOwnsLiveProcessGroup(job: Job): boolean {
-  return process.platform !== "win32" && job.done && processGroupRunning(job.pid);
+  return processGroupsSupported() && job.done && processGroupRunning(job.pid);
 }
 
 function jobIsActive(job: Job): boolean {
@@ -390,7 +393,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     if (!disposed) return;
     runtimeGeneration += 1;
     baseDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-bash-bg-"));
-    if (process.platform !== "win32") fs.chmodSync(baseDir, 0o700);
+    if (processGroupsSupported()) fs.chmodSync(baseDir, 0o700);
     disposed = false;
     disposeObservationProvider = registerObservationProvider(bashObservationProvider);
     const queryDisposer = pi.events.on(BASH_BG_QUERY_EVENT, publishSnapshot);
@@ -473,8 +476,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     // A POSIX job is spawned `detached`, so its pid addresses a process group and
     // the boundary means "group is gone"; on Windows there is no group to wait for
     // and the pid is the whole story.
-    const includeProcessGroup = process.platform !== "win32";
-    const boundaryReached = job.done && (!includeProcessGroup || !processGroupRunning(job.pid));
+    const boundaryReached = job.done && (!processGroupsSupported() || !processGroupRunning(job.pid));
     if (boundaryReached) {
       if (job.stopRequested) job.finishTermination?.();
       return Promise.resolve();
@@ -490,7 +492,8 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     const termination = (async () => {
       let terminated = false;
       let taskkillTimedOut = false;
-      if (process.platform === "win32") {
+      const includeProcessGroup = processGroupsSupported();
+      if (!includeProcessGroup) {
         // spawnSync: async spawn of taskkill silently fails to complete under pi's jiti loader on Windows.
         if (job.pid > 0) {
           const result = spawnSync("taskkill", ["/pid", String(job.pid), "/T", "/F"], {
@@ -501,13 +504,13 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
           });
           taskkillTimedOut = (result.error as NodeJS.ErrnoException | undefined)?.code === "ETIMEDOUT";
         }
-        terminated = await waitForTerminationBoundary(job, false, TERMINATION_GRACE_MS);
+        terminated = await waitForTerminationBoundary(job, includeProcessGroup, TERMINATION_GRACE_MS);
       } else {
         signalProcessTree(job.child, job.pid, "SIGTERM");
-        terminated = await waitForTerminationBoundary(job, true, TERMINATION_GRACE_MS);
+        terminated = await waitForTerminationBoundary(job, includeProcessGroup, TERMINATION_GRACE_MS);
         if (!terminated) {
           signalProcessTree(job.child, job.pid, "SIGKILL");
-          terminated = await waitForTerminationBoundary(job, true, TERMINATION_GRACE_MS);
+          terminated = await waitForTerminationBoundary(job, includeProcessGroup, TERMINATION_GRACE_MS);
         }
       }
 
@@ -546,7 +549,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     try {
       child = spawn(shellConfig.shell, [...shellConfig.args, command], {
         cwd: workdir,
-        detached: process.platform !== "win32",
+        detached: processGroupsSupported(),
         env: process.env,
         stdio: ["ignore", "pipe", "pipe"],
         windowsHide: true,

@@ -930,7 +930,8 @@ export default function subagentMini(pi: ModuleApi): void {
 			if (entry.type !== "custom" || entry.customType !== ARCHIVE_TYPE) continue;
 			// The archive is extension-owned data read back from disk: validate every field
 			// the restore path dereferences before it enters the job table, instead of
-			// casting and finding out later.
+			// casting and finding out later. The version gate runs first, so a payload from
+			// another build's schema never reaches the field checks below.
 			const data = parseArchivedJob(entry.data);
 			if (!data || jobs.has(data.id)) continue;
 			restored++;
