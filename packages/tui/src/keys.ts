@@ -728,6 +728,35 @@ function parseModifyOtherKeysSequence(data: string): ParsedModifyOtherKeysSequen
 }
 
 /**
+ * Whether a modifyOtherKeys keycode names a functional key rather than a character.
+ *
+ * modifyOtherKeys reports every key as a keycode: printable characters as their
+ * codepoint, and functional keys in the private-use Kitty functional-key range (pageUp
+ * 57421, home 57423, ...). Only the latter are recognized here: they must be matched as
+ * keys, never inserted as text.
+ */
+function isModifyOtherKeysFunctionalCodepoint(codepoint: number): boolean {
+	return codepoint >= 57399 && codepoint <= 57426;
+}
+
+/** The Kitty functional-key codepoint a binding name stands for, if it is one. */
+function functionalCodepointFor(key: string): number | undefined {
+	const named: Record<string, number> = {
+		delete: FUNCTIONAL_CODEPOINTS.delete,
+		insert: FUNCTIONAL_CODEPOINTS.insert,
+		home: FUNCTIONAL_CODEPOINTS.home,
+		end: FUNCTIONAL_CODEPOINTS.end,
+		pageup: FUNCTIONAL_CODEPOINTS.pageUp,
+		pagedown: FUNCTIONAL_CODEPOINTS.pageDown,
+		up: ARROW_CODEPOINTS.up,
+		down: ARROW_CODEPOINTS.down,
+		left: ARROW_CODEPOINTS.left,
+		right: ARROW_CODEPOINTS.right,
+	};
+	return named[key];
+}
+
+/**
  * Match xterm modifyOtherKeys format: CSI 27 ; modifiers ; keycode ~
  * This is used by terminals when Kitty protocol is not enabled.
  * Modifier values are 1-indexed: 2=shift, 3=alt, 5=ctrl, etc.
@@ -866,6 +895,17 @@ export function matchesKey(data: string, keyId: KeyId): boolean {
 	if (alt) modifier |= MODIFIERS.alt;
 	if (ctrl) modifier |= MODIFIERS.ctrl;
 	if (superModifier) modifier |= MODIFIERS.super;
+
+	// A modifyOtherKeys functional key (pageUp, home, ...) arrives as `CSI 27 ; mod ; key ~`,
+	// which no case below recognizes. It already means what the binding means, modifiers
+	// included, so match the two directly instead of adding a second functional-key table.
+	const modifyOtherKeys = parseModifyOtherKeysSequence(data);
+	if (modifyOtherKeys && isModifyOtherKeysFunctionalCodepoint(modifyOtherKeys.codepoint)) {
+		return (
+			(modifyOtherKeys.modifier & ~LOCK_MASK) === modifier &&
+			functionalCodepointFor(key) === normalizeKittyFunctionalCodepoint(modifyOtherKeys.codepoint)
+		);
+	}
 
 	switch (key) {
 		case "escape":
@@ -1265,6 +1305,13 @@ function formatParsedKey(codepoint: number, modifier: number, baseLayoutKey?: nu
 	const effectiveCodepoint =
 		isLatinLetter || isDigit || isKnownSymbol ? identityCodepoint : (baseLayoutKey ?? identityCodepoint);
 
+	const keyName = keyNameForCodepoint(effectiveCodepoint);
+	if (!keyName) return undefined;
+	return formatKeyNameWithModifiers(keyName, modifier);
+}
+
+/** Binding name for a key codepoint, or undefined when it is not bindable. */
+function keyNameForCodepoint(effectiveCodepoint: number): string | undefined {
 	let keyName: string | undefined;
 	if (effectiveCodepoint === CODEPOINTS.escape) keyName = "escape";
 	else if (effectiveCodepoint === CODEPOINTS.tab) keyName = "tab";
@@ -1284,9 +1331,7 @@ function formatParsedKey(codepoint: number, modifier: number, baseLayoutKey?: nu
 	else if (effectiveCodepoint >= 48 && effectiveCodepoint <= 57) keyName = String.fromCharCode(effectiveCodepoint);
 	else if (effectiveCodepoint >= 97 && effectiveCodepoint <= 122) keyName = String.fromCharCode(effectiveCodepoint);
 	else if (SYMBOL_KEYS.has(String.fromCharCode(effectiveCodepoint))) keyName = String.fromCharCode(effectiveCodepoint);
-
-	if (!keyName) return undefined;
-	return formatKeyNameWithModifiers(keyName, modifier);
+	return keyName;
 }
 
 export function parseKey(data: string): string | undefined {
@@ -1442,6 +1487,8 @@ function decodeModifyOtherKeysPrintable(data: string): string | undefined {
 	const modifier = parsed.modifier & ~LOCK_MASK;
 	if ((modifier & ~MODIFIERS.shift) !== 0) return undefined;
 	if (!Number.isFinite(parsed.codepoint) || parsed.codepoint < 32) return undefined;
+	// Functional keys report their Kitty code, which is printable but is a key, not text.
+	if (isModifyOtherKeysFunctionalCodepoint(parsed.codepoint)) return undefined;
 
 	try {
 		return String.fromCodePoint(parsed.codepoint);

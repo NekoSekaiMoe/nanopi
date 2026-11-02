@@ -170,17 +170,7 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 			continue;
 		}
 
-		// The session ID is an opaque token, so it matches as a plain substring: fuzzy matching
-		// let "1024" match letters scattered through a UUID. It is kept out of the search text
-		// for the same reason, so only this branch can match it.
-		const needle = token.value.toLowerCase();
-		const idIndex = session.id.toLowerCase().indexOf(needle);
-		if (idIndex >= 0) {
-			totalScore += idIndex * 0.1 - 5;
-			continue;
-		}
-
-		// An exact substring in the body is still a better hit than letters scattered over it.
+		// An exact substring in the body outranks letters scattered over it by fuzzyMatch.
 		if (normalizedText === null) {
 			normalizedText = normalizeMatchText(text);
 		}
