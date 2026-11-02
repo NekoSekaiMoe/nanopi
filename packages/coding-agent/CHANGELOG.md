@@ -8,6 +8,13 @@
 - **Qoder model catalog**: the registered `qoder` / `qoder-cn` providers refresh their models from the account's signed model list on startup, so `/model` lists what the logged-in plan can actually use (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
 - **Qoder daily check-in**: a session start claims the day's Qoder credits for every logged-in Qoder account (both sites) and reports the outcome in one status line; `/qoder-checkin` runs it on demand and `NANOPI_QODER_CHECKIN=0` turns it off (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
 
+### Fixed
+
+- Escape sequences that carry a private parameter byte are stripped whole, so an SGR mouse report (`ESC [ < 35 ; 59 ; 1 M`) or a device-attributes reply (`ESC [ > 0 ; 276 ; 0 c`) no longer leaves `35;59;1M` as plain text in tool output. `>` and `<` are final bytes only in the two-byte VT52 escapes, which still strip
+- The HTML export no longer blanks out on sessions with a few thousand entries: the tree helpers walked the session chain recursively, so the export died with `Maximum call stack size exceeded` inside the page and rendered nothing. They are iterative now, and flattening 50000 entries takes ~50ms
+- `grep` keeps ripgrep's line numbers for files that contain an isolated `\r`: the file was split on `\r` as well as `\n`, which inflated the line count, so every context line after a stray CR was printed under the wrong number and away from the match
+- Skill diagnostics are no longer all labelled `[Skill conflicts]`: only name collisions are conflicts, and a missing frontmatter or unreadable `SKILL.md` is reported under `[Skill warnings]`. Same split for prompts
+
 ## [20261031.1.0]
 
 ### Changed

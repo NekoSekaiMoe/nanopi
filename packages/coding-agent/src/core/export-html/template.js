@@ -159,11 +159,14 @@
         if (!treeNodeMap) {
           treeNodeMap = new Map();
           const tree = buildTree();
-          function mapNodes(node) {
+          // Iterative for the same reason as sortChildren(): the tree can be a single
+          // chain thousands of nodes deep.
+          const stack = [...tree];
+          while (stack.length > 0) {
+            const node = stack.pop();
             treeNodeMap.set(node.entry.id, node);
-            node.children.forEach(mapNodes);
+            for (const child of node.children) stack.push(child);
           }
-          tree.forEach(mapNodes);
         }
 
         const node = treeNodeMap.get(nodeId);
