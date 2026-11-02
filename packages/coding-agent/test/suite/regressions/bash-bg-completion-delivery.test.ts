@@ -123,10 +123,12 @@ describe("bash_bg completion delivery", () => {
 				return pi.deliverMessage(message, options);
 			},
 			appendEntry: (customType, data) => {
-				if (customType === "bash-bg-complete-undelivered") {
-					failure = (data as { message: string }).message;
-				}
+				// The archive record is the only trace: the settled job is written
+				// without a `delivered` field when the hand-off threw.
 				pi.appendEntry(customType, data);
+				if (customType !== "bash-bg-job") return;
+				const entry = data as { status?: string; delivered?: string };
+				if (entry.status === "completed" && entry.delivered === undefined) failure ??= "undelivered";
 			},
 		}));
 		try {
@@ -140,7 +142,8 @@ describe("bash_bg completion delivery", () => {
 
 			await harness.session.prompt("start it");
 			await until(() => failure !== undefined);
-			expect(failure).toBe("no reader attached");
+			expect(failure).toBe("undelivered");
+			expect(attempts).toBe(1);
 			// The failed hand-off left the job retryable instead of marked as sent.
 			expect(customTexts(harness, "bash-bg-complete")).toHaveLength(0);
 		} finally {

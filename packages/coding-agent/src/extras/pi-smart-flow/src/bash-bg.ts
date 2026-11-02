@@ -1,6 +1,7 @@
 // Ported from pi-maestro-flow (MIT, Copyright (c) 2026 catlog22)
 // Source: packages/pi-maestro-flow/src/tools/bash-bg.ts
 import type { ModuleApi, ModuleCommandContext } from "@nanopi/pi-coding-agent";
+import type { ModuleContext, SessionStartEvent } from "../../../core/modules/types.ts";
 
 import type { AgentToolResult } from "@nanopi/pi-agent-core";
 import { Text } from "@nanopi/pi-tui";
@@ -33,6 +34,11 @@ const TERMINATION_POLL_MS = 25;
 
 export const BASH_BG_UPDATE_EVENT = "bash-bg:update";
 export const BASH_BG_QUERY_EVENT = "bash-bg:query";
+/** Session entry carrying one job's latest state; the registry is rebuilt from these. */
+export const BASH_BG_ARCHIVE_TYPE = "bash-bg-job";
+export const BASH_BG_ARCHIVE_VERSION = 1;
+/** How many archived jobs a restart puts back into the registry. */
+const MAX_RESTORED_JOBS = MAX_RETAINED_COMPLETED_JOBS;
 
 export type BashBgJobStatus = "running" | "stopping" | "completed" | "failed" | "killed";
 
@@ -53,6 +59,34 @@ export interface BashBgJobSnapshot {
 
 export interface BashBgSnapshotPayload {
   jobs: BashBgJobSnapshot[];
+}
+
+/**
+ * One job's persisted state.
+ *
+ * A service started by a job outlives the job, and the job outlives the session:
+ * `npm run dev` exits into the background while the server it spawned keeps the
+ * port. Without the archive that service is unaddressable after a restart -- no
+ * jobId, no log path, and nothing to stop -- so the record keeps the log path and
+ * whether the process group is still ours.
+ */
+export interface BashBgArchiveEntry {
+  version: number;
+  id: string;
+  command: string;
+  cwd: string;
+  pid: number;
+  status: BashBgJobStatus;
+  startedAt: number;
+  finishedAt?: number;
+  exitCode: number | null;
+  logPath: string;
+  logBytes: number;
+  logDeleted: boolean;
+  /** The process group was still alive when the record was written. */
+  serviceAlive: boolean;
+  /** Where the completion report landed (`deliverMessage`), when it was delivered. */
+  delivered?: string;
 }
 
 export const BashBgParams = Type.Object({
@@ -83,7 +117,8 @@ interface Job {
   command: string;
   cwd: string;
   pid: number;
-  child: ChildProcess;
+  /** Absent for a job recovered from the archive: its process died with the parent. */
+  child?: ChildProcess;
   outFile: string;
   startedAt: number;
   updatedAt: number;
@@ -99,6 +134,18 @@ interface Job {
   logTruncated: boolean;
   background: boolean;
   completionNotified: boolean;
+  /**
+   * Identity of the runtime that owned the job. The completion hand-off runs after
+   * the job settles, which can be after `session_shutdown` already incremented the
+   * generation.
+   */
+  generation: number;
+  /** Set when the completion report could not be delivered; surfaced in `status`. */
+  reportFailure?: string;
+  /** Where `deliverMessage` said a report landed ("started" / "queued" / "pending"). */
+  delivered?: string;
+  /** True for a job read back from the archive: its log file is the only output left. */
+  restored?: boolean;
   outputFinalized: boolean;
   terminationInProgress: boolean;
   terminationFailure?: string;
@@ -109,14 +156,6 @@ interface Job {
   releaseProcess?: () => void;
   finishTermination?: (error?: Error) => void;
   outputDrainTimer?: ReturnType<typeof setTimeout>;
-  /**
-   * Identity of the runtime that owns the job. The completion hand-off runs
-   * after the job settles, which can be after `session_shutdown` already
-   * incremented the generation.
-   */
-  generation: number;
-  /** Where the completion notification landed; a retry only matters when nobody saw it. */
-  completionDelivered?: "started" | "queued" | "pending";
 }
 
 interface TailOutput {
@@ -191,8 +230,34 @@ function logAccess(job: Job): string {
   ].join("\n");
 }
 
-function appendLogAccess(text: string, job: Job, truncated: boolean): string {
-  return truncated ? `${text}\n${logAccess(job)}` : text;
+/** The trailing block a status/wait view shows: log access when truncated, plus a lost report. */
+function appendJobTrailer(text: string, job: Job, truncated: boolean): string {
+  const lines = [
+    ...(truncated ? [logAccess(job)] : []),
+    ...(job.reportFailure ? [`completion report: not delivered (${job.reportFailure})`] : []),
+  ];
+  return lines.length > 0 ? `${text}\n${lines.join("\n")}` : text;
+}
+
+/**
+ * Where a job's output actually lives, for a view whose job was recovered from the
+ * archive: the log tail is empty, so the path is the only handle on it.
+ */
+function appendRestoredLog(text: string, job: Job, restored: boolean): string {
+  return restored ? `${text}\n${logAccess(job)}` : text;
+}
+
+/** `completed (exit 0), service alive` — a shell that ended while its group still runs. */
+function jobState(job: Job): string {
+  const base = job.done ? `${jobStatus(job)} (exit ${job.exitCode})` : jobStatus(job);
+  // The service outliving its writer is the case the archive exists for: say so
+  // where the user looks, instead of leaving a finished shell unexplained.
+  return jobOwnsLiveProcessGroup(job) ? `${base}, service alive` : base;
+}
+
+/** One job on one line, for `list` and `/kill-bashbg list`. */
+function jobLine(job: Job): string {
+  return `${job.id}\t${jobState(job)}\tpid ${job.pid}\t${job.command}`;
 }
 
 function jobDetails(job: Job, action: string, truncated = false): BashBgDetails {
@@ -207,7 +272,7 @@ function jobDetails(job: Job, action: string, truncated = false): BashBgDetails 
   };
 }
 
-function signalProcessTree(child: ChildProcess, pid: number, signal: NodeJS.Signals): void {
+function signalProcessTree(child: ChildProcess | undefined, pid: number, signal: NodeJS.Signals): void {
   if (pid > 0) {
     try {
       process.kill(-pid, signal);
@@ -217,7 +282,7 @@ function signalProcessTree(child: ChildProcess, pid: number, signal: NodeJS.Sign
     }
   }
   try {
-    child.kill(signal);
+    child?.kill(signal);
   } catch {
     // already gone
   }
@@ -242,6 +307,40 @@ function jobOwnsLiveProcessGroup(job: Job): boolean {
 
 function jobIsActive(job: Job): boolean {
   return !job.done || job.terminationInProgress || jobOwnsLiveProcessGroup(job);
+}
+
+const JOB_STATUSES = new Set<string>(["running", "stopping", "completed", "failed", "killed"]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Read one archive entry, or nothing.
+ *
+ * The payload comes out of the session file, so it is untrusted input: a record
+ * written by another build has another schema, and a truncated one may lack the
+ * fields the restore path dereferences. Version first, then the fields.
+ */
+function parseArchiveEntry(raw: unknown): BashBgArchiveEntry | undefined {
+  if (!isRecord(raw)) return undefined;
+  if (raw.version !== BASH_BG_ARCHIVE_VERSION) return undefined;
+  const { id, command, cwd, pid, status, startedAt, exitCode, logPath } = raw;
+  if (typeof id !== "string" || id.length === 0) return undefined;
+  if (typeof command !== "string" || typeof cwd !== "string" || typeof logPath !== "string") return undefined;
+  if (typeof pid !== "number" || typeof startedAt !== "number") return undefined;
+  if (typeof status !== "string" || !JOB_STATUSES.has(status)) return undefined;
+  if (exitCode !== null && typeof exitCode !== "number") return undefined;
+  return {
+    ...raw,
+    id,
+    command,
+    cwd,
+    pid,
+    status: status as BashBgJobStatus,
+    startedAt,
+    exitCode,
+  } as BashBgArchiveEntry;
 }
 
 function delay(ms: number): Promise<void> {
@@ -366,7 +465,14 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       const evicted = completed.shift();
       if (!evicted) continue;
       jobs.delete(evicted.id);
-      try { fs.rmSync(evicted.outFile, { force: true }); } catch { /* best effort for externally held log handles */ }
+      // The log is the service's only remaining handle once its job leaves the
+      // table, so a group that is still alive keeps its file: "the writer stopped,
+      // the server runs" must not lose the trail.
+      const serviceAlive = jobOwnsLiveProcessGroup(evicted);
+      if (!serviceAlive) {
+        try { fs.rmSync(evicted.outFile, { force: true }); } catch { /* best effort for externally held log handles */ }
+      }
+      record(evicted, !serviceAlive);
     }
   };
 
@@ -401,18 +507,18 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
   };
 
   /**
-   * Hand a finished job's completion to the session, once.
+   * Hand the job's report to the session, once.
    *
-   * `sendMessage` with triggerTurn started a turn even when another run was
-   * still starting; that run's prompt rejected the second one, the rejection was
-   * dropped, and the completion vanished. `deliverMessage` reports where the
-   * message landed ("started"/"queued"/"pending") instead of throwing away that
-   * knowledge, and a delivery that throws leaves the job un-notified so the next
-   * status/wait/kill hands it over again.
+   * The report is the only thing a backgrounded job produces, so it goes through
+   * `deliverMessage`: that reports where it landed ("started"/"queued"/"pending").
+   * `sendMessage` with `triggerTurn` instead started a turn whenever `isStreaming`
+   * was false, including the window where a run is still settling, and the prompt
+   * rejected the second run -- the completion notification disappeared with it.
    *
-   * The hand-off is tied to the runtime that owned the job: `session_shutdown`
-   * clears the registry, and a late notification would describe a job the
-   * session no longer has.
+   * A delivery that throws leaves the job un-notified, so the next status/wait/kill
+   * hands it over again. The hand-off is tied to the runtime that owned the job:
+   * `session_shutdown` clears the registry, and a late notification would describe
+   * a job the session no longer has.
    */
   const notifyComplete = (job: Job): void => {
     if (job.completionNotified) return;
@@ -426,40 +532,38 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       tail.text ? `output (tail):\n${tail.text}` : "output: (empty)",
       ...(tail.truncated ? [logAccess(job)] : []),
     ].join("\n");
-    void (async () => {
-      try {
-        job.completionDelivered = await pi.deliverMessage(
-          {
-            customType: "bash-bg-complete",
-            content: body,
-            display: true,
-            details: {
-              jobId: job.id,
-              exitCode: job.exitCode,
-              ...(tail.truncated ? { logPath: job.outFile, viewCommand: viewLogCommand(job) } : {}),
-            },
-          },
-          { startTurn: true },
-        );
-      } catch (error) {
-        // The message is the job's only output, so a failed hand-off has to leave
-        // a trace rather than disappear. The job is left un-notified so a later
-        // status/wait/kill call tries the hand-off again.
-        job.completionNotified = false;
-        job.completionDelivered = undefined;
-        const reason = error instanceof Error ? error.message : String(error);
-        try {
-          pi.appendEntry("bash-bg-complete-undelivered", {
+    const report = pi
+      .deliverMessage(
+        {
+          customType: "bash-bg-complete",
+          content: body,
+          display: true,
+          details: {
             jobId: job.id,
-            status,
             exitCode: job.exitCode,
-            message: reason,
-          });
-        } catch {
-          // nothing left to do; the output is still reachable through the log file
-        }
-      }
-    })();
+            ...(tail.truncated ? { logPath: job.outFile, viewCommand: viewLogCommand(job) } : {}),
+          },
+        },
+        { startTurn: true },
+      )
+      .then(
+        (delivered) => {
+          job.delivered = delivered;
+          record(job);
+        },
+        (error: unknown) => {
+          // The report is the only result channel: leave the job un-notified so a
+          // later status/wait/kill retries the hand-off, and say so in the view
+          // instead of swallowing it.
+          job.completionNotified = false;
+          job.delivered = undefined;
+          job.reportFailure = error instanceof Error ? error.message : String(error);
+          publishSnapshotSoon();
+        },
+      );
+    // Not awaited: `started` resolves as soon as the turn is running, and
+    // `notifyComplete` runs inside the child's exit path.
+    void report;
   };
 
   const waitForTerminationBoundary = async (job: Job, includeProcessGroup: boolean, timeoutMs: number): Promise<boolean> => {
@@ -492,6 +596,8 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     const termination = (async () => {
       let terminated = false;
       let taskkillTimedOut = false;
+      // One source for "can this platform address a process group": the SIGTERM
+      // branch below and the failure message must not re-derive it.
       const includeProcessGroup = processGroupsSupported();
       if (!includeProcessGroup) {
         // spawnSync: async spawn of taskkill silently fails to complete under pi's jiti loader on Windows.
@@ -590,6 +696,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       resolveTerminal,
     };
     jobs.set(id, job);
+    record(job);
     publishSnapshot();
     const append = (d: Buffer): void => {
       if (disposed || generation !== runtimeGeneration) return;
@@ -635,6 +742,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       job.updatedAt = Date.now();
       job.finishedAt = job.updatedAt;
       job.resolveTerminal();
+      record(job);
       if (disposed || generation !== runtimeGeneration) return;
       publishSnapshot();
       if (!job.terminationInProgress) {
@@ -649,6 +757,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         job.outputDrainTimer = undefined;
       }
       releaseProcess();
+      record(job);
       if (disposed || generation !== runtimeGeneration) return;
       notifyComplete(job);
       pruneCompletedJobs();
@@ -661,6 +770,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         job.terminationInProgress = false;
         job.terminationFailure = error.message;
         job.finishedAt ??= job.updatedAt;
+        record(job);
         publishSnapshot();
         for (const settle of [...(observationWaiters.get(job.id) ?? [])]) settle();
         return;
@@ -729,8 +839,102 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     });
   };
 
+  /**
+   * Write down one job's latest state.
+   *
+   * Append-only like every other archive: the newest record for an id wins on
+   * restore, so a job can be written at start, at settle and at shutdown without
+   * the reader needing to merge anything.
+   */
+  const record = (job: Job, logDeleted = false): void => {
+    try {
+      pi.appendEntry(BASH_BG_ARCHIVE_TYPE, {
+        version: BASH_BG_ARCHIVE_VERSION,
+        id: job.id,
+        command: job.command,
+        cwd: job.cwd,
+        pid: job.pid,
+        status: jobStatus(job),
+        startedAt: job.startedAt,
+        ...(job.finishedAt === undefined ? {} : { finishedAt: job.finishedAt }),
+        exitCode: job.exitCode,
+        logPath: job.outFile,
+        logBytes: job.logBytes,
+        logDeleted,
+        // The port holder is the process group, not the shell that started it: a
+        // "dev server" job is `completed` while the server still runs.
+        serviceAlive: jobOwnsLiveProcessGroup(job),
+        ...(job.delivered === undefined ? {} : { delivered: job.delivered }),
+      } satisfies BashBgArchiveEntry);
+    } catch {
+      // The archive is best-effort, like the subagent one: the live registry is
+      // still authoritative for this process.
+    }
+  };
+
+  /** Rebuild the job table from the session, so a restart does not orphan jobs. */
+  const restoreArchive = (ctx: Pick<ModuleContext, "sessionManager">): void => {
+    const latest = new Map<string, BashBgArchiveEntry>();
+    for (const entry of ctx.sessionManager.getEntries()) {
+      if (entry.type !== "custom" || entry.customType !== BASH_BG_ARCHIVE_TYPE) continue;
+      const parsed = parseArchiveEntry(entry.data);
+      if (parsed) latest.set(parsed.id, parsed);
+    }
+    const records = [...latest.values()]
+      .sort((a, b) => b.startedAt - a.startedAt)
+      .slice(0, MAX_RESTORED_JOBS);
+    for (const record of records) {
+      if (jobs.has(record.id)) continue;
+      // The child is gone with the parent process; what survives is the log and,
+      // on POSIX, the process group whose exit-code-0 already ended.
+      let resolveTerminal!: () => void;
+      const terminal = new Promise<void>((resolve) => {
+        resolveTerminal = resolve;
+      });
+      resolveTerminal();
+      jobs.set(record.id, {
+        id: record.id,
+        command: record.command,
+        cwd: record.cwd,
+        pid: record.pid,
+        child: undefined,
+        outFile: record.logPath,
+        startedAt: record.startedAt,
+        updatedAt: record.finishedAt ?? record.startedAt,
+        ...(record.finishedAt === undefined ? {} : { finishedAt: record.finishedAt }),
+        exitCode: record.exitCode,
+        done: true,
+        stopRequested: record.status === "killed",
+        tail: "",
+        tailTruncated: false,
+        outputBytes: record.logBytes,
+        logBytes: record.logBytes,
+        logLimitBytes: maxLogBytes,
+        logTruncated: false,
+        background: true,
+        completionNotified: true,
+        // The archive record is written by a runtime this one replaced: it can
+        // never hand the job a second report, so it is not the job's generation.
+        generation: -1,
+        outputFinalized: true,
+        restored: true,
+        terminationInProgress: false,
+        terminal,
+        resolveTerminal,
+        ...(record.delivered === undefined ? {} : { delivered: record.delivered }),
+      });
+    }
+    if (jobs.size > 0) publishSnapshot();
+  };
+
+  const onSessionStart = (event: SessionStartEvent, ctx: ModuleContext): void => {
+    initializeRuntime();
+    if (event.reason === "new") return;
+    restoreArchive(ctx);
+  };
+
   initializeRuntime();
-  pi.on("session_start", initializeRuntime);
+  pi.on("session_start", onSessionStart);
 
   pi.registerTool({
     name: "bash_bg",
@@ -783,11 +987,11 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
           // message still counts as read; an unsent one is cancelled so a later
           // status/kill does not hand the same output over a second time.
           job.background = false;
-          job.completionDelivered ??= "started";
+          job.delivered ??= "started";
           return {
             content: [{
               type: "text",
-              text: appendLogAccess(`${out.text || "(no output)"}\n(exit ${job.exitCode})`, job, out.truncated),
+              text: appendJobTrailer(`${out.text || "(no output)"}\n(exit ${job.exitCode})`, job, out.truncated),
             }],
             details: jobDetails(job, "run", out.truncated),
           };
@@ -807,9 +1011,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
 
       if (params.action === "list") {
         if (jobs.size === 0) return { content: [{ type: "text", text: "No background jobs." }], details: { action: "list" } };
-        const lines = [...jobs.values()].map(
-          (j) => `${j.id}\t${jobStatus(j)}${j.done ? `(exit ${j.exitCode})` : ""}\tpid ${j.pid}\t${j.command}`,
-        );
+        const lines = [...jobs.values()].map(jobLine);
         return { content: [{ type: "text", text: lines.join("\n") }], details: { action: "list" } };
       }
 
@@ -827,11 +1029,12 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         // Sending is idempotent, so asking about a finished job is also the moment
         // a completion that never went out gets another chance.
         notifyComplete(job);
-        const state = job.done ? `${jobStatus(job)} (exit ${job.exitCode})` : jobStatus(job);
+        const state = jobState(job);
         const out = tailOutput(job, tailCount);
         const text = `job ${job.id}: ${state}\ncommand: ${job.command}\noutput (tail):\n${out.text || "(empty)"}`;
+        const withLog = appendRestoredLog(text, job, job.restored === true);
         return {
-          content: [{ type: "text", text: appendLogAccess(text, job, out.truncated) }],
+          content: [{ type: "text", text: appendJobTrailer(withLog, job, out.truncated) }],
           details: jobDetails(job, "status", out.truncated),
         };
       }
@@ -839,7 +1042,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       if (params.action === "kill") {
         const alreadyFinished = job.done
           && !job.terminationFailure
-          && (process.platform === "win32" || !processGroupRunning(job.pid));
+          && (!processGroupsSupported() || !processGroupRunning(job.pid));
         await terminateJob(job);
         // A job stopped before its completion went out still owes that message;
         // the kill command is where the report finds a reader.
@@ -861,12 +1064,12 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       if (observed.reason === "aborted") throw new Error("aborted");
       notifyComplete(job);
       const state = job.done
-        ? `${jobStatus(job)} (exit ${job.exitCode})`
+        ? jobState(job)
         : `${jobStatus(job)} after ${Math.round(timeoutMs / 1000)}s`;
       const out = tailOutput(job, tailCount);
       const text = `job ${job.id}: ${state}\ncommand: ${job.command}\noutput (tail):\n${out.text || "(empty)"}`;
       return {
-        content: [{ type: "text", text: appendLogAccess(text, job, out.truncated) }],
+        content: [{ type: "text", text: appendJobTrailer(text, job, out.truncated) }],
         details: jobDetails(job, "wait", out.truncated),
       };
     },
@@ -948,9 +1151,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
 
   const describeJobs = (): string => {
     if (jobs.size === 0) return "No background bash jobs.";
-    return [...jobs.values()]
-      .map((job) => `${job.id}\t${jobStatus(job)}${job.done ? ` (exit ${job.exitCode})` : ""}\tpid ${job.pid}\t${job.command}`)
-      .join("\n");
+    return [...jobs.values()].map(jobLine).join("\n");
   };
 
   // Slash command for the same registry the bash_bg tool drives: the tool is
@@ -1012,6 +1213,9 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     const retiringJobs = [...jobs.values()];
     for (const job of retiringJobs) job.background = false;
     await Promise.all(retiringJobs.map((job) => terminateJob(job)));
+    // Write the final state before the base dir goes: a log whose group survived
+    // termination keeps its file, and the record is what points a later session at it.
+    for (const job of retiringJobs) record(job);
 
     for (const job of retiringJobs) {
       if (job.outputDrainTimer) {
@@ -1036,6 +1240,28 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     jobs.clear();
     observationWaiters.clear();
     baseDir = "";
+    // A log kept for a surviving service stays behind on purpose; every other one
+    // goes with the base dir. `rmSync` has no filter, so the survivors are moved
+    // aside first and put back after.
+    const kept = retiringJobs.filter((job) => jobOwnsLiveProcessGroup(job));
+    const rescued: Array<[string, string]> = [];
+    for (const job of kept) {
+      const aside = `${job.outFile}.kept`;
+      try {
+        fs.renameSync(job.outFile, aside);
+        rescued.push([aside, job.outFile]);
+      } catch {
+        // Already gone or unreadable: nothing left to preserve.
+      }
+    }
     try { fs.rmSync(retiringBaseDir, { recursive: true, force: true }); } catch { /* open Windows handles may finish after shutdown */ }
+    for (const [aside, original] of rescued) {
+      try {
+        fs.mkdirSync(retiringBaseDir, { recursive: true });
+        fs.renameSync(aside, original);
+      } catch {
+        // Best effort, as everywhere on the shutdown path.
+      }
+    }
   });
 }
