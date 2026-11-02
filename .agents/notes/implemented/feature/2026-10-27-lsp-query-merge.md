@@ -42,11 +42,13 @@ lsp_query { path, line, character, kind?: "references" | "callgraph",
 - Descriptions keep the how-to and the parameter semantics; snippets keep the
   when. No text states the efficiency argument twice.
 
-`lsp_diagnostics`, `lsp_hover`, `lsp_definition`, `lsp_rename` and `lsp_delete`
-keep their own names: `diagnostics` has no position and runs the server's push
-path, and `hover`/`definition` are single-request tools whose names are their
-prompt. Folding them into `lsp_query` would make it `{ path, position?,
-kind }` with five meanings.
+`lsp_diagnostics`, `lsp_hover`, `lsp_definition` keep their own names
+(`lsp_rename` and `lsp_delete` later became one `lsp_edit`, see
+[rename and delete are one tool](./2026-10-27-lsp-edit-merge.md)):
+`diagnostics` has no position and runs the server's push path, and
+`hover`/`definition` are single-request tools whose names are their prompt.
+Folding them into `lsp_query` would make it `{ path, position?, kind }` with
+five meanings.
 
 ## Consequences
 

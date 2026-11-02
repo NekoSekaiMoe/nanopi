@@ -19,7 +19,7 @@ The module is a new workspace package `packages/extra` (`@nanopi/pi-extra`,
 lockstep version, `^x.y.z` dependency like every other internal package). The
 coding-agent core touches it in exactly three places:
 
-1. `src/extensions/index.ts` adds a hidden inline factory (loads pre-trust, so
+1. `src/modules/index.ts` adds a hidden inline factory (loads pre-trust, so
    it can answer `project_trust` for `--yolo`). The factory registers
    `--yolo`, `/plan`, the `tool_call` interceptor, prompt injection, and the
    mode badges — pushed through the `ctx.ui.setStatus()` channel, not a custom
@@ -126,8 +126,8 @@ first use per language.
 - `@nanopi/pi-extra` declares no peer dependency on `@nanopi/pi-coding-agent`:
   pnpm turns peer cycles between workspace packages into `pnpm -r` task-cycle
   failures, and the package has no runtime need for it (the extension API is
-  consumed through structural slices in `src/extension-api.ts`, checked at the
-  registration site in the coding-agent).
+  consumed through structural slices in `packages/extra/src/extension-api.ts`,
+  checked at the registration site in the coding-agent).
 - Pairing codes are 8-char one-time values with a 10-minute expiry,
   constant-time comparison, and attempt limiting; the webui startup URL no
   longer embeds the bearer token.

@@ -27,7 +27,7 @@ The default TUI and the pi-ui extra share one Codex-style layout:
   totals (`resolveFooterUsedTokens`). Extension statuses, cwd, cost, and model
   no longer render in the footer. `FooterComponent.setAutoCompactEnabled`
   stays as a no-op for call-site compatibility.
-- `/status` is a built-in command (`src/extensions/builtin-commands/status.ts`,
+- `/status` is a built-in command (`src/modules/builtin-commands/status.ts`,
   dialog in `status-dialog.ts`, registered in `builtin-commands/index.ts` and
   listed in `BUILTIN_SLASH_COMMANDS`): rows are Model / Model provider /
   Directory / Session / Thinking / Token usage / Context — nanopi mappings,

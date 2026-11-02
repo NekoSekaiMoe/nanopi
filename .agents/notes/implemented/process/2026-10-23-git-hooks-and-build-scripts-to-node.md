@@ -56,3 +56,13 @@ hash 后 diff）：23 个用例覆盖无 trailer、已有 `Change-Id`、已有
 - 代价：这两个 hook 现在要求跑 hook 的机器上有 `node`。husky 本身就要
   `pnpm install`，且 `pre-commit` 会跑 `pnpm run check`，所以这不构成新的
   约束。
+
+## Alternatives considered
+
+- **让 husky 直接执行 `.mjs`**：husky 9 生成的 `.husky/_/<hook>` 固定用 `sh -e` 解释
+  hook 文件，`import` 那一行就 `SyntaxError`；要在上游改 hook 运行方式才能绕开，
+  代价远大于两行 shim。
+- **用 `node_modules/.bin` 里的包装脚本代替 hook**：`core.hooksPath` 指向的是
+  husky 生成的目录，git 只看 `.husky/_/<hook>`，多一层包装仍要靠 sh 起步。
+- **保留 `build.sh` 与 `build.mjs` 并存**：改一处要记得改另一处，而 Node 版本当时
+  根本没被 `package.json` 调用过，等于留一份没人跑的真相。

@@ -16,7 +16,7 @@ Renovate 打出 `renovate/all-dependencies` 分支，里面把 7 个 `package.js
 管辖内，pin 策略顺手把它也当依赖版本钉到了当轮最高已发布版本。
 
 更麻烦的是这个错位查不出来：`engines` 本身不做任何事（`pnpm-workspace.yaml` 没开
-`engineStrict`），CI 跑的是 `.github/workflows/*` 里的 `node-version: 24`，
+`engineStrict`），CI 跑的是 `.github/workflows/*` 里的 `node-version: 24.22.2`，
 `Dockerfile` 是 `node:24.22.2-bookworm-slim`，esbuild `target: "node24"`，
 `@types/node` 是 24.19.2——全部绿灯。声明和验证面已经劈叉，但没有任何一处会红。
 见 [node 24 is the floor](./2026-10-27-node-24-floor.md) 里那套「四处一起改」的
@@ -45,7 +45,7 @@ Node 上游发 26 与我们无关，只要 Debian 还在 24。
 手动关一次。
 
 下限真要动的时候，按 [node 24 floor](./2026-10-27-node-24-floor.md) 那五处一起改：
-`engines.node`、workflow 的 `node-version`、esbuild `target`、`@types/node`、
+`engines.node`、workflow 的 `node-version`（现在是 `24.22.2`）、esbuild `target`、`@types/node`、
 文档里的「Node.js N or newer」。不动 `engines` 单点。
 
 ## Alternatives considered

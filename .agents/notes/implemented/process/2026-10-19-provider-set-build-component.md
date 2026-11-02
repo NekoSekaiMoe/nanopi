@@ -5,11 +5,11 @@ Status: implemented
 ## Problem
 
 `buildconfig.json` could drop modules, assets and OAuth flows, but never a
-provider. Every flavor registered all 51 built-in providers and shipped all
-their catalogs: a `minimal` build still answered `--list-models` with every
-vendor in packages/ai, and issue #47 asked for the opposite — `minimal` should
-be the bash tool plus nothing else, `base` the four built-in tools plus the
-preset providers, `full` unchanged.
+provider. Every flavor registered every built-in provider (51 at the time,
+50 today) and shipped all their catalogs: a `minimal` build still answered
+`--list-models` with every vendor in packages/ai, and issue #47 asked for the
+opposite — `minimal` should be the bash tool plus nothing else, `base` the
+four built-in tools plus the core provider set, `full` unchanged.
 
 Two facts made "the build only offers these providers" impossible before:
 
@@ -25,7 +25,8 @@ Two facts made "the build only offers these providers" impossible before:
 
 **`providers` is a build component with values.** It sits next to `toolset`:
 the flavor names one entry from the top-level `providerSets` map
-(`all`, `presets`), the same way `toolset` names one of `toolsetComponents`.
+(`all`, `core`, `none`, `presets`), the same way `toolset` names one of
+`toolsetComponents`.
 `resolveFlavorProviders` returns the provider ids, and a flavor that names no
 set ships every provider.
 
@@ -59,8 +60,8 @@ with `buildconfig.json`.
 
 - **Runtime filter only** (register everything, then filter in
   `ModelRuntime`). Smallest change, and it is all `isProviderIncluded` would
-  need, but the catalogs and their JSON data stay in the artifact — 51 provider
-  modules for a build that offers one. The `minimal` SKU exists to be small.
+  need, but the catalogs and their JSON data stay in the artifact — every
+  provider module for a build that offers one. The `minimal` SKU exists to be small.
 - **Filter at `all.ts` with esbuild aliases, the way modules are stubbed.** The
   module stub plugin works because each module is a separate import the barrel
   names. Providers all come through one package entry and one generated
@@ -70,9 +71,9 @@ with `buildconfig.json`.
 - **A hand-written `minimal` provider list** (openai + anthropic + ...). Rejected
   as a second catalog to maintain: it drifts from the real provider ids, and
   the drift only shows up as a runtime "no such provider" error.
-- **Making every provider its own `module/*` component.** 51 components, 51
-  entries per flavor, and the module component machinery (stubs, barrel parsing)
-  does not fit a provider that is a factory in a shared entry.
+- **Making every provider its own `module/*` component.** One component per
+  provider, one entry per flavor, and the module component machinery (stubs,
+  barrel parsing) does not fit a provider that is a factory in a shared entry.
 - **Widening `BuiltinProvider` to `string` unconditionally.** It would keep a
   trimmed build type-checking, but it also throws away the "is this a real
   provider id" check for every catalog consumer, `full` included.
@@ -83,10 +84,10 @@ with `buildconfig.json`.
   prompts, webui bridge) is dropped too, because the issue asked for no modes
   beyond the tool itself. Its assistant behaves like a shell-only agent: no
   approval prompts, no undo of a command.
-- `base` and `minimal` ship `providerSets.presets`, which equaled the full
-  catalog when this note was written. They no longer do: the catalog is curated
-  to 30 ids and `full` ships the same set, so the set a flavor names no longer
-  tells a full build from a trimmed one
+- `base` and `minimal` ship `providerSets.core` and `providerSets.none` now,
+  and `presets` equaled the full catalog when this note was written. It no
+  longer does: the catalog is curated to 34 ids and `full` names the same set,
+  so the set a flavor names no longer tells a full build from a trimmed one
   ([curated provider catalog](2026-10-26-curated-provider-catalog.md)).
 - `full` regenerates all shards, so `src/models.generated.ts` and the shard set
   stay as they were; only the small flavors produce a different tree, and a

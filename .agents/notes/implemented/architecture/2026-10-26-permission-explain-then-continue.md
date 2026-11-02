@@ -92,4 +92,4 @@ webui 走同一条 gate，但卡片没有输入框可以敲「继续」，所以
   `explain()`，但前端的交互不同（TUI 有编辑器，webui 只有卡片）。
 - 解释这条路只覆盖 webui 与 TUI：headless（无 UI）既弹不出对话框，也没有输入框可敲「继续」，
   `tool_call` 在那种会话里直接放行受门禁的工具（见
-  [无 UI 会话的权限](2026-10-29-unattended-session-permissions.md)）。
+  [无 UI 会话的权限](../bug-fix/2026-10-29-unattended-session-permissions.md)）。

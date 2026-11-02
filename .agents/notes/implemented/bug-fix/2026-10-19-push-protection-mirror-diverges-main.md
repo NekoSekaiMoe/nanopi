@@ -1,7 +1,8 @@
 # Agent Note: 历史里的 push protection 命中让镜像永久卡死，改用合成提交让远端接管
 
-Status: superseded by
-[按内容判定 main 镜像](2026-10-19-mirror-main-by-content-not-ancestry.md)
+Status: implemented
+
+> Superseded by [按内容判定 main 镜像](2026-10-19-mirror-main-by-content-not-ancestry.md): the synthetic-commit mechanism below is history; the mirror now decides by content and keeps retrying transport failures.
 
 ## Problem
 

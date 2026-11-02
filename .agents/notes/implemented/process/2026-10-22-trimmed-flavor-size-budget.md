@@ -14,9 +14,12 @@ one of them was the API implementations `buildconfig.json` could already trim:
   `minimal` still embedded 0.3 MiB (330 KiB of it the changelog) although it
   carries no docs, webui or export templates: the payload was a lone
   `package.json`.
-- `packages/ai` shipped 46 provider catalogs (1639 KiB of shards) in every
-  flavor. An esbuild probe showed the API sets are worth ~49 KiB; the model
-  data is the real cost. So `base` had nothing to save by trimming APIs.
+- `packages/ai` shipped every built-in provider catalog (1639 KiB of shards;
+  46 of them at the time) in every flavor. An esbuild probe showed the API sets
+  are worth ~49 KiB; the model data is the real cost. So `base` had nothing to
+  save by trimming APIs. The catalog count has moved twice since: 206 after #43
+  and 34 after the curation in
+  [curated provider catalog](./2026-10-26-curated-provider-catalog.md).
 - 22 highlight.js grammars, 149 KiB raw. An agent session reads HTML, CSS,
   YAML, SQL, Dockerfiles, PowerShell and diff output far more often than it
   reads Perl or Scala, and the rest of the 1.3 MiB grammar set was locked out
@@ -89,8 +92,9 @@ graph any more, and each one is its own 4 KiB chunk.
 - **Re-encode every doc screenshot, keep them in `docs`.** Only one of the four
   is referenced; re-encoding all of them still costs 150 KiB for three files
   nothing links to.
-- **Give `base` the 46 catalogs and let `models.json` handle the rest.** That
-  is what `presets` did, and it is exactly the 1.5 MiB the issue asked about.
+- **Give `base` the whole catalog set and let `models.json` handle the rest.**
+  That is what `presets` did, and it is exactly the 1.5 MiB the issue asked
+  about.
 - **Ship `webui` in `base`.** It was the other half of the "don't ship dead
   commands" argument, and `base` loses it on purpose: the browser UI is a
   deployment shape, not a core capability, and it drags a Next build into a
@@ -101,7 +105,7 @@ graph any more, and each one is its own 4 KiB chunk.
   path is 388 KiB of templates read by a single CLI command, and without it
   three separate entry points (`--export`, `/export`, `/share`) break at once.
 - **A `providerSets.core` that also included every token-plan variant of every
-  vendor.** 46 ids by another name; the data is the cost, not the list.
+  vendor.** The full list by another name; the data is the cost, not the list.
 
 ## Consequences
 
@@ -122,7 +126,7 @@ curated vendors.
 - `full` lands under the 10 MiB target, with ~0.45 MiB of grammar headroom for
   the languages someone asks for next. Budgets below are as measured here; the
   catalog numbers moved again when `full` stopped shipping every catalog
-  (206 -> 30 ids, 12.1 -> 9.4 MiB, 3.33 MiB of model data -> 0.30 MiB), see
+  (206 -> 34 ids, 12.1 -> 9.4 MiB, 3.33 MiB of model data -> 0.30 MiB), see
   [curated provider catalog](2026-10-26-curated-provider-catalog.md).
 - `base` reports its providers through `--list-models` and answers `/login`
   with only the six curated vendors. Any other vendor is a `models.json` entry.
