@@ -14,7 +14,7 @@
 		]
 	},
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": "*",
+		"@nanopi/pi-coding-agent": "*",
 		"typebox": "*"
 	}
 }
