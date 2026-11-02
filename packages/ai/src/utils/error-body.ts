@@ -117,21 +117,26 @@ function isPlainNonEmptyObject(value: unknown): boolean {
 }
 
 /**
- * Compose a display string from a normalized error. When the message already
- * carries the body (Anthropic / `@google/genai` happy path) or no body/status
- * was extracted, the message is returned unchanged. Otherwise the status and
- * body are surfaced, with an optional provider prefix.
+ * Compose a display string from a normalized error. When no body/status was
+ * extracted, the message is returned unchanged. Otherwise the status and body
+ * are surfaced, with an optional provider prefix. When the message already
+ * carries the body (Anthropic / `@google/genai` happy path) the message is kept
+ * as-is, but the status prefix is still added: the retry classifier reads the
+ * display string, so dropping the status drops the only evidence that a 429 was
+ * a throttle (`payload too large`, `1308`, ... do not match by themselves).
  *
- * - no prefix: `"<status>: <body>"`
- * - prefix:    `"<prefix> (<status>): <body>"`
+ * - no prefix: `"<status>: <body>"` / `"<status>: <message>"`
+ * - prefix:    `"<prefix> (<status>): <body>"` / `"<prefix> (<status>): <message>"`
  */
 export function formatProviderError(norm: NormalizedProviderError, prefix?: string): string {
-	if (norm.messageCarriesBody || norm.status === undefined || norm.body === undefined) {
-		return prefix !== undefined && norm.status !== undefined
-			? `${prefix} (${norm.status}): ${norm.message}`
-			: norm.message;
-	}
-	return prefix !== undefined ? `${prefix} (${norm.status}): ${norm.body}` : `${norm.status}: ${norm.body}`;
+	const text = norm.messageCarriesBody || norm.body === undefined ? norm.message : norm.body;
+	const alreadyPrefixed =
+		norm.status !== undefined && new RegExp(`^\\w[\\w -]* \\(${norm.status}\\):`).test(norm.message);
+	if (norm.status === undefined || alreadyPrefixed) return text;
+	if (prefix !== undefined) return `${prefix} (${norm.status}): ${text}`;
+	// Only add a status the text does not already open with, so the openai SDK's
+	// "<status> status code (no body)" is not printed twice.
+	return text.includes(String(norm.status)) ? text : `${norm.status}: ${text}`;
 }
 
 export function truncateErrorText(text: string, maxChars: number): string {
