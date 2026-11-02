@@ -22,16 +22,16 @@
 		"index.ts"
 	],
 	"peerDependencies": {
-		"@earendil-works/pi-coding-agent": "*",
-		"@earendil-works/pi-tui": "*",
-		"@earendil-works/pi-ai": "*",
+		"@nanopi/pi-coding-agent": "*",
+		"@nanopi/pi-tui": "*",
+		"@nanopi/pi-ai": "*",
 		"typebox": "*"
 	},
 	"peerDependenciesMeta": {
-		"@earendil-works/pi-tui": {
+		"@nanopi/pi-tui": {
 			"optional": true
 		},
-		"@earendil-works/pi-ai": {
+		"@nanopi/pi-ai": {
 			"optional": true
 		}
 	}

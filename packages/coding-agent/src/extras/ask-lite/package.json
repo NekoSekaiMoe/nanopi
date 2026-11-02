@@ -74,8 +74,8 @@
 	},
 	"peerDependencies": {
 		"@juicesharp/rpiv-i18n": "*",
-		"@earendil-works/pi-coding-agent": "*",
-		"@earendil-works/pi-tui": "*",
+		"@nanopi/pi-coding-agent": "*",
+		"@nanopi/pi-tui": "*",
 		"typebox": "*"
 	},
 	"peerDependenciesMeta": {
