@@ -214,11 +214,11 @@ describe("regression #5943: session_start transient UI", () => {
 
 		const chatRendered = context.chatContainer.render(80).join("\n");
 		expect(chatRendered).toContain("restored message");
-		expect(chatRendered).not.toContain("[Skill conflicts]");
+		expect(chatRendered).not.toContain("[Skill warnings]");
 
 		const rendered = root.render(80).join("\n");
 		expect(rendered).not.toContain("stale resources");
-		expect(rendered.indexOf("[Skill conflicts]")).toBeLessThan(rendered.indexOf("restored message"));
+		expect(rendered.indexOf("[Skill warnings]")).toBeLessThan(rendered.indexOf("restored message"));
 	});
 
 	it("renders replacement session state before session_start handlers can notify", async () => {

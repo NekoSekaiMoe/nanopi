@@ -1357,10 +1357,16 @@ export class InteractiveMode {
 		}
 
 		const skillDiagnostics = skillsResult.diagnostics;
-		if (skillDiagnostics.length > 0) {
-			const warningLines = () => this.formatDiagnostics(skillDiagnostics, sourceInfos);
+		const skillCollisions = skillDiagnostics.filter((diagnostic) => diagnostic.type === "collision");
+		const skillWarnings = skillDiagnostics.filter((diagnostic) => diagnostic.type !== "collision");
+		for (const [label, diagnostics] of [
+			["[Skill conflicts]", skillCollisions],
+			["[Skill warnings]", skillWarnings],
+		] as const) {
+			if (diagnostics.length === 0) continue;
+			const lines = () => this.formatDiagnostics(diagnostics, sourceInfos);
 			this.loadedResourcesContainer.addChild(
-				new ThemedText(() => `${theme.fg("warning", "[Skill conflicts]")}\n${warningLines()}`, 0, 0),
+				new ThemedText(() => `${theme.fg("warning", label)}\n${lines()}`, 0, 0),
 			);
 			this.loadedResourcesContainer.addChild(new Spacer(1));
 		}

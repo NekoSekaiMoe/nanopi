@@ -489,10 +489,38 @@ describe("InteractiveMode.showLoadedResources", () => {
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
 
 		const output = renderAll(fakeThis.loadedResourcesContainer);
-		expect(output).toContain("[Skill conflicts]");
+		expect(output).toContain("[Skill warnings]");
 		expect(output).toContain("duplicate skill name");
 		expect(output).not.toContain("[Skills]");
 		expect(output).not.toContain("commit");
+	});
+
+	test("labels skill name collisions as conflicts", () => {
+		const fakeThis = createShowLoadedResourcesThis({
+			skillDiagnostics: [{ type: "collision", message: 'name "commit" collision' }],
+		});
+
+		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
+
+		const output = renderAll(fakeThis.loadedResourcesContainer);
+		expect(output).toContain("[Skill conflicts]");
+		expect(output).not.toContain("[Skill warnings]");
+	});
+
+	test("splits collisions and plain warnings into separate sections", () => {
+		const fakeThis = createShowLoadedResourcesThis({
+			skillDiagnostics: [
+				{ type: "collision", message: 'name "commit" collision' },
+				{ type: "warning", message: "duplicate skill name" },
+			],
+		});
+
+		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
+
+		const output = renderAll(fakeThis.loadedResourcesContainer);
+		expect(output).toContain("[Skill conflicts]");
+		expect(output).toContain("[Skill warnings]");
+		expect(output.indexOf("[Skill conflicts]")).toBeLessThan(output.indexOf("[Skill warnings]"));
 	});
 
 	test("renders nothing when there are no diagnostics", () => {

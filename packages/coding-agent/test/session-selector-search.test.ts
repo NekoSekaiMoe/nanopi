@@ -125,6 +125,53 @@ describe("session selector search", () => {
 		expect(result).toEqual([]);
 	});
 
+	describe("session id matching", () => {
+		it("matches a session id as a literal substring instead of fuzzy digits", () => {
+			const sessions: SessionInfo[] = [
+				makeSession({ id: "1a2b1024", modified: new Date("2026-01-01T00:00:00.000Z"), allMessagesText: "other" }),
+				makeSession({ id: "c0ffee42", modified: new Date("2026-01-02T00:00:00.000Z"), allMessagesText: "other" }),
+			];
+
+			const result = filterAndSortSessions(sessions, "1024", "recent");
+			expect(result.map((s) => s.id)).toEqual(["1a2b1024"]);
+		});
+
+		it("ranks an id hit above a fuzzy name hit", () => {
+			const sessions: SessionInfo[] = [
+				makeSession({
+					id: "abcd",
+					name: "o-p-u-s notes",
+					modified: new Date("2026-01-02T00:00:00.000Z"),
+					allMessagesText: "",
+				}),
+				makeSession({ id: "opus-1", modified: new Date("2026-01-01T00:00:00.000Z"), allMessagesText: "" }),
+			];
+
+			const result = filterAndSortSessions(sessions, "opus", "relevance");
+			expect(result[0]?.id).toBe("opus-1");
+		});
+
+		it("matches a quoted phrase against the session id", () => {
+			const sessions: SessionInfo[] = [
+				makeSession({ id: "session-42", modified: new Date("2026-01-01T00:00:00.000Z"), allMessagesText: "" }),
+				makeSession({ id: "other", modified: new Date("2026-01-02T00:00:00.000Z"), allMessagesText: "session 42" }),
+			];
+
+			const result = filterAndSortSessions(sessions, '"session-42"', "recent");
+			expect(result.map((s) => s.id)).toEqual(["session-42"]);
+		});
+
+		it("matches a session id in regex mode", () => {
+			const sessions: SessionInfo[] = [
+				makeSession({ id: "deadbeef", modified: new Date("2026-01-01T00:00:00.000Z"), allMessagesText: "" }),
+				makeSession({ id: "cafe0000", modified: new Date("2026-01-02T00:00:00.000Z"), allMessagesText: "" }),
+			];
+
+			const result = filterAndSortSessions(sessions, "re:^dead", "recent");
+			expect(result.map((s) => s.id)).toEqual(["deadbeef"]);
+		});
+	});
+
 	describe("name filter", () => {
 		const sessions: SessionInfo[] = [
 			makeSession({
