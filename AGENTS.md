@@ -25,7 +25,11 @@
 - Use only erasable TypeScript syntax (Node strip-only mode) in code checked by the root config (`packages/*/src`, `packages/*/test`, `packages/coding-agent/examples`): no parameter properties, `enum`, `namespace`/`module`, `import =`, `export =`, or other constructs needing JS emit. Use explicit fields with constructor assignments.
 - Always ask before removing functionality or code that appears intentional.
 - Do not preserve backward compatibility unless the user asks for it.
-- Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `DEFAULT_EDITOR_KEYBINDINGS` or `DEFAULT_APP_KEYBINDINGS` so they stay configurable.
+- Never hardcode key checks (e.g. `matchesKey(keyData, "ctrl+x")`). Add defaults to `TUI_KEYBINDINGS` (`packages/tui/src/keybindings.ts`) or `APP_KEYBINDINGS` (`packages/coding-agent/src/core/keybindings.ts`) so they stay configurable.
+- Name by what the call does to the world, not by what the caller wants. Imperative = a request that may be refused; past tense = a fact an adapter reports. Callers and readers can then tell "this can fail" from "this already happened" without reading the body.
+  - Imperative request: `bash_bg`'s `action=kill` (`packages/extra/src/bash-bg.ts`) can refuse, and `terminateJob` reports that through `terminationFailure`.
+  - Past-tense fact: the `bash-bg-complete` and `bash-bg-running` custom types are states the background job reached, not things anyone asked for.
+  - Exception, do not "unify": `bash_bg`'s `action=status` is a noun, and it stays one. It is a read-only snapshot, not the counterpart of `kill`; renaming it `getStatus` would make it look refusable.
 - `packages/ai/src/models.generated.ts` and the `*.models.ts` shards next to it are generated on every build and gitignored. Never edit them; change `packages/ai/scripts/generate-models.ts` instead and run `pnpm run generate:models`.
 
 ## Commands

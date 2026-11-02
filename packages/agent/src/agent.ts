@@ -32,6 +32,7 @@ import type {
 	PrepareNextTurnContext,
 	PrepareRequest,
 	QueueMode,
+	SteeringPollResult,
 	StreamFn,
 	ToolExecutionMode,
 } from "./types.ts";
@@ -177,6 +178,35 @@ class PendingMessageQueue {
 	}
 }
 
+/**
+ * Steering queue that remembers which of its messages arrived as an interruption.
+ *
+ * The loop only preempts a running tool batch for messages the model has not seen. Messages that
+ * were already delivered stay in "interrupting" for the rest of the run and steer at the next turn
+ * boundary like ordinary steering; forwarding them with no messages left keeps the loop from
+ * polling a second time in the same turn, which one-at-a-time mode relies on.
+ */
+class InterruptingMessageQueue extends PendingMessageQueue {
+	private readonly interrupting = new Set<AgentMessage>();
+
+	/** Queue a message that may preempt the current tool batch. */
+	enqueueInterrupting(message: AgentMessage): void {
+		this.interrupting.add(message);
+		this.enqueue(message);
+	}
+
+	drainForPoll(): SteeringPollResult {
+		const messages = this.drain();
+		if (!messages.some((message) => this.interrupting.has(message))) return messages;
+		return { messages, interrupt: true };
+	}
+
+	override clear(): void {
+		this.interrupting.clear();
+		super.clear();
+	}
+}
+
 type ActiveRun = {
 	promise: Promise<void>;
 	resolve: () => void;
@@ -192,7 +222,7 @@ type ActiveRun = {
 export class Agent {
 	private _state: MutableAgentState;
 	private readonly listeners = new Set<(event: AgentEvent, signal: AbortSignal) => Promise<void> | void>();
-	private readonly steeringQueue: PendingMessageQueue;
+	private readonly steeringQueue: InterruptingMessageQueue;
 	private readonly followUpQueue: PendingMessageQueue;
 
 	public convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
@@ -252,7 +282,7 @@ export class Agent {
 		this.prepareRequest = runtimeOptions.prepareRequest;
 		this.prepareNextTurn = runtimeOptions.prepareNextTurn;
 		this.prepareNextTurnWithContext = runtimeOptions.prepareNextTurnWithContext;
-		this.steeringQueue = new PendingMessageQueue(runtimeOptions.steeringMode ?? "one-at-a-time");
+		this.steeringQueue = new InterruptingMessageQueue(runtimeOptions.steeringMode ?? "one-at-a-time");
 		this.followUpQueue = new PendingMessageQueue(runtimeOptions.followUpMode ?? "one-at-a-time");
 		this.sessionId = runtimeOptions.sessionId;
 		this.attributionSessionId = runtimeOptions.sessionId ?? uuidv7();
@@ -304,8 +334,15 @@ export class Agent {
 		return this.followUpQueue.mode;
 	}
 
-	/** Queue a message to be injected after the current assistant turn finishes. */
-	steer(message: AgentMessage): void {
+	/**
+	 * Queue a message to be injected after the current assistant turn finishes, or between the tool
+	 * calls of a sequential batch if the message is marked as interrupting.
+	 */
+	steer(message: AgentMessage, options?: { interrupt?: boolean }): void {
+		if (options?.interrupt) {
+			this.steeringQueue.enqueueInterrupting(message);
+			return;
+		}
 		this.steeringQueue.enqueue(message);
 	}
 
@@ -517,7 +554,7 @@ export class Agent {
 					skipInitialSteeringPoll = false;
 					return [];
 				}
-				return this.steeringQueue.drain();
+				return this.steeringQueue.drainForPoll();
 			},
 			getFollowUpMessages: async () => this.followUpQueue.drain(),
 		};

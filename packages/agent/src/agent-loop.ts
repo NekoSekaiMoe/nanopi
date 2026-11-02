@@ -5,6 +5,7 @@
 
 import {
 	type AssistantMessage,
+	contentText,
 	EventStream,
 	getCurrentTools,
 	getToolStateChanges,
@@ -27,7 +28,9 @@ import type {
 	AgentToolCall,
 	AgentToolCallOutcome,
 	AgentToolResult,
+	InterruptingSteerQueue,
 	PrepareNextTurnContext,
+	SteeringPollResult,
 	StreamFn,
 } from "./types.ts";
 
@@ -247,7 +250,14 @@ async function runLoop(
 	let lastCompletedTurn: PrepareNextTurnContext | undefined;
 	let explicitContinuation = false;
 	// Check for steering messages at start (user may have typed while waiting)
-	let pendingMessages: AgentMessage[] = (await config.getSteeringMessages?.()) || [];
+	let poll = readSteeringPoll(await config.getSteeringMessages?.());
+	let pendingMessages: AgentMessage[] = poll.messages;
+	// Set when the batch itself polled and found interrupting steering: the trailing poll is skipped.
+	let interruptDelivered = false;
+	// An interrupting poll skipped calls of an earlier batch. Those calls are still unanswered, so
+	// the transcript cannot take an input batch until a tool result fills the hole. Loop straight
+	// back to the provider instead.
+	let resumeToolBatch = poll.interrupted ? poll.interrupted : undefined;
 
 	// Outer loop: continues when queued follow-up messages arrive after agent would stop
 	while (true) {
@@ -276,17 +286,23 @@ async function runLoop(
 				// queued while it ran. Only poll again if the earlier poll returned nothing;
 				// otherwise one-at-a-time mode would deliver two messages in this turn.
 				if (pendingMessages.length === 0) {
-					pendingMessages = (await config.getSteeringMessages?.()) || [];
+					poll = readSteeringPoll(await config.getSteeringMessages?.());
+					pendingMessages = poll.messages;
+					resumeToolBatch = poll.interrupted ? poll.interrupted : undefined;
 				}
 				await emit({ type: "turn_start" });
 			}
 
-			// Process prepared and queued messages before the next assistant response.
-			const input = declareToolChanges(currentContext, [...preparedMessages, ...pendingMessages]);
-			const prepared = await prepareInput(currentContext, input, config, signal, newMessages, emit);
-			currentContext = prepared.context;
-			config = prepared.config;
-			pendingMessages = [];
+			// A skipped tool call leaves a hole in the transcript that only a tool result can fill,
+			// so wait for the next provider response instead of appending an input batch.
+			if (resumeToolBatch === undefined) {
+				// Process prepared and queued messages before the next assistant response.
+				const input = declareToolChanges(currentContext, [...preparedMessages, ...pendingMessages]);
+				const prepared = await prepareInput(currentContext, input, config, signal, newMessages, emit);
+				currentContext = prepared.context;
+				config = prepared.config;
+				pendingMessages = [];
+			}
 
 			const requestUpdate = await config.prepareRequest?.(
 				{
@@ -358,6 +374,16 @@ async function runLoop(
 						: await executeToolCalls(currentContext, message, config, signal, emit);
 				toolResults.push(...executedToolBatch.messages);
 				hasMoreToolCalls = !executedToolBatch.terminate;
+				if (executedToolBatch.interrupted) {
+					// The batch stopped early, so these messages must not ride on the trailing poll
+					// below: that poll has already consumed them.
+					poll = readSteeringPoll(executedToolBatch.interrupted);
+					interruptDelivered = true;
+				} else if (executedToolBatch.steeringConsumed) {
+					// Drained at a call boundary, so it is no longer in the queue for the next poll.
+					poll = readSteeringPoll(executedToolBatch.steeringConsumed);
+					interruptDelivered = true;
+				}
 
 				for (const result of toolResults) {
 					currentContext.messages.push(result);
@@ -380,7 +406,12 @@ async function runLoop(
 			}
 
 			explicitContinuation = decision?.action === "continue";
-			pendingMessages = (await config.getSteeringMessages?.()) || [];
+			if (!interruptDelivered) {
+				poll = readSteeringPoll(await config.getSteeringMessages?.());
+			}
+			interruptDelivered = false;
+			pendingMessages = poll.messages;
+			resumeToolBatch = poll.interrupted;
 			if (hasMoreToolCalls || pendingMessages.length > 0) {
 				explicitContinuation = false;
 			}
@@ -611,9 +642,90 @@ async function executeToolCalls(
 	return executeToolCallsParallel(currentContext, assistantMessage, toolCalls, config, signal, emit);
 }
 
+/**
+ * Stop a sequential batch at call `nextIndex` because interrupting steering arrived.
+ *
+ * The provider requires one result per requested call, so the batch cannot simply stop: every
+ * skipped call gets an error result naming the interruption, and the message that follows them is
+ * the steering text.
+ *
+ * The calls that already ran keep their results in the transcript: dropping them would corrupt the
+ * record of work that happened and break every tool call / result pairing on replay. The model
+ * still learns why the batch stopped, because each skipped result says so.
+ */
+async function interruptToolBatch(
+	toolCalls: AgentToolCall[],
+	nextIndex: number,
+	queue: InterruptingSteerQueue,
+	emit: AgentEventSink,
+): Promise<{ messages: ToolResultMessage[]; interrupted: InterruptingSteerQueue }> {
+	const dropped = toolCalls.slice(nextIndex);
+	for (const toolCall of dropped) {
+		await emit({
+			type: "tool_execution_start",
+			toolCallId: toolCall.id,
+			toolName: toolCall.name,
+			args: toolCall.arguments,
+		});
+	}
+	const reasonText = steeringText(queue.messages, "the user interrupted the run");
+	const reason = `Operation interrupted by the user before the tool ran: "${reasonText}"`;
+	const messages: ToolResultMessage[] = [];
+	for (const toolCall of dropped) {
+		const finalized: FinalizedToolCallOutcome = { toolCall, result: createErrorToolResult(reason), isError: true };
+		await emitToolExecutionEnd(finalized, emit);
+		const toolResultMessage = createToolResultMessage(finalized);
+		await emitToolResultMessage(toolResultMessage, emit);
+		messages.push(toolResultMessage);
+	}
+	return {
+		messages,
+		interrupted: {
+			messages: queue.messages,
+			interrupt: true,
+			interruptedToolCallId: queue.interruptedToolCallId,
+		},
+	};
+}
+
+/** Text of the steering messages, for the tool results that report the interruption. */
+function steeringText(messages: AgentMessage[], fallback: string): string {
+	const text = messages
+		.filter((message) => message.role === "user")
+		.map((message) => contentText(message.content))
+		.join("\n")
+		.trim();
+	return text || fallback;
+}
+
+/** Normalize a steering poll: its messages, plus the skipped call when the poll interrupts. */
+function readSteeringPoll(result: SteeringPollResult | undefined): {
+	messages: AgentMessage[];
+	interrupted?: string;
+} {
+	if (!result) return { messages: [] };
+	if (Array.isArray(result)) return { messages: result };
+	if (!result.interrupt) return { messages: result.messages };
+	return { messages: result.messages, interrupted: result.interruptedToolCallId };
+}
+
+/**
+ * Steering that arrived before a call starts cannot preempt anything: the calls before it already
+ * ran. Only the messages the model has not seen yet can interrupt, so the batch ignores the poll
+ * once they have been delivered.
+ */
+function interruptingSteerQueue(result: SteeringPollResult | undefined): InterruptingSteerQueue | undefined {
+	if (!result || Array.isArray(result) || !result.interrupt || result.messages.length === 0) return undefined;
+	return result;
+}
+
 type ExecutedToolCallBatch = {
 	messages: ToolResultMessage[];
 	terminate: boolean;
+	/** Interrupting steering found between calls; the loop delivers it instead of polling again. */
+	interrupted?: InterruptingSteerQueue;
+	/** Plain steering drained at a call boundary, which the loop would otherwise lose. */
+	steeringConsumed?: SteeringPollResult;
 };
 
 async function executeToolCallsSequential(
@@ -626,14 +738,32 @@ async function executeToolCallsSequential(
 ): Promise<ExecutedToolCallBatch> {
 	const finalizedCalls: FinalizedToolCallOutcome[] = [];
 	const messages: ToolResultMessage[] = [];
+	let interrupted: InterruptingSteerQueue | undefined;
+	let consumed: SteeringPollResult | undefined;
 
-	for (const toolCall of toolCalls) {
+	for (const [index, toolCall] of toolCalls.entries()) {
 		await emit({
 			type: "tool_execution_start",
 			toolCallId: toolCall.id,
 			toolName: toolCall.name,
 			args: toolCall.arguments,
 		});
+
+		// Between calls the transcript holds results for the calls that already ran, so steering can
+		// be delivered here instead of waiting for the batch to finish.
+		const lastFinalized = finalizedCalls[finalizedCalls.length - 1];
+		if (index > 0 && lastFinalized && !signal?.aborted) {
+			const polled = await config.getSteeringMessages?.();
+			const queue = interruptingSteerQueue(polled);
+			if (queue) {
+				const skipped = await interruptToolBatch(toolCalls, index, queue, emit);
+				messages.push(...skipped.messages);
+				return { messages, terminate: true, interrupted: skipped.interrupted };
+			}
+			// The poll consumed what it returned. Hand non-interrupting messages to the loop so they
+			// are delivered at the next turn boundary instead of being dropped.
+			if (polled && (!Array.isArray(polled) ? polled.messages : polled).length > 0) consumed = polled;
+		}
 
 		const preparation = await prepareToolCall(currentContext, assistantMessage, toolCall, config, signal);
 		let finalized: FinalizedToolCallOutcome;
@@ -669,6 +799,8 @@ async function executeToolCallsSequential(
 	return {
 		messages,
 		terminate: shouldTerminateToolBatch(finalizedCalls),
+		...(interrupted === undefined ? {} : { interrupted }),
+		...(consumed === undefined ? {} : { steeringConsumed: consumed }),
 	};
 }
 

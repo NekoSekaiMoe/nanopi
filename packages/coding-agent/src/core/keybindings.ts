@@ -64,6 +64,10 @@ const APP_KEYBINDINGS = {
 		defaultKeys: "ctrl+x",
 		description: "Copy selection or last assistant message",
 	},
+	"app.message.steer": {
+		defaultKeys: "ctrl+enter",
+		description: "Interrupt the current tool batch with a steering message",
+	},
 	"app.message.followUp": {
 		defaultKeys: windowsKeybindings ? "ctrl+q" : "alt+enter",
 		description: "Queue follow-up message",
@@ -246,6 +250,7 @@ const KEYBINDING_NAME_MIGRATIONS = {
 	toggleThinking: "app.thinking.toggle",
 	toggleSessionNamedFilter: "app.session.toggleNamedFilter",
 	externalEditor: "app.editor.external",
+	steer: "app.message.steer",
 	followUp: "app.message.followUp",
 	dequeue: "app.message.dequeue",
 	pasteImage: "app.clipboard.pasteImage",
