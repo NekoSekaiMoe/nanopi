@@ -2094,6 +2094,15 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.getText(), "hello");
 		});
 
+		it("does not insert the functional-key codepoint when PageUp arrives as modifyOtherKeys", async () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			editor.setText("abc");
+			// Terminal without known Kitty support reports PageUp as CSI 27;1;57421~.
+			// It used to fall through to the printable path and insert U+E04D.
+			editor.handleInput("\x1b[27;1;57421~");
+			assert.strictEqual(editor.getText(), "abc");
+		});
+
 		it("undoes autocomplete", async () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 

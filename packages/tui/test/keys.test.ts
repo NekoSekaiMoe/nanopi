@@ -306,6 +306,20 @@ describe("matchesKey", () => {
 			assert.strictEqual(matchesKey("\x1b[27;7;104~", "ctrl+alt+h"), true);
 			assert.strictEqual(parseKey("\x1b[27;7;104~"), "ctrl+alt+h");
 		});
+
+		it("should match xterm modifyOtherKeys functional keys by their Kitty keycode", () => {
+			setKittyProtocolActive(false);
+			// Terminal sends PageUp as CSI 27;1;57421~ because kitty support is not known yet.
+			assert.strictEqual(matchesKey("\x1b[27;1;57421~", "pageUp"), true);
+			assert.strictEqual(matchesKey("\x1b[27;1;57422~", "pageDown"), true);
+			assert.strictEqual(matchesKey("\x1b[27;1;57423~", "home"), true);
+			assert.strictEqual(matchesKey("\x1b[27;1;57424~", "end"), true);
+			assert.strictEqual(matchesKey("\x1b[27;5;57421~", "ctrl+pageUp"), true);
+
+			// A functional key is never a printable character.
+			assert.strictEqual(decodePrintableKey("\x1b[27;1;57421~"), undefined);
+			assert.strictEqual(parseKey("\x1b[27;1;57421~"), "pageUp");
+		});
 	});
 
 	describe("Legacy key matching", () => {
