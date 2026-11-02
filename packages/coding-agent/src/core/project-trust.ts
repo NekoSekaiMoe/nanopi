@@ -48,6 +48,13 @@ export async function resolveProjectTrusted(options: ResolveProjectTrustedOption
 	if (options.trustOverride !== undefined) {
 		return options.trustOverride;
 	}
+
+	// A saved rejection survives even when the folder holds no trust-requiring resources,
+	// so a project with only AGENTS.md cannot quietly re-trust itself.
+	const savedDecision = options.trustStore.get(options.cwd);
+	if (savedDecision === false) {
+		return false;
+	}
 	if (!hasTrustRequiringProjectResources(options.cwd)) {
 		return true;
 	}
@@ -70,9 +77,8 @@ export async function resolveProjectTrusted(options: ResolveProjectTrustedOption
 		}
 	}
 
-	const decision = options.trustStore.get(options.cwd);
-	if (decision !== null) {
-		return decision;
+	if (savedDecision !== null) {
+		return savedDecision;
 	}
 
 	switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
