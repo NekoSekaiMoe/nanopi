@@ -264,7 +264,7 @@ function withUsageEstimate(
 			const cachedChars = commonPromptPrefixLength(previousPrompt, prompt);
 			cacheRead = Math.ceil(cachedChars / 4);
 			cacheWrite = Math.ceil((promptLength - cachedChars) / 4);
-			input = Math.max(0, promptTokens - cacheRead);
+			input = Math.max(0, promptTokens - cacheRead - cacheWrite);
 		} else {
 			cacheWrite = promptTokens;
 		}

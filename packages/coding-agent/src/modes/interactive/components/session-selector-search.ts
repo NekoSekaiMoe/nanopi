@@ -182,9 +182,9 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 
 		// An exact substring in the body is still a better hit than letters scattered over it.
 		if (normalizedText === null) {
-			normalizedText = normalizeWhitespaceLower(text);
+			normalizedText = normalizeMatchText(text);
 		}
-		const textIndex = normalizedText.indexOf(normalizeWhitespaceLower(token.value));
+		const textIndex = normalizedText.indexOf(normalizeMatchText(token.value));
 		if (textIndex >= 0) {
 			totalScore += textIndex * 0.1;
 			continue;

@@ -338,11 +338,11 @@ describe("faux provider", () => {
 			{ messages: [user("hello world"), user("next")] },
 			options,
 		);
-		expect(extended.usage).toMatchObject({ input: 3, cacheRead: 4, cacheWrite: 3 });
+		expect(extended.usage).toMatchObject({ input: 0, cacheRead: 4, cacheWrite: 3 });
 
 		// The first message now differs after "user:hello w" (12 characters): "user:hello wide" + 2 + 9 = 26.
 		const edited = await complete(registration.getModel(), { messages: [user("hello wide"), user("next")] }, options);
-		expect(edited.usage).toMatchObject({ input: 4, cacheRead: 3, cacheWrite: 4 });
+		expect(edited.usage).toMatchObject({ input: 0, cacheRead: 3, cacheWrite: 4 });
 	});
 
 	it("does not simulate caching when cacheRetention is none", async () => {
