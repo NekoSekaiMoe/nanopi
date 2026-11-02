@@ -86,6 +86,13 @@ function archivedSession(cwd: string, entries: ArchiveData[]): SessionManager {
 	return sessionManager;
 }
 
+/** A session whose archive holds entries that are not shaped like the current schema. */
+function archivedSessionWith(cwd: string, entries: unknown[]): SessionManager {
+	const sessionManager = SessionManager.inMemory(cwd);
+	for (const entry of entries) sessionManager.appendCustomEntry("subagent-job", entry);
+	return sessionManager;
+}
+
 /** Wait until `predicate` holds; the tool's settle path is async by design. */
 async function until(predicate: () => boolean, what: string): Promise<void> {
 	for (let i = 0; i < 200; i++) {
@@ -185,6 +192,36 @@ describe("subagent archive restore", () => {
 		const text = await call(rig, { action: "status", jobId: "sa-1" });
 		expect(text).toContain("subagent sa-1: interrupted");
 		expect(text).toContain("the parent session ended before this job settled");
+	});
+
+	it("skips archive entries that are not shaped like a job, instead of trusting the cast", async () => {
+		const cwd = process.cwd();
+		const sessionManager = archivedSessionWith(cwd, [
+			// #404: `data.version` used to be read straight off a cast, so an entry
+			// without one crashed the restore instead of being skipped.
+			undefined,
+			{},
+			{ version: 2 },
+			{ version: 1, id: "sa-1", status: "completed", task: "Task: old", scope: "old", report: "", startedAt: 1 },
+			{ version: 2, id: "sa-2", status: "not-a-status", task: "Task: bad", scope: "bad", report: "", startedAt: 1 },
+			{
+				version: 2,
+				id: "sa-3",
+				status: "completed",
+				task: "Task: good",
+				scope: "good",
+				report: "kept",
+				startedAt: 1,
+			},
+		]);
+		const rig = await register(sessionManager);
+		cleanups.push(() => rig.harness.cleanup());
+		await rig.harness.session.bindModules({});
+		expect(await call(rig, { action: "status", jobId: "sa-1" })).toContain("no subagent found");
+		expect(await call(rig, { action: "status", jobId: "sa-2" })).toContain("no subagent found");
+		const kept = await call(rig, { action: "status", jobId: "sa-3" });
+		expect(kept).toContain("subagent sa-3: completed");
+		expect(kept).toContain("kept");
 	});
 
 	it("blocks a dependent whose dependency was interrupted, instead of waiting forever", async () => {
