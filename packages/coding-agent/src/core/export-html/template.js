@@ -98,19 +98,16 @@
           }
         }
 
-        // Sort children by timestamp. Iterative: a session is a chain as deep as it is
-        // long, so recursion blows the stack on thousand-entry sessions.
-        function sortChildren(rootNodes) {
-          const stack = [...rootNodes];
-          while (stack.length > 0) {
-            const node = stack.pop();
-            node.children.sort((a, b) =>
-              new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
-            );
-            for (const child of node.children) stack.push(child);
-          }
+        // Sort children by timestamp. Iterative for the same reason as containsActive below:
+        // a session tree is one long chain, so recursion depth grows with the entry count.
+        const toSort = [...roots];
+        while (toSort.length > 0) {
+          const node = toSort.pop();
+          node.children.sort((a, b) =>
+            new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
+          );
+          for (const child of node.children) toSort.push(child);
         }
-        sortChildren(roots);
 
         return roots;
       }
@@ -192,22 +189,20 @@
         const result = [];
         const multipleRoots = roots.length > 1;
 
-        // Mark which subtrees contain the active leaf. Iterative post-order: this is the
-        // recursion that used to overflow the stack (and blank the page) at a few
-        // thousand entries, because the depth equals the conversation length.
+        // Mark which subtrees contain the active leaf. Iterative for the same reason as
+        // sortChildren above: recursion depth would grow with the entry count.
         const containsActive = new Map();
-        const markStack = roots.map((root) => [root, false]);
-        while (markStack.length > 0) {
-          const frame = markStack[markStack.length - 1];
-          const node = frame[0];
-          if (!frame[1]) {
-            frame[1] = true;
-            for (const child of node.children) {
-              markStack.push([child, false]);
-            }
+        const pending = [];
+        for (const root of roots) pending.push({ node: root, visited: false });
+        while (pending.length > 0) {
+          const item = pending.pop();
+          const node = item.node;
+          if (!item.visited) {
+            pending.push({ node: node, visited: true });
+            for (const child of node.children) pending.push({ node: child, visited: false });
             continue;
           }
-          markStack.pop();
+          // Children were popped after the marker, so their results are already in the map.
           let has = activePathIds.has(node.entry.id);
           for (const child of node.children) {
             if (containsActive.get(child)) has = true;

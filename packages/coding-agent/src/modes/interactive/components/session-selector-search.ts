@@ -19,12 +19,17 @@ export interface MatchResult {
 	score: number;
 }
 
-function normalizeWhitespaceLower(text: string): string {
-	return text.toLowerCase().replace(/\s+/g, " ").trim();
-}
+/** Characters that keep a bare word a plausible session id fragment. */
+const SESSION_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+
+/**
+ * Score offset that ranks session-id hits above fuzzy matches. The offset has to beat the
+ * best fuzzy score: fuzzyMatch pays up to -10 per word-boundary character.
+ */
+const SESSION_ID_MATCH_BONUS = 100;
 
 function getSessionSearchText(session: SessionInfo): string {
-	return `${session.id} ${session.name ?? ""} ${session.allMessagesText} ${session.cwd}`;
+	return `${session.name ?? ""} ${session.allMessagesText} ${session.cwd}`;
 }
 
 export function hasSessionName(session: SessionInfo): boolean {
@@ -113,6 +118,18 @@ export function parseSearchQuery(query: string): ParsedSearchQuery {
 	return { mode: "tokens", tokens, regex: null };
 }
 
+function normalizeMatchText(text: string): string {
+	return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/** Returns the literal-match score, or null when the query is not a session-id hit. */
+function matchSessionId(id: string, query: string): number | null {
+	if (!query || !SESSION_ID_PATTERN.test(query)) return null;
+	const idx = id.toLowerCase().indexOf(query);
+	if (idx < 0) return null;
+	return idx * 0.1 - SESSION_ID_MATCH_BONUS;
+}
+
 export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): MatchResult {
 	const text = getSessionSearchText(session);
 
@@ -120,7 +137,7 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 		if (!parsed.regex) {
 			return { matches: false, score: 0 };
 		}
-		const idx = text.search(parsed.regex);
+		const idx = `${session.id} ${text}`.search(parsed.regex);
 		if (idx < 0) return { matches: false, score: 0 };
 		return { matches: true, score: idx * 0.1 };
 	}
@@ -133,13 +150,21 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 	let normalizedText: string | null = null;
 
 	for (const token of parsed.tokens) {
+		// Session ids are matched literally, in both modes: fuzzy matching lets a short
+		// number such as `1024` hit digits scattered through an 8 character id.
+		const query = token.kind === "phrase" ? normalizeMatchText(token.value) : token.value;
+		const idScore = matchSessionId(session.id, query);
+		if (idScore !== null) {
+			totalScore += idScore;
+			continue;
+		}
+
 		if (token.kind === "phrase") {
 			if (normalizedText === null) {
-				normalizedText = normalizeWhitespaceLower(text);
+				normalizedText = normalizeMatchText(text);
 			}
-			const phrase = normalizeWhitespaceLower(token.value);
-			if (!phrase) continue;
-			const idx = normalizedText.indexOf(phrase);
+			if (!query) continue;
+			const idx = normalizedText.indexOf(query);
 			if (idx < 0) return { matches: false, score: 0 };
 			totalScore += idx * 0.1;
 			continue;

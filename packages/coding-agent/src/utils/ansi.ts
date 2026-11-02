@@ -32,24 +32,23 @@ const ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";
 // OSC sequences: ESC ] ... ST
 const OSC_START = "\\u001B\\]";
 
-// CSI and related: ESC/C1, optional intermediates, optional params (supports ; and :), then final byte
+// CSI and related: ESC/C1, optional intermediates, optional params (supports ; and :), then final byte.
+// `<` and `>` are private-use prefixes (xterm mouse reports `CSI < b;x;y M`, DA1 replies
+// `CSI > ... c`), never final bytes: treating them as finals leaked `35;59;1M` into tool output.
 const CSI_START = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?";
-const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=><~]";
+const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=~]";
 
-// `= < >` end the two-byte VT52 escapes ("ESC >") but are parameter bytes in a CSI
-// ("ESC [ > 0 ; 276 ; 0 c", the device attributes reply; "ESC [ < 35 ; 59 ; 1 M", an SGR
-// mouse report). Matching them as the final byte wins and leaves the rest of the reply as
-// visible text, so the private-parameter form is matched first. The `[` keeps the two apart,
-// which is why this one needs its own alternation instead of a wider CSI_FINAL.
-const CSI_PRIVATE = "(?:\\u001B\\[|\\u009B)[<=>][0-9;:]*[A-PR-TZcf-nq-uy~]";
+// `CSI <` / `CSI >` is a prefix, not a final byte: the parameters and the private marker
+// belong to the same sequence, so the private form is matched as one alternation of its own.
+const CSI_BODY = `(?:${CSI_START}[<>](?:\\d{1,4}(?:[;:]\\d{0,4})*)?|${CSI_START})`;
 
 // Complete sequences. OSC is non-greedy until the first ST.
-const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_PRIVATE}|${CSI_START}${CSI_FINAL}`, "g");
+const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_BODY}${CSI_FINAL}`, "g");
 
-// Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\),
+// Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\\),
 // or CSI without its final byte.
 const unfinishedAnsiAtEndRegex = new RegExp(
-	`(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_START})$`,
+	`(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_BODY})$`,
 );
 
 // Longest unfinished sequence held back while streaming. Longer ones are processed as-is.

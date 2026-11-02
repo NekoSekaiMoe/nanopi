@@ -837,8 +837,13 @@ export async function main(args: string[], options?: MainOptions) {
 
 	const trustStore = new ProjectTrustStore(agentDir);
 	const sessionCwd = sessionManager.getCwd();
+	// Only an explicit saved rejection can suppress implicit trust on reload; an auto-trusted
+	// session looks exactly like a never-decided one to the trust store.
+	const savedReloadTrustDecision = trustStore.get(sessionCwd);
 	const autoTrustOnReloadCwd =
-		parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
+		parsed.projectTrustOverride === undefined &&
+		!hasTrustRequiringProjectResources(sessionCwd) &&
+		savedReloadTrustDecision !== false
 			? sessionCwd
 			: undefined;
 	const trustPromptMode: AppMode = parsed.help || parsed.listModels !== undefined ? "print" : appMode;
