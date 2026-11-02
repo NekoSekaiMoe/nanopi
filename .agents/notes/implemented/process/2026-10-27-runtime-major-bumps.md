@@ -70,8 +70,9 @@ protobufjs 8 也说不通：那是 `^7.5.4` 之外的版本，上游未验证的
 
 - `overrides` 留在原地，并绑定在 `@google/genai` 上——下次 `@google/genai` 把
   `^7.5.4` 提到 v8 时，这条 override 应当一起撤掉。
-- `pnpm run check` 除 tsc 外全绿；tsc 只剩 `sidecars.ts` 的 `ReadableStream` 方差错误，
-  干净 `main` 上同样报（已 stash 本次改动复验过）。
+- `pnpm run check` 全绿：tsc 当时只剩 `sidecars.ts` 的 `ReadableStream` 方差错误，
+  干净 `main` 上同样报；`@types/node` 升到 24 之后 24 的 lib 定义把这条消掉了（见
+  [node 24 is the floor](./2026-10-27-node-24-floor.md)）。
 - `node ./test.mjs`：ai 1418、coding-agent 2419、agent 96、extra 95 全过，
   `packages/tui` 1117 过；`packages/webui` 的 `typecheck` 与 `next build` 通过。
 - 剩余 major 清单收缩为 `protobufjs` v8（等 `@google/genai` 放行）。

@@ -1,7 +1,6 @@
 # Agent Note: 用 GitHub Packages 发 npm 包，用 GHCR 发容器镜像
 
-Status: implemented — `build-binaries.yml` 在 tag 上多发两个渠道：`npm.pkg.github.com` 的 npm
-包，`ghcr.io` 的镜像。GitHub Release 那条腿保持不变。
+Status: implemented
 
 ## Problem
 
@@ -37,7 +36,7 @@ sidecars tarball、source archive、`install.js` 引导脚本。npm 发布在 20
    registry 描述；GitHub 的 npm registry 文档对 provenance 只字未提。所以 GH Packages 侧的发布
    不带 `--provenance`（带了大概率被拒），provenance 留给日后回 npmjs。
 
-## 实现
+## Decision
 
 ### npm 包：`publish-github-packages` job
 
@@ -66,8 +65,11 @@ sidecars tarball、source archive、`install.js` 引导脚本。npm 发布在 20
 ### 文档
 
 `packages/coding-agent/docs/containerization.md` 的 Dockerfile 示例改成基于
-`ghcr.io/nekosekaimoe/nanopi`，并给 npm 的 GitHub-scope 命令和 `.npmrc` 前置配置。README 里的
-`npm install -g @nanopi/pi-coding-agent` 换成 GitHub scope 名字 + 一行 `.npmrc` 说明。
+`ghcr.io/nekosekaimoe/nanopi`，并给 npm 的 GitHub-scope 命令和 `.npmrc` 前置配置。当时改的是
+README 里的 `npm install -g @nanopi/pi-coding-agent`，换成 GitHub scope 名字 + 一行 `.npmrc`
+说明。这些安装说明后来整段挪进了
+`packages/coding-agent/docs/quickstart.md`（仓库根 README 现在只留 `install.js` 那条引导命令），
+scope 名字与 `.npmrc` 那行随文档一起搬过去了。
 
 ## Alternatives considered
 
@@ -93,18 +95,18 @@ sidecars tarball、source archive、`install.js` 引导脚本。npm 发布在 20
 
 不采用：镜像的增量内容与口味无关，维护面乘三换不来新东西。
 
-## Acceptance criteria
+## Consequences
 
-- tag 发布后 `docker run --rm ghcr.io/nekosekaimoe/nanopi:<tag> --version` 能出版本号。
-- `.npmrc` 配好后 `npm install -g @nekosekaimoe/nanopi@<version>` 能装上并跑 `nanopi --version`。
-- `docs/containerization.md` 与 README 里的安装命令与实际可用渠道一致。
-- 发布仍是 `build-binaries.yml` 的一步，不在本地手工 `npm publish` / `docker push`。
-
-## Risks
-
+- 每个 tag 现在多发两个渠道：`ghcr.io/nekosekaimoe/nanopi`（amd64 / arm64，`latest` 只跟 semver
+  tag 走）和 GitHub Packages 上的 `@nekosekaimoe/nanopi`。GitHub Release 那条腿不变，
+  `install.js` 仍然只认 Release 资产。
+- 验收过：tag 发布后 `docker run --rm ghcr.io/nekosekaimoe/nanopi:<tag> --version` 出版本号；
+  `.npmrc` 配好后 `npm install -g @nekosekaimoe/nanopi@<version>` 装上并能跑 `--version`；
+  `docs/containerization.md` 与 `docs/quickstart.md` 里的渠道与命令与实际可用的一致。
 - `@nekosekaimoe` scope 一旦发到 GH Packages，就只属于这个 owner；日后想搬回 npmjs 只能换名
   （或者两个名字并存）。这是选 GitHub Packages 时接受的代价。
 - 镜像多一条维护面：node 基础镜像的安全更新、tag 与 release tag 的对齐。因为只在 tag 上构建，
   基础镜像更新只在下次发版时进来。
 - CNB ↔ GitHub 双向镜像下发布 workflow 只存在于 GitHub 侧，CNB 侧没有 tag 触发，所以两个新渠道
   也只能在 GitHub 侧发。
+- GitHub Packages 侧不带 `--provenance`（该 registry 没写成支持），provenance 留给日后回 npmjs。

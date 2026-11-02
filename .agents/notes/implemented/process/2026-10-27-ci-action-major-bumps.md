@@ -54,4 +54,9 @@ github artifact actions 与 `pnpm/action-setup`，看起来和依赖无关，实
 
 - 这四个 job 只在打 tag 时跑，`pnpm run check` 覆盖不到；验证靠输入集的静态核对，
   真正的确认要等下一次发版。
-- 剩余的基础设施项：`engines.node` 到 v24。它不在这一批里。
+- 这两个 action 后来继续跟着 Renovate 走：现在锁的是 `upload-artifact` v7.0.2 与
+  `download-artifact` v8.0.2（`publish-image.yml` 也用到后者）。v8 与 v7 的输入集一致，
+  `name` + `path` 的配对仍然原样保留。
+- `engines.node` 到 v24 这一项已经落地，见
+  [node 24 is the floor](./2026-10-27-node-24-floor.md)；
+  `pnpm/action-setup` 现在锁的是 v6.1.0。

@@ -14,8 +14,10 @@ suite.
 
 ## Decision
 
-Both are built in as inline extensions under `src/extensions/`, following the
-existing llama.cpp pattern (`builtInExtensions` in `src/extensions/index.ts`):
+Both are built in as inline extensions under `src/modules/`, following the
+existing llama.cpp pattern (today's `BUILTIN_MODULES` in
+`src/modules/index.ts`; the plugin-era `builtInExtensions` in
+`src/extensions/index.ts` is what this note originally named):
 `builtin-commands` registers `/init` and `/context` through the extension API,
 and `codex-compaction` drives every compaction via the `session_before_compact`
 hook — handoff-framed summary (`SUMMARY_PREFIX` from Codex), verbatim retention

@@ -25,7 +25,7 @@ at it — those three have hand-written integrations and still read as
 
 ## Decision
 
-**`all` is a curated list of 32 catalogs, and `full` ships it.** A catalog is in
+**`all` is a curated list of 34 catalogs, and `full` ships it.** A catalog is in
 when someone can plausibly type its key on purpose:
 
 - the assistants people reach for first: `openai`, `anthropic`, `google`,
@@ -36,7 +36,11 @@ when someone can plausibly type its key on purpose:
   `github-copilot`, `openrouter`, `opencode` + `opencode-go`, `vercel-ai-gateway`,
   `ollama-cloud-token-plan`, `antigravity`, `openai-codex`;
 - the hosts a large account brings: `amazon-bedrock`, `google-vertex`, `azure`,
-  `fireworks`, `groq`, `huggingface`.
+  `fireworks`, `groq`, `huggingface`;
+- `qoder` + `qoder-cn`, added after this note: they have no packaged catalog
+  (the account's signed model list is the only source, see
+  `withProviderCatalog` in `packages/coding-agent/src/core/model-runtime.ts`),
+  but the provider registration is what `/login qoder` needs.
 
 Everything else models.dev lists — including `cerebras`, `baseten`, `together`,
 `modal`, `nvidia`, `sensenova`, `typesafe`, both Cloudflare providers, the
@@ -56,7 +60,7 @@ of model data (48 KiB + 20 KiB), which is the price of the decision;
 `openrouter` was never dropped.
 
 **The provider modules stay compiled in.** The trim is a catalog decision, not
-a feature removal: `builtinProviders()` still registers all 48, a build that
+a feature removal: `builtinProviders()` still registers all 50, a build that
 ships a subset swaps in the generated stand-ins (`providerStubs`), and the
 runtime filter that already existed for `base` (`isProviderIncluded`) does the
 rest. A dropped vendor therefore keeps its exact request shape — `groq` stays
@@ -133,8 +137,8 @@ full   12.1 MiB -> 9.4 MiB   catalogs 3.33 MiB -> 0.30 MiB, 177 catalogs stubbed
 
 - The build prints `stubbed catalogs: <n>`, so the trim is visible in the build
   log rather than inferred from a size.
-- `--list-models` in `full` shows 32 vendors instead of 206. `/login` shows the
-  same 32; a vendor that is not there is one `models.json` entry away, and
+- `--list-models` in `full` shows 34 vendors instead of 206. `/login` shows the
+  same 34; a vendor that is not there is one `models.json` entry away, and
   `docs/providers.md` lists the env var for each.
 - `base` adds `openrouter`, `opencode` and `opencode-go` to its `core` set, so
   the trimmed flavor's picker has the two aggregators a user is most likely to

@@ -35,9 +35,10 @@ minor 里那些本该当天进 main 的补丁也跟着停。而 `pnpm run check`
 - vitest 5 删掉了 `describe.sequential`。`packages/ai` 的四个 OAuth 测试文件
   改成 `describe("…", { concurrent: false }, () => …)`，默认行为不变。
 
-`pnpm` 锁到 12.15.0 之后，`.github/workflows/{ci,build-binaries,issue-analysis}.yml`
+`pnpm` 锁到 12.15.0 之后，`.github/workflows/{checks,build-binaries,issue-analysis,nightly}.yml`
 里硬编码的 `npm install -g pnpm@12.3.1` 跟着改成 12.15.0——它们不走 `package.json`，
-不改就是 lockfile 与本机工具链对不上。
+不改就是 lockfile 与本机工具链对不上。（`ci.yml` 后来改名成 `checks.yml`，见
+[必选检查的名字带着工作流名](./2026-11-02-required-checks-name-carries-workflow-name.md)。）
 
 ## Alternatives considered
 
@@ -61,6 +62,11 @@ minor 里那些本该当天进 main 的补丁也跟着停。而 `pnpm run check`
 - 剩余 major 清单：`next`（webui）、`diff`、`highlight.js`、`hosted-git-info`、
   `vitest`、`@xterm/headless`、`protobufjs`（`pnpm-workspace.yaml` 里还钉着 override）、
   node v24、github artifact actions、`pnpm/action-setup` v6。
+  这批之后又落了三条：运行时依赖的 `diff` / `hosted-git-info` / `@xterm/headless`（见
+  [runtime major bumps](./2026-10-27-runtime-major-bumps.md)）、`engines.node` 到 24（见
+  [node 24 is the floor](./2026-10-27-node-24-floor.md)）、artifact actions 与
+  `pnpm/action-setup`（见 [CI action 大版本](./2026-10-27-ci-action-major-bumps.md)）。
+  仍然挂着的只有 `next`、`highlight.js`、`protobufjs` 三项（`vitest` 已经是 5.0.5）。
 - 验证：`pnpm run typecheck`、`node ./test.mjs`（ai 1418 / coding-agent 2419 通过）、
   `packages/webui` 的 `typecheck` 与 `next build` 全部通过。
 

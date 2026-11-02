@@ -79,7 +79,7 @@ so the checkout matches what the generator writes.
   nothing, and the drift comes back. That is the same assumption
   `flavorProviderSelection` makes.
 - `presets` was a dormant 48-vendor list at the time of this fix. It is no
-  longer dormant: `full` ships it, and it carries the same curated 30 ids as
+  longer dormant: `full` ships it, and it carries the same curated 34 ids as
   `all` ([curated provider catalog](../process/2026-10-26-curated-provider-catalog.md)).
   The two are kept equal on purpose, so the "second write target" argument above
   no longer applies — the generator writes `all`, and `presets` is edited

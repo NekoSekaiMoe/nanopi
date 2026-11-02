@@ -45,3 +45,12 @@ is not included in this build (included: openai-completions)
   provider，`getError()` 里那些真正需要用户动手的信息也就跟着没了。
 - **只在 CLI 打印、不做运行时 API**：`/model` 与 webui 也需要同一个列表，
   再各自解析一遍错误字符串比多一个 getter 更脆。
+
+## Consequences
+
+- 一个 provider 只要有模型能落地就仍然出现，掉线的只是构型不覆盖的那几条；
+  `--list-models` 与 `/model` 里看起来跟之前一样，差别在 warnings 行。
+- 缺失的模型是「静默地从选择器里消失」还是「带着原因留在 warnings 里」，现在以后者为准：
+  warnings 只在启动、reload、选择器刷新与 `--list-models` 的 stderr 出现，不进会话记录。
+- provider 级 `api` 缺失仍是硬错误，所以 `getError()` 的语义没有被稀释；
+  `--auth check` 的 readiness 判断也不受 warnings 影响。

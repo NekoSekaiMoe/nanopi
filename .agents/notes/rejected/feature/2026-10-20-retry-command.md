@@ -1,6 +1,6 @@
 # Agent Note: `/retry` 重跑最近一次失败的 turn（#118）
 
-Status: rejected — 用户判断 `/retry` 与手动发一句「继续」差别不大，不做；#118 关闭，#121 / #122 均未合并。
+Status: rejected — 用户判断 `/retry` 与手动发一句「继续」差别不大，不做；#118 关闭，#121 / #122 均未合并。落盘 run 记录这条路后来以另一种形态落地了（显式的 `/retry`，见 [implemented/feature/2026-10-20-retry-last-failed-run.md](../../implemented/feature/2026-10-20-retry-last-failed-run.md)），本文保留的是「启动时自动探测」那一半为什么没做。
 
 ## Problem
 
