@@ -1,4 +1,12 @@
-name: CI
+name: Checks
+
+# 文件名必须是 checks.yml、工作流名必须是 Checks，不能改回 ci.yml / CI。
+#
+# 分支保护上的必选检查名是全名 `<工作流名> / <job 名>`，这里就是
+# `Checks / build-check-test`。Renovate 的 automerge 只看分支保护要的那些
+# 检查（不是「所有检查」），名字对不上它就永远等下去 —— 一个跑了也不会
+# 满足要求的检查等于没有（#419）。改名之后必须同步改 GitHub 的 ruleset /
+# 分支保护里的必选检查，否则所有 PR 都会卡住。
 
 on:
   # push 也要跑：直推 main 的提交（含从 CNB 镜像过来的合并提交）同样要过
