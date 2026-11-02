@@ -98,14 +98,16 @@
           }
         }
 
-        // Sort children by timestamp
-        function sortChildren(node) {
+        // Sort children by timestamp. Iterative for the same reason as containsActive below:
+        // a session tree is one long chain, so recursion depth grows with the entry count.
+        const toSort = [...roots];
+        while (toSort.length > 0) {
+          const node = toSort.pop();
           node.children.sort((a, b) =>
             new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
           );
-          node.children.forEach(sortChildren);
+          for (const child of node.children) toSort.push(child);
         }
-        roots.forEach(sortChildren);
 
         return roots;
       }
@@ -184,17 +186,26 @@
         const result = [];
         const multipleRoots = roots.length > 1;
 
-        // Mark which subtrees contain the active leaf
+        // Mark which subtrees contain the active leaf. Iterative for the same reason as
+        // sortChildren above: recursion depth would grow with the entry count.
         const containsActive = new Map();
-        function markActive(node) {
+        const pending = [];
+        for (const root of roots) pending.push({ node: root, visited: false });
+        while (pending.length > 0) {
+          const item = pending.pop();
+          const node = item.node;
+          if (!item.visited) {
+            pending.push({ node: node, visited: true });
+            for (const child of node.children) pending.push({ node: child, visited: false });
+            continue;
+          }
+          // Children were popped after the marker, so their results are already in the map.
           let has = activePathIds.has(node.entry.id);
           for (const child of node.children) {
-            if (markActive(child)) has = true;
+            if (containsActive.get(child)) has = true;
           }
           containsActive.set(node, has);
-          return has;
         }
-        roots.forEach(markActive);
 
         // Stack: [node, indent, justBranched, showConnector, isLast, gutters, isVirtualRootChild]
         const stack = [];
