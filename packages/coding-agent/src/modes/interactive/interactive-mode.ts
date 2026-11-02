@@ -2500,6 +2500,7 @@ export class InteractiveMode {
 		this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
 		this.defaultEditor.onAction("app.editor.external", () => void this.handleOpenExternalEditor());
 		this.defaultEditor.onAction("app.message.copy", () => void this.handleCopyCommand());
+		this.defaultEditor.onAction("app.message.steer", () => void this.handleSteerInterrupt());
 		this.defaultEditor.onAction("app.message.followUp", () => this.handleFollowUp());
 		this.defaultEditor.onAction("app.message.dequeue", () => this.handleDequeue());
 		this.defaultEditor.onAction("app.session.new", () => this.handleClearCommand());
@@ -3903,6 +3904,43 @@ export class InteractiveMode {
 		}
 	}
 
+	/**
+	 * Send the composer text as interrupting steering.
+	 *
+	 * The message takes the ordinary steering path, so it is delivered at the next turn boundary no
+	 * matter what. What this adds is an attempt to cut the current batch short: a sequential tool
+	 * batch checks for interrupting steering between calls, so a long `bash` followed by more calls
+	 * stops before the rest of the plan runs on the old instructions.
+	 */
+	private async handleSteerInterrupt(): Promise<void> {
+		const text = (this.editor.getExpandedText?.() ?? this.editor.getText()).trim();
+		if (!text) return;
+
+		// Compaction has no tool batch to interrupt, so interrupting steering is plain steering there.
+		if (this.session.isCompacting) {
+			if (this.isExtensionCommand(text)) {
+				this.editor.addToHistory?.(text);
+				this.editor.setText("");
+				await this.session.prompt(text);
+			} else {
+				this.queueCompactionMessage(text, "steer");
+			}
+			return;
+		}
+
+		// Outside a run there is nothing to interrupt: behave like Enter.
+		if (!this.session.isStreaming) {
+			this.editor.onSubmit?.(text);
+			return;
+		}
+
+		this.editor.addToHistory?.(text);
+		this.editor.setText("");
+		await this.session.prompt(text, { streamingBehavior: "steer", steerInterrupt: true });
+		this.updatePendingMessagesDisplay();
+		this.ui.requestRender();
+	}
+
 	private async handleFollowUp(): Promise<void> {
 		const text = (this.editor.getExpandedText?.() ?? this.editor.getText()).trim();
 		if (!text) return;
@@ -4115,7 +4153,8 @@ export class InteractiveMode {
 				this.pendingMessagesContainer.addChild(new TruncatedText(text, 1, 0));
 			}
 			const dequeueHint = this.getAppKeyDisplay("app.message.dequeue");
-			const hintText = theme.fg("dim", `↳ ${dequeueHint} to edit all queued messages`);
+			const steerHint = this.getAppKeyDisplay("app.message.steer");
+			const hintText = theme.fg("dim", `↳ ${dequeueHint} to edit all queued messages, ${steerHint} to steer now`);
 			this.pendingMessagesContainer.addChild(new TruncatedText(hintText, 1, 0));
 		}
 	}
@@ -6141,6 +6180,7 @@ export class InteractiveMode {
 		const externalEditor = this.getAppKeyDisplay("app.editor.external");
 		const cycleModelBackward = this.getAppKeyDisplay("app.model.cycleBackward");
 		const copyMessage = this.getAppKeyDisplay("app.message.copy");
+		const steer = this.getAppKeyDisplay("app.message.steer");
 		const followUp = this.getAppKeyDisplay("app.message.followUp");
 		const dequeue = this.getAppKeyDisplay("app.message.dequeue");
 		const pasteImage = this.getAppKeyDisplay("app.clipboard.pasteImage");
@@ -6185,6 +6225,7 @@ export class InteractiveMode {
 | \`${toggleThinking}\` | Toggle thinking block visibility |
 | \`${externalEditor}\` | Edit message in external editor |
 | \`${copyMessage}\` | Copy selection or last assistant message |
+| \`${steer}\` | Steer now: stop the current tool batch and apply this message |
 | \`${followUp}\` | Queue follow-up message |
 | \`${dequeue}\` | Restore queued messages |
 | \`${pasteImage}\` | Paste files on macOS, images, or text from clipboard |

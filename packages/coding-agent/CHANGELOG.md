@@ -4,6 +4,7 @@
 
 ### New Features
 
+- **Ctrl+Enter steers immediately**: `app.message.steer` sends the composer text as steering that may interrupt the current sequential tool batch, instead of waiting for every call in it to finish. Calls that already ran keep their results, the remaining ones are reported as interrupted with the steering text, and parallel batches still deliver at the next turn boundary (issue [#411](https://cnb.cool/shinytale/nanopi/-/issues/411))
 - **Qoder model catalog**: the registered `qoder` / `qoder-cn` providers refresh their models from the account's signed model list on startup, so `/model` lists what the logged-in plan can actually use (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
 - **Qoder daily check-in**: a session start claims the day's Qoder credits for every logged-in Qoder account (both sites) and reports the outcome in one status line; `/qoder-checkin` runs it on demand and `NANOPI_QODER_CHECKIN=0` turns it off (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
 

@@ -409,6 +409,11 @@ export interface PromptOptions {
 	images?: ImageContent[];
 	/** When streaming, how to queue the message: "steer" (interrupt) or "followUp" (wait). Required if streaming. */
 	streamingBehavior?: "steer" | "followUp";
+	/**
+	 * Steer as soon as possible instead of at the next turn boundary: a sequential tool batch stops
+	 * between calls and reports the remaining ones as interrupted. Ignored for follow-up messages.
+	 */
+	steerInterrupt?: boolean;
 	/** Source of input for extension input event handlers. Defaults to "interactive". */
 	source?: InputSource;
 	/** Internal hook used by RPC mode to observe how an accepted prompt was dispatched. Not called if the prompt is rejected. */
@@ -2565,7 +2570,7 @@ export class AgentSession {
 			if (options.streamingBehavior === "followUp") {
 				await this._queueFollowUp(expandedText, currentImages);
 			} else {
-				await this._queueSteer(expandedText, currentImages);
+				await this._queueSteer(expandedText, currentImages, options.steerInterrupt ?? false);
 			}
 			preflightResult?.("queued");
 			return;
@@ -2661,6 +2666,7 @@ export class AgentSession {
 		images: ImageContent[] | undefined,
 		behavior: "steer" | "followUp",
 		source: InputSource,
+		interrupt = false,
 	): Promise<QueuedInputDisposition> {
 		this.assertRuntimeAvailable();
 		if (text.startsWith("/")) {
@@ -2679,7 +2685,7 @@ export class AgentSession {
 		expandedText = expandPromptTemplate(expandedText, [...this.promptTemplates]);
 
 		if (behavior === "steer") {
-			await this._queueSteer(expandedText, processedInput.images);
+			await this._queueSteer(expandedText, processedInput.images, interrupt);
 		} else {
 			await this._queueFollowUp(expandedText, processedInput.images);
 		}
@@ -2690,17 +2696,21 @@ export class AgentSession {
 	 * Queue a steering message while the agent is running.
 	 * Delivered after the current assistant turn finishes executing its tool calls,
 	 * before the next LLM call.
+	 * An interrupting steering message is also delivered between the tool calls of a sequential
+	 * batch: the calls that already ran keep their results, the remaining ones are reported as
+	 * interrupted. Parallel batches and calls still running when the message arrives are not
+	 * preempted; the message reaches the model at the next turn boundary either way.
 	 * Expands skill commands and prompt templates. Errors on extension commands.
 	 * @param images Optional image attachments to include with the message
-	 * @param options Input source; defaults to interactive
+	 * @param options Input source (defaults to interactive) and whether the message may interrupt
 	 * @throws Error if text is an extension command
 	 */
 	async steer(
 		text: string,
 		images?: ImageContent[],
-		options?: { source?: InputSource },
+		options?: { source?: InputSource; interrupt?: boolean },
 	): Promise<QueuedInputDisposition> {
-		return this._queueUserInput(text, images, "steer", options?.source ?? "interactive");
+		return this._queueUserInput(text, images, "steer", options?.source ?? "interactive", options?.interrupt ?? false);
 	}
 
 	/**
@@ -2722,18 +2732,21 @@ export class AgentSession {
 	/**
 	 * Internal: Queue a steering message (already expanded, no extension command check).
 	 */
-	private async _queueSteer(text: string, images?: ImageContent[]): Promise<void> {
+	private async _queueSteer(text: string, images?: ImageContent[], interrupt = false): Promise<void> {
 		this._steeringMessages.push(text);
 		this._emitQueueUpdate();
 		const content: (TextContent | ImageContent)[] = [{ type: "text", text }];
 		if (images) {
 			content.push(...images);
 		}
-		this.agent.steer({
-			role: "user",
-			content,
-			timestamp: Date.now(),
-		});
+		this.agent.steer(
+			{
+				role: "user",
+				content,
+				timestamp: Date.now(),
+			},
+			{ interrupt },
+		);
 	}
 
 	/**

@@ -55,6 +55,23 @@ export type ToolExecutionMode = "sequential" | "parallel";
  */
 export type QueueMode = "all" | "one-at-a-time";
 
+/**
+ * Steering messages returned from a queue poll.
+ *
+ * A plain array steers at the next turn boundary. The object form marks the messages as
+ * interrupting, which also steers between tool calls inside a sequential batch:
+ * `interruptedToolCallId` names the call that was running when the messages arrived, so the
+ * loop can report it, and the remaining calls of that batch are skipped and left unanswered.
+ */
+export type InterruptingSteerQueue = {
+	messages: AgentMessage[];
+	interrupt: true;
+	interruptedToolCallId?: string;
+};
+
+/** What `getSteeringMessages` returns: plain steering, or interrupting steering. */
+export type SteeringPollResult = AgentMessage[] | InterruptingSteerQueue;
+
 /** A single tool call content block emitted by an assistant message. */
 export type AgentToolCall = Extract<AssistantMessage["content"][number], { type: "toolCall" }>;
 
@@ -320,11 +337,16 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 	 * If messages are returned, they are added to the context before the next LLM call.
 	 * Tool calls from the current assistant message are not skipped.
 	 *
+	 * The return value may instead be an {@link InterruptingSteerQueue}, which marks the same messages as
+	 * interrupting: the loop then also polls between tool calls inside a sequential batch and skips the
+	 * remaining calls of the batch so the messages reach the model without waiting for the whole batch.
+	 * Steering primed on later polls is non-interrupting; only messages the model has not seen yet can interrupt.
+	 *
 	 * Use this for "steering" the agent while it's working.
 	 *
 	 * Contract: must not throw or reject. Return [] when no steering messages are available.
 	 */
-	getSteeringMessages?: () => Promise<AgentMessage[]>;
+	getSteeringMessages?: () => Promise<SteeringPollResult>;
 
 	/**
 	 * Returns follow-up messages to process after the agent would otherwise stop.

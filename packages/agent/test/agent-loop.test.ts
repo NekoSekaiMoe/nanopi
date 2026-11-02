@@ -2332,3 +2332,179 @@ describe("agentLoop failure handling", () => {
 		expect(events.map((event) => event.type)).not.toContain("agent_end");
 	});
 });
+
+describe("interrupting steering", () => {
+	const toolSchema = Type.Object({ value: Type.String() });
+
+	function createEchoTool(
+		executed: string[],
+		executionMode?: "sequential",
+	): AgentTool<typeof toolSchema, { value: string }> {
+		return {
+			name: "echo",
+			label: "Echo",
+			description: "Echo tool",
+			parameters: toolSchema,
+			...(executionMode ? { executionMode } : {}),
+			async execute(_toolCallId, params) {
+				executed.push(params.value);
+				return { content: [{ type: "text", text: `ok:${params.value}` }], details: { value: params.value } };
+			},
+		};
+	}
+
+	function twoCallAssistant(): AssistantMessage {
+		return createAssistantMessage(
+			[
+				{ type: "toolCall", id: "tool-1", name: "echo", arguments: { value: "first" } },
+				{ type: "toolCall", id: "tool-2", name: "echo", arguments: { value: "second" } },
+			],
+			"toolUse",
+		);
+	}
+
+	it("stops a sequential batch between calls and delivers the steering message", async () => {
+		const executed: string[] = [];
+		const steering = createUserMessage("stop, wrong directory");
+		const context: AgentContext = { messages: [], tools: [createEchoTool(executed)] };
+		const requests: boolean[] = [];
+		let callIndex = 0;
+
+		// The startup poll answers first; the batch's call boundary is the second one.
+		let polls = 0;
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+			toolExecution: "sequential",
+			getSteeringMessages: async () => (++polls === 2 ? { messages: [steering], interrupt: true } : []),
+		};
+
+		const stream = agentLoop([createUserMessage("go")], context, config, undefined, (_model, ctx) => {
+			requests.push(
+				ctx.messages.some((m) => m === steering || (m.role === "user" && m.content === steering.content)),
+			);
+			const response = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message =
+					callIndex === 0 ? twoCallAssistant() : createAssistantMessage([{ type: "text", text: "ok" }]);
+				callIndex++;
+				response.push({ type: "done", reason: callIndex === 1 ? "toolUse" : "stop", message });
+			});
+			return response;
+		});
+		await stream.result();
+
+		// The second call of the batch never ran.
+		expect(executed).toEqual(["first"]);
+		// The model is asked again, with the steering message in context.
+		expect(requests).toEqual([false, true]);
+	});
+
+	it("reports the skipped calls as errors and keeps executed results", async () => {
+		const executed: string[] = [];
+		const steering = createUserMessage("stop");
+		const context: AgentContext = { messages: [], tools: [createEchoTool(executed)] };
+		let callIndex = 0;
+
+		let polls = 0;
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+			toolExecution: "sequential",
+			getSteeringMessages: async () => (++polls === 2 ? { messages: [steering], interrupt: true } : []),
+		};
+
+		const stream = agentLoop([createUserMessage("go")], context, config, undefined, () => {
+			const response = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message =
+					callIndex === 0 ? twoCallAssistant() : createAssistantMessage([{ type: "text", text: "ok" }]);
+				callIndex++;
+				response.push({ type: "done", reason: callIndex === 1 ? "toolUse" : "stop", message });
+			});
+			return response;
+		});
+
+		const events: AgentEvent[] = [];
+		for await (const event of stream) events.push(event);
+
+		const toolEnds = events.filter(
+			(e): e is Extract<AgentEvent, { type: "tool_execution_end" }> => e.type === "tool_execution_end",
+		);
+		expect(toolEnds.map((e) => e.toolCallId)).toEqual(["tool-1", "tool-2"]);
+		expect(toolEnds[1].isError).toBe(true);
+
+		// Every requested call keeps a result, so replay stays a valid transcript.
+		const toolResults = events.flatMap((e) =>
+			e.type === "message_end" && e.message.role === "toolResult" ? [e.message] : [],
+		);
+		expect(toolResults.map((message) => message.toolCallId)).toEqual(["tool-1", "tool-2"]);
+		expect(JSON.stringify(toolResults[1].content)).toContain("interrupted");
+	});
+
+	it("ignores non-interrupting steering between calls", async () => {
+		const executed: string[] = [];
+		const steering = createUserMessage("queued");
+		const context: AgentContext = { messages: [], tools: [createEchoTool(executed)] };
+		let callIndex = 0;
+		let delivered = false;
+
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+			toolExecution: "sequential",
+			getSteeringMessages: async () => {
+				if (executed.length === 1 && !delivered) {
+					delivered = true;
+					return [steering];
+				}
+				return [];
+			},
+		};
+
+		const stream = agentLoop([createUserMessage("go")], context, config, undefined, () => {
+			const response = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message =
+					callIndex === 0 ? twoCallAssistant() : createAssistantMessage([{ type: "text", text: "ok" }]);
+				callIndex++;
+				response.push({ type: "done", reason: callIndex === 1 ? "toolUse" : "stop", message });
+			});
+			return response;
+		});
+		await stream.result();
+
+		// Plain steering waits for the batch to finish.
+		expect(executed).toEqual(["first", "second"]);
+	});
+
+	it("does not preempt a parallel batch", async () => {
+		const executed: string[] = [];
+		const context: AgentContext = { messages: [], tools: [createEchoTool(executed)] };
+		let callIndex = 0;
+		let polls = 0;
+
+		const config: AgentLoopConfig = {
+			model: createModel(),
+			convertToLlm: identityConverter,
+			toolExecution: "parallel",
+			// Returned at the call-boundary poll, which only the sequential path has.
+			getSteeringMessages: async () =>
+				++polls === 2 ? { messages: [createUserMessage("stop")], interrupt: true } : [],
+		};
+
+		const stream = agentLoop([createUserMessage("go")], context, config, undefined, () => {
+			const response = createAssistantMessageEventStream();
+			queueMicrotask(() => {
+				const message =
+					callIndex === 0 ? twoCallAssistant() : createAssistantMessage([{ type: "text", text: "ok" }]);
+				callIndex++;
+				response.push({ type: "done", reason: callIndex === 1 ? "toolUse" : "stop", message });
+			});
+			return response;
+		});
+		await stream.result();
+
+		expect(executed.sort()).toEqual(["first", "second"]);
+	});
+});
