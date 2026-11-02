@@ -107,7 +107,14 @@ describe("bash_bg completion delivery", () => {
 		const rig = await register();
 		cleanups.push(() => rig.harness.cleanup());
 		await call(rig.tool, rig.harness.tempDir, { action: "run", command: "echo archived", timeout: 5 });
-		await until(() => rig.entries().some((entry) => entry.status !== "running"), "the settled record");
+		// `markDone` and `finalizeOutput` both append a record, and the first one lands
+		// before the drained stdout reaches the log file. Wait for the archived log,
+		// not for the status flip, or a slow runner reads an empty file.
+		await until(() => {
+			const latest = rig.entries().at(-1);
+			if (latest === undefined || latest.status === "running") return false;
+			return existsSync(latest.logPath) && readFileSync(latest.logPath, "utf8").includes("archived");
+		}, "the archived log");
 
 		const record = rig.entries().at(-1);
 		expect(record?.status).toBe("completed");
