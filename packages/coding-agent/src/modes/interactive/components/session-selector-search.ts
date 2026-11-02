@@ -24,7 +24,7 @@ function normalizeWhitespaceLower(text: string): string {
 }
 
 function getSessionSearchText(session: SessionInfo): string {
-	return `${session.id} ${session.name ?? ""} ${session.allMessagesText} ${session.cwd}`;
+	return `${session.name ?? ""} ${session.allMessagesText} ${session.cwd}`;
 }
 
 export function hasSessionName(session: SessionInfo): boolean {
@@ -142,6 +142,26 @@ export function matchSession(session: SessionInfo, parsed: ParsedSearchQuery): M
 			const idx = normalizedText.indexOf(phrase);
 			if (idx < 0) return { matches: false, score: 0 };
 			totalScore += idx * 0.1;
+			continue;
+		}
+
+		// The session ID is an opaque token, so it matches as a plain substring: fuzzy matching
+		// let "1024" match letters scattered through a UUID. It is kept out of the search text
+		// for the same reason, so only this branch can match it.
+		const needle = token.value.toLowerCase();
+		const idIndex = session.id.toLowerCase().indexOf(needle);
+		if (idIndex >= 0) {
+			totalScore += idIndex * 0.1 - 5;
+			continue;
+		}
+
+		// An exact substring in the body is still a better hit than letters scattered over it.
+		if (normalizedText === null) {
+			normalizedText = normalizeWhitespaceLower(text);
+		}
+		const textIndex = normalizedText.indexOf(normalizeWhitespaceLower(token.value));
+		if (textIndex >= 0) {
+			totalScore += textIndex * 0.1;
 			continue;
 		}
 
