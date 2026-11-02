@@ -489,10 +489,32 @@ describe("InteractiveMode.showLoadedResources", () => {
 		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
 
 		const output = renderAll(fakeThis.loadedResourcesContainer);
-		expect(output).toContain("[Skill conflicts]");
+		expect(output).toContain("[Skill warnings]");
+		expect(output).not.toContain("[Skill conflicts]");
 		expect(output).toContain("duplicate skill name");
 		expect(output).not.toContain("[Skills]");
 		expect(output).not.toContain("commit");
+	});
+
+	test("labels name collisions as conflicts and other diagnostics as warnings", () => {
+		const fakeThis = createShowLoadedResourcesThis({
+			skillDiagnostics: [
+				{
+					type: "collision",
+					message: 'Skill name "commit" is defined twice',
+					path: "/tmp/b/SKILL.md",
+				},
+				{ type: "error", message: "SKILL.md is missing a description", path: "/tmp/a/SKILL.md" },
+			],
+		});
+
+		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
+
+		const output = renderAll(fakeThis.loadedResourcesContainer);
+		expect(output).toContain("[Skill conflicts]");
+		expect(output).toContain("[Skill warnings]");
+		expect(output.indexOf("[Skill conflicts]")).toBeLessThan(output.indexOf("[Skill warnings]"));
+		expect(output).toContain("missing a description");
 	});
 
 	test("renders nothing when there are no diagnostics", () => {
