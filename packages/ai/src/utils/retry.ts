@@ -4,6 +4,17 @@ function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
 	return new RegExp(patterns.join("|"), "i");
 }
 
+/**
+ * Bare HTTP status codes matched with digit boundaries. Plain alternation turns
+ * `"500"` into a substring test, so `1500`, `25001`, errno values, and request ids
+ * starting with those digits were classified as transient server failures and retried.
+ * `\\b` alone would reject `_429_` and `x429` (no boundary before the digits), while
+ * still accepting `retry_after=500ms`, so the surrounding characters are spelled out.
+ */
+function buildHttpStatusPattern(statuses: readonly number[]): RegExp {
+	return new RegExp(`(?<![\\dk])(?:${statuses.join("|")})(?![\\dk])`, "i");
+}
+
 const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
 	// OpenCode Go/free-tier limits returned as 429 JSON error types by OpenCode's
 	// Zen API. These are subscription/account limits, not transient throttles.
@@ -72,16 +83,13 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"model is at capacity",
 	"rate.?limit",
 	"too many requests",
-	"429",
-	"500",
-	"502",
-	"503",
-	"504",
-	"520",
-	"524",
 	"service.?(?:is.?)?(?:temporarily.?)?unavailable",
 	"server.?error",
 	"internal.?error",
+	// HTTP statuses a provider or gateway reports verbatim ("429 status code (no body)",
+	// "OpenAI API error (503): ..."). Kept separate from the substring patterns above
+	// so a digit inside a longer number is not read as a throttle.
+	buildHttpStatusPattern([429, 500, 502, 503, 504, 520, 524]).source,
 
 	// Wrapper/provider text for transient upstream failures, including OpenRouter
 	// "Provider returned error" responses (#2264) and gateway wording such as

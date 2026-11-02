@@ -100,6 +100,40 @@ describe("provider retry classification", () => {
 		).toBe(true);
 	});
 
+	it("matches HTTP status codes the provider reports verbatim", () => {
+		// Regression for #431: formatProviderError now keeps the status on messages
+		// that already carry the body, so a bare "429" is the common shape.
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", { stopReason: "error", errorMessage: "429: payload too large" }),
+			),
+		).toBe(true);
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", { stopReason: "error", errorMessage: "503 service unavailable" }),
+			),
+		).toBe(true);
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", { stopReason: "error", errorMessage: "retry_after=429ms" }),
+			),
+		).toBe(true);
+	});
+
+	it("does not read a status code out of a longer number", () => {
+		// Regression for #431: "500" used to match as a substring, so these were retried.
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", { stopReason: "error", errorMessage: '{"error":{"code":"1308"}}' }),
+			),
+		).toBe(false);
+		expect(
+			isRetryableAssistantError(
+				fauxAssistantMessage("", { stopReason: "error", errorMessage: "request 1500 failed for repo_2500" }),
+			),
+		).toBe(false);
+	});
+
 	it("keeps provider limit errors non-retryable", () => {
 		expect(
 			isRetryableAssistantError(

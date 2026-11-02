@@ -218,6 +218,27 @@ describe("formatProviderError", () => {
 		expect(formatProviderError(norm, "OpenAI API error")).toBe(`OpenAI API error (403): ${body}`);
 	});
 
+	it("keeps the status without a prefix when the message already carries the body", () => {
+		// Regression for #431: this shape used to return the bare body, so the retry
+		// classifier lost its only evidence that the response was a 429 throttle.
+		const body = JSON.stringify({ error: { message: "payload too large" } });
+		const norm = normalizeProviderError(Object.assign(new Error(body), { status: 429 }));
+
+		expect(formatProviderError(norm)).toBe(`429: ${body}`);
+	});
+
+	it("does not repeat a status the message already carries", () => {
+		const norm = normalizeProviderError(Object.assign(new Error("429: slow down"), { status: 429 }));
+
+		expect(formatProviderError(norm)).toBe("429: slow down");
+	});
+
+	it("reports the status when the error has none of its own body", () => {
+		const norm = normalizeProviderError(Object.assign(new Error("socket hang up"), { statusCode: 502 }));
+
+		expect(formatProviderError(norm)).toBe("502: socket hang up");
+	});
+
 	it("returns the bare message for a non-Error value", () => {
 		const norm = normalizeProviderError({ reason: "boom" });
 
