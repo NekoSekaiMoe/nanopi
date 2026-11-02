@@ -180,6 +180,49 @@ type RestoredJob = {
 	durationMs?: number;
 };
 
+const JOB_STATUSES: ReadonlySet<string> = new Set<JobStatus>([
+	"queued",
+	"blocked",
+	"running",
+	"completed",
+	"failed",
+	"killed",
+	"timeout",
+	"interrupted",
+]);
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Read one `subagent-job` archive entry back into a job, or reject it.
+ *
+ * `CustomEntry.data` is `unknown` on disk: a truncated write, a hand-edited session
+ * or a future schema all land here as something other than a `RestoredJob`. The
+ * fields below are the ones the restore path dereferences, so they are checked
+ * rather than cast; an entry that fails is skipped instead of poisoning the table.
+ */
+function parseArchivedJob(raw: unknown): (RestoredJob & { version: number }) | undefined {
+	if (!isRecord(raw)) return undefined;
+	if (raw.version !== ARCHIVE_VERSION) return undefined;
+	const { id, status, task, scope, report, startedAt } = raw;
+	if (typeof id !== "string" || id.length === 0) return undefined;
+	if (typeof status !== "string" || !JOB_STATUSES.has(status)) return undefined;
+	if (typeof task !== "string" || typeof report !== "string") return undefined;
+	if (typeof scope !== "string" || typeof startedAt !== "number") return undefined;
+	return {
+		...(raw as unknown as RestoredJob),
+		id,
+		status: status as JobStatus,
+		task,
+		scope,
+		report,
+		startedAt,
+		version: ARCHIVE_VERSION,
+	};
+}
+
 function textResult(text: string) {
 	return { content: [{ type: "text" as const, text }], details: {} };
 }
@@ -885,9 +928,11 @@ export default function subagentMini(pi: ModuleApi): void {
 		let restored = 0;
 		for (const entry of ctx.sessionManager.getEntries()) {
 			if (entry.type !== "custom" || entry.customType !== ARCHIVE_TYPE) continue;
-			const data = entry.data as (RestoredJob & { version?: number }) | undefined;
-			if (!data?.id || jobs.has(data.id)) continue;
-			if (data.version !== ARCHIVE_VERSION) continue;
+			// The archive is extension-owned data read back from disk: validate every field
+			// the restore path dereferences before it enters the job table, instead of
+			// casting and finding out later.
+			const data = parseArchivedJob(entry.data);
+			if (!data || jobs.has(data.id)) continue;
 			restored++;
 			const match = /^sa-(\d+)$/.exec(data.id);
 			if (match) counter = Math.max(counter, Number(match[1]));
