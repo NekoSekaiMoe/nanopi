@@ -38,13 +38,25 @@ export function createBudget(options: BudgetOptions): Budget {
 	timer?.unref?.();
 	options.signal?.addEventListener("abort", () => controller?.abort(), { once: true });
 	const started = Date.now();
+	// `remainingMs` is a whole number of milliseconds, so a caller that is one
+	// millisecond into the budget reads `total - 1`. The first request would
+	// then be armed with 299ms while the budget's own timer still fires at
+	// 300ms, and the deadline that ends it reports 299ms — a number the caller
+	// never asked for. Flooring the elapsed time keeps the first request at the
+	// full budget; every later request only loses the whole milliseconds that
+	// actually passed.
+	let readAt = started;
+	const elapsed = () => {
+		readAt = Math.max(readAt, Date.now());
+		return Math.floor(readAt - started);
+	};
 
 	return {
 		timeoutMs: options.timeoutMs,
 		signal: controller?.signal,
 		get remainingMs(): number | undefined {
 			if (options.timeoutMs === undefined) return undefined;
-			return Math.max(0, total - (Date.now() - started));
+			return Math.max(0, total - elapsed());
 		},
 		get expired(): boolean {
 			return this.remainingMs !== undefined && this.remainingMs <= 0;
