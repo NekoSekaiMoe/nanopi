@@ -240,3 +240,49 @@ describe("session selector search", () => {
 		});
 	});
 });
+
+describe("session selector search: ID is not fuzzy matched", () => {
+	it("does not match letters scattered through a UUID", () => {
+		const sessions: SessionInfo[] = [
+			makeSession({
+				id: "1a0b2c4d-0000-4000-8000-000000000000",
+				modified: new Date("2026-01-02T00:00:00.000Z"),
+				allMessagesText: "unrelated body",
+			}),
+		];
+
+		expect(filterAndSortSessions(sessions, "1024", "recent")).toEqual([]);
+	});
+
+	it("matches a session ID as a substring", () => {
+		const sessions: SessionInfo[] = [
+			makeSession({
+				id: "2026-1024-abc",
+				modified: new Date("2026-01-02T00:00:00.000Z"),
+				allMessagesText: "unrelated body",
+			}),
+		];
+
+		expect(filterAndSortSessions(sessions, "1024", "recent").map((s) => s.id)).toEqual(["2026-1024-abc"]);
+	});
+
+	it("ranks the session whose ID contains the token above one that only mentions it", () => {
+		const sessions: SessionInfo[] = [
+			makeSession({
+				id: "body-only",
+				modified: new Date("2026-01-03T00:00:00.000Z"),
+				allMessagesText: "we talked about abcd1234 yesterday",
+			}),
+			makeSession({
+				id: "abcd1234",
+				modified: new Date("2026-01-01T00:00:00.000Z"),
+				allMessagesText: "hello",
+			}),
+		];
+
+		expect(filterAndSortSessions(sessions, "abcd1234", "relevance").map((s) => s.id)).toEqual([
+			"abcd1234",
+			"body-only",
+		]);
+	});
+});
