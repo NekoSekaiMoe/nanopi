@@ -1,10 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended",
-    ":semanticCommits",
-    ":semanticCommitScopeDisabled"
-  ],
+  "extends": ["config:recommended"],
+  "commitMessagePrefix": "chore(deps): ",
   "dependencyDashboard": false,
   "branchConcurrentLimit": 1,
   "prConcurrentLimit": 1,
@@ -14,28 +11,44 @@
   "separateMinorPatch": false,
   "rangeStrategy": "pin",
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": false
   },
   "packageRules": [
     {
-      "description": "One group, one branch, one PR per run: no approval, automerge into main.",
-      "matchPackageNames": ["*"],
-      "groupName": "all dependencies",
-      "groupSlug": "all-dependencies",
+      "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了直接合进 main。platformAutomerge 关掉，让 Renovate 自己在 CI 之后合，而不是等 GitHub 的 native auto-merge。",
+      "matchManagers": ["npm"],
+      "groupName": "npm dependencies",
+      "groupSlug": "npm-dependencies",
       "automerge": true,
-      "automergeType": "branch",
-      "platformAutomerge": true
+      "automergeType": "pr",
+      "platformAutomerge": false
+    },
+    {
+      "description": "Node 底图只升 patch：跨 minor 会换掉运行时，得人工确认 Node 版本后再动。这条必须排在上面 npm 组之前，否则被分组的规则吞掉。",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["node"],
+      "groupName": "node runtime",
+      "groupSlug": "node-runtime",
+      "separateMinorPatch": true,
+      "automerge": false
+    },
+    {
+      "description": "GitHub Actions 的 sha 固定统一成一组，digest 要跟着换，跟 npm 依赖塞在同一个 PR 里会互相顶掉。",
+      "matchManagers": ["custom.regex"],
+      "groupName": "github actions",
+      "groupSlug": "github-actions",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": false
     }
   ],
   "customManagers": [
     {
       "customType": "regex",
-      "description": "GitHub Actions `uses:` pins (sha # vX.Y.Z) live in the workflows.",
-      "managerFilePatterns": [
-        "/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"
-      ],
+      "description": "GitHub Actions `uses:` pins (sha # vX.Y.Z) live in the workflows. 注释允许 1~3 段版本号：docker/setup-* 的 v3 系列没有 patch 位，只认三段会让整个文件零提取。",
+      "managerFilePatterns": ["/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"],
       "matchStrings": [
-        "uses:\\s+(?<depName>[^\\s@]+)@(?<currentDigest>[0-9a-f]{40})\\s+#\\s+v?(?<currentValue>\\d+\\.\\d+\\.\\d+)"
+        "uses:\\s+(?<depName>[^\\s@]+)@(?<currentDigest>[0-9a-f]{40})\\s+#\\s+v?(?<currentValue>\\d+(?:\\.\\d+){1,2})"
       ],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
