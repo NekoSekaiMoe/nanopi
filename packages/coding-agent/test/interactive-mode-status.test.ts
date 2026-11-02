@@ -448,7 +448,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 		verbose?: boolean;
 		quietStartup?: QuietStartup;
 		skills?: Array<{ filePath: string; name: string }>;
-		skillDiagnostics?: Array<{ type: "warning" | "error" | "collision"; message: string }>;
+		skillDiagnostics?: Array<{ type: "warning" | "error" | "collision"; message: string; path?: string }>;
 	}) {
 		const fakeThis: any = {
 			options: { verbose: options.verbose ?? false },
@@ -490,28 +490,21 @@ describe("InteractiveMode.showLoadedResources", () => {
 
 		const output = renderAll(fakeThis.loadedResourcesContainer);
 		expect(output).toContain("[Skill warnings]");
+		expect(output).not.toContain("[Skill conflicts]");
 		expect(output).toContain("duplicate skill name");
 		expect(output).not.toContain("[Skills]");
 		expect(output).not.toContain("commit");
 	});
 
-	test("labels skill name collisions as conflicts", () => {
-		const fakeThis = createShowLoadedResourcesThis({
-			skillDiagnostics: [{ type: "collision", message: 'name "commit" collision' }],
-		});
-
-		(InteractiveMode as any).prototype.showLoadedResources.call(fakeThis);
-
-		const output = renderAll(fakeThis.loadedResourcesContainer);
-		expect(output).toContain("[Skill conflicts]");
-		expect(output).not.toContain("[Skill warnings]");
-	});
-
-	test("splits collisions and plain warnings into separate sections", () => {
+	test("labels name collisions as conflicts and other diagnostics as warnings", () => {
 		const fakeThis = createShowLoadedResourcesThis({
 			skillDiagnostics: [
-				{ type: "collision", message: 'name "commit" collision' },
-				{ type: "warning", message: "duplicate skill name" },
+				{
+					type: "collision",
+					message: 'Skill name "commit" is defined twice',
+					path: "/tmp/b/SKILL.md",
+				},
+				{ type: "error", message: "SKILL.md is missing a description", path: "/tmp/a/SKILL.md" },
 			],
 		});
 
@@ -521,6 +514,7 @@ describe("InteractiveMode.showLoadedResources", () => {
 		expect(output).toContain("[Skill conflicts]");
 		expect(output).toContain("[Skill warnings]");
 		expect(output.indexOf("[Skill conflicts]")).toBeLessThan(output.indexOf("[Skill warnings]"));
+		expect(output).toContain("missing a description");
 	});
 
 	test("renders nothing when there are no diagnostics", () => {

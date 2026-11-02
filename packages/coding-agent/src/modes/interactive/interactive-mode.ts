@@ -1356,11 +1356,13 @@ export class InteractiveMode {
 			}
 		}
 
-		const skillDiagnostics = skillsResult.diagnostics;
-		const skillCollisions = skillDiagnostics.filter((diagnostic) => diagnostic.type === "collision");
-		const skillWarnings = skillDiagnostics.filter((diagnostic) => diagnostic.type !== "collision");
+		// Only name collisions are conflicts. A skill with a missing frontmatter field or an
+		// unreadable file is a warning, and labeling it "[Skill conflicts]" sends the user
+		// looking for a duplicate that does not exist.
+		const skillConflicts = skillsResult.diagnostics.filter((diagnostic) => diagnostic.type === "collision");
+		const skillWarnings = skillsResult.diagnostics.filter((diagnostic) => diagnostic.type !== "collision");
 		for (const [label, diagnostics] of [
-			["[Skill conflicts]", skillCollisions],
+			["[Skill conflicts]", skillConflicts],
 			["[Skill warnings]", skillWarnings],
 		] as const) {
 			if (diagnostics.length === 0) continue;
