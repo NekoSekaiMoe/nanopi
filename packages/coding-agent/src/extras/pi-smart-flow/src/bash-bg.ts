@@ -109,6 +109,14 @@ interface Job {
   releaseProcess?: () => void;
   finishTermination?: (error?: Error) => void;
   outputDrainTimer?: ReturnType<typeof setTimeout>;
+  /**
+   * Identity of the runtime that owns the job. The completion hand-off runs
+   * after the job settles, which can be after `session_shutdown` already
+   * incremented the generation.
+   */
+  generation: number;
+  /** Where the completion notification landed; a retry only matters when nobody saw it. */
+  completionDelivered?: "started" | "queued" | "pending";
 }
 
 interface TailOutput {
@@ -389,8 +397,23 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
     disposeQueryListener = typeof queryDisposer === "function" ? queryDisposer : undefined;
   };
 
+  /**
+   * Hand a finished job's completion to the session, once.
+   *
+   * `sendMessage` with triggerTurn started a turn even when another run was
+   * still starting; that run's prompt rejected the second one, the rejection was
+   * dropped, and the completion vanished. `deliverMessage` reports where the
+   * message landed ("started"/"queued"/"pending") instead of throwing away that
+   * knowledge, and a delivery that throws leaves the job un-notified so the next
+   * status/wait/kill hands it over again.
+   *
+   * The hand-off is tied to the runtime that owned the job: `session_shutdown`
+   * clears the registry, and a late notification would describe a job the
+   * session no longer has.
+   */
   const notifyComplete = (job: Job): void => {
-    if (disposed || !job.background || job.completionNotified) return;
+    if (job.completionNotified) return;
+    if (disposed || job.generation !== runtimeGeneration) return;
     job.completionNotified = true;
     const tail = tailOutput(job, 20);
     const status = jobStatus(job);
@@ -400,19 +423,40 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       tail.text ? `output (tail):\n${tail.text}` : "output: (empty)",
       ...(tail.truncated ? [logAccess(job)] : []),
     ].join("\n");
-    pi.sendMessage(
-      {
-        customType: "bash-bg-complete",
-        content: body,
-        display: true,
-        details: {
-          jobId: job.id,
-          exitCode: job.exitCode,
-          ...(tail.truncated ? { logPath: job.outFile, viewCommand: viewLogCommand(job) } : {}),
-        },
-      },
-      { triggerTurn: true },
-    );
+    void (async () => {
+      try {
+        job.completionDelivered = await pi.deliverMessage(
+          {
+            customType: "bash-bg-complete",
+            content: body,
+            display: true,
+            details: {
+              jobId: job.id,
+              exitCode: job.exitCode,
+              ...(tail.truncated ? { logPath: job.outFile, viewCommand: viewLogCommand(job) } : {}),
+            },
+          },
+          { startTurn: true },
+        );
+      } catch (error) {
+        // The message is the job's only output, so a failed hand-off has to leave
+        // a trace rather than disappear. The job is left un-notified so a later
+        // status/wait/kill call tries the hand-off again.
+        job.completionNotified = false;
+        job.completionDelivered = undefined;
+        const reason = error instanceof Error ? error.message : String(error);
+        try {
+          pi.appendEntry("bash-bg-complete-undelivered", {
+            jobId: job.id,
+            status,
+            exitCode: job.exitCode,
+            message: reason,
+          });
+        } catch {
+          // nothing left to do; the output is still reachable through the log file
+        }
+      }
+    })();
   };
 
   const waitForTerminationBoundary = async (job: Job, includeProcessGroup: boolean, timeoutMs: number): Promise<boolean> => {
@@ -426,6 +470,9 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
 
   const terminateJob = (job: Job): Promise<void> => {
     if (job.termination) return job.termination;
+    // A POSIX job is spawned `detached`, so its pid addresses a process group and
+    // the boundary means "group is gone"; on Windows there is no group to wait for
+    // and the pid is the whole story.
     const includeProcessGroup = process.platform !== "win32";
     const boundaryReached = job.done && (!includeProcessGroup || !processGroupRunning(job.pid));
     if (boundaryReached) {
@@ -535,6 +582,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
       completionNotified: false,
       outputFinalized: false,
       terminationInProgress: false,
+      generation,
       terminal,
       resolveTerminal,
     };
@@ -727,6 +775,12 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         }
         if (outcome === "completed" || job.done) {
           const out = tailOutput(job, params.tail ?? 200);
+          // The caller reads the result right here, so the same output must not
+          // also arrive as a completion message on top of it. An already sent
+          // message still counts as read; an unsent one is cancelled so a later
+          // status/kill does not hand the same output over a second time.
+          job.background = false;
+          job.completionDelivered ??= "started";
           return {
             content: [{
               type: "text",
@@ -767,6 +821,9 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
           detail: "full",
           lines: tailCount,
         }, signal);
+        // Sending is idempotent, so asking about a finished job is also the moment
+        // a completion that never went out gets another chance.
+        notifyComplete(job);
         const state = job.done ? `${jobStatus(job)} (exit ${job.exitCode})` : jobStatus(job);
         const out = tailOutput(job, tailCount);
         const text = `job ${job.id}: ${state}\ncommand: ${job.command}\noutput (tail):\n${out.text || "(empty)"}`;
@@ -781,6 +838,9 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
           && !job.terminationFailure
           && (process.platform === "win32" || !processGroupRunning(job.pid));
         await terminateJob(job);
+        // A job stopped before its completion went out still owes that message;
+        // the kill command is where the report finds a reader.
+        notifyComplete(job);
         return {
           content: [{ type: "text", text: `${alreadyFinished ? "Job already finished" : job.done ? "Stopped job" : "Stopping job"} ${job.id} (pid ${job.pid}).` }],
           details: jobDetails(job, "kill"),
@@ -796,6 +856,7 @@ export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {
         timeoutMs,
       }, signal);
       if (observed.reason === "aborted") throw new Error("aborted");
+      notifyComplete(job);
       const state = job.done
         ? `${jobStatus(job)} (exit ${job.exitCode})`
         : `${jobStatus(job)} after ${Math.round(timeoutMs / 1000)}s`;
