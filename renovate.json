@@ -33,6 +33,11 @@
       "automerge": false
     },
     {
+      "description": "engines.node 是人工决策点，不让 Renovate 碰。rangeStrategy=pin 会把 >=24.0.0 钉成当轮最高的精确版本（实测 \"v26.13.0\" 解析成 26.13.0 这一个点，26.14 都不满足）；而 engines 不做任何事，CI/esbuild/@types 全绿也测不出这个错位，只会在用户安装期冒出来。下限怎么动见 .agents/notes/implemented/process/2026-11-02-node-floor-follows-debian.md。",
+      "matchDepTypes": ["engines"],
+      "enabled": false
+    },
+    {
       "description": "GitHub Actions 的 sha 固定统一成一组，digest 要跟着换，跟 npm 依赖塞在同一个 PR 里会互相顶掉。",
       "matchManagers": ["custom.regex"],
       "groupName": "github actions",
