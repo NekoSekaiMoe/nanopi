@@ -38,10 +38,10 @@
       "enabled": false
     },
     {
-      "description": "GitHub Actions 的 sha 固定统一成一组，digest 要跟着换，跟 npm 依赖塞在同一个 PR 里会互相顶掉。",
+      "description": "GitHub Actions 的 sha 固定不分组：每个 action 一条分支、一个 PR。sha 固定时即便只有单个 action 变了，整份文件的 regex 也会重新算一遍，把别人刚推上去的 sha 一起带上——分组的话，Renovate 每合一次都要重建上一次的 PR 分支，而重建出来的分支是不带 automerge 的。",
       "matchManagers": ["custom.regex"],
-      "groupName": "github actions",
-      "groupSlug": "github-actions",
+      "groupName": null,
+      "groupSlug": null,
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": false

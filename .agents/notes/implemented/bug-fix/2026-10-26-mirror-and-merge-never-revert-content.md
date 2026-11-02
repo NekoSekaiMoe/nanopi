@@ -38,7 +38,7 @@ base 上原有的文件是否还在」。按路径逐条比 `ls-tree`，路径�
   **事件必须选 `pull_request.target`**：`pull_request` 拿的是预合并后的提交，
   按定义已经把 base 的树合进来了，回退永远查不出来。代价是它拿不到 PR 的代码，
   脚本里按 `CNB_PULL_REQUEST_SLUG` / `CNB_PULL_REQUEST_BRANCH` 自己合一次。
-- `.github/workflows/ci.yml` 的 `Check merge result` 步骤，`fetch-depth: 0`，
+- `.github/workflows/checks.yml` 的 `Check merge result` 步骤，`fetch-depth: 0`，
   `--base refs/remotes/origin/${{ github.base_ref }}`。步骤并进 `build-check-test`，
   脚本只读 git 对象、不需要依赖，不用为它单独起一个 runner。workflow 同时响应
   `push` 与 `pull_request`（直推 main 也要过 build/check/test，#258），这一步只在
