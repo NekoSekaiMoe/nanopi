@@ -103,6 +103,15 @@ describe("stripAnsi", () => {
 		}
 	});
 
+	// Ported from earendil-works/pi#11377: ">" and "<" were treated as CSI final bytes,
+	// so SGR mouse reports and DA replies leaked their parameters into tool output.
+	it("strips SGR mouse reports and terminal capability replies whole", () => {
+		expect(stripAnsi("a\x1b[<35;59;1Mb")).toBe("ab");
+		expect(stripAnsi("a\x1b[<0;10;20Mb")).toBe("ab");
+		expect(stripAnsi("a\x1b[>0;276;0cb")).toBe("ab");
+		expect(stripAnsi("a\x9b<35;59;1Mb")).toBe("ab");
+	});
+
 	it("strips common ANSI sequences used in tool output", () => {
 		const input = "a\x1b[31mred\x1b[0m\x1b]8;;https://example.com\x07link\x1b]8;;\x07z";
 		expect(stripAnsi(input)).toBe("aredlinkz");

@@ -1271,6 +1271,30 @@ export class InteractiveMode {
 		return formatDisplayPath(p, os.homedir());
 	}
 
+	/**
+	 * Render one diagnostic section. Only name collisions are "conflicts"; a skill without
+	 * frontmatter was reported under "[Skill conflicts]" too, which pointed at the wrong cause.
+	 */
+	private addResourceDiagnosticSection(
+		kind: "Skill" | "Prompt",
+		diagnostics: readonly ResourceDiagnostic[],
+		sourceInfos: Map<string, SourceInfo>,
+	): void {
+		const collisions = diagnostics.filter((diagnostic) => diagnostic.type === "collision");
+		const others = diagnostics.filter((diagnostic) => diagnostic.type !== "collision");
+		for (const [label, group] of [
+			[`[${kind} conflicts]`, collisions],
+			[`[${kind} warnings]`, others],
+		] as const) {
+			if (group.length === 0) continue;
+			const lines = () => this.formatDiagnostics(group, sourceInfos);
+			this.loadedResourcesContainer.addChild(
+				new ThemedText(() => `${theme.fg("warning", label)}\n${lines()}`, 0, 0),
+			);
+			this.loadedResourcesContainer.addChild(new Spacer(1));
+		}
+	}
+
 	private formatDiagnostics(diagnostics: readonly ResourceDiagnostic[], sourceInfos: Map<string, SourceInfo>): string {
 		const lines: string[] = [];
 
@@ -1356,23 +1380,8 @@ export class InteractiveMode {
 			}
 		}
 
-		const skillDiagnostics = skillsResult.diagnostics;
-		if (skillDiagnostics.length > 0) {
-			const warningLines = () => this.formatDiagnostics(skillDiagnostics, sourceInfos);
-			this.loadedResourcesContainer.addChild(
-				new ThemedText(() => `${theme.fg("warning", "[Skill conflicts]")}\n${warningLines()}`, 0, 0),
-			);
-			this.loadedResourcesContainer.addChild(new Spacer(1));
-		}
-
-		const promptDiagnostics = promptsResult.diagnostics;
-		if (promptDiagnostics.length > 0) {
-			const warningLines = () => this.formatDiagnostics(promptDiagnostics, sourceInfos);
-			this.loadedResourcesContainer.addChild(
-				new ThemedText(() => `${theme.fg("warning", "[Prompt conflicts]")}\n${warningLines()}`, 0, 0),
-			);
-			this.loadedResourcesContainer.addChild(new Spacer(1));
-		}
+		this.addResourceDiagnosticSection("Skill", skillsResult.diagnostics, sourceInfos);
+		this.addResourceDiagnosticSection("Prompt", promptsResult.diagnostics, sourceInfos);
 
 		const extensionDiagnostics: ResourceDiagnostic[] = [];
 		const extensionsResult = this.session.resourceLoader.getModules();

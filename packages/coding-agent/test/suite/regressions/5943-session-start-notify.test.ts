@@ -33,6 +33,7 @@ type LoadedResourcesContext = {
 	findSourceInfoForPath: (p: string) => undefined;
 	formatPathWithSource: (p: string) => string;
 	formatDiagnostics: (diagnostics: unknown) => string;
+	addResourceDiagnosticSection(this: LoadedResourcesContext, ...args: [unknown, unknown, unknown]): void;
 	getBuiltInCommandConflictDiagnostics: (moduleRegistry: LoadedResourcesContext["session"]["moduleRegistry"]) => [];
 };
 
@@ -196,6 +197,9 @@ function createLoadedResourcesContext(): LoadedResourcesContext {
 		findSourceInfoForPath: () => undefined,
 		formatPathWithSource: (p) => p,
 		formatDiagnostics: () => "duplicate skill name",
+		addResourceDiagnosticSection(this: LoadedResourcesContext, ...args: [unknown, unknown, unknown]) {
+			(interactiveModePrototype as any).addResourceDiagnosticSection.apply(this, args);
+		},
 		getBuiltInCommandConflictDiagnostics: () => [],
 	};
 }
@@ -214,11 +218,11 @@ describe("regression #5943: session_start transient UI", () => {
 
 		const chatRendered = context.chatContainer.render(80).join("\n");
 		expect(chatRendered).toContain("restored message");
-		expect(chatRendered).not.toContain("[Skill conflicts]");
+		expect(chatRendered).not.toContain("[Skill warnings]");
 
 		const rendered = root.render(80).join("\n");
 		expect(rendered).not.toContain("stale resources");
-		expect(rendered.indexOf("[Skill conflicts]")).toBeLessThan(rendered.indexOf("restored message"));
+		expect(rendered.indexOf("[Skill warnings]")).toBeLessThan(rendered.indexOf("restored message"));
 	});
 
 	it("renders replacement session state before session_start handlers can notify", async () => {

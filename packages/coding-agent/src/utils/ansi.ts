@@ -36,8 +36,15 @@ const OSC_START = "\\u001B\\]";
 const CSI_START = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?";
 const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=><~]";
 
+// `= < >` end the two-byte VT52 escapes ("ESC >") but are parameter bytes in a CSI
+// ("ESC [ > 0 ; 276 ; 0 c", the device attributes reply; "ESC [ < 35 ; 59 ; 1 M", an SGR
+// mouse report). Matching them as the final byte wins and leaves the rest of the reply as
+// visible text, so the private-parameter form is matched first. The `[` keeps the two apart,
+// which is why this one needs its own alternation instead of a wider CSI_FINAL.
+const CSI_PRIVATE = "(?:\\u001B\\[|\\u009B)[<=>][0-9;:]*[A-PR-TZcf-nq-uy~]";
+
 // Complete sequences. OSC is non-greedy until the first ST.
-const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_START}${CSI_FINAL}`, "g");
+const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_PRIVATE}|${CSI_START}${CSI_FINAL}`, "g");
 
 // Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\),
 // or CSI without its final byte.

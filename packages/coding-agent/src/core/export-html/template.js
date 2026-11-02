@@ -98,14 +98,19 @@
           }
         }
 
-        // Sort children by timestamp
-        function sortChildren(node) {
-          node.children.sort((a, b) =>
-            new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
-          );
-          node.children.forEach(sortChildren);
+        // Sort children by timestamp. Iterative: a session is a chain as deep as it is
+        // long, so recursion blows the stack on thousand-entry sessions.
+        function sortChildren(rootNodes) {
+          const stack = [...rootNodes];
+          while (stack.length > 0) {
+            const node = stack.pop();
+            node.children.sort((a, b) =>
+              new Date(a.entry.timestamp).getTime() - new Date(b.entry.timestamp).getTime()
+            );
+            for (const child of node.children) stack.push(child);
+          }
         }
-        roots.forEach(sortChildren);
+        sortChildren(roots);
 
         return roots;
       }
@@ -157,11 +162,14 @@
         if (!treeNodeMap) {
           treeNodeMap = new Map();
           const tree = buildTree();
-          function mapNodes(node) {
+          // Iterative for the same reason as sortChildren(): the tree can be a single
+          // chain thousands of nodes deep.
+          const stack = [...tree];
+          while (stack.length > 0) {
+            const node = stack.pop();
             treeNodeMap.set(node.entry.id, node);
-            node.children.forEach(mapNodes);
+            for (const child of node.children) stack.push(child);
           }
-          tree.forEach(mapNodes);
         }
 
         const node = treeNodeMap.get(nodeId);
@@ -184,17 +192,28 @@
         const result = [];
         const multipleRoots = roots.length > 1;
 
-        // Mark which subtrees contain the active leaf
+        // Mark which subtrees contain the active leaf. Iterative post-order: this is the
+        // recursion that used to overflow the stack (and blank the page) at a few
+        // thousand entries, because the depth equals the conversation length.
         const containsActive = new Map();
-        function markActive(node) {
+        const markStack = roots.map((root) => [root, false]);
+        while (markStack.length > 0) {
+          const frame = markStack[markStack.length - 1];
+          const node = frame[0];
+          if (!frame[1]) {
+            frame[1] = true;
+            for (const child of node.children) {
+              markStack.push([child, false]);
+            }
+            continue;
+          }
+          markStack.pop();
           let has = activePathIds.has(node.entry.id);
           for (const child of node.children) {
-            if (markActive(child)) has = true;
+            if (containsActive.get(child)) has = true;
           }
           containsActive.set(node, has);
-          return has;
         }
-        roots.forEach(markActive);
 
         // Stack: [node, indent, justBranched, showConnector, isLast, gutters, isVirtualRootChild]
         const stack = [];
