@@ -4,7 +4,7 @@ import { stripAnsi } from "../src/utils/ansi.ts";
 function referenceAnsiRegex(): RegExp {
 	const ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";
 	const osc = `(?:\\u001B\\][\\s\\S]*?${ST})`;
-	const csi = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]";
+	const csi = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=~]";
 	return new RegExp(`${osc}|${csi}`, "g");
 }
 
@@ -106,5 +106,24 @@ describe("stripAnsi", () => {
 	it("strips common ANSI sequences used in tool output", () => {
 		const input = "a\x1b[31mred\x1b[0m\x1b]8;;https://example.com\x07link\x1b]8;;\x07z";
 		expect(stripAnsi(input)).toBe("aredlinkz");
+	});
+
+	it("strips xterm mouse reports instead of leaking their parameters", () => {
+		// `CSI <` is a private-use prefix, not a final byte.
+		expect(stripAnsi("\x1b[<35;59;1M")).toBe("");
+		expect(stripAnsi("\x1b[<0;10;20m")).toBe("");
+		expect(stripAnsi("a\x1b[<35;59;1Mb")).toBe("ab");
+		expect(stripAnsi("a\x1b[<35;59;1M\x1b[31mb")).toBe("ab");
+	});
+
+	it("strips terminal replies with a private-use prefix", () => {
+		// DA1 reply: `CSI > params c`.
+		expect(stripAnsi("\x1b[>0;276;0c")).toBe("");
+		expect(stripAnsi("a\x1b[>0;276;0c\x1b[1mz")).toBe("az");
+	});
+
+	it("still strips SGR after a private-use sequence", () => {
+		expect(stripAnsi("\x1b[1;31mred\x1b[0m")).toBe("red");
+		expect(stripAnsi("\x1b[=5u")).toBe("5u");
 	});
 });

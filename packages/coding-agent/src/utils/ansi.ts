@@ -32,17 +32,23 @@ const ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";
 // OSC sequences: ESC ] ... ST
 const OSC_START = "\\u001B\\]";
 
-// CSI and related: ESC/C1, optional intermediates, optional params (supports ; and :), then final byte
+// CSI and related: ESC/C1, optional intermediates, optional params (supports ; and :), then final byte.
+// `<` and `>` are private-use prefixes (xterm mouse reports `CSI < b;x;y M`, DA1 replies
+// `CSI > ... c`), never final bytes: treating them as finals leaked `35;59;1M` into tool output.
 const CSI_START = "[\\u001B\\u009B][[\\]()#;?]*(?:\\d{1,4}(?:[;:]\\d{0,4})*)?";
-const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=><~]";
+const CSI_FINAL = "[\\dA-PR-TZcf-nq-uy=~]";
+
+// `CSI <` / `CSI >` is a prefix, not a final byte: its parameters belong to the same
+// sequence, so the two spellings are alternated instead of making the params optional.
+const CSI_BODY = `(?:${CSI_START}[<>](?:\\d{1,4}(?:[;:]\\d{0,4})*)?|${CSI_START})`;
 
 // Complete sequences. OSC is non-greedy until the first ST.
-const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_START}${CSI_FINAL}`, "g");
+const ansiRegex = new RegExp(`(?:${OSC_START}[\\s\\S]*?${ST})|${CSI_BODY}${CSI_FINAL}`, "g");
 
-// Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\),
+// Unfinished sequence at the end of the text: OSC without its ST (a trailing ESC may start ESC\\),
 // or CSI without its final byte.
 const unfinishedAnsiAtEndRegex = new RegExp(
-	`(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_START})$`,
+	`(?:${OSC_START}(?:[^\\u0007\\u009C\\u001B]|\\u001B(?!\\\\))*|${CSI_BODY})$`,
 );
 
 // Longest unfinished sequence held back while streaming. Longer ones are processed as-is.
