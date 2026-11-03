@@ -134,6 +134,13 @@ export interface QuestionnaireResult {
 	answers: QuestionAnswer[];
 	cancelled: boolean;
 	error?: QuestionnaireError;
+	/**
+	 * Indices of questions the user left blank. Present only on partial submission —
+	 * the Submit tab does not gate on `allAnswered`, so a dialog can close with some
+	 * tabs untouched. Filled in by `buildQuestionnaireResponse`, which also names those
+	 * questions in the LLM-facing envelope; the UI never reads it.
+	 */
+	unanswered?: number[];
 }
 
 export function isQuestionnaireResult(value: unknown): value is QuestionnaireResult {

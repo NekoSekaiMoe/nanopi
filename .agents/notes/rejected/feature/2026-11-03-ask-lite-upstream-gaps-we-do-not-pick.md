@@ -1,6 +1,6 @@
 # Agent Note: ask-lite 不跟随上游的那 6 条交互改动
 
-Status: rejected — 用户判断：六条都先不做。前三条里真正值钱的是三个局部缺口（`unanswered`、行尾光标、`toolCallId`），它们和「跟不跟上上游」是两件事，各自有机会再说。
+Status: rejected — 用户判断：六条都先不做。核对中发现的三个局部缺口（`unanswered`、行尾光标、`toolCallId`）与「跟不跟上上游」是两件事：`unanswered` 已拆出单独修（见下），另两个各自有机会再说。
 
 ## Problem
 
@@ -20,13 +20,8 @@ Status: rejected — 用户判断：六条都先不做。前三条里真正值�
 
 ## Proposal
 
-决定：6 条全部不做，但把核对过程中发现的三个**局部缺口**记下来，它们不依赖「跟上游」这个前提：
+决定：6 条全部不做。核对过程中发现的两个**局部缺口**记在这里，它们不依赖「跟上游」这个前提：
 
-- **`unanswered` 字段缺失。** 上游 `tool/response-envelope.ts:27-50` 在部分提交时补一段
-  `unanswered: "<question>", "<question>".`，并在 `details.unanswered` 带索引。我们
-  `tool/response-envelope.ts:23-28` 只是把已答的 segment 拼起来，没答的 tab 什么都不输出，模型收到
-  的仍然是 `You can now continue with the user's answers in mind.`（`:6`），会以为全定了。这是
-  「模型被喂了错误事实」，不是 UI 偏好。
 - **行尾光标消失。** 上游 `view/components/inline-input.ts:48` 有 `const cursorAtLineEnd = rawAt === "\n"`
   这一支；我们 `view/components/wrapping-select.ts:299` 只有 `rawAt === "" || rawAt === " "`。光标落
   在逻辑行尾时 `atCursor` 拿到 `"\n"` —— 宽度 0 的控制符进了反显区间，光标看不见。修的时候不能只
@@ -36,7 +31,17 @@ Status: rejected — 用户判断：六条都先不做。前三条里真正值�
   `toolCallId?: string` 是纯 append、不影响任何现存代码。做这个不是因为要跟 4，而是因为以后谁想
   区分「哪一次提问」都得先有它。
 
-三条都各自需要单独的需求确认，不在本文落地。
+`unanswered` 不留在本文：它是「模型被喂错事实」，已单独修掉（见下）。另两条各自需要单独的需求确认，不在本文落地。
+
+### 已落地：`unanswered`（从本文拆出）
+
+上游 `tool/response-envelope.ts:27-50` 在部分提交时补一段 `unanswered: "<question>", "<question>".`，并在 `details.unanswered` 带索引；我们 `tool/response-envelope.ts:23-28` 只把已答的 segment 拼起来，没答的 tab 什么都不输出。
+
+链路是通的：`key-router.ts:265-269` 明写 Submit 不 gate `allAnswered`，所以部分提交能走到 `buildQuestionnaireResponse`，而信封结尾仍是 `You can now continue with the user's answers in mind.`（`:6`）。三题只答第一题，模型收到的是：
+
+`User has answered your questions: "Which database?"="Postgres". You can now continue with the user's answers in mind.`
+
+模型既不知道另两题没答，也不知道该不该再问。修的时候唯一要守的是别把那两题渲染成 `"Q"="(no input)"`——`(no input)` 是 Submit 复核面板专用的 `NO_INPUT_PLACEHOLDER`（`format-answer.ts:19`），在模型侧读作「用户答了但空着」。缺答案就是缺答案，单列 `unanswered` 才不撒谎。
 
 ## Alternatives considered
 
@@ -97,5 +102,5 @@ Enter-in-input、`state-reducer.ts` 的 `multi_confirm` 要同时带 `selected` 
 
 - 与上游的差距会继续拉大，之后逐条对的成本只会更高。缓解手段是这份记录本身：下次再翻 changelog 时
   先读这里，不用把「为什么不做」重推一遍。
-- `unanswered` 那个缺口是本文里唯一有「模型被喂错事实」性质的一条。把它和其余五条一起搁置，意味着
-  这个错会一直存在到有人单独提它。
+- 三个局部缺口里唯一「模型被喂错事实」的那条（`unanswered`）已拆出去单独修，本文不再替它兜底。剩下两条
+  在 UI 和事件契约层，不走这条路不会出错，只是不够好。
