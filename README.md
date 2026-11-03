@@ -1,5 +1,7 @@
 # NanoPi
 
+English | [简体中文](README.zh-CN.md)
+
 NanoPi is a lightweight agent harness deeply trimmed and tailored from the Pi Coding Agent, featuring both a CLI and a WebUI. Pi is the upstream: NanoPi keeps its core and drops most of what surrounds it.
 
 In an era where coding agent frameworks are blindly bloating into complex microservices and over-engineered platforms, NanoPi retreats back to a pure, controllable core guided by four fundamental philosophies:
