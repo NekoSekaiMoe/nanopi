@@ -81,7 +81,7 @@ jobs:
       # The image is published for linux/amd64 and linux/arm64; the arm64 stages
       # run through QEMU because the runner is amd64.
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@68827325e0b33c7199eb31dd4e31fbe9023e06e3 # v3.0.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
