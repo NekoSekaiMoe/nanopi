@@ -6,8 +6,8 @@
  * discovered from disk - you compose modules in code.
  */
 
-import type { SessionModule } from "@nanopi/pi-coding-agent";
 import { createAgentSession, DefaultResourceLoader, getAgentDir, SessionManager } from "@nanopi/pi-coding-agent";
+import type { SessionModule } from "@nanopi/pi-coding-agent/modules";
 
 const myModule: SessionModule = {
 	name: "my-logging-module",

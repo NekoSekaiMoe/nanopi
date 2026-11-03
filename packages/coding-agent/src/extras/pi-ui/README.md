@@ -48,13 +48,14 @@ Everything visual is gated to interactive (TUI) mode. In `rpc`, `print`, and
 ## How it works
 
 The extension is wiring only (`src/index.ts`); each concern is a small module
-built on documented `ExtensionAPI` / `ExtensionUIContext` methods:
+built on documented `ModuleApi` (`@nanopi/pi-coding-agent/modules`) and
+`ModuleUIContext` methods:
 
-| Module        | Pi API                                              | What it does                                    |
+| Module        | Module API                                          | What it does                                    |
 | ------------- | --------------------------------------------------- | ----------------------------------------------- |
 | `footer.ts`   | `ctx.ui.setFooter()`                                | `used xk/yk` single-line toolbar + status badges |
 | `working.ts`  | Working UI methods + guarded TUI `Loader` hook       | Status shimmer + elapsed transcript row         |
-| `tools.ts`    | `pi.registerTool()` + `ToolExecutionComponent`      | Flat tool rows and edit/write diffs             |
+| `tools.ts`    | `nanopi.registerTool()` + `ToolExecutionComponent`  | Flat tool rows and edit/write diffs             |
 | `gradient.ts` | —                                                   | Truecolor gradient helpers                      |
 
 The tool-row restyle re-registers same-name definitions for `bash`, `read`,

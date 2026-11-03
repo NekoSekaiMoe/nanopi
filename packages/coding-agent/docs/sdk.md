@@ -129,7 +129,7 @@ Modules are the only extension mechanism: pass `SessionModule` objects (`{ name,
 There is no loader to call and no path to drop a file into, so a module runs only when your code imports it:
 
 ```typescript
-import type { SessionModule } from "@nanopi/pi-coding-agent";
+import type { SessionModule } from "@nanopi/pi-coding-agent/modules";
 
 const myModule: SessionModule = {
 	name: "my-tool",
@@ -150,6 +150,7 @@ const { session } = await createAgentSession({ modules: [myModule] });
 - The factory receives `ModuleApi`: `on()` over the documented events, plus `registerTool`, `registerCommand`, `registerFlag`, `registerProvider`, `registerVirtualModel`, `sendMessage`, `exec`, `getSettings`, `setModel`, and the rest of the session surface.
 - To extend the CLI itself rather than an embedding app, put the module in `.nanopi/extensions/` (loaded at startup, no build step; see [Modules from disk](modules.md#modules-from-disk)) or import it from `src/modules/index.ts` to compile it in; see [Repo-local modules](configuration.md#repo-local-modules). The bundled module list is `BUILTIN_MODULES` from `@nanopi/pi-coding-agent`.
 - The full guide - what a module can register, the event set, and what it cannot do - is [Modules](modules.md).
+- Import what a module needs from the two narrow subpaths, not the package root: `@nanopi/pi-coding-agent/modules` for the contracts (`SessionModule`, `ModuleApi`, events, `isToolCallEventType`, tool types) and `@nanopi/pi-coding-agent/ui` for rendering (`Theme`, `getMarkdownTheme`, components). See [Which entry point to import](modules.md#which-entry-point-to-import).
 - `--modules a,b` narrows the compiled-in list for one run; it cannot add a module the binary does not carry.
 
 See [Programmatic modules](../examples/sdk/06-modules.ts) for a runnable example, and the focused examples for [models](../examples/sdk/02-custom-model.ts), [tools](../examples/sdk/05-tools.ts), and [full control](../examples/sdk/12-full-control.ts).

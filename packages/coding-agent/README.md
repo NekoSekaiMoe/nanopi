@@ -8,7 +8,7 @@
 
 nanopi is a minimal, extensible agent harness that you can make your own.
 
-Adapt nanopi to your workflows, not the other way around. Extend it with [modules](docs/sdk.md#modules) - programmatic modules compiled into the build - and customize it with [skills](docs/skills.md) and [prompt templates](docs/prompt-templates.md).
+Adapt nanopi to your workflows, not the other way around. Extend it with [modules](docs/modules.md) - programmatic modules compiled into the build - and customize it with [skills](docs/skills.md) and [prompt templates](docs/prompt-templates.md).
 
 nanopi ships with powerful defaults but skips features like sub-agents and plan mode. Ask nanopi to build what you want, or install a package that does it your way.
 
@@ -54,6 +54,34 @@ nanopi
 For a built-in AI provider, run `/login` inside nanopi to connect a subscription or API key. Then give nanopi a task.
 
 See the [documentation](docs/index.md) for full setup and usage instructions.
+
+## Embed nanopi
+
+`@nanopi/pi-coding-agent` is a TypeScript SDK: `createAgentSession()` gives you the agent, its
+sessions, tools, models, and resources in-process.
+
+```typescript
+import { createAgentSession } from "@nanopi/pi-coding-agent";
+
+const { session } = await createAgentSession();
+await session.prompt("What files are in the current directory?");
+session.dispose();
+```
+
+Writing a module? Import from a narrow subpath instead of the package root:
+
+| Import from | Gives you |
+|---|---|
+| `@nanopi/pi-coding-agent/modules` | `SessionModule`, `ModuleApi`, `ModuleContext`, the event types, `isToolCallEventType`, `ToolDefinition` |
+| `@nanopi/pi-coding-agent/ui` | `Theme`, `getMarkdownTheme`, `renderDiff`, `CustomEditor`, `ToolExecutionComponent` |
+| `@nanopi/pi-coding-agent` | the host: `createAgentSession`, `SessionManager`, `DefaultResourceLoader`, storage, model runtime |
+
+The root export is roughly 490 names wide and every one of them is a published `.d.ts` contract, so it only
+grows when a module is genuinely blocked. The two subpaths carry what module code actually uses,
+under a file budget that `npm run check` enforces.
+
+See the [SDK documentation](docs/sdk.md), the [modules guide](docs/modules.md), and the
+[runnable examples](examples/sdk/).
 
 ## Export a session
 

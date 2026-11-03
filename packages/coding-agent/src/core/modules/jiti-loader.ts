@@ -67,8 +67,16 @@ function jitiAliases(): Record<string, string> {
 		const entry = workspaceEntry(workspacePackage, specifier);
 		return existsSync(entry) ? entry : undefined;
 	};
-	const aliases: Record<string, string> = { "@nanopi/pi-coding-agent": join(entryDir, "index.ts") };
+	const aliases: Record<string, string> = {
+		"@nanopi/pi-coding-agent": join(entryDir, "index.ts"),
+		"@nanopi/pi-coding-agent/modules": join(entryDir, "modules-api.ts"),
+		"@nanopi/pi-coding-agent/ui": join(entryDir, "ui.ts"),
+	};
 	if (!existsSync(aliases["@nanopi/pi-coding-agent"])) aliases["@nanopi/pi-coding-agent"] = join(entryDir, "index.js");
+	for (const subpath of ["modules", "ui"]) {
+		const key = `@nanopi/pi-coding-agent/${subpath}`;
+		if (!existsSync(aliases[key])) aliases[key] = aliases[key].replace(/\.ts$/, ".js");
+	}
 	for (const [workspacePackage, specifier] of [
 		["agent", "@nanopi/pi-agent-core"],
 		["ai", "@nanopi/pi-ai"],
