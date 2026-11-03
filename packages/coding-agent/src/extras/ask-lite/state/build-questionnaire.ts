@@ -310,7 +310,13 @@ class QuestionnaireBuilder {
 			adapter,
 			notesInput: this.notesInput,
 			inlineInput: this.inlineInput,
-			optionPageSize: () => tabs[0]?.optionList.pageSize ?? 1,
+			optionPageSize: () => {
+				// PgUp/PgDn page the list the user is looking at, not tab 0: tab bodies
+				// share the tallest height but each option list windows its own rows, so
+				// the step has to come from the tab the page key lands on.
+				const idx = selectActivePreviewPaneIndex(this.getCurrentTab(), tabs.length);
+				return tabs[idx]?.optionList.pageSize ?? 1;
+			},
 			render: (w) => dialog.render(w),
 			invalidate: () => adapter.invalidate(),
 		};
