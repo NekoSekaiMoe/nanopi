@@ -38,7 +38,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24.22.2'
+          node-version: '26.13.0'
 
       # nightly 版本号 = 当前包版本 + 日期，registry 上每天唯一，semver 上仍排在
       # 对应的正式版本之下。同一天重跑会因为已存在而跳过发布。
@@ -122,7 +122,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: '24.22.2'
+          node-version: '26.13.0'
           registry-url: 'https://npm.pkg.github.com'
 
       - name: Install dependencies
