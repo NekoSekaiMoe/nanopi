@@ -31,9 +31,9 @@ Context usage uses the limits of the physical model that produced the latest res
 ## Register a virtual model
 
 ```typescript
-import type { ExtensionAPI } from "@nanopi/pi-coding-agent";
+import type { ModuleApi } from "@nanopi/pi-coding-agent/modules";
 
-export default function (nanopi: ExtensionAPI) {
+export default function (nanopi: ModuleApi) {
   nanopi.registerVirtualModel({
     provider: "router",
     id: "auto",

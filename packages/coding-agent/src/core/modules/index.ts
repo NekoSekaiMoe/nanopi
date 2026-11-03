@@ -3,6 +3,7 @@
  * flags, and provider registration for code-time composition.
  */
 
+export type * from "../../modules-api.ts";
 export type { SlashCommandInfo, SlashCommandSource } from "../slash-commands.ts";
 export type { SourceInfo } from "../source-info.ts";
 export type {

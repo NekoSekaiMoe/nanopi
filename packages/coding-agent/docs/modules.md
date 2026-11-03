@@ -18,7 +18,7 @@ A published package ships every built-in module. `--modules a,b` narrows that li
 ## Write a module
 
 ```typescript
-import type { SessionModule } from "@nanopi/pi-coding-agent";
+import type { SessionModule } from "@nanopi/pi-coding-agent/modules";
 
 export default {
 	name: "standup-notes",
@@ -35,6 +35,18 @@ export default {
 ```
 
 The factory runs once per session construction, in load order, before the first prompt. Registration happens synchronously through the `ModuleApi` it receives.
+
+## Which entry point to import
+
+Two subpaths carry what a module needs, and the package root carries everything else:
+
+| Import from | Gives you |
+|---|---|
+| `@nanopi/pi-coding-agent/modules` | `SessionModule`, `ModuleApi`, `ModuleContext`, the event types, `isToolCallEventType`, `ToolDefinition`, `defineTool`, the UI context types |
+| `@nanopi/pi-coding-agent/ui` | `Theme`, `getMarkdownTheme`, `renderDiff`, `CustomEditor`, `ToolExecutionComponent`, `truncateToVisualLines`, and the rest of the components a renderer returns |
+| `@nanopi/pi-coding-agent` | the host surface: `createAgentSession`, `SessionManager`, `DefaultResourceLoader`, storage, model runtime |
+
+The narrow doors exist because the root barrel is a promise: every name in it is part of the published `.d.ts`, and changing one is a breaking change. `./modules` and `./ui` are small enough to keep that promise cheaply, and `check:entry-graphs` holds them to a file budget so one additive export cannot turn them back into the root barrel. Import from a subpath when you are writing a module; the root stays for code that builds a session.
 
 ## What a module can register
 
@@ -54,7 +66,7 @@ Registration failures are programming errors and surface as load errors; they do
 `nanopi.on(event, handler)` is where a module observes or changes a run. Handlers receive the event and a `ModuleContext`; a handler can return a value to change behavior:
 
 ```typescript
-import { isToolCallEventType } from "@nanopi/pi-coding-agent";
+import { isToolCallEventType } from "@nanopi/pi-coding-agent/modules";
 
 nanopi.on("tool_call", (event) => {
 	// Block a destructive command before it runs.
@@ -85,14 +97,14 @@ Compiled-in modules are the whole story for a build without jiti support. The
 
 A module file default-exports either a `SessionModule` or a bare factory. jiti
 transforms it in-process, so a `.ts` file runs as written and `import type`
-lines cost nothing at runtime. Aliases point `@nanopi/pi-coding-agent`,
-`@nanopi/pi-agent-core`, `@nanopi/pi-ai`, and `@nanopi/pi-tui` at the running
-installation, so a module sees the same classes, tools, and theme helpers the
-CLI uses.
+lines cost nothing at runtime. Aliases point `@nanopi/pi-coding-agent` (and its
+`/modules` and `/ui` subpaths), `@nanopi/pi-agent-core`, `@nanopi/pi-ai`, and
+`@nanopi/pi-tui` at the running installation, so a module sees the same classes,
+tools, and theme helpers the CLI uses.
 
 ```ts
 // .nanopi/extensions/hello.ts
-import type { SessionModule } from "@nanopi/pi-coding-agent";
+import type { SessionModule } from "@nanopi/pi-coding-agent/modules";
 
 const hello: SessionModule = {
 	name: "hello",

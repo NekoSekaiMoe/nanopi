@@ -16,6 +16,14 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
+		"./modules": {
+			"types": "./dist/modules-api.d.ts",
+			"import": "./dist/modules-api.js"
+		},
+		"./ui": {
+			"types": "./dist/ui.d.ts",
+			"import": "./dist/ui.js"
+		},
 		"./rpc-entry": {
 			"import": "./dist/bundle/rpc-entry.js"
 		}

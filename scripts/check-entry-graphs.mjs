@@ -36,6 +36,14 @@ const BUDGETS = {
 		},
 		"./utils/*": { maxFiles: 3, forbid: ["providers/", "api/", "index.ts"] },
 	},
+	// The two narrow doors a module author walks through. They exist so that
+	// writing a module does not pull the package root's 476-file graph; the
+	// budgets hold that promise, and the package root is forbidden in both so a
+	// wildcard export cannot quietly turn them back into the root barrel.
+	"packages/coding-agent": {
+		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
+		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
+	},
 };
 
 const SPEC = /(?:^|\n)\s*(?:import|export)\s+(?!type\s)([^;]*?\sfrom\s*)?["']([^"']+)["']/g;
