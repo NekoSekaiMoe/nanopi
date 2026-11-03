@@ -301,17 +301,6 @@ class QuestionnaireBuilder {
 		});
 	}
 
-	/**
-	 * Rows one page shows on the tab that currently owns the option list. Read per
-	 * keystroke, so it must follow `getCurrentTab()` — PgUp/PgDn act on the live tab,
-	 * and tabs may declare different option counts (and therefore different window
-	 * sizes). Tab 0 is only the fallback for an out-of-range index.
-	 */
-	private pageSizeOfCurrentTab(tabs: ReadonlyArray<TabComponents>): number {
-		const idx = Math.min(this.getCurrentTab(), tabs.length - 1);
-		return tabs[idx]?.optionList.pageSize ?? tabs[0]?.optionList.pageSize ?? 1;
-	}
-
 	private handle(
 		adapter: QuestionnairePropsAdapter,
 		dialog: DialogView,
@@ -321,7 +310,13 @@ class QuestionnaireBuilder {
 			adapter,
 			notesInput: this.notesInput,
 			inlineInput: this.inlineInput,
-			optionPageSize: () => this.pageSizeOfCurrentTab(tabs),
+			optionPageSize: () => {
+				// PgUp/PgDn page the list the user is looking at, not tab 0: tab bodies
+				// share the tallest height but each option list windows its own rows, so
+				// the step has to come from the tab the page key lands on.
+				const idx = selectActivePreviewPaneIndex(this.getCurrentTab(), tabs.length);
+				return tabs[idx]?.optionList.pageSize ?? 1;
+			},
 			render: (w) => dialog.render(w),
 			invalidate: () => adapter.invalidate(),
 		};
