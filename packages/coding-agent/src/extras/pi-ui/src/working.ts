@@ -1,4 +1,4 @@
-/** Animated omp-style status shimmer and elapsed transcript row. */
+/** The animated Working row (registerWorkingIndicator) and the elapsed transcript row. */
 
 import type { ModuleApi, Theme, WorkingIndicatorRenderer } from "@nanopi/pi-coding-agent";
 import { Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
@@ -12,8 +12,6 @@ const MIN_STEP_CHARS = 12;
 const ROW_PREFIX_COLS = 4;
 const HINT_SUFFIX = " · esc to interrupt)";
 
-/** Theme captured from the latest event context. */
-let activeTheme: Theme | undefined;
 /** Terminal width captured from the footer factory; the working row is one line. */
 let terminalColumns = 0;
 
@@ -166,10 +164,8 @@ export function installWorking(pi: ModuleApi): () => void {
     return new Text(theme.fg("dim", `Worked for ${formatElapsed(elapsedMs)}`), 0, 0);
   });
 
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", () => {
     planTodos = [];
-    if (ctx.mode !== "tui") return;
-    activeTheme = ctx.ui.theme;
   });
 
   // Mirror the todo extension's plan from its result details. The tool's own
@@ -178,14 +174,11 @@ export function installWorking(pi: ModuleApi): () => void {
     syncPlanFromToolResult(event);
   });
 
-  pi.on("agent_start", (_event, ctx) => {
-    if (ctx.mode !== "tui") return;
-    activeTheme = ctx.ui.theme;
+  pi.on("agent_start", () => {
     if (startedAt === undefined) startedAt = Date.now();
   });
 
-  pi.on("agent_settled", (_event, ctx) => {
-    if (ctx.mode !== "tui") return;
+  pi.on("agent_settled", () => {
     if (startedAt !== undefined) {
       pi.appendEntry(ELAPSED_ENTRY_TYPE, { elapsedMs: Date.now() - startedAt });
       startedAt = undefined;
@@ -195,7 +188,6 @@ export function installWorking(pi: ModuleApi): () => void {
   const cleanup = () => {
     startedAt = undefined;
     planTodos = [];
-    activeTheme = undefined;
   };
 
   pi.on("session_shutdown", cleanup);

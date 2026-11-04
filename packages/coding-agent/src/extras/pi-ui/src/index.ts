@@ -123,9 +123,8 @@ export default function (pi: ModuleApi) {
   // Codex-style thinking rows in tool-row style ("• Thinking Ns" + latest
   // line while streaming, "• Thought for Ns" + the model's own one-sentence
   // summary afterwards), ctrl+t expansion, and removal of the "Hide thinking"
-  // settings entry. Installed for the process lifetime for the same reason
-  // as the renderer redirect above; the theme and the TUI render trigger are
-  // refreshed per session_start below.
+  // settings entry. Registered once for the same reason as the renderer
+  // redirect above; the theme reaches it through the render context.
   installThinkingDisplay(pi);
 
   // The read/list/search group: rows land in the chat in finish order and the
@@ -156,7 +155,6 @@ export default function (pi: ModuleApi) {
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     installResourceHeadingGradient(ctx.ui.theme);
-    installThinkingDisplay(pi, ctx.ui.theme);
     suppressTodoWidget(ctx.ui);
     skinSubagentWidget(ctx.ui);
     installFooter(ctx);

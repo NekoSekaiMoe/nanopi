@@ -212,11 +212,3 @@ export function shimmerSegments(segments: readonly ShimmerSegment[], theme: Them
   }
   return out;
 }
-
-export function shimmerText(text: string, theme: Theme, palette?: ShimmerPalette): string {
-  // Wall-clock phase for call sites without their own frame loop (retry /
-  // compaction status, refreshed ~1/s by Pi's countdown timer).
-  const total = countCodePoints(text);
-  const pos = total === 0 ? 0 : ((Date.now() / 1000) * SHIMMER_SPEED_CELLS_PER_S) % (total + CLASSIC_PADDING * 2);
-  return shimmerSegments([{ text, palette }], theme, pos);
-}
