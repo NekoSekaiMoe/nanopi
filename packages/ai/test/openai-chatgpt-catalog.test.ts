@@ -72,6 +72,35 @@ describe("OpenAI ChatGPT account catalog", () => {
 		expect(ids).toContain("gpt-6-astra");
 	});
 
+	it("hides bundled Codex models that the signed-in plan cannot use", async () => {
+		const credentials = new InMemoryCredentialStore();
+		await credentials.modify("openai-codex", async () => ({
+			type: "oauth",
+			access: "access",
+			refresh: "refresh",
+			expires: Date.now() + 3_600_000,
+			modelIds: ["gpt-5.6-terra", "gpt-5.6-luna", "gpt-6-luna"],
+		}));
+		const models = builtinModels({ credentials });
+
+		const ids = (await models.getAvailable("openai-codex")).map((model) => model.id);
+		expect(ids).toEqual(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-luna"]);
+		expect(ids).not.toContain("gpt-6-astra");
+	});
+
+	it("keeps every Codex model while the account catalog is unknown", async () => {
+		const credentials = new InMemoryCredentialStore();
+		await credentials.modify("openai-codex", async () => ({
+			type: "oauth",
+			access: "access",
+			refresh: "refresh",
+			expires: Date.now() + 3_600_000,
+		}));
+		const models = builtinModels({ credentials });
+
+		expect((await models.getAvailable("openai-codex")).map((model) => model.id)).toContain("gpt-6-astra");
+	});
+
 	it("leaves API key availability untouched", async () => {
 		const credentials = new InMemoryCredentialStore();
 		await credentials.modify("openai", async () => ({ type: "api_key", key: "secret" }));

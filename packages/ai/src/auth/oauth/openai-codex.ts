@@ -14,6 +14,7 @@ if (typeof process !== "undefined" && process.versions?.node) {
 }
 
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
+import { fetchChatGPTModelIds } from "../chatgpt-models.ts";
 import type { LoginOptions, OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.ts";
 import { pollOAuthDeviceCodeFlow } from "./device-code.ts";
@@ -329,13 +330,23 @@ function credentialsFromToken(token: OAuthToken): OAuthCredential {
 	};
 }
 
+/**
+ * Store the account's model catalog on the credential. Best effort: without an answer the picker
+ * keeps the full bundled catalog because the stored list stays absent.
+ */
+async function withChatGPTModelIds(credential: OAuthCredential, signal: AbortSignal): Promise<OAuthCredential> {
+	const modelIds = await fetchChatGPTModelIds(credential.access, signal);
+	return modelIds ? { ...credential, modelIds } : credential;
+}
+
 async function exchangeAuthorizationCodeForCredentials(
 	code: string,
 	verifier: string,
 	redirectUri: string,
 	signal: AbortSignal,
 ): Promise<OAuthCredential> {
-	return credentialsFromToken(await exchangeAuthorizationCode(code, verifier, redirectUri, signal));
+	const credential = credentialsFromToken(await exchangeAuthorizationCode(code, verifier, redirectUri, signal));
+	return withChatGPTModelIds(credential, signal);
 }
 
 async function loginOpenAICodexDeviceCode(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
@@ -431,6 +442,10 @@ export const openaiCodexOAuth: OAuthAuth = {
 	},
 
 	refresh: (credential, signal) => refreshOpenAICodexToken(credential.refresh, signal),
+
+	// A ChatGPT plan only reaches part of the bundled catalog, and the plan can change while the
+	// credential stays. Re-reading the account catalog on each model refresh keeps the picker in step.
+	refreshAvailability: withChatGPTModelIds,
 
 	async toAuth(credential) {
 		return { apiKey: credential.access };

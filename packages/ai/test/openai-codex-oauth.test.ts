@@ -485,6 +485,95 @@ describe("OpenAI Codex OAuth", () => {
 		expect(consoleError).not.toHaveBeenCalled();
 	});
 
+	it("stores the account model catalog on the credential at login", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: unknown) => {
+				const url = getUrl(input);
+				if (url === "https://chatgpt.com/backend-api/models") {
+					return jsonResponse({ models: [{ id: "gpt-5.6-luna" }, { id: "gpt-5.6-terra" }, { id: "gpt-6-luna" }] });
+				}
+				return jsonResponse({
+					access_token: createAccessToken("acct"),
+					refresh_token: "refresh",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		let authUrl = "";
+		const credential = await openaiCodexOAuth.login({
+			signal: neverAbortedSignal,
+			notify: (event) => {
+				if (event.type === "auth_url") authUrl = event.url;
+			},
+			prompt: async (prompt) => {
+				if (prompt.type === "select") return "browser";
+				if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+				const state = new URL(authUrl).searchParams.get("state");
+				return `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`;
+			},
+		});
+
+		expect(credential.modelIds).toEqual(["gpt-5.6-luna", "gpt-5.6-terra", "gpt-6-luna"]);
+	});
+
+	it("keeps the login credential when the account catalog is unavailable", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (input: unknown) => {
+				const url = getUrl(input);
+				if (url === "https://chatgpt.com/backend-api/models") {
+					return jsonResponse({ error: "nope" }, 501);
+				}
+				return jsonResponse({
+					access_token: createAccessToken("acct"),
+					refresh_token: "refresh",
+					expires_in: 3600,
+				});
+			}),
+		);
+
+		let authUrl = "";
+		const credential = await openaiCodexOAuth.login({
+			signal: neverAbortedSignal,
+			notify: (event) => {
+				if (event.type === "auth_url") authUrl = event.url;
+			},
+			prompt: async (prompt) => {
+				if (prompt.type === "select") return "browser";
+				if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+				const state = new URL(authUrl).searchParams.get("state");
+				return `http://localhost:1455/auth/callback?code=pasted-code&state=${state}`;
+			},
+		});
+
+		expect(credential.accountId).toBe("acct");
+		expect(credential.modelIds).toBeUndefined();
+	});
+
+	it("re-reads the account model catalog on an availability refresh", async () => {
+		const fetchMock = vi.fn(async (input: unknown) => {
+			expect(getUrl(input)).toBe("https://chatgpt.com/backend-api/models");
+			return jsonResponse({ models: [{ id: "gpt-6-luna" }] });
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		await expect(
+			openaiCodexOAuth.refreshAvailability?.(
+				{
+					type: "oauth",
+					access: "access-token",
+					refresh: "refresh-token",
+					expires: Date.now() + 3_600_000,
+					modelIds: ["gpt-6-astra"],
+				},
+				neverAbortedSignal,
+			),
+		).resolves.toMatchObject({ modelIds: ["gpt-6-luna"] });
+		expect(fetchMock).toHaveBeenCalledOnce();
+	});
+
 	it("uses the app's agent name as the browser login originator", async () => {
 		vi.stubGlobal(
 			"fetch",
