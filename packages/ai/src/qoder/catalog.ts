@@ -13,8 +13,7 @@
 import type { Model, ModelCost } from "../types.ts";
 import { asNumber, asString, type QoderJson, qoderErrorDetail, qoderRequestSignal, readQoderJson } from "./client.ts";
 import { qoderFingerprint, qoderSignedHeaders, qoderSigningPath } from "./cosy.ts";
-import type { QoderRegion } from "./endpoints.ts";
-import { qoderEndpoints } from "./endpoints.ts";
+import { QODER_API, type QoderApi, type QoderRegion, qoderEndpoints } from "./endpoints.ts";
 
 const CATALOG_BUCKETS = ["assistant", "developer", "chat"];
 /** Subscription access bills no per-token price, so every entry is free. */
@@ -88,11 +87,7 @@ export function parseQoderModelList(body: QoderJson | null): QoderListedModel[] 
 	return [];
 }
 
-export function qoderModelEntry(values: {
-	provider: "qoder" | "qoder-cn";
-	baseUrl: string;
-	listed: QoderListedModel;
-}): Model<"openai-completions"> {
+export function qoderModelEntry(values: { provider: "qoder" | "qoder-cn"; listed: QoderListedModel }): Model<QoderApi> {
 	const { listed } = values;
 	// A reasoning model needs room for its thinking output; the rest keep the
 	// list endpoint's own input budget as their output cap.
@@ -100,9 +95,9 @@ export function qoderModelEntry(values: {
 	return {
 		id: listed.key,
 		name: listed.displayName,
-		api: "openai-completions",
+		api: QODER_API,
 		provider: values.provider,
-		baseUrl: values.baseUrl,
+		baseUrl: qoderEndpoints(values.provider === "qoder-cn" ? "cn" : "global").chatUrl,
 		reasoning: listed.isReasoning,
 		input: ["text"],
 		cost: SUBSCRIPTION_COST,
