@@ -48,6 +48,7 @@ describe("pi-ui thinking row theme", () => {
 				renderer = fn;
 			},
 			registerShortcut: () => {},
+			registerSettingsItem: () => {},
 			unregisterSettingsItem: () => {},
 			on: () => {},
 		};

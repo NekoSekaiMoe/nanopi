@@ -311,6 +311,10 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 		setToolsExpanded(_expanded: boolean) {
 			// Tool expansion not supported in RPC mode - no TUI
 		},
+
+		setThinkingHidden(_hidden: boolean) {
+			// Thinking visibility is a TUI concern; message content stays unchanged here.
+		},
 	});
 
 	runtimeHost.setRebindSession(async () => {

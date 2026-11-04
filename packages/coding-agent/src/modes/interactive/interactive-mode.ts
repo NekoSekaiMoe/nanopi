@@ -2128,6 +2128,7 @@ export class InteractiveMode {
 			},
 			getToolsExpanded: () => this.toolOutputExpanded,
 			setToolsExpanded: (expanded) => this.setToolsExpanded(expanded),
+			setThinkingHidden: (hidden) => this.setThinkingHidden(hidden),
 		};
 	}
 
@@ -4111,6 +4112,16 @@ export class InteractiveMode {
 			}
 		}
 		this.showStatus(`Tool output: ${expanded ? "expanded" : "collapsed"}`);
+	}
+
+	/**
+	 * Hide or show thinking blocks without touching the stored setting: a module
+	 * that supersedes the thinking display owns the choice, and persisting it
+	 * here would make the core setting and the module disagree on reload.
+	 */
+	private setThinkingHidden(hidden: boolean): void {
+		this.hideThinkingBlock = hidden;
+		this.updateThinkingBlockVisibility();
 	}
 
 	/** Update rendered assistant messages without rebuilding live tool components. */

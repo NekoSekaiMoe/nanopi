@@ -337,6 +337,15 @@ export interface ModuleUIContext {
 
 	/** Set tool output expansion state. */
 	setToolsExpanded(expanded: boolean): void;
+
+	/**
+	 * Hide or show thinking blocks in every rendered assistant message.
+	 *
+	 * This is the core's own "hide thinking" toggle, so a module that replaces
+	 * the thinking display can still honour the choice without the core row.
+	 * The setting is not persisted; the caller owns what the value means.
+	 */
+	setThinkingHidden(hidden: boolean): void;
 }
 
 // ============================================================================
