@@ -17,6 +17,8 @@
  *     (`• Thinking Ns` live tail, `• Thought for Ns` + model-written summary,
  *     ctrl+t to expand) and removal of the now-superseded "Hide thinking"
  *     settings entry
+ *   - section-heading.ts -> the `/status` section headings ([Context],
+ *     [Skills], …): the palette's own color, or pi-ui's frame gradient
  *
  * Wiring only. Each concern lives in its own module and is installed against
  * documented ModuleApi / ModuleUIContext methods — no component prototypes are
@@ -35,8 +37,9 @@
  *     pi.registerShellRenderer() for `!` command rows
  *
  * The todo extension's own plan widget is suppressed here (suppressTodoWidget)
- * because the Working line already tracks the current step. That is a policy
- * call between two modules over the documented setWidget API, not a patch.
+ * because the Working line already tracks the current step. `redrawWidget`
+ * records the suppression, so it survives the host rebuilding its widget table
+ * on /new, /resume, /fork and /reload without pi-ui watching those events.
  *
  * Registrations on pi are made ONCE at load so they don't stack across session
  * switches/reloads. The per-session setter (footer) is a replacing setter
@@ -52,8 +55,6 @@
 import type {
   ModuleApi,
   ModuleUIContext,
-  Theme,
-  ThemeColor,
   ModuleCommandsSurface,
   ModuleEventsSurface,
   ModuleToolsSurface,
@@ -62,7 +63,7 @@ import type {
   ModuleSettingsSurface,
 } from "@nanopi/pi-coding-agent";
 import { installFooter } from "./footer.ts";
-import { FRAME_STOPS, gradientText } from "./gradient.ts";
+import { installSectionHeadingStyle } from "./section-heading.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
 import {
   EXPLORING_MESSAGE_TYPE,
@@ -73,48 +74,16 @@ import {
 import { installThinkingDisplay } from "./thinking.ts";
 import { captureTerminalWidth, installWorking } from "./working.ts";
 
-const patchedThemes = new WeakSet<Theme>();
-const PI_THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
-
 /**
  * The todo extension renders its plan as a widget above the editor
- * (`setWidget("todo", …)`). pi-ui hijacks that plan into the Working line, so
- * the duplicate panel is suppressed: every "todo" widget write is forced to
- * `undefined`. ctx.ui is shared across the whole session, so wrapping once is
- * enough even though refreshDisplay fires from many handlers.
+ * (`setWidget("todo", …)`). pi-ui carries that plan into the Working line, so
+ * the duplicate panel is cleared once through `redrawWidget`: the host keeps
+ * that write on record and replays it after it rebuilds its widget table, so
+ * the panel stays gone across /new, /resume, /fork and /reload without pi-ui
+ * wrapping setWidget or watching session events.
  */
-const todoWidgetsSuppressed = new WeakSet<object>();
 function suppressTodoWidget(ui: ModuleUIContext): void {
-  if (todoWidgetsSuppressed.has(ui)) return;
-  type SetWidget = ModuleUIContext["setWidget"];
-  const original = ui.setWidget.bind(ui) as SetWidget;
-  const wrapped = ((key: string, content: unknown, options?: unknown) =>
-    // The cast erases the call-overload so we can reroute "todo" writes.
-    (original as (k: string, c: unknown, o?: unknown) => void)(
-      key,
-      key === "todo" ? undefined : content,
-      options,
-    )) as SetWidget;
-  ui.setWidget = wrapped;
-  todoWidgetsSuppressed.add(ui);
-  // Clear anything the todo extension already registered before we wrapped it.
-  ui.setWidget("todo", undefined);
-}
-
-function installResourceHeadingGradient(themeProxy: Theme): void {
-  // Pi exposes a forwarding Proxy to extensions. Patch the shared instance
-  // behind it so startup resources, which import the same global theme, see it.
-  const globalThemes = globalThis as typeof globalThis & { [PI_THEME_KEY]?: Theme };
-  const theme = globalThemes[PI_THEME_KEY] ?? themeProxy;
-  if (patchedThemes.has(theme)) return;
-  const originalFg = theme.fg.bind(theme);
-  theme.fg = (color: ThemeColor, text: string): string => {
-    if (color === "mdHeading" && /^\[[^\]\n]+\]$/.test(text)) {
-      return gradientText(text, FRAME_STOPS);
-    }
-    return originalFg(color, text);
-  };
-  patchedThemes.add(theme);
+  ui.redrawWidget("todo", undefined);
 }
 
 export default function (pi: ModuleEventsSurface &
@@ -170,7 +139,7 @@ export default function (pi: ModuleEventsSurface &
   // frame (see the pi-ui note in .agents/notes).
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
-    installResourceHeadingGradient(ctx.ui.theme);
+    installSectionHeadingStyle(pi, ctx.ui.theme);
     suppressTodoWidget(ctx.ui);
     skinSubagentWidget(ctx.ui);
     installFooter(ctx);
@@ -178,5 +147,4 @@ export default function (pi: ModuleEventsSurface &
     // width to fold its own label instead of wrapping onto a second line.
     captureTerminalWidth(process.stdout.columns || 0);
   });
-
 }

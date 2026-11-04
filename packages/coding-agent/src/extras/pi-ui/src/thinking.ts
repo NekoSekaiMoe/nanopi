@@ -46,8 +46,8 @@
  *     the host repaints every rendered message.
  *   - `pi.unregisterSettingsItem("hide-thinking")` drops the superseded row.
  *   - `pi.on("message_update")` keeps the freshest ModuleContext (model +
- *     API key) for summary calls; the footer factory hand-off captures the
- *     TUI so a landed summary can request an immediate re-render.
+ *     API key) for summary calls; the footer hand-off captures the TUI so a
+ *     landed summary can request an immediate re-render.
  */
 
 import type {

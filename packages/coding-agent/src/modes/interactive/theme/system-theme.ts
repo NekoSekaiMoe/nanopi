@@ -118,6 +118,7 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
 	toolDiffRemoved: "red",
 	warning: "yellow",
 	mdHeading: "yellow",
+	mdSectionHeading: "yellow",
 	syntaxFunction: "yellow",
 	syntaxString: "orange",
 
@@ -322,7 +323,16 @@ const RULES: Rule[] = [
 	},
 	{ token: "toolOutput", on: ["background", ...TOOL_PANELS], level: "readable" },
 	...each(
-		["mdHeading", "mdLink", "mdLinkUrl", "mdCode", "mdQuote", "mdCodeBlockBorder", "mdListBullet"],
+		[
+			"mdHeading",
+			"mdSectionHeading",
+			"mdLink",
+			"mdLinkUrl",
+			"mdCode",
+			"mdQuote",
+			"mdCodeBlockBorder",
+			"mdListBullet",
+		],
 		["background", ...MESSAGE_PANELS],
 		"readable",
 	),

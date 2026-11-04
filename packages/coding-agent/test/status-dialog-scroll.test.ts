@@ -166,6 +166,13 @@ describe("/status dialog paging", () => {
 		expect(body(press(PAGE_DOWN))).toBe(top);
 	});
 
+	it("paints section headings with the section token", async () => {
+		// `mdSectionHeading` is separate from `mdHeading` so a reskin can style
+		// `/status` headings without touching transcript headings.
+		const press = await openDialog(20);
+		expect(press("\u001b[A").join("\n")).toContain("{mdSectionHeading}[Tools]");
+	});
+
 	it("pages by the rows the terminal can show when the body is longer", async () => {
 		// 12 rows - 6 chrome rows leaves a 6-row page, so PgDn keeps five rows on screen
 		// and the sixth row of the old page becomes the first of the new one. Paging by

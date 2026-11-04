@@ -4304,6 +4304,19 @@ export class AgentSession {
 		);
 
 		const extensionsResult = this._resourceLoader.getModules();
+		// A reload swaps the module set but keeps the runtime, so widgets recorded
+		// through `redrawWidget` survive it. Forget the records of modules that are
+		// gone, or their widgets would come back on the next session switch.
+		const drawn = extensionsResult.runtime.widgetDraws;
+		if (drawn) {
+			const claimed = new Set<string>();
+			for (const module of extensionsResult.modules) {
+				for (const key of module.widgetKeys ?? []) claimed.add(key);
+			}
+			for (const key of [...drawn.keys()]) {
+				if (!claimed.has(key)) drawn.delete(key);
+			}
+		}
 		if (!this._moduleRegistry) {
 			this._moduleRegistry = new ModuleRegistry(
 				extensionsResult.modules,

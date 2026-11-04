@@ -45,6 +45,11 @@ export const THEME_TOKENS = defineThemeTokens({
 	toolTitle: { slot: "foreground", description: "Tool execution box title color" },
 	toolOutput: { slot: "foreground", description: "Tool execution box output text color" },
 	mdHeading: { slot: "foreground", description: "Markdown heading text" },
+	mdSectionHeading: {
+		slot: "foreground",
+		description: "Named section heading (e.g. the `/status` resource sections)",
+		fallback: "mdHeading",
+	},
 	mdLink: { slot: "foreground", description: "Markdown link text" },
 	mdLinkUrl: { slot: "foreground", description: "Markdown link URL" },
 	mdCode: { slot: "foreground", description: "Markdown inline code" },

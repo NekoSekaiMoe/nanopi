@@ -25,6 +25,8 @@ function makeTheme(colors: TokenValues, mode: TerminalColorMode = "truecolor", a
 }
 
 const DARK_BASE: TokenValues = {
+	// mdSectionHeading falls back to mdHeading, so a theme needs the latter.
+	mdHeading: "#f9e2af",
 	text: "#e5e5e7",
 	success: "#22c55e",
 	error: "#ef4444",
