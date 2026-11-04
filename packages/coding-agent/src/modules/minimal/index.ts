@@ -18,7 +18,7 @@
  * actor re-adds it.
  */
 
-import type { ModuleApi } from "../../core/modules/types.ts";
+import type { ModuleEventsSurface, ModuleSessionSurface, ModuleToolsSurface } from "../../core/modules/types.ts";
 
 /** Shell tools the minimal build keeps. */
 const MINIMAL_TOOL_NAMES = new Set(["bash", "powershell"]);
@@ -26,7 +26,9 @@ const MINIMAL_TOOL_NAMES = new Set(["bash", "powershell"]);
 const MINIMAL_GUIDELINE =
 	"You are in a minimal build: only the bash tool is available. Use shell commands for everything, including reading and writing files.";
 
-export default function minimalToolsExtension(nanopi: ModuleApi): void {
+export default function minimalToolsExtension(
+	nanopi: ModuleEventsSurface & ModuleToolsSurface & ModuleSessionSurface,
+): void {
 	const shellTools = () =>
 		nanopi
 			.getAllTools()

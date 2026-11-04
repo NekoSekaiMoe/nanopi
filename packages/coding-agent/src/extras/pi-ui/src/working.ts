@@ -1,8 +1,23 @@
 /** Animated omp-style status shimmer and elapsed transcript row. */
 
-import type { ModuleApi, Theme, WorkingIndicatorRenderer } from "@nanopi/pi-coding-agent";
-import { Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
-import { HINT_SHIMMER_PALETTE, MAIN_SHIMMER_PALETTE, shimmerSegmentsAnimated, type SweepState } from "./shimmer.ts";
+import type {
+  ModuleActionsSurface,
+  ModuleContext,
+  ModuleEventsSurface,
+  ModuleRenderingSurface,
+  Theme,
+  WorkingIndicatorOptions,
+  WorkingIndicatorRenderer,
+} from "@nanopi/pi-coding-agent";
+import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { fgRgb } from "./gradient.ts";
+import {
+  HINT_SHIMMER_PALETTE,
+  MAIN_SHIMMER_PALETTE,
+  shimmerSegmentsAnimated,
+  shimmerText,
+  type SweepState,
+} from "./shimmer.ts";
 
 const ELAPSED_ENTRY_TYPE = "pi-ui-elapsed";
 const MAX_STEP_CHARS = 48;
@@ -155,7 +170,9 @@ function workingRowRenderer(): WorkingIndicatorRenderer {
   };
 }
 
-export function installWorking(pi: ModuleApi): () => void {
+export function installWorking(
+  pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleActionsSurface,
+): () => void {
   let startedAt: number | undefined;
 
   pi.registerWorkingIndicator(workingRowRenderer());

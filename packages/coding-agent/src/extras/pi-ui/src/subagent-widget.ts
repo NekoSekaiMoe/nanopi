@@ -26,14 +26,7 @@
  * shows only the "• Explored" row with nothing under it.
  */
 
-import type {
-	AgentToolResult,
-	MessageRenderer,
-	ModuleApi,
-	ModuleUIContext,
-	Theme,
-	ThemeColor,
-} from "@nanopi/pi-coding-agent";
+import type { AgentToolResult, MessageRenderer, ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { Text, truncateToWidth } from "@nanopi/pi-tui";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";

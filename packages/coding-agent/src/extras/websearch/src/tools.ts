@@ -8,7 +8,7 @@
  */
 
 import { Text } from "@nanopi/pi-tui";
-import type { ModuleApi, Theme } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, Theme, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { getWebsearchConfigPath, loadWebsearchConfig } from "./config.ts";
 import type { SearchAttempt, SearchItem } from "./engines.ts";
@@ -64,7 +64,7 @@ function summarizeAttempts(attempts: SearchAttempt[]): string {
 		.join("\n");
 }
 
-export function registerWebsearchTools(pi: ModuleApi): void {
+export function registerWebsearchTools(pi: ModuleToolsSurface): void {
 	pi.registerTool({
 		name: "web_search",
 		label: "Web search",

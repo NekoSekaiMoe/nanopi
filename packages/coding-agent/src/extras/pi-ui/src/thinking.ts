@@ -54,8 +54,11 @@
 import type {
   AssistantMessageRenderContext,
   AssistantMessageRenderer,
-  ModuleApi,
+  ModuleCommandsSurface,
   ModuleContext,
+  ModuleEventsSurface,
+  ModuleRenderingSurface,
+  ModuleSettingsSurface,
   MarkdownTransformContext,
   MarkdownTransformer,
   Theme,
@@ -559,7 +562,7 @@ function renderCodexThinking(
  * streaming component" check, which the host's own isStreaming flag also
  * agrees with.
  */
-function registerThinkingRenderer(pi: ModuleApi): void {
+function registerThinkingRenderer(pi: ModuleRenderingSurface): void {
   pi.registerAssistantMessageRenderer((message, context) => {
     if (!hasThinkingContent(message) || !resolveTheme()) return false;
     // message_start renders a thinking-less partial: the reliable per-message
@@ -581,7 +584,7 @@ function registerThinkingRenderer(pi: ModuleApi): void {
  * the key, so the core's own ctrl+t still toggles the now-superseded
  * "hide thinking" setting for users who do not run pi-ui.
  */
-function installThinkingToggle(pi: ModuleApi): void {
+function installThinkingToggle(pi: ModuleCommandsSurface): void {
   pi.registerShortcut("ctrl+t", {
     description: "Toggle Codex-style thinking rows",
     handler: (ctx) => {
@@ -600,7 +603,10 @@ function installThinkingToggle(pi: ModuleApi): void {
  * summary model context are registered once. The theme is refreshed on every
  * TUI session_start so theme switches are followed via the live proxy.
  */
-export function installThinkingDisplay(pi?: ModuleApi, theme?: Theme): void {
+export function installThinkingDisplay(
+  pi?: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
+  theme?: Theme,
+): void {
   if (theme) activeTheme = theme;
   if (pi && !eventsRegistered) {
     eventsRegistered = true;

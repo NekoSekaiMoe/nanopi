@@ -49,7 +49,18 @@
  *   pi install npm:@NekoSekaiMoe/pi-ui
  */
 
-import type { ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
+import type {
+  ModuleApi,
+  ModuleUIContext,
+  Theme,
+  ThemeColor,
+  ModuleCommandsSurface,
+  ModuleEventsSurface,
+  ModuleToolsSurface,
+  ModuleRenderingSurface,
+  ModuleActionsSurface,
+  ModuleSettingsSurface,
+} from "@nanopi/pi-coding-agent";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
@@ -106,7 +117,12 @@ function installResourceHeadingGradient(themeProxy: Theme): void {
   patchedThemes.add(theme);
 }
 
-export default function (pi: ModuleApi) {
+export default function (pi: ModuleEventsSurface &
+  ModuleToolsSurface &
+  ModuleRenderingSurface &
+  ModuleActionsSurface &
+  ModuleCommandsSurface &
+  ModuleSettingsSurface) {
   // Patch renderer lookup before any restored tool components are created.
   // This changes only presentation; extension-owned execute functions remain
   // registered and invoked as-is. The patch covers every tool pi-ui does not
@@ -132,7 +148,7 @@ export default function (pi: ModuleApi) {
   // live header under the editor closes when a turn stops exploring. The
   // history rows need an explicit message renderer: the default custom-message
   // panel would wrap each one in a `[pi-ui-exploring]` box.
-  installExploringBlock(pi);
+  installExploringBlock(pi as unknown as ModuleApi);
   pi.registerMessageRenderer(EXPLORING_MESSAGE_TYPE, exploringHistoryRenderer);
 
   // Register Codex-style tool renderers at load time. Most built-ins are

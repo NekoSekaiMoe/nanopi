@@ -36,6 +36,47 @@ export default {
 
 The factory runs once per session construction, in load order, before the first prompt. Registration happens synchronously through the `ModuleApi` it receives.
 
+## Declare the surfaces a module uses
+
+`ModuleApi` is a composition of eight smaller contracts. A module that only
+registers a command should not be handed `registerProvider`; say which surfaces
+it uses and the compiler holds it to that:
+
+```typescript
+import type { ModuleCommandsSurface, SessionModule } from "@nanopi/pi-coding-agent/modules";
+
+export default {
+	name: "standup-notes",
+	factory: (nanopi) => {
+		nanopi.registerCommand("standup", { /* ... */ });
+		// nanopi.registerProvider(...)  // error: not part of ModuleCommandsSurface
+	},
+} satisfies SessionModule<ModuleCommandsSurface>;
+```
+
+| Surface | What it carries |
+|---|---|
+| `ModuleEventsSurface` | the `on()` overloads, one per event the host emits |
+| `ModuleToolsSurface` | `registerTool`, and the shell-backend trio (`registerBashOperations`, `setActiveBashOperations`, `getActiveBashOperations`) |
+| `ModuleCommandsSurface` | `registerCommand`, `registerShortcut`, `registerFlag`, `getFlag` |
+| `ModuleRenderingSurface` | `registerMessageRenderer`, `registerEntryRenderer`, `registerToolRenderer`, `registerMarkdownTransformer` |
+| `ModuleActionsSurface` | `sendMessage`, `deliverMessage`, `sendUserMessage`, `appendEntry` |
+| `ModuleSessionSurface` | `setSessionName`, `getSessionName`, `setLabel`, `exec`, `getActiveTools`, `getAllTools`, `getSettings`, `setActiveTools`, `getCommands`, `getModuleNames` |
+| `ModuleModelSurface` | `setModel`, `getThinkingLevel`, `setThinkingLevel` |
+| `ModuleProvidersSurface` | `registerProvider`, `unregisterProvider`, `registerVirtualModel`, `unregisterVirtualModel` |
+
+Every surface also carries `events`, the shared `EventBus`.
+
+The type parameter narrows the factory parameter only: the object the host
+actually passes is the full `ModuleApi`, so a surface-composed type is a
+*view*, not a smaller object. Pass `pi` to a helper that declares a wider
+surface than you do and the compiler rejects it, which is the point - widen
+the module's declaration rather than widening the helper. Leave the type
+parameter off (`SessionModule`) and nothing changes.
+
+The split is a promise about what a module *may* touch, checked when the
+module is written. It is not a capability check at load time.
+
 ## Which entry point to import
 
 Two subpaths carry what a module needs, and the package root carries everything else:

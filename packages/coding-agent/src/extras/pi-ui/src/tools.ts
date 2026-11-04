@@ -1,9 +1,6 @@
 /** Flat Codex-style renderers for Pi's built-in and selected extension tools. */
 
-import type {
-	ModuleApi,
-	ToolDefinition,
-} from "../../../core/modules/types.ts";
+import type { ModuleRenderingSurface, ModuleToolsSurface, ToolDefinition } from "../../../core/modules/types.ts";
 import { createEditToolDefinition } from "../../../core/tools/edit.ts";
 import type { AgentToolResult, ToolRenderResultOptions } from "@nanopi/pi-coding-agent";
 import { Text } from "@nanopi/pi-tui";
@@ -459,7 +456,7 @@ function withWriteDiff(
  * tool renderers cannot reach. A shell row renderer replaces its bordered body
  * with the same flat rows the bash tool uses.
  */
-export function installShellRenderer(pi: ModuleApi): void {
+export function installShellRenderer(pi: ModuleRenderingSurface): void {
   pi.registerShellRenderer((state, next, theme) => {
     const title = renderTitle(
       ROWS.bash!,
@@ -632,7 +629,7 @@ function renderRedirectedResultText(
  * stay with the owning module, and the tool's own renderers keep winning for
  * anything pi-ui ships itself.
  */
-export function installExternalToolRenderers(pi: ModuleApi): void {
+export function installExternalToolRenderers(pi: ModuleRenderingSurface): void {
   pi.registerToolRowRenderer((name, next) => {
     if (isPiUiBuiltinTool(name)) return undefined;
     return {
@@ -716,7 +713,7 @@ function codexifyTool(name: string, cwd: string): ToolDefinition<any, any, any> 
   };
 }
 
-export function installToolRenderers(pi: ModuleApi, cwd: string): string[] {
+export function installToolRenderers(pi: ModuleRenderingSurface & ModuleToolsSurface, cwd: string): string[] {
   const installed: string[] = [];
   for (const name of Object.keys(FACTORIES)) {
     try {

@@ -12,9 +12,11 @@
  * own monthly allowance, so a fresh install searches without a key.
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface } from "@nanopi/pi-coding-agent";
 import { registerWebsearchTools } from "./tools.ts";
 
-export default function websearchExtension(pi: ModuleApi): void {
+export default function websearchExtension(pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleCommandsSurface): void {
 	registerWebsearchTools(pi);
 }

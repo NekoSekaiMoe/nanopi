@@ -260,6 +260,63 @@ interface CompactionSummaryMessage {
 
 nanopi creates this context message from a persisted `compaction` entry.
 
+## Message codecs
+
+Every role above answers three questions for the rest of the host: what it
+becomes in LLM context, how many tokens it costs, and how the transcript draws
+it. Those used to be hardcoded `switch (message.role)` statements, so a role
+that lived outside `messages.ts` could not reach any of them.
+
+A registry answers all three per message kind
+([`core/messages/registry.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/messages/registry.ts)).
+A module registers through `registerMessageType()`, which is the same call the
+built-in kinds come from:
+
+```typescript
+import { registerMessageType } from "@nanopi/pi-coding-agent";
+
+registerMessageType({
+  kind: "buildResult",
+  toLlm: (message) => [
+    {
+      role: "user",
+      content: [{ type: "text", text: `Build finished: ${message.summary}` }],
+      timestamp: message.timestamp,
+    },
+  ],
+  estimateTokens: (message) => Math.ceil(message.summary.length / 4),
+});
+```
+
+| Field | Effect |
+|---|---|
+| `kind` | the message `role` this codec owns; registering the same kind again replaces it |
+| `customType` | with `kind: "custom"`, narrows one custom type instead of the whole role |
+| `toLlm(message)` | the request form; returning `[]` keeps the message out of the request |
+| `estimateTokens(message)` | token estimate; absent counts as 0 |
+| `renderRun(message, options)` | draws the message in the transcript; absent falls back to `[kind]` |
+
+`convertToLlm()`, `estimateTokens()`
+([`core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts)),
+and the interactive transcript all read the session's table. A kind nobody
+registered is dropped from the request: guessing a projection would put module
+payloads in front of the model without anyone deciding they belong there.
+
+The four provider roles (`system`, `user`, `assistant`, `toolResult`) pass
+through untouched — the provider layer is what understands them, and a module
+must not be able to re-project the conversation the model already saw.
+
+The app's own kinds (`bashExecution`, `branchSummary`, `compactionSummary`,
+`custom`) are registered by
+[`core/messages/builtin-codecs.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/messages/builtin-codecs.ts),
+so the behavior you read above is one codec per kind, not a special case. A
+module can replace a built-in kind's projection for its session, but the kind
+itself cannot be unregistered: the app writes those messages itself.
+
+The declaration merging above is still how a role reaches TypeScript; the codec
+is how it reaches the runtime. Registering a codec without the merge compiles
+and runs, but every `switch (message.role)` in your own code loses exhaustiveness.
+
 ## AgentMessage union
 
 In the coding agent, the union is equivalent to:

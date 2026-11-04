@@ -1,6 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface } from "@nanopi/pi-coding-agent";
 import {
   LspManager,
   type Ctx,
@@ -325,7 +325,9 @@ async function deleteSymbol(
 // extension
 // ---------------------------------------------------------------------------
 
-export default function lspMiniExtension(pi: ModuleApi): void {
+export default function lspMiniExtension(pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleCommandsSurface): void {
   pi.on("session_shutdown", async () => {
     await manager.shutdownAll();
   });

@@ -1,4 +1,4 @@
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { loadConfig, validateGuidanceFields } from "./config.js";
 import { ASK_USER_PROMPT_EVENT, type AskUserPromptEventPayload } from "./events.js";
 import { displayLabel } from "./state/i18n-bridge.js";
@@ -17,7 +17,7 @@ import {
 import { validateQuestionnaire } from "./tool/validate-questionnaire.js";
 import type { WrappingSelectItem } from "./view/components/wrapping-select.js";
 
-function emitAskUserPromptEvent(pi: ModuleApi, params: QuestionParams): void {
+function emitAskUserPromptEvent(pi: ModuleToolsSurface, params: QuestionParams): void {
 	const payload: AskUserPromptEventPayload = {
 		questions: params.questions.map((q) => ({
 			question: q.question,
@@ -119,7 +119,7 @@ export const DEFAULT_PROMPT_GUIDELINES: string[] = [
 	`Ask instead of guessing when the request is underspecified and the answer changes what you build; one call carries every open question, with your recommended option first and "(Recommended)" on it.`,
 ];
 
-export function registerAskUserQuestionTool(pi: ModuleApi): void {
+export function registerAskUserQuestionTool(pi: ModuleToolsSurface): void {
 	const guidance = validateGuidanceFields(loadConfig().guidance);
 	pi.registerTool({
 		name: "ask_user_question",

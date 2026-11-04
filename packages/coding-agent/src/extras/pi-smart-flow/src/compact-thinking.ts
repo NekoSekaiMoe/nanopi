@@ -25,10 +25,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type {
-	ModuleApi,
-	ModuleContext,
-} from "../../../core/modules/types.ts";
+import type { ModuleApi, ModuleContext, ModuleEventsSurface, ModuleCommandsSurface, ModuleRenderingSurface, ModuleActionsSurface } from "../../../core/modules/types.ts";
 import { SettingsManager } from "../../../core/settings-manager.ts";
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import { Text } from "@nanopi/pi-tui";
@@ -110,7 +107,7 @@ function boundInput(text: string): string {
   return `${text.slice(0, HEAD_CHARS)}\n[...]\n${text.slice(-(MAX_INPUT_CHARS - HEAD_CHARS))}`;
 }
 
-export function registerCompactThinking(pi: ModuleApi): void {
+export function registerCompactThinking(pi: ModuleEventsSurface & ModuleCommandsSurface & ModuleRenderingSurface & ModuleActionsSurface): void {
   // Read on first session, not at import: the agent dir comes from the host
   // context (`NANOPI_CODING_AGENT_DIR` and a possibly renamed config dir come
   // with it), and there is no context before a session starts.
