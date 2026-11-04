@@ -1,6 +1,6 @@
 // Ported from pi-maestro-flow (MIT, Copyright (c) 2026 catlog22)
 // Source: packages/pi-maestro-flow/src/tools/bash-bg.ts
-import type { ModuleApi, ModuleCommandContext } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleCommandContext, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
 import type { ModuleContext, SessionStartEvent } from "../../../core/modules/types.ts";
 
 import type { AgentToolResult } from "@nanopi/pi-agent-core";
@@ -360,7 +360,7 @@ export interface RegisterBashBgOptions {
   maxLogBytes?: number;
 }
 
-export function registerBashBg(pi: ModuleApi, options: RegisterBashBgOptions = {}): void {
+export function registerBashBg(pi: ModuleEventsSurface & ModuleToolsSurface & ModuleCommandsSurface & ModuleActionsSurface, options: RegisterBashBgOptions = {}): void {
   const maxActiveJobs = options.maxActiveJobs ?? MAX_ACTIVE_JOBS;
   const maxRetainedCompletedJobs = options.maxRetainedCompletedJobs ?? MAX_RETAINED_COMPLETED_JOBS;
   const maxLogBytes = options.maxLogBytes ?? MAX_LOG_BYTES;

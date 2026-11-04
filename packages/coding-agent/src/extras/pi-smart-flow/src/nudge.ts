@@ -12,7 +12,7 @@
  * ~90 tokens (was ~250). Original in nudge.ts.bak.
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleSessionSurface } from "@nanopi/pi-coding-agent";
 
 /**
  * The injected guidance. Keep this short, stable, and cache-friendly:
@@ -35,7 +35,7 @@ function nudgeEnabled(): boolean {
   return process.env.PI_SMART_FLOW_NUDGE !== "0";
 }
 
-export function registerDelegationNudge(pi: ModuleApi): void {
+export function registerDelegationNudge(pi: ModuleEventsSurface & ModuleToolsSurface & ModuleSessionSurface): void {
   pi.on("before_agent_start", (event) => {
     if (!nudgeEnabled()) return;
     if (!pi.getActiveTools().includes("subagent_spawn")) return;

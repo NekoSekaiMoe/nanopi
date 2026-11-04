@@ -260,6 +260,57 @@ interface CompactionSummaryMessage {
 
 nanopi creates this context message from a persisted `compaction` entry.
 
+## Message codecs
+
+Every role above answers three questions for the rest of the host: what it
+becomes in LLM context, how many tokens it costs, and where a compaction cut may
+start. Those were three `switch (message.role)` statements in three files, so a
+role that lived outside `messages.ts` could not reach any of them.
+
+`registerMessageCodec()` puts one table in charge
+([`core/messages.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/messages.ts)):
+
+```typescript
+import { registerMessageCodec } from "@nanopi/pi-coding-agent";
+
+registerMessageCodec({
+  role: "buildResult",
+  include: (message) => !message.hidden,
+  toLlm: (message) => ({
+    role: "user",
+    content: [{ type: "text", text: `Build finished: ${message.summary}` }],
+    timestamp: message.timestamp,
+  }),
+  estimateTokens: (message) => Math.ceil(message.summary.length / 4),
+  isCutPoint: () => true,
+  isTurnStart: () => true,
+});
+```
+
+| Field | Effect |
+|---|---|
+| `role` | the role this codec owns; registering the same role again replaces it |
+| `include(message)` | return false to keep the message out of the request |
+| `toLlm(message)` | the request form; absent passes the message through unchanged |
+| `estimateTokens(message)` | token estimate; defaults to `chars/4` over `content`, `summary`, `command`, and `output` |
+| `isCutPoint(message)` | whether compaction may cut before this message |
+| `isTurnStart(message)` | whether a cut may start here as a turn boundary |
+
+`convertToLlm()`, `estimateTokens()` ([`core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts)),
+and the compaction cut points all read the table. A role with no codec is not
+an error: `convertToLlm()` passes it through as an LLM message, and compaction
+treats it as neither a cut point nor a turn start.
+
+The four coding-agent roles (`bashExecution`, `custom`, `branchSummary`,
+`compactionSummary`) are pre-registered this way, so the built-in behavior you
+read above is one `registerMessageCodec()` call per role, not a special case.
+`registerMessageCodec()` can replace any of them, and
+`unregisterMessageCodec(role)` removes one.
+
+The declaration merging above is still how a role reaches TypeScript; the codec
+is how it reaches the runtime. Registering a codec without the merge compiles
+and runs, but every `switch (message.role)` in your own code loses exhaustiveness.
+
 ## AgentMessage union
 
 In the coding agent, the union is equivalent to:

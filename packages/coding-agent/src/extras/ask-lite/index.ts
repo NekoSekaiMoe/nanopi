@@ -15,7 +15,7 @@
  * "Contributing translations" for the full convention.
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { registerAskUserQuestionTool } from "./ask-user-question.js";
 import { I18N_NAMESPACE } from "./state/i18n-bridge.js";
 
@@ -58,6 +58,6 @@ export {
 	type AskUserPromptQuestion,
 } from "./events.js";
 
-export default function (pi: ModuleApi) {
+export default function (pi: ModuleToolsSurface) {
 	registerAskUserQuestionTool(pi);
 }

@@ -26,14 +26,7 @@
  * shows only the "• Explored" row with nothing under it.
  */
 
-import type {
-	AgentToolResult,
-	MessageRenderer,
-	ModuleApi,
-	ModuleUIContext,
-	Theme,
-	ThemeColor,
-} from "@nanopi/pi-coding-agent";
+import type { AgentToolResult, MessageRenderer, ModuleApi, ModuleUIContext, Theme, ThemeColor, ModuleEventsSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { Text, TuiMainScreen, truncateToWidth } from "@nanopi/pi-tui";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
@@ -265,7 +258,7 @@ function exploreDetail(name: string, input: Record<string, unknown>): string {
  * turn stops exploring: a finished turn keeps its rows in history, a report
  * arriving from a subagent settles the block on its own turn.
  */
-export function installExploringBlock(pi: ModuleApi): void {
+export function installExploringBlock(pi: ModuleEventsSurface & ModuleActionsSurface): void {
   installRenderMeasure();
   const width = columnWidth;
 

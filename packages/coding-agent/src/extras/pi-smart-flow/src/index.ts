@@ -14,12 +14,17 @@
  *   pi install npm:@NekoSekaiMoe/pi-smart-flow
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface, ModuleRenderingSurface, ModuleActionsSurface, ModuleSessionSurface } from "@nanopi/pi-coding-agent";
 import { registerCompactThinking } from "./compact-thinking.ts";
 import { registerDelegationNudge } from "./nudge.ts";
 import { registerBashBg } from "./bash-bg.ts";
 
-export default function (pi: ModuleApi): void {
+export default function (pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleCommandsSurface &
+	ModuleRenderingSurface &
+	ModuleActionsSurface &
+	ModuleSessionSurface): void {
   registerDelegationNudge(pi);
   registerBashBg(pi);
   // observe removed 2026-09: no other observation providers exist; bash_bg wait covers it (-659 tokens)

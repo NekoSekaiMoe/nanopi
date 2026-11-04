@@ -4,7 +4,7 @@
 
 import { StringEnum } from "@nanopi/pi-ai";
 import { Text } from "@nanopi/pi-tui";
-import type { ModuleApi, ModuleContext, Theme } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleContext, Theme, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { type Static, Type } from "typebox";
 
 import {
@@ -249,7 +249,7 @@ function executeTodoAction(
 // ── Tool 注册入口 ─────────────────────────────────────
 
 export function registerTodoTool(
-	pi: ModuleApi,
+	pi: ModuleToolsSurface,
 	state: TodoSessionState,
 	refreshDisplay: (ctx: ModuleContext) => void,
 ): void {

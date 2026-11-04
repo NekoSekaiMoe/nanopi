@@ -27,7 +27,7 @@ import type {
 } from "@nanopi/pi-ai/compat";
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
-import { convertToLlm } from "../messages.ts";
+import { convertToLlm, estimateMessageTokens, isCutPointMessageRole, isTurnStartMessageRole } from "../messages.ts";
 import {
 	buildSessionProjection,
 	type CompactionEntry,
@@ -331,11 +331,8 @@ function estimateTextAndImageContentChars(content: string | Array<{ type: string
 	return chars;
 }
 
-/**
- * Estimate token count for a message using chars/4 heuristic.
- * This is conservative (overestimates tokens).
- */
-export function estimateTokens(message: AgentMessage): number {
+/** Token cost of the provider-facing messages. Coding-agent roles defer to their codec. */
+function estimateTokensForCoreRole(message: AgentMessage): number {
 	let chars = 0;
 
 	switch (message.role) {
@@ -374,48 +371,48 @@ export function estimateTokens(message: AgentMessage): number {
 			chars = estimateTextAndImageContentChars(message.content);
 			return Math.ceil(chars / 4);
 		}
-		case "bashExecution": {
-			chars = message.command.length + message.output.length;
-			return Math.ceil(chars / 4);
-		}
-		case "branchSummary":
-		case "compactionSummary": {
-			chars = message.summary.length;
-			return Math.ceil(chars / 4);
-		}
 	}
 
 	return 0;
 }
 
-function isCutPointMessage(message: AgentMessage): boolean {
-	switch (message.role) {
-		case "user":
-		case "assistant":
-		case "bashExecution":
-		case "custom":
-		case "branchSummary":
-		case "compactionSummary":
-			return true;
-		case "toolResult":
-			return false;
-	}
-	return false;
+/**
+ * Estimate token count for a message using chars/4 heuristic.
+ * This is conservative (overestimates tokens).
+ *
+ * A role with a registered codec (see `registerMessageCodec`) answers for
+ * itself; everything else falls back to the core shapes.
+ */
+export function estimateTokens(message: AgentMessage): number {
+	return estimateMessageTokens(message, () => estimateTokensForCoreRole(message));
 }
 
-function isTurnStartMessage(message: AgentMessage): boolean {
+/**
+ * Cut rule for the roles the codec table does not own. `system` is context, not
+ * a boundary, and tool results must follow their tool call, so neither starts a
+ * cut; everything else does.
+ */
+function isCoreCutPoint(message: AgentMessage): boolean {
 	switch (message.role) {
-		case "user":
-		case "bashExecution":
-		case "custom":
-		case "branchSummary":
-		case "compactionSummary":
-			return true;
-		case "assistant":
+		case "system":
 		case "toolResult":
 			return false;
+		default:
+			return true;
 	}
-	return false;
+}
+
+/** Only user-role messages open a turn. */
+function isCoreTurnStart(message: AgentMessage): boolean {
+	return message.role === "user";
+}
+
+export function isCutPointMessage(message: AgentMessage): boolean {
+	return isCutPointMessageRole(message, isCoreCutPoint);
+}
+
+export function isTurnStartMessage(message: AgentMessage): boolean {
+	return isTurnStartMessageRole(message, isCoreTurnStart);
 }
 
 /** Collect the tool call ids an assistant message dispatches. */

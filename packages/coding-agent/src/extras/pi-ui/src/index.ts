@@ -43,7 +43,7 @@
  *   pi install npm:@NekoSekaiMoe/pi-ui
  */
 
-import type { ModuleApi, ModuleUIContext, Theme, ThemeColor } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleUIContext, Theme, ThemeColor, ModuleEventsSurface, ModuleToolsSurface, ModuleRenderingSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
@@ -100,7 +100,10 @@ function installResourceHeadingGradient(themeProxy: Theme): void {
   patchedThemes.add(theme);
 }
 
-export default function (pi: ModuleApi) {
+export default function (pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleRenderingSurface &
+	ModuleActionsSurface) {
   // Patch renderer lookup before any restored tool components are created.
   // This changes only presentation; extension-owned execute functions remain
   // registered and invoked as-is. The patch covers every tool pi-ui does not

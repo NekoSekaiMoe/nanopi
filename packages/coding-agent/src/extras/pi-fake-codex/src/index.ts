@@ -49,7 +49,7 @@
  * There are no commands; the extension takes effect on load.
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
 import { buildOriginator, buildUserAgent } from "./headers.ts";
 import { registerCodexHookAdapter } from "./hooks/adapter.ts";
 import { codexifyResponsesPayload } from "./payload.ts";
@@ -57,7 +57,7 @@ import { codexifyResponsesPayload } from "./payload.ts";
 /** APIs whose traffic we impersonate as Codex CLI. */
 export const CODEX_APIS = new Set(["openai-responses", "openai-codex-responses"]);
 
-export default function (pi: ModuleApi): void {
+export default function (pi: ModuleEventsSurface & ModuleToolsSurface & ModuleActionsSurface): void {
   // `before_provider_headers` fires after request headers are assembled and
   // before the HTTP call. Handlers mutate `headers` in place; a `null` value
   // deletes that header. Return value is ignored.

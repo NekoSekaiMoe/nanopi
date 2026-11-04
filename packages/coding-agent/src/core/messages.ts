@@ -137,6 +137,179 @@ export function createCustomMessage(
 	};
 }
 
+// ============================================================================
+// Message codec registry
+// ============================================================================
+
+/**
+ * What a message role contributes to the rest of the host: how it becomes LLM
+ * context, how many tokens it costs, and where it can be cut.
+ *
+ * The role table used to be three hardcoded `switch (message.role)` statements
+ * in three files. Adding a role meant finding all three, and a module that
+ * invented its own role could not reach any of them. The codec registers one
+ * place per role instead; `convertToLlm`, `estimateTokens`, and the compaction
+ * cut points read this table.
+ */
+export interface MessageCodec<TMessage extends AgentMessage = AgentMessage> {
+	/** Role this codec owns. One codec per role; registering again replaces. */
+	readonly role: string;
+	/** Whether the message enters LLM context. Absent leaves it in; false drops it. */
+	include?(message: TMessage): boolean;
+	/** LLM context form, or undefined when the message does not belong in a request. */
+	toLlm?(message: TMessage): Message | undefined;
+	/** Token estimate. Defaults to `estimateMessageTextChars(message) / 4`. */
+	estimateTokens?(message: TMessage): number;
+	/** Whether a compaction cut may start before this message. Defaults to the core rule for its role. */
+	isCutPoint?(message: TMessage): boolean;
+	/** Whether a compaction cut may start at this message as a turn boundary. */
+	isTurnStart?(message: TMessage): boolean;
+}
+
+const codecs = new Map<string, MessageCodec>();
+
+/** Register a message codec, replacing any codec already registered for that role. */
+export function registerMessageCodec(codec: MessageCodec): void {
+	codecs.set(codec.role, codec);
+}
+
+/** Remove the codec for a role. Built-in codecs can be replaced with `registerMessageCodec()`. */
+export function unregisterMessageCodec(role: string): void {
+	codecs.delete(role);
+}
+
+/** The codec for a role, or undefined when the role only has the core message shape. */
+export function getMessageCodec(role: string): MessageCodec | undefined {
+	return codecs.get(role);
+}
+
+/** Roles that have a codec, in registration order. */
+export function getMessageCodecRoles(): string[] {
+	return [...codecs.keys()];
+}
+
+/**
+ * Rough character count of a message, used when a codec does not supply its own
+ * estimate. Reads the optional `content`, `summary`, `command`, and `output`
+ * fields loosely so that a module's message shape can still ride the default.
+ */
+const ESTIMATED_IMAGE_CHARS = 4800;
+
+export function estimateMessageTextChars(message: AgentMessage): number {
+	const shaped = message as { content?: unknown; summary?: unknown; command?: unknown; output?: unknown };
+	let chars = 0;
+	const content = shaped.content;
+	if (typeof content === "string") {
+		chars += content.length;
+	} else if (Array.isArray(content)) {
+		for (const block of content) {
+			if (typeof block !== "object" || block === null) continue;
+			const typed = block as { type?: string; text?: string; thinking?: string };
+			if (typed.type === "text" && typeof typed.text === "string") chars += typed.text.length;
+			else if (typed.type === "image") chars += ESTIMATED_IMAGE_CHARS;
+			else if (typed.type === "thinking" && typeof typed.thinking === "string") chars += typed.thinking.length;
+		}
+	}
+	if (typeof shaped.summary === "string") chars += shaped.summary.length;
+	if (typeof shaped.command === "string") chars += shaped.command.length;
+	if (typeof shaped.output === "string") chars += shaped.output.length;
+	return chars;
+}
+
+/**
+ * Token estimate for one message: the codec's own, or `fallback` for roles the
+ * codec table does not own (`system`, `user`, `assistant`, `toolResult`).
+ */
+export function estimateMessageTokens(message: AgentMessage, fallback?: (message: AgentMessage) => number): number {
+	const codec = codecs.get(message.role);
+	if (codec?.estimateTokens) return codec.estimateTokens(message);
+	if (fallback) return fallback(message);
+	return Math.ceil(estimateMessageTextChars(message) / 4);
+}
+
+/** Whether a compaction cut may start before this message. Unknown roles cannot be cut. */
+export function isCutPointMessageRole(
+	message: AgentMessage,
+	fallback: (message: AgentMessage) => boolean = () => false,
+): boolean {
+	const codec = codecs.get(message.role);
+	if (codec?.isCutPoint) return codec.isCutPoint(message);
+	return fallback(message);
+}
+
+/** Whether a compaction cut may start at this message as a turn boundary. */
+export function isTurnStartMessageRole(
+	message: AgentMessage,
+	fallback: (message: AgentMessage) => boolean = () => false,
+): boolean {
+	const codec = codecs.get(message.role);
+	if (codec?.isTurnStart) return codec.isTurnStart(message);
+	return fallback(message);
+}
+
+/** Wrap text as a user message, the shape most custom roles convert to. */
+export function toUserTextMessage(text: string, timestamp: number): Message {
+	return { role: "user", content: [{ type: "text", text }], timestamp };
+}
+
+const BUILTIN_CODECS: MessageCodec[] = [
+	{
+		role: "bashExecution",
+		include: (message) => !(message as BashExecutionMessage).excludeFromContext,
+		toLlm: (message) => {
+			const bash = message as BashExecutionMessage;
+			return toUserTextMessage(bashExecutionToText(bash), bash.timestamp);
+		},
+		estimateTokens: (message) => {
+			const bash = message as BashExecutionMessage;
+			return Math.ceil((bash.command.length + bash.output.length) / 4);
+		},
+		isCutPoint: () => true,
+		isTurnStart: () => true,
+	},
+	{
+		role: "custom",
+		toLlm: (message) => {
+			const custom = message as CustomMessage;
+			const content =
+				typeof custom.content === "string" ? [{ type: "text" as const, text: custom.content }] : custom.content;
+			return { role: "user", content, timestamp: custom.timestamp };
+		},
+		estimateTokens: (message) =>
+			Math.ceil(
+				estimateMessageTextChars({ role: "custom", content: (message as CustomMessage).content } as AgentMessage) /
+					4,
+			),
+		isCutPoint: () => true,
+		isTurnStart: () => true,
+	},
+	{
+		role: "branchSummary",
+		toLlm: (message) => {
+			const branch = message as BranchSummaryMessage;
+			return toUserTextMessage(BRANCH_SUMMARY_PREFIX + branch.summary + BRANCH_SUMMARY_SUFFIX, branch.timestamp);
+		},
+		estimateTokens: (message) => Math.ceil((message as BranchSummaryMessage).summary.length / 4),
+		isCutPoint: () => true,
+		isTurnStart: () => true,
+	},
+	{
+		role: "compactionSummary",
+		toLlm: (message) => {
+			const compaction = message as CompactionSummaryMessage;
+			return toUserTextMessage(
+				COMPACTION_SUMMARY_PREFIX + compaction.summary + COMPACTION_SUMMARY_SUFFIX,
+				compaction.timestamp,
+			);
+		},
+		estimateTokens: (message) => Math.ceil((message as CompactionSummaryMessage).summary.length / 4),
+		isCutPoint: () => true,
+		isTurnStart: () => true,
+	},
+];
+
+for (const codec of BUILTIN_CODECS) registerMessageCodec(codec);
+
 /**
  * Transform AgentMessages (including custom types) to LLM-compatible Messages.
  *
@@ -144,53 +317,26 @@ export function createCustomMessage(
  * - Agent's transormToLlm option (for prompt calls and queued messages)
  * - Compaction's generateSummary (for summarization)
  * - Custom extensions and tools
+ *
+ * A role without a codec passes through unchanged: `system`, `user`,
+ * `assistant`, and `toolResult` are already LLM messages, and an unknown role
+ * is the host's business, not ours.
  */
 export function convertToLlm(messages: AgentMessage[]): Message[] {
-	return messages
-		.map((m): Message | undefined => {
-			switch (m.role) {
-				case "bashExecution":
-					// Skip messages excluded from context (!! prefix)
-					if (m.excludeFromContext) {
-						return undefined;
-					}
-					return {
-						role: "user",
-						content: [{ type: "text", text: bashExecutionToText(m) }],
-						timestamp: m.timestamp,
-					};
-				case "custom": {
-					const content = typeof m.content === "string" ? [{ type: "text" as const, text: m.content }] : m.content;
-					return {
-						role: "user",
-						content,
-						timestamp: m.timestamp,
-					};
-				}
-				case "branchSummary":
-					return {
-						role: "user",
-						content: [{ type: "text" as const, text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX }],
-						timestamp: m.timestamp,
-					};
-				case "compactionSummary":
-					return {
-						role: "user",
-						content: [
-							{ type: "text" as const, text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX },
-						],
-						timestamp: m.timestamp,
-					};
-				case "system":
-				case "user":
-				case "assistant":
-				case "toolResult":
-					return m;
-				default:
-					// biome-ignore lint/correctness/noSwitchDeclarations: fine
-					const _exhaustiveCheck: never = m;
-					return undefined;
-			}
-		})
-		.filter((m) => m !== undefined);
+	const converted: Message[] = [];
+	for (const message of messages) {
+		const codec = codecs.get(message.role);
+		if (!codec) {
+			converted.push(message as Message);
+			continue;
+		}
+		if (codec.include && !codec.include(message)) continue;
+		if (!codec.toLlm) {
+			converted.push(message as Message);
+			continue;
+		}
+		const llmMessage = codec.toLlm(message);
+		if (llmMessage !== undefined) converted.push(llmMessage);
+	}
+	return converted;
 }

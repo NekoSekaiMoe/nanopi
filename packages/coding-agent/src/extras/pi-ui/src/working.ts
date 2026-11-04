@@ -1,6 +1,6 @@
 /** Animated omp-style status shimmer and elapsed transcript row. */
 
-import type { ModuleApi, ModuleContext, Theme, WorkingIndicatorOptions } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleContext, Theme, WorkingIndicatorOptions, ModuleRenderingSurface, ModuleEventsSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
 import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import {
@@ -186,7 +186,7 @@ function installStatusGradients(): () => void {
   }
 }
 
-export function installWorking(pi: ModuleApi): () => void {
+export function installWorking(pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleActionsSurface): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let startedAt: number | undefined;
   let lastFrameAt = 0;

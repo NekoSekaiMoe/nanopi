@@ -41,7 +41,7 @@
  * One decision payloads are not agent traffic and are left alone.
  */
 
-import type { ModuleApi } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleEventsSurface } from "@nanopi/pi-coding-agent";
 import {
 	buildClient,
 	buildProjectId,
@@ -71,7 +71,7 @@ const SHAPED_APIS = new Set<string>([
  */
 const lastBodies = new Map<string, unknown>();
 
-export default function (pi: ModuleApi): void {
+export default function (pi: ModuleEventsSurface): void {
 	// Identity headers: fired after request headers are assembled and before the
 	// HTTP call. Handlers mutate `headers` in place.
 	pi.on("before_provider_headers", (event, ctx) => {

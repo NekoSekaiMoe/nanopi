@@ -24,7 +24,12 @@
  */
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
-import type { ModuleApi, ModuleCommandContext, ModuleContext } from "../../../core/modules/types.ts";
+import type {
+	ModuleCommandContext,
+	ModuleCommandsSurface,
+	ModuleContext,
+	ModuleEventsSurface,
+} from "../../../core/modules/types.ts";
 import { blameDays, SOFT_LIMIT, type StaleCandidate, STALE_DAYS, staleCandidates } from "./freshness.ts";
 import { ageInDays, type MemoryEntry, stripStamp } from "./parse.ts";
 import { isDuplicate, listEntries, validateEntry } from "./parse.ts";
@@ -369,7 +374,7 @@ async function forgetMemory(ctx: ModuleCommandContext, session: PendingSession, 
 	);
 }
 
-export default function memory(pi: ModuleApi): void {
+export default function memory(pi: ModuleEventsSurface & ModuleCommandsSurface): void {
 	const sessions = new Map<string, PendingSession>();
 	const nudged = new Set<string>();
 

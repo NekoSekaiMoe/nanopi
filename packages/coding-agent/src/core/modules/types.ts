@@ -1500,9 +1500,28 @@ export interface ResolvedCommand extends RegisteredCommand {
 export type ModuleHandler<E, R = undefined> = (event: E, ctx: ModuleContext) => Promise<R | void> | R | void;
 
 /**
- * ModuleApi passed to extension factory functions.
+ * ModuleApi passed to extension factory functions. It is the composition of the
+ * surfaces below, so a module that only needs one of them can name it directly
+ * (`ModuleSurface<ModuleEventsSurface>`) instead of taking the whole thing.
  */
-export interface ModuleApi {
+export interface ModuleApi
+	extends ModuleEventsSurface,
+		ModuleToolsSurface,
+		ModuleCommandsSurface,
+		ModuleRenderingSurface,
+		ModuleActionsSurface,
+		ModuleSessionSurface,
+		ModuleModelSurface,
+		ModuleProvidersSurface {}
+
+/** Cross-module messages on the shared `EventBus`; part of every surface. */
+interface ModuleEvents {
+	/** Shared event bus for extension communication. */
+	events: EventBus;
+}
+
+/** Event subscription: the `on()` overload set, one per event the host emits. */
+export interface ModuleEventsSurface extends ModuleEvents {
 	// =========================================================================
 	// Event Subscription
 	// =========================================================================
@@ -1548,7 +1567,10 @@ export interface ModuleApi {
 	on(event: "tool_call", handler: ModuleHandler<ToolCallEvent, ToolCallEventResult>): () => void;
 	on(event: "tool_result", handler: ModuleHandler<ToolResultEvent, ToolResultEventResult>): () => void;
 	on(event: "input", handler: ModuleHandler<InputEvent, InputEventResult>): () => void;
+}
 
+/** Tools: what the model can call, and which shell backend those tools run on. */
+export interface ModuleToolsSurface extends ModuleEvents {
 	// =========================================================================
 	// Tool Registration
 	// =========================================================================
@@ -1581,7 +1603,10 @@ export interface ModuleApi {
 
 	/** Id of the backend selected with `setActiveBashOperations()`. */
 	getActiveBashOperations(): string | undefined;
+}
 
+/** Slash commands, keyboard shortcuts, and CLI flags the module contributes. */
+export interface ModuleCommandsSurface extends ModuleEvents {
 	// =========================================================================
 	// Command, Shortcut, Flag Registration
 	// =========================================================================
@@ -1616,7 +1641,10 @@ export interface ModuleApi {
 
 	/** Get the value of a registered CLI flag. */
 	getFlag(name: string): boolean | string | undefined;
+}
 
+/** Renderers: how a module's messages, entries, and tool calls are drawn. */
+export interface ModuleRenderingSurface extends ModuleEvents {
 	// =========================================================================
 	// Message Rendering
 	// =========================================================================
@@ -1632,7 +1660,10 @@ export interface ModuleApi {
 
 	/** Choose how tool calls are drawn. Resolvers run in extension load order. */
 	registerToolRenderer(resolver: ToolRendererResolver): void;
+}
 
+/** Actions: everything a module does to a live session rather than registering. */
+export interface ModuleActionsSurface extends ModuleEvents {
 	// =========================================================================
 	// Actions
 	// =========================================================================
@@ -1667,7 +1698,10 @@ export interface ModuleApi {
 
 	/** Append a custom entry to the session for state persistence (not sent to LLM). */
 	appendEntry<T = unknown>(customType: string, data?: T): void;
+}
 
+/** Session reads: name, current tools, settings, commands, and the module list. */
+export interface ModuleSessionSurface extends ModuleEvents {
 	// =========================================================================
 	// Session Metadata
 	// =========================================================================
@@ -1709,7 +1743,10 @@ export interface ModuleApi {
 	 * only be handed modules this build already compiled in.
 	 */
 	getModuleNames(): string[];
+}
 
+/** Model selection and thinking level for the running session. */
+export interface ModuleModelSurface extends ModuleEvents {
 	// =========================================================================
 	// Model and Thinking Level
 	// =========================================================================
@@ -1728,7 +1765,10 @@ export interface ModuleApi {
 	 * for new sessions.
 	 */
 	setThinkingLevel(level: ThinkingLevel): void;
+}
 
+/** Provider, virtual-model, and event-bus registration. */
+export interface ModuleProvidersSurface extends ModuleEvents {
 	// =========================================================================
 	// Provider Registration
 	// =========================================================================
@@ -1816,10 +1856,26 @@ export interface ModuleApi {
 
 	/** Remove a virtual model registered with `registerVirtualModel()`. */
 	unregisterVirtualModel(provider: string, id: string): void;
-
-	/** Shared event bus for extension communication. */
-	events: EventBus;
 }
+
+/**
+ * The API a module factory receives, narrowed to the surfaces it declares.
+ *
+ * `SessionModule.factory` is typed against `ModuleApi` in full, but a module
+ * that only registers a command does not need provider registration. Declare
+ * what you use and the compiler holds you to it:
+ *
+ * ```typescript
+ * const myModule: SessionModule<ModuleCommandsSurface> = {
+ *   name: "my-module",
+ *   factory: (nanopi) => { ... }  // no `registerProvider` here
+ * };
+ * ```
+ *
+ * The runtime object is the whole `ModuleApi`; the parameter type is the
+ * promise, and it is checked when the module is written, not when it loads.
+ */
+export type ModuleSurface<TSurface extends object = ModuleApi> = TSurface;
 
 // ============================================================================
 // Provider Registration Types
@@ -1946,16 +2002,22 @@ export interface ProviderClassifierModelConfig extends ProviderModelConfigBase {
 export type ProviderModelConfig = ProviderChatModelConfig | ProviderImageModelConfig | ProviderClassifierModelConfig;
 
 /** RegisteredModule factory function type. Supports both sync and async initialization. */
-export type ModuleFactory = (nanopi: ModuleApi) => void | Promise<void>;
+export type ModuleFactory<TSurface extends object = ModuleApi> = (nanopi: TSurface) => void | Promise<void>;
 
 /** A programmatic module: registers tools, commands, flags, and event handlers
  * through a `ModuleApi` when the session loads it. Modules are the replacement
  * for extension files: they are composed in code (see `createAgentSession({
- * modules })`) instead of being discovered from disk. */
-export interface SessionModule {
+ * modules })`) instead of being discovered from disk.
+ *
+ * The type parameter narrows what the factory may touch. It defaults to the
+ * full `ModuleApi`, so an unparameterized module keeps the whole surface; a
+ * module that names the surfaces it uses (`SessionModule<ModuleCommandsSurface>`)
+ * is checked against only those.
+ */
+export interface SessionModule<TSurface extends object = ModuleApi> {
 	/** Module name used in diagnostics, error reports, and the /status listing. */
 	name: string;
-	factory: ModuleFactory;
+	factory: ModuleFactory<TSurface>;
 	/** Omit this module from the loaded-modules listing. */
 	hidden?: boolean;
 }

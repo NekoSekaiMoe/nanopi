@@ -2,13 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
-import type {
-	ModuleApi,
-	ModuleContext,
-	ModuleUIContext,
-	SessionStartEvent,
-	ToolLoadout,
-} from "../../../core/modules/types.ts";
+import type { ModuleApi, ModuleContext, ModuleUIContext, SessionStartEvent, ToolLoadout, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface, ModuleSessionSurface } from "../../../core/modules/types.ts";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
@@ -379,7 +373,10 @@ function resetForRun(job: Job): void {
 	});
 }
 
-export default function subagentMini(pi: ModuleApi): void {
+export default function subagentMini(pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleActionsSurface &
+	ModuleSessionSurface): void {
 	const jobs = new Map<string, Job>();
 	let counter = 0;
 	let uiRef: ModuleUIContext | undefined;

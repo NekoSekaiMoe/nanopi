@@ -21,7 +21,7 @@
  */
 
 import { Type } from "typebox";
-import type { ModuleApi, ModuleToolContext } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleToolContext, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface } from "@nanopi/pi-coding-agent";
 import { McpClient, type McpToolDefinition } from "./client.ts";
 import { loadMcpConfig, type McpConfig } from "./config.ts";
 import { commandAvailable } from "./executables.ts";
@@ -120,7 +120,9 @@ function serverListing(states: Map<string, ServerState>, config: McpConfig | und
 	return lines.join("\n");
 }
 
-export default function mcpLiteExtension(pi: ModuleApi): void {
+export default function mcpLiteExtension(pi: ModuleEventsSurface &
+	ModuleToolsSurface &
+	ModuleCommandsSurface): void {
 	const states = new Map<string, ServerState>();
 	let loaded: McpConfig | undefined;
 
@@ -203,7 +205,7 @@ export default function mcpLiteExtension(pi: ModuleApi): void {
  * in-process, which is worse for context hygiene but better than no MCP at all.
  */
 function registerWrapperTool(
-	pi: ModuleApi,
+	pi: ModuleEventsSurface & ModuleToolsSurface & ModuleCommandsSurface,
 	states: () => Map<string, ServerState>,
 	config: () => McpConfig | undefined,
 ): void {
@@ -315,7 +317,7 @@ function registerWrapperTool(
 	});
 }
 
-function registerMcpTool(pi: ModuleApi, client: McpClient, serverName: string, tool: McpToolDefinition): void {
+function registerMcpTool(pi: ModuleToolsSurface, client: McpClient, serverName: string, tool: McpToolDefinition): void {
 	pi.registerTool({
 		name: mcpToolName(serverName, tool.name),
 		label: `${serverName}: ${tool.name}`,

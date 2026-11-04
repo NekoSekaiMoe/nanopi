@@ -51,7 +51,7 @@
  *     TUI so a landed summary can request an immediate re-render.
  */
 
-import type { ModuleApi, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme, ModuleRenderingSurface, ModuleEventsSurface } from "@nanopi/pi-coding-agent";
 
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import type { MarkdownTheme } from "@nanopi/pi-tui";
@@ -667,7 +667,7 @@ function installSettingsFilterPatch(): void {
  * summary model context are registered once. The theme is refreshed on every
  * TUI session_start so theme switches are followed via the live proxy.
  */
-export function installThinkingDisplay(pi?: ModuleApi, theme?: Theme): void {
+export function installThinkingDisplay(pi?: ModuleRenderingSurface & ModuleEventsSurface, theme?: Theme): void {
   if (theme) activeTheme = theme;
   installAssistantMessagePatch();
   installThinkingTogglePatch();

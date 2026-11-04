@@ -15,7 +15,7 @@
  *   pi install github.com/arpagon/pi-rewind
  */
 
-import type { ModuleApi } from "../../../core/modules/types.ts";
+import type { ModuleApi, ModuleEventsSurface, ModuleCommandsSurface } from "../../../core/modules/types.ts";
 import {
   isGitRepo,
   getRepoRoot,
@@ -52,7 +52,7 @@ function describeToolCall(toolName: string, input: any): string {
   }
 }
 
-export default function (pi: ModuleApi) {
+export default function (pi: ModuleEventsSurface & ModuleCommandsSurface) {
   const state = createInitialState();
 
   // Register /rewind command and Esc+Esc shortcut

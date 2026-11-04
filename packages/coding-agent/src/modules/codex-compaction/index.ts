@@ -13,7 +13,7 @@
  */
 
 import { Text } from "@nanopi/pi-tui";
-import type { ModuleApi } from "../../core/modules/types.ts";
+import type { ModuleActionsSurface, ModuleEventsSurface, ModuleRenderingSurface } from "../../core/modules/types.ts";
 import { DEFAULT_USER_RETAIN_TOKENS, runCodexCompaction } from "./compact.ts";
 
 /** TUI-only entry type for the post-compaction warning. */
@@ -33,7 +33,9 @@ function normalizeHeaders(headers: Record<string, string | null> | undefined): R
 const COMPACTION_WARNING =
 	"Heads up: long threads and multiple compactions can cause the model to be less accurate. Start a new thread when possible to keep threads small and targeted.";
 
-export default function codexCompactionExtension(pi: ModuleApi): void {
+export default function codexCompactionExtension(
+	pi: ModuleEventsSurface & ModuleActionsSurface & ModuleRenderingSurface,
+): void {
 	const config = { userRetainTokens: DEFAULT_USER_RETAIN_TOKENS };
 
 	pi.on("session_before_compact", async (event, ctx) => {

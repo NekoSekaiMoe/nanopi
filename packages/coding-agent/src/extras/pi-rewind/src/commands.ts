@@ -5,7 +5,7 @@
  * browser and restore options.
  */
 
-import type { ModuleApi, ModuleCommandContext } from "../../../core/modules/types.ts";
+import type { ModuleApi, ModuleCommandContext, ModuleEventsSurface, ModuleCommandsSurface } from "../../../core/modules/types.ts";
 import type { RewindState } from "./state.js";
 import type { CheckpointData } from "./core.js";
 import { restoreCheckpoint, createCheckpoint, diffCheckpoints, sanitizeForRef, git } from "./core.js";
@@ -301,7 +301,7 @@ export async function handleTreeRestore(
 // Registration
 // ============================================================================
 
-export function registerCommands(pi: ModuleApi, state: RewindState): void {
+export function registerCommands(pi: ModuleEventsSurface & ModuleCommandsSurface, state: RewindState): void {
   pi.registerCommand("rewind", {
     description: "Rewind file changes and/or conversation to a checkpoint",
     handler: async (_args, ctx) => {

@@ -1,9 +1,6 @@
 /** Flat Codex-style renderers for Pi's built-in and selected extension tools. */
 
-import type {
-	ModuleApi,
-	ToolDefinition,
-} from "../../../core/modules/types.ts";
+import type { ModuleApi, ToolDefinition, ModuleRenderingSurface, ModuleToolsSurface } from "../../../core/modules/types.ts";
 import { createEditToolDefinition } from "../../../core/tools/edit.ts";
 import type { AgentToolResult, ToolRenderResultOptions } from "@nanopi/pi-coding-agent";
 import { Text } from "@nanopi/pi-tui";
@@ -817,7 +814,7 @@ function codexifyTool(name: string, cwd: string): ToolDefinition<any, any, any> 
   };
 }
 
-export function installToolRenderers(pi: ModuleApi, cwd: string): string[] {
+export function installToolRenderers(pi: ModuleRenderingSurface & ModuleToolsSurface, cwd: string): string[] {
   const installed: string[] = [];
   for (const name of Object.keys(FACTORIES)) {
     try {
