@@ -51,16 +51,25 @@
  *     TUI so a landed summary can request an immediate re-render.
  */
 
-import type { ModuleApi, ModuleContext, MarkdownTransformContext, MarkdownTransformer, Theme, ModuleRenderingSurface, ModuleEventsSurface } from "@nanopi/pi-coding-agent";
+import type {
+  AssistantMessageRenderContext,
+  AssistantMessageRenderer,
+  ModuleCommandsSurface,
+  ModuleContext,
+  ModuleEventsSurface,
+  ModuleRenderingSurface,
+  ModuleSettingsSurface,
+  MarkdownTransformContext,
+  MarkdownTransformer,
+  Theme,
+} from "@nanopi/pi-coding-agent";
 
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import type { MarkdownTheme } from "@nanopi/pi-tui";
-import { SettingsList, Spacer, Text, Markdown, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { Spacer, Markdown, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
-import { AssistantMessageComponent } from "../../../modes/interactive/components/assistant-message.ts";
-import { InteractiveMode } from "../../../modes/interactive/interactive-mode.ts";
 
 /** Theme captured at the latest session_start; fallback for resolveTheme(). */
 let activeTheme: Theme | undefined;
@@ -82,9 +91,6 @@ function resolveTheme(): Theme | undefined {
   return shared ?? activeTheme;
 }
 
-const ASSISTANT_ORIGINAL = Symbol.for("@NekoSekaiMoe/pi-ui:assistant-message-update-content");
-const MODE_TOGGLE_ORIGINAL = Symbol.for("@NekoSekaiMoe/pi-ui:thinking-toggle-original");
-const SETTINGS_LIST_ORIGINAL = Symbol.for("@NekoSekaiMoe/pi-ui:settings-list-render");
 const HIDE_THINKING_ID = "hide-thinking";
 
 /** Stable subset of AssistantMessage content blocks used here. */
@@ -100,26 +106,8 @@ interface AssistantMessageLike {
   errorMessage?: string;
 }
 
-/** Stable subset of the AssistantMessageComponent internals this patch drives. */
-interface AssistantMessageState {
-  contentContainer: { clear(): void; addChild(child: unknown): void };
-  markdownTheme: MarkdownTheme;
-  markdownTransformers?: MarkdownTransformer[];
-  outputPad: number;
-  isStreaming: boolean;
-  lastMessage: AssistantMessageLike | undefined;
-  hasToolCalls: boolean;
-  invalidate?(): void;
-}
-
-interface InteractiveModeState {
-  showStatus?: (message: string) => void;
-}
-
-interface SettingsListState {
-  items?: { id?: string }[];
-  filteredItems?: { id?: string }[];
-}
+/** What the renderer owns per message: the block list it draws into. */
+type AssistantMessageState = AssistantMessageRenderContext;
 
 /** One maximal run of consecutive non-empty thinking blocks. */
 interface ThinkingRun {
@@ -208,7 +196,7 @@ function nonEmptyLineCount(text: string): number {
 function composeTransform(
   messageType: MarkdownTransformContext["messageType"],
   isStreaming: boolean,
-  transformers: MarkdownTransformer[] | undefined,
+  transformers: readonly MarkdownTransformer[] | undefined,
 ): ((markdown: string, availableWidth: number) => string) | undefined {
   if (!transformers || transformers.length === 0) return undefined;
   return (markdown: string, availableWidth: number): string => {
@@ -446,7 +434,11 @@ function syncLiveTimings(runs: ThinkingRun[]): void {
  * sanity check; joined lengths are NOT compared because the finalized message
  * may normalize whitespace without changing which runs were timed.
  */
-function commitLiveState(component: AssistantMessageState, message: object, runs: ThinkingRun[]): FinalRunState | undefined {
+function commitLiveState(
+  component: AssistantMessageRenderContext,
+  message: object,
+  runs: ThinkingRun[],
+): FinalRunState | undefined {
   if (liveRuns.length === 0 || component !== lastLiveComponent) return undefined;
   if (runs.length !== liveRuns.length) return undefined;
   const state: FinalRunState = {
@@ -471,34 +463,32 @@ function commitLiveState(component: AssistantMessageState, message: object, runs
  * thinking rows. Text blocks, spacing, and stop-reason/error rows mirror the
  * original renderer; only thinking runs change presentation.
  */
-function renderCodexThinking(state: AssistantMessageState, message: AssistantMessageLike, streaming: boolean): void {
+function renderCodexThinking(
+  context: AssistantMessageRenderContext,
+  message: AssistantMessageLike,
+  streaming: boolean,
+): void {
   const theme = resolveTheme()!;
-  state.lastMessage = message;
-  state.isStreaming = streaming;
-  state.contentContainer.clear();
+  const addChild = (child: Component) => context.addChild(child);
 
   if (message.content.some(isVisibleBlock)) {
-    state.contentContainer.addChild(new Spacer(1));
+    addChild(new Spacer(1));
   }
 
   const runs = collectThinkingRuns(message);
   if (streaming) {
     lastPartialMessage = message;
-    lastLiveComponent = state;
+    lastLiveComponent = context;
     syncLiveTimings(runs);
   }
-  const committed = streaming ? undefined : commitLiveState(state, message, runs) ?? finalRuns.get(message);
+  const committed = streaming ? undefined : commitLiveState(context, message, runs) ?? finalRuns.get(message);
   const content = message.content;
 
   let runCursor = 0;
   for (let i = 0; i < content.length; i++) {
     const block = content[i]!;
     if (block.type === "text" && (block.text ?? "").trim()) {
-      state.contentContainer.addChild(
-        new Markdown(block.text!.trim(), state.outputPad, 0, state.markdownTheme, undefined, {
-          transform: composeTransform("assistant", streaming, state.markdownTransformers),
-        }),
-      );
+      context.renderText(block.text!);
       continue;
     }
     if (block.type !== "thinking") continue;
@@ -512,18 +502,18 @@ function renderCodexThinking(state: AssistantMessageState, message: AssistantMes
       const hasVisibleContentAfter = content.slice(i + 1).some(isVisibleBlock);
       if (thinkingExpanded) {
         // Expanded: Pi's full italic thinking markdown, transforms included.
-        state.contentContainer.addChild(
-          new Markdown(run.joined, state.outputPad, 0, state.markdownTheme, {
+        addChild(
+          new Markdown(run.joined, context.outputPad, 0, context.markdownTheme, {
             color: (text: string) => theme.fg("thinkingText", text),
             italic: true,
           }, {
-            transform: composeTransform("assistant-thinking", streaming, state.markdownTransformers),
+            transform: (markdown: string) => context.transform("assistant-thinking", markdown),
           }),
         );
       } else if (streaming && !run.closed) {
         // Live tail: gray dot + ticking duration, single most recent line.
         const timing = liveRuns[runIndex];
-        state.contentContainer.addChild(
+        addChild(
           new ThinkingRow({
             live: true,
             elapsedMs: timing ? Date.now() - timing.startedAt : undefined,
@@ -540,8 +530,8 @@ function renderCodexThinking(state: AssistantMessageState, message: AssistantMes
         } else {
           durationMs = committed?.durations[runIndex];
         }
-        const summary = resolveClosedSummary(message, runIndex, run, streaming, state);
-        state.contentContainer.addChild(
+        const summary = resolveClosedSummary(message, runIndex, run, streaming, context);
+        addChild(
           new ThinkingRow({
             live: false,
             durationMs,
@@ -550,7 +540,7 @@ function renderCodexThinking(state: AssistantMessageState, message: AssistantMes
         );
       }
       if (hasVisibleContentAfter) {
-        state.contentContainer.addChild(new Spacer(1));
+        addChild(new Spacer(1));
       }
     } else {
       // An all-empty thinking run: consume it silently, exactly like Pi.
@@ -559,106 +549,52 @@ function renderCodexThinking(state: AssistantMessageState, message: AssistantMes
     }
   }
 
-  // Mirror Pi's stop-reason/error rows (render() reads hasToolCalls for OSC).
-  const hasToolCalls = content.some((c) => c.type === "toolCall");
-  state.hasToolCalls = hasToolCalls;
-  if (message.stopReason === "length") {
-    state.contentContainer.addChild(new Spacer(1));
-    state.contentContainer.addChild(
-      new Text(theme.fg("error", "Response was truncated before completion."), state.outputPad, 0),
-    );
-  } else if (!hasToolCalls) {
-    if (message.stopReason === "aborted") {
-      const abortMessage =
-        message.errorMessage && message.errorMessage !== "Request was aborted" ? message.errorMessage : "Operation aborted";
-      state.contentContainer.addChild(new Spacer(1));
-      state.contentContainer.addChild(new Text(theme.fg("error", abortMessage), state.outputPad, 0));
-    } else if (message.stopReason === "error") {
-      const errorMsg = message.errorMessage || "Unknown error";
-      state.contentContainer.addChild(new Spacer(1));
-      state.contentContainer.addChild(new Text(theme.fg("error", `Error: ${errorMsg}`), state.outputPad, 0));
-    }
-  }
-}
-
-/** Install the Codex thinking renderer on AssistantMessageComponent. */
-function installAssistantMessagePatch(): void {
-  const prototype = AssistantMessageComponent.prototype as unknown as Record<PropertyKey, unknown>;
-  if (typeof prototype.updateContent !== "function" || prototype[ASSISTANT_ORIGINAL]) return;
-  const originalUpdateContent = prototype.updateContent as (
-    this: AssistantMessageState,
-    message?: AssistantMessageLike,
-    isStreaming?: boolean,
-  ) => void;
-  prototype[ASSISTANT_ORIGINAL] = originalUpdateContent;
-
-  prototype.updateContent = function (this: AssistantMessageState, message?: AssistantMessageLike, isStreaming?: boolean) {
-    const streaming = isStreaming ?? this.isStreaming;
-    // message_start renders a thinking-less partial: the reliable per-message
-    // reset point for the live timing/summary arrays (partial copies have no
-    // stable identity across deltas).
-    if (streaming && message && !hasThinkingContent(message)) {
-      liveRuns = [];
-      liveSummaries = [];
-      livePending = [];
-      lastPartialMessage = undefined;
-      lastLiveComponent = undefined;
-    }
-    if (!message || !hasThinkingContent(message) || !resolveTheme()) {
-      originalUpdateContent.call(this, message, streaming);
-      return;
-    }
-    try {
-      renderCodexThinking(this, message, streaming);
-    } catch {
-      // Unexpected message/component shape: keep Pi's default rendering.
-      originalUpdateContent.call(this, message, streaming);
-    }
-  };
+  // Pi's stop-reason/error rows, so a truncated or failed turn still says so.
+  context.renderStopReason(message);
 }
 
 /**
- * ctrl+t reinterpreted: flip this module's expansion flag, then reuse Pi's
- * original toggle (chat rebuild + streaming-component refresh + persistence)
- * so every rendered message immediately reflects the new state.
+ * The `registerAssistantMessageRenderer` entry: messages that carry thinking get
+ * the Codex rows; everything else stays with the default renderer.
+ *
+ * The context object stands in for the component: the host creates one per
+ * render pass and the live timing commit only needs a stable "is this still the
+ * streaming component" check, which the host's own isStreaming flag also
+ * agrees with.
  */
-function installThinkingTogglePatch(): void {
-  const prototype = InteractiveMode.prototype as unknown as Record<PropertyKey, unknown>;
-  const original = prototype.toggleThinkingBlockVisibility;
-  if (typeof original !== "function" || prototype[MODE_TOGGLE_ORIGINAL]) return;
-  prototype[MODE_TOGGLE_ORIGINAL] = original;
-
-  prototype.toggleThinkingBlockVisibility = function (this: InteractiveModeState) {
-    thinkingExpanded = !thinkingExpanded;
-    (original as (this: InteractiveModeState) => void).call(this);
+function registerThinkingRenderer(pi: ModuleRenderingSurface): void {
+  pi.registerAssistantMessageRenderer((message, context) => {
+    if (!hasThinkingContent(message) || !resolveTheme()) return false;
+    // message_start renders a thinking-less partial: the reliable per-message
+    // reset point for the live timing/summary arrays (partial copies have no
+    // stable identity across deltas).
     try {
-      this.showStatus?.(
-        thinkingExpanded ? "Thinking expanded · ctrl+t to collapse" : "Thinking collapsed · ctrl+t to expand",
-      );
+      renderCodexThinking(context, message, context.isStreaming);
+      return true;
     } catch {
-      // The status line is cosmetic.
+      // Unexpected message shape: keep Pi's default rendering.
+      return false;
     }
-  };
+  });
 }
 
-/** Drop the "hide-thinking" entry from every rendered settings list. */
-function installSettingsFilterPatch(): void {
-  const prototype = SettingsList.prototype as unknown as Record<PropertyKey, unknown>;
-  const original = prototype.render;
-  if (typeof original !== "function" || prototype[SETTINGS_LIST_ORIGINAL]) return;
-  prototype[SETTINGS_LIST_ORIGINAL] = original;
-
-  prototype.render = function (this: SettingsListState, width: number): string[] {
-    try {
-      if (Array.isArray(this.items) && this.items.some((item) => item?.id === HIDE_THINKING_ID)) {
-        this.items = this.items.filter((item) => item?.id !== HIDE_THINKING_ID);
-        this.filteredItems = this.items;
-      }
-    } catch {
-      // Keep the original list on any unexpected shape.
-    }
-    return (original as (this: SettingsListState, width: number) => string[]).call(this, width);
-  };
+/**
+ * ctrl+t reinterpreted: flip this module's expansion flag, then hand the toggle
+ * back to the core so every rendered message repaints. `registerShortcut` owns
+ * the key, so the core's own ctrl+t still toggles the now-superseded
+ * "hide thinking" setting for users who do not run pi-ui.
+ */
+function installThinkingToggle(pi: ModuleCommandsSurface): void {
+  pi.registerShortcut("ctrl+t", {
+    description: "Toggle Codex-style thinking rows",
+    handler: (ctx) => {
+      thinkingExpanded = !thinkingExpanded;
+      ctx.ui.notify(
+        thinkingExpanded ? "Thinking expanded · ctrl+t to collapse" : "Thinking collapsed · ctrl+t to expand",
+        "info",
+      );
+    },
+  });
 }
 
 /**
@@ -667,13 +603,18 @@ function installSettingsFilterPatch(): void {
  * summary model context are registered once. The theme is refreshed on every
  * TUI session_start so theme switches are followed via the live proxy.
  */
-export function installThinkingDisplay(pi?: ModuleRenderingSurface & ModuleEventsSurface, theme?: Theme): void {
+export function installThinkingDisplay(
+  pi?: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
+  theme?: Theme,
+): void {
   if (theme) activeTheme = theme;
-  installAssistantMessagePatch();
-  installThinkingTogglePatch();
-  installSettingsFilterPatch();
   if (pi && !eventsRegistered) {
     eventsRegistered = true;
+    registerThinkingRenderer(pi);
+    installThinkingToggle(pi);
+    // The core "Hide thinking" row is superseded by the collapsed Codex rows
+    // above; drop the now-misleading entry from the settings list.
+    pi.unregisterSettingsItem(HIDE_THINKING_ID);
     // Keep the freshest model context for summary generation. message_update
     // fires throughout streaming, so latestCtx.model tracks model switches.
     pi.on("message_update", (_event, ctx) => {

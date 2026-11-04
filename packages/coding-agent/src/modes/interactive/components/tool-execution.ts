@@ -10,14 +10,21 @@ import {
 	type TUI,
 	type TuiMouseEvent,
 } from "@nanopi/pi-tui";
-import type { ToolDefinition, ToolRenderContext, ToolRenderers } from "../../../core/modules/types.ts";
+import type {
+	ToolDefinition,
+	ToolRenderContext,
+	ToolRenderers,
+	ToolRenderResultOptions,
+	ToolRowRenderContext,
+	ToolRowRenderers,
+} from "../../../core/modules/types.ts";
 
 /** What this component needs from a tool: how to draw it, without executing it. */
 export type { ToolRenderers };
 
 import { formatToolCallWithArgs, getTextOutput as getRenderedTextOutput } from "../../../core/tools/render-utils.ts";
 import { ensurePngTranscoder } from "../../../utils/image-convert.ts";
-import { theme } from "../theme/theme.ts";
+import { type Theme, theme } from "../theme/theme.ts";
 import { keyHint } from "./keybinding-hints.ts";
 
 const FALLBACK_PREVIEW_LINES = 10;
@@ -26,6 +33,12 @@ export interface ToolExecutionOptions {
 	showImages?: boolean;
 	imageWidthCells?: number;
 	outputPad?: number;
+	/**
+	 * Renderers for this call, already resolved through the session's
+	 * `registerToolRowRenderer` resolvers. Without them the component draws the
+	 * row from the tool definition it was constructed with.
+	 */
+	rowRenderers?: ToolRowRenderers;
 }
 
 export class ToolExecutionComponent extends Container {
@@ -37,6 +50,8 @@ export class ToolExecutionComponent extends Container {
 	private callRendererComponent?: Component;
 	private resultRendererComponent?: Component;
 	private rendererState: any = {};
+	private rowRenderers?: ToolRowRenderers;
+	private hideRequested = false;
 	private imageComponents: Image[] = [];
 	/** Inputs of imageComponents, so updateDisplay can reuse images and keep their converted PNG data. */
 	private imageSources: Array<{ data: string; mimeType: string; widthCells: number }> = [];
@@ -76,6 +91,7 @@ export class ToolExecutionComponent extends Container {
 		this.toolCallId = toolCallId;
 		this.args = args;
 		this.toolDefinition = toolDefinition;
+		this.rowRenderers = options.rowRenderers;
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
 		this.outputPad = options.outputPad ?? 1;
@@ -101,20 +117,46 @@ export class ToolExecutionComponent extends Container {
 		this.updateDisplay();
 	}
 
-	private getCallRenderer(): ToolDefinition<any, any>["renderCall"] | undefined {
-		return this.toolDefinition?.renderCall;
+	private getCallRenderer(): ((args: unknown, theme: Theme, context: ToolRowRenderContext) => Component) | undefined {
+		return this.rowRenderers?.renderCall ?? this.toolDefinition?.renderCall;
 	}
 
-	private getResultRenderer(): ToolDefinition<any, any>["renderResult"] | undefined {
-		return this.toolDefinition?.renderResult;
+	private getResultRenderer():
+		| ((
+				result: { content: any; details?: unknown },
+				options: ToolRenderResultOptions,
+				theme: Theme,
+				context: ToolRowRenderContext,
+		  ) => Component)
+		| undefined {
+		return (this.rowRenderers?.renderResult ?? this.toolDefinition?.renderResult) as
+			| ((
+					result: { content: any; details?: unknown },
+					options: ToolRenderResultOptions,
+					theme: Theme,
+					context: ToolRowRenderContext,
+			  ) => Component)
+			| undefined;
 	}
 
 	private hasRendererDefinition(): boolean {
-		return this.toolDefinition !== undefined;
+		return this.toolDefinition !== undefined || this.rowRenderers !== undefined;
 	}
 
 	private getRenderShell(): "default" | "self" {
-		return this.toolDefinition?.renderShell ?? "default";
+		return this.rowRenderers?.renderShell ?? this.toolDefinition?.renderShell ?? "default";
+	}
+
+	/** A tool-row renderer sees the row it belongs to; the tool definition renderers do not. */
+	private getRowRenderContext(lastComponent: Component | undefined): ToolRowRenderContext {
+		return {
+			...this.getRenderContext(lastComponent),
+			toolName: this.toolName,
+			lastComponent,
+			hide: () => {
+				this.hideRequested = true;
+			},
+		};
 	}
 
 	private getRenderContext(lastComponent: Component | undefined): ToolRenderContext {
@@ -278,6 +320,7 @@ export class ToolExecutionComponent extends Container {
 
 		let hasContent = false;
 		this.hideComponent = false;
+		this.hideRequested = false;
 		if (this.hasRendererDefinition()) {
 			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
 			if (renderContainer instanceof Box) {
@@ -292,7 +335,7 @@ export class ToolExecutionComponent extends Container {
 				hasContent = true;
 			} else {
 				try {
-					const component = callRenderer(this.args, theme, this.getRenderContext(this.callRendererComponent));
+					const component = callRenderer(this.args, theme, this.getRowRenderContext(this.callRendererComponent));
 					this.callRendererComponent = component;
 					renderContainer.addChild(this.createResultRegion(component));
 					hasContent = true;
@@ -317,7 +360,7 @@ export class ToolExecutionComponent extends Container {
 							{ content: this.result.content as any, details: this.result.details },
 							{ expanded: this.expanded, isPartial: this.isPartial },
 							theme,
-							this.getRenderContext(this.resultRendererComponent),
+							this.getRowRenderContext(this.resultRendererComponent),
 						);
 						this.resultRendererComponent = component;
 						renderContainer.addChild(this.createResultRegion(component));
@@ -386,7 +429,7 @@ export class ToolExecutionComponent extends Container {
 			}
 		}
 
-		if (this.hasRendererDefinition() && !hasContent && this.imageComponents.length === 0) {
+		if (this.hasRendererDefinition() && (!hasContent || this.hideRequested) && this.imageComponents.length === 0) {
 			this.hideComponent = true;
 		}
 	}

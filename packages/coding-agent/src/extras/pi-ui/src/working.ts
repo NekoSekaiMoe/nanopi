@@ -1,6 +1,14 @@
 /** Animated omp-style status shimmer and elapsed transcript row. */
 
-import type { ModuleApi, ModuleContext, Theme, WorkingIndicatorOptions, ModuleRenderingSurface, ModuleEventsSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
+import type {
+  ModuleActionsSurface,
+  ModuleContext,
+  ModuleEventsSurface,
+  ModuleRenderingSurface,
+  Theme,
+  WorkingIndicatorOptions,
+  WorkingIndicatorRenderer,
+} from "@nanopi/pi-coding-agent";
 import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import {
@@ -11,12 +19,7 @@ import {
   type SweepState,
 } from "./shimmer.ts";
 
-// ~30fps so the fixed-velocity band (30 cells/s) advances <= 1 cell per frame,
-// matching omp's loader cadence.
-const INTERVAL_MS = 1000 / 30;
-const FRAME_MS = INTERVAL_MS;
 const ELAPSED_ENTRY_TYPE = "pi-ui-elapsed";
-const LOADER_ORIGINAL_UPDATE = Symbol.for("@NekoSekaiMoe/pi-ui:loader-original-update");
 const MAX_STEP_CHARS = 48;
 /** Below this many step characters the fold marker costs more than it explains. */
 const MIN_STEP_CHARS = 12;
@@ -24,7 +27,7 @@ const MIN_STEP_CHARS = 12;
 const ROW_PREFIX_COLS = 4;
 const HINT_SUFFIX = " · esc to interrupt)";
 
-/** Theme captured from the latest event context, for the Loader prototype patch. */
+/** Theme captured from the latest event context. */
 let activeTheme: Theme | undefined;
 /** Terminal width captured from the footer factory; the working row is one line. */
 let terminalColumns = 0;
@@ -36,10 +39,6 @@ let terminalColumns = 0;
  */
 export function captureTerminalWidth(columns: number): void {
   terminalColumns = columns;
-}
-
-function indicator(): WorkingIndicatorOptions {
-  return { frames: [fgRgb("·", [34, 197, 94])], intervalMs: INTERVAL_MS };
 }
 
 function formatElapsed(milliseconds: number): string {
@@ -117,7 +116,7 @@ function currentPlanStep(): PlanStep | undefined {
   };
 }
 
-/** Exported for the pi-ui tests; the frame loop is the only production caller. */
+/** Exported for the pi-ui tests; the working row renderer is the only production caller. */
 export function workingMessage(theme: Theme, elapsedMs: number, sweep: SweepState, dtMs: number): string {
   const step = currentPlanStep();
   // While a todo plan is being implemented, the step list replaces the word
@@ -139,94 +138,44 @@ export function workingMessage(theme: Theme, elapsedMs: number, sweep: SweepStat
   return truncateToWidth(line, terminalColumns - 1, "…");
 }
 
-type LoaderUpdate = (this: StatusLoaderState) => void;
-
-interface StatusLoaderState {
-  kind?: unknown;
-  message?: unknown;
-  setText(text: string): void;
-  ui?: { requestRender?: () => void } | null;
-}
-
-function installStatusGradients(): () => void {
-  const noop = () => {};
-  try {
-    const prototype = Loader.prototype as unknown as Record<PropertyKey, unknown>;
-    const currentUpdate = prototype.updateDisplay;
-    if (typeof currentUpdate !== "function") return noop;
-
-    const originalUpdate =
-      (prototype[LOADER_ORIGINAL_UPDATE] as LoaderUpdate | undefined) ?? currentUpdate as LoaderUpdate;
-    const patchedUpdate: LoaderUpdate = function (this: StatusLoaderState): void {
-      const message = typeof this.message === "string" ? this.message : "";
-      const isRetryOrCompaction =
-        this.kind === "retry" ||
-        this.kind === "compaction" ||
-        message.startsWith("Retrying (") ||
-        message.includes("Compacting context...") ||
-        message.includes("Auto-compacting...");
-      if (!isRetryOrCompaction) {
-        originalUpdate.call(this);
-        return;
-      }
-
-      const word = activeTheme ? shimmerText(message, activeTheme) : message;
-      this.setText(`${fgRgb("·", [34, 197, 94])} ${word}`);
-      this.ui?.requestRender?.();
-    };
-
-    prototype[LOADER_ORIGINAL_UPDATE] = originalUpdate;
-    prototype.updateDisplay = patchedUpdate;
-    return () => {
-      if (prototype.updateDisplay === patchedUpdate) prototype.updateDisplay = originalUpdate;
-    };
-  } catch {
-    // Keep Pi's default status colors if Loader internals change.
-    return noop;
-  }
-}
-
-export function installWorking(pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleActionsSurface): () => void {
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  let startedAt: number | undefined;
-  let lastFrameAt = 0;
-  let nextFrameAt = 0;
-  // Band phase accumulator: decoupled from Date.now() so text-width changes
-  // ("9s" -> "10s", "59s" -> "1m 0s") never teleport the sweep.
+/**
+ * The working line, as a `registerWorkingIndicator` row. The core hands the
+ * row its message, elapsed time, and width, so this module no longer needs to
+ * drive `setWorkingMessage` on a frame timer or patch Loader.
+ */
+function workingRowRenderer(): WorkingIndicatorRenderer {
   const sweep: SweepState = { phase: 0, canvas: 0 };
-  const restoreStatusGradients = installStatusGradients();
-
-  const stop = () => {
-    if (!timer) return;
-    clearTimeout(timer);
-    timer = undefined;
-  };
-
-  // Self-realigning frame chain on a fixed grid anchored at animation start.
-  // Unlike setInterval, a blocked event loop never queues catch-up bursts
-  // (which coalesce into one paint and make the band jump); missed slots are
-  // skipped, and the grid re-anchors after a long stall.
-  const scheduleFrame = (ctx: ModuleContext) => {
-    if (timer) return;
-    const now = Date.now();
-    if (nextFrameAt < now - FRAME_MS) nextFrameAt = now;
-    const delay = Math.max(0, nextFrameAt - now);
-    nextFrameAt += FRAME_MS;
-    timer = setTimeout(() => {
-      timer = undefined;
-      frame(ctx);
-    }, delay);
-  };
-
-  const frame = (ctx: ModuleContext) => {
-    const now = Date.now();
-    const dt = Math.max(0, now - lastFrameAt);
-    lastFrameAt = now;
-    if (startedAt !== undefined) {
-      ctx.ui.setWorkingMessage(workingMessage(ctx.ui.theme, now - startedAt, sweep, dt));
+  return (state, theme) => {
+    if (state.placement === "none") return { text: "", hidden: true };
+    // The host's message is `setWorkingMessage()`, or the default
+    // "Working (0s · esc to interrupt)" when nothing set one. A todo plan
+    // replaces the word "Working" with the current step.
+    const step = currentPlanStep();
+    const label = step ? `${step.done}/${step.total} ${step.text}` : "Working";
+    const hint = ` (${formatElapsed(state.elapsedMs)} · esc to interrupt)`;
+    const line = shimmerSegmentsAnimated(
+      [
+        { text: label, palette: MAIN_SHIMMER_PALETTE },
+        { text: hint, palette: HINT_SHIMMER_PALETTE },
+      ],
+      theme,
+      sweep,
+      state.dtMs,
+    );
+    const columns = state.columns > 0 ? state.columns : terminalColumns;
+    if (columns > 0 && visibleWidth(line) > columns - 1) {
+      return { text: truncateToWidth(line, columns - 1, "…") };
     }
-    scheduleFrame(ctx);
+    return { text: line };
   };
+}
+
+export function installWorking(
+  pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleActionsSurface,
+): () => void {
+  let startedAt: number | undefined;
+
+  pi.registerWorkingIndicator(workingRowRenderer());
 
   pi.registerEntryRenderer(ELAPSED_ENTRY_TYPE, (entry, _options, theme) => {
     const data = entry.data as { elapsedMs?: unknown } | undefined;
@@ -238,7 +187,6 @@ export function installWorking(pi: ModuleRenderingSurface & ModuleEventsSurface 
     planTodos = [];
     if (ctx.mode !== "tui") return;
     activeTheme = ctx.ui.theme;
-    ctx.ui.setWorkingIndicator(indicator());
   });
 
   // Mirror the todo extension's plan from its result details. The tool's own
@@ -250,36 +198,21 @@ export function installWorking(pi: ModuleRenderingSurface & ModuleEventsSurface 
   pi.on("agent_start", (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     activeTheme = ctx.ui.theme;
-    if (startedAt === undefined) {
-      startedAt = Date.now();
-      sweep.phase = 0;
-      sweep.canvas = 0;
-      lastFrameAt = startedAt;
-      nextFrameAt = startedAt + FRAME_MS;
-    }
-    ctx.ui.setWorkingIndicator(indicator());
-    if (startedAt !== undefined) {
-      ctx.ui.setWorkingMessage(workingMessage(ctx.ui.theme, Date.now() - startedAt, sweep, 0));
-    }
-    scheduleFrame(ctx);
+    if (startedAt === undefined) startedAt = Date.now();
   });
 
   pi.on("agent_settled", (_event, ctx) => {
-    stop();
     if (ctx.mode !== "tui") return;
     if (startedAt !== undefined) {
       pi.appendEntry(ELAPSED_ENTRY_TYPE, { elapsedMs: Date.now() - startedAt });
       startedAt = undefined;
     }
-    ctx.ui.setWorkingMessage();
   });
 
   const cleanup = () => {
-    stop();
     startedAt = undefined;
     planTodos = [];
     activeTheme = undefined;
-    restoreStatusGradients();
   };
 
   pi.on("session_shutdown", cleanup);

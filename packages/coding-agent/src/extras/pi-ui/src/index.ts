@@ -8,8 +8,8 @@
  *     context, token, and cost data,
  *   - an animated "Working (Ns · esc to interrupt)" shimmer,
  *   - flat Codex-style tool-call rows (`● Ran <cmd>` / `└ <output>`) for the
- *     built-in tools, and automatically for every other tool via a renderer
- *     lookup redirect on ToolExecutionComponent.
+ *     built-in tools, and automatically for every other tool via
+ *     registerToolRowRenderer.
  *   - subagent-widget.ts -> the "• Exploring" group: read/ls/grep/find and
  *     subagent calls drop their own rows (see tools.ts) and render as one
  *     block over their actions
@@ -19,31 +19,48 @@
  *     settings entry
  *
  * Wiring only. Each concern lives in its own module and is installed against
- * documented ModuleApi / ModuleUIContext methods:
+ * documented ModuleApi / ModuleUIContext methods — no component prototypes are
+ * patched:
  *   - editor: none — the default composer stays; input frame and menu
  *     direction belong to the core TUI, not the reskin
  *   - footer.ts   -> ctx.ui.setFooter() status toolbar with right-aligned
  *     extension statuses (ctx.ui.setStatus channel) and shell-mode label
- *   - thinking.ts -> AssistantMessageComponent/InteractiveMode/SettingsList
- *     prototype patches (process-lifetime, like the tool renderer redirect)
- *   - working.ts  -> pi.on(agent_start/settled) + setWorkingIndicator/Message
- *     (also mirrors @zhushanwen/pi-todo steps into the Working line)
- *   - tools.ts    -> pi.registerTool() (overrides built-ins by name)
+ *   - thinking.ts -> pi.registerAssistantMessageRenderer() for the row body,
+ *     pi.registerShortcut("ctrl+t") for expansion, and
+ *     pi.unregisterSettingsItem("hide-thinking") to retire the superseded row
+ *   - working.ts  -> pi.registerWorkingIndicator() (also mirrors
+ *     @zhushanwen/pi-todo steps into the Working line)
+ *   - tools.ts    -> pi.registerTool() (overrides built-ins by name),
+ *     pi.registerToolRowRenderer() for everything else, and
+ *     pi.registerShellRenderer() for `!` command rows
  *
  * The todo extension's own plan widget is suppressed here (suppressTodoWidget)
- * because the Working line already tracks the current step.
+ * because the Working line already tracks the current step. That is a policy
+ * call between two modules over the documented setWidget API, not a patch.
  *
- * pi.on handlers (tools, working) are registered ONCE at load so they don't
- * stack across session switches/reloads. The per-session setter (footer) is
- * rather than accumulate. Everything visual is guarded to ctx.mode === "tui";
- * other modes (rpc/print/json) keep Pi's defaults.
+ * Registrations on pi are made ONCE at load so they don't stack across session
+ * switches/reloads. The per-session setter (footer) is a replacing setter
+ * rather than an accumulating registration, so calling it per start is safe.
+ * Everything visual is guarded to ctx.mode === "tui"; other modes
+ * (rpc/print/json) keep Pi's defaults.
  *
  * Usage:
  *   pi -e ./src/index.ts
  *   pi install npm:@NekoSekaiMoe/pi-ui
  */
 
-import type { ModuleApi, ModuleUIContext, Theme, ThemeColor, ModuleEventsSurface, ModuleToolsSurface, ModuleRenderingSurface, ModuleActionsSurface } from "@nanopi/pi-coding-agent";
+import type {
+  ModuleApi,
+  ModuleUIContext,
+  Theme,
+  ThemeColor,
+  ModuleCommandsSurface,
+  ModuleEventsSurface,
+  ModuleToolsSurface,
+  ModuleRenderingSurface,
+  ModuleActionsSurface,
+  ModuleSettingsSurface,
+} from "@nanopi/pi-coding-agent";
 import { installFooter } from "./footer.ts";
 import { FRAME_STOPS, gradientText } from "./gradient.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
@@ -101,9 +118,11 @@ function installResourceHeadingGradient(themeProxy: Theme): void {
 }
 
 export default function (pi: ModuleEventsSurface &
-	ModuleToolsSurface &
-	ModuleRenderingSurface &
-	ModuleActionsSurface) {
+  ModuleToolsSurface &
+  ModuleRenderingSurface &
+  ModuleActionsSurface &
+  ModuleCommandsSurface &
+  ModuleSettingsSurface) {
   // Patch renderer lookup before any restored tool components are created.
   // This changes only presentation; extension-owned execute functions remain
   // registered and invoked as-is. The patch covers every tool pi-ui does not
@@ -114,7 +133,8 @@ export default function (pi: ModuleEventsSurface &
   // (/resume, /new, fork), and restoring there would silently revert
   // grep/find/web_search/etc. to Pi's bordered default for the rest of the
   // process, since nothing reinstalls the patch between sessions.
-  installExternalToolRenderers();
+  installExternalToolRenderers(pi);
+  installShellRenderer(pi);
 
   // Codex-style thinking rows in tool-row style ("• Thinking Ns" + latest
   // line while streaming, "• Thought for Ns" + the model's own one-sentence
@@ -128,10 +148,8 @@ export default function (pi: ModuleEventsSurface &
   // live header under the editor closes when a turn stops exploring. The
   // history rows need an explicit message renderer: the default custom-message
   // panel would wrap each one in a `[pi-ui-exploring]` box.
-  installExploringBlock(pi);
+  installExploringBlock(pi as unknown as ModuleApi);
   pi.registerMessageRenderer(EXPLORING_MESSAGE_TYPE, exploringHistoryRenderer);
-
-  let restoreShellRenderer = () => {};
 
   // Register Codex-style tool renderers at load time. Most built-ins are
   // overridden by name; grep/find use the renderer-only prototype redirect so
@@ -157,15 +175,10 @@ export default function (pi: ModuleEventsSurface &
     installThinkingDisplay(pi, ctx.ui.theme);
     suppressTodoWidget(ctx.ui);
     skinSubagentWidget(ctx.ui);
-    restoreShellRenderer();
-    restoreShellRenderer = installShellRenderer(ctx.ui.theme);
     installFooter(ctx);
     // The working row is one line inside the editor frame, so it needs the
     // width to fold its own label instead of wrapping onto a second line.
     captureTerminalWidth(process.stdout.columns || 0);
   });
 
-  pi.on("session_shutdown", () => {
-    restoreShellRenderer();
-  });
 }

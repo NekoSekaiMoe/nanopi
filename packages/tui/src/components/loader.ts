@@ -61,6 +61,11 @@ export class Loader extends Text {
 		this.updateDisplay();
 	}
 
+	/** The text set with `setMessage`, for a subclass that draws its own row. */
+	getMessage(): string {
+		return this.message;
+	}
+
 	override invalidate(): void {
 		super.invalidate();
 		this.updateDisplay();

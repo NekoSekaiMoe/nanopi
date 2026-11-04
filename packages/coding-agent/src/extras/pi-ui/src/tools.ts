@@ -1,6 +1,6 @@
 /** Flat Codex-style renderers for Pi's built-in and selected extension tools. */
 
-import type { ModuleApi, ToolDefinition, ModuleRenderingSurface, ModuleToolsSurface } from "../../../core/modules/types.ts";
+import type { ModuleRenderingSurface, ModuleToolsSurface, ToolDefinition } from "../../../core/modules/types.ts";
 import { createEditToolDefinition } from "../../../core/tools/edit.ts";
 import type { AgentToolResult, ToolRenderResultOptions } from "@nanopi/pi-coding-agent";
 import { Text } from "@nanopi/pi-tui";
@@ -15,7 +15,6 @@ import { createWriteToolDefinition } from "../../../core/tools/write.ts";
 import type { Theme } from "../../../modes/interactive/theme/theme.ts";
 import { renderDiff } from "../../../modes/interactive/components/diff.ts";
 import { BashExecutionComponent } from "../../../modes/interactive/components/bash-execution.ts";
-import { ToolExecutionComponent } from "../../../modes/interactive/components/tool-execution.ts";
 import { generateDiffString } from "../../../core/tools/edit-diff.ts";
 
 interface RowConfig {
@@ -34,19 +33,6 @@ interface RenderContext {
   args?: unknown;
   state?: Record<string, unknown>;
 }
-
-interface BashComponentState {
-  status?: "running" | "complete" | "error" | "cancelled";
-  exitCode?: number;
-  expanded?: boolean;
-  getCommand(): string;
-  getOutput(): string;
-}
-
-type ComponentRender = (this: BashComponentState, width: number) => string[];
-
-const SHELL_ORIGINAL_RENDER = Symbol.for("@NekoSekaiMoe/pi-ui:bash-render");
-const TOOL_EXECUTION_ORIGINALS = Symbol.for("@NekoSekaiMoe/pi-ui:tool-execution-renderers");
 
 const ANSI_PATTERN = /\x1b\[[0-?]*[ -/]*[@-~]/g;
 export const DOT_RUNNING: readonly [number, number, number] = [148, 148, 158];
@@ -465,75 +451,31 @@ function withWriteDiff(
   return { ...definition, execute: executeWithDiff };
 }
 
-function renderShellExecution(component: BashComponentState, width: number, theme: Theme): string[] {
-  if (width <= 0) return [];
-
-  const status = component.status;
-  if (!status) throw new Error("Unsupported BashExecutionComponent state");
-  const isPartial = status === "running";
-  const isError = status === "error";
-  const title = renderTitle(
-    ROWS.bash!,
-    { command: component.getCommand() },
-    { isPartial, isError, lastComponent: undefined },
-    theme,
-  );
-
-  let content = title;
-  if (!isPartial) {
-    let output = component.getOutput().replace(ANSI_PATTERN, "").trim();
-    if (!output && status === "error") output = `(exit ${component.exitCode ?? "?"})`;
-    if (!output && status === "cancelled") output = "(cancelled)";
-    content += `\n${renderOutputText(output, component.expanded === true, theme, SHELL_PREVIEW_LINES)}`;
-  }
-
-  // BashExecutionComponent normally starts with a spacer. Preserve that rhythm
-  // while replacing its bordered body with the same flat rows as tool calls.
-  return ["", ...new Text(content, 0, 0).render(width)];
-}
-
 /**
- * User `!` commands are rendered by Pi's separate BashExecutionComponent, so
- * tool renderers cannot affect them. The component is exported by Pi, but its
- * shell is not otherwise configurable; replace only render() and retain the
- * original as a compatibility fallback when its shape changes.
+ * User `!` commands are rendered by a separate BashExecutionComponent, which
+ * tool renderers cannot reach. A shell row renderer replaces its bordered body
+ * with the same flat rows the bash tool uses.
  */
-export function installShellRenderer(theme: Theme): () => void {
-  const noop = () => {};
-  try {
-    const prototype = BashExecutionComponent.prototype as unknown as Record<PropertyKey, unknown>;
-    const currentRender = prototype.render;
-    if (typeof currentRender !== "function") return noop;
-
-    const originalRender = (prototype[SHELL_ORIGINAL_RENDER] as ComponentRender | undefined) ?? currentRender;
-    prototype[SHELL_ORIGINAL_RENDER] = originalRender;
-    const patchedRender: ComponentRender = function (this: BashComponentState, width: number): string[] {
-      try {
-        return renderShellExecution(this, width, theme);
-      } catch {
-        return originalRender.call(this, width);
-      }
-    };
-    prototype.render = patchedRender;
-    return () => {
-      if (prototype.render === patchedRender) prototype.render = originalRender;
-    };
-  } catch {
-    // Keep Pi's bordered shell when this internal component changes shape.
-    return noop;
-  }
-}
-
-interface ToolExecutionState {
-  toolName?: string;
-  /** Internal flag honored by render(): true hides the whole component row. */
-  hideComponent?: boolean;
-}
-
-interface ToolExecutionOriginals {
-  getCallRenderer: (this: ToolExecutionState) => unknown;
-  getResultRenderer: (this: ToolExecutionState) => unknown;
-  getRenderShell: (this: ToolExecutionState) => unknown;
+export function installShellRenderer(pi: ModuleRenderingSurface): void {
+  pi.registerShellRenderer((state, next, theme) => {
+    const title = renderTitle(
+      ROWS.bash!,
+      { command: state.command },
+      { isPartial: state.status === "running", isError: state.status === "error", lastComponent: undefined },
+      theme,
+    );
+    let content = title;
+    if (state.status !== "running") {
+      let output = state.output.replace(ANSI_PATTERN, "").trim();
+      if (!output && state.status === "error") output = `(exit ${state.exitCode ?? "?"})`;
+      if (!output && state.status === "cancelled") output = "(cancelled)";
+      content += `\n${renderOutputText(output, state.expanded, theme, SHELL_PREVIEW_LINES)}`;
+    }
+    const text = new Text(content, 0, 0);
+    // The bordered row starts with a spacer. Preserve that rhythm while
+    // replacing its body with the flat row.
+    return { invalidate: () => {}, render: (width: number) => ["", ...text.render(width)] };
+  });
 }
 
 /** Arg keys probed, in order, when deriving a primary label for unknown tools. */
@@ -678,94 +620,51 @@ function renderRedirectedResultText(
 
 /**
  * Every tool pi-ui does not re-register itself gets the flat Codex row through
- * this redirect, with no per-tool declaration required. Tools listed in ROWS
+ * this resolver, with no per-tool declaration required. Tools listed in ROWS
  * use their curated verbs; anything else (new extension tools, MCP tools, …)
- * falls back to a derived `Running <name>` row. Execute functions always stay
- * with the owning extension — only the renderer lookups on Pi's public
- * component class are redirected.
+ * falls back to a derived `Running <name>` row.
  *
- * This is a process-lifetime patch, like the registerTool() registrations:
- * session switches emit session_shutdown but must NOT restore it, otherwise
- * grep/find/web_search silently revert to Pi's bordered default until reload.
+ * `next()` is the row the tool's own definition would draw, so this only
+ * intercepts the tools pi-ui has not re-registered: their execute functions
+ * stay with the owning module, and the tool's own renderers keep winning for
+ * anything pi-ui ships itself.
  */
-export function installExternalToolRenderers(): () => void {
-  const noop = () => {};
-  try {
-    const prototype = ToolExecutionComponent.prototype as unknown as Record<PropertyKey, unknown> & ToolExecutionState;
-    const currentCall = prototype.getCallRenderer;
-    const currentResult = prototype.getResultRenderer;
-    const currentShell = prototype.getRenderShell;
-    if (
-      typeof currentCall !== "function" ||
-      typeof currentResult !== "function" ||
-      typeof currentShell !== "function"
-    ) return noop;
-
-    const originals =
-      (prototype[TOOL_EXECUTION_ORIGINALS] as ToolExecutionOriginals | undefined) ?? {
-        getCallRenderer: currentCall as ToolExecutionOriginals["getCallRenderer"],
-        getResultRenderer: currentResult as ToolExecutionOriginals["getResultRenderer"],
-        getRenderShell: currentShell as ToolExecutionOriginals["getRenderShell"],
-      };
-    prototype[TOOL_EXECUTION_ORIGINALS] = originals;
-
-    const patchedCall: ToolExecutionOriginals["getCallRenderer"] = function (this: ToolExecutionState): unknown {
-      const name = this.toolName;
-      if (typeof name !== "string" || isPiUiBuiltinTool(name)) return originals.getCallRenderer.call(this);
-      return (args: unknown, theme: Theme, context: RenderContext): Text => {
+export function installExternalToolRenderers(pi: ModuleRenderingSurface): void {
+  pi.registerToolRowRenderer((name, next) => {
+    if (isPiUiBuiltinTool(name)) return undefined;
+    return {
+      // Flat rows draw their own framing, exactly like the tools pi-ui
+      // re-registers with renderShell: "self".
+      renderShell: "self",
+      renderCall: (args, theme, context) => {
         const record = (args as Record<string, unknown>) ?? {};
         // Silent todo updates: hide the whole row; the Working line picks up
-        // the new step. updateDisplay resets this flag before each pass, and
-        // the result renderer re-shows the row when the call failed.
-        if (name === "todo" && record.action !== "add") this.hideComponent = true;
+        // the new step. updateDisplay re-evaluates this flag before each pass,
+        // and the result renderer re-shows the row when the call failed.
+        if (name === "todo" && record.action !== "add") context.hide();
         // An exploration call owns no row of its own: the tool_result joins it
         // to the "• Exploring" group. Its result body is suppressed the same
         // way (see renderRedirectedResultText), so the resolved call keeps
         // rendering as an empty group. An exploration call that fails has
         // nothing to join, so it falls back to a plain row.
-        if (isExploreTool(name) && !context.isError) this.hideComponent = true;
+        if (isExploreTool(name) && !context.isError) context.hide();
         const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
         text.setText(renderTitle(rowConfigFor(name), record, context, theme));
         return text;
-      };
-    };
-    const patchedResult: ToolExecutionOriginals["getResultRenderer"] = function (this: ToolExecutionState): unknown {
-      const name = this.toolName;
-      if (typeof name !== "string" || isPiUiBuiltinTool(name)) return originals.getResultRenderer.call(this);
-      return (
-        result: AgentToolResult<unknown>,
-        options: ToolRenderResultOptions,
-        theme: Theme,
-        context: RenderContext,
-      ): Text => {
+      },
+      renderResult: (result, options, theme, context) => {
         // A failed silent todo update still surfaces its error row.
-        if (name === "todo" && context.isError) this.hideComponent = false;
+        if (name === "todo" && context.isError) context.hide();
         const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
-        const content = name === "subagent"
-          ? renderExploredResult(result, options, theme)
-          : renderRedirectedResultText(name, result, options, theme, context.isError);
+        const content =
+          name === "subagent"
+            ? renderExploredResult(result, options, theme)
+            : renderRedirectedResultText(name, result, options, theme, context.isError);
         text.setText(content);
         return text;
-      };
+      },
     };
-    const patchedShell: ToolExecutionOriginals["getRenderShell"] = function (this: ToolExecutionState): unknown {
-      const name = this.toolName;
-      return typeof name === "string" && !isPiUiBuiltinTool(name) ? "self" : originals.getRenderShell.call(this);
-    };
-
-    prototype.getCallRenderer = patchedCall;
-    prototype.getResultRenderer = patchedResult;
-    prototype.getRenderShell = patchedShell;
-
-    return () => {
-      if (prototype.getCallRenderer === patchedCall) prototype.getCallRenderer = originals.getCallRenderer;
-      if (prototype.getResultRenderer === patchedResult) prototype.getResultRenderer = originals.getResultRenderer;
-      if (prototype.getRenderShell === patchedShell) prototype.getRenderShell = originals.getRenderShell;
-    };
-  } catch {
-    // Keep Pi's default component when its private method layout changes.
-    return noop;
-  }
+  });
 }
 
 function codexifyTool(name: string, cwd: string): ToolDefinition<any, any, any> | undefined {

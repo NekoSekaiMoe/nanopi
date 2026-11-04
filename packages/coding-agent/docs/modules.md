@@ -99,8 +99,35 @@ The narrow doors exist because the root barrel is a promise: every name in it is
 - `registerVirtualModel(...)` / `unregisterVirtualModel(...)` - a virtual model that routes to a physical one per request.
 - `registerBashOperations(id, operations)` + `setActiveBashOperations(id)` - route shell commands through a sandbox.
 - Renderers: `registerMessageRenderer`, `registerEntryRenderer`, `registerToolRenderer`, `registerMarkdownTransformer`.
+- Transcript rows the module does not own: `registerToolRowRenderer` (restyle, flatten, or hide the row of a tool another module registered), `registerShellRenderer` (`!` command rows), `registerAssistantMessageRenderer` (the body of an assistant message, e.g. its thinking rows).
+- Chrome: `registerWorkingIndicator` (the streaming working line), `registerSettingsItem` / `unregisterSettingsItem` (rows in the settings list, and retiring a core row a module supersedes).
 
 Registration failures are programming errors and surface as load errors; they do not silently skip the module.
+
+## Restyle a row you do not own
+
+`registerTool` replaces a tool, including its `execute`. When all you want is a
+different row, `registerToolRowRenderer` hands you the row for one call:
+
+```typescript
+nanopi.registerToolRowRenderer((toolName, next) => {
+	// `next()` is the row the remaining resolvers, then the tool itself, would draw.
+	if (!toolName.startsWith("mcp__")) return undefined;
+	const base = next();
+	return {
+		...base,
+		renderResult: (result, options, theme, context) => {
+			// context.toolName identifies the row; context.hide() folds it away.
+			return base?.renderResult?.(result, options, theme, context) ?? new Text("", 0, 0);
+		},
+	};
+});
+```
+
+The same shape covers the other rows a reskin needs: `registerShellRenderer`
+for `!` commands, `registerAssistantMessageRenderer` for an assistant message's
+body (return `false` to leave the message to the default renderer), and
+`registerWorkingIndicator` for the streaming working line.
 
 ## React to session events
 

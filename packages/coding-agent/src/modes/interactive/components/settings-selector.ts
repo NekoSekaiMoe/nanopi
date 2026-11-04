@@ -2,6 +2,7 @@ import type { ThinkingLevel } from "@nanopi/pi-agent-core";
 import { getSupportedThinkingLevels, type Model, type Transport } from "@nanopi/pi-ai";
 import { Container, getCapabilities, type SelectItem, type SettingItem, SettingsList } from "@nanopi/pi-tui";
 import { formatHttpIdleTimeoutMs, HTTP_IDLE_TIMEOUT_CHOICES } from "../../../core/http-dispatcher.ts";
+import type { ModuleSettingsItem } from "../../../core/modules/types.ts";
 import { SETTINGS_DEFAULTS } from "../../../core/settings-defaults.ts";
 import {
 	CACHE_WARMING_MODES,
@@ -72,6 +73,10 @@ export interface SettingsConfig {
 	defaultProjectTrust: DefaultProjectTrust;
 	clearOnShrink: boolean;
 	showTerminalProgress: boolean;
+	/** Rows contributed by modules through `registerSettingsItem()`. */
+	moduleItems?: readonly ModuleSettingsItem[];
+	/** Ids modules retired with `unregisterSettingsItem()`, applied to core rows too. */
+	removedItemIds?: ReadonlySet<string>;
 	warnings: WarningSettings;
 	/** Terminal height getter, so submenu lists fit a short terminal. */
 	getTerminalRows?: () => number;
@@ -108,6 +113,8 @@ export interface SettingsCallbacks {
 	onClearOnShrinkChange: (enabled: boolean) => void;
 	onShowTerminalProgressChange: (enabled: boolean) => void;
 	onWarningsChange: (warnings: WarningSettings) => void;
+	/** Apply a change to a row a module registered with `registerSettingsItem()`. */
+	onModuleSettingChange?: (id: string, value: string) => void;
 	onCancel: () => void;
 }
 
@@ -539,11 +546,27 @@ export class SettingsSelectorComponent extends Container {
 			values: ["true", "false"],
 		});
 
+		// Module-contributed rows go last: they extend the core list instead of
+		// interleaving with it, so a module cannot change where a core row sits.
+		for (const item of config.moduleItems ?? []) {
+			items.push({
+				id: item.id,
+				label: item.label,
+				description: item.description,
+				currentValue: item.currentValue,
+				values: [...item.values],
+			});
+		}
+
+		// A module that supersedes a core setting retires its row here rather than
+		// patching this selector.
+		const listedItems = config.removedItemIds ? items.filter((item) => !config.removedItemIds?.has(item.id)) : items;
+
 		// Add borders
 		this.addChild(new DynamicBorder());
 
 		this.settingsList = new SettingsList(
-			items,
+			listedItems,
 			10,
 			getSettingsListTheme(),
 			(id, newValue) => {
@@ -638,6 +661,9 @@ export class SettingsSelectorComponent extends Container {
 						break;
 					case "terminal-progress":
 						callbacks.onShowTerminalProgressChange(newValue === "true");
+						break;
+					default:
+						callbacks.onModuleSettingChange?.(id, newValue);
 						break;
 				}
 			},

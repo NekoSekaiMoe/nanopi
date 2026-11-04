@@ -20,6 +20,7 @@ import type {
 import type {
 	AnyModel,
 	Api,
+	AssistantMessage,
 	AssistantMessageEvent,
 	AssistantMessageEventStream,
 	ClassifierApi,
@@ -49,6 +50,7 @@ import type {
 	EditorComponent,
 	EditorTheme,
 	KeyId,
+	MarkdownTheme,
 	OverlayHandle,
 	OverlayOptions,
 	TUI,
@@ -757,6 +759,22 @@ export type ToolRendererResolver = (
 	toolName: string,
 	next: () => ToolRenderers | undefined,
 ) => ToolRenderers | undefined;
+
+/**
+ * Chooses how the row of one tool call is drawn. `next()` returns the row that
+ * the remaining resolvers, then the tool's own definition, would draw.
+ */
+export type ToolRowRendererResolver = (
+	toolName: string,
+	next: () => ToolRowRenderers | undefined,
+) => ToolRowRenderers | undefined;
+
+/** Chooses how a `!` shell command row is drawn; `next()` is the default bordered row. */
+export type ShellRendererResolver = (
+	state: ShellEntryState,
+	next: () => Component,
+	theme: Theme,
+) => Component | undefined;
 
 /**
  * Preserve parameter inference for standalone tool definitions.
@@ -1476,6 +1494,136 @@ export type EntryRenderer<T = unknown> = (
 ) => Component | undefined;
 
 // ============================================================================
+// Transcript Rendering Hooks
+// ============================================================================
+
+/**
+ * What `registerToolRenderer` hands a resolver for one tool call.
+ *
+ * The renderer runs for that row only, so a persona can restyle, flatten, or
+ * hide a call it does not own without shipping a replacement tool definition
+ * (which would also replace the tool's `execute`).
+ */
+export interface ToolRowRenderContext<TState = any, TArgs = any> extends ToolRenderContext<TState, TArgs> {
+	/** The tool this row draws. */
+	readonly toolName: string;
+	/**
+	 * Hides this row. The component re-evaluates the flag on its next pass, so a
+	 * renderer may call it after drawing (a silent todo update, a call that joins
+	 * a surrounding group) or before.
+	 */
+	hide(): void;
+}
+
+/**
+ * A tool shell chooses how the transcript frames a call: `"default"` adds the
+ * pending/success/error background and padding around the renderers, `"self"`
+ * leaves the framing to them.
+ */
+export interface ToolRowRenderers {
+	renderShell?: "default" | "self";
+	renderCall?: (args: unknown, theme: Theme, context: ToolRowRenderContext) => Component;
+	renderResult?: (
+		result: AgentToolResult<unknown>,
+		options: ToolRenderResultOptions,
+		theme: Theme,
+		context: ToolRowRenderContext,
+	) => Component;
+}
+
+/** The shell a `!` command row adopts in the transcript. */
+export interface ShellEntryState {
+	readonly command: string;
+	readonly output: string;
+	readonly exitCode: number | undefined;
+	readonly status: "running" | "complete" | "error" | "cancelled";
+	readonly expanded: boolean;
+}
+
+/** One row of the assistant message that some registered block replaces. */
+export interface AssistantBlockRow {
+	/** Index of this block in `message.content`. */
+	readonly index: number;
+	/** Runs of consecutive non-empty thinking blocks, merged per run. */
+	readonly thinking: readonly string[];
+}
+
+/** What an assistant message renderer gets to draw with. */
+export interface AssistantMessageRenderContext {
+	/** True while the message is still streaming. */
+	readonly isStreaming: boolean;
+	/** Horizontal padding configured by the outputPad setting. */
+	readonly outputPad: number;
+	/** Markdown theme to construct block components with. */
+	readonly markdownTheme: MarkdownTheme;
+	/** Registered markdown transformers, already applied by the default renderer. */
+	readonly transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) => string;
+	/** Append a component to the message body. */
+	addChild(component: Component): void;
+	/**
+	 * Draw text blocks the way the default renderer does. A renderer that only
+	 * restyles thinking rows calls this for every text block it keeps.
+	 */
+	renderText(text: string): void;
+	/** Draw the stop-reason and error rows the default renderer appends. */
+	renderStopReason(message: {
+		stopReason?: string;
+		errorMessage?: string;
+		content: readonly { type: string }[];
+	}): void;
+}
+
+/**
+ * A registered message renderer decides how a message's content blocks are
+ * drawn. Returning false leaves the message to the default renderer.
+ */
+export type AssistantMessageRenderer = (message: AssistantMessage, context: AssistantMessageRenderContext) => boolean;
+
+/** Where the working indicator draws its one line. */
+export type WorkingIndicatorPlacement = "editorFrame" | "statusRow" | "none";
+
+export interface WorkingIndicatorState {
+	/** Milliseconds since the turn started. */
+	readonly elapsedMs: number;
+	/** Milliseconds since the previous frame. */
+	readonly dtMs: number;
+	/** Text the host would otherwise show (`setWorkingMessage`, or the default label). */
+	readonly message: string;
+	/** Where that text would go; "none" means the indicator is hidden. */
+	readonly placement: WorkingIndicatorPlacement;
+	/** Renderable columns, or 0 when unknown. */
+	readonly columns: number;
+}
+
+/**
+ * Draws the working line. Return `undefined` for a frame to keep the host's
+ * own text, or `{ hidden }` to suppress the row entirely.
+ */
+export type WorkingIndicatorRenderer = (
+	state: WorkingIndicatorState,
+	theme: Theme,
+) => { text: string; hidden?: boolean } | undefined;
+
+// ============================================================================
+// Settings Rows
+// ============================================================================
+
+/**
+ * One row a module contributes to the settings list, drawn by
+ * `SettingsSelectorComponent`. Rows are plain data: the selector owns input,
+ * scrolling, and search.
+ */
+export interface ModuleSettingsItem {
+	id: string;
+	label: string;
+	description?: string;
+	currentValue: string;
+	values: readonly string[];
+	/** Applies a new value. The selector reports the choice; the module decides what it means. */
+	onChange(value: string): void;
+}
+
+// ============================================================================
 // Command Registration
 // ============================================================================
 
@@ -1511,6 +1659,7 @@ export interface ModuleApi
 		ModuleRenderingSurface,
 		ModuleActionsSurface,
 		ModuleSessionSurface,
+		ModuleSettingsSurface,
 		ModuleModelSurface,
 		ModuleProvidersSurface {}
 
@@ -1660,6 +1809,75 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 
 	/** Choose how tool calls are drawn. Resolvers run in extension load order. */
 	registerToolRenderer(resolver: ToolRendererResolver): void;
+}
+
+/** Renderers: how a module's messages, entries, and tool calls are drawn. */
+export interface ModuleRenderingSurface extends ModuleEvents {
+	// =========================================================================
+	// Message Rendering
+	// =========================================================================
+
+	/** Register a custom renderer for CustomMessageEntry. */
+	registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
+
+	/** Register a transformer for user and assistant Markdown before nanopi renders it in the interactive transcript. */
+	registerMarkdownTransformer(transformer: MarkdownTransformer): void;
+
+	/** Register a custom renderer for CustomEntry. Custom entries do not participate in LLM context. */
+	registerEntryRenderer<T = unknown>(customType: string, renderer: EntryRenderer<T>): void;
+
+	/** Choose how tool calls are drawn. Resolvers run in extension load order. */
+	registerToolRenderer(resolver: ToolRendererResolver): void;
+
+	/**
+	 * Restyle the rows of tools the module does not register itself — including
+	 * tools the model can still call but no module shipped a definition for.
+	 *
+	 * Resolvers run in module load order and get `next()`: the row the remaining
+	 * resolvers, then the tool's own definition, would draw. Returning a value
+	 * replaces the row for that call only; the tool's `execute`, schema, and
+	 * prompt text are untouched. Use `context.hide()` from a renderer to fold the
+	 * row into a surrounding group.
+	 */
+	registerToolRowRenderer(resolver: ToolRowRendererResolver): void;
+
+	/** Draw `!` shell command rows. Resolvers run in module load order; the last one that returns a component owns the row. */
+	registerShellRenderer(resolver: ShellRendererResolver): void;
+
+	/**
+	 * Draw assistant messages that carry thinking, custom blocks, or anything the
+	 * default renderer would otherwise render on its own.
+	 *
+	 * Resolvers run in module load order; the first one that returns true owns
+	 * the message body for that pass. Returning false (or throwing) leaves the
+	 * message to the default renderer, so a renderer that only restyles thinking
+	 * rows must return false for messages it does not handle.
+	 */
+	registerAssistantMessageRenderer(renderer: AssistantMessageRenderer): void;
+
+	/**
+	 * Draw the working indicator line — the animated row shown while a turn
+	 * streams. The last registered renderer wins; returning undefined for a frame
+	 * keeps the host text, and `{ hidden: true }` suppresses the row.
+	 */
+	registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void;
+}
+
+/** Settings rows: what a module contributes to the settings list, and what it retires from it. */
+export interface ModuleSettingsSurface extends ModuleEvents {
+	/**
+	 * Contribute rows to the settings list. `id` must be unique across modules;
+	 * registering the same id again replaces the row. The row is drawn by the
+	 * core selector, so modules never build or receive a component.
+	 */
+	registerSettingsItem(item: ModuleSettingsItem): void;
+
+	/**
+	 * Remove a settings row by id. It also removes a built-in row: the settings
+	 * list reads its rows through this registry, so a module that supersedes a
+	 * core setting retires it here instead of patching the selector.
+	 */
+	unregisterSettingsItem(id: string): void;
 }
 
 /** Actions: everything a module does to a live session rather than registering. */
@@ -2234,6 +2452,13 @@ export interface RegisteredModule {
 	commands: Map<string, RegisteredCommand>;
 	flags: Map<string, ModuleFlag>;
 	shortcuts: Map<KeyId, ModuleShortcut>;
+	toolRowRenderers?: ToolRowRendererResolver[];
+	shellRenderers?: ShellRendererResolver[];
+	assistantMessageRenderers?: AssistantMessageRenderer[];
+	settingsItems?: Map<string, ModuleSettingsItem>;
+	/** Ids removed with `unregisterSettingsItem()`, including built-in rows. */
+	removedSettingsItems?: Set<string>;
+	workingIndicatorRenderer?: WorkingIndicatorRenderer;
 }
 
 /** Result of loading extensions. */
