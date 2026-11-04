@@ -12,6 +12,7 @@
 
 import { clampScrollOffset, Key, matchesKey, pageScrollOffset, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { ModuleCommandContext } from "../../core/modules/types.ts";
+import type { Theme } from "../../modes/interactive/theme/theme.ts";
 
 export type StatusRow = {
 	label: string;
@@ -67,17 +68,17 @@ const OVERLAY_OPTIONS = {
 	margin: { left: 0, right: 0, bottom: 0 },
 } as const;
 
-function rule(theme: any, width: number): string {
+function rule(theme: Theme, width: number): string {
 	return theme.fg("accent", "─".repeat(Math.max(1, width)));
 }
 
-function hintRow(theme: any, text: string, width: number): string {
+function hintRow(theme: Theme, text: string, width: number): string {
 	return theme.fg("dim", padStatusLine(` ${text}`, width));
 }
 
 /** Render the section block: ` [Title]` header plus dim wrapped item lines. */
-function sectionLines(theme: any, section: StatusSection, contentWidth: number): string[] {
-	const lines = [theme.fg("mdHeading", `[${section.title}]`)];
+function sectionLines(theme: Theme, section: StatusSection, contentWidth: number): string[] {
+	const lines = [theme.fg("mdSectionHeading", `[${section.title}]`)];
 	const joined = section.items.join(", ");
 	for (const wrapped of wrapStatusText(joined, Math.max(1, contentWidth - 2))) {
 		lines.push(theme.fg("dim", padStatusLine(`   ${wrapped}`, contentWidth)));

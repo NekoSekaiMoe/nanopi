@@ -74,6 +74,8 @@ import type {
 	ModuleToolContext,
 	ModuleUIContext,
 	ModuleVirtualModel,
+	ModuleWidgetContent,
+	ModuleWidgetOptions,
 	ProjectTrustContext,
 	ProjectTrustEvent,
 	ProjectTrustEventResult,
@@ -301,6 +303,7 @@ const noOpUIContext: ModuleUIContext = {
 	setWorkingIndicator: () => {},
 	setHiddenThinkingLabel: () => {},
 	setWidget: () => {},
+	redrawWidget: () => {},
 	setFooter: () => {},
 	setHeader: () => {},
 	setTitle: () => {},
@@ -538,6 +541,8 @@ export class ModuleRegistry {
 
 	setUIContext(uiContext?: ModuleUIContext, mode: ModuleMode = "print"): void {
 		this.uiContext = uiContext ? this.widgetChannels.forContext(uiContext) : noOpUIContext;
+		this.runtime.widgetDraws ??= new Map();
+		this.widgetChannels.useDrawRecords(this.runtime.widgetDraws);
 		this.widgetChannels.bind(uiContext);
 		this.mode = mode;
 	}
@@ -1668,6 +1673,13 @@ function createModuleApi(
 		registerSettingsItem(item: ModuleSettingsItem): void {
 			module.settingsItems ??= new Map();
 			module.settingsItems.set(item.id, item);
+		},
+
+		redrawWidget(key: string, content: ModuleWidgetContent | undefined, options?: ModuleWidgetOptions): void {
+			module.widgetKeys ??= new Set();
+			module.widgetKeys.add(key);
+			runtime.widgetDraws ??= new Map();
+			runtime.widgetDraws.set(key, { content, options });
 		},
 
 		unregisterSettingsItem(id: string): void {

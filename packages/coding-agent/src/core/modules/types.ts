@@ -129,6 +129,15 @@ export interface ModuleWidgetOptions {
 	placement?: WidgetPlacement;
 }
 
+/** What `setWidget` / `redrawWidget` accept as widget content. */
+export type ModuleWidgetContent = string[] | ((tui: TUI, theme: Theme) => Component & { dispose?(): void });
+
+/** A recorded `redrawWidget` write; `undefined` content records the key as cleared. */
+export interface ModuleWidgetDraw {
+	content: ModuleWidgetContent | undefined;
+	options: ModuleWidgetOptions | undefined;
+}
+
 /** Raw terminal input listener for extensions. */
 export type TerminalInputHandler = (data: string) => { consume?: boolean; data?: string } | undefined;
 
@@ -206,6 +215,27 @@ export interface ModuleUIContext {
 	/** Set a widget to display above or below the editor. Accepts string array or component factory. */
 	setWidget(key: string, content: string[] | undefined, options?: ModuleWidgetOptions): void;
 	setWidget(
+		key: string,
+		content: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined,
+		options?: ModuleWidgetOptions,
+	): void;
+
+	/**
+	 * Write a widget that survives the host rebuilding its editor widgets.
+	 *
+	 * `setWidget` is a write to the host's current widget table, and the host
+	 * clears that table whenever the session changes (`/new`, `/resume`, `/fork`,
+	 * `/reload`). A module that writes once at session start therefore loses its
+	 * widget on the next switch. `redrawWidget` records the write instead: the
+	 * host replays the record after each rebuild, so the widget comes back
+	 * without the module listening for the rebuild.
+	 *
+	 * The record is per key and holds the latest value: `undefined` removes the
+	 * key rather than hiding it once, so a widget another module cleared mid
+	 * session stays cleared. Unloading the recording module drops its keys.
+	 */
+	redrawWidget(key: string, content: string[] | undefined, options?: ModuleWidgetOptions): void;
+	redrawWidget(
 		key: string,
 		content: ((tui: TUI, theme: Theme) => Component & { dispose?(): void }) | undefined,
 		options?: ModuleWidgetOptions,
@@ -2397,6 +2427,12 @@ export interface ModuleRuntimeState {
 	pendingNativeProviderRegistrations: Array<{ provider: Provider; moduleName: string }>;
 	/** Virtual model registrations queued during module loading, processed when the registry binds. */
 	pendingVirtualModelRegistrations: Array<{ definition: VirtualModelDefinition; moduleName: string }>;
+	/**
+	 * Widget writes recorded through `redrawWidget`, keyed by widget key. They
+	 * outlive a module runtime swap, so a reload keeps the widgets of modules
+	 * that are still loaded.
+	 */
+	widgetDraws?: Map<string, ModuleWidgetDraw>;
 	/** Create a module context. Throws before the registry binds. */
 	createContext: () => ModuleContext;
 	/**
@@ -2522,6 +2558,8 @@ export interface RegisteredModule {
 	settingsItems?: Map<string, ModuleSettingsItem>;
 	/** Ids removed with `unregisterSettingsItem()`, including built-in rows. */
 	removedSettingsItems?: Set<string>;
+	/** Widget keys the module recorded with `redrawWidget()`, dropped when it unloads. */
+	widgetKeys?: Set<string>;
 	workingIndicatorRenderer?: WorkingIndicatorRenderer;
 }
 

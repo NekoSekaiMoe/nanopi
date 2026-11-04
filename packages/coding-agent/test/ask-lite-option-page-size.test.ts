@@ -12,9 +12,15 @@ const PAGE_DOWN = "\u001b[6~";
 
 /** Minimal theme: the questionnaire only needs the tokens it styles with. */
 const theme = new Theme(
-	{ text: "#e5e5e7", accent: "#3b82f6", muted: "#6b7280", dim: "#4b5563", thinkingXhigh: "#a78bfa" } as Partial<
-		Record<ThemeColor, string>
-	> as never,
+	// mdSectionHeading falls back to mdHeading, so the latter must be present.
+	{
+		text: "#e5e5e7",
+		accent: "#3b82f6",
+		muted: "#6b7280",
+		dim: "#4b5563",
+		thinkingXhigh: "#a78bfa",
+		mdHeading: "#f9e2af",
+	} as Partial<Record<ThemeColor, string>> as never,
 	{} as Partial<Record<ThemeBg, string>> as never,
 	"truecolor",
 	{ name: "test", appearance: "dark" },

@@ -16,6 +16,8 @@ import type {
 	ModuleWidgetChannelContext,
 	ModuleWidgetChannelTransform,
 	ModuleWidgetChannelUpdateOptions,
+	ModuleWidgetDraw,
+	ModuleWidgetOptions,
 } from "./types.ts";
 
 /** Widget key a channel writes to. Namespaced so it cannot collide with a plain `setWidget` key. */
@@ -32,12 +34,20 @@ interface ChannelState {
  * Bind a ui context to channels. One host per interactive session: the
  * transforms a module registers only ever see the content written through the
  * same host, so two sessions cannot read each other's rows.
+ *
+ * The host also replays `redrawWidget` records. The registry's widget table is
+ * rebuilt when the session changes, so every rebind writes the records back;
+ * keeping that here rather than in the interactive mode means a module never has
+ * to know when the rebuild happened. The records themselves live on the module
+ * runtime, so they survive the registry swap a `/reload` performs.
  */
 export class WidgetChannelHost {
 	private ui: ModuleUIContext | undefined;
 	private channelUI: ModuleUIContext | undefined;
 	private states = new Map<string, ChannelState>();
 	private transforms = new Map<string, ModuleWidgetChannelTransform[]>();
+	/** Widget writes recorded through `redrawWidget`, owned by the module runtime. */
+	private draws = new Map<string, ModuleWidgetDraw>();
 
 	/** Point the host at a ui context. Undefined detaches it (RPC/print modes have no widgets). */
 	bind(ui: ModuleUIContext | undefined): void {
@@ -48,6 +58,24 @@ export class WidgetChannelHost {
 		for (const [name, state] of this.states) {
 			if (state.content !== undefined) this.draw(name, state);
 		}
+		// The channel UI is rebuilt on every bind, and the host only rebinds when
+		// the widget table behind it was dropped: write the records back.
+		this.replay();
+	}
+
+	/** Write a recorded widget once. `undefined` clears the widget without dropping the record. */
+	private write(key: string, draw: ModuleWidgetDraw): void {
+		const ui = this.ui as { setWidget?: (k: string, c: unknown, o?: ModuleWidgetOptions) => void } | undefined;
+		ui?.setWidget?.(key, draw.content, draw.options);
+	}
+
+	/** Point the host at the widget records of the module runtime it draws for. */
+	useDrawRecords(draws: Map<string, ModuleWidgetDraw>): void {
+		this.draws = draws;
+	}
+
+	private replay(): void {
+		for (const [key, draw] of this.draws) this.write(key, draw);
 	}
 
 	context<T extends ModuleWidgetChannelContent>(channel: ModuleWidgetChannel<T>): ModuleWidgetChannelContext<T> {

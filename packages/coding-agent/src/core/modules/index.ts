@@ -136,6 +136,7 @@ export type {
 	ModuleWidgetChannelPlacement,
 	ModuleWidgetChannelTransform,
 	ModuleWidgetChannelUpdateOptions,
+	ModuleWidgetDraw,
 	ModuleWidgetOptions,
 	NormalizedBuildSystemPromptOptions,
 	PowerShellToolCallEvent,

@@ -118,6 +118,15 @@ describe("generateSystemThemeColors", () => {
 		expect([colors.modeYolo, colors.modePlan, colors.modeMinimal, colors.bashMode]).toEqual([1, 2, 4, 3]);
 	});
 
+	it("gives the section heading token its own contrast rule", () => {
+		// Without a rule the token resolves to "" (terminal default) and a reskin
+		// that paints `/status` headings would silently lose the palette color.
+		for (const input of [DRACULA, TERMINALS.backgroundOnly]) {
+			const { colors } = generateSystemThemeColors(input);
+			expect(colors.mdSectionHeading).toBe(colors.mdHeading);
+		}
+	});
+
 	it("renders grayscale at zero saturation", () => {
 		const { colors } = generateSystemThemeColors({ ...DRACULA, saturation: 0 });
 		expect(colorToOklch(parseColor(colors.error as string)).c).toBeLessThan(0.005);
@@ -140,6 +149,12 @@ describe("system theme", () => {
 		expect(theme.appearance).toBe("dark");
 		expect(theme.getFgAnsi("text")).toBe("\x1b[39m");
 		expect(theme.getFgAnsi("error")).toMatch(/^\x1b\[38;/);
+	});
+
+	it("follows mdHeading when a theme omits the section heading token", () => {
+		setTerminalColors(DRACULA);
+		const theme = refreshSystemTheme();
+		expect(theme.getFgAnsi("mdSectionHeading")).toBe(theme.getFgAnsi("mdHeading"));
 	});
 
 	it("renders faint tokens with SGR 2 and closes it", () => {
