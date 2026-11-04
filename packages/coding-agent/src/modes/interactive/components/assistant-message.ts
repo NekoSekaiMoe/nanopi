@@ -138,6 +138,7 @@ export class AssistantMessageComponent extends Container {
 			isStreaming,
 			outputPad: this.outputPad,
 			markdownTheme: this.markdownTheme,
+			theme,
 			transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) =>
 				this.applyTransforms(messageType, markdown),
 			addChild: (component: Parameters<Container["addChild"]>[0]) => {

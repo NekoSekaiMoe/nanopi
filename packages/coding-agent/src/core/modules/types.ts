@@ -1588,6 +1588,13 @@ export interface AssistantMessageRenderContext {
 	readonly outputPad: number;
 	/** Markdown theme to construct block components with. */
 	readonly markdownTheme: MarkdownTheme;
+	/**
+	 * The live theme. It resolves through the same forwarding proxy the rest of
+	 * the host uses, so a system-theme refresh mid-session is picked up without
+	 * the renderer re-reading anything: only reuse the value for styling, never
+	 * as an identity.
+	 */
+	readonly theme: Theme;
 	/** Registered markdown transformers, already applied by the default renderer. */
 	readonly transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) => string;
 	/** Append a component to the message body. */

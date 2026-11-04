@@ -172,7 +172,6 @@ export default function (pi: ModuleEventsSurface &
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     installResourceHeadingGradient(ctx.ui.theme);
-    installThinkingDisplay(pi, ctx.ui.theme);
     suppressTodoWidget(ctx.ui);
     skinSubagentWidget(ctx.ui);
     installFooter(ctx);
