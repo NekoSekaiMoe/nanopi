@@ -13,6 +13,7 @@ import {
 	SessionManager,
 	SettingsManager,
 } from "@nanopi/pi-coding-agent";
+import { MessageTypeRegistry } from "../../src/core/messages/registry.ts";
 
 const modelRuntime = await ModelRuntime.create({
 	authPath: "/tmp/my-agent/auth.json",
@@ -34,7 +35,13 @@ const settingsManager = SettingsManager.inMemory({
 const cwd = process.cwd();
 
 const resourceLoader: ResourceLoader = {
-	getModules: () => ({ modules: [], errors: [], warnings: [], runtime: createModuleRuntime() }),
+	getModules: () => ({
+		modules: [],
+		errors: [],
+		warnings: [],
+		runtime: createModuleRuntime(),
+		messageTypes: new MessageTypeRegistry(),
+	}),
 	getSkills: () => ({ skills: [], diagnostics: [] }),
 	getPrompts: () => ({ prompts: [], diagnostics: [] }),
 	getAgentsFiles: () => ({ agentsFiles: [] }),

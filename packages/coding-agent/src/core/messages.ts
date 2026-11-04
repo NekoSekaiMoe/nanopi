@@ -7,6 +7,8 @@
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
 import type { ImageContent, Message, TextContent } from "@nanopi/pi-ai";
+import { createBuiltinMessageCodecs } from "./messages/builtin-codecs.ts";
+import { type MessageTypeCodecMap, resolveMessageCodec } from "./messages/codec.ts";
 
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -144,53 +146,39 @@ export function createCustomMessage(
  * - Agent's transormToLlm option (for prompt calls and queued messages)
  * - Compaction's generateSummary (for summarization)
  * - Custom extensions and tools
+ *
+ * Without an explicit `codecs`, the coding agent's own message types are projected by
+ * the built-in codecs. Pass `session.messageTypes` to pick up the message types modules
+ * registered; a kind nobody registered is dropped, because guessing a projection would
+ * put module payloads in front of the model unannounced.
  */
-export function convertToLlm(messages: AgentMessage[]): Message[] {
-	return messages
-		.map((m): Message | undefined => {
-			switch (m.role) {
-				case "bashExecution":
-					// Skip messages excluded from context (!! prefix)
-					if (m.excludeFromContext) {
-						return undefined;
-					}
-					return {
-						role: "user",
-						content: [{ type: "text", text: bashExecutionToText(m) }],
-						timestamp: m.timestamp,
-					};
-				case "custom": {
-					const content = typeof m.content === "string" ? [{ type: "text" as const, text: m.content }] : m.content;
-					return {
-						role: "user",
-						content,
-						timestamp: m.timestamp,
-					};
-				}
-				case "branchSummary":
-					return {
-						role: "user",
-						content: [{ type: "text" as const, text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX }],
-						timestamp: m.timestamp,
-					};
-				case "compactionSummary":
-					return {
-						role: "user",
-						content: [
-							{ type: "text" as const, text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX },
-						],
-						timestamp: m.timestamp,
-					};
-				case "system":
-				case "user":
-				case "assistant":
-				case "toolResult":
-					return m;
-				default:
-					// biome-ignore lint/correctness/noSwitchDeclarations: fine
-					const _exhaustiveCheck: never = m;
-					return undefined;
-			}
-		})
-		.filter((m) => m !== undefined);
+export function convertToLlm(messages: AgentMessage[], codecs?: MessageTypeCodecMap): Message[] {
+	const table = codecs ?? builtinCodecs();
+	const out: Message[] = [];
+	for (const message of messages) {
+		// The four provider roles pass through: the provider layer is what understands them,
+		// and a module must not be able to re-project the conversation the model already saw.
+		if (isProviderRole(message.role)) {
+			out.push(message as Message);
+			continue;
+		}
+		const codec = resolveMessageCodec(table, message);
+		if (!codec) continue;
+		for (const projected of codec.toLlm(message)) out.push(projected);
+	}
+	return out;
+}
+
+const PROVIDER_ROLES = new Set(["system", "user", "assistant", "toolResult"]);
+
+function isProviderRole(role: string): boolean {
+	return PROVIDER_ROLES.has(role);
+}
+
+// Built once, for callers that have no session to take a table from.
+let defaultCodecs: MessageTypeCodecMap | undefined;
+
+function builtinCodecs(): MessageTypeCodecMap {
+	if (!defaultCodecs) defaultCodecs = createBuiltinMessageCodecs();
+	return defaultCodecs;
 }

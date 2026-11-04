@@ -5,6 +5,7 @@ import {
 	estimateProjectedContextTokens,
 	prepareCompaction,
 } from "../src/core/compaction/index.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 
 function assistant(text: string): AssistantMessage {
@@ -294,10 +295,11 @@ describe("session context edits", () => {
 		const instructionId = session.appendCustomMessageEntry("next-work", "UNSENT-INSTRUCTION ".repeat(100), false);
 		session.appendCustomEntry("bookkeeping", { source: "test" });
 
-		const preparation = prepareCompaction(session.getBranch(), {
-			...DEFAULT_COMPACTION_SETTINGS,
-			keepRecentTokens: 1,
-		});
+		const preparation = prepareCompaction(
+			session.getBranch(),
+			{ ...DEFAULT_COMPACTION_SETTINGS, keepRecentTokens: 1 },
+			new MessageTypeRegistry().table(),
+		);
 		expect(preparation?.firstKeptEntryId).toBe(instructionId);
 		expect(JSON.stringify(preparation?.messagesToSummarize)).not.toContain("UNSENT-INSTRUCTION");
 		expect(JSON.stringify(preparation?.turnPrefixMessages)).not.toContain("UNSENT-INSTRUCTION");

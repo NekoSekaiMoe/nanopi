@@ -302,9 +302,13 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const isExcludedTool = excludedToolNames ? createToolNameMatcher(excludedToolNames) : undefined;
 	const initialActiveToolNames = (selectedToolNames ?? defaultToolNames).filter((name) => !isExcludedTool?.(name));
 
-	// Create convertToLlm wrapper that filters images if blockImages is enabled (defense-in-depth)
+	const moduleRegistryRef: { current?: ModuleRegistry } = {};
+
+	// Create convertToLlm wrapper that filters images if blockImages is enabled (defense-in-depth).
+	// The message-type table comes from the registry, so a kind a module registered is projected
+	// by its own codec instead of being dropped as unknown.
 	const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
-		const converted = convertToLlm(messages);
+		const converted = convertToLlm(messages, moduleRegistryRef.current?.messageCodecs);
 		// Check setting dynamically so mid-session changes take effect
 		if (!settingsManager.getBlockImages()) {
 			return converted;
@@ -339,7 +343,6 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		});
 	};
 
-	const moduleRegistryRef: { current?: ModuleRegistry } = {};
 	const cacheWarmer = new CacheWarmer(
 		modelRuntime,
 		sessionManager,

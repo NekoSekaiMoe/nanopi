@@ -15,6 +15,7 @@ import {
 	redactUrl,
 	writeDiagnosticBundle,
 } from "../src/core/diagnostic-bundle.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import type { LoadModulesResult } from "../src/core/modules/types.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
@@ -38,6 +39,7 @@ const emptyModules: LoadModulesResult = {
 	errors: [],
 	warnings: [],
 	runtime: {} as LoadModulesResult["runtime"],
+	messageTypes: new MessageTypeRegistry(),
 };
 
 async function input(options: { cwd: string; agentDir?: string; sessionJsonl?: string } = { cwd: tempDir() }) {

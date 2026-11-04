@@ -486,6 +486,8 @@ export class InteractiveMode {
 
 	// Agent subscription unsubscribe function
 	private unsubscribe?: () => void;
+	/** Turn the transcript is currently drawing, for message run renderers. */
+	private turnIndex = 0;
 	// Abort controller for the in-flight next-prompt suggestion request
 	private nextPromptSuggestionAbort?: AbortController;
 	private signalCleanupHandlers: Array<() => void> = [];
@@ -2865,6 +2867,7 @@ export class InteractiveMode {
 				break;
 
 			case "turn_start":
+				this.turnIndex++;
 				if (this.settingsManager.getShowTerminalProgress()) {
 					this.ui.terminal.setProgress(true);
 				}
@@ -3314,7 +3317,30 @@ export class InteractiveMode {
 		this.chatContainer.addChild(component);
 	}
 
+	/**
+	 * Draw a message through the codec registered for its kind. Returns false when the kind
+	 * has no run renderer, so the caller falls back to the hand-written rendering below.
+	 */
+	private renderFromMessageCodec(message: AgentMessage): boolean {
+		const codec = this.session.moduleRegistry.messageTypes.codecFor(message);
+		if (!codec?.renderRun) return false;
+		const component = codec.renderRun(message, {
+			expanded: this.toolOutputExpanded,
+			outputPad: this.outputPad,
+			turn: this.turnIndex,
+			availableWidth: this.ui.terminal.columns,
+		});
+		if (!component) return false;
+		this.chatContainer.addChild(component);
+		return true;
+	}
+
 	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
+		// Kinds the message-type registry draws (bash execution, the two summaries, and any
+		// kind a module registered) render through their codec, so a module can replace a
+		// built-in drawing without patching a prototype.
+		if (this.renderFromMessageCodec(message)) return;
+
 		switch (message.role) {
 			case "bashExecution": {
 				const component = this.createShellEntry(message.command, message.excludeFromContext === true);
