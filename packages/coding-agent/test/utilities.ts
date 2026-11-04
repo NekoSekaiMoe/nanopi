@@ -12,6 +12,7 @@ import { getModel, streamSimple } from "@nanopi/pi-ai/compat";
 import { builtinProviders } from "@nanopi/pi-ai/providers/all";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import {
 	createModuleRuntime,
 	type LoadModulesResult,
@@ -212,6 +213,8 @@ export interface CreateTestResourceLoaderOptions {
 	appendSystemPrompt?: string[];
 	/** Context files a module would otherwise load, such as an AGENTS.md. */
 	contextFiles?: Array<{ path: string; content: string }>;
+	/** Message kinds the test's modules registered. */
+	messageTypes?: MessageTypeRegistry;
 }
 
 export function createTestResourceLoader(options: CreateTestResourceLoaderOptions = {}): ResourceLoader {
@@ -219,6 +222,7 @@ export function createTestResourceLoader(options: CreateTestResourceLoaderOption
 		modules: [],
 		errors: [],
 		runtime: createModuleRuntime(),
+		messageTypes: options.messageTypes ?? new MessageTypeRegistry(),
 	};
 
 	return {

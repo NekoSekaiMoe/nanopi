@@ -90,6 +90,7 @@ import { exportSessionToHtml, type ToolHtmlRenderer } from "./export-html/index.
 import { createToolHtmlRenderer } from "./export-html/tool-renderer.ts";
 import { exportSessionToMarkdown } from "./export-markdown/index.ts";
 import type { MemorySample } from "./memory-usage.ts";
+import type { MessageTypeCodecMap } from "./messages/codec.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
@@ -706,7 +707,7 @@ export class AgentSession {
 	}> {
 		// Route a virtual model first: summaries size their input and output from the model they get.
 		const route = isVirtualModel(selectedModel)
-			? await this._modelRuntime.resolveModel(selectedModel, convertToLlm(this.messages), {
+			? await this._modelRuntime.resolveModel(selectedModel, convertToLlm(this.messages, this.messageTypes), {
 					reason: "direct",
 					thinkingLevel: this.thinkingLevel,
 					signal,
@@ -914,7 +915,8 @@ export class AgentSession {
 	): boolean {
 		if (model.contextWindow <= 0) return false;
 		return shouldCompact(
-			estimateProjectedContextTokens(projection, this.sessionManager.getBranch()).tokens + additionalTokens,
+			estimateProjectedContextTokens(projection, this.sessionManager.getBranch(), this.messageTypes).tokens +
+				additionalTokens,
 			model.contextWindow,
 			this.settingsManager.getCompactionSettings(this.model),
 		);
@@ -980,7 +982,7 @@ export class AgentSession {
 			const lastResponse = context.messages.findLastIndex((message) => message.role === "assistant");
 			const userTurn = context.messages.slice(lastResponse + 1).some((message) => message.role === "user");
 			const state = getVirtualModelState(this.sessionManager.getBranch(), model.provider, model.id);
-			const route = await this._modelRuntime.resolveModel(model, convertToLlm(context.messages), {
+			const route = await this._modelRuntime.resolveModel(model, convertToLlm(context.messages, this.messageTypes), {
 				reason: failed ? "retry" : userTurn ? "user" : "continuation",
 				thinkingLevel,
 				signal,
@@ -1133,6 +1135,7 @@ export class AgentSession {
 					const tokensBefore = estimateProjectedContextTokens(
 						manager.buildSessionProjection(),
 						manager.getBranch(),
+						this.messageTypes,
 					).tokens;
 					entryId = manager.appendCompaction(
 						draft.summary,
@@ -1169,7 +1172,7 @@ export class AgentSession {
 	): BoundaryContextPreview {
 		const projection = this._createBoundaryPreviewManager(drafts).buildSessionProjection();
 		const pendingMessages = this._getPendingBoundaryMessages();
-		const llmMessages = convertToLlm(projection.messages);
+		const llmMessages = convertToLlm(projection.messages, this.messageTypes);
 		const finalRole = llmMessages[llmMessages.length - 1]?.role;
 		const hasNonSystemContext = llmMessages.some((message) => message.role !== "system");
 		const contextCanContinue = hasNonSystemContext && finalRole !== "assistant";
@@ -2476,7 +2479,9 @@ export class AgentSession {
 		const lastMessage = this.messages.at(-1);
 		if (lastMessage?.role !== "assistant") return undefined;
 
-		const transcript = serializeConversation(convertToLlm(this.messages).slice(-NEXT_PROMPT_SUGGESTION_MAX_MESSAGES));
+		const transcript = serializeConversation(
+			convertToLlm(this.messages, this.messageTypes).slice(-NEXT_PROMPT_SUGGESTION_MAX_MESSAGES),
+		);
 		if (!transcript.trim()) return undefined;
 
 		const { model, apiKey, headers, env } = await this._getSummarizationRequestAuth(selectedModel, options.signal);
@@ -3409,7 +3414,7 @@ export class AgentSession {
 			const settings = this.settingsManager.getCompactionSettings(model);
 			const pathEntries = this.sessionManager.getBranch();
 
-			const preparation = prepareCompaction(pathEntries, settings);
+			const preparation = prepareCompaction(pathEntries, settings, this.messageTypes);
 			if (!preparation) {
 				// Check why we can't compact
 				if (getEntriesAfterLatestCompaction(pathEntries)?.length === 0) {
@@ -3686,10 +3691,10 @@ export class AgentSession {
 		const hasContextEdits = projection.entries.some((entry) => entry.sourceEntry.type === "context_edit");
 		const directContextTokens = assistantMessage.usage ? calculateContextTokens(assistantMessage.usage) : 0;
 		if (hasContextEdits) {
-			contextTokens = estimateProjectedContextTokens(projection, branch).tokens;
+			contextTokens = estimateProjectedContextTokens(projection, branch, this.messageTypes).tokens;
 		} else if (assistantMessage.stopReason === "error" || directContextTokens === 0) {
 			const messages = this.agent.state.messages;
-			const estimate = estimateContextTokens(messages);
+			const estimate = estimateContextTokens(messages, this.messageTypes);
 			// Without provider usage, estimate.tokens is the pure message-size estimate.
 			// Only usage-backed estimates need the stale pre-compaction check.
 			if (estimate.lastUsageIndex !== null) {
@@ -3739,7 +3744,7 @@ export class AgentSession {
 			}
 
 			const pathEntries = this.sessionManager.getBranch();
-			const preparation = prepareCompaction(pathEntries, settings);
+			const preparation = prepareCompaction(pathEntries, settings, this.messageTypes);
 			if (!preparation) {
 				return false;
 			}
@@ -4942,7 +4947,7 @@ export class AgentSession {
 			if (!hasPostCompactionUsage) return { tokens: null, contextWindow, percent: null };
 		}
 
-		const estimate = estimateProjectedContextTokens(projection, branch);
+		const estimate = estimateProjectedContextTokens(projection, branch, this.messageTypes);
 		const percent = (estimate.tokens / contextWindow) * 100;
 
 		return {
@@ -5050,5 +5055,14 @@ export class AgentSession {
 	 */
 	get moduleRegistry(): ModuleRegistry {
 		return this._moduleRegistry;
+	}
+
+	/**
+	 * Message-type table for this session: built-in kinds plus whatever modules
+	 * registered. Consumers that project or measure messages (`convertToLlm`,
+	 * compaction) take it from here so a registered kind is understood everywhere.
+	 */
+	get messageTypes(): MessageTypeCodecMap {
+		return this._moduleRegistry.messageCodecs;
 	}
 }

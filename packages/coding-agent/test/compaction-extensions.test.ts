@@ -11,6 +11,7 @@ import { getModel, streamSimple } from "@nanopi/pi-ai/compat";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AgentSession } from "../src/core/agent-session.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import {
 	createModuleRuntime,
 	type RegisteredModule,
@@ -105,7 +106,13 @@ describe.skipIf(!API_KEY)("Compaction extensions", () => {
 		const runtime = createModuleRuntime();
 		const resourceLoader = {
 			...createTestResourceLoader(),
-			getModules: () => ({ modules: extensions, errors: [], warnings: [], runtime }),
+			getModules: () => ({
+				modules: extensions,
+				errors: [],
+				warnings: [],
+				runtime,
+				messageTypes: new MessageTypeRegistry(),
+			}),
 		};
 
 		session = new AgentSession({

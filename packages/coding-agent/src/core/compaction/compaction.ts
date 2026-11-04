@@ -27,6 +27,8 @@ import type {
 } from "@nanopi/pi-ai/compat";
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
+import { estimateMessageTokens } from "../messages/builtin-codecs.ts";
+import type { MessageTypeCodecMap } from "../messages/codec.ts";
 import { convertToLlm } from "../messages.ts";
 import {
 	buildSessionProjection,
@@ -236,13 +238,13 @@ function getLastAssistantUsageInfo(messages: AgentMessage[]): { usage: Usage; in
  * Estimate context tokens from messages, using the last assistant usage when available.
  * If there are messages after the last usage, estimate their tokens with estimateTokens.
  */
-export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEstimate {
+export function estimateContextTokens(messages: AgentMessage[], codecs?: MessageTypeCodecMap): ContextUsageEstimate {
 	const usageInfo = getLastAssistantUsageInfo(messages);
 
 	if (!usageInfo) {
 		let estimated = 0;
 		for (const message of messages) {
-			estimated += estimateTokens(message);
+			estimated += estimateTokens(message, codecs);
 		}
 		return {
 			tokens: estimated,
@@ -255,7 +257,7 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 	const usageTokens = calculateContextTokens(usageInfo.usage);
 	let trailingTokens = 0;
 	for (let i = usageInfo.index + 1; i < messages.length; i++) {
-		trailingTokens += estimateTokens(messages[i]);
+		trailingTokens += estimateTokens(messages[i], codecs);
 	}
 
 	return {
@@ -270,8 +272,9 @@ export function estimateContextTokens(messages: AgentMessage[]): ContextUsageEst
 export function estimateProjectedContextTokens(
 	projection: SessionProjection,
 	branchEntries: SessionEntry[],
+	codecs?: MessageTypeCodecMap,
 ): ContextUsageEstimate {
-	const estimate = estimateContextTokens(projection.messages);
+	const estimate = estimateContextTokens(projection.messages, codecs);
 	if (estimate.lastUsageIndex !== null) {
 		let projectedMessageIndex = 0;
 		let usageEntryId: string | undefined;
@@ -296,7 +299,7 @@ export function estimateProjectedContextTokens(
 	const currentSystem = getCurrentSystemMessage(projection.messages);
 	let tokens = currentSystem ? estimateTokens(currentSystem) : 0;
 	for (const message of projection.messages) {
-		if (message.role !== "system") tokens += estimateTokens(message);
+		if (message.role !== "system") tokens += estimateTokens(message, codecs);
 	}
 	return { tokens, usageTokens: 0, trailingTokens: tokens, lastUsageIndex: null };
 }
@@ -334,8 +337,14 @@ function estimateTextAndImageContentChars(content: string | Array<{ type: string
 /**
  * Estimate token count for a message using chars/4 heuristic.
  * This is conservative (overestimates tokens).
+ *
+ * Core roles are measured here. Any other kind is measured by the codec the session
+ * registered for it, so a message type a module added is priced by its own definition
+ * instead of silently counting as free context.
  */
-export function estimateTokens(message: AgentMessage): number {
+export function estimateTokens(message: AgentMessage, codecs?: MessageTypeCodecMap): number {
+	if (!isCoreRole(message.role)) return codecs ? estimateMessageTokens(codecs, message) : 0;
+
 	let chars = 0;
 
 	switch (message.role) {
@@ -369,23 +378,21 @@ export function estimateTokens(message: AgentMessage): number {
 			}
 			return Math.ceil(chars / 4);
 		}
-		case "custom":
 		case "toolResult": {
 			chars = estimateTextAndImageContentChars(message.content);
 			return Math.ceil(chars / 4);
 		}
-		case "bashExecution": {
-			chars = message.command.length + message.output.length;
-			return Math.ceil(chars / 4);
-		}
-		case "branchSummary":
-		case "compactionSummary": {
-			chars = message.summary.length;
-			return Math.ceil(chars / 4);
-		}
+		default:
+			return codecs ? estimateMessageTokens(codecs, message) : 0;
 	}
+}
 
-	return 0;
+// The roles whose size this file measures directly. Everything else is a kind some module
+// defined, including `custom`, and is priced by the codec registered for it.
+const MEASURED_ROLES = new Set<string>(["system", "user", "assistant", "toolResult"]);
+
+function isCoreRole(role: string): role is "system" | "user" | "assistant" | "toolResult" {
+	return MEASURED_ROLES.has(role);
 }
 
 function isCutPointMessage(message: AgentMessage): boolean {
@@ -522,6 +529,7 @@ export function findCutPoint(
 	startIndex: number,
 	endIndex: number,
 	keepRecentTokens: number,
+	codecs?: MessageTypeCodecMap,
 ): CutPointResult {
 	const cutPoints = findValidCutPoints(entries, startIndex, endIndex);
 
@@ -536,7 +544,7 @@ export function findCutPoint(
 	for (let i = endIndex - 1; i >= startIndex; i--) {
 		const entry = entries[i];
 		const messageTokens = sessionEntryToContextMessages(entry).reduce(
-			(sum, message) => sum + estimateTokens(message),
+			(sum, message) => sum + estimateTokens(message, codecs),
 			0,
 		);
 		if (messageTokens === 0) continue;
@@ -865,6 +873,7 @@ function findProjectedCutPoint(
 	startIndex: number,
 	endIndex: number,
 	keepRecentTokens: number,
+	codecs?: MessageTypeCodecMap,
 ): CutPointResult {
 	const cutPoints: number[] = [];
 	for (let i = startIndex; i < endIndex; i++) {
@@ -879,7 +888,7 @@ function findProjectedCutPoint(
 	let exceededBudget = false;
 	let cutIndex = cutPoints[0];
 	for (let i = endIndex - 1; i >= startIndex; i--) {
-		const messageTokens = entries[i].messages.reduce((sum, message) => sum + estimateTokens(message), 0);
+		const messageTokens = entries[i].messages.reduce((sum, message) => sum + estimateTokens(message, codecs), 0);
 		if (messageTokens === 0) continue;
 		accumulatedTokens += messageTokens;
 		if (accumulatedTokens >= keepRecentTokens) {
@@ -933,6 +942,7 @@ function findProjectedCutPoint(
 export function prepareCompaction(
 	pathEntries: SessionEntry[],
 	settings: CompactionSettings,
+	codecs?: MessageTypeCodecMap,
 ): CompactionPreparation | undefined {
 	if (getEntriesAfterLatestCompaction(pathEntries)?.length === 0) {
 		return undefined;
@@ -955,8 +965,14 @@ export function prepareCompaction(
 		boundaryStart = prevCompactionIndex + 1;
 	}
 	const boundaryEnd = projectedEntries.length;
-	const tokensBefore = estimateProjectedContextTokens(projection, pathEntries).tokens;
-	const cutPoint = findProjectedCutPoint(projectedEntries, boundaryStart, boundaryEnd, settings.keepRecentTokens);
+	const tokensBefore = estimateProjectedContextTokens(projection, pathEntries, codecs).tokens;
+	const cutPoint = findProjectedCutPoint(
+		projectedEntries,
+		boundaryStart,
+		boundaryEnd,
+		settings.keepRecentTokens,
+		codecs,
+	);
 
 	const firstKeptEntry = projectedEntries[cutPoint.firstKeptEntryIndex]?.sourceEntry;
 	if (!firstKeptEntry?.id) return undefined;

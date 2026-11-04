@@ -16,6 +16,7 @@ import {
 	shouldCompact,
 } from "../src/core/compaction/index.ts";
 import { getRequestIdentityMetadata, type InternalRequestIdentity } from "../src/core/compaction/request-metadata.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import {
 	buildSessionContext,
 	type CompactionEntry,
@@ -356,6 +357,8 @@ describe("findCutPoint", () => {
 		}
 	});
 
+	// `custom` is a message kind like any other: its size comes from the codec registered for
+	// it, so this test passes the table the session would use.
 	it("should budget context-visible custom message entries", () => {
 		const entries: SessionEntry[] = [
 			createMessageEntry(createUserMessage("hi")),
@@ -364,12 +367,12 @@ describe("findCutPoint", () => {
 			createMessageEntry(createAssistantMessage("ok")),
 		];
 
-		const tinyBudget = findCutPoint(entries, 0, entries.length, 1);
+		const tinyBudget = findCutPoint(entries, 0, entries.length, 1, new MessageTypeRegistry().table());
 		expect(tinyBudget.firstKeptEntryIndex).toBe(3);
 		expect(tinyBudget.isSplitTurn).toBe(true);
 		expect(tinyBudget.turnStartIndex).toBe(2);
 
-		const customFitsBudget = findCutPoint(entries, 0, entries.length, 2);
+		const customFitsBudget = findCutPoint(entries, 0, entries.length, 2, new MessageTypeRegistry().table());
 		expect(customFitsBudget.firstKeptEntryIndex).toBe(2);
 		expect(customFitsBudget.isSplitTurn).toBe(false);
 		expect(customFitsBudget.turnStartIndex).toBe(-1);

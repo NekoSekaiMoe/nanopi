@@ -198,7 +198,9 @@ export async function createHarness(options: HarnessOptions = {}): Promise<Harne
 			systemPrompt: "",
 			tools: [],
 		},
-		convertToLlm,
+		// Same lookup the SDK performs: a kind a test module registered projects through its
+		// codec, so a harness session behaves like a real one.
+		convertToLlm: (messages) => convertToLlm(messages, moduleRegistryRef.current?.messageCodecs),
 		onPayload: async (payload) => {
 			const runner = moduleRegistryRef.current;
 			if (!runner?.hasHandlers("before_provider_request")) {

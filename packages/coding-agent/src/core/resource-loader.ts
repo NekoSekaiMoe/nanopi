@@ -10,6 +10,7 @@ import { canonicalizePath, isLocalPath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { findGitPaths } from "./footer-data-provider.ts";
+import { MessageTypeRegistry } from "./messages/registry.ts";
 import { diskModulesIncluded, loadDiskModules, scanDiskModules } from "./modules/jiti-loader.ts";
 import { createModuleRuntime, loadModules } from "./modules/registry.ts";
 import type { LoadModulesResult, RegisteredModule, SessionModule } from "./modules/types.ts";
@@ -254,7 +255,13 @@ export class DefaultResourceLoader implements ResourceLoader {
 		this.systemPromptOverride = options.systemPromptOverride;
 		this.appendSystemPromptOverride = options.appendSystemPromptOverride;
 
-		this.extensionsResult = { modules: [], errors: [], warnings: [], runtime: createModuleRuntime() };
+		this.extensionsResult = {
+			modules: [],
+			errors: [],
+			warnings: [],
+			runtime: createModuleRuntime(),
+			messageTypes: new MessageTypeRegistry(),
+		};
 		this.skills = [];
 		this.skillDiagnostics = [];
 		this.prompts = [];

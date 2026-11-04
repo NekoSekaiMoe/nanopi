@@ -28,6 +28,7 @@ import {
 	streamSimple as streamSimpleOpenAICodexResponses,
 } from "../../ai/src/api/openai-codex-responses.ts";
 import { AuthStorage } from "../src/core/auth-storage.ts";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import { createModuleRuntime } from "../src/core/modules/registry.ts";
 import type { ToolDefinition } from "../src/core/modules/types.ts";
 import type { ResourceLoader } from "../src/core/resource-loader.ts";
@@ -174,7 +175,12 @@ function buildPrompt(turn: number): string {
 
 function createMinimalResourceLoader(systemPrompt: string): ResourceLoader {
 	return {
-		getModules: () => ({ modules: [], errors: [], runtime: createModuleRuntime() }),
+		getModules: () => ({
+			modules: [],
+			errors: [],
+			runtime: createModuleRuntime(),
+			messageTypes: new MessageTypeRegistry(),
+		}),
 		getSkills: () => ({ skills: [], diagnostics: [] }),
 		getPrompts: () => ({ prompts: [], diagnostics: [] }),
 		getAgentsFiles: () => ({ agentsFiles: [] }),
