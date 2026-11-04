@@ -9,6 +9,10 @@
 - Added the Qoder daily check-in (`@nanopi/pi-ai/qoder`): the campaign list and claim calls that pay the day's credits. The legacy `daily-check-in/claim` endpoint is not used — it answers 409 on unclaimed days and pays nothing — and a replayed claim reports "already claimed" instead of failing (issue [#398](https://cnb.cool/shinytale/nanopi/-/issues/398))
 - Added the `qoder` API (`api/qoder.ts`): Qoder turns are signed agent-chat requests against `POST /algo/api/v2/service/pro/sse/agent_chat_generation`, not Chat Completions. The adapter builds the envelope (`model_config.key` = the catalogue key, `messages`, `tools`, `parameters.max_tokens`), signs it with one COSY session per turn (`qoder/signature.ts`), and converts the `{headers, body, statusCodeValue}` SSE frames into nanopi events: `content` → text, `reasoning_content` → thinking, `tool_calls` → tool calls, with a non-200 envelope status and an in-band `code` ending the turn as an error (issue [#467](https://cnb.cool/shinytale/nanopi/-/issues/467))
 
+### Fixed
+
+- Fixed `openai-codex` listing models the signed-in ChatGPT plan cannot use: the bundled catalog carries every tier, so a Free account still saw `gpt-6-astra` and failed on the first turn. The provider now filters by the account catalog `GET /models` reports, which the Codex login and each model refresh store on the credential the same way `openai` already does (issue [#473](https://cnb.cool/shinytale/nanopi/-/issues/473))
+
 ## [20261031.1.0]
 
 ### Fixed
