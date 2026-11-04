@@ -4,6 +4,7 @@ import type {
 	ModuleWidgetChannel,
 	ModuleWidgetChannelContext,
 	ModuleWidgetChannelTransform,
+	ModuleWidgetDraw,
 } from "../src/core/modules/types.ts";
 import { WidgetChannelHost } from "../src/core/modules/widget-channels.ts";
 import { SUBAGENT_CHANNEL } from "../src/extras/shared-channels.ts";
@@ -105,6 +106,26 @@ describe("widget channels", () => {
 		expect(() => host.context(ROWS).update({ label: "rows", kind: "rows" } as unknown as Rows)).toThrow(
 			'Invalid content for widget channel "test-rows"',
 		);
+	});
+
+	test("a redrawWidget record is replayed when the host rebinds", () => {
+		const draws = new Map<string, ModuleWidgetDraw>();
+		const host = new WidgetChannelHost();
+		host.useDrawRecords(draws);
+		const writes: Array<{ key: string; content: unknown }> = [];
+		const base = createTestUiContext({
+			setWidget: (key: string, content: unknown) => {
+				writes.push({ key, content });
+			},
+		});
+		host.bind(base);
+		draws.set("todo", { content: undefined, options: undefined });
+		// The host rebuilds its widget table on a session switch and rebinds the
+		// same context; the record has to come back without the writer noticing.
+		host.bind(undefined);
+		writes.length = 0;
+		host.bind(base);
+		expect(writes).toEqual([{ key: "todo", content: undefined }]);
 	});
 
 	test("the subagent channel accepts pi-subagent-mini rows and nothing else", () => {

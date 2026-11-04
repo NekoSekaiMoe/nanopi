@@ -201,6 +201,13 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
 			// Hidden thinking label not supported in RPC mode - requires TUI message rendering access
 		},
 
+		// Replay of a recorded widget after a session switch: the host's widget table
+		// was dropped, so it needs the same request a live setWidget emits.
+		redrawWidget(key, content, options) {
+			// Component factories have no RPC surface, so only lines are replayed.
+			if (typeof content !== "function") this.setWidget(key, content, options);
+		},
+
 		setWidget(key: string, content: unknown, options?: ModuleWidgetOptions): void {
 			// Only support string arrays in RPC mode - factory functions are ignored
 			if (content === undefined || Array.isArray(content)) {

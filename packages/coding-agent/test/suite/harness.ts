@@ -82,6 +82,7 @@ export function createTestUiContext(overrides: Partial<ModuleUIContext> = {}): M
 		setWorkingIndicator: () => {},
 		setHiddenThinkingLabel: () => {},
 		setWidget: () => {},
+		redrawWidget: () => {},
 		setFooter: () => {},
 		setHeader: () => {},
 		setTitle: () => {},
