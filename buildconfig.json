@@ -95,7 +95,7 @@
 			"description": "LSP tools"
 		},
 		"module/pi-memory": {
-			"description": "Memory distillation: /remember and the end-of-session AGENTS.md reminder"
+			"description": "Memory distillation: /remember, extracted in the background"
 		},
 		"module/pi-rewind": {
 			"description": "Session rewind command"

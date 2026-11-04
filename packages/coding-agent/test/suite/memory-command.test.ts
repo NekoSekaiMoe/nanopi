@@ -155,6 +155,96 @@ describe("/remember --prune", () => {
 	});
 });
 
+/**
+ * `/remember` with no argument asks nothing: the extraction already ran in the
+ * background, and the command is the confirmation step.
+ */
+describe("background extraction", () => {
+	test("runs once after enough turns and the command reuses it", async () => {
+		const harness = await createHarness({ modules: [{ name: "pi-memory", factory: memory }] });
+		try {
+			writeFileSync(join(harness.tempDir, "AGENTS.md"), AGENTS);
+			const notes = captureNotifies(harness);
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+				fauxAssistantMessage("four"),
+				fauxAssistantMessage(EXTRACTED),
+			]);
+			for (const turn of ["q1", "q2", "q3", "q4"]) await harness.session.prompt(turn);
+			await waitFor(() => notes.some((note) => note.includes("/remember to review")));
+			// The extraction used the fifth response; the command must not need a sixth.
+			expect(harness.getPendingResponseCount()).toBe(0);
+			spyOnInput(harness, [], "1");
+			await invoke(harness, "/remember");
+			expect(harness.getPendingResponseCount()).toBe(0);
+			expect(readFileSync(join(harness.tempDir, "AGENTS.md"), "utf-8")).toContain(
+				"Rebuild the webui before testing it",
+			);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("writes nothing to the footer", async () => {
+		const harness = await createHarness({ modules: [{ name: "pi-memory", factory: memory }] });
+		try {
+			const statuses = captureStatuses(harness);
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+				fauxAssistantMessage("four"),
+				fauxAssistantMessage(EXTRACTED),
+			]);
+			for (const turn of ["q1", "q2", "q3", "q4"]) await harness.session.prompt(turn);
+			await waitFor(() => harness.getPendingResponseCount() === 0);
+			expect(statuses).toEqual([]);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("stays silent when there is no UI to confirm in", async () => {
+		// The harness binds no UI context, which is what `--print` and RPC look
+		// like to a module: four responses for four turns, and a fifth model call
+		// would be one nobody asked for.
+		const harness = await createHarness({ modules: [{ name: "pi-memory", factory: memory }] });
+		try {
+			harness.setResponses([
+				fauxAssistantMessage("one"),
+				fauxAssistantMessage("two"),
+				fauxAssistantMessage("three"),
+				fauxAssistantMessage("four"),
+			]);
+			for (const turn of ["q1", "q2", "q3", "q4"]) await harness.session.prompt(turn);
+			await new Promise((resolve) => setTimeout(resolve, 100));
+			expect(harness.faux.state.callCount).toBe(4);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	test("a session with too few turns is left alone", async () => {
+		const harness = await createHarness({ modules: [{ name: "pi-memory", factory: memory }] });
+		try {
+			const statuses = captureStatuses(harness);
+			harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
+			await harness.session.prompt("q1");
+			await harness.session.prompt("q2");
+			expect(harness.faux.state.callCount).toBe(2);
+			expect(statuses).toEqual([]);
+		} finally {
+			harness.cleanup();
+		}
+	});
+});
+
+const EXTRACTED = `\`\`\`json
+{ "candidates": [ { "text": "- Rebuild the webui before testing it", "reason": "the built output is what runs", "section": "Build" } ] }
+\`\`\``;
+
 /** Dispatch a slash command the way the interactive loop does. */
 async function invoke(harness: Harness, command: string): Promise<void> {
 	await harness.session.prompt(command);
@@ -166,6 +256,30 @@ function captureNotifies(harness: Harness): string[] {
 	const registry = harness.session.moduleRegistry;
 	registry.setUIContext({ ...registry.getUIContext(), notify: (message: string) => notes.push(message) });
 	return notes;
+}
+
+/** Poll until `condition` holds, so a background task started by an event can finish. */
+async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (condition()) return;
+		await new Promise((resolve) => setTimeout(resolve, 10));
+	}
+	throw new Error("condition did not hold before the timeout");
+}
+
+/** Every `setStatus` write the module made, in order. */
+function captureStatuses(harness: Harness): string[] {
+	const writes: string[] = [];
+	const registry = harness.session.moduleRegistry;
+	const ui = registry.getUIContext();
+	registry.setUIContext({
+		...ui,
+		setStatus: (key: string, text: string | undefined) => {
+			if (text !== undefined) writes.push(`${key}=${text}`);
+		},
+	});
+	return writes;
 }
 
 /** Answer the next `ui.input` with `answer`, recording the question. */

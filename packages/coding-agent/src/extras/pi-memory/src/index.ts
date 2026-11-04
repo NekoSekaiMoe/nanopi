@@ -1,5 +1,5 @@
 /**
- * pi-memory — `/remember` and the end-of-session memory prompt.
+ * pi-memory — `/remember`, backed by one background extraction per session.
  *
  * A naive memory feature writes every plausible fact into AGENTS.md and makes
  * the context worse every session. This one is built around refusing: entries
@@ -7,7 +7,7 @@
  * what AGENTS.md already says, and nothing is ever written without the user
  * saying yes.
  *
- *   /remember             Ask the model for candidates, then confirm what to write
+ *   /remember             Confirm what a background extraction already proposed
  *   /remember <text>      Write that one line directly (still validated)
  *   /remember --list      Show what the file holds, with ages
  *   /remember --prune     Offer the entries that look out of date for deletion
@@ -47,8 +47,21 @@ import {
 
 const COMMAND = "remember";
 const FORGET = "forget";
-/** One nudge per session, and only for a session that went somewhere. */
-const MIN_USER_TURNS_FOR_PROMPT = 4;
+/**
+ * One background extraction per session, and only for a session that went
+ * somewhere. The extraction reads the transcript and costs a model call, so it
+ * runs once no matter how long the session goes on; `/remember` reuses the
+ * result and only re-reads the session when the answer it cached went stale.
+ */
+const MIN_USER_TURNS_FOR_BACKGROUND = 4;
+
+/** What an extraction produced, in the shape both the command and the cache use. */
+interface ExtractionOutcome {
+	candidates: Candidate[];
+	stale: Candidate[];
+	target: string;
+	exists: boolean;
+}
 
 interface PendingSession {
 	cwd: string;
@@ -56,6 +69,12 @@ interface PendingSession {
 	assistantTurns: string[];
 	/** Candidates the user declined, fed back into the next extraction. */
 	declined: string[];
+	/** Result of the background extraction, with the session shape it was computed from. */
+	cached?: { turns: number; declined: number; outcome: ExtractionOutcome };
+	/** The in-flight background extraction, so `/remember` waits for it instead of paying twice. */
+	background?: Promise<void>;
+	/** Whether a background extraction already ran, so a session pays for the transcript once. */
+	extracted?: boolean;
 }
 
 function textOf(message: AgentMessage): string {
@@ -104,10 +123,7 @@ async function readStale(cwd: string, file: string): Promise<StaleCandidate[]> {
 	return staleCandidates({ cwd, entries, now: new Date(), blameDays: ages });
 }
 
-async function extract(
-	ctx: ModuleContext,
-	session: PendingSession,
-): Promise<{ candidates: Candidate[]; stale: Candidate[]; target: string; exists: boolean } | string> {
+async function extract(ctx: ModuleContext, session: PendingSession): Promise<ExtractionOutcome | string> {
 	const model = ctx.model;
 	if (!model) return "No model selected.";
 	const target = resolveTarget(session.cwd);
@@ -159,10 +175,64 @@ function resolveQuotes(entries: readonly MemoryFileEntry[], quotes: readonly Can
 	return found;
 }
 
+/**
+ * The extraction this session already paid for, when it still describes the
+ * session: a new turn or a new decline makes the cached answer a claim about a
+ * conversation that no longer exists.
+ */
+function cachedOutcome(session: PendingSession): ExtractionOutcome | undefined {
+	const cached = session.cached;
+	if (!cached) return undefined;
+	if (cached.turns !== session.userTurns.length) return undefined;
+	if (cached.declined !== session.declined.length) return undefined;
+	return cached.outcome;
+}
+
+function cacheOutcome(session: PendingSession, outcome: ExtractionOutcome): void {
+	session.cached = { turns: session.userTurns.length, declined: session.declined.length, outcome };
+}
+
+/**
+ * The extraction for this session: the one the background run already
+ * produced when it is still current, otherwise a fresh one.
+ */
+async function extractionFor(ctx: ModuleContext, session: PendingSession): Promise<ExtractionOutcome | string> {
+	// `/remember` typed while the background run is still reading the session
+	// waits for it instead of starting a second request over the same turns.
+	await session.background;
+	const cached = cachedOutcome(session);
+	if (cached) return cached;
+	const outcome = await extract(ctx, session);
+	if (typeof outcome !== "string") cacheOutcome(session, outcome);
+	return outcome;
+}
+
+/**
+ * Extract without asking anything.
+ *
+ * The session that reached the conclusion is the only reader that has the
+ * transcript in context, and the user is the only one who can decide what to
+ * keep. Running the first half here and the second half in `/remember` splits
+ * the work at the confirmation, so the command is instant and nothing reaches
+ * AGENTS.md without a yes.
+ */
+async function extractInBackground(ctx: ModuleContext, session: PendingSession): Promise<void> {
+	const outcome = await extract(ctx, session);
+	if (typeof outcome === "string") return;
+	cacheOutcome(session, outcome);
+	if (outcome.candidates.length === 0) return;
+	const where = relative(session.cwd, outcome.target);
+	const count = outcome.candidates.length;
+	ctx.ui.notify(
+		`${count} conclusion${count === 1 ? "" : "s"} from this session ${count === 1 ? "is" : "are"} ready for ${where}: /${COMMAND} to review.`,
+		"info",
+	);
+}
+
 async function rememberFromSession(ctx: ModuleCommandContext, session: PendingSession): Promise<void> {
-	let result: Awaited<ReturnType<typeof extract>>;
+	let result: ExtractionOutcome | string;
 	try {
-		result = await extract(ctx, session);
+		result = await extractionFor(ctx, session);
 	} catch (error) {
 		ctx.ui.notify(`Memory extraction failed: ${error instanceof Error ? error.message : String(error)}`, "warning");
 		return;
@@ -194,6 +264,8 @@ async function rememberFromSession(ctx: ModuleCommandContext, session: PendingSe
 		for (const [index, candidate] of result.candidates.entries()) {
 			if (!keep.has(index + 1)) session.declined.push(candidate.text);
 		}
+		// The file is about to change, so what was checked against it is spent.
+		session.cached = undefined;
 		await confirmStale(ctx, session, result.target, result.stale);
 
 		if (keep.size === 0) {
@@ -259,6 +331,9 @@ async function confirmStale(
 }
 
 function rememberDirect(ctx: ModuleCommandContext, session: PendingSession, text: string): void {
+	// The candidates the background run proposed were checked against a file
+	// this write is about to change.
+	session.cached = undefined;
 	const target = resolveTarget(session.cwd);
 	const invalid = validateEntry(text);
 	if (invalid) {
@@ -303,6 +378,7 @@ function listMemory(ctx: ModuleCommandContext, session: PendingSession): void {
 }
 
 async function pruneMemory(ctx: ModuleCommandContext, session: PendingSession): Promise<void> {
+	session.cached = undefined;
 	const target = resolveTarget(session.cwd);
 	if (!target.exists) {
 		ctx.ui.notify(`No ${relative(session.cwd, target.path)} to prune.`, "info");
@@ -349,6 +425,7 @@ async function pruneMemory(ctx: ModuleCommandContext, session: PendingSession): 
 }
 
 async function forgetMemory(ctx: ModuleCommandContext, session: PendingSession, arg: string): Promise<void> {
+	session.cached = undefined;
 	const target = resolveTarget(session.cwd);
 	const entries = readEntries(target.path);
 	if (entries.length === 0) {
@@ -376,7 +453,6 @@ async function forgetMemory(ctx: ModuleCommandContext, session: PendingSession, 
 
 export default function memory(pi: ModuleEventsSurface & ModuleCommandsSurface): void {
 	const sessions = new Map<string, PendingSession>();
-	const nudged = new Set<string>();
 
 	const current = (cwd: string): PendingSession => {
 		let session = sessions.get(cwd);
@@ -388,10 +464,7 @@ export default function memory(pi: ModuleEventsSurface & ModuleCommandsSurface):
 	};
 
 	pi.on("session_start", async (event, ctx) => {
-		if (event.reason === "new") {
-			sessions.delete(ctx.cwd);
-			nudged.delete(ctx.cwd);
-		}
+		if (event.reason === "new") sessions.delete(ctx.cwd);
 		current(ctx.cwd);
 	});
 
@@ -402,16 +475,25 @@ export default function memory(pi: ModuleEventsSurface & ModuleCommandsSurface):
 		session.assistantTurns = turns.assistantTurns;
 	});
 
-	pi.on("agent_settled", async (_event, ctx) => {
+	pi.on("agent_settled", async (event, ctx) => {
+		if (event.aborted) return;
+		// No UI means no one to confirm the result, so the model call would be
+		// paid for and thrown away. `--print` and RPC consumers stay quiet.
+		if (!ctx.hasUI) return;
 		const session = current(ctx.cwd);
-		if (nudged.has(session.cwd)) return;
-		if (session.userTurns.length < MIN_USER_TURNS_FOR_PROMPT) return;
-		nudged.add(session.cwd);
-		const target = resolveTarget(session.cwd);
-		ctx.ui.setStatus(
-			COMMAND,
-			`/${COMMAND}: write this session's durable conclusions to ${relative(session.cwd, target.path)}`,
-		);
+		if (session.userTurns.length < MIN_USER_TURNS_FOR_BACKGROUND) return;
+		// Once per session: a second run would pay for the same transcript again
+		// to reach the same conclusion.
+		if (session.extracted || session.background) return;
+		session.extracted = true;
+		session.background = extractInBackground(ctx, session)
+			.catch(() => {
+				// A background extraction that fails is silent on purpose: the next
+				// `/remember` runs it again and reports the error there.
+			})
+			.finally(() => {
+				session.background = undefined;
+			});
 	});
 
 	pi.registerCommand(COMMAND, {
