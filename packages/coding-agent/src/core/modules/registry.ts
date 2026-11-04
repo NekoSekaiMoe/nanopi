@@ -4,10 +4,10 @@
  */
 
 import type { AgentMessage, AgentTool } from "@nanopi/pi-agent-core";
-import type { ImageContent, Model, Provider, ProviderHeaders } from "@nanopi/pi-ai";
-import type { KeyId } from "@nanopi/pi-tui";
+import type { AssistantMessage, ImageContent, Model, Provider, ProviderHeaders } from "@nanopi/pi-ai";
+import type { Component, KeyId } from "@nanopi/pi-tui";
 import { getAgentDir, resolveHostEntry } from "../../config.ts";
-import { theme } from "../../modes/interactive/theme/theme.ts";
+import { type Theme, theme } from "../../modes/interactive/theme/theme.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import type { ResourceDiagnostic } from "../diagnostics.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
@@ -31,6 +31,8 @@ import { time } from "../timings.ts";
 import type { BashOperations } from "../tools/bash.ts";
 import type { ModelRouteRequest, VirtualModelDefinition } from "../virtual-models.ts";
 import type {
+	AssistantMessageRenderContext,
+	AssistantMessageRenderer,
 	BeforeAgentStartCustomEvent,
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
@@ -67,6 +69,7 @@ import type {
 	ModuleFlag,
 	ModuleMode,
 	ModuleRuntime,
+	ModuleSettingsItem,
 	ModuleShortcut,
 	ModuleToolContext,
 	ModuleUIContext,
@@ -86,6 +89,8 @@ import type {
 	SessionBoundaryDraft,
 	SessionModule,
 	SessionShutdownEvent,
+	ShellEntryState,
+	ShellRendererResolver,
 	ToolCallEvent,
 	ToolCallEventResult,
 	ToolDefinition,
@@ -93,7 +98,10 @@ import type {
 	ToolRenderers,
 	ToolResultEvent,
 	ToolResultEventResult,
+	ToolRowRendererResolver,
+	ToolRowRenderers,
 	TurnEndEvent,
+	WorkingIndicatorRenderer,
 } from "./types.ts";
 import { WidgetChannelHost } from "./widget-channels.ts";
 
@@ -722,6 +730,99 @@ export class ModuleRegistry {
 		const resolve = (index: number): ToolRenderers | undefined =>
 			index < resolvers.length ? resolvers[index](toolName, () => resolve(index + 1)) : base();
 		return resolve(0);
+	}
+
+	/**
+	 * Row renderers for one tool call, resolved through every module's
+	 * `registerToolRowRenderer` resolvers. `base` is the row the tool's own
+	 * definition would draw, so a resolver that only restyles unknown tools can
+	 * delegate to it unchanged.
+	 */
+	resolveToolRowRenderers(toolName: string, base: () => ToolRowRenderers | undefined): ToolRowRenderers | undefined {
+		const resolvers = this.modules.flatMap((ext) => ext.toolRowRenderers ?? []);
+		const resolve = (index: number): ToolRowRenderers | undefined =>
+			index < resolvers.length ? resolvers[index](toolName, () => resolve(index + 1)) : base();
+		return resolve(0);
+	}
+
+	/** Whether any module registered a `!` command row renderer. */
+	hasShellRenderers(): boolean {
+		return this.modules.some((ext) => (ext.shellRenderers?.length ?? 0) > 0);
+	}
+
+	/** The shell row every module would draw for one `!` command. */
+	resolveShellRenderer(state: ShellEntryState, fallback: () => Component, theme: Theme): Component {
+		let next: () => Component = fallback;
+		for (const ext of this.modules) {
+			for (const resolver of ext.shellRenderers ?? []) {
+				const previous = next;
+				next = () => resolver(state, previous, theme) ?? previous();
+			}
+		}
+		return next();
+	}
+
+	/** Assistant-message renderers, in module load order. */
+	getAssistantMessageRenderers(): AssistantMessageRenderer[] {
+		return this.modules.flatMap((ext) => ext.assistantMessageRenderers ?? []);
+	}
+
+	/**
+	 * Whether a registered assistant-message renderer drew the message body.
+	 * The first renderer returning true owns it for that pass.
+	 */
+	hasAssistantMessageRenderer(message: AssistantMessage, context: AssistantMessageRenderContext): boolean {
+		for (const ext of this.modules) {
+			for (const renderer of ext.assistantMessageRenderers ?? []) {
+				try {
+					if (renderer(message, context)) return true;
+				} catch {
+					// A renderer that trips over a message shape must not blank the
+					// transcript: fall through to the default renderer.
+				}
+			}
+		}
+		return false;
+	}
+
+	/** Report a new value for a module-contributed settings row to its owner. */
+	applySettingsItemChange(id: string, value: string): void {
+		for (const ext of this.modules) {
+			const item = ext.settingsItems?.get(id);
+			if (!item) continue;
+			item.onChange(value);
+			return;
+		}
+	}
+
+	/** Settings rows contributed by modules, in module load order. */
+	getSettingsItems(): ModuleSettingsItem[] {
+		const removed = this.getRemovedSettingsItemIds();
+		const items = new Map<string, ModuleSettingsItem>();
+		for (const ext of this.modules) {
+			for (const [id, item] of ext.settingsItems ?? []) {
+				if (!removed.has(id)) items.set(id, item);
+			}
+		}
+		return [...items.values()];
+	}
+
+	/** Ids modules removed from the settings list, including built-in rows. */
+	getRemovedSettingsItemIds(): ReadonlySet<string> {
+		const removed = new Set<string>();
+		for (const ext of this.modules) {
+			for (const id of ext.removedSettingsItems ?? []) removed.add(id);
+		}
+		return removed;
+	}
+
+	/** Last registered working-indicator renderer, or undefined when none is registered. */
+	getWorkingIndicatorRenderer(): WorkingIndicatorRenderer | undefined {
+		let renderer: WorkingIndicatorRenderer | undefined;
+		for (const ext of this.modules) {
+			if (ext.workingIndicatorRenderer) renderer = ext.workingIndicatorRenderer;
+		}
+		return renderer;
 	}
 
 	getEntryRenderer(customType: string): EntryRenderer | undefined {
@@ -1547,6 +1648,36 @@ function createModuleApi(
 		registerToolRenderer(resolver: ToolRendererResolver): void {
 			module.toolRenderers ??= [];
 			module.toolRenderers.push(resolver);
+		},
+
+		registerToolRowRenderer(resolver: ToolRowRendererResolver): void {
+			module.toolRowRenderers ??= [];
+			module.toolRowRenderers.push(resolver);
+		},
+
+		registerShellRenderer(resolver: ShellRendererResolver): void {
+			module.shellRenderers ??= [];
+			module.shellRenderers.push(resolver);
+		},
+
+		registerAssistantMessageRenderer(renderer: AssistantMessageRenderer): void {
+			module.assistantMessageRenderers ??= [];
+			module.assistantMessageRenderers.push(renderer);
+		},
+
+		registerSettingsItem(item: ModuleSettingsItem): void {
+			module.settingsItems ??= new Map();
+			module.settingsItems.set(item.id, item);
+		},
+
+		unregisterSettingsItem(id: string): void {
+			module.settingsItems?.delete(id);
+			module.removedSettingsItems ??= new Set();
+			module.removedSettingsItems.add(id);
+		},
+
+		registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void {
+			module.workingIndicatorRenderer = renderer;
 		},
 
 		// Flag access - checks module registered it, reads from runtime

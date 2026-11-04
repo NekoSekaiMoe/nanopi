@@ -8,7 +8,16 @@
  */
 
 export type { Component } from "@nanopi/pi-tui";
-export type { EntryRenderOptions, MarkdownTransformContext, MarkdownTransformer } from "./core/modules/index.ts";
+export type {
+	EntryRenderOptions,
+	MarkdownTransformContext,
+	MarkdownTransformer,
+	ShellEntryState,
+	ToolRowRenderContext,
+	ToolRowRenderers,
+	WorkingIndicatorRenderer,
+	WorkingIndicatorState,
+} from "./core/modules/index.ts";
 export {
 	BorderedLoader,
 	CustomEditor,

@@ -1,5 +1,5 @@
 import { type Component, Loader, type TUI, truncateToWidth } from "@nanopi/pi-tui";
-import type { WorkingIndicatorOptions } from "../../../core/modules/index.ts";
+import type { WorkingIndicatorOptions, WorkingIndicatorRenderer } from "../../../core/modules/index.ts";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { keyText } from "./keybinding-hints.ts";
@@ -36,6 +36,9 @@ export class StatusIndicator extends Loader {
 }
 
 export class WorkingStatusIndicator extends StatusIndicator {
+	private rowRenderer: WorkingIndicatorRenderer | undefined;
+	private startedAt = Date.now();
+
 	constructor(ui: TUI, message: string, indicator?: WorkingIndicatorOptions, colorFn?: (text: string) => string) {
 		super(
 			"working",
@@ -45,6 +48,41 @@ export class WorkingStatusIndicator extends StatusIndicator {
 			message,
 			indicator,
 		);
+	}
+
+	/** Install a `registerWorkingIndicator` renderer; undefined restores the default row. */
+	setRowRenderer(renderer: WorkingIndicatorRenderer | undefined): void {
+		this.rowRenderer = renderer;
+		this.invalidate();
+	}
+
+	/**
+	 * A registered row renderer draws the line instead of the spinner-plus-message
+	 * pair. Returning undefined for a frame keeps the host text, and `hidden`
+	 * suppresses the row.
+	 */
+	override render(width: number): string[] {
+		const renderer = this.rowRenderer;
+		if (!renderer) return super.render(width);
+		let result: { text: string; hidden?: boolean } | undefined;
+		try {
+			result = renderer(
+				{
+					elapsedMs: Date.now() - this.startedAt,
+					dtMs: 0,
+					message: this.getMessage(),
+					placement: "statusRow",
+					columns: width,
+				},
+				theme,
+			);
+		} catch {
+			// Keep the default row when a renderer trips over an unknown state.
+			return super.render(width);
+		}
+		if (!result) return super.render(width);
+		if (result.hidden) return [];
+		return ["", truncateToWidth(result.text, width, "")];
 	}
 }
 
