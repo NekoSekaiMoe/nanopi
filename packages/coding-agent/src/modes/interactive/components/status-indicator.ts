@@ -6,6 +6,9 @@ import { keyText } from "./keybinding-hints.ts";
 
 export type StatusIndicatorKind = "working" | "retry" | "compaction" | "branchSummary";
 
+/** Frame interval for an animated row: 30fps, the cadence the shimmer is tuned for. */
+const ANIMATION_FRAME_MS = 1000 / 30;
+
 export class StatusIndicator extends Loader {
 	readonly kind: StatusIndicatorKind;
 
@@ -22,7 +25,10 @@ export class StatusIndicator extends Loader {
 	}
 
 	renderInBorder(width: number): string {
-		const line = super.render(width + 2)[1] ?? "";
+		// `render`, not `super.render`: a subclass that draws its own row (the
+		// working indicator does) has to be asked, or the embedded border shows a
+		// row the host already replaced.
+		const line = this.render(width + 2)[1] ?? "";
 		return truncateToWidth(line.startsWith(" ") ? line.slice(1).trimEnd() : line.trimEnd(), width, "");
 	}
 
@@ -38,6 +44,11 @@ export class StatusIndicator extends Loader {
 export class WorkingStatusIndicator extends StatusIndicator {
 	private rowRenderer: WorkingIndicatorRenderer | undefined;
 	private startedAt = Date.now();
+	/** Wall time of the last frame handed to the row renderer. */
+	private lastFrameAt = Date.now();
+	private frameTimer: ReturnType<typeof setInterval> | undefined;
+	/** Loader owns a private `ui`; keep the repaint target under its own name. */
+	private readonly repaintTarget: TUI;
 
 	constructor(ui: TUI, message: string, indicator?: WorkingIndicatorOptions, colorFn?: (text: string) => string) {
 		super(
@@ -48,12 +59,37 @@ export class WorkingStatusIndicator extends StatusIndicator {
 			message,
 			indicator,
 		);
+		this.repaintTarget = ui;
 	}
 
 	/** Install a `registerWorkingIndicator` renderer; undefined restores the default row. */
 	setRowRenderer(renderer: WorkingIndicatorRenderer | undefined): void {
 		this.rowRenderer = renderer;
+		this.lastFrameAt = Date.now();
+		if (renderer) this.startFrameLoop();
+		else this.stopFrameLoop();
 		this.invalidate();
+	}
+
+	/**
+	 * A row renderer paints every frame (the shimmer moves with the clock), so the
+	 * host has to keep rendering while the row is up. The spinner's own interval
+	 * repaints far too slowly for that and would freeze the elapsed text anyway.
+	 */
+	private startFrameLoop(): void {
+		if (this.frameTimer) return;
+		this.frameTimer = setInterval(() => this.repaintTarget.requestRender(), ANIMATION_FRAME_MS);
+	}
+
+	private stopFrameLoop(): void {
+		if (!this.frameTimer) return;
+		clearInterval(this.frameTimer);
+		this.frameTimer = undefined;
+	}
+
+	override dispose(): void {
+		this.stopFrameLoop();
+		super.dispose();
 	}
 
 	/**
@@ -66,10 +102,13 @@ export class WorkingStatusIndicator extends StatusIndicator {
 		if (!renderer) return super.render(width);
 		let result: { text: string; hidden?: boolean } | undefined;
 		try {
+			const now = Date.now();
+			const dtMs = Math.max(0, now - this.lastFrameAt);
+			this.lastFrameAt = now;
 			result = renderer(
 				{
-					elapsedMs: Date.now() - this.startedAt,
-					dtMs: 0,
+					elapsedMs: now - this.startedAt,
+					dtMs,
 					message: this.getMessage(),
 					placement: "statusRow",
 					columns: width,

@@ -63,6 +63,52 @@ describe("status indicators", () => {
 		indicator.dispose();
 	});
 
+	it("embeds a module-registered working row instead of the spinner text", () => {
+		initTheme();
+		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
+		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
+			embedWorkingStatus: true,
+			style: "composer",
+		});
+		const indicator = new WorkingStatusIndicator(tui, "Working");
+		const frames: { dtMs: number; elapsedMs: number }[] = [];
+		indicator.setRowRenderer((state) => {
+			frames.push({ dtMs: state.dtMs, elapsedMs: state.elapsedMs });
+			return { text: `shimmer ${state.elapsedMs}ms` };
+		});
+		editor.setWorkingStatusIndicator(indicator);
+
+		try {
+			expect(stripAnsi(editor.render(40)[0]!)).toContain("shimmer ");
+			// The row owns the line, so the spinner text does not leak through.
+			expect(stripAnsi(editor.render(40)[0]!)).not.toContain("Working");
+			// A frame carries the time since the previous one, so an animated row
+			// moves with the clock instead of standing still.
+			expect(frames.length).toBeGreaterThanOrEqual(2);
+			expect(frames[0]!.dtMs).toBe(0);
+			expect(frames[1]!.dtMs).toBeGreaterThanOrEqual(0);
+		} finally {
+			indicator.dispose();
+		}
+	});
+
+	it("repaints while a module-registered row is installed", () => {
+		initTheme();
+		vi.useFakeTimers();
+		const requestRender = vi.fn();
+		const tui = { requestRender } as unknown as TUI;
+		const indicator = new WorkingStatusIndicator(tui, "Working");
+		indicator.setRowRenderer(() => ({ text: "shimmer" }));
+
+		vi.advanceTimersByTime(100);
+		expect(requestRender.mock.calls.length).toBeGreaterThanOrEqual(3);
+
+		indicator.dispose();
+		const afterDispose = requestRender.mock.calls.length;
+		vi.advanceTimersByTime(200);
+		expect(requestRender.mock.calls.length).toBe(afterDispose);
+	});
+
 	it("keeps a blank row between the embedded status and the composer input", () => {
 		initTheme();
 		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
