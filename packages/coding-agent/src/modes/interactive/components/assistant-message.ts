@@ -138,6 +138,8 @@ export class AssistantMessageComponent extends Container {
 			isStreaming,
 			outputPad: this.outputPad,
 			markdownTheme: this.markdownTheme,
+			// The module-facing getter, not the static `theme` export: the system
+			// theme instance is replaced when the terminal reports its colors.
 			theme,
 			transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) =>
 				this.applyTransforms(messageType, markdown),

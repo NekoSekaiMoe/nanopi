@@ -71,8 +71,8 @@ import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
 
 /** Module-level expansion state; false = collapsed Codex-style rows. */
 let thinkingExpanded = false;
-/** Guard so pi.on context hooks are registered exactly once per process. */
-let eventsRegistered = false;
+/** Guard so the process-lifetime registrations run exactly once. */
+let installed = false;
 
 const HIDE_THINKING_ID = "hide-thinking";
 
@@ -549,7 +549,7 @@ function renderCodexThinking(
  * streaming component" check, which the host's own isStreaming flag also
  * agrees with.
  */
-function registerThinkingRenderer(pi: ModuleRenderingSurface): void {
+function registerThinkingRenderer(pi: ModuleRenderingSurface & ModuleSettingsSurface): void {
   pi.registerAssistantMessageRenderer((message, context) => {
     if (!hasThinkingContent(message)) return false;
     // message_start renders a thinking-less partial: the reliable per-message
@@ -587,14 +587,13 @@ function installThinkingToggle(pi: ModuleCommandsSurface): void {
 /**
  * Activate the Codex thinking display. Registrations on `pi` are made once for
  * the process lifetime; the renderer takes its theme from the render context,
- * so theme switches need no per-session reinstall. Passing no `pi` only keeps
- * the call site uniform with the other install helpers.
+ * so theme switches need no per-session reinstall.
  */
 export function installThinkingDisplay(
-  pi?: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
+  pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
 ): void {
-  if (pi && !eventsRegistered) {
-    eventsRegistered = true;
+  if (!installed) {
+    installed = true;
     registerThinkingRenderer(pi);
     installThinkingToggle(pi);
     // The core "Hide thinking" row is superseded by the collapsed Codex rows
@@ -612,7 +611,7 @@ export function installThinkingDisplay(
 }
 
 /**
- * Capture the TUI (from the editor factory in index.ts) so landed summaries
+ * Capture the TUI (from the footer factory in footer.ts) so landed summaries
  * can request an immediate repaint instead of waiting for the next render.
  */
 export function captureRenderTrigger(tui: TUI): void {
