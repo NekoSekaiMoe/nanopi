@@ -1,4 +1,9 @@
-/** The animated Working row (registerWorkingIndicator) and the elapsed transcript row. */
+/**
+ * The one-line Working row: an animated shimmer over the current todo step
+ * (or the plain "Working" label), plus the "Worked for Ns" transcript entry
+ * written when the turn settles. Colours follow the active theme's tokens, so
+ * a theme switch needs no reinstall.
+ */
 
 import type {
   ModuleActionsSurface,
@@ -11,12 +16,7 @@ import type {
 } from "@nanopi/pi-coding-agent";
 import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
-import {
-  HINT_SHIMMER_PALETTE,
-  MAIN_SHIMMER_PALETTE,
-  shimmerSegmentsAnimated,
-  type SweepState,
-} from "./shimmer.ts";
+import { HINT_SHIMMER_PALETTE, MAIN_SHIMMER_PALETTE, shimmerSegmentsAnimated, type SweepState } from "./shimmer.ts";
 
 const ELAPSED_ENTRY_TYPE = "pi-ui-elapsed";
 const MAX_STEP_CHARS = 48;

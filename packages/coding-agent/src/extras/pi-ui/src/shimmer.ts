@@ -120,11 +120,6 @@ export interface SweepState {
   canvas: number;
 }
 
-export function resetSweep(state: SweepState): void {
-  state.phase = 0;
-  state.canvas = 0;
-}
-
 /**
  * Advance the sweep by `dtMs` of wall time (clamped) for a text of `total`
  * code points, keeping the crest position continuous when the canvas changes:
@@ -144,8 +139,9 @@ function advanceSweep(state: SweepState, dtMs: number, total: number): void {
 }
 
 /**
- * Animated variant used by the Working line: advances `state` by `dtMs` and
- * renders the sweep at the resulting phase.
+ * Advance `state` by `dtMs` and render the sweep at the resulting phase. The
+ * segments are treated as one continuous string; same-tier runs are coalesced
+ * so each frame emits a handful of escape sequences, not one per code point.
  */
 export function shimmerSegmentsAnimated(
   segments: readonly ShimmerSegment[],
@@ -154,26 +150,14 @@ export function shimmerSegmentsAnimated(
   dtMs: number,
 ): string {
   let total = 0;
-  for (const seg of segments) total += countCodePoints(seg.text);
-  if (total === 0) return "";
-  advanceSweep(state, dtMs, total);
-  return shimmerSegments(segments, theme, state.phase);
-}
-
-/**
- * Render the sweep across one or more segments with the band crest at `pos`
- * (cells, over the padded canvas), treating the segments as a single
- * continuous string. Same-tier runs are coalesced so each frame emits a
- * handful of escape sequences, not one per code point.
- */
-export function shimmerSegments(segments: readonly ShimmerSegment[], theme: Theme, pos: number): string {
-  let total = 0;
   const perSeg: { text: string; palette: ShimmerPalette }[] = [];
   for (const seg of segments) {
     total += countCodePoints(seg.text);
     perSeg.push({ text: seg.text, palette: seg.palette ?? MAIN_SHIMMER_PALETTE });
   }
   if (total === 0) return "";
+  advanceSweep(state, dtMs, total);
+  const pos = state.phase;
 
   // Fast-path window: outside [bandLo, bandHi] the intensity is guaranteed
   // zero (tier "low"), so the per-char intensity call is skipped there.

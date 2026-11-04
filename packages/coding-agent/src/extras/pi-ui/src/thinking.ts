@@ -37,13 +37,13 @@
  * superseded (collapsed summary / expanded full text), the settings entry is
  * removed from the settings list.
  *
- * Mechanics, following tools.ts conventions:
- *   - `pi.registerAssistantMessageRenderer` draws the rows: messages that
- *     contain thinking are rendered here, everything else is left to Pi's
- *     default renderer (so text blocks keep its exact markdown pipeline).
- *     Any unexpected shape falls back to the default renderer.
- *   - `pi.registerShortcut("ctrl+t")` flips this module's expansion flag. The
- *     host owns the repaint.
+ * Mechanics, all through exported contracts (no prototype patches):
+ *   - `pi.registerAssistantMessageRenderer` draws the thinking rows; text blocks
+ *     go back through `context.renderText`, so they keep Pi's exact markdown
+ *     pipeline. Any unexpected shape returns false and falls back to the
+ *     default renderer.
+ *   - `pi.registerShortcut("ctrl+t")` flips this module's expansion flag and
+ *     the host repaints every rendered message.
  *   - `pi.unregisterSettingsItem("hide-thinking")` drops the superseded row.
  *   - `pi.on("message_update")` keeps the freshest ModuleContext (model +
  *     API key) for summary calls; the footer factory hand-off captures the
@@ -585,11 +585,9 @@ function installThinkingToggle(pi: ModuleCommandsSurface): void {
 }
 
 /**
- * Activate the Codex thinking display. The renderer, the shortcut, and the
- * event hooks are registrations on `pi`, so they are made once for the process
- * lifetime rather than per session_start (which would stack them). The theme
- * is not captured here: the renderer reads it from the render context, so a
- * theme switch is followed on the next repaint.
+ * Activate the Codex thinking display. Registrations on `pi` are made once for
+ * the process lifetime; the renderer takes its theme from the render context,
+ * so theme switches need no per-session reinstall.
  */
 export function installThinkingDisplay(
   pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
