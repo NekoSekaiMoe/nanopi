@@ -2,7 +2,8 @@
  * Component for displaying bash command execution with streaming output.
  */
 
-import { Container, Loader, Spacer, Text, type TUI } from "@nanopi/pi-tui";
+import { type Component, Container, Loader, Spacer, Text, type TUI } from "@nanopi/pi-tui";
+import type { ShellEntryState } from "../../../core/modules/types.ts";
 import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
@@ -10,6 +11,7 @@ import {
 	truncateTail,
 } from "../../../core/tools/truncate.ts";
 import { stripAnsi } from "../../../utils/ansi.ts";
+import type { Theme } from "../theme/theme.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyHint, keyText } from "./keybinding-hints.ts";
@@ -31,6 +33,14 @@ export class BashExecutionComponent extends Container {
 	/** `dim` marks `!!` commands, whose output is excluded from the model context. */
 	private readonly colorKey: "dim" | "bashMode";
 	private outputPad: number;
+	/**
+	 * Replaces the bordered default body when a module registered a shell row
+	 * renderer. It receives the row state, the live theme, and a factory for the
+	 * default body, so a resolver can delegate the parts it does not restyle.
+	 */
+	private rowRenderer:
+		| ((state: ShellEntryState, theme: Theme, renderDefault: () => Component) => Component)
+		| undefined;
 
 	constructor(command: string, ui: TUI, excludeFromContext = false, outputPad = 1) {
 		super();
@@ -120,6 +130,29 @@ export class BashExecutionComponent extends Container {
 	}
 
 	private updateDisplay(): void {
+		if (!this.rowRenderer) {
+			this.renderDefaultBody();
+			return;
+		}
+		// A registered row replaces the body; the component keeps owning the
+		// streaming output and the expanded/status state the row draws from.
+		this.contentContainer.clear();
+		try {
+			this.contentContainer.addChild(this.rowRenderer(this.getShellState(), theme, () => this.buildDefaultBody()));
+		} catch {
+			// Fall back to the bordered default when a resolver trips over a state
+			// it did not expect.
+			this.renderDefaultBody();
+		}
+	}
+
+	private renderDefaultBody(): void {
+		this.contentContainer.clear();
+		this.contentContainer.addChild(this.buildDefaultBody());
+	}
+
+	private buildDefaultBody(): Component {
+		const body = new Container();
 		// Apply truncation for LLM context limits (same limits as bash tool)
 		const fullOutput = this.outputLines.join("\n");
 		const contextTruncation = truncateTail(fullOutput, {
@@ -135,25 +168,25 @@ export class BashExecutionComponent extends Container {
 		const hiddenLineCount = availableLines.length - previewLogicalLines.length;
 
 		// Rebuild content container
-		this.contentContainer.clear();
+		body.clear();
 
 		// Command header
 		const header = new Text(theme.fg(this.colorKey, theme.bold(`$ ${this.command}`)), this.outputPad, 0);
-		this.contentContainer.addChild(header);
+		body.addChild(header);
 
 		// Output
 		if (availableLines.length > 0) {
 			if (this.expanded) {
 				// Show all lines
 				const displayText = availableLines.map((line) => theme.fg("muted", line)).join("\n");
-				this.contentContainer.addChild(new Text(`\n${displayText}`, this.outputPad, 0));
+				body.addChild(new Text(`\n${displayText}`, this.outputPad, 0));
 			} else {
 				// Use shared visual truncation utility with width-aware caching
 				const styledOutput = previewLogicalLines.map((line) => theme.fg("muted", line)).join("\n");
 				const styledInput = `\n${styledOutput}`;
 				let cachedWidth: number | undefined;
 				let cachedLines: string[] | undefined;
-				this.contentContainer.addChild({
+				body.addChild({
 					render: (width: number) => {
 						if (cachedLines === undefined || cachedWidth !== width) {
 							const result = truncateToVisualLines(styledInput, PREVIEW_LINES, width, this.outputPad);
@@ -172,7 +205,7 @@ export class BashExecutionComponent extends Container {
 
 		// Loader or status
 		if (this.status === "running") {
-			this.contentContainer.addChild(this.loader);
+			body.addChild(this.loader);
 		} else {
 			const statusParts: string[] = [];
 
@@ -202,9 +235,30 @@ export class BashExecutionComponent extends Container {
 			}
 
 			if (statusParts.length > 0) {
-				this.contentContainer.addChild(new Text(`\n${statusParts.join("\n")}`, this.outputPad, 0));
+				body.addChild(new Text(`\n${statusParts.join("\n")}`, this.outputPad, 0));
 			}
 		}
+		return body;
+	}
+
+	/** Install a `registerShellRenderer` row for this entry. */
+	setRowRenderer(renderer: (state: ShellEntryState, theme: Theme, renderDefault: () => Component) => Component): void {
+		this.rowRenderer = renderer;
+		this.updateDisplay();
+	}
+
+	/**
+	 * The state a `registerShellRenderer` resolver draws from: the command, the
+	 * accumulated output, and the status the row should show.
+	 */
+	getShellState(): ShellEntryState {
+		return {
+			command: this.command,
+			output: this.getOutput(),
+			exitCode: this.exitCode,
+			status: this.status,
+			expanded: this.expanded,
+		};
 	}
 
 	/**

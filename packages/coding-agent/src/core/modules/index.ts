@@ -32,6 +32,9 @@ export type {
 	AgentToolUpdateCallback,
 	// App keybindings (for custom editors)
 	AppKeybinding,
+	AssistantBlockRow,
+	AssistantMessageRenderContext,
+	AssistantMessageRenderer,
 	AutocompleteProviderFactory,
 	// Events - Tool (ToolCallEvent types)
 	BashToolCallEvent,
@@ -107,6 +110,7 @@ export type {
 	// Runtime
 	ModuleMode,
 	ModuleRuntime,
+	ModuleSettingsItem,
 	ModuleShortcut,
 	ModuleToolContext,
 	ModuleUIContext,
@@ -153,6 +157,9 @@ export type {
 	SessionStartEvent,
 	SessionTreeEvent,
 	SetActiveToolsHandler,
+	// Transcript rows
+	ShellEntryState,
+	ShellRendererResolver,
 	// Events - Tool
 	TerminalInputHandler,
 	ToolAnnotations,
@@ -176,12 +183,18 @@ export type {
 	ToolRenderResultOptions,
 	ToolResultEvent,
 	ToolResultEventResult,
+	ToolRowRenderContext,
+	ToolRowRendererResolver,
+	ToolRowRenderers,
 	TreePreparation,
 	TurnEndEvent,
 	TurnEndEventResult,
 	TurnStartEvent,
 	WidgetPlacement,
 	WorkingIndicatorOptions,
+	WorkingIndicatorPlacement,
+	WorkingIndicatorRenderer,
+	WorkingIndicatorState,
 	WriteToolCallEvent,
 	WriteToolResultEvent,
 } from "./types.ts";

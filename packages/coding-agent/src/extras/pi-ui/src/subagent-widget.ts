@@ -35,7 +35,7 @@ import type {
 	ThemeColor,
 } from "@nanopi/pi-coding-agent";
 import type { Component, TUI } from "@nanopi/pi-tui";
-import { Text, TuiMainScreen, truncateToWidth } from "@nanopi/pi-tui";
+import { Text, truncateToWidth } from "@nanopi/pi-tui";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
 import { type ExploreCall, exploreCallFor, exploringCalls } from "./tools.ts";
 
@@ -167,7 +167,13 @@ function liveComponent(tui: TUI, theme: Theme): WidgetComponent {
     render(width: number): string[] {
       const block = liveBlocks.get(tui);
       if (!block || block.collapsed) return [];
-      return exploringRows(block.calls, theme, width);
+      // Record the size this pass paints at: the rows are pre-coloured, so the
+      // width the widget container hands over is the one to fold against, and
+      // the line count is the rewind length a settle needs.
+      const rows = exploringRows(block.calls, theme, width);
+      blockWidths.set(tui, Math.max(1, width));
+      renderedBlocks.set(tui, { lines: rows.length });
+      return rows;
     },
   };
 }
@@ -203,27 +209,7 @@ function columnWidth(): number {
   return Math.max(1, (process.stdout.columns || 80) - 1);
 }
 
-const TUI_RENDER_ORIGINAL = Symbol.for("@NekoSekaiMoe/pi-ui:exploring-tui-render");
 const skinnedContexts = new WeakSet<object>();
-
-function installRenderMeasure(): void {
-  try {
-    const prototype = TuiMainScreen.prototype as unknown as Record<string | symbol, unknown>;
-    const original = prototype.render as ((this: object, width: number) => string[]) | undefined;
-    if (typeof original !== "function" || prototype[TUI_RENDER_ORIGINAL]) return;
-    prototype[TUI_RENDER_ORIGINAL] = original;
-    prototype.render = function (this: object, width: number): string[] {
-      const lines = original.call(this, width);
-      const block = liveBlocks.get(this);
-      if (!block) return lines;
-      blockWidths.set(this, Math.max(1, width - 1));
-      renderedBlocks.set(this, { lines: block.collapsed ? 0 : block.calls.length > 0 ? block.calls.length + 1 : 0 });
-      return lines;
-    };
-  } catch {
-    // Without the measurement a stale block is cleared by the next full repaint.
-  }
-}
 
 /**
  * Own the subagent channel: pi-subagent-mini's running jobs become rows of the
@@ -266,7 +252,6 @@ function exploreDetail(name: string, input: Record<string, unknown>): string {
  * arriving from a subagent settles the block on its own turn.
  */
 export function installExploringBlock(pi: ModuleApi): void {
-  installRenderMeasure();
   const width = columnWidth;
 
   pi.on("tool_result", (event, ctx) => {

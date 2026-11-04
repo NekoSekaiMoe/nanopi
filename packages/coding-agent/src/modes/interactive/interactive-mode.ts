@@ -1682,6 +1682,50 @@ export class InteractiveMode {
 		);
 	}
 
+	/**
+	 * One assistant message row, with the session's `registerAssistantMessageRenderer`
+	 * renderers installed. Without them the component draws the default body.
+	 */
+	private createAssistantMessageComponent(message: AssistantMessage | undefined): AssistantMessageComponent {
+		const component = new AssistantMessageComponent(
+			message,
+			this.hideThinkingBlock,
+			this.getMarkdownThemeWithSettings(),
+			this.hiddenThinkingLabel,
+			this.outputPad,
+			this.getMarkdownTransformers(),
+		);
+		const renderers = this.session.moduleRegistry.getAssistantMessageRenderers();
+		if (renderers.length > 0) component.setMessageRenderers(renderers);
+		return component;
+	}
+
+	/**
+	 * A `!` command row. `registerShellRenderer` resolvers wrap BashExecutionComponent's
+	 * default bordered body, so a module can restyle shell output without owning the
+	 * component or its streaming lifecycle.
+	 */
+	private createShellEntry(command: string, excludeFromContext: boolean): BashExecutionComponent {
+		const component = new BashExecutionComponent(command, this.ui, excludeFromContext, this.outputPad);
+		const registry = this.session.moduleRegistry;
+		if (!registry.hasShellRenderers()) return component;
+		component.setRowRenderer((state, theme, renderDefault) =>
+			registry.resolveShellRenderer(state, renderDefault, theme),
+		);
+		return component;
+	}
+
+	/**
+	 * Row renderers for one tool call: `registerToolRowRenderer` resolvers layered
+	 * over the tool's own definition, so a module can restyle a call without
+	 * replacing the tool (and its execute).
+	 */
+	private getToolRowRenderers(toolName: string) {
+		return this.session.moduleRegistry.resolveToolRowRenderers(toolName, () =>
+			this.getRegisteredToolDefinition(toolName),
+		);
+	}
+
 	private getMarkdownTransformers(): MarkdownTransformer[] {
 		return [this.mermaidMarkdownTransformer, ...this.session.moduleRegistry.getMarkdownTransformers()];
 	}
@@ -1760,14 +1804,15 @@ export class InteractiveMode {
 			? (text: string) =>
 					(this.editor.borderColor ?? theme.getThinkingBorderColor(this.session.thinkingLevel || "off"))(text)
 			: undefined;
-		this.showStatusIndicator(
-			new WorkingStatusIndicator(
-				this.ui,
-				this.workingMessage ?? this.defaultWorkingMessage,
-				this.workingIndicatorOptions,
-				colorFn,
-			),
+		const indicator = new WorkingStatusIndicator(
+			this.ui,
+			this.workingMessage ?? this.defaultWorkingMessage,
+			this.workingIndicatorOptions,
+			colorFn,
 		);
+		// A module row replaces the spinner-plus-message pair for the whole turn.
+		indicator.setRowRenderer(this.session.moduleRegistry.getWorkingIndicatorRenderer());
+		this.showStatusIndicator(indicator);
 	}
 
 	private setWorkingVisible(visible: boolean): void {
@@ -2904,14 +2949,7 @@ export class InteractiveMode {
 					this.updatePendingMessagesDisplay();
 					this.ui.requestRender();
 				} else if (event.message.role === "assistant") {
-					this.streamingComponent = new AssistantMessageComponent(
-						undefined,
-						this.hideThinkingBlock,
-						this.getMarkdownThemeWithSettings(),
-						this.hiddenThinkingLabel,
-						this.outputPad,
-						this.getMarkdownTransformers(),
-					);
+					this.streamingComponent = this.createAssistantMessageComponent(undefined);
 					this.streamingMessage = event.message;
 					this.chatContainer.addChild(this.streamingComponent);
 					this.streamingComponent.updateContent(this.streamingMessage, true);
@@ -2935,6 +2973,7 @@ export class InteractiveMode {
 										showImages: this.settingsManager.getShowImages(),
 										imageWidthCells: this.settingsManager.getImageWidthCells(),
 										outputPad: this.outputPad,
+										rowRenderers: this.getToolRowRenderers(content.name),
 									},
 									this.getRegisteredToolDefinition(content.name),
 									this.ui,
@@ -3013,6 +3052,7 @@ export class InteractiveMode {
 							showImages: this.settingsManager.getShowImages(),
 							imageWidthCells: this.settingsManager.getImageWidthCells(),
 							outputPad: this.outputPad,
+							rowRenderers: this.getToolRowRenderers(event.toolName),
 						},
 						this.getRegisteredToolDefinition(event.toolName),
 						this.ui,
@@ -3277,12 +3317,7 @@ export class InteractiveMode {
 	private addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void {
 		switch (message.role) {
 			case "bashExecution": {
-				const component = new BashExecutionComponent(
-					message.command,
-					this.ui,
-					message.excludeFromContext,
-					this.outputPad,
-				);
+				const component = this.createShellEntry(message.command, message.excludeFromContext === true);
 				if (message.output) {
 					component.appendOutput(message.output);
 				}
@@ -3376,14 +3411,7 @@ export class InteractiveMode {
 				break;
 			}
 			case "assistant": {
-				const assistantComponent = new AssistantMessageComponent(
-					message,
-					this.hideThinkingBlock,
-					this.getMarkdownThemeWithSettings(),
-					this.hiddenThinkingLabel,
-					this.outputPad,
-					this.getMarkdownTransformers(),
-				);
+				const assistantComponent = this.createAssistantMessageComponent(message);
 				this.chatContainer.addChild(assistantComponent);
 				break;
 			}
@@ -3443,6 +3471,7 @@ export class InteractiveMode {
 								showImages: this.settingsManager.getShowImages(),
 								imageWidthCells: this.settingsManager.getImageWidthCells(),
 								outputPad: this.outputPad,
+								rowRenderers: this.getToolRowRenderers(content.name),
 							},
 							this.getRegisteredToolDefinition(content.name),
 							this.ui,
@@ -4374,6 +4403,8 @@ export class InteractiveMode {
 					quietStartup: this.settingsManager.getQuietStartup(),
 					clearOnShrink: this.settingsManager.getClearOnShrink(),
 					showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
+					moduleItems: this.session.moduleRegistry.getSettingsItems(),
+					removedItemIds: this.session.moduleRegistry.getRemovedSettingsItemIds(),
 					warnings: this.settingsManager.getWarnings(),
 					getTerminalRows: () => this.ui.terminal.rows,
 				},
@@ -4526,6 +4557,12 @@ export class InteractiveMode {
 					},
 					onWarningsChange: (warnings) => {
 						this.settingsManager.setWarnings(warnings);
+					},
+					onModuleSettingChange: (id, value) => {
+						// The row belongs to a module, so the module owns what a new
+						// value means; the selector only reports the choice.
+						this.session.moduleRegistry.applySettingsItemChange(id, value);
+						this.ui.requestRender();
 					},
 					onCancel: () => {
 						done();
@@ -6324,7 +6361,7 @@ export class InteractiveMode {
 	private async handleBashCommand(command: string, excludeFromContext = false): Promise<void> {
 		// Normal execution path (possibly with custom operations)
 		const isDeferred = this.session.isStreaming;
-		this.bashComponent = new BashExecutionComponent(command, this.ui, excludeFromContext, this.outputPad);
+		this.bashComponent = this.createShellEntry(command, excludeFromContext);
 
 		if (isDeferred) {
 			// Show in pending area when agent is streaming
