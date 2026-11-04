@@ -29,7 +29,8 @@
  *     extension statuses (ctx.ui.setStatus channel) and shell-mode label
  *   - thinking.ts -> pi.registerAssistantMessageRenderer() for the row body,
  *     pi.registerShortcut("ctrl+t") for expansion, and
- *     pi.unregisterSettingsItem("hide-thinking") to retire the superseded row
+ *     pi.registerSettingsItem() row "Thinking display" plus
+ *     pi.unregisterSettingsItem("hide-thinking") to retire the superseded one
  *   - working.ts  -> pi.registerWorkingIndicator() (also mirrors
  *     @zhushanwen/pi-todo steps into the Working line)
  *   - tools.ts    -> pi.registerTool() (overrides built-ins by name),

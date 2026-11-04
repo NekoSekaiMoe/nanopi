@@ -17,6 +17,8 @@
 
 ### Fixed
 
+- A module can claim ctrl+t again: `app.thinking.toggle` is no longer a reserved built-in key, so pi-ui's `registerShortcut("ctrl+t")` takes effect instead of being skipped with "conflicts with built-in shortcut". The editor asks module shortcuts before app actions, so the module that replaces the thinking display owns the press. Every other editor action keeps its key exclusively, and covering one of them is now silent rather than reported as a conflict that was already resolved (issue [#464](https://cnb.cool/shinytale/nanopi/-/issues/464))
+- pi-ui keeps a way to hide thinking: the core "Hide thinking" row it retires is replaced by a pi-ui one, and the new `ctx.ui.setThinkingHidden()` hides the rows in every rendered message. Without it, removing the built-in row also removed the only control for the setting it stored (issue [#464](https://cnb.cool/shinytale/nanopi/-/issues/464))
 - `ask_user_question` tells the model which questions the user skipped: a partial submission now ends the envelope with `unanswered: "<question>", …` and carries `details.unanswered` (indices), instead of closing with "continue with the user's answers in mind" as if every tab had been settled (issue [#449](https://cnb.cool/shinytale/nanopi/-/issues/449))
 - `ask_user_question` pages by the current tab's option window instead of tab 0's, so PgUp/PgDn no longer step by a stale row count when the questions have different option counts
 - Escape sequences that carry a private parameter byte are stripped whole, so an SGR mouse report (`ESC [ < 35 ; 59 ; 1 M`) or a device-attributes reply (`ESC [ > 0 ; 276 ; 0 c`) no longer leaves `35;59;1M` as plain text in tool output. `>` and `<` are final bytes only in the two-byte VT52 escapes, which still strip

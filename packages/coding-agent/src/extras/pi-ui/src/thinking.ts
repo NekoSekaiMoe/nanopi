@@ -34,8 +34,8 @@
  *
  * ctrl+t toggles between this collapsed pair and Pi's full italic thinking
  * markdown. Because both states of Pi's old "Hide thinking" setting are now
- * superseded (collapsed summary / expanded full text), the settings entry is
- * removed from the settings list.
+ * superseded (collapsed summary / expanded full text), that row is replaced by
+ * a pi-ui one that still hides the rows entirely.
  *
  * Mechanics, all through exported contracts (no prototype patches):
  *   - `pi.registerAssistantMessageRenderer` draws the thinking rows; text blocks
@@ -43,8 +43,12 @@
  *     pipeline. Any unexpected shape returns false and falls back to the
  *     default renderer.
  *   - `pi.registerShortcut("ctrl+t")` flips this module's expansion flag and
- *     the host repaints every rendered message.
- *   - `pi.unregisterSettingsItem("hide-thinking")` drops the superseded row.
+ *     the host repaints every rendered message. `app.thinking.toggle` is not a
+ *     reserved built-in key, so a module can claim it; the editor looks at
+ *     module shortcuts before app actions.
+ *   - `pi.unregisterSettingsItem("hide-thinking")` retires the superseded core
+ *     row, and `pi.registerSettingsItem()` puts the same choice back: "hide"
+ *     keeps the rows out of the transcript, "show" draws them.
  *   - `pi.on("message_update")` keeps the freshest ModuleContext (model +
  *     API key) for summary calls; the footer hand-off captures the TUI so a
  *     landed summary can request an immediate re-render.
@@ -74,7 +78,13 @@ let thinkingExpanded = false;
 /** Guard so the process-lifetime registrations run exactly once. */
 let installed = false;
 
+/** The core "Hide thinking" row this module supersedes. */
 const HIDE_THINKING_ID = "hide-thinking";
+const THINKING_DISPLAY_ID = "pi-ui:thinking-display";
+/** Empty widget key whose write the host turns into a repaint. */
+const REPAINT_KEY = "pi-ui:repaint";
+const ROWS = "rows";
+const HIDDEN = "hidden";
 
 /** Stable subset of AssistantMessage content blocks used here. */
 interface ContentBlockLike {
@@ -456,11 +466,14 @@ function renderCodexThinking(
   const theme = context.theme;
   const addChild = (child: Component) => context.addChild(child);
 
-  if (message.content.some(isVisibleBlock)) {
+  // Hidden: thinking stays out of the transcript, but the rest of the message
+  // still renders through this module (text, tool rows, stop reason).
+  const runs = thinkingHidden ? [] : collectThinkingRuns(message);
+
+  if (message.content.some((block) => isVisibleBlock(block) && !(thinkingHidden && block.type === "thinking"))) {
     addChild(new Spacer(1));
   }
 
-  const runs = collectThinkingRuns(message);
   if (streaming) {
     lastPartialMessage = message;
     lastLiveComponent = context;
@@ -565,21 +578,47 @@ function registerThinkingRenderer(pi: ModuleRenderingSurface & ModuleSettingsSur
   });
 }
 
+/** True when the rows are drawn at all; false hides thinking like the core setting. */
+let thinkingHidden = false;
+
 /**
- * ctrl+t reinterpreted: flip this module's expansion flag, then hand the toggle
- * back to the core so every rendered message repaints. `registerShortcut` owns
- * the key, so the core's own ctrl+t still toggles the now-superseded
- * "hide thinking" setting for users who do not run pi-ui.
+ * ctrl+t reinterpreted: flip this module's expansion flag. `registerShortcut`
+ * owns the key — `app.thinking.toggle` is not a reserved built-in — and the
+ * editor asks module shortcuts before app actions, so the core's own ctrl+t
+ * handler never runs while pi-ui is loaded.
  */
 function installThinkingToggle(pi: ModuleCommandsSurface): void {
   pi.registerShortcut("ctrl+t", {
     description: "Toggle Codex-style thinking rows",
     handler: (ctx) => {
       thinkingExpanded = !thinkingExpanded;
+      // Redrawing a widget is the repaint: components already on screen
+      // invalidate on their next render and read the flag above.
+      ctx.ui.redrawWidget(REPAINT_KEY, undefined);
       ctx.ui.notify(
         thinkingExpanded ? "Thinking expanded · ctrl+t to collapse" : "Thinking collapsed · ctrl+t to expand",
         "info",
       );
+    },
+  });
+}
+
+/**
+ * Put the retired core row's choice back. "rows" draws the Codex rows,
+ * "hidden" hides thinking in every rendered message, exactly like the core
+ * setting this module superseded. Both live outside the settings store: the
+ * core row is gone, so nothing reads a stored value back.
+ */
+function installThinkingSetting(pi: ModuleSettingsSurface): void {
+  pi.registerSettingsItem({
+    id: THINKING_DISPLAY_ID,
+    label: "Thinking display",
+    description: "Codex-style thinking rows, or hide thinking entirely",
+    currentValue: ROWS,
+    values: [ROWS, HIDDEN],
+    onChange: (value) => {
+      thinkingHidden = value === HIDDEN;
+      latestCtx?.ui.setThinkingHidden(thinkingHidden);
     },
   });
 }
@@ -597,8 +636,13 @@ export function installThinkingDisplay(
     registerThinkingRenderer(pi);
     installThinkingToggle(pi);
     // The core "Hide thinking" row is superseded by the collapsed Codex rows
-    // above; drop the now-misleading entry from the settings list.
+    // above, so it is retired; `installThinkingSetting` keeps the choice.
     pi.unregisterSettingsItem(HIDE_THINKING_ID);
+    installThinkingSetting(pi);
+    // A session can start after the row was changed; keep the two in step.
+    pi.on("session_start", (_event, ctx) => {
+      ctx.ui.setThinkingHidden(thinkingHidden);
+    });
     // Keep the freshest model context for summary generation. message_update
     // fires throughout streaming, so latestCtx.model tracks model switches.
     pi.on("message_update", (_event, ctx) => {

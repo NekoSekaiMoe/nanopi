@@ -99,6 +99,7 @@ export function createTestUiContext(overrides: Partial<ModuleUIContext> = {}): M
 		},
 		getToolsExpanded: () => false,
 		setToolsExpanded: () => {},
+		setThinkingHidden: () => {},
 		...overrides,
 	};
 }

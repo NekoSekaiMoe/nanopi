@@ -109,6 +109,10 @@ import { WidgetChannelHost } from "./widget-channels.ts";
 
 // RegisteredModule shortcuts compete with canonical keybinding ids from keybindings.json.
 // Only editor-global shortcuts are reserved here. Picker-specific bindings are not.
+//
+// `app.thinking.toggle` is deliberately absent: the editor asks module shortcuts
+// before app actions, and a module that replaces the thinking display owns that
+// key press. Every other editor action keeps its key exclusively.
 const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"app.interrupt",
 	"app.clear",
@@ -119,7 +123,6 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"app.model.cycleBackward",
 	"app.model.select",
 	"app.tools.expand",
-	"app.thinking.toggle",
 	"app.editor.external",
 	"app.message.copy",
 	"app.message.steer",
@@ -131,27 +134,19 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"tui.editor.deleteToLineEnd",
 ] as const;
 
-type BuiltInKeyBindings = Partial<Record<KeyId, { keybinding: string; restrictOverride: boolean }>>;
+/** Keys bound to a reserved action; a module may not take them. */
+type BuiltInKeyBindings = Set<KeyId>;
 
 const buildBuiltinKeybindings = (resolvedKeybindings: KeybindingsConfig): BuiltInKeyBindings => {
-	const builtinKeybindings = {} as BuiltInKeyBindings;
+	const reservedKeys: BuiltInKeyBindings = new Set();
 	for (const [keybinding, keys] of Object.entries(resolvedKeybindings)) {
 		if (keys === undefined) continue;
-		const keyList = Array.isArray(keys) ? keys : [keys];
-		const restrictOverride = (RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]).includes(keybinding);
-		for (const key of keyList) {
-			const normalizedKey = key.toLowerCase() as KeyId;
-			// If multiple actions bind the same key, the reserved action wins so extensions
-			// remain blocked by reserved shortcuts regardless of iteration order.
-			const existing = builtinKeybindings[normalizedKey];
-			if (existing?.restrictOverride && !restrictOverride) continue;
-			builtinKeybindings[normalizedKey] = {
-				keybinding,
-				restrictOverride,
-			};
+		if (!(RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS as readonly string[]).includes(keybinding)) continue;
+		for (const key of Array.isArray(keys) ? keys : [keys]) {
+			reservedKeys.add(key.toLowerCase() as KeyId);
 		}
 	}
-	return builtinKeybindings;
+	return reservedKeys;
 };
 
 /** The message that starts a run: the before_agent_start event without its prompt fields. */
@@ -320,6 +315,7 @@ const noOpUIContext: ModuleUIContext = {
 	},
 	getToolsExpanded: () => false,
 	setToolsExpanded: () => {},
+	setThinkingHidden: () => {},
 };
 
 /** Resource snapshot used before the session binds its real loader (e.g. in SDK embedders). */
@@ -651,20 +647,12 @@ export class ModuleRegistry {
 			for (const [key, shortcut] of ext.shortcuts) {
 				const normalizedKey = key.toLowerCase() as KeyId;
 
-				const builtInKeybinding = builtinKeybindings[normalizedKey];
-				if (builtInKeybinding?.restrictOverride === true) {
+				if (builtinKeybindings.has(normalizedKey)) {
 					addDiagnostic(
 						`RegisteredModule shortcut '${key}' from ${shortcut.moduleName} conflicts with built-in shortcut. Skipping.`,
 						shortcut.moduleName,
 					);
 					continue;
-				}
-
-				if (builtInKeybinding?.restrictOverride === false) {
-					addDiagnostic(
-						`RegisteredModule shortcut conflict: '${key}' is built-in shortcut for ${builtInKeybinding.keybinding} and ${shortcut.moduleName}. Using ${shortcut.moduleName}.`,
-						shortcut.moduleName,
-					);
 				}
 
 				const existingExtensionShortcut = extensionShortcuts.get(normalizedKey);
