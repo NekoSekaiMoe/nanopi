@@ -15,6 +15,8 @@ import type { ExecOptions } from "../exec.ts";
 import { execCommand } from "../exec.ts";
 import type { KeybindingsConfig } from "../keybindings.ts";
 import type { MemorySample } from "../memory-usage.ts";
+import type { MessageTypeCodec, MessageTypeCodecMap } from "../messages/codec.ts";
+import { MessageTypeRegistry } from "../messages/registry.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
 import type { SessionManager } from "../session-manager.ts";
@@ -53,6 +55,9 @@ import type {
 	MessageEndEvent,
 	MessageEndEventResult,
 	MessageRenderer,
+	MessageRunRenderer,
+	MessageTypeRegistration,
+	MessageTypeRegistrationHandle,
 	ModuleActions,
 	ModuleApi,
 	ModuleCommandContext,
@@ -359,6 +364,8 @@ export class ModuleRegistry {
 	private shutdownHandler: ShutdownHandler = () => {};
 	private shortcutDiagnostics: ResourceDiagnostic[] = [];
 	private commandDiagnostics: ResourceDiagnostic[] = [];
+	/** Message kinds modules registered, on top of the built-in ones. */
+	private registryMessageTypes = new MessageTypeRegistry();
 
 	constructor(
 		extensions: RegisteredModule[],
@@ -691,6 +698,16 @@ export class ModuleRegistry {
 			}
 		}
 		return false;
+	}
+
+	/** Message kinds this session understands, built-in and module-registered. */
+	get messageTypes(): MessageTypeRegistry {
+		return this.registryMessageTypes;
+	}
+
+	/** Codec table for `convertToLlm` and the token estimator. */
+	get messageCodecs(): MessageTypeCodecMap {
+		return this.registryMessageTypes.table();
 	}
 
 	getMessageRenderer(customType: string): MessageRenderer | undefined {
@@ -1490,6 +1507,7 @@ function createModuleApi(
 	cwd: string,
 	eventBus: EventBus,
 	getModuleNames: () => string[],
+	messageTypes: MessageTypeRegistry,
 ): { api: ModuleApi; commit: () => void; discard: () => void } {
 	const pendingFlagValues = new Map<string, boolean | string>();
 	const pendingRuntimeChanges: Array<() => void> = [];
@@ -1581,6 +1599,41 @@ function createModuleApi(
 
 		registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
 			module.messageRenderers.set(customType, renderer as MessageRenderer);
+		},
+
+		registerMessageType(options: MessageTypeRegistration): MessageTypeRegistrationHandle {
+			const codec: MessageTypeCodec = {
+				kind: options.kind,
+				toLlm: options.toLlm as MessageTypeCodec["toLlm"],
+				estimateTokens: options.estimateTokens as MessageTypeCodec["estimateTokens"],
+				renderRun: options.renderRun
+					? (message, renderOptions) => options.renderRun?.(message, renderOptions)
+					: undefined,
+			};
+			const registry = messageTypes;
+			const customType = options.customType;
+			registry.register(codec, customType);
+			const current = () =>
+				customType ? registry.customTypes.get(customType) : registry.codecForKind(options.kind);
+			return {
+				isRegistered: () => current() === codec,
+				unregister: () => {
+					if (current() !== codec) return;
+					if (customType) registry.customTypes.delete(customType);
+					else registry.unregister(options.kind);
+				},
+			};
+		},
+
+		registerMessageRunRenderer(kind: string, renderer: MessageRunRenderer): void {
+			// Keep whatever projection the kind already has; only the drawing changes.
+			const existing = messageTypes.codecForKind(kind);
+			messageTypes.register({
+				kind,
+				toLlm: existing?.toLlm ?? ((message) => [message as never]),
+				estimateTokens: existing?.estimateTokens ?? (() => 0),
+				renderRun: (message, options) => renderer(message, options),
+			});
 		},
 
 		registerMarkdownTransformer(transformer: MarkdownTransformer): void {
@@ -1795,12 +1848,13 @@ async function initializeModule(
 	eventBus: EventBus,
 	runtime: ModuleRuntime,
 	loadedNames: readonly string[],
+	messageTypes: MessageTypeRegistry,
 ): Promise<RegisteredModule> {
 	const module = createRegisteredModule(sessionModule);
 	// Factories run before the registry object exists, so the names come from the
 	// list built so far. `loadedNames` is captured by reference to the caller's
 	// array, which is appended as each module finishes loading.
-	const load = createModuleApi(module, runtime, cwd, eventBus, () => [...loadedNames]);
+	const load = createModuleApi(module, runtime, cwd, eventBus, () => [...loadedNames], messageTypes);
 	try {
 		await sessionModule.factory(load.api);
 		load.commit();
@@ -1826,10 +1880,15 @@ export async function loadModules(
 	// Names of every module in the load set (not just the ones loaded so far), so
 	// a module asking mid-load sees the full list it is part of.
 	const loadedNames: string[] = modules.map((sessionModule) => sessionModule.name);
+	// One table for the whole load set, so a kind registered by one module is projected
+	// and drawn by every consumer of the session rather than only by its owner.
+	const messageTypes = new MessageTypeRegistry();
 
 	for (const sessionModule of modules) {
 		try {
-			loaded.push(await initializeModule(sessionModule, resolvedCwd, resolvedEventBus, runtime, loadedNames));
+			loaded.push(
+				await initializeModule(sessionModule, resolvedCwd, resolvedEventBus, runtime, loadedNames, messageTypes),
+			);
 		} catch (error) {
 			errors.push({
 				path: sessionModule.name,
@@ -1838,5 +1897,5 @@ export async function loadModules(
 		}
 	}
 
-	return { modules: loaded, errors, warnings: [], runtime };
+	return { modules: loaded, errors, warnings: [], runtime, messageTypes };
 }

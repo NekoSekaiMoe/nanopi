@@ -78,19 +78,17 @@ export { createEventBus, type EventBus, type EventBusController } from "./core/e
 export { execCommand } from "./core/exec.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
-export type { MessageCodec } from "./core/messages.ts";
 export {
-	convertToLlm,
-	estimateMessageTextChars,
-	estimateMessageTokens,
-	getMessageCodec,
-	getMessageCodecRoles,
-	isCutPointMessageRole,
-	isTurnStartMessageRole,
-	registerMessageCodec,
-	toUserTextMessage,
-	unregisterMessageCodec,
-} from "./core/messages.ts";
+	charsToTokens,
+	createBuiltinMessageCodecs,
+	type MessageRunRenderOptions,
+	type MessageTypeCodec,
+	type MessageTypeCodecMap,
+	MessageTypeRegistry,
+	messageKind,
+	resolveMessageCodec,
+} from "./core/messages/index.ts";
+export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
 export {
 	findInitialModel,

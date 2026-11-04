@@ -2,6 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import { createModuleRuntime } from "../src/core/modules/registry.ts";
 import type { ResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";
@@ -52,7 +53,12 @@ This is a test skill.
 
 	it("should have empty skills when resource loader returns none (--no-skills)", async () => {
 		const resourceLoader: ResourceLoader = {
-			getModules: () => ({ modules: [], errors: [], runtime: createModuleRuntime() }),
+			getModules: () => ({
+				modules: [],
+				errors: [],
+				runtime: createModuleRuntime(),
+				messageTypes: new MessageTypeRegistry(),
+			}),
 			getSkills: () => ({ skills: [], diagnostics: [] }),
 			getPrompts: () => ({ prompts: [], diagnostics: [] }),
 			getAgentsFiles: () => ({ agentsFiles: [] }),
@@ -86,7 +92,12 @@ This is a test skill.
 		};
 
 		const resourceLoader: ResourceLoader = {
-			getModules: () => ({ modules: [], errors: [], runtime: createModuleRuntime() }),
+			getModules: () => ({
+				modules: [],
+				errors: [],
+				runtime: createModuleRuntime(),
+				messageTypes: new MessageTypeRegistry(),
+			}),
 			getSkills: () => ({ skills: [customSkill], diagnostics: [] }),
 			getPrompts: () => ({ prompts: [], diagnostics: [] }),
 			getAgentsFiles: () => ({ agentsFiles: [] }),

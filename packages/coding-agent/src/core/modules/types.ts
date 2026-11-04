@@ -63,6 +63,7 @@ import type { ExecOptions, ExecResult } from "../exec.ts";
 import type { ReadonlyFooterDataProvider } from "../footer-data-provider.ts";
 import type { KeybindingsManager } from "../keybindings.ts";
 import type { MemorySample } from "../memory-usage.ts";
+import type { MessageTypeRegistry } from "../messages/registry.ts";
 import type { CustomMessage } from "../messages.ts";
 import type { ModelRegistry } from "../model-registry.ts";
 import type { ScopedModel } from "../model-resolver.ts";
@@ -1469,6 +1470,35 @@ export interface MessageRenderOptions {
 	outputPad: number;
 }
 
+/** What `registerMessageType` accepts. */
+export interface MessageTypeRegistration {
+	/** Message `role` the codec handles, e.g. "notification". */
+	kind: string;
+	/** Required when `kind` is "custom": narrows the codec to this custom type. */
+	customType?: string;
+	/** Project one message into the LLM context. Return [] to keep it out of the request. */
+	toLlm: (message: AgentMessage) => Message[];
+	/** Rough token estimate used by compaction. Chars/4 is the convention. */
+	estimateTokens?: (message: AgentMessage) => number;
+	/** Draw the message in the interactive transcript. */
+	renderRun?: (message: AgentMessage, options: MessageRunRenderOptions) => Component | undefined;
+}
+
+export interface MessageTypeRegistrationHandle {
+	/** True when the codec is in the session's table and this registration still owns it. */
+	isRegistered(): boolean;
+	/** Remove the codec, but only if this registration is the one that installed it. */
+	unregister(): void;
+}
+
+/** Options a run renderer receives. */
+export interface MessageRunRenderOptions extends MessageRenderOptions {
+	/** Index of the turn the message belongs to. */
+	turn: number;
+	/** Width available to the transcript, when the caller knows it. */
+	availableWidth?: number;
+}
+
 export interface MarkdownTransformContext {
 	messageType: "user" | "assistant" | "assistant-thinking";
 	isStreaming: boolean;
@@ -1486,6 +1516,8 @@ export type MessageRenderer<T = unknown> = (
 	options: MessageRenderOptions,
 	theme: Theme,
 ) => Component | undefined;
+
+export type MessageRunRenderer = (message: AgentMessage, options: MessageRunRenderOptions) => Component | undefined;
 
 export type EntryRenderer<T = unknown> = (
 	entry: CustomEntry<T>,
@@ -1817,6 +1849,24 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 	// Message Rendering
 	// =========================================================================
 
+	/**
+	 * Register a message type: how a message with this `role` reaches the LLM, how many
+	 * tokens it costs, and how the transcript draws it.
+	 *
+	 * `role` is a message `role` string. The app's own kinds (system, user, assistant,
+	 * toolResult, bashExecution, branchSummary, compactionSummary, custom) are already
+	 * there; re-registering one replaces its projection for this session, which also
+	 * stops it from being written into the LLM context the old way.
+	 *
+	 * A message whose kind nobody registered is dropped from the LLM context. That is
+	 * deliberate: guessing a projection would put module payloads in front of the model
+	 * without anyone deciding they belong there.
+	 *
+	 * `kind: "custom"` with a `customType` narrows one custom message type instead of
+	 * the whole `custom` role.
+	 */
+	registerMessageType(options: MessageTypeRegistration): MessageTypeRegistrationHandle;
+
 	/** Register a custom renderer for CustomMessageEntry. */
 	registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
 
@@ -1861,6 +1911,13 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 	 * keeps the host text, and `{ hidden: true }` suppresses the row.
 	 */
 	registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void;
+
+	/**
+	 * Draw one message kind in the interactive transcript. This is `registerMessageType`
+	 * without the projection, for a kind whose LLM context the app already defines, such
+	 * as `bashExecution`.
+	 */
+	registerMessageRunRenderer(kind: string, renderer: MessageRunRenderer): void;
 }
 
 /** Settings rows: what a module contributes to the settings list, and what it retires from it. */
@@ -2468,6 +2525,8 @@ export interface LoadModulesResult {
 	warnings?: Array<{ path: string; warning: string }>;
 	/** Shared runtime - actions are throwing stubs until runner.initialize() */
 	runtime: ModuleRuntime;
+	/** Message kinds registered while the factories ran; feeds `convertToLlm` and drawing. */
+	messageTypes: MessageTypeRegistry;
 }
 
 // ============================================================================

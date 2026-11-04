@@ -63,7 +63,14 @@ documentation first and a compiler check second; the check is what caught that
 `pi-smart-flow`'s `registerDelegationNudge` reads `getActiveTools`, and that
 `pi-fake-codex`'s hook failure path calls `sendUserMessage`.
 
-### 2. Message roles register a codec
+### 2. Message kinds register a codec
+
+> Superseded in part by
+> [message type codec registry](2026-11-04-message-type-codec-registry.md), which
+> landed first. `registerMessageCodec()` described below was replaced by the
+> per-session `MessageTypeRegistry` + `registerMessageType()` before this branch
+> merged; what survived is the surface split above and the token estimate reading
+> the registry instead of counting a registered kind as 0.
 
 ```typescript
 export interface MessageCodec<TMessage extends AgentMessage = AgentMessage> {
@@ -140,12 +147,32 @@ where compaction cuts a session by being registered.
   `core/messages.ts` would put an LLM-message dependency in the coding-agent
   message definitions.
 
+## Merge resolution
+
+This branch was rebased onto a `main` that already carried
+[the message type codec registry](2026-11-04-message-type-codec-registry.md). Three
+files conflicted and the per-role `registerMessageCodec` table was dropped rather
+than kept beside the registry:
+
+- `src/core/messages.ts`: one projection entry point. `convertToLlm(messages, codecs?)`
+  resolves through `resolveMessageCodec`, the four provider roles pass through, and a
+  kind with no codec is dropped. The `registerMessageCodec` map is gone; the registry
+  owns registration.
+- `src/core/compaction/compaction.ts`: `estimateTokens(message, codecs?)` consults the
+  session table first, which is the part of this note worth keeping — a module's kind is
+  priced by its own estimator, and a codec can re-measure a built-in role. Cut points
+  stay a `switch` over the known kinds and are now exported so they can be tested. The
+  registry has no `isCutPoint`, so registering a kind cannot move a cut.
+- `src/core/modules/types.ts`: `registerMessageType` and `registerMessageRunRenderer`
+  live on `ModuleRenderingSurface`, and the surface composition is unchanged.
+
 ## Consequences
 
-- `estimateTokens()` estimates an unknown role at `chars/4` instead of 0. A
-  session that contains a message role from an augmented host now counts that
-  message against the context window. This is a behavior change, and the
-  intended one: 0 meant compaction ignored content the model was paying for.
+- `estimateTokens()` prices a kind through the session's codec instead of 0. A
+  session that contains a kind a module registered now counts that message against
+  the context window; a kind nobody registered still counts as 0. This is a behavior
+  change, and the intended one: 0 meant compaction ignored content the model was
+  paying for.
 - Cut points for the four built-in roles are identical to the old switches
   (`bashExecution`, `custom`, `branchSummary`, `compactionSummary`: cut, turn
   start). `convertToLlm` output was diffed message-by-message against the old
@@ -160,8 +187,8 @@ where compaction cuts a session by being registered.
   `CustomAgentMessages` to reach TypeScript. The codec is the runtime half
   only; registering one without the merge compiles, runs, and takes away the
   exhaustiveness that would have warned you.
-- `isCutPointMessage` and `isTurnStartMessage` are now exported from
-  `compaction.ts` so the codec behavior is testable directly.
+- `isCutPointMessage` and `isTurnStartMessage` are exported from `compaction.ts` so
+  the cut rules are testable directly.
 - Every `module/<name>` factory has an explicit surface list. That list is now
   part of the diff when a module grows a capability; a reviewer sees
   `registerProvider` arrive in a type position before it arrives in a body.
