@@ -37,15 +37,14 @@
  * superseded (collapsed summary / expanded full text), the settings entry is
  * removed from the settings list.
  *
- * Mechanics, following tools.ts conventions:
- *   - `AssistantMessageComponent.prototype.updateContent` is re-implemented
- *     for messages that contain thinking and delegated to the original for
- *     everything else (so text blocks keep Pi's exact markdown pipeline).
- *     Any unexpected shape falls back to the original renderer.
- *   - `InteractiveMode.prototype.toggleThinkingBlockVisibility` (the ctrl+t
- *     action) is wrapped to flip this module's expansion flag; the original
- *     still performs the chat rebuild and streaming-component refresh.
- *   - `SettingsList.prototype.render` drops the "hide-thinking" item.
+ * Mechanics, all through exported contracts (no prototype patches):
+ *   - `pi.registerAssistantMessageRenderer` draws the thinking rows; text blocks
+ *     go back through `context.renderText`, so they keep Pi's exact markdown
+ *     pipeline. Any unexpected shape returns false and falls back to the
+ *     default renderer.
+ *   - `pi.registerShortcut("ctrl+t")` flips this module's expansion flag and
+ *     the host repaints every rendered message.
+ *   - `pi.unregisterSettingsItem("hide-thinking")` drops the superseded row.
  *   - `pi.on("message_update")` keeps the freshest ModuleContext (model +
  *     API key) for summary calls; the editor factory hand-off captures the
  *     TUI so a landed summary can request an immediate re-render.
@@ -65,31 +64,15 @@ import type {
 } from "@nanopi/pi-coding-agent";
 
 import { completeSimple } from "@nanopi/pi-ai/compat";
-import type { MarkdownTheme } from "@nanopi/pi-tui";
 import { Spacer, Markdown, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
 
-/** Theme captured at the latest session_start; fallback for resolveTheme(). */
-let activeTheme: Theme | undefined;
 /** Module-level expansion state; false = collapsed Codex-style rows. */
 let thinkingExpanded = false;
 /** Guard so pi.on context hooks are registered exactly once per process. */
 let eventsRegistered = false;
-
-/** Shared global theme instance Pi publishes for cross-loader access. */
-const PI_THEME_KEY = Symbol.for("@nanopi/pi-coding-agent:theme");
-
-/**
- * Resolve the current theme lazily: the shared global instance is live and
- * already initialized when restored sessions render their chat *before*
- * session_start delivers ctx.ui.theme (see InteractiveMode.run()).
- */
-function resolveTheme(): Theme | undefined {
-  const shared = (globalThis as typeof globalThis & { [PI_THEME_KEY]?: Theme })[PI_THEME_KEY];
-  return shared ?? activeTheme;
-}
 
 const HIDE_THINKING_ID = "hide-thinking";
 
@@ -339,6 +322,7 @@ function resolveClosedSummary(
  * thinking color, truncated to the render width. Flush-left like tool rows.
  */
 class ThinkingRow implements Component {
+  private theme: Theme;
   private live: boolean;
   private elapsedMs?: number;
   private durationMs?: number;
@@ -346,7 +330,8 @@ class ThinkingRow implements Component {
   private cachedWidth = -1;
   private cachedLines: string[] = [];
 
-  constructor(options: { live: boolean; elapsedMs?: number; durationMs?: number; line: string }) {
+  constructor(options: { theme: Theme; live: boolean; elapsedMs?: number; durationMs?: number; line: string }) {
+    this.theme = options.theme;
     this.live = options.live;
     this.elapsedMs = options.elapsedMs;
     this.durationMs = options.durationMs;
@@ -359,8 +344,8 @@ class ThinkingRow implements Component {
   }
 
   render(width: number): string[] {
-    const theme = resolveTheme();
-    if (!theme || width <= 0) return [];
+    const theme = this.theme;
+    if (width <= 0) return [];
     if (this.cachedWidth === width) return this.cachedLines;
 
     const dot = fgRgb("•", this.live ? DOT_RUNNING : DOT_DONE);
@@ -468,7 +453,7 @@ function renderCodexThinking(
   message: AssistantMessageLike,
   streaming: boolean,
 ): void {
-  const theme = resolveTheme()!;
+  const theme = context.theme;
   const addChild = (child: Component) => context.addChild(child);
 
   if (message.content.some(isVisibleBlock)) {
@@ -515,6 +500,7 @@ function renderCodexThinking(
         const timing = liveRuns[runIndex];
         addChild(
           new ThinkingRow({
+            theme,
             live: true,
             elapsedMs: timing ? Date.now() - timing.startedAt : undefined,
             line: lastNonEmptyLine(run.joined),
@@ -533,6 +519,7 @@ function renderCodexThinking(
         const summary = resolveClosedSummary(message, runIndex, run, streaming, context);
         addChild(
           new ThinkingRow({
+            theme,
             live: false,
             durationMs,
             line: summary,
@@ -564,7 +551,7 @@ function renderCodexThinking(
  */
 function registerThinkingRenderer(pi: ModuleRenderingSurface): void {
   pi.registerAssistantMessageRenderer((message, context) => {
-    if (!hasThinkingContent(message) || !resolveTheme()) return false;
+    if (!hasThinkingContent(message)) return false;
     // message_start renders a thinking-less partial: the reliable per-message
     // reset point for the live timing/summary arrays (partial copies have no
     // stable identity across deltas).
@@ -598,16 +585,14 @@ function installThinkingToggle(pi: ModuleCommandsSurface): void {
 }
 
 /**
- * Activate the Codex thinking display. Prototype patches are process-lifetime
- * and idempotent (see tools.ts for the rationale); `pi` event hooks for the
- * summary model context are registered once. The theme is refreshed on every
- * TUI session_start so theme switches are followed via the live proxy.
+ * Activate the Codex thinking display. Registrations on `pi` are made once for
+ * the process lifetime; the renderer takes its theme from the render context,
+ * so theme switches need no per-session reinstall. Passing no `pi` only keeps
+ * the call site uniform with the other install helpers.
  */
 export function installThinkingDisplay(
   pi?: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
-  theme?: Theme,
 ): void {
-  if (theme) activeTheme = theme;
   if (pi && !eventsRegistered) {
     eventsRegistered = true;
     registerThinkingRenderer(pi);
