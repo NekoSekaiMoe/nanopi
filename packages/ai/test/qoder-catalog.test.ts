@@ -55,7 +55,6 @@ describe("Qoder model list", () => {
 	it("builds subscription-cost entries from a listed model", () => {
 		const entry = qoderModelEntry({
 			provider: "qoder",
-			baseUrl: "https://api2.qoder.sh/v1",
 			listed: { key: "cmodel", displayName: "Sonus", isDefault: false, isReasoning: false, contextWindow: 200000 },
 		});
 
@@ -63,7 +62,8 @@ describe("Qoder model list", () => {
 			id: "cmodel",
 			name: "Sonus",
 			provider: "qoder",
-			api: "openai-completions",
+			api: "qoder",
+			baseUrl: qoderEndpoints("global").chatUrl,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: 200000,
 			maxTokens: 16384,

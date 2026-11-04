@@ -17,6 +17,8 @@ export interface QoderEndpoints {
 	openApiHost: string;
 	/** Signed `/algo` endpoint that lists the models the account may use. */
 	modelListUrl: string;
+	/** Signed `/algo` endpoint that streams one agent completion. */
+	chatUrl: string;
 }
 
 const GLOBAL_ENDPOINTS: QoderEndpoints = {
@@ -26,6 +28,8 @@ const GLOBAL_ENDPOINTS: QoderEndpoints = {
 	plan: "https://openapi.qoder.sh/api/v2/user/plan",
 	openApiHost: "openapi.qoder.sh",
 	modelListUrl: "https://api2.qoder.sh/algo/api/v2/model/list?Encode=1",
+	chatUrl:
+		"https://api1.qoder.sh/algo/api/v2/service/pro/sse/agent_chat_generation?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1",
 };
 
 const CN_ENDPOINTS: QoderEndpoints = {
@@ -35,11 +39,17 @@ const CN_ENDPOINTS: QoderEndpoints = {
 	plan: "https://openapi.qoder.com.cn/api/v2/user/plan",
 	openApiHost: "openapi.qoder.com.cn",
 	modelListUrl: "https://gateway.qoder.com.cn/algo/api/v2/model/list?Encode=1",
+	chatUrl:
+		"https://gateway.qoder.com.cn/algo/api/v2/service/pro/sse/agent_chat_generation?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1",
 };
 
 export function qoderEndpoints(region: QoderRegion): QoderEndpoints {
 	return region === "cn" ? CN_ENDPOINTS : GLOBAL_ENDPOINTS;
 }
+
+/** The API id Qoder models carry: endpoint signing, not Chat Completions. */
+export const QODER_API = "qoder";
+export type QoderApi = typeof QODER_API;
 
 /** Provider ids: one catalog per site, since they bill and route separately. */
 export const QODER_GLOBAL_PROVIDER_ID = "qoder";
