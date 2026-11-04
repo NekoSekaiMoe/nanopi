@@ -1,10 +1,7 @@
-import type {
-  ModuleApi,
-  ModuleCommandContext,
-} from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleCommandContext, ModuleCommandsSurface, ModuleActionsSurface, ModuleSessionSurface } from "@nanopi/pi-coding-agent";
 import { handleSimplifyCommand, COMMAND_NAME } from "./simplify-command.js";
 
-export default function (pi: ModuleApi): void {
+export default function (pi: ModuleCommandsSurface & ModuleActionsSurface & ModuleSessionSurface): void {
   pi.registerCommand(COMMAND_NAME, {
     description:
       "Review recently changed code for clarity, consistency, and maintainability improvements",

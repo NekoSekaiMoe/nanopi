@@ -27,7 +27,6 @@ import type {
 } from "@nanopi/pi-ai/compat";
 import { completeSimple } from "@nanopi/pi-ai/compat";
 import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
-import { estimateMessageTokens } from "../messages/builtin-codecs.ts";
 import type { MessageTypeCodecMap } from "../messages/codec.ts";
 import { convertToLlm } from "../messages.ts";
 import {
@@ -338,12 +337,18 @@ function estimateTextAndImageContentChars(content: string | Array<{ type: string
  * Estimate token count for a message using chars/4 heuristic.
  * This is conservative (overestimates tokens).
  *
- * Core roles are measured here. Any other kind is measured by the codec the session
- * registered for it, so a message type a module added is priced by its own definition
+ * Core roles are measured here; a kind the session registered a codec for is measured
+ * by that codec, so a message type a module added is priced by its own definition
  * instead of silently counting as free context.
  */
 export function estimateTokens(message: AgentMessage, codecs?: MessageTypeCodecMap): number {
-	if (!isCoreRole(message.role)) return codecs ? estimateMessageTokens(codecs, message) : 0;
+	// A session's table answers first, so a module can price a kind it invented and also
+	// replace how a built-in one is measured. Only an unlisted kind falls through.
+	if (codecs) {
+		const codec = codecs.get(message.role);
+		if (codec?.estimateTokens) return codec.estimateTokens(message);
+	}
+	if (!isCoreRole(message.role)) return 0;
 
 	let chars = 0;
 
@@ -383,7 +388,7 @@ export function estimateTokens(message: AgentMessage, codecs?: MessageTypeCodecM
 			return Math.ceil(chars / 4);
 		}
 		default:
-			return codecs ? estimateMessageTokens(codecs, message) : 0;
+			return 0;
 	}
 }
 
@@ -395,7 +400,12 @@ function isCoreRole(role: string): role is "system" | "user" | "assistant" | "to
 	return MEASURED_ROLES.has(role);
 }
 
-function isCutPointMessage(message: AgentMessage): boolean {
+/**
+ * Cut rule for every message kind. `system` is context, not a boundary, and a tool
+ * result must follow its call, so neither starts a cut. A kind nobody listed stays
+ * out of the cut search rather than splitting a conversation at random.
+ */
+export function isCutPointMessage(message: AgentMessage): boolean {
 	switch (message.role) {
 		case "user":
 		case "assistant":
@@ -410,7 +420,7 @@ function isCutPointMessage(message: AgentMessage): boolean {
 	return false;
 }
 
-function isTurnStartMessage(message: AgentMessage): boolean {
+export function isTurnStartMessage(message: AgentMessage): boolean {
 	switch (message.role) {
 		case "user":
 		case "bashExecution":

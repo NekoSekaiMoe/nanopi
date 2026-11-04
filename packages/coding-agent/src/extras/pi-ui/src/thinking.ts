@@ -53,8 +53,11 @@
 import type {
   AssistantMessageRenderContext,
   AssistantMessageRenderer,
-  ModuleApi,
+  ModuleCommandsSurface,
   ModuleContext,
+  ModuleEventsSurface,
+  ModuleRenderingSurface,
+  ModuleSettingsSurface,
   MarkdownTransformContext,
   MarkdownTransformer,
   Theme,
@@ -546,7 +549,7 @@ function renderCodexThinking(
  * streaming component" check, which the host's own isStreaming flag also
  * agrees with.
  */
-function registerThinkingRenderer(pi: ModuleApi): void {
+function registerThinkingRenderer(pi: ModuleRenderingSurface & ModuleSettingsSurface): void {
   pi.registerAssistantMessageRenderer((message, context) => {
     if (!hasThinkingContent(message)) return false;
     // message_start renders a thinking-less partial: the reliable per-message
@@ -568,7 +571,7 @@ function registerThinkingRenderer(pi: ModuleApi): void {
  * the key, so the core's own ctrl+t still toggles the now-superseded
  * "hide thinking" setting for users who do not run pi-ui.
  */
-function installThinkingToggle(pi: ModuleApi): void {
+function installThinkingToggle(pi: ModuleCommandsSurface): void {
   pi.registerShortcut("ctrl+t", {
     description: "Toggle Codex-style thinking rows",
     handler: (ctx) => {
@@ -588,7 +591,9 @@ function installThinkingToggle(pi: ModuleApi): void {
  * is not captured here: the renderer reads it from the render context, so a
  * theme switch is followed on the next repaint.
  */
-export function installThinkingDisplay(pi: ModuleApi): void {
+export function installThinkingDisplay(
+  pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleSettingsSurface & ModuleCommandsSurface,
+): void {
   if (!installed) {
     installed = true;
     registerThinkingRenderer(pi);

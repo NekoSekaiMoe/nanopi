@@ -12,10 +12,7 @@
 // per session when a config activates.
 
 import { randomUUID } from "node:crypto";
-import type {
-	ModuleApi,
-	ModuleContext,
-} from "../../../../core/modules/types.ts";
+import type { ModuleApi, ModuleContext, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface } from "../../../../core/modules/types.ts";
 import {
   type CodexHookEvent,
   type LoadedCodexHooks,
@@ -50,7 +47,7 @@ interface HookState {
   stopHookActive: boolean;
 }
 
-export function registerCodexHookAdapter(pi: ModuleApi): void {
+export function registerCodexHookAdapter(pi: ModuleEventsSurface & ModuleToolsSurface & ModuleActionsSurface): void {
   const state: HookState = {
     active: false,
     lifecycle: new AbortController(),
@@ -378,7 +375,7 @@ function notifySystemMessage(output: ParsedHookOutput, ctx: ModuleContext): void
 }
 
 function sendHookFailureMessage(
-  pi: ModuleApi,
+  pi: ModuleActionsSurface,
   eventName: CodexHookEvent,
   failures: ParsedHookOutput[],
 ): void {

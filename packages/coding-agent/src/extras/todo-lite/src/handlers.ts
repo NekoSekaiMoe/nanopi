@@ -3,7 +3,7 @@
  * before_agent_start / agent_end。
  */
 
-import type { ModuleApi, ModuleContext } from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleContext, ModuleEventsSurface } from "@nanopi/pi-coding-agent";
 
 import {
 	migrateTodo,
@@ -157,7 +157,7 @@ export function handleReminder(state: TodoSessionState): boolean {
 // ── Event handler 注册入口 ──────────────────────────
 
 export function registerTodoEventHandlers(
-	pi: ModuleApi,
+	pi: ModuleEventsSurface,
 	state: TodoSessionState,
 	refreshDisplay: RefreshDisplayFn,
 ): void {

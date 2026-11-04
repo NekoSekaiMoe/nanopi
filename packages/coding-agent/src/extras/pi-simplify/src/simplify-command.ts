@@ -1,7 +1,4 @@
-import type {
-  ModuleApi,
-  ModuleCommandContext,
-} from "@nanopi/pi-coding-agent";
+import type { ModuleApi, ModuleCommandContext, ModuleCommandsSurface, ModuleActionsSurface, ModuleSessionSurface } from "@nanopi/pi-coding-agent";
 import { getChangedFiles } from "./git-diff.js";
 import { buildSimplifyPrompt } from "./prompt-builder.js";
 import type { SimplifyOptions } from "./types.js";
@@ -30,7 +27,7 @@ export function parseArgs(args: string): SimplifyOptions {
 export async function handleSimplifyCommand(
   args: string,
   ctx: ModuleCommandContext,
-  pi: ModuleApi,
+  pi: ModuleCommandsSurface & ModuleActionsSurface & ModuleSessionSurface,
 ): Promise<void> {
   const options = parseArgs(args);
   const files = await getChangedFiles(pi, ctx.cwd, options);

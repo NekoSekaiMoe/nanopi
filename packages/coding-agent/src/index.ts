@@ -78,6 +78,16 @@ export { createEventBus, type EventBus, type EventBusController } from "./core/e
 export { execCommand } from "./core/exec.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
+export {
+	charsToTokens,
+	createBuiltinMessageCodecs,
+	type MessageRunRenderOptions,
+	type MessageTypeCodec,
+	type MessageTypeCodecMap,
+	MessageTypeRegistry,
+	messageKind,
+	resolveMessageCodec,
+} from "./core/messages/index.ts";
 export { convertToLlm } from "./core/messages.ts";
 export { ModelRegistry } from "./core/model-registry.ts";
 export {
@@ -155,20 +165,30 @@ export type {
 	ModelSelectEvent,
 	ModelSelectSource,
 	ModuleActions,
+	ModuleActionsSurface,
 	ModuleApi,
 	ModuleCommandContext,
 	ModuleCommandContextActions,
+	ModuleCommandsSurface,
 	ModuleContext,
 	ModuleContextActions,
 	ModuleError,
 	ModuleEvent,
+	ModuleEventsSurface,
 	ModuleFactory,
 	ModuleFlag,
 	ModuleHandler,
+	ModuleModelSurface,
+	ModuleProvidersSurface,
+	ModuleRenderingSurface,
 	ModuleRuntime,
+	ModuleSessionSurface,
 	ModuleSettingsItem,
+	ModuleSettingsSurface,
 	ModuleShortcut,
+	ModuleSurface,
 	ModuleToolContext,
+	ModuleToolsSurface,
 	ModuleUIContext,
 	ModuleUIDialogOptions,
 	ModuleVirtualModel,

@@ -171,7 +171,7 @@ export function convertToLlm(messages: AgentMessage[], codecs?: MessageTypeCodec
 
 const PROVIDER_ROLES = new Set(["system", "user", "assistant", "toolResult"]);
 
-function isProviderRole(role: string): boolean {
+function isProviderRole(role: string): role is "system" | "user" | "assistant" | "toolResult" {
 	return PROVIDER_ROLES.has(role);
 }
 
