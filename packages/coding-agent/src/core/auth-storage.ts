@@ -50,7 +50,7 @@ type AuthFileReadState = {
 
 let sharedAuthFileReadState: { authPath: string; readState: AuthFileReadState } | undefined;
 
-export interface AuthStorageBackend {
+interface AuthStorageBackend {
 	withLock<T>(fn: (current: string | undefined) => LockResult<T>): T;
 	withLockAsync<T>(
 		fn: (current: string | undefined) => Promise<LockResult<T>>,
@@ -58,7 +58,7 @@ export interface AuthStorageBackend {
 	): Promise<T>;
 }
 
-export class FileAuthStorageBackend implements AuthStorageBackend {
+class FileAuthStorageBackend implements AuthStorageBackend {
 	private authPath: string;
 
 	constructor(authPath: string = join(getAgentDir(), "auth.json")) {
@@ -290,7 +290,7 @@ export class ReadOnlyAuthStorage implements CredentialStore {
 	}
 }
 
-export class InMemoryAuthStorageBackend implements AuthStorageBackend {
+class InMemoryAuthStorageBackend implements AuthStorageBackend {
 	private value: string | undefined;
 	private asyncChain: Promise<unknown> = Promise.resolve();
 
@@ -505,3 +505,8 @@ export function readStoredCredential(
 		return undefined;
 	}
 }
+
+export type { AuthStorageBackend };
+// Package-internal: a backend is only ever chosen by `AuthStorage.create`, which takes no backend
+// argument. `AuthStorage`, `ReadOnlyAuthStorage` and `readStoredCredential` stay on the root.
+export { FileAuthStorageBackend, InMemoryAuthStorageBackend };

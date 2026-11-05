@@ -27,7 +27,7 @@ import {
 import type { SessionEntry } from "./session-manager.ts";
 
 /** API id of virtual catalog entries. Requests for it fail unless routed first. */
-export const VIRTUAL_MODEL_API = "nanopi-virtual";
+const VIRTUAL_MODEL_API = "nanopi-virtual";
 
 /** Custom entry type that stores router state on the session branch. */
 export const VIRTUAL_MODEL_STATE_ENTRY = "nanopi.virtual-model-state";
@@ -109,12 +109,12 @@ export interface VirtualModelDefinition<TState = unknown> {
 }
 
 /** Whether a model or message names a virtual model. Failed routing leaves the virtual model on its message. */
-export function isVirtualModel(model: { api: string }): boolean {
+function isVirtualModel(model: { api: string }): boolean {
 	return model.api === VIRTUAL_MODEL_API;
 }
 
 /** Latest successful response. Its model is physical: failed or aborted requests, including failed routing, are skipped. */
-export function findLatestResponse(messages: readonly AgentMessage[]): AssistantMessage | undefined {
+function findLatestResponse(messages: readonly AgentMessage[]): AssistantMessage | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i];
 		if (message.role === "assistant" && message.stopReason !== "error" && message.stopReason !== "aborted") {
@@ -132,7 +132,7 @@ export function findLatestResponse(messages: readonly AgentMessage[]): Assistant
  *
  * Only the last `model_change` can hold, so this looks up at most one model in the catalog.
  */
-export function getBranchSelection(
+function getBranchSelection(
 	branch: readonly SessionEntry[],
 	getModel: (provider: string, modelId: string) => Model<Api> | undefined,
 ): { provider: string; modelId: string } | undefined {
@@ -163,7 +163,7 @@ function findLastModelChange(
 }
 
 /** Latest router state a session branch stores for a virtual model. */
-export function getVirtualModelState(branch: readonly SessionEntry[], provider: string, modelId: string): unknown {
+function getVirtualModelState(branch: readonly SessionEntry[], provider: string, modelId: string): unknown {
 	for (let i = branch.length - 1; i >= 0; i--) {
 		const entry = branch[i];
 		if (entry.type !== "custom" || entry.customType !== VIRTUAL_MODEL_STATE_ENTRY) continue;
@@ -205,7 +205,7 @@ function unroutedStream(model: Model<Api>): AssistantMessageEventStream {
  * that only lists the virtual models. A virtual model hides a physical chat model with the same id,
  * which a catalog refresh can add after registration. Availability follows the provider's auth.
  */
-export function withVirtualModels(
+function withVirtualModels(
 	providerId: string,
 	provider: Provider | undefined,
 	virtualModels: readonly Model<Api>[],
@@ -243,3 +243,14 @@ export function withVirtualModels(
 			isVirtualModel(model) ? unroutedStream(model) : provider.streamSimple(model, context, options),
 	};
 }
+
+// Package-internal: `createVirtualModel` is how a module defines one; resolving a stored state entry
+// and picking the branch's latest response is what the runtime does with it.
+export {
+	findLatestResponse,
+	getBranchSelection,
+	getVirtualModelState,
+	isVirtualModel,
+	VIRTUAL_MODEL_API,
+	withVirtualModels,
+};

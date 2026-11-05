@@ -420,7 +420,7 @@ function forkSessionOrExit(sourcePath: string, cwd: string, sessionDir?: string,
 	}
 }
 
-export async function createSessionManager(
+async function createSessionManager(
 	parsed: Args,
 	cwd: string,
 	sessionDir: string | undefined,
@@ -1119,3 +1119,6 @@ export async function main(args: string[], options?: MainOptions) {
 		return;
 	}
 }
+
+// Package-internal: `main` builds its own session manager from the parsed CLI arguments.
+export { createSessionManager };

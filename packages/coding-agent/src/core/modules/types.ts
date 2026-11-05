@@ -1530,7 +1530,13 @@ export interface MessageTypeRegistrationHandle {
 	unregister(): void;
 }
 
-/** Options a run renderer receives. */
+/**
+ * Options a run renderer receives.
+ *
+ * `MessageCodecRenderOptions` in `core/messages/codec.ts` carries the same two extra fields for the
+ * runtime codec table; the two are structurally interchangeable, so a codec renders through either.
+ * They used to share this name, which only compiled because a named re-export picked one of them.
+ */
 export interface MessageRunRenderOptions extends MessageRenderOptions {
 	/** Index of the turn the message belongs to. */
 	turn: number;

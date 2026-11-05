@@ -31,7 +31,8 @@ import {
 	type ThemeToken,
 } from "./theme-tokens.ts";
 
-export { SYSTEM_THEME_NAME } from "./system-theme.ts";
+// `ThemeBg` / `ThemeColor` / `ThemeToken` are the vocabulary of `Theme.fg()` and of the theme JSON, so
+// they stay public; the sibling: the raw token table and the terminal negotiation below do not.
 export type { ThemeBg, ThemeColor, ThemeToken } from "./theme-tokens.ts";
 
 // ============================================================================
@@ -86,18 +87,18 @@ let terminalColorScheme: TerminalTheme | undefined;
  * Record the terminal's reported colors. The system theme is generated from them; tokens set to "" use
  * the defaults. Ends the pending state.
  */
-export function setTerminalColors(colors: TerminalColors): void {
+function setTerminalColors(colors: TerminalColors): void {
 	terminalColors = { ...colors };
 	terminalColorsPending = false;
 }
 
 /** Record the terminal's light/dark report, the fallback for terminals that do not report their background. */
-export function setTerminalColorScheme(scheme: TerminalTheme | undefined): void {
+function setTerminalColorScheme(scheme: TerminalTheme | undefined): void {
 	terminalColorScheme = scheme;
 }
 
 /** Render the system theme in grayscale until `setTerminalColors()` reports the terminal's colors. */
-export function markTerminalColorsPending(): void {
+function markTerminalColorsPending(): void {
 	terminalColorsPending = true;
 }
 
@@ -343,7 +344,7 @@ function createSystemTheme(mode?: TerminalColorMode): Theme {
 	});
 }
 
-export type TerminalTheme = "dark" | "light";
+type TerminalTheme = "dark" | "light";
 
 /**
  * Dark or light from the `COLORFGBG` environment variable some terminals set, or undefined without a
@@ -352,7 +353,7 @@ export type TerminalTheme = "dark" | "light";
  * whose colors are unknown here, so it is classified by index like Vim does: 0-6 and 8 (bright black, e.g.
  * Solarized Dark's background) are dark, 7 and 9-15 are light.
  */
-export function detectColorFgBgTheme(env: NodeJS.ProcessEnv = process.env): TerminalTheme | undefined {
+function detectColorFgBgTheme(env: NodeJS.ProcessEnv = process.env): TerminalTheme | undefined {
 	const bg = env.COLORFGBG?.split(";").at(-1)?.trim();
 	if (!bg || !/^\d{1,2}$/.test(bg)) return undefined;
 	const index = Number(bg);
@@ -365,7 +366,7 @@ export function detectColorFgBgTheme(env: NodeJS.ProcessEnv = process.env): Term
  * system theme does. Without a reported background: the terminal's light/dark report, then COLORFGBG,
  * then dark.
  */
-export function detectTerminalTheme(
+function detectTerminalTheme(
 	colors: TerminalColors = {},
 	reportedScheme?: TerminalTheme,
 	env: NodeJS.ProcessEnv = process.env,
@@ -376,7 +377,7 @@ export function detectTerminalTheme(
 }
 
 /** Whether the terminal is dark or light, from everything it reported so far. See `detectTerminalTheme()`. */
-export function getTerminalTheme(): TerminalTheme {
+function getTerminalTheme(): TerminalTheme {
 	return detectTerminalTheme(terminalColors, terminalColorScheme);
 }
 
@@ -402,7 +403,7 @@ export const theme: Theme = new Proxy({} as Theme, {
  * The active theme instance. Regenerating the system theme installs a new instance, so renderers can
  * compare identities to invalidate cached styled output.
  */
-export function getThemeInstance(): Theme {
+function getThemeInstance(): Theme {
 	const t = (globalThis as Record<symbol, Theme>)[THEME_KEY];
 	if (!t) throw new Error("Theme not initialized. Call initTheme() first.");
 	return t;
@@ -422,7 +423,7 @@ export function initTheme(): void {
  * Regenerate the system theme from the colors and light/dark reports recorded so far. Installs a new
  * instance, so callers must invalidate cached styled output afterwards. Returns the new instance.
  */
-export function refreshSystemTheme(): Theme {
+function refreshSystemTheme(): Theme {
 	const next = createSystemTheme();
 	setGlobalTheme(next);
 	return next;
@@ -436,7 +437,7 @@ export function refreshSystemTheme(): Theme {
  * Resolved theme colors of the active system theme as CSS-compatible hex strings.
  * Used by HTML export to generate CSS custom properties.
  */
-export function getResolvedThemeColors(): Record<string, string> {
+function getResolvedThemeColors(): Record<string, string> {
 	const colors = getThemeInstance().colors;
 	return Object.fromEntries(Object.entries(colors).map(([token, color]) => [token, colorToHex(color)]));
 }
@@ -634,7 +635,7 @@ export function getSelectListTheme(): SelectListTheme {
 	};
 }
 
-export function getEditorTheme(): EditorTheme {
+function getEditorTheme(): EditorTheme {
 	return {
 		borderColor: (text: string) => theme.fg("borderMuted", text),
 		selectList: getSelectListTheme(),
@@ -651,3 +652,22 @@ export function getSettingsListTheme(): SettingsListTheme {
 		hint: (text: string) => theme.fg("dim", text),
 	};
 }
+
+export type { TerminalTheme };
+// The re-export block below exists because the declarations above are deliberately not `export`ed:
+// they are the terminal-colour negotiation, the per-renderer theme handle and the raw token table.
+// The package root used to publish 13 of these, which bought a module nothing it could use (it draws
+// through the `Theme` instance it is handed) and turned each one into a contract. Inside the package
+// they stay reachable by path, which is what this block is for.
+export {
+	detectColorFgBgTheme,
+	detectTerminalTheme,
+	getEditorTheme,
+	getResolvedThemeColors,
+	getTerminalTheme,
+	getThemeInstance,
+	markTerminalColorsPending,
+	refreshSystemTheme,
+	setTerminalColorScheme,
+	setTerminalColors,
+};

@@ -32,7 +32,8 @@ import type { AuthStatus, ProviderConfigInput } from "./provider-composer.ts";
 import type { VirtualModelDefinition } from "./virtual-models.ts";
 
 export type { ProviderConfigInput } from "./provider-composer.ts";
-export type ResolvedRequestAuth =
+
+type ResolvedRequestAuth =
 	| {
 			ok: true;
 			apiKey?: string;
@@ -41,7 +42,6 @@ export type ResolvedRequestAuth =
 			env?: Record<string, string>;
 	  }
 	| { ok: false; error: string };
-export { clearApiKeyCache } from "./provider-composer.ts";
 
 /**
  * Synchronous compatibility facade exposed to extensions.
@@ -268,3 +268,8 @@ export class ModelRegistry {
 		return this.runtime.getRegisteredProviderIds();
 	}
 }
+
+// Package-internal: `ModelRuntime` clears the credential cache, and `ResolvedRequestAuth` is the
+// shape of one resolved request. A module reads auth through `ModuleContext` instead.
+export { clearApiKeyCache } from "./provider-composer.ts";
+export type { ResolvedRequestAuth };

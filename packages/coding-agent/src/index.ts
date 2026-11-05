@@ -4,281 +4,44 @@
 // build. SDK users ask these before offering a feature whose code the build may
 // not carry.
 export * from "./build-components.ts";
-export { type Args, parseArgs } from "./cli/args.ts";
-
-// Config paths
-export {
-	CONFIG_DIR_NAME,
-	getAgentDir,
-	getDocsPath,
-	getExamplesPath,
-	getPackageDir,
-	getReadmePath,
-	VERSION,
-} from "./config.ts";
-export {
-	AgentSession,
-	type AgentSessionConfig,
-	type AgentSessionEvent,
-	type AgentSessionEventListener,
-	type ModelCycleResult,
-	type ParsedSkillBlock,
-	type PromptOptions,
-	parseSkillBlock,
-	RuntimeReloadError,
-	type SessionStats,
-} from "./core/agent-session.ts";
-export { AuthStorage, ReadOnlyAuthStorage, readStoredCredential } from "./core/auth-storage.ts";
-// Process and shell helpers
+export * from "./cli/args.ts";
+export * from "./config.ts";
+export * from "./core/agent-session.ts";
+export * from "./core/auth-storage.ts";
 export * from "./core/bash-executor.ts";
-export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
-// Compaction
-export {
-	type BranchPreparation,
-	type BranchSummaryResult,
-	type CollectEntriesResult,
-	type CompactionResult,
-	type CutPointResult,
-	calculateContextTokens,
-	collectEntriesForBranchSummary,
-	compact,
-	DEFAULT_COMPACTION_SETTINGS,
-	estimateTokens,
-	type FileOperations,
-	findCutPoint,
-	findTurnStartIndex,
-	type GenerateBranchSummaryOptions,
-	generateBranchSummary,
-	generateSummary,
-	generateSummaryWithUsage,
-	getLastAssistantUsage,
-	prepareBranchEntries,
-	serializeConversation,
-	shouldCompact,
-} from "./core/compaction/index.ts";
+export * from "./core/compaction/index.ts";
 export * from "./core/defaults.ts";
 export * from "./core/event-bus.ts";
-export { execCommand } from "./core/exec.ts";
-// Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
+export * from "./core/exec.ts";
+// Only the read-only view a module's footer receives is public; `FooterDataProvider` itself is the
+// session's watcher.
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
-export {
-	charsToTokens,
-	createBuiltinMessageCodecs,
-	type MessageRunRenderOptions,
-	type MessageTypeCodec,
-	type MessageTypeCodecMap,
-	MessageTypeRegistry,
-	messageKind,
-	resolveMessageCodec,
-} from "./core/messages/index.ts";
-export { convertToLlm } from "./core/messages.ts";
-export { ModelRegistry } from "./core/model-registry.ts";
-export {
-	findInitialModel,
-	type ModelScopeDiagnostic,
-	type ResolveCliModelResult,
-	type ResolveModelScopeResult,
-	resolveCliModel,
-	resolveModelScopeWithDiagnostics,
-	type ScopedModel,
-} from "./core/model-resolver.ts";
+export * from "./core/messages/index.ts";
+export * from "./core/messages.ts";
+export * from "./core/model-registry.ts";
+export * from "./core/model-resolver.ts";
 export * from "./core/model-runtime.ts";
-// RegisteredModule system
-export type {
-	AgentActivityOutcome,
-	AgentEndEvent,
-	AgentSettledEvent,
-	AgentStartEvent,
-	AgentToolResult,
-	AgentToolUpdateCallback,
-	AppKeybinding,
-	AssistantBlockRow,
-	AssistantMessageRenderContext,
-	AssistantMessageRenderer,
-	AutocompleteProviderFactory,
-	BashToolCallEvent,
-	BeforeAgentStartCustomEvent,
-	BeforeAgentStartEvent,
-	BeforeAgentStartEventResult,
-	BeforeAgentStartUserEvent,
-	BeforeProviderHeadersEvent,
-	BeforeProviderRequestEvent,
-	BeforeProviderRequestEventResult,
-	BoundaryContextPreview,
-	BoundaryResult,
-	BoundaryState,
-	BuildSystemPromptOptions,
-	CompactionEntryDraft,
-	CompactOptions,
-	ContextEditEntryDraft,
-	ContextUsage,
-	CustomEntryDraft,
-	CustomMessageEntryDraft,
-	CustomToolCallEvent,
-	EditToolCallEvent,
-	EntryRenderer,
-	EntryRenderOptions,
-	ExecOptions,
-	ExecResult,
-	ExecuteToolOptions,
-	FindToolCallEvent,
-	GrepToolCallEvent,
-	InputEvent,
-	InputEventResult,
-	InputSource,
-	KeybindingsManager,
-	LoadedResource,
-	LoadedResources,
-	LoadModulesResult,
-	LsToolCallEvent,
-	MarkdownTransformContext,
-	MarkdownTransformer,
-	MessageEndEvent,
-	MessageEndEventResult,
-	MessageRenderer,
-	MessageRenderOptions,
-	MessageStartEvent,
-	MessageUpdateEvent,
-	ModelSelectEvent,
-	ModelSelectSource,
-	ModuleActions,
-	ModuleActionsSurface,
-	ModuleApi,
-	ModuleCommandContext,
-	ModuleCommandContextActions,
-	ModuleCommandsSurface,
-	ModuleContext,
-	ModuleContextActions,
-	ModuleError,
-	ModuleEvent,
-	ModuleEventsSurface,
-	ModuleFactory,
-	ModuleFlag,
-	ModuleHandler,
-	ModuleModelSurface,
-	ModuleProvidersSurface,
-	ModuleRenderingSurface,
-	ModuleRuntime,
-	ModuleSessionSurface,
-	ModuleSettingsItem,
-	ModuleSettingsSurface,
-	ModuleShortcut,
-	ModuleSurface,
-	ModuleToolContext,
-	ModuleToolsSurface,
-	ModuleUIContext,
-	ModuleUIDialogOptions,
-	ModuleVirtualModel,
-	ModuleWidgetChannel,
-	ModuleWidgetChannelContent,
-	ModuleWidgetChannelContext,
-	ModuleWidgetChannelPlacement,
-	ModuleWidgetChannelTransform,
-	ModuleWidgetChannelUpdateOptions,
-	ModuleWidgetOptions,
-	NormalizedBuildSystemPromptOptions,
-	PowerShellToolCallEvent,
-	ProjectTrustContext,
-	ProjectTrustEvent,
-	ProjectTrustEventDecision,
-	ProjectTrustEventResult,
-	ProjectTrustHandler,
-	ProviderConfig,
-	ProviderModelConfig,
-	ReadToolCallEvent,
-	RegisteredCommand,
-	RegisteredModule,
-	RegisteredTool,
-	ResolvedCommand,
-	SessionBeforeCompactEvent,
-	SessionBeforeCompactResult,
-	SessionBeforeForkEvent,
-	SessionBeforeForkResult,
-	SessionBeforeTreeEvent,
-	SessionBeforeTreeResult,
-	SessionBoundaryDraft,
-	SessionCompactEvent,
-	SessionModule,
-	SessionShutdownEvent,
-	SessionStartEvent,
-	SessionTreeEvent,
-	ShellEntryState,
-	ShellRendererResolver,
-	SlashCommandInfo,
-	SlashCommandSource,
-	SourceInfo,
-	TerminalInputHandler,
-	ToolAnnotations,
-	ToolCallEvent,
-	ToolCallEventResult,
-	ToolDefinition,
-	ToolExecutionEndEvent,
-	ToolExecutionMode,
-	ToolExecutionStartEvent,
-	ToolExecutionUpdateEvent,
-	ToolExposure,
-	ToolInfo,
-	ToolLoadout,
-	ToolLoadoutChanges,
-	ToolNamespace,
-	ToolRendererResolver,
-	ToolRenderers,
-	ToolRenderResultOptions,
-	ToolResultEvent,
-	ToolResultEventResult,
-	ToolRowRenderContext,
-	ToolRowRendererResolver,
-	ToolRowRenderers,
-	TurnEndEvent,
-	TurnEndEventResult,
-	TurnStartEvent,
-	WidgetPlacement,
-	WorkingIndicatorOptions,
-	WorkingIndicatorPlacement,
-	WorkingIndicatorRenderer,
-	WorkingIndicatorState,
-	WriteToolCallEvent,
-} from "./core/modules/index.ts";
-export {
-	createModuleRuntime,
-	defineTool,
-	isBashToolResult,
-	isEditToolResult,
-	isFindToolResult,
-	isGrepToolResult,
-	isLsToolResult,
-	isPowerShellToolResult,
-	isReadToolResult,
-	isToolCallEventType,
-	isWriteToolResult,
-	loadModules,
-	ModuleRegistry,
-	wrapRegisteredTool,
-	wrapRegisteredTools,
-} from "./core/modules/index.ts";
-export { resolveProjectTrusted } from "./core/project-trust.ts";
-export { expandPromptTemplate } from "./core/prompt-templates.ts";
+export * from "./core/modules/index.ts";
+export * from "./core/project-trust.ts";
+export * from "./core/prompt-templates.ts";
 export * from "./core/resource-discovery.ts";
-export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
-export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
-// SDK for programmatic usage
+export * from "./core/resource-loader.ts";
+export * from "./core/sdk.ts";
+export * from "./core/session-manager.ts";
+export * from "./core/settings-manager.ts";
+export * from "./core/skills.ts";
+export * from "./core/source-info.ts";
+export * from "./core/system-prompt.ts";
+export * from "./core/tool-patterns.ts";
+export * from "./core/tools/edit-diff.ts";
+export * from "./core/tools/index.ts";
+// A `export *` per source above, but two roots disagree about the tool factories: `core/tools/`
+// declares `createReadTool(cwd)` and `createReadToolDefinition(cwd, options)`, `core/sdk.ts`
+// re-exports the same factory, and `core/tools/index.ts` owns a different `createReadTool`
+// (single-tool, options-only). Re-exporting one of them by name is the only way to say which;
+// `export *` on both barrels would drop the name silently and fail typecheck.
 export {
-	AgentSessionRuntime,
-	type AgentSessionRuntimeDiagnostic,
-	type AgentSessionServices,
-	type CreateAgentSessionFromServicesOptions,
-	type CreateAgentSessionOptions,
-	type CreateAgentSessionResult,
-	type CreateAgentSessionRuntimeFactory,
-	type CreateAgentSessionRuntimeResult,
-	type CreateAgentSessionServicesOptions,
-	// Factory
-	createAgentSession,
-	createAgentSessionFromServices,
-	createAgentSessionRuntime,
-	createAgentSessionServices,
 	createBashTool,
-	// Tool factories (for custom cwd)
 	createCodingTools,
 	createEditTool,
 	createFindTool,
@@ -288,259 +51,19 @@ export {
 	createReadOnlyTools,
 	createReadTool,
 	createWriteTool,
-	type PromptTemplate,
-} from "./core/sdk.ts";
-export {
-	type BranchSummaryEntry,
-	buildContextEntries,
-	buildSessionContext,
-	buildSessionProjection,
-	type CompactionEntry,
-	type ContextEditableContent,
-	type ContextEditEntry,
-	CURRENT_SESSION_VERSION,
-	type CustomEntry,
-	type CustomMessageEntry,
-	type FileEntry,
-	getLatestCompactionEntry,
-	type ModelChangeEntry,
-	migrateSessionEntries,
-	type NewSessionOptions,
-	type ProjectedSessionEntry,
-	parseSessionEntries,
-	type SessionContext,
-	type SessionEntry,
-	type SessionEntryBase,
-	type SessionHeader,
-	type SessionInfo,
-	type SessionInfoEntry,
-	SessionManager,
-	type SessionMessageEntry,
-	type SessionProjection,
-	type SessionTreeNode,
-	sessionEntryToContextMessages,
-	type ThinkingLevelChangeEntry,
-} from "./core/session-manager.ts";
-export {
-	applyToolModifiers,
-	type CacheWarmingMode,
-	type CompactionModelOverride,
-	type CompactionSettings,
-	DEFAULT_TOOL_NAMES,
-	type DefaultProjectTrust,
-	FileSettingsStorage,
-	getToolListError,
-	type ImageSettings,
-	InMemorySettingsStorage,
-	isToolModifier,
-	type QuietStartup,
-	type RetrySettings,
-	type SettingsError,
-	SettingsManager,
-	type SettingsManagerCreateOptions,
-	type SettingsScope,
-	type SettingsStorage,
-} from "./core/settings-manager.ts";
-// Skills
-export {
-	formatSkillsForPrompt,
-	type LoadSkillsFromDirOptions,
-	type LoadSkillsResult,
-	loadSkills,
-	loadSkillsFromDir,
-	type Skill,
-	type SkillFrontmatter,
-} from "./core/skills.ts";
-export { createSyntheticSourceInfo } from "./core/source-info.ts";
-export {
-	buildSystemPrompt,
-	normalizeBuildSystemPromptOptions,
-} from "./core/system-prompt.ts";
-export * from "./core/tool-patterns.ts";
-export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
-// Tools
-export {
-	type BashOperations,
-	type BashOperationsProviders,
-	type BashSpawnContext,
-	type BashSpawnHook,
-	type BashToolDetails,
-	type BashToolInput,
-	type BashToolOptions,
-	createBashToolDefinition,
-	createEditToolDefinition,
-	createFindToolDefinition,
-	createGrepToolDefinition,
-	createLocalBashOperations,
-	createLocalPowerShellOperations,
-	createLsToolDefinition,
-	createPowerShellToolDefinition,
-	createReadToolDefinition,
-	createWriteToolDefinition,
-	DEFAULT_MAX_BYTES,
-	DEFAULT_MAX_LINES,
-	type EditOperations,
-	type EditToolDetails,
-	type EditToolInput,
-	type EditToolOptions,
-	type FindOperations,
-	type FindToolDetails,
-	type FindToolInput,
-	type FindToolOptions,
-	formatSize,
-	type GrepOperations,
-	type GrepToolDetails,
-	type GrepToolInput,
-	type GrepToolOptions,
-	type LsOperations,
-	type LsToolDetails,
-	type LsToolInput,
-	type LsToolOptions,
-	type PowerShellOperations,
-	type PowerShellSpawnContext,
-	type PowerShellSpawnHook,
-	type PowerShellToolDetails,
-	type PowerShellToolInput,
-	type PowerShellToolOptions,
-	type ReadOperations,
-	type ReadToolDetails,
-	type ReadToolInput,
-	type ReadToolOptions,
-	resolveShellOperations,
-	type ToolsOptions,
-	type TruncationOptions,
-	type TruncationResult,
-	truncateHead,
-	truncateLine,
-	truncateTail,
-	type WriteOperations,
-	type WriteToolInput,
-	type WriteToolOptions,
 	withFileMutationQueue,
 } from "./core/tools/index.ts";
-export {
-	hasTrustRequiringProjectResources,
-	type ProjectTrustDecision,
-	ProjectTrustStore,
-	type ProjectTrustStoreEntry,
-	type ProjectTrustUpdate,
-} from "./core/trust-manager.ts";
-export {
-	type ModelRoute,
-	type ModelRouteReason,
-	type ModelRouteRequest,
-	VIRTUAL_MODEL_STATE_ENTRY,
-	type VirtualModelDefinition,
-	type VirtualModelStateData,
-} from "./core/virtual-models.ts";
-// Main entry point
-export { type MainOptions, main } from "./main.ts";
-// Run modes for programmatic SDK usage
-export {
-	InteractiveMode,
-	type InteractiveModeOptions,
-	type JsonAgentSessionEvent,
-	type ModelInfo,
-	type PrintModeOptions,
-	RpcClient,
-	type RpcClientOptions,
-	type RpcCommand,
-	type RpcEventListener,
-	type RpcExtensionUIRequest,
-	type RpcExtensionUIResponse,
-	type RpcResponse,
-	type RpcSessionState,
-	runPrintMode,
-	runRpcMode,
-} from "./modes/index.ts";
-// UI components for extensions
-export {
-	ArminComponent,
-	AssistantMessageComponent,
-	BashExecutionComponent,
-	BorderedLoader,
-	BranchSummaryMessageComponent,
-	CompactionSummaryMessageComponent,
-	CustomEditor,
-	type CustomEditorOptions,
-	CustomMessageComponent,
-	DynamicBorder,
-	ExtensionEditorComponent,
-	ExtensionInputComponent,
-	ExtensionSelectorComponent,
-	FooterComponent,
-	keyHint,
-	keyText,
-	LoginDialogComponent,
-	ModelSelectorComponent,
-	OAuthSelectorComponent,
-	type RenderDiffOptions,
-	rawKeyHint,
-	renderDiff,
-	SessionSelectorComponent,
-	type SettingsCallbacks,
-	type SettingsConfig,
-	SettingsSelectorComponent,
-	ShowImagesSelectorComponent,
-	SkillInvocationMessageComponent,
-	ThinkingSelectorComponent,
-	ToolExecutionComponent,
-	type ToolExecutionOptions,
-	TreeSelectorComponent,
-	truncateToVisualLines,
-	UserMessageComponent,
-	UserMessageSelectorComponent,
-	type VisualTruncateResult,
-} from "./modes/interactive/components/index.ts";
-// Theme utilities for custom tools and extensions
-export {
-	getLanguageFromPath,
-	getMarkdownTheme,
-	getSelectListTheme,
-	getSettingsListTheme,
-	highlightCode,
-	initTheme,
-	Theme,
-	type ThemeAppearance,
-	type ThemeBg,
-	type ThemeColor,
-	type ThemeStyle,
-	type ThemeToken,
-} from "./modes/interactive/theme/theme.ts";
-// Broad core surface: these are the interfaces users compose when they extend
-// nanopi programmatically (see docs/sdk.md).
+export * from "./core/trust-manager.ts";
+export * from "./core/virtual-models.ts";
+export * from "./main.ts";
+export * from "./modes/index.ts";
+export * from "./modes/interactive/components/index.ts";
+export * from "./modes/interactive/theme/theme.ts";
 export * from "./modules/index.ts";
-// Clipboard utilities
-export { copyToClipboard } from "./utils/clipboard.ts";
+export * from "./utils/clipboard.ts";
 export * from "./utils/frontmatter.ts";
-export { convertToPng } from "./utils/image-convert.ts";
-export {
-	formatDimensionNote,
-	type ImageResizeFailureReason,
-	type ImageResizeResult,
-	type ResizedImage,
-	resizeImage,
-} from "./utils/image-resize.ts";
-export { detectSupportedImageMimeTypeFromFile } from "./utils/mime.ts";
-// Path utilities
-export {
-	canonicalizePath,
-	getCwdRelativePath,
-	getFileRevision,
-	isLocalPath,
-	normalizePath,
-	normalizeWindowsShellPath,
-	type PathInputOptions,
-	resolvePath,
-} from "./utils/paths.ts";
-
-// Shell utilities
-export {
-	getPowerShellConfig,
-	getShellConfig,
-	getShellEnv,
-	killProcessTree,
-	POWERSHELL_ARGS,
-	type ShellConfig,
-	sanitizeBinaryOutput,
-} from "./utils/shell.ts";
+export * from "./utils/image-convert.ts";
+export * from "./utils/image-resize.ts";
+export * from "./utils/mime.ts";
+export * from "./utils/paths.ts";
+export * from "./utils/shell.ts";

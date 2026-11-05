@@ -23,12 +23,12 @@ import { loadSkills } from "./skills.ts";
 import { createSourceInfo, getSyntheticPathSource, isSyntheticPath, type SourceInfo } from "./source-info.ts";
 import { resetTimings } from "./timings.ts";
 
-export interface ResourceExtensionPaths {
+interface ResourceExtensionPaths {
 	skillPaths?: Array<{ path: string; metadata: PathMetadata }>;
 	promptPaths?: Array<{ path: string; metadata: PathMetadata }>;
 }
 
-export interface ResourceLoaderReloadOptions {
+interface ResourceLoaderReloadOptions {
 	resolveProjectTrust?: (input: { modulesResult: LoadModulesResult }) => Promise<boolean>;
 }
 
@@ -154,7 +154,7 @@ export function loadProjectContextFiles(options: {
 	return contextFiles;
 }
 
-export interface DefaultResourceLoaderOptions {
+interface DefaultResourceLoaderOptions {
 	cwd: string;
 	agentDir: string;
 	settingsManager?: SettingsManager;
@@ -841,3 +841,8 @@ export class DefaultResourceLoader implements ResourceLoader {
 		return conflicts;
 	}
 }
+
+// Package-internal: the option bags belong to `new DefaultResourceLoader(...)`, whose constructor
+// signature already says what it takes; `ResourceLoader` is the interface a caller injects instead.
+// `loadProjectContextFiles` stays public (the `AGENTS.md` walk).
+export type { DefaultResourceLoaderOptions, ResourceExtensionPaths, ResourceLoaderReloadOptions };

@@ -5,7 +5,7 @@
 
 export { charsToTokens, createBuiltinMessageCodecs, estimateMessageTokens } from "./builtin-codecs.ts";
 export {
-	type MessageRunRenderOptions,
+	type MessageCodecRenderOptions,
 	type MessageTypeCodec,
 	type MessageTypeCodecMap,
 	messageKind,

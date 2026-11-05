@@ -20,7 +20,7 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
 	}
 }
 
-export async function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+async function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
 	const photon = await loadPhoton();
 	if (!photon) {
 		// Photon not available, can't convert
@@ -58,7 +58,7 @@ export async function convertToPng(
  * Load photon and return a synchronous PNG transcoder for pi-tui's Kitty image rendering.
  * Returns undefined if photon cannot be loaded.
  */
-export async function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
+async function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
 	const photon = await loadPhoton();
 	if (!photon) return undefined;
 	return (base64Data) => {
@@ -75,7 +75,7 @@ let pngTranscoderRegistered = false;
  * Loads photon once. `onRegistered` runs after registration so callers can re-render images that
  * showed text fallbacks; it is not called if the transcoder was already registered or cannot load.
  */
-export function ensurePngTranscoder(onRegistered: () => void): void {
+function ensurePngTranscoder(onRegistered: () => void): void {
 	if (pngTranscoderRegistered || getCapabilities().images !== "kitty") return;
 	pngTranscoderLoad ??= loadPngTranscoder().then((transcoder) => {
 		if (!transcoder) return false;
@@ -87,3 +87,7 @@ export function ensurePngTranscoder(onRegistered: () => void): void {
 		if (registered) onRegistered();
 	});
 }
+
+// Package-internal: `convertToPng` is what a caller needs; the transcoder lifecycle and the
+// bytes-level conversion are how it does that.
+export { convertImageBytesToPng, ensurePngTranscoder, loadPngTranscoder };

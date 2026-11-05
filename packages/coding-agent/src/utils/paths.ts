@@ -117,12 +117,12 @@ export function getCwdRelativePath(filePath: string, cwd: string): string | unde
 	return isInsideCwd ? relativePath || "." : undefined;
 }
 
-export function formatPathRelativeToCwdOrAbsolute(filePath: string, cwd: string): string {
+function formatPathRelativeToCwdOrAbsolute(filePath: string, cwd: string): string {
 	const absolutePath = resolvePath(filePath, cwd);
 	return (getCwdRelativePath(absolutePath, cwd) ?? absolutePath).split(sep).join("/");
 }
 
-export function markPathIgnoredByCloudSync(path: string): void {
+function markPathIgnoredByCloudSync(path: string): void {
 	const attrs =
 		process.platform === "darwin"
 			? ["com.dropbox.ignored", "com.apple.fileprovider.ignore#P"]
@@ -138,3 +138,6 @@ export function markPathIgnoredByCloudSync(path: string): void {
 		}
 	}
 }
+
+// Package-internal: display formatting and the cloud-sync ignore hint.
+export { formatPathRelativeToCwdOrAbsolute, markPathIgnoredByCloudSync };

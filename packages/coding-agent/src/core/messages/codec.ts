@@ -16,8 +16,8 @@ import type { Message } from "@nanopi/pi-ai";
 import type { Component } from "@nanopi/pi-tui";
 import type { MessageRenderOptions } from "../modules/types.ts";
 
-/** What a renderer gets besides the message. */
-export interface MessageRunRenderOptions extends MessageRenderOptions {
+/** What a codec's renderer gets besides the message. */
+export interface MessageCodecRenderOptions extends MessageRenderOptions {
 	turn: number;
 	/** Width available to the transcript, when the caller knows it. */
 	availableWidth?: number;
@@ -42,7 +42,7 @@ export interface MessageTypeCodec<T = any> {
 	estimateTokens?(message: T): number;
 
 	/** Draw the message in the interactive transcript. Undefined falls back to `[kind]`. */
-	renderRun?(message: T, options: MessageRunRenderOptions): Component | undefined;
+	renderRun?(message: T, options: MessageCodecRenderOptions): Component | undefined;
 }
 
 export type MessageTypeCodecMap = Map<string, MessageTypeCodec>;

@@ -8,7 +8,7 @@ import { access, readFile } from "fs/promises";
 import { splitBom } from "../../utils/text.ts";
 import { resolveToCwd } from "./path-utils.ts";
 
-export function detectLineEnding(content: string): "\r\n" | "\n" {
+function detectLineEnding(content: string): "\r\n" | "\n" {
 	const crlfIdx = content.indexOf("\r\n");
 	const lfIdx = content.indexOf("\n");
 	if (lfIdx === -1) return "\n";
@@ -16,11 +16,11 @@ export function detectLineEnding(content: string): "\r\n" | "\n" {
 	return crlfIdx < lfIdx ? "\r\n" : "\n";
 }
 
-export function normalizeToLF(text: string): string {
+function normalizeToLF(text: string): string {
 	return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
+function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
 	return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
@@ -31,7 +31,7 @@ export function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string 
  * - Normalize Unicode dashes/hyphens to ASCII hyphen
  * - Normalize special Unicode spaces to regular space
  */
-export function normalizeForFuzzyMatch(text: string): string {
+function normalizeForFuzzyMatch(text: string): string {
 	return (
 		text
 			.normalize("NFKC")
@@ -129,7 +129,7 @@ function applyReplacements(content: string, replacements: TextReplacement[], off
  * from `originalContent`. The actual replacement ranges drive preservation so
  * duplicate normalized lines cannot be aligned to the wrong occurrence.
  */
-export function applyReplacementsPreservingUnchangedLines(
+function applyReplacementsPreservingUnchangedLines(
 	originalContent: string,
 	baseContent: string,
 	replacements: TextReplacement[],
@@ -172,7 +172,7 @@ export function applyReplacementsPreservingUnchangedLines(
 	return result;
 }
 
-export interface FuzzyMatchResult {
+interface FuzzyMatchResult {
 	/** Whether a match was found */
 	found: boolean;
 	/** The index where the match starts (in the content that should be used for replacement) */
@@ -188,12 +188,12 @@ export interface FuzzyMatchResult {
 	contentForReplacement: string;
 }
 
-export interface Edit {
+interface Edit {
 	oldText: string;
 	newText: string;
 }
 
-export interface AppliedEditsResult {
+interface AppliedEditsResult {
 	baseContent: string;
 	newContent: string;
 }
@@ -204,7 +204,7 @@ export interface AppliedEditsResult {
  * fuzzy-normalized version of the content (trailing whitespace stripped,
  * Unicode quotes/dashes normalized to ASCII).
  */
-export function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
+function fuzzyFindText(content: string, oldText: string): FuzzyMatchResult {
 	// Try exact match first
 	const exactIndex = content.indexOf(oldText);
 	if (exactIndex !== -1) {
@@ -404,11 +404,7 @@ function getNoChangeError(path: string, totalEdits: number): Error {
  * overlays those line-level changes onto the original content so unchanged line
  * blocks keep their original bytes.
  */
-export function applyEditsToNormalizedContent(
-	normalizedContent: string,
-	edits: Edit[],
-	path: string,
-): AppliedEditsResult {
+function applyEditsToNormalizedContent(normalizedContent: string, edits: Edit[], path: string): AppliedEditsResult {
 	const normalizedEdits = edits.map((edit) => ({
 		oldText: normalizeToLF(edit.oldText),
 		newText: normalizeToLF(edit.newText),
@@ -610,7 +606,7 @@ export interface EditDiffResult {
 	firstChangedLine: number | undefined;
 }
 
-export interface EditDiffError {
+interface EditDiffError {
 	error: string;
 }
 
@@ -618,11 +614,7 @@ export interface EditDiffError {
  * Compute the diff for one or more edit operations without applying them.
  * Used for preview rendering in the TUI before the tool executes.
  */
-export async function computeEditsDiff(
-	path: string,
-	edits: Edit[],
-	cwd: string,
-): Promise<EditDiffResult | EditDiffError> {
+async function computeEditsDiff(path: string, edits: Edit[], cwd: string): Promise<EditDiffResult | EditDiffError> {
 	const absolutePath = resolveToCwd(path, cwd);
 
 	try {
@@ -653,7 +645,7 @@ export async function computeEditsDiff(
  * Compute the diff for a single edit operation without applying it.
  * Kept as a convenience wrapper for single-edit callers.
  */
-export async function computeEditDiff(
+async function computeEditDiff(
 	path: string,
 	oldText: string,
 	newText: string,
@@ -661,3 +653,20 @@ export async function computeEditDiff(
 ): Promise<EditDiffResult | EditDiffError> {
 	return computeEditsDiff(path, [{ oldText, newText }], cwd);
 }
+
+export type { AppliedEditsResult, Edit, EditDiffError, FuzzyMatchResult };
+// Package-internal: `generateDiffString` and `generateUnifiedPatch` are what a renderer and the
+// export path call; the line-ending normalisation and the fuzzy matcher are how the edit tool finds
+// a match. `EditDiffResult` stays public (it is `computeEditDiff`'s result, re-exported for the
+// compaction transcripts).
+export {
+	applyEditsToNormalizedContent,
+	applyReplacementsPreservingUnchangedLines,
+	computeEditDiff,
+	computeEditsDiff,
+	detectLineEnding,
+	fuzzyFindText,
+	normalizeForFuzzyMatch,
+	normalizeToLF,
+	restoreLineEndings,
+};

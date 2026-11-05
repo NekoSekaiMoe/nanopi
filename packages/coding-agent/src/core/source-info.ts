@@ -1,7 +1,7 @@
 import type { PathMetadata } from "./resource-discovery.ts";
 
-export type SourceScope = "user" | "project" | "temporary";
-export type SourceOrigin = "package" | "top-level";
+type SourceScope = "user" | "project" | "temporary";
+type SourceOrigin = "package" | "top-level";
 
 export interface SourceInfo {
 	path: string;
@@ -13,32 +13,20 @@ export interface SourceInfo {
 }
 
 /** Prefix of built-in tool and extension paths, such as `builtin:read` or `builtin:llama`. */
-export const BUILTIN_PATH_PREFIX = "builtin:";
+const BUILTIN_PATH_PREFIX = "builtin:";
 
 /**
  * Source of a path that names no file: `builtin` for `builtin:<name>`, or the prefix of an
  * angle-bracket path such as `inline` for `<inline:name>`. Undefined for file paths.
  */
-export function getSyntheticPathSource(path: string): string | undefined {
+function getSyntheticPathSource(path: string): string | undefined {
 	if (path.startsWith(BUILTIN_PATH_PREFIX)) return "builtin";
 	if (path.startsWith("<") && path.endsWith(">")) return path.slice(1, -1).split(":")[0] || "temporary";
 	return undefined;
 }
 
-export function isSyntheticPath(path: string): boolean {
+function isSyntheticPath(path: string): boolean {
 	return path.startsWith(BUILTIN_PATH_PREFIX) || path.startsWith("<");
-}
-
-export interface SourcePackageIdentity {
-	source: string;
-	scope: SourceScope;
-}
-
-export function getSourcePackageKey(identity: SourcePackageIdentity): string {
-	return JSON.stringify({
-		source: identity.source,
-		scope: identity.scope,
-	});
 }
 
 export function createSourceInfo(path: string, metadata: PathMetadata): SourceInfo {
@@ -71,3 +59,9 @@ export function createSyntheticSourceInfo(
 		...(options.changelogPath ? { changelogPath: options.changelogPath } : {}),
 	};
 }
+
+// Package-internal: a caller builds a `SourceInfo` through `createSourceInfo` /
+// `createSyntheticSourceInfo`, which is what their return type describes; the scope/origin unions
+// are the values that show up inside it. `getSourcePackageKey` went with them: nothing here or in the
+// package called it, so it was a public name with no caller.
+export { BUILTIN_PATH_PREFIX, getSyntheticPathSource, isSyntheticPath, type SourceOrigin, type SourceScope };

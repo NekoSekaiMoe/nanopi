@@ -41,6 +41,15 @@ const BUDGETS = {
 	// budgets hold that promise, and the package root is forbidden in both so a
 	// wildcard export cannot quietly turn them back into the root barrel.
 	"packages/coding-agent": {
+		// The public root: 43 lines of `export *`, so nothing in the file says how expensive it is.
+		// Every source it names is public, and a source that grows an import grows this graph.
+		//
+		// Measured at 707 files (336 `pi-ai`, 318 `coding-agent`, 46 `pi-tui`, 7 `agent`), 601 of
+		// which `./modules` does not reach. The biggest chunk is `ai/src/providers` (270): the SDK
+		// hands out `createAgentSession`, which resolves models, so the whole provider catalog is
+		// behind the root by design — that is what a coding agent is. The budget is here to catch the
+		// next subsystem that hangs itself off the root, not to forbid what is already there.
+		".": { maxFiles: 780 },
 		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
 		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
 		// Not an entry point, so no `exports` lookup: `sourcePath` budgets the source file itself.
