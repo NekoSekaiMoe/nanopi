@@ -18,9 +18,9 @@ const { findViolations } = (await import(
  * them, and two sources declared `CompactionSettings` / `MessageRunRenderOptions` under the same
  * name, which only compiled because a named re-export arbitrarily picked one.
  *
- * It is now one `export *` per source. Nothing here pins the public surface itself — the point of
- * `export *` is that it follows the sources — except for the names `export *` cannot resolve: a
- * source, or a chain of sources, exporting one name twice with different bodies.
+ * It is now one `export *` per source, and nothing else: no named block survives. A name exported
+ * through two barrel paths is the same symbol (TypeScript 5.0+), and TS2308 was never the silent
+ * drop the runtime gives, so `export *` resolves what used to need naming by hand.
  */
 const barrelPath = fileURLToPath(new URL("../src/index.ts", import.meta.url));
 
@@ -40,13 +40,11 @@ describe("package root barrel", () => {
 		expect(star).toContain("./modes/index.ts");
 	});
 
-	it("names only the tool factories that two roots disagree about", () => {
+	it("names nothing: every name arrives through `export *`", () => {
+		// `core/tools/index.ts` forwards `createReadTool` from `read.ts` and `core/sdk.ts` forwards it
+		// again; both point at the one declaration, so `export *` over both barrels is unambiguous.
 		const { named } = reExports();
-		// `core/tools/index.ts` declares `createReadTool(cwd)` and also re-exports `read.ts`'s
-		// `createReadToolDefinition(cwd, options)`; `core/sdk.ts` re-exports the same factory, and
-		// `core/tools/index.ts` owns a second, options-only `createReadTool`. `export *` would drop
-		// the name silently and fail the typecheck, so these eleven are re-exported by name.
-		expect(named).toEqual(["./core/tools/index.ts"]);
+		expect(named).toEqual([]);
 	});
 
 	it("keeps the package-internal helpers out of the public surface", () => {
