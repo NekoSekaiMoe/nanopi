@@ -36,13 +36,15 @@ Node 上游发 26 与我们无关，只要 Debian 还在 24。
 ```json
 {
   "matchDepTypes": ["engines"],
-  "enabled": false
+  "allowedVersions": "/^>=24\\.0\\.0$/"
 }
 ```
 
 放进 `renovate.json` 的 `packageRules`。`matchDepTypes` 只命中 `engines`，不动任何
-真实依赖；`enabled: false` 让 Renovate 连升级线索都不再提，避免每轮重开 PR 再被人
-手动关一次。
+真实依赖；`allowedVersions` 让「范围写死」这件事本身成为拦截条件——写了别的就判为
+不允许的更新，不产生 PR，也就不会每轮重开再被人手动关一次。这一项后来从
+`enabled: false` 改过来，好让 `@types/node` 的 major 规则能引用同一个值，
+见 [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
 
 下限真要动的时候，按 [node 24 floor](./2026-10-27-node-24-floor.md) 那五处一起改：
 `engines.node`、workflow 的 `node-version`（现在是 `24.22.2`）、esbuild `target`、`@types/node`、
@@ -65,7 +67,9 @@ Node 上游发 26 与我们无关，只要 Debian 还在 24。
 
 - `engines.node` 从此是纯人工决策点，Renovate dashboard 上不再出现它。
   代价是：Debian testing 真的换了大版本时，没人提醒，得自己看包版本。
-- `engines` 声明与 `@types/node` 之间那层「类型库不得新于运行时」的约束仍然只靠
-  review 维持，现在少了一个自动破坏它的来源。
+- `engines` 声明与 `@types/node` 之间那层「类型库不得新于运行时」的约束后来
+  变成了配置：`@types/node` 的 major 升级被同一条规则引用的
+  `allowedVersions` 拦下，见
+  [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
 - 本条只解决「谁来决定」，「怎么改」仍归
   [node 24 floor](./2026-10-27-node-24-floor.md)。
