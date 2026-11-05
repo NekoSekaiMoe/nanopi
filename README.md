@@ -102,3 +102,15 @@ clean-room (no code copied).
 <p align="center">
   <strong>For all things AI, head to <a href="https://linux.do/">LINUX DO</a>. Wishing the community ever greater success.</strong>
 </p>
+
+## AtomGit
+
+<p align="center">
+  <a href="https://atomgit.com/NanoPi/NanoPi">
+    <img src="./packages/coding-agent/docs/images/atomgit.png" width="12%" alt="AtomGit">
+  </a>
+</p>
+
+<p align="center">
+  <strong>For the mainland China mirror and downloads, see <a href="https://atomgit.com/NanoPi/NanoPi">AtomGit</a>. Thanks to AtomGit for the hosting.</strong>
+</p>
