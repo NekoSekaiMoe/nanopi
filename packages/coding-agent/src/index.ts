@@ -35,24 +35,6 @@ export * from "./core/system-prompt.ts";
 export * from "./core/tool-patterns.ts";
 export * from "./core/tools/edit-diff.ts";
 export * from "./core/tools/index.ts";
-// A `export *` per source above, but two roots disagree about the tool factories: `core/tools/`
-// declares `createReadTool(cwd)` and `createReadToolDefinition(cwd, options)`, `core/sdk.ts`
-// re-exports the same factory, and `core/tools/index.ts` owns a different `createReadTool`
-// (single-tool, options-only). Re-exporting one of them by name is the only way to say which;
-// `export *` on both barrels would drop the name silently and fail typecheck.
-export {
-	createBashTool,
-	createCodingTools,
-	createEditTool,
-	createFindTool,
-	createGrepTool,
-	createLsTool,
-	createPowerShellTool,
-	createReadOnlyTools,
-	createReadTool,
-	createWriteTool,
-	withFileMutationQueue,
-} from "./core/tools/index.ts";
 export * from "./core/trust-manager.ts";
 export * from "./core/virtual-models.ts";
 export * from "./main.ts";

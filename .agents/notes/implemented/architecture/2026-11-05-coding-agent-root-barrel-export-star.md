@@ -27,17 +27,19 @@ and nothing said so.
 
 ## Decision
 
-`src/index.ts` is 43 `export *` lines, one per source, plus one named re-export. It went from 546
-lines to 69.
+`src/index.ts` is 43 `export *` lines, one per source, and nothing else. It went from 546 lines to
+67.
 
 Keeping the public surface from growing is done at the **definition**, not in the barrel: a symbol
 that should not be public loses its `export` keyword where it is declared, and gains a paired
 re-export in the same module so the package's own files can still reach it by path. `export *`
 then cannot carry it out, and no list can drift.
 
-The resulting public surface is 486 names over 43 sources, up from 320: 165 added, 38 removed, and
-one (`createReadTool`) that used to be `core/tools`' and is now the same factory `core/sdk.ts` always
-meant.
+The surface itself is measured, not counted by hand: compile the package with
+`--emitDeclarationOnly` (`outDir` outside the repo), then walk `index.d.ts`, following every
+`export *` and every `export { ... }` block, and take the set difference across two checkouts. The
+numbers this note first carried (320 → 486, 165 added / 38 removed) came from reading the diff by
+eye and were wrong in both directions; re-run before quoting a number.
 
 ### The four kinds of edit this took
 
@@ -49,16 +51,30 @@ meant.
    `MessageRunRenderOptions` stays as `core/modules/types.ts` has it (that is the module-registration
    contract, published by `modules-api.ts`); the codec-local twin is now
    `MessageCodecRenderOptions` in `core/messages/codec.ts`.
-2. **A name exported twice with different bodies stays named.** `core/tools/index.ts` re-exports
-   `createReadTool` from `read.ts` *and* declares its own `createReadTool(cwd, options)`;
-   `core/sdk.ts` re-exports the first one. `export *` over both barrels drops the name, so
-   `index.ts` names the eleven tool factories from `./core/tools/index.ts` explicitly. That block is
-   the same one it had before; it does not grow when a source does.
-3. **Internal symbols lose `export` at the definition.** 38 names were removed this way (theme
-   terminal negotiation, session-file entry types, RPC wire types, settings-schema details, path
-   helpers). Each edit is `export function foo` → `function foo` plus a paired
-   `export { foo }` block at the bottom of the module, so intra-package imports keep working and
-   only the package root changes.
+2. **A name reachable through two barrels is still one symbol.** `core/tools/index.ts` forwards
+   `createReadTool` from `read.ts`, and `core/sdk.ts` forwards it again from `./tools/index.ts`;
+   both paths end at the single declaration, so `export *` over both is unambiguous. An earlier
+   version of this note claimed the opposite (a second `createReadTool` declared in
+   `core/tools/index.ts`, `export *` dropping the name silently, eleven tool factories therefore
+   re-exported by name) and kept that named block "just in case". Deleting the block changes
+   nothing: `tsc` stays clean, the measured surface is identical, and
+   `test/root-barrel-exports.test.ts` now asserts there is no named block at all.
+
+   The general rule this settles: a *different body under the same name* is TS2308 at the barrel and
+   fails the typecheck (that is why `CompactionSettings` / `MessageRunRenderOptions` had to be
+   split); "silently dropped" is the JS *runtime* behaviour of `export *`, which never reaches CI
+   because `tsc` gets there first.
+3. **Internal symbols lose `export` at the definition.** Two passes, 11 names each: public-entry
+   internals (`findTurnStartIndex`, `getLastAssistantUsage`, `DEFAULT_COMPACTION_SETTINGS`,
+   `BUILTIN_MODULES`, `getPromptsDir`, `getToolsDir`, `findNodePackageDir`,
+   `ResolveProjectTrustedOptions`), storage/construction seams (`SettingsStorage`,
+   `InMemorySettingsStorage`, `SettingsError`, `SettingsScope`, `SettingsManagerCreateOptions`,
+   `CreateModelRuntimeOptions`, `ModelRuntimeAuthOverrides`, `CredentialSynchronizationOperation`),
+   file-format details (`QuietStartup`, `ImageSettings`, `POWERSHELL_ARGS`). Each edit is
+   `export function foo` → `function foo` plus, only when another file in the package still imports
+   it by path, a paired `export { foo }` block at the bottom of the module. The paired block does
+   not itself hide anything — `export { foo }` puts the name back in the module's export table;
+   what keeps it out of the package root is the missing `export` keyword on the declaration.
 4. **Additions were left alone.** A name published by `export *` that no defect motivates hiding
    stays published: tool factories and definitions, module/event types, model routing helpers,
    compaction helpers, session entry *values* (`SessionEntry` stayed private because it is a re-typed
@@ -71,7 +87,7 @@ meant.
 are mostly the provider catalog (270) behind `createAgentSession`'s model resolution. There is no
 `forbid` list: the root is a whole agent and always reached `providers/`.
 
-`packages/coding-agent/test/root-barrel-exports.test.ts` pins the shape: 43 `export *` lines, the one
+`packages/coding-agent/test/root-barrel-exports.test.ts` pins the shape: 43 `export *` lines, no
 named block, and the budget.
 
 ## Alternatives considered
@@ -83,22 +99,22 @@ a per-source whitelist still has to be edited when that source gains a legitimat
 of hiding a symbol is the same either way; doing it once and then deleting 546 lines of list is
 cheaper than doing it 36 times and keeping 36 lists.
 
-**Publish only the 267 new names that look safe, keep a whitelist for the rest.** Rejected: the
-267 was always an artifact of the half-converted state (the same symbol counted once per source),
-and it makes the public surface depend on which sources happened to be converted. The number that
-matters is the surface itself, 486.
+**Publish only the new names that look safe, keep a whitelist for the rest.** Rejected: the count
+of "new" names was an artifact of the half-converted state (the same symbol counted once per
+source), and it makes the public surface depend on which sources happened to be converted.
 
-**Keep `export *` and drop the collisions silently.** `export *` resolves an ambiguous name by
-omitting it, which is the failure mode #506 exists to kill, except here it also fails `tsc`. Every
-collision got a declaration fixed instead.
+**Keep `export *` and drop the collisions silently.** Rejected twice over: at *runtime* `export *`
+resolves an ambiguous name by omitting it, but the package is typechecked, and there TS2308 stops
+the build. Every collision got a declaration fixed instead. This is also why no named block is
+needed as a safety net — a real ambiguity cannot reach CI silently.
 
 **Add a whitelist/source diff check.** Still not done, and now unnecessary: with no whitelist there
 is nothing to diff against. The public/private boundary lives in the `export` keywords.
 
 **Hide everything that is not in `modules-api.ts`.** Rejected as a policy: `modules-api.ts` is the
 narrow door for *writing a module*, and the root is also the SDK for embedding an agent
-(`createAgentSession`, tool factories, model routing, session storage). Most of the 486 are there
-because that surface is legitimate.
+(`createAgentSession`, tool factories, model routing, session storage). Most of the surface is
+there because that surface is legitimate.
 
 ## Consequences
 
@@ -107,12 +123,10 @@ because that surface is legitimate.
   diff instead of a list edit nobody can audit.
 - Gain: the two ambiguous names are now distinguishable by name, so a caller can no longer pick the
   wrong `MessageRunRenderOptions` by barrels.
-- Cost: 165 names are new public API, and unpublishing any of them later is a breaking change. The
-  ones that are close to the line — `theme` (the singleton), the `config.ts` path helpers, the
-  compaction internals — are candidates for removal by adding a missing paired re-export, not by
-  reintroducing a list.
-- Cost: 38 names removed here are breaking for anyone who imported them from the root; all of them
-  were either unreachable from their source or wire-format details.
+- Cost: every name the 43 sources export is public API, and unpublishing any of them later is a
+  breaking change. The ones close to the line — `theme` (the singleton), the `config.ts` path
+  helpers, the compaction internals — are candidates for removal by dropping the `export` at the
+  declaration, not by reintroducing a list.
 - `core/messages/codec.ts`'s `MessageCodecRenderOptions` is structurally identical to
   `MessageRunRenderOptions`. They stay separate names because the first is the codec table's and the
   second is what a module registers; unifying them is a follow-up that touches the codec table.
