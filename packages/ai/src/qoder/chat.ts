@@ -166,6 +166,28 @@ export function qoderChatBody(request: QoderChatRequest): QoderJson {
 	};
 }
 
+/**
+ * Upstream's "sign in again" family: `105 Login expired` for a device token
+ * that aged out, and `TOKEN_EXPIRE` when the token was revoked. Both answer 403
+ * and both are fixed by renewing the token, not by retrying as-is.
+ */
+const EXPIRED_TOKEN_CODES = new Set(["105", "TOKEN_EXPIRE"]);
+
+/** What to do about an expired token, once the provider has nothing left to retry with. */
+export const TOKEN_EXPIRED_HINT =
+	"Qoder rejected the device token. Run '/login qoder' (or set QODER_ACCOUNT_REFRESH_TOKEN so the token renews itself).";
+
+function expiredToken(body: QoderJson | undefined): boolean {
+	if (!body) return false;
+	for (const key of ["code", "subCode", "message", "msg", "error"]) {
+		const value = body[key];
+		if (typeof value !== "string") continue;
+		const text = value.trim();
+		if (EXPIRED_TOKEN_CODES.has(text) || /login expired/i.test(text)) return true;
+	}
+	return false;
+}
+
 /** One decoded frame: the delta upstream sent, or the error it reported. */
 export interface QoderStreamDelta {
 	role?: string;
@@ -177,6 +199,8 @@ export interface QoderStreamDelta {
 	finishReason?: string;
 	/** Upstream refused or failed the turn inside the stream. */
 	error?: string;
+	/** `error` is an expired (or revoked) device token, which a renewal fixes. */
+	tokenExpired?: boolean;
 }
 
 function jsonObject(value: unknown): QoderJson | undefined {
@@ -205,7 +229,17 @@ export function parseQoderStreamFrame(payload: string): QoderStreamDelta {
 	const status = envelope.statusCodeValue;
 	if (typeof status === "number" && status !== 200) {
 		const detail = typeof envelope.body === "string" ? envelope.body : JSON.stringify(envelope.body ?? {});
-		return { error: `Qoder stream failed (HTTP ${status}): ${detail}` };
+		let parsed: QoderJson | undefined;
+		try {
+			parsed = jsonObject(JSON.parse(detail));
+		} catch {
+			parsed = undefined;
+		}
+		const expiry = expiredToken(parsed);
+		const suffix = expiry ? ` ${TOKEN_EXPIRED_HINT}` : "";
+		const failure: QoderStreamDelta = { error: `Qoder stream failed (HTTP ${status}): ${detail}${suffix}` };
+		if (expiry) failure.tokenExpired = true;
+		return failure;
 	}
 	const body = typeof envelope.body === "string" ? envelope.body : undefined;
 	if (!body) return {};
@@ -224,7 +258,11 @@ export function parseQoderStreamFrame(payload: string): QoderStreamDelta {
 	const code = chunk.code;
 	if (typeof code === "string" && code.length > 0 && code !== "0") {
 		const message = typeof chunk.message === "string" ? chunk.message : "";
-		return { ...delta, error: `Qoder error ${code}: ${message}` };
+		const expiry = expiredToken(chunk);
+		const renewal = expiry ? ` ${TOKEN_EXPIRED_HINT}` : "";
+		const failure: QoderStreamDelta = { ...delta, error: `Qoder error ${code}: ${message}${renewal}` };
+		if (expiry) failure.tokenExpired = true;
+		return failure;
 	}
 	const choices = Array.isArray(chunk.choices) ? chunk.choices : [];
 	const choice = jsonObject(choices[0]);

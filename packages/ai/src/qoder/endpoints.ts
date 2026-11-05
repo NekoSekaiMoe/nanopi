@@ -15,6 +15,8 @@ export interface QoderEndpoints {
 	plan: string;
 	/** OpenAPI host that serves the daily check-in endpoints. */
 	openApiHost: string;
+	/** Redeems a refresh token for a fresh device token, renewing the login. */
+	jobTokenUrl: string;
 	/** Signed `/algo` endpoint that lists the models the account may use. */
 	modelListUrl: string;
 	/** Signed `/algo` endpoint that streams one agent completion. */
@@ -27,6 +29,7 @@ const GLOBAL_ENDPOINTS: QoderEndpoints = {
 	userInfo: "https://openapi.qoder.sh/api/v1/userinfo",
 	plan: "https://openapi.qoder.sh/api/v2/user/plan",
 	openApiHost: "openapi.qoder.sh",
+	jobTokenUrl: "https://center.qoder.sh/algo/api/v3/user/jobToken?Encode=1",
 	modelListUrl: "https://api2.qoder.sh/algo/api/v2/model/list?Encode=1",
 	chatUrl:
 		"https://api1.qoder.sh/algo/api/v2/service/pro/sse/agent_chat_generation?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1",
@@ -38,6 +41,7 @@ const CN_ENDPOINTS: QoderEndpoints = {
 	userInfo: "https://openapi.qoder.com.cn/api/v1/userinfo",
 	plan: "https://openapi.qoder.com.cn/api/v2/user/plan",
 	openApiHost: "openapi.qoder.com.cn",
+	jobTokenUrl: "https://gateway.qoder.com.cn/algo/api/v3/user/jobToken?Encode=1",
 	modelListUrl: "https://gateway.qoder.com.cn/algo/api/v2/model/list?Encode=1",
 	chatUrl:
 		"https://gateway.qoder.com.cn/algo/api/v2/service/pro/sse/agent_chat_generation?FetchKeys=llm_model_result&AgentId=agent_common&Encode=1",

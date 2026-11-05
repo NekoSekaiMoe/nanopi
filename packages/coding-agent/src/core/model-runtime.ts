@@ -9,6 +9,7 @@ import {
 	type AuthCheck,
 	type AuthInteraction,
 	type AuthOperationOptions,
+	type AuthorizationUpdate,
 	type AuthResult,
 	type AuthType,
 	type ClassifierApi,
@@ -589,6 +590,14 @@ export class ModelRuntime implements Models {
 		return this.snapshot.auth.has(providerId);
 	}
 
+	storeAuthorizationUpdate(
+		providerId: string,
+		update: AuthorizationUpdate,
+		options?: AuthOperationOptions,
+	): Promise<void> {
+		return this.models.storeAuthorizationUpdate(providerId, update, options);
+	}
+
 	getAuth(providerId: string, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
 	getAuth(model: AnyModel, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
 	async getAuth(
@@ -704,6 +713,7 @@ export class ModelRuntime implements Models {
 		model: TModel;
 		options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
 	}> {
+		const runtime = this;
 		const provider = this.models.getProvider(model.provider);
 		if (!provider) throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
 		const resolution = await this.getAuth(model, {
@@ -722,6 +732,7 @@ export class ModelRuntime implements Models {
 				? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
 				: undefined;
 		const requestModel: TModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
+		const onAuthorizationUpdate = providerOptions.onAuthorizationUpdate;
 		return {
 			provider,
 			model: requestModel,
@@ -730,6 +741,15 @@ export class ModelRuntime implements Models {
 				apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
 				headers,
 				env,
+				// A provider may renew its own credential mid-response (Qoder's device token
+				// expires under a signed request). Persist the rotation so the next request
+				// starts from it, then let the caller's hook see it too.
+				async onAuthorizationUpdate(update) {
+					await runtime.models.storeAuthorizationUpdate(model.provider, update, {
+						signal: providerOptions.signal,
+					});
+					await onAuthorizationUpdate?.(update);
+				},
 			} as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
 		};
 	}

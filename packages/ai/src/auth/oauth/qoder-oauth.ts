@@ -8,11 +8,15 @@
  * the device token (`dt-...`). 404 means "not approved yet", so the poll
  * interval is fixed and there is no device code to type anywhere.
  *
- * The device token is what the Qoder API accepts as `Authorization: Bearer`.
- * It carries no expiry this flow can see (the account refresh token is
- * separate and not part of this response), so `expires` is set far out and
- * `refresh` re-reads the account info rather than re-running a token exchange;
- * a token that stops working is a re-login, not a refresh.
+ * A login stores two strings: the device token (`dt-...`) every request
+ * carries, and the account refresh token (`drt-...`) the poll answers with.
+ * The device token carries no expiry this flow can see, and the signed `/algo`
+ * endpoints report an expired one only inside the stream (`403`,
+ * `{"code":"105","message":"Login expired"}`), so `expires` is set far out and
+ * `refresh` renews the pair through the job-token exchange instead of
+ * re-reading the account: that endpoint trades the refresh token for a new
+ * device token *and* a new refresh token, which the credential has to store
+ * because the redeemed one dies with the exchange.
  */
 
 import {
@@ -23,6 +27,7 @@ import {
 	resolveQoderRegion,
 } from "../../qoder/client.ts";
 import { type QoderRegion, qoderEndpoints } from "../../qoder/endpoints.ts";
+import { renewQoderToken } from "../../qoder/job-token.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { generatePKCE } from "./pkce.ts";
@@ -32,7 +37,7 @@ const QODER_CLIENT_ID = "e883ade2-e6e3-4d6d-adf7-f92ceff5fdcb";
 const POLL_INTERVAL_MS = 2000;
 const DEFAULT_LOGIN_TIMEOUT_SECONDS = 10 * 60;
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
-/** Tokens do not advertise an expiry; renew the account info daily instead. */
+/** Tokens do not advertise an expiry; renew the pair daily instead. */
 const DEVICE_TOKEN_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 type DeviceToken = { token: string; refreshToken?: string };
@@ -159,7 +164,8 @@ function credentialFrom(
 		type: "oauth",
 		access: token,
 		// `refresh` holds the account refresh token when the login returned one and
-		// the device token otherwise; the token exchange itself is a separate flow.
+		// the device token otherwise; both are redeemable at the job-token endpoint,
+		// but only the former rotates into a new pair.
 		refresh: refreshToken ?? token,
 		expires: Date.now() + DEVICE_TOKEN_LIFETIME_MS - REFRESH_SKEW_MS,
 		// The account id and token travel in the env because the signed model
@@ -229,14 +235,17 @@ function createQoderOAuth(explicitRegion?: QoderRegion): OAuthAuth {
 
 		login: (interaction) => loginQoder(interaction, explicitRegion),
 
-		// No token endpoint to exchange against; re-read the account to keep the
-		// credential fresh and surface a dead token as a refresh failure.
+		// The job-token exchange is the token endpoint; the account lookup that
+		// follows keeps the stored name, plan and org in step with the new session.
 		async refresh(credential, signal) {
-			const token = credential.access;
-			if (!token) throw new Error("Qoder credential has no device token. Sign in again.");
 			const resolvedRegion = credentialRegion(credential);
-			const info = await fetchAccount(token, resolvedRegion, signal);
-			return credentialFrom(token, credential.refresh, resolvedRegion, info);
+			const renewed = await renewQoderToken({
+				credential: credential.refresh || credential.access,
+				jobTokenUrl: qoderEndpoints(resolvedRegion).jobTokenUrl,
+				signal,
+			});
+			const info = await fetchAccount(renewed.token, resolvedRegion, signal);
+			return credentialFrom(renewed.token, renewed.refreshToken, resolvedRegion, info);
 		},
 
 		async toAuth(credential) {

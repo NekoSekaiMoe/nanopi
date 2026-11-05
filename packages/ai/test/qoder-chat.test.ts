@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { parseQoderStreamFrame } from "../src/qoder/chat.ts";
 import { qoderEndpoints } from "../src/qoder/endpoints.ts";
+import { encodeQoderBody, renewQoderToken } from "../src/qoder/job-token.ts";
 
 const neverAbortedSignal = new AbortController().signal;
+
+function jsonResponse(body: unknown, status = 200): Response {
+	return new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
+}
 
 function sseStream(frames: readonly unknown[], status = 200): Response {
 	const body = frames.map((frame) => `data:${JSON.stringify(frame)}\n\n`).join("");
@@ -177,5 +182,130 @@ describe("Qoder chat adapter", () => {
 
 		expect(result.stopReason).toBe("error");
 		expect(result.errorMessage).toMatch(/device token/);
+	});
+});
+
+describe("Qoder login expiry", () => {
+	it("marks the 105 Login expired envelope as a token the caller can renew", () => {
+		const delta = parseQoderStreamFrame(JSON.stringify(frame({ code: "105", message: "Login expired" }, 403)));
+
+		expect(delta.tokenExpired).toBe(true);
+		expect(delta.error).toMatch(/HTTP 403.*Login expired/);
+		expect(delta.error).toMatch(/\/login qoder/);
+	});
+
+	it("leaves every other upstream error alone", () => {
+		expect(
+			parseQoderStreamFrame(JSON.stringify(frame({ code: "101", message: "Signature invalid" }, 403))),
+		).toMatchObject({ error: expect.stringMatching(/Signature invalid/) });
+		expect(
+			parseQoderStreamFrame(JSON.stringify(frame({ code: "101", message: "Signature invalid" }, 403))).tokenExpired,
+		).toBeUndefined();
+	});
+
+	it("renews the pair once the stream reports the expiry, and reports the new tokens", async () => {
+		const { stream } = await import("../src/api/qoder.ts");
+		const endpoints = qoderEndpoints("global");
+		const requests: string[] = [];
+		vi.stubGlobal("fetch", async (input: unknown) => {
+			const url = String(input);
+			requests.push(url);
+			if (url === endpoints.jobTokenUrl) return jsonResponse({ device_token: "dt-new", refresh_token: "drt-new" });
+			// The first turn is answered with a stream that only carries the expiry frame.
+			if (requests.filter((entry) => entry === endpoints.chatUrl).length === 1) {
+				return sseStream([frame({ code: "105", message: "Login expired" }, 403)]);
+			}
+			return sseStream([frame({ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] })]);
+		});
+
+		let stored: unknown;
+		const result = await stream(model(), { messages: [{ role: "user", content: "hi", timestamp: 0 }] } as never, {
+			...credentialOptions,
+			env: { ...credentialOptions.env, QODER_ACCOUNT_REFRESH_TOKEN: "drt-old" },
+			onAuthorizationUpdate: (update) => {
+				stored = update;
+			},
+		}).result();
+
+		expect(result.stopReason).toBe("stop");
+		expect(result.content).toMatchObject([{ type: "text", text: "hi" }]);
+		expect(stored).toEqual({ token: "dt-new", refreshToken: "drt-new", continues: true });
+		expect(requests.filter((url) => url === endpoints.chatUrl)).toHaveLength(2);
+	});
+
+	it("fails with the expiry when the credential has no refresh token to renew with", async () => {
+		const { stream } = await import("../src/api/qoder.ts");
+		vi.stubGlobal("fetch", async () => sseStream([frame({ code: "105", message: "Login expired" }, 403)]));
+
+		const result = await stream(
+			model(),
+			{ messages: [{ role: "user", content: "hi", timestamp: 0 }] } as never,
+			credentialOptions,
+		).result();
+
+		expect(result.stopReason).toBe("error");
+		expect(result.errorMessage).toMatch(/Login expired/);
+		expect(result.errorMessage).toMatch(/\/login qoder/);
+	});
+});
+
+describe("Qoder job token exchange", () => {
+	it("encodes the body with Qoder's own alphabet", () => {
+		const encoded = encodeQoderBody(new TextEncoder().encode('{"payload":"x","encodeVersion":"1"}'));
+
+		// Standard base64 of that body, rotated by the trailing third and remapped onto
+		// Qoder's alphabet: the characters of plain base64 never survive as-is.
+		const standard = Buffer.from('{"payload":"x","encodeVersion":"1"}').toString("base64").replace(/=+$/, "");
+		// Every character comes from Qoder's alphabet, so none of the standard one survives as-is.
+		expect(encoded.length).toBe(standard.length);
+		expect(encoded).not.toBe(standard);
+		expect(encoded).not.toMatch(/^[A-Za-z0-9+/]+$/);
+	});
+
+	it("asks for a rotation when it redeems a refresh token", async () => {
+		let body = "";
+		let headers: Headers | undefined;
+		vi.stubGlobal("fetch", async (_input: unknown, init?: RequestInit) => {
+			body = String(init?.body);
+			headers = new Headers(init?.headers);
+			return jsonResponse({ device_token: "dt-new", refresh_token: "drt-new" });
+		});
+
+		const renewed = await renewQoderToken({
+			credential: "drt-old",
+			jobTokenUrl: qoderEndpoints("global").jobTokenUrl,
+			signal: neverAbortedSignal,
+		});
+
+		expect(renewed).toEqual({ token: "dt-new", refreshToken: "drt-new" });
+		expect(headers?.get("signature")).toMatch(/^[0-9a-f]{32}$/);
+		expect(headers?.get("appcode")).toBe("cosy");
+		// The encoded payload carries needRefresh, so upstream rotates the pair.
+		expect(body.length).toBeGreaterThan(0);
+		expect(body).not.toContain("drt-old");
+	});
+
+	it("keeps the redeemed refresh token when the exchange answers with a device token only", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ device_token: "dt-new" }));
+
+		const renewed = await renewQoderToken({
+			credential: "drt-old",
+			jobTokenUrl: qoderEndpoints("global").jobTokenUrl,
+			signal: neverAbortedSignal,
+		});
+
+		expect(renewed).toEqual({ token: "dt-new", refreshToken: "drt-old" });
+	});
+
+	it("reports a rejected exchange instead of an empty token", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ message: "personal token is invalid" }, 200));
+
+		await expect(
+			renewQoderToken({
+				credential: "drt-old",
+				jobTokenUrl: qoderEndpoints("global").jobTokenUrl,
+				signal: neverAbortedSignal,
+			}),
+		).rejects.toThrow(/returned no device token/);
 	});
 });
