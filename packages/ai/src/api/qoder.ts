@@ -13,12 +13,20 @@
  * stores. `QODER_*` env vars on the resolved credential carry the account
  * facts the signing identity needs, so a device token alone is enough to
  * start a turn.
+ *
+ * An expired login is reported inside the stream (`403` / `105 Login expired`),
+ * which no retry fixes. When the credential carries an account refresh token,
+ * the turn renews the pair through the job-token endpoint once and reports the
+ * new tokens on `message.authorizationUpdate`, so the caller can store them; a
+ * renewed device token that lands after the refresh hook already needs it would
+ * otherwise be thrown away and every turn would renew again.
  */
 
 import type { QoderListedModel } from "../qoder/catalog.ts";
 import { parseQoderStreamFrame, type QoderStreamDelta, qoderChatBody } from "../qoder/chat.ts";
-import { qoderFingerprint } from "../qoder/cosy.ts";
+import { type QoderFingerprint, qoderFingerprint } from "../qoder/cosy.ts";
 import { type QoderApi, type QoderRegion, qoderEndpoints } from "../qoder/endpoints.ts";
+import { renewQoderToken } from "../qoder/job-token.ts";
 import { createQoderCosySession, qoderSessionHeaders } from "../qoder/signature.ts";
 import type {
 	AssistantMessage,
@@ -75,6 +83,23 @@ function signingIdentity(model: Model<QoderApi>, apiKey: string | undefined, env
 		userType: getProviderEnvValue("QODER_ACCOUNT_USER_TYPE", env),
 		refreshToken: getProviderEnvValue("QODER_ACCOUNT_REFRESH_TOKEN", env),
 	};
+}
+
+/** What the caller does with tokens the turn renewed: store them. */
+export interface QoderAuthorizationUpdate {
+	token: string;
+	refreshToken?: string;
+}
+
+interface Turn {
+	identity: ReturnType<typeof signingIdentity>;
+	fingerprint: QoderFingerprint;
+}
+
+/** One signed request's credentials; rebuilt from renewed tokens between attempts. */
+function turnFor(model: Model<QoderApi>, apiKey: string, env: ProviderEnv | undefined): Turn {
+	const identity = signingIdentity(model, apiKey, env);
+	return { identity, fingerprint: qoderFingerprint(identity.uid) };
 }
 
 interface StreamState {
@@ -267,31 +292,73 @@ const stream: StreamFunction<QoderApi, StreamOptions> = (
 		const state: StreamState = { output, blocks, textBlock: null, thinkingBlock: null, toolBlocks: new Map() };
 		output.content = blocks as AssistantMessage["content"];
 		try {
-			const identity = signingIdentity(model, options?.apiKey, options?.env);
 			const region = regionFor(model, options?.env);
-			const session = createQoderCosySession(identity, qoderFingerprint(identity.uid));
-			const url = qoderEndpoints(region).chatUrl;
+			const initialToken = options?.apiKey ?? signingIdentity(model, options?.apiKey, options?.env).token;
+			const endpoints = qoderEndpoints(region);
 			const body = JSON.stringify(
 				qoderChatBody({
 					model: listedModel(model),
 					messages: context.messages,
 					tools: resolveTranscriptTools(context.messages, false).requestTools,
 					maxTokens: options?.maxTokens,
+					// Both are account facts the credential recorded; the model decides reasoning.
 					reasoning: model.reasoning,
-					userType: identity.userType,
+					userType: getProviderEnvValue("QODER_ACCOUNT_USER_TYPE", options?.env),
 				}),
 			);
-			const response = await fetch(url, {
-				method: "POST",
-				headers: {
-					...qoderSessionHeaders(session, { url, body }),
-					accept: "text/event-stream",
-					"content-type": "application/json",
-				},
-				body,
-				signal: options?.signal,
-			});
-			await options?.onResponse?.({ status: response.status, headers: {} }, model);
+
+			/** One signed POST of the turn; `token` is the device token this attempt carries. */
+			const send = async (token: string) => {
+				const turn = turnFor(model, token, options?.env);
+				const session = createQoderCosySession(turn.identity, turn.fingerprint);
+				const response = await fetch(endpoints.chatUrl, {
+					method: "POST",
+					headers: {
+						...qoderSessionHeaders(session, { url: endpoints.chatUrl, body }),
+						accept: "text/event-stream",
+						"content-type": "application/json",
+					},
+					body,
+					signal: options?.signal,
+				});
+				await options?.onResponse?.({ status: response.status, headers: {} }, model);
+				return response;
+			};
+
+			/**
+			 * Renew the pair once per turn. Only a credential that carries the account
+			 * refresh token can rotate it; without one the token is already as fresh as
+			 * this process can make it, and renewing would hand upstream the same dead
+			 * credential twice.
+			 */
+			let token = initialToken;
+			let renewed = false;
+			const renewToken = async () => {
+				const refreshToken = getProviderEnvValue("QODER_ACCOUNT_REFRESH_TOKEN", options?.env);
+				if (renewed || !refreshToken) return false;
+				renewed = true;
+				const next = await renewQoderToken({
+					credential: refreshToken,
+					jobTokenUrl: endpoints.jobTokenUrl,
+					signal: options?.signal ?? new AbortController().signal,
+				});
+				token = next.token;
+				// The renewal continues the credential this turn started from, so storing it
+				// cannot overwrite a login that replaced that credential mid-turn.
+				output.authorizationUpdate = { token: next.token, refreshToken: next.refreshToken, continues: true };
+				return true;
+			};
+
+			let response = await send(token);
+			if (response.status === 401 || response.status === 403) {
+				// The stream carries this error inside a 200 most of the time; an outright
+				// 403 means the same thing, so both renew before the turn gives up.
+				await response.text();
+				if (!(await renewToken())) {
+					throw new Error(`Qoder chat failed (HTTP ${response.status}): the device token was rejected.`);
+				}
+				response = await send(token);
+			}
 			if (!response.ok) {
 				const text = await response.text();
 				throw new Error(`Qoder chat failed (HTTP ${response.status}): ${text.slice(0, 500)}`);
@@ -305,6 +372,23 @@ const stream: StreamFunction<QoderApi, StreamOptions> = (
 				const delta = parseQoderStreamFrame(payload);
 				if (delta.error) {
 					upstreamError = delta.error;
+					if (!delta.tokenExpired) break;
+					// Nothing was emitted for this turn yet: renewing the token and sending
+					// the same envelope again cannot duplicate content.
+					if (!(await renewToken())) break;
+					const retried = await send(token);
+					if (retried.ok && retried.body) {
+						upstreamError = undefined;
+						for await (const payload of sseFrames(retried.body)) {
+							const next = parseQoderStreamFrame(payload);
+							if (next.error) {
+								upstreamError = next.error;
+								break;
+							}
+							if (next.finishReason) finished = true;
+							applyDelta(state, stream, next);
+						}
+					}
 					break;
 				}
 				if (delta.finishReason) finished = true;
@@ -312,6 +396,7 @@ const stream: StreamFunction<QoderApi, StreamOptions> = (
 			}
 			if (upstreamError) throw new Error(upstreamError);
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
+			if (output.authorizationUpdate) await options?.onAuthorizationUpdate?.(output.authorizationUpdate);
 			finishBlocks(state, stream);
 			const hasToolCall = state.blocks.some((block) => block.type === "toolCall");
 			output.stopReason = hasToolCall ? "toolUse" : "stop";

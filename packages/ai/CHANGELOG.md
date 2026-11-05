@@ -11,6 +11,7 @@
 
 ### Fixed
 
+- Fixed `qoder` / `qoder-cn` failing with `Qoder stream failed (HTTP 403): {"code":"105","message":"Login expired"}` once the device token aged out: the signed endpoints report an expired login inside the stream and nothing renewed it. `refresh` now trades the stored `drt-...` account refresh token at `POST /algo/api/v3/user/jobToken?Encode=1` for a new device token *and* a new refresh token and stores both, a turn that hits `105`/`TOKEN_EXPIRE` renews once and resends the same envelope, and the rotation is persisted through `Models.storeAuthorizationUpdate` (`message.authorizationUpdate`) so the next turn starts from the new pair instead of renewing again. A credential without a refresh token now says so instead of reporting the raw upstream error (issue [#476](https://cnb.cool/shinytale/nanopi/-/issues/476))
 - Fixed `openai-codex` listing models the signed-in ChatGPT plan cannot use: the bundled catalog carries every tier, so a Free account still saw `gpt-6-astra` and failed on the first turn. The provider now filters by the account catalog `GET /models` reports, which the Codex login and each model refresh store on the credential the same way `openai` already does (issue [#473](https://cnb.cool/shinytale/nanopi/-/issues/473))
 
 ## [20261031.1.0]

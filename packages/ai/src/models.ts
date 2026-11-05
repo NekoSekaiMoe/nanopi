@@ -28,6 +28,7 @@ import type {
 	AssistantImages,
 	AssistantMessage,
 	AssistantMessageEventStream,
+	AuthorizationUpdate,
 	ClassifierApi,
 	ClassifierContext,
 	ClassifierModel,
@@ -67,6 +68,9 @@ import {
 	isModelType,
 } from "./utils/model-operations.ts";
 import { normalizeContext } from "./utils/transcript.ts";
+
+/** A rotated token is as fresh as a login, so it buys the same day of validity. */
+const AUTHORIZATION_UPDATE_LIFETIME_MS = 24 * 60 * 60 * 1000;
 
 export { ModelsError, type ModelsErrorCode } from "./auth/resolve.ts";
 export { getModelType, isModelType } from "./utils/model-operations.ts";
@@ -312,6 +316,19 @@ export interface Models {
 	 */
 	getAuth(providerId: string, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
 	getAuth(model: AnyModel, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
+
+	/**
+	 * Store tokens a provider renewed while serving a response
+	 * (`message.authorizationUpdate`), so later requests start from them instead of
+	 * renewing again. Applied only when the rotation still continues the stored
+	 * credential: an access token that already changed means a refresh or a new
+	 * login won the race, and a stale rotation must not roll that back.
+	 */
+	storeAuthorizationUpdate(
+		providerId: string,
+		update: AuthorizationUpdate,
+		options?: AuthOperationOptions,
+	): Promise<void>;
 
 	/** Run a provider-owned login flow and persist its returned credential. */
 	login(providerId: string, type: AuthType, interaction: AuthInteraction, options?: LoginOptions): Promise<Credential>;
@@ -812,6 +829,40 @@ class ModelsImpl implements MutableModels {
 				headers: mergeHeaders(result.auth.headers, providerOrModel.headers),
 			},
 		};
+	}
+
+	async storeAuthorizationUpdate(
+		providerId: string,
+		update: AuthorizationUpdate,
+		options?: AuthOperationOptions,
+	): Promise<void> {
+		const signal = operationSignal(options?.signal);
+		const rotate = async () =>
+			this.credentials.modify(
+				providerId,
+				async (current) => {
+					if (current?.type !== "oauth") return undefined; // logged out meanwhile
+					if (current.access !== update.token && !update.continues) return undefined;
+					return {
+						...current,
+						access: update.token,
+						refresh: update.refreshToken ?? current.refresh,
+						// The new pair is as fresh as a login; the old expiry described the old token.
+						expires: Math.max(current.expires, Date.now() + AUTHORIZATION_UPDATE_LIFETIME_MS),
+						env: {
+							...current.env,
+							QODER_DEVICE_TOKEN: update.token,
+							...(update.refreshToken ? { QODER_ACCOUNT_REFRESH_TOKEN: update.refreshToken } : {}),
+						},
+					};
+				},
+				{ signal },
+			);
+		try {
+			await raceWithAbortSignal(rotate(), signal);
+		} catch (error) {
+			throw new ModelsError("auth", `Credential store update failed for ${providerId}`, { cause: error });
+		}
 	}
 
 	async login(
