@@ -89,9 +89,15 @@ tag 已经存在（触发要求 tag 先存在，`--ref main` 只提供工作流�
 - 国内下载路径存在了，代价是每次发布多一份约 15 MiB 的存储（三个口味）和一次构建。
   正式版因此在 GitHub 与 CNB 各构建一次，两份产物同为 tag 上那个提交的构建结果；
   换掉其中任何一条都等于改发布流程，不在这次改动范围内。
-- 发行仓库的写权限来自密钥仓库 `shinytale/keys` 的 `ATOMGIT_TOKEN`
-  （`.cnb.yml` 的 `imports` 注入），token 由 `--token-env` 指给脚本，走
-  `GIT_ASKPASS`，不进 argv、不进 `.git-credentials`。
+- 发行仓库的写权限来自密钥仓库 `shinytale/keys` 的 `ATOMGIT_KEY`
+  （`.cnb.yml` 的 `imports` 注入），token 由 `.cnb.yml` 的
+  `--token-env ATOMGIT_KEY` 指给脚本，走 `GIT_ASKPASS`，不进 argv、不进
+  `.git-credentials`。
+- `--token-env` 是 `--push` 的必需参数，不是可选项：脚本不猜凭据躺在哪个环境变量
+  里。少了它直接报错，因为一个「没带 token 的 push」不会立刻失败——`GIT_TERMINAL_PROMPT=0`
+  把它变成 git 的 `could not read Username`，看起来像 URL 写错了——失败点离「少传了
+  一个参数」太远。凭据的名字放在 `.cnb.yml` 里也更好查：换密钥库里的变量名时，
+  改的是看得见的那一行。
 - **cron 不随代码生效**：只有「本次推送的变更包含 `.cnb.yml`」才会自动同步定时任务。
   这条改动合进 main 时刚好满足，但以后单独改 cron 表达式要记得去
   「云原生构建 → 定时任务」点一次同步。
