@@ -1274,10 +1274,11 @@ function buildParams(
 		model.compat?.supportsMidConvoEffort !== true &&
 		compat.supportsTemperature
 	) {
-		// SDK 1.x drops `temperature` from the request types: its `anthropic-version` header is
-		// pinned to 2026-10-21, where the field is gone. The wire field still exists for older
-		// protocol versions, and Anthropic-compatible endpoints on `anthropic-messages` read it,
-		// so set it through a widened literal instead of losing the option.
+		// SDK 1.x drops `temperature` from the request types: its client defaults the
+		// `anthropic-version` header to 2026-10-21, where the field is gone. Gateways serving the
+		// older protocol do accept it, but they see 2026-10-21 unless the model config carries its
+		// own `anthropic-version` header, so the field only survives where the endpoint says so.
+		// Widening the literal keeps the option working there instead of dropping it for everyone.
 		(params as MessageCreateParamsStreaming & { temperature?: number }).temperature = options.temperature;
 	}
 
@@ -1392,10 +1393,6 @@ function convertMessages(
 		pendingSystemMessages.length = 0;
 	};
 
-	// Narrows to what a `role: "system"` message accepts: text, tool_addition, tool_removal.
-	const systemBlocks: SystemContentBlockParam[] = [];
-	// Reused by every branch below: widening the declaration is what lets a system message carry
-	// tool_addition / tool_removal blocks, so it must stay out of the individual conversions.
 	for (let i = 0; i < transformedMessages.length; i++) {
 		const msg = transformedMessages[i];
 
@@ -1403,7 +1400,10 @@ function convertMessages(
 			// Later system messages only reach this point when the model accepts them natively;
 			// otherwise the transcript was collapsed into the leading message before conversion.
 			const text = renderSystemMessageUpdate(msg);
-			systemBlocks.length = 0;
+			// Declared here, not shared across iterations: every entry in `pendingSystemMessages`
+			// holds this array by reference, so reusing one would make every queued update send
+			// the blocks of the last system message.
+			const systemBlocks: SystemContentBlockParam[] = [];
 			if (text.length > 0) systemBlocks.push({ type: "text", text: sanitizeSurrogates(text) });
 			if (convertToolDefinitions) {
 				const added = msg.toolsAdded ?? [];
