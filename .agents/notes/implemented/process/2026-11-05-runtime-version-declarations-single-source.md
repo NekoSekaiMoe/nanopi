@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> **已被部分取代（2026-11-05，`shinytale/nanopi#516`）**：本篇 `## Decision` 里把 `engines` 规则从 `enabled: false` 换成 `allowedVersions` 的那条，以及「`@types/node` 的 major 规则引用同一个值」这个理由，已被实测推翻：`allowedVersions` 拦不住 `rangeStrategy: pin` 对 `engines.node` 的范围改写，而那两条规则在配置里并不互相引用。`engines` 规则已改回 `enabled: false`，并加了 CI 断言。见 [engines.node 改回 enabled: false](../bug-fix/2026-11-05-engines-allowedversions-regression.md)。本篇其余关于 `protobufjs`、`allowBuilds`、`@types/node` 不抢跑的结论仍成立。
+
 ## Problem
 
 Renovate 打出来的 grouped PR 同时升了 `@types/node` 24.19.2 → 26.6.6 和
