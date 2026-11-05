@@ -4,6 +4,7 @@ import {
 	type AltScreenSearchMatch,
 	getAltScreenSearchMatchKey,
 } from "./alt-screen-search.ts";
+import type { Component, TuiMouseButton, TuiMouseEvent } from "./component.ts";
 import { AltScreenFlashContainer } from "./components/alt-screen-flash.ts";
 import { ScrollView } from "./components/scroll-view.ts";
 import { getKeybindings } from "./keybindings.ts";
@@ -32,7 +33,6 @@ import {
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
 import {
-	type Component,
 	Container,
 	CURSOR_MARKER,
 	compositeTuiLine,
@@ -40,10 +40,8 @@ import {
 	type OverlayHandle,
 	retargetMouseEvent,
 	TuiBase,
-	type TuiMouseButton,
 	type TuiMouseDispatchResult,
 	type TuiMouseDispatchTarget,
-	type TuiMouseEvent,
 	type TuiStopOptions,
 	VIEWPORT_TUI,
 	type ViewportTUI,

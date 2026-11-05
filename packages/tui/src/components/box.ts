@@ -1,4 +1,6 @@
-import { type Component, dispatchMouseEvent, type TuiMouseDispatchResult, type TuiMouseEvent } from "../tui.ts";
+import type { Component, TuiMouseEvent } from "../component.ts";
+import type { TuiMouseDispatchResult } from "../tui.ts";
+import { dispatchMouseEvent } from "../tui.ts";
 import { flattenLines, visibleWidth } from "../utils.ts";
 
 type RenderCache = {

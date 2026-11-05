@@ -31,13 +31,10 @@ import type { MessageTypeCodecMap } from "../messages/codec.ts";
 import { convertToLlm } from "../messages.ts";
 import {
 	buildSessionProjection,
-	type CompactionEntry,
 	getEntriesAfterLatestCompaction,
-	type ProjectedSessionEntry,
-	type SessionEntry,
-	type SessionProjection,
 	sessionEntryToContextMessages,
 } from "../session-manager.ts";
+import type { CompactionEntry, ProjectedSessionEntry, SessionEntry, SessionProjection } from "../session-store.ts";
 import { combineUsage } from "../usage-totals.ts";
 import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {

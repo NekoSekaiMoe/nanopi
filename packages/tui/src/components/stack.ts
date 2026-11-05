@@ -1,5 +1,6 @@
+import type { Component } from "../component.ts";
 import { LAYOUT_NODE, type LayoutViewport, type StackLayoutEntry, type StackLayoutNode } from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import { Container } from "../tui.ts";
 
 export interface StackEntryOptions {
 	basis?: number | "auto";

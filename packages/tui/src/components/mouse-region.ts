@@ -1,10 +1,6 @@
-import {
-	type Component,
-	dispatchMouseEvent,
-	type TuiMouseDispatchResult,
-	type TuiMouseEvent,
-	type TuiMouseEventResult,
-} from "../tui.ts";
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../component.ts";
+import type { TuiMouseDispatchResult } from "../tui.ts";
+import { dispatchMouseEvent } from "../tui.ts";
 
 export type MouseRegionHandler = (event: TuiMouseEvent) => TuiMouseEventResult | undefined;
 

@@ -15,7 +15,8 @@ import {
 	createCompactionSummaryMessage,
 	createCustomMessage,
 } from "../messages.ts";
-import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
+import type { ReadonlySessionManager } from "../session-manager.ts";
+import type { SessionEntry } from "../session-store.ts";
 import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction.ts";
 import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {

@@ -1,16 +1,10 @@
 import type { AutocompleteProvider, AutocompleteSuggestions } from "../autocomplete.ts";
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../component.ts";
 import { getKeybindings } from "../keybindings.ts";
 import { decodePrintableKey, matchesKey } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
-import {
-	type Component,
-	CURSOR_MARKER,
-	type Focusable,
-	renderFakeCursor,
-	type TUI,
-	type TuiMouseEvent,
-	type TuiMouseEventResult,
-} from "../tui.ts";
+import type { Focusable, TUI } from "../tui.ts";
+import { CURSOR_MARKER, renderFakeCursor } from "../tui.ts";
 import { UndoStack } from "../undo-stack.ts";
 import {
 	autocompleteBoundaryRegex,
