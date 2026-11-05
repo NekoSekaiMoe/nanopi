@@ -74,22 +74,12 @@ A/B 实证（逐个 diff 核过）：
 这个「引用」在配置里不存在，是语义对齐被写成了隐含依赖。改回 `enabled: false`
 不会破坏 `@types/node` 的拦截，下次 Node 迁移也不该照着「有依赖」这个前提改配置。
 
-**顺带查清「CI 绿却没自动合并」**：不是这次才坏，是从未真正生效。所有 Renovate
-PR（GitHub #3~#17）的合并提交 author 都是 `dabao1955`（人工），不是 `renovate[bot]`；
-PR #17 时间线里 `12:23:50 auto_merge_enabled` → `12:23:56 auto_merge_disabled` →
-`12:24:06 merged by dabao1955`，正是人开着 GitHub native auto-merge、等不到结果
-又手动合掉的痕迹。`shinytale/nanopi#419` 已经诊断过一次根因：Renovate 的
-automerge 只等分支保护点名的必选检查，名字对不上就永远判定「还差一条」。PR #17
-head `3727ec7bb` 的 `build-check-test` 是 `success`，但 combined commit status 是
-`pending`——检查跑在 Actions（check-runs）里，`status` 通道没有任何记录。配置是
-`automergeType: "pr"` + `platformAutomerge: false`（Renovate 自己合，不用 GitHub
-native auto-merge），而 timeline 里出现的 `auto_merge_enabled/disabled` 是 GitHub
-native auto-merge 的事件，说明有人在手动开它、它又在等一条不会来的检查。
-仓库侧能改的（workflow 名对齐 `Checks / build-check-test`）在 #420 已做；剩下的
-是 GitHub ruleset 里的必选检查名，只有仓库管理员能在网页改，仓库读不到也写不了。
-所以「修法」分两半：`enabled: false` + CI 断言是仓库内能做的；automerge 真正生效
-仍需管理员把 ruleset 必选检查改成 `Checks / build-check-test`，并用
-`gh pr checks <PR>` 核对一字不差。
+**「CI 绿却没自动合并」后来单独翻案了**：这里记的「必选检查名对不上、要管理员
+改 ruleset、仓库读不到也写不了」是 `shinytale/nanopi#419` 的结论，GitHub API 实测
+不支持。真因是 `renovate.json` 的 `platformAutomerge: false` 把合并交给 Renovate
+自合并路径（依赖轮询时序，实测从未生效），已改回 `true` 交给 GitHub 原生
+auto-merge；仓库内就能修，不需要管理员改设置。详见
+[绿了不合的真因是 platformAutomerge: false](2026-11-05-renovate-platform-automerge.md)。
 
 ## Alternatives considered
 
@@ -119,5 +109,6 @@ native auto-merge 的事件，说明有人在手动开它、它又在等一条�
 - 验证：`node --test scripts/check-pinned-deps.test.mjs` 6 项全绿；
   `node scripts/check-pinned-deps.mjs` 对当前仓库 8 处 `>=24.0.0` 返回 0；
   `pnpm run check` 全绿。
-- automerge 不会因这次改动自己变好。管理员若不改 GitHub ruleset 的必选检查名，
-  下一个依赖 PR 仍会「绿了不合、等人手点」。这是仓库外的一步，已在 Decision 里写清。
+- automerge 不在这篇修复范围内；它由后续 `shinytale/nanopi#518` 之后的
+  `platformAutomerge` 翻案单独修，见
+  [绿了不合的真因是 platformAutomerge: false](2026-11-05-renovate-platform-automerge.md)。
