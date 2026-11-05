@@ -9,6 +9,7 @@ import type {
 	BetaMessageParam as MessageParam,
 	BetaRawMessageStreamEvent as RawMessageStreamEvent,
 	BetaRefusalStopDetails as RefusalStopDetails,
+	BetaSystemMessageParam as SystemMessageParam,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import {
 	ANTHROPIC_FEDERATION_RULE_ID_ENV,
@@ -216,6 +217,13 @@ const DEFERRED_TOOL_PLACEHOLDER: BetaTool = {
 	input_schema: { type: "object", properties: {}, required: [] },
 	defer_loading: true,
 };
+
+/**
+ * Content a `role: "system"` message may carry. The SDK types that array position as text /
+ * tool_addition / tool_removal blocks only; `BetaContentBlockParam` is the wider union used by
+ * user and assistant turns.
+ */
+type SystemContentBlockParam = Exclude<NonNullable<SystemMessageParam["content"]>, string>[number];
 
 function shouldUseServerSideFallbackBeta(model: Model<"anthropic-messages">): boolean {
 	return (model.compat?.allowedFallbackModels?.length ?? 0) > 0;
@@ -1266,7 +1274,11 @@ function buildParams(
 		model.compat?.supportsMidConvoEffort !== true &&
 		compat.supportsTemperature
 	) {
-		params.temperature = options.temperature;
+		// SDK 1.x drops `temperature` from the request types: its `anthropic-version` header is
+		// pinned to 2026-10-21, where the field is gone. The wire field still exists for older
+		// protocol versions, and Anthropic-compatible endpoints on `anthropic-messages` read it,
+		// so set it through a widened literal instead of losing the option.
+		(params as MessageCreateParamsStreaming & { temperature?: number }).temperature = options.temperature;
 	}
 
 	const toolCacheControl = compat.supportsCacheControlOnTools ? cacheControl : undefined;
@@ -1380,6 +1392,10 @@ function convertMessages(
 		pendingSystemMessages.length = 0;
 	};
 
+	// Narrows to what a `role: "system"` message accepts: text, tool_addition, tool_removal.
+	const systemBlocks: SystemContentBlockParam[] = [];
+	// Reused by every branch below: widening the declaration is what lets a system message carry
+	// tool_addition / tool_removal blocks, so it must stay out of the individual conversions.
 	for (let i = 0; i < transformedMessages.length; i++) {
 		const msg = transformedMessages[i];
 
@@ -1387,24 +1403,27 @@ function convertMessages(
 			// Later system messages only reach this point when the model accepts them natively;
 			// otherwise the transcript was collapsed into the leading message before conversion.
 			const text = renderSystemMessageUpdate(msg);
-			const blocks: ContentBlockParam[] = [];
-			if (text.length > 0) blocks.push({ type: "text", text: sanitizeSurrogates(text) });
+			systemBlocks.length = 0;
+			if (text.length > 0) systemBlocks.push({ type: "text", text: sanitizeSurrogates(text) });
 			if (convertToolDefinitions) {
 				const added = msg.toolsAdded ?? [];
 				const redefined = new Set(added.map((tool) => tool.name));
 				for (const tool of msg.toolsRemoved ?? []) {
 					// A new definition under the same name replaces the old one, so no removal is needed.
 					if (redefined.has(tool.name)) continue;
-					blocks.push({
+					systemBlocks.push({
 						type: "tool_removal",
 						tool: { type: "tool_reference", name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name },
 					});
 				}
 				for (const definition of convertToolDefinitions(added)) {
-					blocks.push({ type: "tool_addition", tool: { type: "tool_definition", definition } });
+					systemBlocks.push({ type: "tool_addition", tool: { type: "tool_definition", definition } });
 				}
 			}
-			if (blocks.length > 0) pendingSystemMessages.push({ role: "system", content: blocks });
+			if (systemBlocks.length > 0) {
+				const systemMessage: SystemMessageParam = { role: "system", content: systemBlocks };
+				pendingSystemMessages.push(systemMessage);
+			}
 		} else if (msg.role === "user") {
 			if (typeof msg.content === "string") {
 				if (msg.content.trim().length > 0) {
