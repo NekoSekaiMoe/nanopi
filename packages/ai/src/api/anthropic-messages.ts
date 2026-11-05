@@ -9,6 +9,7 @@ import type {
 	BetaMessageParam as MessageParam,
 	BetaRawMessageStreamEvent as RawMessageStreamEvent,
 	BetaRefusalStopDetails as RefusalStopDetails,
+	BetaSystemMessageParam as SystemMessageParam,
 } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import {
 	ANTHROPIC_FEDERATION_RULE_ID_ENV,
@@ -216,6 +217,13 @@ const DEFERRED_TOOL_PLACEHOLDER: BetaTool = {
 	input_schema: { type: "object", properties: {}, required: [] },
 	defer_loading: true,
 };
+
+/**
+ * Content a `role: "system"` message may carry. The SDK types that array position as text /
+ * tool_addition / tool_removal blocks only; `BetaContentBlockParam` is the wider union used by
+ * user and assistant turns.
+ */
+type SystemContentBlockParam = Exclude<NonNullable<SystemMessageParam["content"]>, string>[number];
 
 function shouldUseServerSideFallbackBeta(model: Model<"anthropic-messages">): boolean {
 	return (model.compat?.allowedFallbackModels?.length ?? 0) > 0;
@@ -1266,7 +1274,13 @@ function buildParams(
 		model.compat?.supportsMidConvoEffort !== true &&
 		compat.supportsTemperature
 	) {
-		params.temperature = options.temperature;
+		// The SDK 1.x types describe the 2026-10-21 request, where any `temperature` value is a
+		// 400, so the field has no slot left in `MessageCreateParamsStreaming`. 2023-06-01 is not
+		// deprecated and stays supported, so requests that need a non-default sampling value
+		// belong on it. Widening keeps the field on the wire for the endpoints that still use that
+		// version, chosen by `anthropic-version` (client default plus `model.headers`): custom
+		// gateways, OpenRouter and Bedrock.
+		(params as MessageCreateParamsStreaming & { temperature?: number }).temperature = options.temperature;
 	}
 
 	const toolCacheControl = compat.supportsCacheControlOnTools ? cacheControl : undefined;
@@ -1387,24 +1401,30 @@ function convertMessages(
 			// Later system messages only reach this point when the model accepts them natively;
 			// otherwise the transcript was collapsed into the leading message before conversion.
 			const text = renderSystemMessageUpdate(msg);
-			const blocks: ContentBlockParam[] = [];
-			if (text.length > 0) blocks.push({ type: "text", text: sanitizeSurrogates(text) });
+			// Declared here, not shared across iterations: every entry in `pendingSystemMessages`
+			// holds this array by reference, so reusing one would make every queued update send
+			// the blocks of the last system message.
+			const systemBlocks: SystemContentBlockParam[] = [];
+			if (text.length > 0) systemBlocks.push({ type: "text", text: sanitizeSurrogates(text) });
 			if (convertToolDefinitions) {
 				const added = msg.toolsAdded ?? [];
 				const redefined = new Set(added.map((tool) => tool.name));
 				for (const tool of msg.toolsRemoved ?? []) {
 					// A new definition under the same name replaces the old one, so no removal is needed.
 					if (redefined.has(tool.name)) continue;
-					blocks.push({
+					systemBlocks.push({
 						type: "tool_removal",
 						tool: { type: "tool_reference", name: isOAuthToken ? toClaudeCodeName(tool.name) : tool.name },
 					});
 				}
 				for (const definition of convertToolDefinitions(added)) {
-					blocks.push({ type: "tool_addition", tool: { type: "tool_definition", definition } });
+					systemBlocks.push({ type: "tool_addition", tool: { type: "tool_definition", definition } });
 				}
 			}
-			if (blocks.length > 0) pendingSystemMessages.push({ role: "system", content: blocks });
+			if (systemBlocks.length > 0) {
+				const systemMessage: SystemMessageParam = { role: "system", content: systemBlocks };
+				pendingSystemMessages.push(systemMessage);
+			}
 		} else if (msg.role === "user") {
 			if (typeof msg.content === "string") {
 				if (msg.content.trim().length > 0) {

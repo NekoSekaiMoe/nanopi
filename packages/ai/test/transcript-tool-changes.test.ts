@@ -174,6 +174,24 @@ describe("transcript system messages", () => {
 		expect(payload.messages.at(-1)?.content).toHaveLength(1);
 	});
 
+	test("sends each queued Anthropic system update with its own blocks", async () => {
+		// Two updates queue up before the same assistant turn, so both flush together.
+		const payload = await capturePayload<AnthropicPayload>(anthropicNativeModel, {
+			messages: [
+				{ role: "system", content: "base prompt", toolsAdded: [baseTool], timestamp: 0 },
+				{ role: "user", content: "before", timestamp: 1 },
+				{ role: "system", content: "first update", timestamp: 2 },
+				{ role: "system", content: "second update", timestamp: 3 },
+			],
+		});
+
+		const updates = payload.messages.filter((message) => message.role === "system");
+		expect(updates.map((message) => message.content.map((block) => block.text))).toEqual([
+			["first update"],
+			["second update"],
+		]);
+	});
+
 	test("sends the current Anthropic tool list without an initial tool", async () => {
 		// Anthropic rejects a tool list where every tool (here: the placeholder) is deferred.
 		const payload = await capturePayload<AnthropicPayload>(anthropicNativeModel, {

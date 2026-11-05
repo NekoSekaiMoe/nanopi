@@ -17,6 +17,8 @@ export interface OAuthCallbackServerOptions<T> {
 	/** Port to listen on; `0` picks a free port. */
 	port: number;
 	path: string;
+	/** Local origin the browser page is served from. `*` allows any, the default when omitted. */
+	pageOrigin?: string;
 	/** Host in `redirectUri` when it differs from `host`, for example `localhost`. */
 	redirectHost?: string;
 	/** Expected `state` parameter. Omit when the provider does not send one. */
@@ -42,8 +44,15 @@ export interface OAuthCallbackServer<T> {
 	close(): void;
 }
 
-function sendPage(response: ServerResponse, status: number, html: string): void {
-	response.writeHead(status, { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" });
+function sendPage(response: ServerResponse, status: number, html: string, pageOrigin: string): void {
+	response.writeHead(status, {
+		"content-type": "text/html; charset=utf-8",
+		"cache-control": "no-store",
+		// The page is a status message, not an origin. A provider that hides its callback in an
+		// embedded frame (Anthropic does) only renders a page whose `frame-ancestors` allows it.
+		// `style-src` stays inline for the page's single <style>; scripts are not used at all.
+		"content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; frame-ancestors ${pageOrigin}`,
+	});
 	response.end(html);
 }
 
@@ -51,6 +60,7 @@ export async function startOAuthCallbackServer<T>(
 	options: OAuthCallbackServerOptions<T>,
 ): Promise<OAuthCallbackServer<T>> {
 	const { providerName, signal } = options;
+	const pageOrigin = options.pageOrigin ?? "*";
 	if (signal?.aborted) throw new Error("Login cancelled");
 
 	let resolveWait: (value: T | undefined) => void = () => {};
@@ -79,37 +89,42 @@ export async function startOAuthCallbackServer<T>(
 		void (async () => {
 			const url = new URL(request.url ?? "/", "http://localhost");
 			if (request.method !== "GET" || url.pathname !== options.path) {
-				sendPage(response, 404, oauthErrorHtml("Callback route not found."));
+				sendPage(response, 404, oauthErrorHtml("Callback route not found."), pageOrigin);
 				return;
 			}
 			if (options.state !== undefined && url.searchParams.get("state") !== options.state) {
-				sendPage(response, 400, oauthErrorHtml("State mismatch."));
+				sendPage(response, 400, oauthErrorHtml("State mismatch."), pageOrigin);
 				return;
 			}
 			if (claimed || settled) {
-				sendPage(response, 409, oauthErrorHtml("This sign-in has already been handled."));
+				sendPage(response, 409, oauthErrorHtml("This sign-in has already been handled."), pageOrigin);
 				return;
 			}
 			const error = url.searchParams.get("error");
 			if (error) {
 				const description = url.searchParams.get("error_description") ?? error;
-				sendPage(response, 400, oauthErrorHtml(`${providerName} authorization failed.`, description));
+				sendPage(response, 400, oauthErrorHtml(`${providerName} authorization failed.`, description), pageOrigin);
 				finish({ error: new Error(`${providerName} authorization failed: ${description}`) });
 				return;
 			}
 			const code = url.searchParams.get("code");
 			if (!code) {
-				sendPage(response, 400, oauthErrorHtml("Missing authorization code."));
+				sendPage(response, 400, oauthErrorHtml("Missing authorization code."), pageOrigin);
 				return;
 			}
 			claimed = true;
 			try {
 				const value = await options.complete(code);
-				sendPage(response, 200, oauthSuccessHtml(`Signed in to ${providerName}. You may now close this page.`));
+				sendPage(
+					response,
+					200,
+					oauthSuccessHtml(`Signed in to ${providerName}. You may now close this page.`),
+					pageOrigin,
+				);
 				finish({ value });
 			} catch (error) {
 				const failure = error instanceof Error ? error : new Error(String(error));
-				sendPage(response, 502, oauthErrorHtml(`${providerName} sign-in failed.`, failure.message));
+				sendPage(response, 502, oauthErrorHtml(`${providerName} sign-in failed.`, failure.message), pageOrigin);
 				finish({ error: failure });
 			}
 		})();
