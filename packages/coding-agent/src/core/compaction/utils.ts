@@ -3,7 +3,8 @@
  */
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
-import { contentText, type Message } from "@nanopi/pi-ai";
+import type { Message } from "@nanopi/pi-ai";
+import { contentText } from "@nanopi/pi-ai/module-surface";
 
 // ============================================================================
 // File Operation Tracking

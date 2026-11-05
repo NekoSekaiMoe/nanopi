@@ -1,14 +1,9 @@
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../component.ts";
 import { getKeybindings } from "../keybindings.ts";
 import { decodeKittyPrintable } from "../keys.ts";
 import { KillRing } from "../kill-ring.ts";
-import {
-	type Component,
-	CURSOR_MARKER,
-	type Focusable,
-	renderFakeCursor,
-	type TuiMouseEvent,
-	type TuiMouseEventResult,
-} from "../tui.ts";
+import type { Focusable } from "../tui.ts";
+import { CURSOR_MARKER, renderFakeCursor } from "../tui.ts";
 import { UndoStack } from "../undo-stack.ts";
 import { getGraphemeSegmenter, isWhitespaceChar, sliceByColumn, truncateToWidth, visibleWidth } from "../utils.ts";
 import { findWordBackward, findWordForward } from "../word-navigation.ts";

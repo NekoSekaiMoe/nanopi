@@ -6,7 +6,8 @@ This reference describes automatic compaction, branch summarization, persisted e
 - [`packages/coding-agent/src/core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) - Auto-compaction logic
 - [`packages/coding-agent/src/core/compaction/branch-summarization.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts) - Branch summarization
 - [`packages/coding-agent/src/core/compaction/utils.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils.ts) - Shared utilities (file tracking, serialization)
-- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-manager.ts) - Entry types (`CompactionEntry`, `BranchSummaryEntry`)
+- [`packages/coding-agent/src/core/session-store.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-store.ts) - Entry types (`CompactionEntry`, `BranchSummaryEntry`, `SessionEntry`)
+- [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-manager.ts) - Session file I/O over those entries
 - [`packages/coding-agent/src/core/modules/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/modules/types.ts) - Module event types
 
 For TypeScript definitions in your project, inspect `node_modules/@nanopi/pi-coding-agent/dist/`.

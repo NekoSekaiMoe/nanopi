@@ -36,12 +36,31 @@ export type {
 } from "./compat/extension-oauth-types.ts";
 export * from "./models.ts";
 export * from "./models-store.ts";
-export * from "./providers/faux.ts";
+// Re-exported by name, not by `export *`: `."/compat"` kept `./providers/faux.ts` when this entry
+// stopped reaching it, and a wildcard here would drag the whole providers folder back in.
+export {
+	createFauxCore,
+	type FauxContentBlock,
+	type FauxModelDefinition,
+	type FauxProviderHandle,
+	type FauxProviderRegistration,
+	type FauxProviderState,
+	type FauxResponseFactory,
+	type FauxResponseStep,
+	fauxAssistantMessage,
+	fauxProvider,
+	fauxText,
+	fauxThinking,
+	fauxToolCall,
+	type RegisterFauxProviderOptions,
+	registerFauxProvider,
+} from "./providers/faux.ts";
 export * from "./session-resources.ts";
 export * from "./types.ts";
 export * from "./utils/assistant-message-frame.ts";
 export * from "./utils/diagnostics.ts";
 export * from "./utils/event-stream.ts";
+export { createAssistantMessageEventStream } from "./utils/event-stream.ts";
 export * from "./utils/json-parse.ts";
 export * from "./utils/overflow.ts";
 export * from "./utils/retry.ts";

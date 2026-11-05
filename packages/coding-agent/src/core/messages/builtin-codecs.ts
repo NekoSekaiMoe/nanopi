@@ -9,9 +9,6 @@
  */
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
-import { BranchSummaryMessageComponent } from "../../modes/interactive/components/branch-summary-message.ts";
-import { CompactionSummaryMessageComponent } from "../../modes/interactive/components/compaction-summary-message.ts";
-import { getMarkdownTheme } from "../../modes/interactive/theme/theme.ts";
 import {
 	type BashExecutionMessage,
 	BRANCH_SUMMARY_PREFIX,
@@ -22,6 +19,7 @@ import {
 	COMPACTION_SUMMARY_SUFFIX,
 	type CompactionSummaryMessage,
 } from "../messages.ts";
+import { renderBranchSummary, renderCompactionSummary } from "./builtin-renderers.ts";
 import type { MessageTypeCodec, MessageTypeCodecMap } from "./codec.ts";
 
 /** Chars-per-token convention shared by every estimate in this app. */
@@ -55,11 +53,7 @@ const branchSummary: MessageTypeCodec<BranchSummaryMessage> = {
 		},
 	],
 	estimateTokens: (message) => charsToTokens(message.summary.length),
-	renderRun: (message, options) => {
-		const component = new BranchSummaryMessageComponent(message, getMarkdownTheme(), options.outputPad);
-		component.setExpanded(options.expanded);
-		return component;
-	},
+	renderRun: renderBranchSummary,
 };
 
 const compactionSummary: MessageTypeCodec<CompactionSummaryMessage> = {
@@ -72,11 +66,7 @@ const compactionSummary: MessageTypeCodec<CompactionSummaryMessage> = {
 		},
 	],
 	estimateTokens: (message) => charsToTokens(message.summary.length),
-	renderRun: (message, options) => {
-		const component = new CompactionSummaryMessageComponent(message, getMarkdownTheme(), options.outputPad);
-		component.setExpanded(options.expanded);
-		return component;
-	},
+	renderRun: renderCompactionSummary,
 };
 
 export function createBuiltinMessageCodecs(): MessageTypeCodecMap {

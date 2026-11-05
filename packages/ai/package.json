@@ -19,6 +19,10 @@
 			"types": "./dist/models.d.ts",
 			"import": "./dist/models.js"
 		},
+		"./module-surface": {
+			"types": "./dist/module-surface.d.ts",
+			"import": "./dist/module-surface.js"
+		},
 		"./compat": {
 			"types": "./dist/compat.d.ts",
 			"import": "./dist/compat.js"

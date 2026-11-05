@@ -3,6 +3,7 @@
  */
 
 import { performance } from "node:perf_hooks";
+import type { Component, TuiMouseEvent, TuiMouseEventResult } from "./component.ts";
 import { isKeyRelease, matchesKey } from "./keys.ts";
 import type { Terminal } from "./terminal.ts";
 import {
@@ -15,47 +16,17 @@ import {
 import { getCapabilities, isImageLine, setCellDimensions } from "./terminal-image.ts";
 import { extractSegments, normalizeTerminalOutput, sliceByColumn, sliceWithWidth, visibleWidth } from "./utils.ts";
 
+export type {
+	Component,
+	TuiMouseButton,
+	TuiMouseEvent,
+	TuiMouseEventResult,
+	TuiMouseEventType,
+} from "./component.ts";
+
 /**
  * Component interface - all components must implement this
  */
-export type TuiMouseEventType = "press" | "release" | "move" | "drag" | "click" | "wheel";
-export type TuiMouseButton = "left" | "middle" | "right" | "none";
-
-/** Normalized cell-based mouse event. Coordinates are zero-based. */
-export interface TuiMouseEvent {
-	type: TuiMouseEventType;
-	button: TuiMouseButton;
-	/** Coordinates local to the receiving component. */
-	x: number;
-	y: number;
-	/** Absolute terminal coordinates. */
-	screenX: number;
-	screenY: number;
-	/** Current component bounds. */
-	width: number;
-	height: number;
-	shift: boolean;
-	alt: boolean;
-	ctrl: boolean;
-	/** Logical lines. Negative values scroll up. */
-	wheelDelta?: number;
-	/** Consecutive click count when type is click. */
-	clickCount?: number;
-}
-
-export interface TuiMouseEventResult {
-	/** Stop propagation and suppress renderer-level fallback behavior. */
-	handled?: boolean;
-	/** Route subsequent drag/release events to this component. Implies handled. */
-	capture?: boolean;
-	/** Give keyboard focus to this component. Implies handled. */
-	focus?: boolean;
-	/**
-	 * Explicitly request or suppress a render. Move and release default to false;
-	 * press, click, drag, and wheel default to true.
-	 */
-	render?: boolean;
-}
 
 /** Internal target metadata used by containers and alternate-screen dispatch. */
 export interface TuiMouseDispatchTarget {
@@ -112,33 +83,6 @@ export function retargetMouseEvent(event: TuiMouseEvent, target: TuiMouseDispatc
 		width: target.width,
 		height: target.height,
 	};
-}
-
-export interface Component {
-	/**
-	 * Render the component to lines for the given viewport width
-	 * @param width - Current viewport width
-	 * @returns Array of strings, each representing a line
-	 */
-	render(width: number): string[];
-
-	/** Optional handler for keyboard input when component has focus. */
-	handleInput?(data: string): void;
-
-	/** Optional normalized mouse handler. */
-	handleMouse?(event: TuiMouseEvent): TuiMouseEventResult | undefined;
-
-	/**
-	 * If true, component receives key release events (Kitty protocol).
-	 * Default is false - release events are filtered out.
-	 */
-	wantsKeyRelease?: boolean;
-
-	/**
-	 * Invalidate any cached rendering state.
-	 * Called when theme changes or when component needs to re-render from scratch.
-	 */
-	invalidate(): void;
 }
 
 export type TuiInputListenerResult = { consume?: boolean; data?: string } | undefined;

@@ -6,15 +6,6 @@
  */
 
 import type { AgentMessage, StreamFn, ThinkingLevel } from "@nanopi/pi-agent-core";
-import {
-	contentText,
-	getCurrentSystemMessage,
-	normalizeContext,
-	type RetryCallbacks,
-	type RetryPolicy,
-	retryAssistantCall,
-	uuidv7,
-} from "@nanopi/pi-ai";
 import type {
 	Api,
 	AssistantMessage,
@@ -24,21 +15,26 @@ import type {
 	SystemMessage,
 	TranscriptContext,
 	Usage,
-} from "@nanopi/pi-ai/compat";
-import { completeSimple } from "@nanopi/pi-ai/compat";
-import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
+} from "@nanopi/pi-ai";
+import {
+	contentText,
+	getCurrentSystemMessage,
+	normalizeContext,
+	type RetryCallbacks,
+	type RetryPolicy,
+	retryAssistantCall,
+	uuidv7,
+} from "@nanopi/pi-ai/module-surface";
 import type { MessageTypeCodecMap } from "../messages/codec.ts";
 import { convertToLlm } from "../messages.ts";
 import {
 	buildSessionProjection,
-	type CompactionEntry,
 	getEntriesAfterLatestCompaction,
-	type ProjectedSessionEntry,
-	type SessionEntry,
-	type SessionProjection,
 	sessionEntryToContextMessages,
-} from "../session-manager.ts";
+} from "../session-projection.ts";
+import type { CompactionEntry, ProjectedSessionEntry, SessionEntry, SessionProjection } from "../session-store.ts";
 import { combineUsage } from "../usage-totals.ts";
+import { getPromptCacheTtlMs, priceTokens } from "./costs.ts";
 import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {
 	computeFileLists,
@@ -706,12 +702,16 @@ function createSummarizationOptions(
  * `terminated`, socket close) honor the configured retry policy instead of failing
  * the whole compaction on the first attempt. Deterministic errors and aborts return
  * immediately (see {@link retryAssistantCall}).
+ *
+ * `streamFn` is required: the caller owns the request path (auth, routing, attribution). There is no
+ * `completeSimple` fallback here on purpose -- reaching it imports the provider registry into this
+ * module's graph, and every summarizer imports this module.
  */
 export async function completeSummarization(
 	model: Model<any>,
 	context: TranscriptContext,
 	options: SimpleStreamOptions,
-	streamFn?: StreamFn,
+	streamFn: StreamFn,
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 ): Promise<AssistantMessage> {
@@ -722,10 +722,7 @@ export async function completeSummarization(
 		cacheRetention: "none",
 		sessionId: options.sessionId ?? uuidv7(),
 	};
-	const produce = async (): Promise<AssistantMessage> =>
-		streamFn
-			? (await streamFn(model, context, requestOptions)).result()
-			: completeSimple(model, context, requestOptions);
+	const produce = async (): Promise<AssistantMessage> => (await streamFn(model, context, requestOptions)).result();
 	return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
 }
 
@@ -739,12 +736,12 @@ export async function generateSummary(
 	// Unused. Kept for existing callers; summaries use the model's output limit (upstream #9512).
 	_reserveTokens: number | undefined,
 	apiKey: string | undefined,
-	headers?: Record<string, string>,
-	signal?: AbortSignal,
-	customInstructions?: string,
-	previousSummary?: string,
-	thinkingLevel?: ThinkingLevel,
-	streamFn?: StreamFn,
+	headers: Record<string, string> | undefined,
+	signal: AbortSignal | undefined,
+	customInstructions: string | undefined,
+	previousSummary: string | undefined,
+	thinkingLevel: ThinkingLevel | undefined,
+	streamFn: StreamFn,
 	env?: Record<string, string>,
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
@@ -791,12 +788,12 @@ export async function generateSummaryWithUsage(
 	// Unused. Kept for existing callers; summaries use the model's output limit (upstream #9512).
 	_reserveTokens: number | undefined,
 	apiKey: string | undefined,
-	headers?: Record<string, string>,
-	signal?: AbortSignal,
-	customInstructions?: string,
-	previousSummary?: string,
-	thinkingLevel?: ThinkingLevel,
-	streamFn?: StreamFn,
+	headers: Record<string, string> | undefined,
+	signal: AbortSignal | undefined,
+	customInstructions: string | undefined,
+	previousSummary: string | undefined,
+	thinkingLevel: ThinkingLevel | undefined,
+	streamFn: StreamFn,
 	env?: Record<string, string>,
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
@@ -1058,19 +1055,17 @@ export async function compact(
 	preparation: CompactionPreparation,
 	model: Model<any>,
 	apiKey: string | undefined,
-	headers?: Record<string, string>,
-	customInstructions?: string,
-	signal?: AbortSignal,
-	thinkingLevel?: ThinkingLevel,
-	streamFn?: StreamFn,
+	headers: Record<string, string> | undefined,
+	customInstructions: string | undefined,
+	signal: AbortSignal | undefined,
+	thinkingLevel: ThinkingLevel | undefined,
+	streamFn: StreamFn,
 	env?: Record<string, string>,
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,
 ): Promise<CompactionResult> {
-	// Attach compaction request identity only when a caller stream function exists; the
-	// default completeSimple path keeps its own routing options and stays mockable.
-	const attributedStreamFn = streamFn ? withCompactionRequestMetadata(streamFn) : undefined;
+	const attributedStreamFn = withCompactionRequestMetadata(streamFn);
 	const {
 		firstKeptEntryId,
 		messagesToSummarize,
@@ -1171,11 +1166,11 @@ async function generateTurnPrefixSummary(
 	messages: AgentMessage[],
 	model: Model<any>,
 	apiKey: string | undefined,
-	headers?: Record<string, string>,
-	env?: Record<string, string>,
-	signal?: AbortSignal,
-	thinkingLevel?: ThinkingLevel,
-	streamFn?: StreamFn,
+	headers: Record<string, string> | undefined,
+	env: Record<string, string> | undefined,
+	signal: AbortSignal | undefined,
+	thinkingLevel: ThinkingLevel | undefined,
+	streamFn: StreamFn,
 	retry?: RetryPolicy,
 	callbacks?: RetryCallbacks,
 	sessionId?: string,

@@ -33,6 +33,7 @@
  * must never break.
  */
 
+import type { StreamFn } from "@nanopi/pi-agent-core";
 import { type CompactionResult, estimateTokens, generateSummaryWithUsage } from "../../core/compaction/index.ts";
 import type { ModuleContext, SessionBeforeCompactEvent } from "../../core/modules/types.ts";
 import type { SessionEntry } from "../../core/session-manager.ts";
@@ -233,6 +234,7 @@ export async function runCodexCompaction(
 	auth: SummarizationAuth,
 	config: CodexCompactConfig,
 	thinkingLevel: ModuleContext["thinkingLevel"],
+	streamFn: StreamFn,
 ): Promise<CompactionResult | undefined> {
 	const preparation = event.preparation;
 	const plan = planUserRetention(event.branchEntries, preparation.firstKeptEntryId, config.userRetainTokens);
@@ -253,7 +255,7 @@ export async function runCodexCompaction(
 		focus,
 		stripCodexPrefix(preparation.previousSummary),
 		thinkingLevel,
-		undefined,
+		streamFn,
 		auth.env,
 	);
 

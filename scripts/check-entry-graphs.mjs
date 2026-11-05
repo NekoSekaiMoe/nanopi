@@ -43,6 +43,24 @@ const BUDGETS = {
 	"packages/coding-agent": {
 		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
 		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
+		// Not an entry point, so no `exports` lookup: `sourcePath` budgets the source file itself.
+		// This barrel is what a summarizer imports. It reached 181 files because it dragged the
+		// transcript, the theme and the session file I/O along, then 123 because `pi-ai/compat` was
+		// the only place its types came from, and `compat` re-exports the provider catalog
+		// (`providers/all.ts` imports every `<provider>.models.ts`, 111 files on its own).
+		//
+		// The 111 is now out of reach: the types and the pure helpers a summarizer needs live in
+		// `@nanopi/pi-ai/module-surface` and `model-core.ts`, `pi-ai`'s root barrel no longer reaches
+		// `compat.ts`, and the summarizers take their stream function from the caller instead of
+		// falling back to a global `completeSimple`. What is left is the compaction code itself.
+		//
+		// Headroom is deliberate: a summarizer that grows past this has started importing the model
+		// runtime again. Split the module rather than raise the number.
+		"core/compaction/index.ts": {
+			sourcePath: true,
+			maxFiles: 20,
+			forbid: ["modes/interactive/", "core/session-manager.ts", "pi-ai/src/providers/"],
+		},
 	},
 };
 
@@ -101,9 +119,40 @@ function expand(pkgDir, entry, target) {
 }
 
 let failures = 0;
+
+/** Enforces one budget against one source file: the graph size and every forbidden pattern. */
+function checkGraph(pkgDir, label, source, budget) {
+	if (!existsSync(source)) {
+		console.error(`${pkgDir} ${label} has no source file at ${relative(ROOT, source)}`);
+		failures += 1;
+		return;
+	}
+	const graph = [...walk(source)].map((file) => relative(ROOT, file));
+	if (graph.length > budget.maxFiles) {
+		console.error(
+			`${pkgDir} "${label}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
+				graph.map((file) => `    ${file}`).join("\n"),
+		);
+		failures += 1;
+	}
+	for (const pattern of budget.forbid ?? []) {
+		const hit = graph.filter((file) => file.includes(pattern));
+		if (hit.length > 0) {
+			console.error(`${pkgDir} "${label}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
+			failures += 1;
+		}
+	}
+}
+
 for (const [pkgDir, budgets] of Object.entries(BUDGETS)) {
 	const manifest = JSON.parse(readFileSync(resolve(ROOT, pkgDir, "package.json"), "utf8"));
 	for (const [entry, budget] of Object.entries(budgets)) {
+		// A source path rather than an entry point: the budget holds the graph behind a barrel
+		// the package reaches internally, so there is no `exports` entry to look up.
+		if (budget.sourcePath) {
+			checkGraph(pkgDir, entry, resolve(ROOT, pkgDir, "src", entry), budget);
+			continue;
+		}
 		const declared = manifest.exports?.[entry];
 		if (!declared) {
 			console.error(`${pkgDir} declares no export "${entry}" but a budget exists for it`);
@@ -118,21 +167,7 @@ for (const [pkgDir, budgets] of Object.entries(BUDGETS)) {
 				failures += 1;
 				continue;
 			}
-			const graph = [...walk(source)].map((file) => relative(ROOT, file));
-			if (graph.length > budget.maxFiles) {
-				console.error(
-					`${pkgDir} export "${name}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
-						graph.map((file) => `    ${file}`).join("\n"),
-				);
-				failures += 1;
-			}
-			for (const pattern of budget.forbid ?? []) {
-				const hit = graph.filter((file) => file.includes(pattern));
-				if (hit.length > 0) {
-					console.error(`${pkgDir} export "${name}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
-					failures += 1;
-				}
-			}
+			checkGraph(pkgDir, name, source, budget);
 		}
 	}
 }
