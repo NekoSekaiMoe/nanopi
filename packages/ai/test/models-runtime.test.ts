@@ -1293,3 +1293,56 @@ describe("Models runtime", () => {
 		expect(message.stopReason).toBe("stop");
 	});
 });
+
+describe("storeAuthorizationUpdate", () => {
+	const oauthCredential = {
+		type: "oauth" as const,
+		access: "dt-old",
+		refresh: "drt-old",
+		expires: Date.now() + 60_000,
+		env: { QODER_DEVICE_TOKEN: "dt-old", QODER_ACCOUNT_REFRESH_TOKEN: "drt-old" },
+	};
+
+	async function modelsWithStoredCredential() {
+		const credentials = new InMemoryCredentialStore();
+		await credentials.modify("qoder", async () => oauthCredential);
+		return { credentials, models: createModels({ credentials }) };
+	}
+
+	it("persists both tokens of a rotation that continues the stored credential", async () => {
+		const { credentials, models } = await modelsWithStoredCredential();
+
+		await models.storeAuthorizationUpdate("qoder", {
+			token: "dt-new",
+			refreshToken: "drt-new",
+			continues: true,
+		});
+
+		const stored = await credentials.read("qoder");
+		expect(stored).toMatchObject({
+			type: "oauth",
+			access: "dt-new",
+			refresh: "drt-new",
+			env: { QODER_DEVICE_TOKEN: "dt-new", QODER_ACCOUNT_REFRESH_TOKEN: "drt-new" },
+		});
+	});
+
+	it("drops a rotation the store has moved past", async () => {
+		const { credentials, models } = await modelsWithStoredCredential();
+		await credentials.modify("qoder", async () => ({ ...oauthCredential, access: "dt-other" }));
+
+		await models.storeAuthorizationUpdate("qoder", { token: "dt-new", refreshToken: "drt-new" });
+
+		expect((await credentials.read("qoder"))?.type === "oauth" && (await credentials.read("qoder"))).toMatchObject({
+			access: "dt-other",
+		});
+	});
+
+	it("replaces the device token the provider itself rotated when no refresh token came back", async () => {
+		const { credentials, models } = await modelsWithStoredCredential();
+
+		await models.storeAuthorizationUpdate("qoder", { token: "dt-renewed", continues: true });
+
+		expect(await credentials.read("qoder")).toMatchObject({ access: "dt-renewed", refresh: "drt-old" });
+	});
+});

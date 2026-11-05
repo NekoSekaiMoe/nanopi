@@ -93,17 +93,50 @@ describe("Qoder OAuth", () => {
 		if (authUrl?.type === "auth_url") expect(authUrl.url.startsWith("https://qoder.com.cn/")).toBe(true);
 	});
 
-	it("reports a dead token instead of retrying on refresh", async () => {
+	it("renews an expired pair through the job-token exchange and stores the new refresh token", async () => {
 		const endpoints = qoderEndpoints("global");
-		vi.stubGlobal("fetch", async () => jsonResponse({ message: "TOKEN_EXPIRE" }, 401));
+		const requested: string[] = [];
+		vi.stubGlobal("fetch", async (input: unknown) => {
+			const url = urlOf(input);
+			requested.push(url);
+			if (url === endpoints.jobTokenUrl) return jsonResponse({ device_token: "dt-new", refresh_token: "drt-new" });
+			if (url === endpoints.userInfo) return jsonResponse({ name: "Ada", userId: "u1", userType: "personal_pro" });
+			return jsonResponse({}, 404);
+		});
+
+		const credential = await qoderOAuth.refresh(
+			{ type: "oauth", access: "dt-old", refresh: "drt-old", expires: Date.now() + 1000 },
+			neverAbortedSignal,
+		);
+
+		expect(requested[0]).toBe(endpoints.jobTokenUrl);
+		expect(credential.access).toBe("dt-new");
+		expect(credential.refresh).toBe("drt-new");
+		expect(credential.env).toMatchObject({
+			QODER_DEVICE_TOKEN: "dt-new",
+			QODER_ACCOUNT_REFRESH_TOKEN: "drt-new",
+			QODER_ACCOUNT_ID: "u1",
+			QODER_ACCOUNT_USER_TYPE: "personal_pro",
+		});
+	});
+
+	it("reports a rejected renewal instead of a token that lapsed", async () => {
+		const endpoints = qoderEndpoints("cn");
+		vi.stubGlobal("fetch", async () => jsonResponse({ message: "personal token is invalid" }, 200));
 
 		await expect(
 			qoderOAuth.refresh(
-				{ type: "oauth", access: "dt-old", refresh: "dt-old", expires: Date.now() + 1000 },
+				{
+					type: "oauth",
+					access: "dt-old",
+					refresh: "drt-old",
+					expires: Date.now() + 1000,
+					env: { QODER_REGION: "cn" },
+				},
 				neverAbortedSignal,
 			),
-		).rejects.toThrow(/rejected the device token/);
-		expect(endpoints.userInfo).toContain("openapi.qoder.sh");
+		).rejects.toThrow(/token exchange returned no device token/);
+		expect(endpoints.jobTokenUrl).toContain("gateway.qoder.com.cn");
 	});
 
 	it("derives bearer auth from the stored token", async () => {
