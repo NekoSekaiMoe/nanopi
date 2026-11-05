@@ -6,6 +6,13 @@ export { Type } from "typebox";
 // live under "@nanopi/pi-ai/providers/*", API implementations under
 // "@nanopi/pi-ai/api/*", the old global API under
 // "@nanopi/pi-ai/compat".
+//
+// Mixed by kind, not by policy: `export *` where the source is core plumbing
+// whose every name belongs here (and where a whitelist already lost one — the
+// `./compat` case below), named lists where the source mixes core with
+// provider-specific option/API shapes. When a wildcard would reach the provider
+// folder, the line stays named; that is what keeps `createFauxCore` and friends
+// reachable without dragging the catalog in.
 export type { AnthropicEffort, AnthropicOptions, AnthropicThinkingDisplay } from "./api/anthropic-messages.ts";
 export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
 export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";

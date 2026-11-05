@@ -1,4 +1,10 @@
 // Core session management
+//
+// The rest of this file is 43 `export *` lines and nothing else: names arrive
+// whole from their sources, ambiguity is TS2308 at the typecheck rather than a
+// silent omission, and the surface is measured against the emitted `.d.ts`
+// rather than counted by hand. Hiding a symbol is a one-line diff at its
+// declaration; unpublishing one later is a breaking change.
 
 // Build flavor surface: what a flavor (buildconfig.json) turned on for this
 // build. SDK users ask these before offering a feature whose code the build may
