@@ -48,21 +48,15 @@
       "allowedVersions": "/^>=24\\.0\\.0$/"
     },
     {
-      "description": "Node 大版本迁移时 @types/node 跟着一起动：@types/node 只能比 engines.node 老、不能比它新，而 engines.node 由上面那条规则锁着，所以这里的 major 升级一律拦下。版本号改成 comparison：否则按默认 npm 语义 >=24.0.0 被当成 24.0.0 这一个点，25 及以上全被判成 major。迁移时人工按五处一起改（engines、workflow 的 node-version、Dockerfile 底图、esbuild target、@types/node），见 .agents/notes/implemented/process/2026-10-27-node-24-floor.md。不写 enabled: false 是为了留升级线索：这条规则不产生 PR，但 Renovate 会照常把这批版本记进日志，靠人盯 Debian testing 的 nodejs 换大版本。",
+      "description": "Node 大版本迁移时 @types/node 跟着一起动：@types/node 只能比 engines.node 老、不能比它新，而 engines.node 由上面那条规则锁着，所以这里的 major 升级一律拦下。写法上不能再带 matchUpdateTypes：Renovate 拒绝在同一规则里同时出现 matchUpdateTypes 与 allowedVersions/versioning，所以这里只写 versioning + allowedVersions，npm 版本一律被取反正则判为越界，major 自然包含在内。迁移时人工按五处一起改（engines、workflow 的 node-version、Dockerfile 底图、esbuild target、@types/node），见 .agents/notes/implemented/process/2026-10-27-node-24-floor.md。不写 enabled: false 是为了留升级线索：这条规则不产生 PR，但 Renovate 会照常把这批版本记进日志，靠人盯 Debian testing 的 nodejs 换大版本。",
       "matchPackageNames": [
         "@types/node"
       ],
       "matchDepTypes": [
         "devDependencies"
       ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "customVersioning": {
-        "versioning": "npm",
-        "extractVersion": "^(?<version>.*)$",
-        "allowedVersions": "!/^(?:0|[1-9]\\d*)\\./"
-      }
+      "versioning": "npm",
+      "allowedVersions": "!/^(?:0|[1-9]\\d*)\\./"
     },
     {
       "description": "protobufjs 只有 @google/genai 一个消费者，且只经由 overrides 被钉住（pnpm-workspace.yaml）。它单独升级没有意义：@google/genai 自己声明 protobufjs: ^7.5.4，越过上游兼容范围的组合没人验证过。所以不给 protobufjs 单开升级路径（它本来也不在任何 package.json 里），升级只在 @google/genai 放开范围时连携发生：那条 overrides 跟着 @google/genai 的声明一起撤掉或抬高，理由见 .agents/notes/implemented/process/2026-10-27-runtime-major-bumps.md。",
