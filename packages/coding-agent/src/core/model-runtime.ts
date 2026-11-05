@@ -123,7 +123,7 @@ interface WaitingAvailabilityPass {
 /** Upper bound for one availability pass, so a hung auth check or credential store cannot block callers. */
 const AVAILABILITY_PASS_TIMEOUT_MS = 10_000;
 
-export interface CreateModelRuntimeOptions {
+interface CreateModelRuntimeOptions {
 	/** Credential storage. Defaults to the file at authPath. */
 	credentials?: CredentialStore;
 	authPath?: string;
@@ -141,14 +141,14 @@ export interface CreateModelRuntimeOptions {
 	refreshOnCreate?: boolean;
 }
 
-export interface ModelRuntimeAuthOverrides extends AuthOperationOptions {
+interface ModelRuntimeAuthOverrides extends AuthOperationOptions {
 	apiKey?: string;
 	env?: Record<string, string>;
 	/** Require this much remaining OAuth-token validity; defaults to five minutes. */
 	minOAuthValidityMs?: number;
 }
 
-export type CredentialSynchronizationOperation = "login" | "logout" | "setRuntimeApiKey" | "removeRuntimeApiKey";
+type CredentialSynchronizationOperation = "login" | "logout" | "setRuntimeApiKey" | "removeRuntimeApiKey";
 
 /** Credentials changed successfully, but the local model/auth snapshot could not be synchronized. */
 export class CredentialSynchronizationError extends Error {
@@ -1092,3 +1092,9 @@ export class ModelRuntime implements Models {
 		return model && !isVirtualModel(model) ? model : undefined;
 	}
 }
+
+// Package-internal: `ModelRuntime` is the object `createModelRuntime` returns, and
+// `CredentialSynchronizationError` is what `synchronizeCredentials` throws. The option bag, the auth
+// override shape and the operation union describe how it is constructed and kept in sync; they stay
+// path-importable for `model-registry.ts` and the runtime's own tests.
+export type { CreateModelRuntimeOptions, CredentialSynchronizationOperation, ModelRuntimeAuthOverrides };

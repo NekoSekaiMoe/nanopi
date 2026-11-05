@@ -658,7 +658,9 @@ export type { TerminalTheme };
 // they are the terminal-colour negotiation, the per-renderer theme handle and the raw token table.
 // The package root used to publish 13 of these, which bought a module nothing it could use (it draws
 // through the `Theme` instance it is handed) and turned each one into a contract. Inside the package
-// they stay reachable by path, which is what this block is for.
+// they stay reachable by path, which is what this block is for. Two of them are unreachable even
+// inside: `detectColorFgBgTheme` and `detectTerminalTheme` are the terminal's colour report, and
+// nothing imports them -- `initTheme` runs the negotiation itself, by bare name.
 export {
 	detectColorFgBgTheme,
 	detectTerminalTheme,

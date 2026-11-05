@@ -656,9 +656,9 @@ async function computeEditDiff(
 
 export type { AppliedEditsResult, Edit, EditDiffError, FuzzyMatchResult };
 // Package-internal: `generateDiffString` and `generateUnifiedPatch` are what a renderer and the
-// export path call; the line-ending normalisation and the fuzzy matcher are how the edit tool finds
-// a match. `EditDiffResult` stays public (it is `computeEditDiff`'s result, re-exported for the
-// compaction transcripts).
+// export path call; `computeEditsDiff` is the preview the edit renderer streams. The line-ending
+// normalisation and the fuzzy matcher are how the edit tool finds a match, and `EditDiffResult` stays
+// public because it is `computeEditsDiff`'s result.
 export {
 	applyEditsToNormalizedContent,
 	applyReplacementsPreservingUnchangedLines,

@@ -627,7 +627,7 @@ async function promptForMissingSessionCwd(
 	]);
 }
 
-export interface MainOptions {
+interface MainOptions {
 	/** Extra programmatic modules to load in addition to the built-ins. */
 	modules?: SessionModule[];
 }
@@ -1120,5 +1120,6 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 }
 
-// Package-internal: `main` builds its own session manager from the parsed CLI arguments.
-export { createSessionManager };
+// Package-internal: `main` builds its own session manager from the parsed CLI arguments; the option
+// bag is only for an embedding caller and `createSessionManager` is what the resume tests call.
+export { createSessionManager, type MainOptions };

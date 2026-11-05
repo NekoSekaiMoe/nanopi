@@ -110,10 +110,7 @@ function findShadowedContextFile(cwd: string): string | undefined {
 	return worktreeContextFile ? join(mainRepoRoot, basename(worktreeContextFile.path)) : undefined;
 }
 
-export function loadProjectContextFiles(options: {
-	cwd: string;
-	agentDir: string;
-}): Array<{ path: string; content: string }> {
+function loadProjectContextFiles(options: { cwd: string; agentDir: string }): Array<{ path: string; content: string }> {
 	const resolvedCwd = resolvePath(options.cwd);
 	const resolvedAgentDir = resolvePath(options.agentDir);
 
@@ -842,7 +839,8 @@ export class DefaultResourceLoader implements ResourceLoader {
 	}
 }
 
-// Package-internal: the option bags belong to `new DefaultResourceLoader(...)`, whose constructor
-// signature already says what it takes; `ResourceLoader` is the interface a caller injects instead.
-// `loadProjectContextFiles` stays public (the `AGENTS.md` walk).
 export type { DefaultResourceLoaderOptions, ResourceExtensionPaths, ResourceLoaderReloadOptions };
+// Package-internal: `DefaultResourceLoader` is what the session constructs and `ResourceLoader` is
+// the interface a module sees. The `AGENTS.md` walk and the option bags its constructor and
+// `reload` take are how that loader is wired, not what a caller names.
+export { loadProjectContextFiles };

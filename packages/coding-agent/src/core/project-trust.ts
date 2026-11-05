@@ -2,7 +2,7 @@ import { APP_NAME, CONFIG_DIR_NAME } from "../config.ts";
 import { emitProjectTrustEvent } from "./modules/registry.ts";
 import type { LoadModulesResult, ProjectTrustContext } from "./modules/types.ts";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
-import type { DefaultProjectTrust } from "./settings-manager.ts";
+import type { DefaultProjectTrust } from "./settings-schema.ts";
 import {
 	getProjectTrustOptions,
 	hasTrustRequiringProjectResources,
@@ -12,7 +12,7 @@ import {
 
 export type AppMode = "interactive" | "print" | "json" | "rpc" | "webui";
 
-export interface ResolveProjectTrustedOptions {
+interface ResolveProjectTrustedOptions {
 	cwd: string;
 	trustStore: ProjectTrustStore;
 	trustOverride?: boolean;
@@ -101,3 +101,6 @@ export async function resolveProjectTrusted(options: ResolveProjectTrustedOption
 	}
 	return false;
 }
+
+// Package-internal: the option bag of `resolveProjectTrusted`, which is the entry point.
+export type { ResolveProjectTrustedOptions };

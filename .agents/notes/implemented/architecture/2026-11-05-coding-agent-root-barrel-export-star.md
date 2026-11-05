@@ -123,3 +123,50 @@ barrel) reached the opposite conclusion for a public root — keep the whitelist
 names, reject a whole-package `export *`. The difference is that `pi-tui`'s root is a rendering
 surface with a deliberately small contract, while this one already hands out a whole agent;
 `packages/tui`'s conclusion stands until its own issue says otherwise.
+
+## Follow-up: actually narrowing the surface (issue #517)
+
+The "internal symbols lose `export` at the definition" step above is not what that edit did. Moving
+`export` to a paired `export { ... }` at the bottom of the module leaves the symbol in the module's
+export table, and `export *` copies the export table: `setTerminalColors`, the `config.ts` path
+helpers and the settings-schema details all still reached the root. Issue #517 measured this against
+the emitted `.d.ts`, so the boundary is now the declaration itself.
+
+`src/index.ts` is unchanged. What changed is a handful of declarations across `core/compaction/`,
+`core/tools/`, `core/settings-*.ts`, `config.ts`, `utils/` and `modules/`: a name that only exists so a
+sibling module or a unit test can reach it is declared without `export`, and the module keeps an
+`export { ... }` block at the bottom that the root still sees, because `export *` publishes the
+module's export table and a paired block *adds* to it.
+
+The measurement: compile the package with `emitDeclarationOnly`, resolve `index.d.ts`'s
+`export *` / `export { }` / `export declare` closure recursively, and diff the two runs. The root went
+from 702 names to 691: 11 gone, 0 added.
+
+Removed, by what they were:
+
+- steps inside a public entry point: `findTurnStartIndex`, `getLastAssistantUsage`,
+  `DEFAULT_COMPACTION_SETTINGS`, `supportsInContextCompaction`, `appendInContextCompactionRequest`
+  and the in-context summary prompts (`compaction.ts`); `BUILTIN_MODULES` (`modules/index.ts`);
+  `findNodePackageDir`, `getPromptsDir`, `getToolsDir` (`config.ts`);
+  `ResolveProjectTrustedOptions` (`project-trust.ts`)
+- storage and construction seams: `SettingsStorage`, `InMemorySettingsStorage`, `SettingsError`,
+  `SettingsScope`, `SettingsManagerCreateOptions` (`settings-manager.ts`); `CreateModelRuntimeOptions`,
+  `ModelRuntimeAuthOverrides`, `CredentialSynchronizationOperation` (`model-runtime.ts`)
+- file-format details: `QuietStartup`, `ImageSettings` (`settings-manager.ts` re-export);
+  `POWERSHELL_ARGS` (`utils/shell.ts`)
+
+`DEFAULT_COMPACTION_SETTINGS` is worth a note: it looks like a default a caller would read, but
+`compact` takes the merged `CompactionSettings` from `SettingsManager`, so nothing outside the module
+uses it.
+
+The regression test reads the sources the root re-exports and asserts each kept-private name has no
+top-level `export` declaration there. It reads files rather than the built root so the failure lands
+on the edit, not on a stale build.
+
+Two of the four "kinds of edit" above were wrong, and this is where the correction goes:
+
+1. `export *` does not drop an ambiguous name under `tsc`; it is TS2308. The named block for the tool
+   factories was never needed — the closure over `core/tools/index.ts` and `core/sdk.ts` reaches the
+   same declarations, so no ambiguity exists. Removing it is a separate edit because it changes the
+   test's `named` expectation, not because the code disagrees.
+2. The paired-re-export trick does not hide anything, which is the whole point of this follow-up.

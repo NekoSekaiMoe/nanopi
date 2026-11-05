@@ -97,7 +97,7 @@ type ToolDef = ToolDefinition<any, any>;
 type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep" | "find" | "ls";
 const allToolNames: Set<ToolName> = new Set(["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"]);
 
-export interface ToolsOptions {
+interface ToolsOptions {
 	read?: ReadToolOptions;
 	bash?: BashToolOptions;
 	powershell?: PowerShellToolOptions;
@@ -253,8 +253,12 @@ function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, T
 export type { Tool, ToolDef, ToolName };
 // Package-internal: `createCodingTools` / `createReadOnlyTools` (typed `Tool[]`, re-exported through
 // `core/sdk.ts`) are what an SDK caller builds tools with, and the `*ToolDefinition` factories are
-// what a module composes. The generic dispatch below them (`createTool(name)`, the `ToolName`
-// catalogue, the definition filter) is how the session wires its own toolset.
+// what a module composes. The dispatch below them (`createTool(name)`, the `ToolName` catalogue) is
+// how the session wires its own toolset, and `ToolsOptions` is the bag `createCodingTools` takes.
+//
+// `createCodingToolDefinitions`, `createReadOnlyToolDefinitions` and `filterToolDefinitions` have no
+// caller: `createCodingTools` and `createReadOnlyTools` build the tools directly, and
+// `createAllToolDefinitions` filters through its own `names` argument.
 export {
 	allToolNames,
 	createAllToolDefinitions,
@@ -264,4 +268,5 @@ export {
 	createTool,
 	createToolDefinition,
 	filterToolDefinitions,
+	type ToolsOptions,
 };

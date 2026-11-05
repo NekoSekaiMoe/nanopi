@@ -32,7 +32,7 @@ import {
 // Types
 // ============================================================================
 
-export interface BranchSummaryResult {
+interface BranchSummaryResult {
 	summary?: string;
 	usage?: Usage;
 	readFiles?: string[];
@@ -42,14 +42,14 @@ export interface BranchSummaryResult {
 }
 
 /** Details stored in BranchSummaryEntry.details for file tracking */
-export interface BranchSummaryDetails {
+interface BranchSummaryDetails {
 	readFiles: string[];
 	modifiedFiles: string[];
 }
 
 export type { FileOperations } from "./utils.ts";
 
-export interface BranchPreparation {
+interface BranchPreparation {
 	/** Messages extracted for summarization, in chronological order */
 	messages: AgentMessage[];
 	/** File operations extracted from tool calls */
@@ -58,14 +58,14 @@ export interface BranchPreparation {
 	totalTokens: number;
 }
 
-export interface CollectEntriesResult {
+interface CollectEntriesResult {
 	/** Entries to summarize, in chronological order */
 	entries: SessionEntry[];
 	/** Common ancestor between old and new position, if any */
 	commonAncestorId: string | null;
 }
 
-export interface GenerateBranchSummaryOptions {
+interface GenerateBranchSummaryOptions {
 	/** Model to use for summarization */
 	model: Model<any>;
 	/** API key for the model */
@@ -193,7 +193,7 @@ function getMessageFromEntry(entry: SessionEntry): AgentMessage | undefined {
  * @param entries - Entries in chronological order
  * @param tokenBudget - Maximum tokens to include (0 = no limit)
  */
-export function prepareBranchEntries(entries: SessionEntry[], tokenBudget: number = 0): BranchPreparation {
+function prepareBranchEntries(entries: SessionEntry[], tokenBudget: number = 0): BranchPreparation {
 	const messages: AgentMessage[] = [];
 	const fileOps = createFileOps();
 	let totalTokens = 0;
@@ -386,3 +386,16 @@ export async function generateBranchSummary(
 		modifiedFiles,
 	};
 }
+
+// Package-internal: `generateBranchSummary` and `collectEntriesForBranchSummary` are what the
+// session calls when it leaves a branch; the preparation between them is a step inside. This module
+// reaches the package root through `./index.ts`, so the block is what keeps those steps reachable
+// without publishing them.
+export {
+	type BranchPreparation,
+	type BranchSummaryDetails,
+	type BranchSummaryResult,
+	type CollectEntriesResult,
+	type GenerateBranchSummaryOptions,
+	prepareBranchEntries,
+};

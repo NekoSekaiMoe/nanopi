@@ -6,7 +6,7 @@ import { spawnProcessSync } from "./child-process.ts";
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;
 
-export interface PathInputOptions {
+interface PathInputOptions {
 	/** Trim leading/trailing whitespace before normalization. */
 	trim?: boolean;
 	/** Expand leading `~` to a home directory. Defaults to true. */
@@ -65,7 +65,7 @@ export function isLocalPath(value: string): boolean {
 }
 
 /** Convert Git Bash, MSYS, Cygwin, and WSL drive paths to a form native Windows APIs accept. */
-export function normalizeWindowsShellPath(filePath: string): string {
+function normalizeWindowsShellPath(filePath: string): string {
 	if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\")) return filePath;
 	const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/i);
 	if (!match) return filePath;
@@ -140,4 +140,12 @@ function markPathIgnoredByCloudSync(path: string): void {
 }
 
 // Package-internal: display formatting and the cloud-sync ignore hint.
-export { formatPathRelativeToCwdOrAbsolute, markPathIgnoredByCloudSync };
+// Package-internal: the option bag the path helpers thread through, the git-bash/Cygwin spelling
+// fix, and the macOS cloud-sync marker. Callers outside this module use `resolvePath` /
+// `normalizePath` / `canonicalizePath`.
+export {
+	formatPathRelativeToCwdOrAbsolute,
+	markPathIgnoredByCloudSync,
+	normalizeWindowsShellPath,
+	type PathInputOptions,
+};

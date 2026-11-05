@@ -194,7 +194,7 @@ function migrateToCurrentVersion(entries: FileEntry[]): boolean {
 }
 
 /** Exported for testing */
-export function migrateSessionEntries(entries: FileEntry[]): void {
+function migrateSessionEntries(entries: FileEntry[]): void {
 	migrateToCurrentVersion(entries);
 }
 
@@ -258,7 +258,7 @@ function parseSessionEntryLine(line: string): FileEntry | null {
 }
 
 /** Exported for testing */
-export function loadEntriesFromFile(filePath: string): FileEntry[] {
+function loadEntriesFromFile(filePath: string): FileEntry[] {
 	const resolvedFilePath = normalizePath(filePath);
 	if (!existsSync(resolvedFilePath)) return [];
 
@@ -380,7 +380,7 @@ function sessionCwdMatches(cwd: string | undefined, resolvedCwd: string): boolea
 }
 
 /** Exported for testing */
-export function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
+function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
 	const resolvedSessionDir = normalizePath(sessionDir);
 	const resolvedCwd = cwd ? resolvePath(cwd) : undefined;
 	try {
@@ -1716,3 +1716,9 @@ export class SessionManager {
 		}
 	}
 }
+
+// Package-internal: reading one session file, migrating a v1 entry list, and picking the newest file
+// in a directory are steps inside `SessionManager`. `SessionManager`, `SessionInfo` and
+// `assertValidSessionId` are the public shape; the three below stay path-importable for the tests
+// and the resume path that drive a fixture directly.
+export { findMostRecentSession, loadEntriesFromFile, migrateSessionEntries };

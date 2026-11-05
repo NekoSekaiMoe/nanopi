@@ -64,7 +64,7 @@ function addIgnoreRules(ig: IgnoreMatcher, dir: string, rootDir: string): void {
 	}
 }
 
-export interface SkillFrontmatter {
+interface SkillFrontmatter {
 	name?: string;
 	description?: string;
 	"disable-model-invocation"?: boolean;
@@ -126,7 +126,7 @@ function validateDescription(description: unknown): string[] {
 	return errors;
 }
 
-export interface LoadSkillsFromDirOptions {
+interface LoadSkillsFromDirOptions {
 	/** Directory to scan for skills */
 	dir: string;
 	/** Source identifier for these skills */
@@ -518,4 +518,7 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 }
 
 // Package-internal: `loadSkills` takes it; `loadSkillsFromDir` is the one the docs name.
-export type { LoadSkillsOptions };
+// Package-internal: `loadSkills` is the entry point; loading one directory is a step inside it, and
+// the frontmatter shape is what that step parses. `Skill`, `LoadSkillsResult` and
+// `formatSkillsForPrompt` stay public because a module renders and filters skills itself.
+export type { LoadSkillsFromDirOptions, LoadSkillsOptions, SkillFrontmatter };
