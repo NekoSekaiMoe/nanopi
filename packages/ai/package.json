@@ -76,15 +76,15 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "1.5.0",
-		"@aws-sdk/client-bedrock-runtime": "3.1157.0",
-		"@google/genai": "2.31.0",
-		"@smithy/node-http-handler": "4.13.0",
-		"@smithy/types": "4.19.0",
+		"@aws-sdk/client-bedrock-runtime": "3.1162.0",
+		"@google/genai": "2.32.0",
+		"@smithy/node-http-handler": "4.14.2",
+		"@smithy/types": "4.20.0",
 		"http-proxy-agent": "9.1.0",
 		"https-proxy-agent": "9.1.0",
-		"openai": "7.45.0",
+		"openai": "7.51.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.4.3",
+		"typebox": "1.4.4",
 		"@aws/bedrock-token-generator": "1.1.0"
 	},
 	"keywords": [
@@ -105,15 +105,15 @@
 		"directory": "packages/ai"
 	},
 	"engines": {
-		"node": ">=24.0.0"
+		"node": "v26.13.0"
 	},
 	"devDependencies": {
 		"@types/node": "24.19.2",
 		"canvas": "3.2.3",
-		"vitest": "5.0.5"
+		"vitest": "5.1.0"
 	},
 	"peerDependencies": {
-		"zod": "4.6.6"
+		"zod": "4.6.7"
 	},
 	"peerDependenciesMeta": {
 		"zod": {

@@ -47,17 +47,17 @@
 	},
 	"devDependencies": {
 		"@anthropic-ai/sandbox-runtime": "0.0.81",
-		"@biomejs/biome": "2.6.2",
+		"@biomejs/biome": "2.6.5",
 		"@types/node": "24.19.2",
 		"esbuild": "0.28.2",
 		"husky": "9.1.7",
-		"pnpm": "12.15.0",
+		"pnpm": "12.16.1",
 		"shx": "0.4.0",
 		"typescript": "7.0.2",
 		"yaml": "2.9.1"
 	},
 	"engines": {
-		"node": ">=24.0.0"
+		"node": "v26.13.0"
 	},
 	"version": "0.0.3"
 }

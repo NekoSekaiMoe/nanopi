@@ -15,6 +15,6 @@
 	},
 	"peerDependencies": {
 		"@nanopi/pi-coding-agent": "*",
-		"typebox": "*"
+		"typebox": "1.4.4"
 	}
 }
