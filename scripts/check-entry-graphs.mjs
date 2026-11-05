@@ -118,62 +118,66 @@ function expand(pkgDir, entry, target) {
 		.map((name) => [entry.replace("*", name.replace(/\.ts$/, "")), target.replace("*", name.replace(/\.ts$/, ""))]);
 }
 
-let failures = 0;
-
 /** Enforces one budget against one source file: the graph size and every forbidden pattern. */
-function checkGraph(pkgDir, label, source, budget) {
+function checkGraph(pkgDir, label, source, budget, report) {
 	if (!existsSync(source)) {
-		console.error(`${pkgDir} ${label} has no source file at ${relative(ROOT, source)}`);
-		failures += 1;
+		report(`${pkgDir} ${label} has no source file at ${relative(ROOT, source)}`);
 		return;
 	}
 	const graph = [...walk(source)].map((file) => relative(ROOT, file));
 	if (graph.length > budget.maxFiles) {
-		console.error(
+		report(
 			`${pkgDir} "${label}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
 				graph.map((file) => `    ${file}`).join("\n"),
 		);
-		failures += 1;
 	}
 	for (const pattern of budget.forbid ?? []) {
 		const hit = graph.filter((file) => file.includes(pattern));
 		if (hit.length > 0) {
-			console.error(`${pkgDir} "${label}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
-			failures += 1;
+			report(`${pkgDir} "${label}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
 		}
 	}
 }
 
-for (const [pkgDir, budgets] of Object.entries(BUDGETS)) {
-	const manifest = JSON.parse(readFileSync(resolve(ROOT, pkgDir, "package.json"), "utf8"));
-	for (const [entry, budget] of Object.entries(budgets)) {
-		// A source path rather than an entry point: the budget holds the graph behind a barrel
-		// the package reaches internally, so there is no `exports` entry to look up.
-		if (budget.sourcePath) {
-			checkGraph(pkgDir, entry, resolve(ROOT, pkgDir, "src", entry), budget);
-			continue;
-		}
-		const declared = manifest.exports?.[entry];
-		if (!declared) {
-			console.error(`${pkgDir} declares no export "${entry}" but a budget exists for it`);
-			failures += 1;
-			continue;
-		}
-		const target = typeof declared === "string" ? declared : declared.import;
-		for (const [name, distPath] of expand(pkgDir, entry, target)) {
-			const source = sourceFor(pkgDir, distPath);
-			if (!source) {
-				console.error(`${pkgDir} export "${name}" points at ${distPath}, which has no source file`);
-				failures += 1;
+/** Every budget violation, as one message per violation. The CLI below prints them and exits. */
+export function findViolations(budgets = BUDGETS) {
+	const violations = [];
+	for (const [pkgDir, entries] of Object.entries(budgets)) {
+		const manifest = JSON.parse(readFileSync(resolve(ROOT, pkgDir, "package.json"), "utf8"));
+		for (const [entry, budget] of Object.entries(entries)) {
+			// A source path rather than an entry point: the budget holds the graph behind a barrel
+			// the package reaches internally, so there is no `exports` entry to look up.
+			if (budget.sourcePath) {
+				checkGraph(pkgDir, entry, resolve(ROOT, pkgDir, "src", entry), budget, (message) =>
+					violations.push(message),
+				);
 				continue;
 			}
-			checkGraph(pkgDir, name, source, budget);
+			const declared = manifest.exports?.[entry];
+			if (!declared) {
+				violations.push(`${pkgDir} declares no export "${entry}" but a budget exists for it`);
+				continue;
+			}
+			const target = typeof declared === "string" ? declared : declared.import;
+			for (const [name, distPath] of expand(pkgDir, entry, target)) {
+				const source = sourceFor(pkgDir, distPath);
+				if (!source) {
+					violations.push(`${pkgDir} export "${name}" points at ${distPath}, which has no source file`);
+					continue;
+				}
+				checkGraph(pkgDir, name, source, budget, (message) => violations.push(message));
+			}
 		}
 	}
+	return violations;
 }
 
-if (failures > 0) {
-	console.error(`\n${failures} entry-point budget violation(s).`);
-	process.exit(1);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	const violations = findViolations();
+	for (const violation of violations) console.error(violation);
+	if (violations.length > 0) {
+		console.error(`\n${violations.length} entry-point budget violation(s).`);
+		process.exit(1);
+	}
+	console.log("Entry point graphs are within budget.");
 }
-console.log("Entry point graphs are within budget.");
