@@ -1,6 +1,6 @@
 # Agent Note: 每 agent 一棵 git worktree 的流程（被否，只剩「合回前自检」待议）
 
-Status: rejected — 「每个 agent 自己开 worktree、review 完修完再合回分支」在 nanopi 里已有三分之二是现成的（`isolated` 建树、PR 流程、pre-commit 体检），真缺的只有「子 agent 的 worktree 分支合回主树之前先自检」这一步；写进 `AGENTS.md` 当全局规则、或强制主会话每 session 一棵树，代价都大于收益。本文件只作占位，提案正文等新 issue 开出来后搬过去。
+Status: rejected — 「每个 agent 自己开 worktree、review 完修完再合回分支」在 nanopi 里已有三分之二是现成的（`isolated` 建树、PR 流程、pre-commit 体检），真缺的只有「子 agent 的 worktree 分支合回主树之前先自检」这一步；写进 `AGENTS.md` 当全局规则、或强制主会话每 session 一棵树，代价都大于收益。剩下那条缺口已在 shinytale/nanopi#504 单独立项待议。
 
 ## Problem
 
@@ -50,4 +50,4 @@ ISSUE #501（承自 shinytale/nanopi#499 的后续）里已经否掉整包吸收
 
 ## 待议
 
-「合回前自检」这一条单独立项讨论，判据是：有没有人真的被脏树 / 半成品合进主树坑过。没有这个证据之前不排期，本文件只占位。
+「合回前自检」已单独立到 shinytale/nanopi#504，判据是：有没有人真的被脏树 / 半成品合进主树坑过。没有这个证据之前不排期，本文件只留被否的三种走法与理由。
