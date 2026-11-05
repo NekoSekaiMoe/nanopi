@@ -1,3 +1,4 @@
+import type { StreamFn } from "@nanopi/pi-agent-core";
 import type {
 	Api,
 	AssistantImages,
@@ -48,9 +49,23 @@ export { clearApiKeyCache } from "./provider-composer.ts";
  */
 export class ModelRegistry {
 	private readonly runtime: ModelRuntime;
+	/**
+	 * Request path for callers that must go through the same auth, timeout and attribution behavior
+	 * the session uses. Summarizers are the ones that need it: they send a completion outside the
+	 * agent loop, so they take this instead of reaching for a global default.
+	 */
+	readonly streamFn: StreamFn;
 
-	constructor(runtime: ModelRuntime) {
+	/**
+	 * `streamFn` defaults to the runtime's provider path, which is what a registry built outside a
+	 * session should use. A session passes its own so summarizers inherit its request behavior.
+	 */
+	constructor(
+		runtime: ModelRuntime,
+		streamFn: StreamFn = (model, context, options) => runtime.streamSimple(model, context, options),
+	) {
 		this.runtime = runtime;
+		this.streamFn = streamFn;
 	}
 
 	/** Reload models.json asynchronously. Await before making synchronous registry reads. */

@@ -1,3 +1,4 @@
+import { registerApiProvider, unregisterApiProviders } from "../api-proxy-registry.ts";
 import { createProvider, type Provider } from "../models.ts";
 import type {
 	AssistantMessage,
@@ -723,5 +724,29 @@ export function fauxProvider(options: RegisterFauxProviderOptions = {}): FauxPro
 		setResponses: core.setResponses,
 		appendResponses: core.appendResponses,
 		getPendingResponseCount: core.getPendingResponseCount,
+	};
+}
+
+/**
+ * Registers a faux provider into the legacy api-id registry (the compat surface).
+ *
+ * Lives here rather than in `compat.ts`: it needs the registry, not the provider catalog, and
+ * `compat.ts` pulls the catalog in.
+ */
+export function registerFauxProvider(options: RegisterFauxProviderOptions = {}): FauxProviderRegistration {
+	const core = createFauxCore(options);
+	const sourceId = `faux-provider-${Math.random().toString(36).slice(2, 10)}`;
+	registerApiProvider({ api: core.api, stream: core.stream, streamSimple: core.streamSimple }, sourceId);
+	return {
+		api: core.api,
+		models: core.models,
+		getModel: core.getModel,
+		state: core.state,
+		setResponses: core.setResponses,
+		appendResponses: core.appendResponses,
+		getPendingResponseCount: core.getPendingResponseCount,
+		unregister() {
+			unregisterApiProviders(sourceId);
+		},
 	};
 }

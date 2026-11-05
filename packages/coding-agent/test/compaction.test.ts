@@ -1,6 +1,6 @@
 import type { AgentMessage, StreamFn } from "@nanopi/pi-agent-core";
 import type { AssistantMessage, Usage } from "@nanopi/pi-ai/compat";
-import { createAssistantMessageEventStream, fauxAssistantMessage, getModel } from "@nanopi/pi-ai/compat";
+import { createAssistantMessageEventStream, fauxAssistantMessage, getModel, streamSimple } from "@nanopi/pi-ai/compat";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -708,7 +708,16 @@ describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("LLM summarization", () => {
 		const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
 		expect(preparation).toBeDefined();
 
-		const compactionResult = await compact(preparation!, model, process.env.ANTHROPIC_OAUTH_TOKEN!);
+		const compactionResult = await compact(
+			preparation!,
+			model,
+			process.env.ANTHROPIC_OAUTH_TOKEN!,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamSimple,
+		);
 
 		expect(compactionResult.summary.length).toBeGreaterThan(100);
 		expect(compactionResult.firstKeptEntryId).toBeTruthy();
@@ -729,7 +738,16 @@ describe.skipIf(!process.env.ANTHROPIC_OAUTH_TOKEN)("LLM summarization", () => {
 		const preparation = prepareCompaction(entries, DEFAULT_COMPACTION_SETTINGS);
 		expect(preparation).toBeDefined();
 
-		const compactionResult = await compact(preparation!, model, process.env.ANTHROPIC_OAUTH_TOKEN!);
+		const compactionResult = await compact(
+			preparation!,
+			model,
+			process.env.ANTHROPIC_OAUTH_TOKEN!,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamSimple,
+		);
 
 		// Simulate appending compaction to entries by creating a proper entry
 		const lastEntry = entries[entries.length - 1];

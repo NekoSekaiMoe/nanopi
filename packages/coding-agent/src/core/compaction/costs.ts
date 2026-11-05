@@ -6,7 +6,8 @@
  * on every compaction, so they live here instead of behind the warming machinery.
  */
 
-import { type Api, calculateCost, type Model, type SimpleStreamOptions, type Usage } from "@nanopi/pi-ai";
+import type { Api, Model, SimpleStreamOptions, Usage } from "@nanopi/pi-ai";
+import { calculateCost } from "@nanopi/pi-ai/module-surface";
 import { getProviderEnvValue } from "@nanopi/pi-ai/utils/provider-env";
 
 /** Prompt-cache lifetime in ms for this model and request, or undefined when it is not cacheable. */

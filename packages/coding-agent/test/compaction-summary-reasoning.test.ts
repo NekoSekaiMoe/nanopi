@@ -1,5 +1,11 @@
-import type { AgentMessage } from "@nanopi/pi-agent-core";
-import { type AssistantMessage, type Model, normalizeContext, type TranscriptContext } from "@nanopi/pi-ai";
+import type { AgentMessage, StreamFn } from "@nanopi/pi-agent-core";
+import {
+	type AssistantMessage,
+	type AssistantMessageEventStream,
+	type Model,
+	normalizeContext,
+	type TranscriptContext,
+} from "@nanopi/pi-ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	type CompactionPreparation,
@@ -9,17 +15,17 @@ import {
 	generateSummaryWithUsage,
 } from "../src/core/compaction/index.ts";
 
+// The summarizers take the request path from their caller instead of falling back to
+// `completeSimple`. The session hands them its stream function; here the stand-in records the call
+// and resolves it through `completeSimple`, so these tests keep asserting on request options.
 const { completeSimpleMock } = vi.hoisted(() => ({
 	completeSimpleMock: vi.fn(),
 }));
 
-vi.mock("@nanopi/pi-ai/compat", async (importOriginal) => {
-	const actual = await importOriginal<typeof import("@nanopi/pi-ai/compat")>();
-	return {
-		...actual,
-		completeSimple: completeSimpleMock,
-	};
-});
+const streamFn: StreamFn = async (model, context, options) => {
+	const response = await completeSimpleMock(model, context, options);
+	return { result: async () => response } as AssistantMessageEventStream;
+};
 
 function createModel(
 	reasoning: boolean,
@@ -84,6 +90,7 @@ describe("generateSummary reasoning options", () => {
 			undefined,
 			undefined,
 			"medium",
+			streamFn,
 		);
 
 		expect(result.text).toBe("## Goal\nTest summary");
@@ -97,14 +104,47 @@ describe("generateSummary reasoning options", () => {
 	});
 
 	it("preserves the string result from generateSummary", async () => {
-		await expect(generateSummary(messages, createModel(false), undefined, "test-key")).resolves.toBe(
-			"## Goal\nTest summary",
-		);
+		await expect(
+			generateSummary(
+				messages,
+				createModel(false),
+				undefined,
+				"test-key",
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				streamFn,
+			),
+		).resolves.toBe("## Goal\nTest summary");
 	});
 
 	it("uses fresh routing sessions without prompt caching", async () => {
-		await generateSummary(messages, createModel(false), undefined, "test-key");
-		await generateSummary(messages, createModel(false), undefined, "test-key");
+		await generateSummary(
+			messages,
+			createModel(false),
+			undefined,
+			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+		);
+		await generateSummary(
+			messages,
+			createModel(false),
+			undefined,
+			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+		);
 
 		const requestOptions = completeSimpleMock.mock.calls.map((call) => call[2]);
 		expect(requestOptions).toHaveLength(2);
@@ -115,11 +155,16 @@ describe("generateSummary reasoning options", () => {
 	});
 
 	it("honors caller-supplied routing session and tool choice without prompt caching", async () => {
-		await completeSummarization(createModel(false), normalizeContext({ systemPrompt: "Summarize", messages: [] }), {
-			sessionId: "current-routing-session",
-			cacheRetention: "long",
-			toolChoice: "auto",
-		});
+		await completeSummarization(
+			createModel(false),
+			normalizeContext({ systemPrompt: "Summarize", messages: [] }),
+			{
+				sessionId: "current-routing-session",
+				cacheRetention: "long",
+				toolChoice: "auto",
+			},
+			streamFn,
+		);
 
 		expect(completeSimpleMock.mock.calls[0][2]).toMatchObject({
 			sessionId: "current-routing-session",
@@ -140,7 +185,16 @@ describe("generateSummary reasoning options", () => {
 			settings: { enabled: true, reserveTokens: 2000, keepRecentTokens: 20 },
 		};
 
-		const result = await compact(preparation, createModel(false), "test-key");
+		const result = await compact(
+			preparation,
+			createModel(false),
+			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+		);
 
 		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
 		expect(result.summary).toContain("previous checkpoint");
@@ -154,9 +208,20 @@ describe("generateSummary reasoning options", () => {
 	it("rejects tool calls from conversation summaries", async () => {
 		completeSimpleMock.mockResolvedValueOnce(mockToolCallResponse);
 
-		await expect(generateSummaryWithUsage(messages, createModel(false), undefined, "test-key")).rejects.toThrow(
-			"Summarization attempted to call a tool",
-		);
+		await expect(
+			generateSummaryWithUsage(
+				messages,
+				createModel(false),
+				undefined,
+				"test-key",
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				streamFn,
+			),
+		).rejects.toThrow("Summarization attempted to call a tool");
 	});
 
 	it("rejects tool calls from split-turn summaries", async () => {
@@ -171,9 +236,9 @@ describe("generateSummary reasoning options", () => {
 			settings: { enabled: true, reserveTokens: 2000, keepRecentTokens: 20 },
 		};
 
-		await expect(compact(preparation, createModel(false), "test-key")).rejects.toThrow(
-			"Turn prefix summarization attempted to call a tool",
-		);
+		await expect(
+			compact(preparation, createModel(false), "test-key", undefined, undefined, undefined, undefined, streamFn),
+		).rejects.toThrow("Turn prefix summarization attempted to call a tool");
 	});
 
 	it("rejects a length-limited history summary", async () => {
@@ -183,9 +248,20 @@ describe("generateSummary reasoning options", () => {
 			content: [{ type: "text", text: "partial" }],
 		});
 
-		await expect(generateSummaryWithUsage(messages, createModel(false), undefined, "test-key")).rejects.toThrow(
-			"generation hit the token cap",
-		);
+		await expect(
+			generateSummaryWithUsage(
+				messages,
+				createModel(false),
+				undefined,
+				"test-key",
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				undefined,
+				streamFn,
+			),
+		).rejects.toThrow("generation hit the token cap");
 	});
 
 	it("rejects a length-limited split-turn summary", async () => {
@@ -204,9 +280,9 @@ describe("generateSummary reasoning options", () => {
 			settings: { enabled: true, reserveTokens: 2000, keepRecentTokens: 20 },
 		};
 
-		await expect(compact(preparation, createModel(false), "test-key")).rejects.toThrow(
-			"generation hit the token cap",
-		);
+		await expect(
+			compact(preparation, createModel(false), "test-key", undefined, undefined, undefined, undefined, streamFn),
+		).rejects.toThrow("generation hit the token cap");
 	});
 
 	it("does not set reasoning when thinking is off", async () => {
@@ -220,6 +296,7 @@ describe("generateSummary reasoning options", () => {
 			undefined,
 			undefined,
 			"off",
+			streamFn,
 		);
 
 		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
@@ -240,6 +317,7 @@ describe("generateSummary reasoning options", () => {
 			undefined,
 			undefined,
 			"medium",
+			streamFn,
 		);
 
 		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
@@ -263,6 +341,12 @@ describe("generateSummary reasoning options", () => {
 			}),
 			undefined,
 			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
 		);
 
 		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
@@ -270,7 +354,18 @@ describe("generateSummary reasoning options", () => {
 	});
 
 	it("does not set Anthropic refusal fallback for models without allowed fallback targets", async () => {
-		await generateSummary(messages, createModel(true), undefined, "test-key");
+		await generateSummary(
+			messages,
+			createModel(true),
+			undefined,
+			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+		);
 
 		expect(completeSimpleMock).toHaveBeenCalledTimes(1);
 		expect(completeSimpleMock.mock.calls[0][2]).not.toHaveProperty("refusalFallbacks");
@@ -287,7 +382,16 @@ describe("generateSummary reasoning options", () => {
 			settings: { enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 },
 		};
 
-		const result = await compact(preparation, createModel(false, 128000), "test-key");
+		const result = await compact(
+			preparation,
+			createModel(false, 128000),
+			"test-key",
+			undefined,
+			undefined,
+			undefined,
+			undefined,
+			streamFn,
+		);
 
 		expect(result.usage).toEqual({
 			...mockSummaryResponse.usage,

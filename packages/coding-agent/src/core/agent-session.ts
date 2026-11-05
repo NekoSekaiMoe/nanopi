@@ -4322,7 +4322,7 @@ export class AgentSession {
 				extensionsResult.runtime,
 				this._cwd,
 				this.sessionManager,
-				new ModelRegistry(this._modelRuntime),
+				new ModelRegistry(this._modelRuntime, this.agent.streamFunction),
 			);
 			if (this._moduleRegistryRef) {
 				this._moduleRegistryRef.current = this._moduleRegistry;

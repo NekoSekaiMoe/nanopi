@@ -50,6 +50,7 @@ export default function codexCompactionExtension(
 				{ apiKey: auth.apiKey, headers: normalizeHeaders(auth.headers), env: auth.env },
 				config,
 				ctx.thinkingLevel,
+				ctx.modelRegistry.streamFn,
 			);
 			if (compaction) return { compaction };
 		} catch {

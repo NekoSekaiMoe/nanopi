@@ -6,9 +6,8 @@
  */
 
 import type { AgentMessage, StreamFn } from "@nanopi/pi-agent-core";
-import type { RetryCallbacks, RetryPolicy } from "@nanopi/pi-ai";
-import { contentText, normalizeContext } from "@nanopi/pi-ai";
-import type { Model, SimpleStreamOptions, Usage } from "@nanopi/pi-ai/compat";
+import type { Model, SimpleStreamOptions, Usage } from "@nanopi/pi-ai";
+import { contentText, normalizeContext, type RetryCallbacks, type RetryPolicy } from "@nanopi/pi-ai/module-surface";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,
@@ -83,8 +82,8 @@ export interface GenerateBranchSummaryOptions {
 	replaceInstructions?: boolean;
 	/** Tokens reserved when selecting branch history (default 16384) */
 	reserveTokens?: number;
-	/** Optional session stream function. Used to preserve SDK request behavior without mutating agent state. */
-	streamFn?: StreamFn;
+	/** Session stream function. Required: it carries the SDK request behavior (auth, timeouts, retries). */
+	streamFn: StreamFn;
 	/** Retry policy for transient summarization errors. Reuses coding-agent's `settings.retry`. */
 	retry?: RetryPolicy;
 	/** Optional callbacks for retry reporting (e.g. TUI retry indicators). */
