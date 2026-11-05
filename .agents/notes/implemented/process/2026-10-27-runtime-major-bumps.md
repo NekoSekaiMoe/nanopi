@@ -69,7 +69,10 @@ protobufjs 8 也说不通：那是 `^7.5.4` 之外的版本，上游未验证的
 ## Consequences
 
 - `overrides` 留在原地，并绑定在 `@google/genai` 上——下次 `@google/genai` 把
-  `^7.5.4` 提到 v8 时，这条 override 应当一起撤掉。
+  `^7.5.4` 提到 v8 时，这条 override 应当一起撤掉。这个条件现在写进了
+  `renovate.json`：`protobufjs` 有一条 `enabled: false` 的规则，说明它不许独立升级，
+  只在 `@google/genai` 放开范围时连携动，见
+  [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
 - `pnpm run check` 全绿：tsc 当时只剩 `sidecars.ts` 的 `ReadableStream` 方差错误，
   干净 `main` 上同样报；`@types/node` 升到 24 之后 24 的 lib 定义把这条消掉了（见
   [node 24 is the floor](./2026-10-27-node-24-floor.md)）。

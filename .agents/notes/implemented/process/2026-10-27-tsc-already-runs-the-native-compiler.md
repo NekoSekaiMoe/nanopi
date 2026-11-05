@@ -37,9 +37,9 @@ Issue #322 想「把 tsc 换成 v7 的 tsgo」。听起来像一次工具链迁�
 - 4011 个文件、74.8 万行、144 万个类型、724 万次实例化
 - check 3.6s、emit 0.8s、总 6.1s，内存 1.8 GB，墙钟 7.4-7.7s
 
-对照 `packages/webui`（仍是 `typescript@5.9.3`，该包有自己的 tsconfig，
+对照 `packages/webui`（当时仍是 `typescript@5.9.3`，该包有自己的 tsconfig，
 不在根 include 里）：同一份代码 5.9.3 与 7.0.2 都干净通过，可以按需切换，
-急不起来。
+急不起来。后来它按需切了，见 [webui 的 typescript 7](./2026-11-05-webui-typescript-7.md)。
 
 ## Alternatives considered
 
@@ -49,7 +49,8 @@ Issue #322 想「把 tsc 换成 v7 的 tsgo」。听起来像一次工具链迁�
   一起跟着换路径。
 - **把 `packages/webui` 的 5.9.3 也提到 7.0.2**：可以，但和这个 issue 无关。
   webui 的 tsc 是 `next build` 的类型检查前置，锁 5.9.3 是当时按 Next 16 的
-  兼容面选的，验证过没问题再动，不搭这趟车。
+  兼容面选的，验证过没问题再动，不搭这趟车。后来单独验证过并升上去了，见
+  [webui 的 typescript 7](./2026-11-05-webui-typescript-7.md)。
 - **再加一条 `typecheck:native` 脚本调 `tsgo`**：仓库里没有第二个可指向的
   二进制，多出来的脚本只会让 `pnpm run check` 多一次全量编译。
 

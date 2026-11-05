@@ -66,7 +66,11 @@ minor 里那些本该当天进 main 的补丁也跟着停。而 `pnpm run check`
   [runtime major bumps](./2026-10-27-runtime-major-bumps.md)）、`engines.node` 到 24（见
   [node 24 is the floor](./2026-10-27-node-24-floor.md)）、artifact actions 与
   `pnpm/action-setup`（见 [CI action 大版本](./2026-10-27-ci-action-major-bumps.md)）。
-  仍然挂着的只有 `next`、`highlight.js`、`protobufjs` 三项（`vitest` 已经是 5.0.5）。
+  之后 `protobufjs` 不再是「待升」而是「不许独立升」，条件绑定在 `@google/genai` 上，
+  `typescript` v7 也覆盖到了 `packages/webui`，见
+  [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md) 与
+  [webui 的 typescript 7](./2026-11-05-webui-typescript-7.md)。
+  仍然挂着的只有 `next`、`highlight.js` 两项（`vitest` 已经是 5.0.5）。
 - 验证：`pnpm run typecheck`、`node ./test.mjs`（ai 1418 / coding-agent 2419 通过）、
   `packages/webui` 的 `typecheck` 与 `next build` 全部通过。
 

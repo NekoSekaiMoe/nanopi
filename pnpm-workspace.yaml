@@ -26,6 +26,10 @@ allowBuilds:
   canvas: true
   cpu-features: true
   esbuild: true
+  # protobufjs 的唯一 script 是 postinstall：只在依赖方声明的版本不满足它自己
+  # 的 versionScheme（"~"）时往 stderr 打一行警告，装出来的 dist 与跳过脚本时
+  # 逐字节相同。false 是有意的「拒绝」，不是待审：删掉这一行 pnpm 会把它当成
+  # 未审批的构建脚本并让 install 失败。
   pnpm: false
-  protobufjs: true
+  protobufjs: false
   ssh2: true

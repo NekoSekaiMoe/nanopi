@@ -1,6 +1,8 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": [
+    "config:recommended"
+  ],
   "commitMessagePrefix": "chore(deps): ",
   "dependencyDashboard": false,
   "branchConcurrentLimit": 1,
@@ -16,7 +18,9 @@
   "packageRules": [
     {
       "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了直接合进 main。platformAutomerge 关掉，让 Renovate 自己在 CI 之后合，而不是等 GitHub 的 native auto-merge。",
-      "matchManagers": ["npm"],
+      "matchManagers": [
+        "npm"
+      ],
       "groupName": "npm dependencies",
       "groupSlug": "npm-dependencies",
       "automerge": true,
@@ -25,21 +29,53 @@
     },
     {
       "description": "Node 底图只升 patch：跨 minor 会换掉运行时，得人工确认 Node 版本后再动。这条必须排在上面 npm 组之前，否则被分组的规则吞掉。",
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["node"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "node"
+      ],
       "groupName": "node runtime",
       "groupSlug": "node-runtime",
       "separateMinorPatch": true,
       "automerge": false
     },
     {
-      "description": "engines.node 是人工决策点，不让 Renovate 碰。rangeStrategy=pin 会把 >=24.0.0 钉成当轮最高的精确版本（实测 \"v26.13.0\" 解析成 26.13.0 这一个点，26.14 都不满足）；而 engines 不做任何事，CI/esbuild/@types 全绿也测不出这个错位，只会在用户安装期冒出来。下限怎么动见 .agents/notes/implemented/process/2026-11-02-node-floor-follows-debian.md。",
-      "matchDepTypes": ["engines"],
+      "description": "engines.node 不是依赖版本，禁止 Renovate 改写：rangeStrategy=pin 会把它钉成当轮最高的精确版本，而 engines 不做任何事，CI/esbuild/@types 全绿也测不出错位。范围写死在这里，Node 大版本迁移时手工改（下限跟着 Debian testing 的 nodejs 走，见 .agents/notes/implemented/process/2026-11-02-node-floor-follows-debian.md）。@types/node 的 major 由下一条规则挂在同一个值上。",
+      "matchDepTypes": [
+        "engines"
+      ],
+      "allowedVersions": "/^>=24\\.0\\.0$/"
+    },
+    {
+      "description": "Node 大版本迁移时 @types/node 跟着一起动：@types/node 只能比 engines.node 老、不能比它新，而 engines.node 由上面那条规则锁着，所以这里的 major 升级一律拦下。版本号改成 comparison：否则按默认 npm 语义 >=24.0.0 被当成 24.0.0 这一个点，25 及以上全被判成 major。迁移时人工按五处一起改（engines、workflow 的 node-version、Dockerfile 底图、esbuild target、@types/node），见 .agents/notes/implemented/process/2026-10-27-node-24-floor.md。不写 enabled: false 是为了留升级线索：这条规则不产生 PR，但 Renovate 会照常把这批版本记进日志，靠人盯 Debian testing 的 nodejs 换大版本。",
+      "matchPackageNames": [
+        "@types/node"
+      ],
+      "matchDepTypes": [
+        "devDependencies"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "customVersioning": {
+        "versioning": "npm",
+        "extractVersion": "^(?<version>.*)$",
+        "allowedVersions": "!/^(?:0|[1-9]\\d*)\\./"
+      }
+    },
+    {
+      "description": "protobufjs 只有 @google/genai 一个消费者，且只经由 overrides 被钉住（pnpm-workspace.yaml）。它单独升级没有意义：@google/genai 自己声明 protobufjs: ^7.5.4，越过上游兼容范围的组合没人验证过。所以不给 protobufjs 单开升级路径（它本来也不在任何 package.json 里），升级只在 @google/genai 放开范围时连携发生：那条 overrides 跟着 @google/genai 的声明一起撤掉或抬高，理由见 .agents/notes/implemented/process/2026-10-27-runtime-major-bumps.md。",
+      "matchPackageNames": [
+        "protobufjs"
+      ],
       "enabled": false
     },
     {
       "description": "GitHub Actions 的 sha 固定不分组：每个 action 一条分支、一个 PR。sha 固定时即便只有单个 action 变了，整份文件的 regex 也会重新算一遍，把别人刚推上去的 sha 一起带上——分组的话，Renovate 每合一次都要重建上一次的 PR 分支，而重建出来的分支是不带 automerge 的。",
-      "matchManagers": ["custom.regex"],
+      "matchManagers": [
+        "custom.regex"
+      ],
       "groupName": null,
       "groupSlug": null,
       "automerge": true,
@@ -51,7 +87,9 @@
     {
       "customType": "regex",
       "description": "GitHub Actions `uses:` pins (sha # vX.Y.Z) live in the workflows. 注释允许 1~3 段版本号：docker/setup-* 的 v3 系列没有 patch 位，只认三段会让整个文件零提取。",
-      "managerFilePatterns": ["/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/^\\.github\\/workflows\\/[^/]+\\.ya?ml$/"
+      ],
       "matchStrings": [
         "uses:\\s+(?<depName>[^\\s@]+)@(?<currentDigest>[0-9a-f]{40})\\s+#\\s+v?(?<currentValue>\\d+(?:\\.\\d+){1,2})"
       ],
