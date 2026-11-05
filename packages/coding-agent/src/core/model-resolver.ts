@@ -264,14 +264,14 @@ function parseModelPattern(
  * The algorithm tries to match the full pattern first, then progressively
  * strips colon-suffixes to find a match.
  */
-export interface ModelScopeDiagnostic {
+interface ModelScopeDiagnostic {
 	type: "warning";
 	code: "no-match" | "invalid-thinking-level";
 	message: string;
 	pattern: string;
 }
 
-export interface ResolveModelScopeResult {
+interface ResolveModelScopeResult {
 	scopedModels: ScopedModel[];
 	diagnostics: ModelScopeDiagnostic[];
 }
@@ -375,7 +375,7 @@ async function resolveModelScope(
 	return scopedModels;
 }
 
-export interface ResolveCliModelResult {
+interface ResolveCliModelResult {
 	model: Model<Api> | undefined;
 	thinkingLevel?: ThinkingLevel;
 	warning: string | undefined;
@@ -779,11 +779,15 @@ async function restoreModelFromSession(
 export type { InitialModelResult, ParsedModelResult };
 // Package-internal: `resolveCliModel` and `findInitialModel` are the two the CLI and the SDK call;
 // everything below is a step inside them. `resolveModelScopeWithDiagnostics` stays public because it
-// is the one that reports *why* a scope matched nothing.
+// is the one that reports *why* a scope matched nothing, and the two result shapes are what it and
+// `resolveCliModel` return, so they stay public with it.
 export {
 	defaultModelPerProvider,
 	findExactModelReferenceMatch,
+	type ModelScopeDiagnostic,
 	parseModelPattern,
+	type ResolveCliModelResult,
+	type ResolveModelScopeResult,
 	resolveModelScope,
 	resolveModelScopeFromModels,
 	restoreModelFromSession,

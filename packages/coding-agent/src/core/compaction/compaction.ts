@@ -162,7 +162,7 @@ export interface CompactionResult<T = unknown> {
 // ============================================================================
 
 /** The enabled-by-default block, i.e. the numbers `settings.json` leaves out. */
-export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = { ...SETTINGS_DEFAULTS.compaction };
+const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = { ...SETTINGS_DEFAULTS.compaction };
 
 // ============================================================================
 // Token calculation
@@ -198,7 +198,7 @@ function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 /**
  * Find the last valid assistant message usage from session entries.
  */
-export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
+function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefined {
 	for (let i = entries.length - 1; i >= 0; i--) {
 		const entry = entries[i];
 		if (entry.type === "message") {
@@ -209,7 +209,7 @@ export function getLastAssistantUsage(entries: SessionEntry[]): Usage | undefine
 	return undefined;
 }
 
-export interface ContextUsageEstimate {
+interface ContextUsageEstimate {
 	tokens: number;
 	usageTokens: number;
 	trailingTokens: number;
@@ -396,7 +396,7 @@ function isCoreRole(role: string): role is "system" | "user" | "assistant" | "to
  * result must follow its call, so neither starts a cut. A kind nobody listed stays
  * out of the cut search rather than splitting a conversation at random.
  */
-export function isCutPointMessage(message: AgentMessage): boolean {
+function isCutPointMessage(message: AgentMessage): boolean {
 	switch (message.role) {
 		case "user":
 		case "assistant":
@@ -411,7 +411,7 @@ export function isCutPointMessage(message: AgentMessage): boolean {
 	return false;
 }
 
-export function isTurnStartMessage(message: AgentMessage): boolean {
+function isTurnStartMessage(message: AgentMessage): boolean {
 	switch (message.role) {
 		case "user":
 		case "bashExecution":
@@ -491,7 +491,7 @@ function findValidCutPoints(entries: SessionEntry[], startIndex: number, endInde
  * Find the context-visible user-role message that starts the turn containing the given entry index.
  * Returns -1 if no turn start found before the index.
  */
-export function findTurnStartIndex(entries: SessionEntry[], entryIndex: number, startIndex: number): number {
+function findTurnStartIndex(entries: SessionEntry[], entryIndex: number, startIndex: number): number {
 	for (let i = entryIndex; i >= startIndex; i--) {
 		if (isTurnStartEntry(entries[i])) {
 			return i;
@@ -500,7 +500,7 @@ export function findTurnStartIndex(entries: SessionEntry[], entryIndex: number, 
 	return -1;
 }
 
-export interface CutPointResult {
+interface CutPointResult {
 	/** Index of first entry to keep */
 	firstKeptEntryIndex: number;
 	/** Index of user message that starts the turn being split, or -1 if not splitting */
@@ -1210,7 +1210,7 @@ async function generateTurnPrefixSummary(
  * whole conversation, including the recent messages that compaction keeps verbatim, so the
  * summary describes the current state instead of the state at the cut point.
  */
-export const IN_CONTEXT_COMPACTION_INSTRUCTIONS = `# Context compaction
+const IN_CONTEXT_COMPACTION_INSTRUCTIONS = `# Context compaction
 
 The conversation is about to be compacted. Everything above will be replaced by a checkpoint summary that you write now. The most recent messages will be kept verbatim after the summary, but the summary must stand on its own for everything earlier.
 
@@ -1252,7 +1252,7 @@ Use this EXACT format:
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
 /** User message that asks for the in-context summary after the instructions. */
-export const IN_CONTEXT_COMPACTION_PROMPT = "Write the context checkpoint summary now.";
+const IN_CONTEXT_COMPACTION_PROMPT = "Write the context checkpoint summary now.";
 
 /** Fallback lifetime for models without catalog cache lifetimes: the shortest documented provider lifetime. */
 const DEFAULT_PROMPT_CACHE_TTL_MS = 5 * 60_000;
@@ -1266,7 +1266,7 @@ const UNPRICED_CACHE_READ_WEIGHT = 0.1;
  * The system message carries the instructions; models that accept system messages
  * mid-conversation receive it in place, so the conversation prefix stays cached.
  */
-export function appendInContextCompactionRequest(messages: Message[], customInstructions?: string): Message[] {
+function appendInContextCompactionRequest(messages: Message[], customInstructions?: string): Message[] {
 	const timestamp = Date.now();
 	const prompt = customInstructions
 		? `${IN_CONTEXT_COMPACTION_PROMPT}\n\nAdditional focus: ${customInstructions}`
@@ -1279,7 +1279,7 @@ export function appendInContextCompactionRequest(messages: Message[], customInst
 }
 
 /** Whether the model catalog marks the model as keeping its prompt cache for in-context compaction. */
-export function supportsInContextCompaction(model: Model<Api>): boolean {
+function supportsInContextCompaction(model: Model<Api>): boolean {
 	const compat = model.compat as
 		| { supportsMidConvoSystemMessages?: boolean; supportsInContextCompaction?: boolean }
 		| undefined;
@@ -1287,7 +1287,7 @@ export function supportsInContextCompaction(model: Model<Api>): boolean {
 }
 
 /** Estimated cost of both summary strategies, excluding output, which is similar for both. */
-export interface InContextCompactionCosts {
+interface InContextCompactionCosts {
 	/** Prompt tokens of the last response, expected to be read from the cache. */
 	cachedTokens: number;
 	/** Prompt tokens added since the last response, including the compaction request. */
@@ -1300,9 +1300,9 @@ export interface InContextCompactionCosts {
 	priced: boolean;
 }
 
-export type InContextCompactionDecision = ({ use: true } & InContextCompactionCosts) | { use: false; reason: string };
+type InContextCompactionDecision = ({ use: true } & InContextCompactionCosts) | { use: false; reason: string };
 
-export interface InContextCompactionInput {
+interface InContextCompactionInput {
 	/** The model that would answer the next turn. */
 	model: Model<Api>;
 	projection: SessionProjection;
@@ -1467,3 +1467,23 @@ export async function compactInContext(
 
 // Re-exported because this module is where callers already look for the compaction types.
 export type { CompactionSettings, CompactionSettingsInput } from "../settings-schema.ts";
+// Package-internal: the cut-point search and the in-context cost probe are steps inside `compact`,
+// `prepareCompaction` and `compactInContext`, not options. `src/index.ts` exports this module with
+// `export *`, so anything exported at the declaration would be public API. The block keeps them
+// reachable from the sibling modules (`branch-summarization.ts`) that run the same steps.
+export {
+	appendInContextCompactionRequest,
+	type ContextUsageEstimate,
+	type CutPointResult,
+	DEFAULT_COMPACTION_SETTINGS,
+	findTurnStartIndex,
+	getLastAssistantUsage,
+	IN_CONTEXT_COMPACTION_INSTRUCTIONS,
+	IN_CONTEXT_COMPACTION_PROMPT,
+	type InContextCompactionCosts,
+	type InContextCompactionDecision,
+	type InContextCompactionInput,
+	isCutPointMessage,
+	isTurnStartMessage,
+	supportsInContextCompaction,
+};

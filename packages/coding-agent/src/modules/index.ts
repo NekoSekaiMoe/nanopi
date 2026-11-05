@@ -34,7 +34,7 @@ import qoderCheckinExtension from "./qoder/index.ts";
 
 /** Modules compiled into every nanopi build. Order matters: `extra` loads
  * first so it can answer `project_trust` for `--yolo` before anything else. */
-export const BUILTIN_MODULES: SessionModule[] = [
+const BUILTIN_MODULES: SessionModule[] = [
 	// Modes/permissions module (packages/extra). Build flavors excluding the
 	// "module/extra" component alias @nanopi/pi-extra to an inert stub whose
 	// factory registers nothing.
@@ -67,3 +67,7 @@ export const BUILTIN_MODULES: SessionModule[] = [
 export function enabledModules(): SessionModule[] {
 	return BUILTIN_MODULES.filter((module) => isBuildComponentEnabled(`module/${module.name}`));
 }
+
+// Package-internal: `enabledModules()` is the one entry point; the unfiltered table is what it
+// filters, and pairing it here keeps `BUILTIN_MODULES` out of the package root.
+export { BUILTIN_MODULES };

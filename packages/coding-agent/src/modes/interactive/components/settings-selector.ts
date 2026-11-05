@@ -9,9 +9,9 @@ import {
 	type CacheWarmingMode,
 	type DefaultProjectTrust,
 	type MermaidRenderingMode,
-	type QuietStartup,
 	type WarningSettings,
 } from "../../../core/settings-manager.ts";
+import type { QuietStartup } from "../../../core/settings-schema.ts";
 import { getSettingsListTheme, theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
 import { keyDisplayText } from "./keybinding-hints.ts";

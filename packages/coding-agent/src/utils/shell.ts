@@ -138,7 +138,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
 	return { shell: "sh", args: ["-c"] };
 }
 
-export const POWERSHELL_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"] as const;
+const POWERSHELL_ARGS = ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command"] as const;
 
 /** Resolve PowerShell on Windows, preferring PowerShell 7 when available. */
 export function getPowerShellConfig(): ShellConfig {
@@ -255,5 +255,6 @@ export function killProcessTree(pid: number, signal: NodeJS.Signals = "SIGKILL")
 }
 
 // Package-internal: the detached-child registry that `killProcessTree` and the bash tool keep in
-// step; a caller kills one pid, not the registry.
-export { killTrackedDetachedChildren, trackDetachedChildPid, untrackDetachedChildPid };
+// step (a caller kills one pid, not the registry), and the argv a Windows PowerShell invocation is
+// built from. Public shape is `ShellConfig` / `getShellConfig()` / `getPowerShellConfig()`.
+export { killTrackedDetachedChildren, POWERSHELL_ARGS, trackDetachedChildPid, untrackDetachedChildPid };

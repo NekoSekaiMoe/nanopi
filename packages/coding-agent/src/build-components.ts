@@ -25,10 +25,10 @@ export function isBuildComponentEnabled(component: string): boolean {
  * shell tools, the default `standard` ships the full set. Values come from
  * `toolsetComponents` in buildconfig.json, validated by scripts/buildconfig.mjs.
  */
-export type Toolset = "standard" | "bash";
+type Toolset = "standard" | "bash";
 
 /** The tool set this build registers, or undefined outside bundled builds. */
-export function buildToolset(): string | undefined {
+function buildToolset(): string | undefined {
 	return typeof NANOPI_BUILD_TOOLSET === "undefined" ? undefined : NANOPI_BUILD_TOOLSET;
 }
 
@@ -64,7 +64,7 @@ export function isShellToolName(name: string): boolean {
  * nor the registration of the providers it drops. A source checkout or npm
  * install has no define and ships every provider.
  */
-export function builtinProviderIds(): readonly string[] | undefined {
+function builtinProviderIds(): readonly string[] | undefined {
 	// A full set arrives as the string "undefined", like builtinApiIds() above.
 	if (typeof NANOPI_BUILD_PROVIDERS === "undefined" || (NANOPI_BUILD_PROVIDERS as unknown) === "undefined")
 		return undefined;
@@ -92,7 +92,7 @@ export function isNoBuiltinProviderBuild(): boolean {
  * implementation. A flavor that names an API set ships no client for the APIs
  * it drops, so `models.json` can only reference the ids its set carries.
  */
-export function builtinApiIds(): readonly string[] | undefined {
+function builtinApiIds(): readonly string[] | undefined {
 	// The define map spells a full set as the string "undefined" (esbuild rejects
 	// an undefined define value), which reads the same as an absent define here.
 	if (typeof NANOPI_BUILD_APIS === "undefined" || (NANOPI_BUILD_APIS as unknown) === "undefined") return undefined;
@@ -128,7 +128,7 @@ export function builtinToolNames(): readonly string[] | undefined {
  * and the `importOAuthModule` calls in `@nanopi/pi-ai`'s `auth/oauth/load.ts`;
  * `validateOAuthFlowRegistry()` keeps the three in lockstep at build time.
  */
-export const OAUTH_FLOW_IDS: readonly string[] = [
+const OAUTH_FLOW_IDS: readonly string[] = [
 	"anthropic",
 	"antigravity",
 	"github-copilot",
@@ -143,12 +143,12 @@ export const OAUTH_FLOW_IDS: readonly string[] = [
 ];
 
 /** Whether this build carries a single OAuth flow. */
-export function isOAuthFlowEnabled(flow: string): boolean {
+function isOAuthFlowEnabled(flow: string): boolean {
 	return isBuildComponentEnabled(`oauth/${flow}`);
 }
 
 /** OAuth flows this build carries, in registry order. Empty means the build logs in with API keys only. */
-export function enabledOAuthFlows(): readonly string[] {
+function enabledOAuthFlows(): readonly string[] {
 	return OAUTH_FLOW_IDS.filter((flow) => isOAuthFlowEnabled(flow));
 }
 
@@ -160,3 +160,17 @@ export function enabledOAuthFlows(): readonly string[] {
 export function hasOAuthFlows(): boolean {
 	return enabledOAuthFlows().length > 0;
 }
+
+// Package-internal: `isBuildComponentEnabled` and the flags a flavor turns on stay public, because
+// an SDK caller asks them before offering a feature the build may not carry. The rest is how those
+// flags are derived -- the tool set, the provider and API sets, the OAuth flow registry -- and two
+// unit tests import it by path.
+export {
+	buildToolset,
+	builtinApiIds,
+	builtinProviderIds,
+	enabledOAuthFlows,
+	isOAuthFlowEnabled,
+	OAUTH_FLOW_IDS,
+	type Toolset,
+};

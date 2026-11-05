@@ -438,6 +438,7 @@ export interface Settings extends Omit<SettingsInput, "queueMode" | "retry" | "s
 	skills?: string[];
 }
 
-// The names a `SettingsManager` caller hands back to the manager. The rest of the schema stays the
-// manager's business: it describes `settings.json`, not an SDK argument list.
+// The rest of the schema's names stay path-importable (`./settings-schema.ts`) but are not on the
+// package root: they describe `settings.json`, not an SDK argument list. `ImageSettings` has no
+// reader at all.
 export type { CacheWarmingMode, DefaultProjectTrust, ImageSettings, QuietStartup };

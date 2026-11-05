@@ -4,7 +4,7 @@ import { type Component, Container, type Focusable, type TUI } from "../../tui/s
 import { TuiMainScreen } from "../../tui/src/tui-main-screen.ts";
 import { VirtualTerminal } from "../../tui/test/virtual-terminal.ts";
 import type { AutocompleteProviderFactory } from "../src/core/modules/types.ts";
-import type { QuietStartup } from "../src/core/settings-manager.ts";
+import type { QuietStartup } from "../src/core/settings-schema.ts";
 import type { AuthSelectorProvider } from "../src/modes/interactive/components/oauth-selector.ts";
 import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
 import { initTheme } from "../src/modes/interactive/theme/theme.ts";

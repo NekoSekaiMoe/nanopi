@@ -162,8 +162,8 @@ try {
 }
 
 const nanopiConfigName: string | undefined = pkg.nanopiConfig?.name;
-const PACKAGE_NAME: string = pkg.name || "@nanopi/pi-coding-agent";
-const APP_NAME: string = nanopiConfigName || "nanopi";
+export const PACKAGE_NAME: string = pkg.name || "@nanopi/pi-coding-agent";
+export const APP_NAME: string = nanopiConfigName || "nanopi";
 const APP_TITLE: string = nanopiConfigName ? APP_NAME : "nanopi";
 export const CONFIG_DIR_NAME: string = pkg.nanopiConfig?.configDir || ".nanopi";
 /** Standalone builds without embedded assets inject the version instead. */
@@ -210,21 +210,6 @@ export function getSettingsPath(): string {
 	return join(getAgentDir(), "settings.json");
 }
 
-/** Get path to tools directory */
-function getToolsDir(): string {
-	return join(getAgentDir(), "tools");
-}
-
-/** Get path to managed binaries directory (fd, rg) */
-function getBinDir(): string {
-	return join(getAgentDir(), "bin");
-}
-
-/** Get path to prompt templates directory */
-function getPromptsDir(): string {
-	return join(getAgentDir(), "prompts");
-}
-
 /** Get path to sessions directory */
 function getSessionsDir(): string {
 	return join(getAgentDir(), "sessions");
@@ -235,31 +220,32 @@ function getDebugLogPath(): string {
 	return join(getAgentDir(), `${APP_NAME}-debug.log`);
 }
 
-// The rest of the paths in this file stay path-importable (`../config.ts`) but are not on the
-// package root: `getAuthPath`, the session/tool/prompt directories and the install-detection helpers
-// describe where this app keeps its own files, and publishing them made every one a promise. The
-// block below is what `src/index.ts` used to hand out, kept for the callers that import this module
-// directly.
+/** Get path to managed binaries directory (fd, rg) */
+export function getBinDir(): string {
+	return join(getAgentDir(), "bin");
+}
+
+// `src/index.ts` exports this module with `export *`, so anything exported here is public API. The
+// default is therefore private: the path helpers and install probes below describe where this app
+// keeps its own files, and each one that leaks out becomes a contract. They stay reachable by path
+// (`../config.ts`) through this block, which the module's own callers use.
+//
+// `getBinDir` is exported above on purpose: it is the one directory `settings.json` lets a user
+// point somewhere else, so the modules that place binaries there name it.
 export {
-	APP_NAME,
 	APP_TITLE,
 	detectInstallChange,
 	ENV_AGENT_DIR,
 	ENV_SESSION_DIR,
 	expandTildePath,
-	findNodePackageDir,
 	getAuthPath,
-	getBinDir,
 	getChangelogPath,
 	getDebugLogPath,
 	getExportTemplateDir,
 	getModelsPath,
 	getPackageJsonPath,
-	getPromptsDir,
 	getSessionsDir,
-	getToolsDir,
 	type InstallChange,
 	isBundledNode,
-	PACKAGE_NAME,
 	resolveHostEntry,
 };

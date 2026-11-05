@@ -6,14 +6,14 @@ import { CONFIG_DIR_NAME } from "../config.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
 
-export type ProjectTrustDecision = boolean | null;
+type ProjectTrustDecision = boolean | null;
 
 export interface ProjectTrustStoreEntry {
 	path: string;
 	decision: boolean;
 }
 
-export interface ProjectTrustUpdate {
+interface ProjectTrustUpdate {
 	path: string;
 	decision: ProjectTrustDecision;
 }
@@ -243,6 +243,13 @@ export class ProjectTrustStore {
 	}
 }
 
-// Package-internal: the trust dialog reads its option list from here; an SDK caller asks the store
-// whether a project is trusted instead.
-export { getProjectTrustOptions, getProjectTrustParentPath, type ProjectTrustOption };
+// Package-internal: the store's own entry shapes and the parent-directory probe behind the trust
+// dialog. `ProjectTrustStore` and `hasTrustRequiringProjectResources` are what the session calls; an
+// SDK caller asks the store whether a project is trusted instead of reading these.
+export {
+	getProjectTrustOptions,
+	getProjectTrustParentPath,
+	type ProjectTrustDecision,
+	type ProjectTrustOption,
+	type ProjectTrustUpdate,
+};

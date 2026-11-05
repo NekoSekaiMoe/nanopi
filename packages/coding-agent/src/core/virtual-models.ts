@@ -30,7 +30,7 @@ import type { SessionEntry } from "./session-manager.ts";
 const VIRTUAL_MODEL_API = "nanopi-virtual";
 
 /** Custom entry type that stores router state on the session branch. */
-export const VIRTUAL_MODEL_STATE_ENTRY = "nanopi.virtual-model-state";
+const VIRTUAL_MODEL_STATE_ENTRY = "nanopi.virtual-model-state";
 
 /** Data of a `nanopi.virtual-model-state` custom entry. */
 export interface VirtualModelStateData<TState = unknown> {
@@ -252,5 +252,6 @@ export {
 	getVirtualModelState,
 	isVirtualModel,
 	VIRTUAL_MODEL_API,
+	VIRTUAL_MODEL_STATE_ENTRY,
 	withVirtualModels,
 };

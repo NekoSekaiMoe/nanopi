@@ -23,17 +23,20 @@ import type {
 	WarningSettings,
 } from "./settings-schema.ts";
 
+// `src/index.ts` exports this module with `export *`, so a name re-exported here is public API.
+// `Settings` and the blocks a caller hands the manager (`CompactionModelOverride`, `BranchSummarySettings`,
+// the cache-warming profile, the project-trust default, the retry and terminal shapes) stay; the rest
+// describe `settings.json` internals. `ImageSettings` has no reader at all, and `QuietStartup` is only
+// `SettingsManager.getQuietStartup()`'s return type, which the selector reads structurally.
 export type {
 	BranchSummarySettings,
 	CacheWarmingMode,
 	CompactionModelOverride,
 	DefaultProjectTrust,
-	ImageSettings,
 	LlamaCppSettings,
 	MarkdownSettings,
 	MermaidRenderingMode,
 	ProviderRetrySettings,
-	QuietStartup,
 	RetrySettings,
 	Settings,
 	TerminalSettings,
@@ -158,17 +161,17 @@ function normalizeNonRetryableErrorPatterns(value: unknown): string[] | undefine
 	return patterns.length > 0 ? patterns : undefined;
 }
 
-export type SettingsScope = "global" | "project";
+type SettingsScope = "global" | "project";
 
-export interface SettingsManagerCreateOptions {
+interface SettingsManagerCreateOptions {
 	projectTrusted?: boolean;
 }
 
-export interface SettingsStorage {
+interface SettingsStorage {
 	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void;
 }
 
-export interface SettingsError {
+interface SettingsError {
 	scope: SettingsScope;
 	path?: string;
 	error: Error;
@@ -184,7 +187,7 @@ function toSettingsError(scope: SettingsScope, error: unknown, path?: string): S
 	};
 }
 
-export class FileSettingsStorage implements SettingsStorage {
+class FileSettingsStorage implements SettingsStorage {
 	private globalSettingsPath: string;
 	private projectSettingsPath: string;
 
@@ -253,7 +256,7 @@ export class FileSettingsStorage implements SettingsStorage {
 	}
 }
 
-export class InMemorySettingsStorage implements SettingsStorage {
+class InMemorySettingsStorage implements SettingsStorage {
 	private global: string | undefined;
 	private project: string | undefined;
 
@@ -1338,5 +1341,15 @@ export class SettingsManager {
 	}
 }
 
-// Package-internal: the valid cache-warming values, for the settings selector.
-export { CACHE_WARMING_MODES };
+// Package-internal: the storage seam behind the manager, its diagnostics, and the valid cache-warming
+// values the settings selector lists. `SettingsManager` and `DEFAULT_TOOL_NAMES` are the SDK's; a
+// backend or a mutable scope is how this package wires its own defaults and tests.
+export {
+	CACHE_WARMING_MODES,
+	FileSettingsStorage,
+	InMemorySettingsStorage,
+	type SettingsError,
+	type SettingsManagerCreateOptions,
+	type SettingsScope,
+	type SettingsStorage,
+};

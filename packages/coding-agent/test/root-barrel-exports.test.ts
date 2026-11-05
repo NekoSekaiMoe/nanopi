@@ -49,6 +49,47 @@ describe("package root barrel", () => {
 		expect(named).toEqual(["./core/tools/index.ts"]);
 	});
 
+	it("keeps the package-internal helpers out of the public surface", () => {
+		// `export *` copies a module's export table, so a paired `export { ... }` at the bottom of
+		// a source still reaches the root and a symbol stays public however late it is named. The
+		// boundary is the declaration, and these are the shapes that moved there: steps inside a
+		// public entry point (`getPromptsDir`, `findTurnStartIndex`, `ResolveProjectTrustedOptions`),
+		// storage seams (`SettingsStorage`), and file-format details (`POWERSHELL_ARGS`).
+		//
+		// Checked by reading the sources rather than by importing the root, so the test fails on the
+		// edit that breaks the rule and not on a missing build.
+		const sources = reExports().star.map((spec) =>
+			readFileSync(fileURLToPath(new URL(`../src/${spec.replace(/\.\//, "")}`, import.meta.url)), "utf8"),
+		);
+		const declaredAt = sources.join("\n");
+		for (const name of [
+			"DEFAULT_COMPACTION_SETTINGS",
+			"findTurnStartIndex",
+			"getLastAssistantUsage",
+			"IN_CONTEXT_COMPACTION_PROMPT",
+			"supportsInContextCompaction",
+			"SettingsStorage",
+			"InMemorySettingsStorage",
+			"QuietStartup",
+			"ImageSettings",
+			"getPromptsDir",
+			"findNodePackageDir",
+			"ResolveProjectTrustedOptions",
+			"CreateModelRuntimeOptions",
+			"BUILTIN_MODULES",
+			"LoadSkillsFromDirOptions",
+			"SkillFrontmatter",
+			"getToolsDir",
+			"POWERSHELL_ARGS",
+		]) {
+			const exported = new RegExp(
+				`^export (?:declare )?(?:const|let|var|function|class|interface|type) ${name}\\b`,
+				"m",
+			);
+			expect(exported.test(declaredAt), `${name} is exported from a source the root re-exports`).toBe(false);
+		}
+	});
+
 	it("stays inside the entry graph budget the root now has", () => {
 		expect(
 			findViolations({

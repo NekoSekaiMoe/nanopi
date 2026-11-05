@@ -7,7 +7,7 @@ import { isBashOnlyBuild, isBuildComponentEnabled } from "../build-components.ts
 import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
 import { formatSkillsForPrompt, type Skill } from "./skills.ts";
 
-interface BuildSystemPromptOptions {
+export interface BuildSystemPromptOptions {
 	/** Custom system prompt (replaces the default prefix). */
 	customPrompt?: string;
 	/** Exact full prompt replacement set by a before_agent_start handler. */
@@ -37,7 +37,7 @@ interface BuildSystemPromptOptions {
 	skills?: Skill[];
 }
 
-type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
+export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
 	selectedTools: string[];
 	hiddenTools: string[];
 	toolSnippets: Record<string, string>;
@@ -257,13 +257,8 @@ function diffSystemPromptSections(
 	return Object.keys(patch).length > 0 ? patch : undefined;
 }
 
-// Package-internal: `buildSystemPrompt` is the entry point; the option bags and the per-section
-// builders exist so `--print-state` can diff two prompts without rebuilding the whole string.
-export {
-	type BuildSystemPromptOptions,
-	buildSystemPromptSections,
-	buildSystemPromptState,
-	diffSystemPromptSections,
-	type NormalizedBuildSystemPromptOptions,
-	type SystemPromptSections,
-};
+// Package-internal: `buildSystemPrompt` is the entry point; the per-section builders exist so
+// `--print-state` can diff two prompts without rebuilding the whole string. `BuildSystemPromptOptions`
+// and `NormalizedBuildSystemPromptOptions` stay public because `ModuleCommandContext` hands them to
+// a module.
+export { buildSystemPromptSections, buildSystemPromptState, diffSystemPromptSections, type SystemPromptSections };
