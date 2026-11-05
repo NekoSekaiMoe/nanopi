@@ -27,7 +27,7 @@ Download bundle js in release, or let `install.js` fetch one for you:
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
 
-In mainland China, GitHub Releases is slow or unreachable. The same bundles are mirrored to AtomGit ([NanoPi/NanoPi](https://atomgit.com/NanoPi/NanoPi)) and published daily to [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets); pass the mirror URL printed in that repository's README to `install.js`:
+In mainland China, GitHub Releases is slow or unreachable. The same bundles are published to AtomGit's [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets) by the GitHub Actions workflows themselves (nightly, and every release); pass the mirror URL printed in that repository's README to `install.js`:
 
 ```bash
 # the URL carries the tag, `nightly` or a release like v20261031.1.0

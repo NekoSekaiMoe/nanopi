@@ -31,25 +31,24 @@ x-notify-failure: &notify-failure
       corepack enable npm && npm install -g pnpm @cnbcool/cnb-cli
       node scripts/report-failed-check.mjs
 
-# bundle 发到 AtomGit（atomgit.com/nanopi/releases-assets），给国内用户一条不绕
-# GitHub Releases 的下载路径。安装入口是 install.js --mirror=<该仓库 README 里的
-# URL>，资产名与 GitHub Release 一致（nanopi.js / nanopi-base.js /
-# nanopi-minimal.js / SHA256SUMS），换源不改文件名。
+# nightly 的 bundle 还有一个兜底出口：AtomGit（atomgit.com/nanopi/releases-assets）。
 #
-# 两条流水线：nightly 每天从 main 重建一次，正式版由 GitHub 那一侧打出的 tag
-# 镜像回 CNB 后触发（tag_push）。判定与推送都在 scripts/publish-atomgit.mjs 里：
-# 它自己组装资产的目录、写 README 与 SHA256SUMS、提交、打 tag、推送。
+# 正常情况下它由 GitHub Actions 发（.github/workflows/nightly.yml 里的
+# publish-atomgit job），但 GitHub 会因为账单或者「60 天没有活动过的公开仓库」
+# 停掉 schedule，停掉的时候不会有人来通知，nightly 就静默断供。所以这里留一条
+# 同时间的 crontab：GitHub 那边跑得动时它会把同一个 tag 重发一遍（内容取自各自的
+# 构建，幂等），跑不动的时候它就是唯一的一份。
 #
-# 发行仓库的写权限来自密钥仓库里的 ATOMGIT_KEY（imports 注入的环境变量），由
-# --token-env ATOMGIT_KEY 指名交给 scripts/publish-atomgit.mjs；脚本不猜变量名，
-# 少写这个参数时 --push 直接报错，而不是拿匿名身份去推、把失败拖到 git push。
-# 正式版的 tag 由 GitHub 侧打出、由 main push 时的 mirror tags 带回 CNB，所以
-# tag_push 里拿到的只有源码树；nightly 与正式版都在这条流水线里自己构建（三个
-# 口味共用一次 install/build）。
+# 正式版的 bundle 不在这里：它在 GitHub 的 build-binaries.yml 里发，那份资产已经
+# 在 stage 阶段校验过，这里再构建一遍只会多一份可能与 GitHub Release 不一致的包。
 #
-# 要让 nightly 的 cron 生效，推送这份文件之后还需要在「云原生构建 → 定时任务」里
-# 同步一次 main 分支：只有「本次推送的变更包含 .cnb.yml」才会自动同步。
-x-atomgit-release: &atomgit-release
+# 判定与推送都在 scripts/publish-atomgit.mjs 里：它自己组装资产的目录、写 README
+# 与 SHA256SUMS、提交、打 tag、推送。写权限来自密钥仓库里的 ATOMGIT_KEY（imports
+# 注入），由 --token-env ATOMGIT_KEY 指名交给脚本。
+#
+# 要让这条 cron 生效，推送这份文件之后还需要在「云原生构建 → 定时任务」里同步一次
+# main 分支：只有「本次推送的变更包含 .cnb.yml」才会自动同步。
+x-atomgit-nightly: &atomgit-nightly
   # 2c4g 足够：单文件构建是纯 CPU 的 esbuild 打包，峰值内存约 4 GiB。
   runner:
     tags: cnb:arch:amd64
@@ -58,7 +57,7 @@ x-atomgit-release: &atomgit-release
     - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
   endStages: *notify-failure
   stages:
-    - name: publish
+    - name: publish-nightly
       script: |
         set -euo pipefail
         # build-single-file.mjs 自己跑 pnpm install 与 build:offline，产物落在
@@ -73,17 +72,7 @@ x-atomgit-release: &atomgit-release
           node "release-assets/$bundle.js" --version
           node "release-assets/$bundle.js" --help > /dev/null
         done
-        node scripts/publish-atomgit.mjs --tag "$TAG" --input release-assets --work "${TMPDIR:-/tmp}/atomgit-assets" --token-env ATOMGIT_KEY --push
-
-        # 正式版的流程是反的：GitHub 打 tag → GitHub 构建 Release → tag 才回到
-        # CNB。这一步把「构建」钉在 CNB 上，正式的 GitHub Release 仍由
-        # build-binaries.yml 负责（它拒绝改动已发布的 Release）。也就意味着两边
-        # 都构建了一遍，但换掉其中一条流水线等于换掉发布流程本身，不在这次改动
-        # 的范围里。用 gh 直接开一个 tag 上的 workflow，CNB 的 CNB_TOKEN 不在
-        # 这里用：它出不了本仓库。
-        case "$TAG" in
-          v*) GH_TOKEN="$GH_KEY" gh workflow run build-binaries.yml --repo NekoSekaiMoe/nanopi --ref main -f tag="$TAG" ;;
-        esac
+        node scripts/publish-atomgit.mjs --tag nightly --commit "$CNB_COMMIT" --input release-assets --work "${TMPDIR:-/tmp}/atomgit-assets" --token-env ATOMGIT_KEY --push
 
 main:
   push:
@@ -130,15 +119,17 @@ main:
 #
 # 缩进不能丢：pull_request.target 是上面 main: 的子键。e1a11be62 曾把它写成顶格的
 # 第二个 main:，YAML 直接拒绝整份文件（duplicated mapping key，见 #246）。
-  # 每天重建一次 nightly 的 bundle 并发到 AtomGit。cron 按系统时区
-  # （Asia/Shanghai）算，16:00 对应 GitHub nightly 那次 00:00 UTC。
+  # 每天重建一次 nightly 的 bundle 并发到 AtomGit，与 GitHub nightly 那次
+  # （00:00 UTC）同一时刻。cron 按系统时区（Asia/Shanghai）算，16:00 就是
+  # 00:00 UTC。
+  #
+  # 它是 GitHub schedule 的兜底，不是主路径：GitHub 那边跑得动时两条都会发同一个
+  # nightly tag，谁后到谁的构建版本留在那里，两边都是 main 上的构建，没有对错。
   #
   # 名义上的 24h 是「上一次跑完之后隔一天」的意思，不是硬时限：CNB 定时任务的
   # 触发身份是最后修改这份配置并推送的人，人被移出仓库时任务会静默不跑。
   "crontab: 0 16 * * *":
-    - <<: *atomgit-release
-      env:
-        TAG: nightly
+    - <<: *atomgit-nightly
 
   pull_request.target:
     - name: merge-result
@@ -165,25 +156,6 @@ $:
     - endStages: *notify-failure
   pull_request.merged:
     - endStages: *notify-failure
-  # 正式版的 tag 在 GitHub 上打，再由 main push 时的 mirror tags 带回 CNB，于是
-  # 这里的 tag_push 才被触发。tag 到的时候 CNB 上只有源码树，没有产物，所以这条
-  # 流水线自己构建。
-  #
-  # 目标 tag 用 CNB_BRANCH（tag 事件里它就是 tag 名）：publish-atomgit.mjs 只
-  # 推送 `+refs/tags/$TAG`，不碰发行仓库的 main，所以补发历史版本也不会把主分支
-  # 的「最新一份」退回去。
-  #
-  # 一次发布会触发两条：GitHub tag push → sync-to-cnb 推 main 与 tags 回来，
-  # 于是 tag_push 与这次 main push 的镜像各开一份。tag_push 只碰 tag，镜像只碰
-  # main，撞不上。
-  web_trigger:
-    - <<: *atomgit-release
-      env:
-        TAG: $TAG
-  tag_push:
-    - <<: *atomgit-release
-      env:
-        TAG: $CNB_BRANCH
 
   # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
   #

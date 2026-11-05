@@ -42,10 +42,14 @@ async function fixture(t, { source = false } = {}) {
 	return { root, remote, input, work: join(root, "work") };
 }
 
+// 每次发布都要说清楚「这批资产是哪个提交构建出来的」：nightly 的 release notes
+// 与 README 都写着它，没这个参数就产不出可复现的说法。
+const COMMIT = "c8da551859c6aefcb598716e9968dfd3c8116e08";
+
 function publish(fixture, args, extraEnv = {}) {
 	return spawnSync(
 		process.execPath,
-		[script, "--input", fixture.input, "--work", fixture.work, "--remote", `file://${fixture.remote}`, ...args],
+		[script, "--commit", COMMIT, "--input", fixture.input, "--work", fixture.work, "--remote", `file://${fixture.remote}`, ...args],
 		{ encoding: "utf8", env: { ...gitEnv, ...extraEnv } },
 	);
 }
@@ -75,7 +79,8 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 	}
 
 	const readme = git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]);
-	assert.match(readme, /Current: \*\*nightly\*\* \(rebuilt every night from `main`\)/);
+	assert.match(readme, new RegExp(`Current: \\*\\*nightly\\*\\* built from ${COMMIT}`));
+	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:assets/RELEASE_NOTES.md"]), new RegExp(`Nightly build of ${COMMIT}`));
 	assert.match(readme, /nanopi\/releases-assets\/raw\/main\/nightly\/nanopi\.js/);
 
 	// 同一天重跑：新提交叠在上面，tag 挪过去，主分支不出现 force。
@@ -129,6 +134,18 @@ test("--push with an unset token variable names it", async (t) => {
 	const result = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"], { ATOMGIT_KEY: "" });
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /ATOMGIT_KEY is unset/);
+});
+
+test("--commit is required: a nightly nobody can trace back is not worth publishing", async (t) => {
+	const fixturePaths = await fixture(t);
+
+	const result = spawnSync(
+		process.execPath,
+		[script, "--tag", "nightly", "--input", fixturePaths.input, "--work", fixturePaths.work, "--remote", `file://${fixturePaths.remote}`],
+		{ encoding: "utf8", env: gitEnv },
+	);
+	assert.equal(result.status, 2);
+	assert.match(result.stdout, /--commit <sha>/);
 });
 
 test("without --push nothing is uploaded", async (t) => {

@@ -4,13 +4,13 @@
 // 让国内用户不必绕 GitHub Releases。
 //
 // Usage:
-//   node scripts/publish-atomgit.mjs --tag <tag> --input <dir> --work <dir> \
-//     [--remote <url>] [--repo-slug <owner>/<repo>] [--token-env <VAR>] \
-//     [--token-user <name>] [--push]
+//   node scripts/publish-atomgit.mjs --tag <tag> --commit <sha> --input <dir> \
+//     --work <dir> [--remote <url>] [--repo-slug <owner>/<repo>] \
+//     [--token-env <VAR>] [--token-user <name>] [--push]
 //
-// 这条脚本只做「组装」和「推送」两件事，构建本身留在调用方（.cnb.yml 的
-// nightly 用 build-single-file.mjs，正式版直接取构建产物）：它决定发什么、
-// 怎么命名、校验和对不对得上，以及推到哪里。
+// 这条脚本只做「组装」和「推送」两件事，构建本身留在调用方（GitHub Actions 的
+// nightly.yml 用 build-single-file.mjs，正式版的资产直接取 build-binaries.yml
+// 的 artifact）：它决定发什么、怎么命名、校验和对不对得上，以及推到哪里。
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -29,6 +29,7 @@ const NOTES = "RELEASE_NOTES.md";
 const { values } = parseArgs({
 	options: {
 		tag: { type: "string" },
+		commit: { type: "string" },
 		input: { type: "string" },
 		work: { type: "string" },
 		remote: { type: "string", default: DEFAULT_REMOTE },
@@ -40,10 +41,12 @@ const { values } = parseArgs({
 	},
 });
 
-if (values.help || !values.tag || !values.input || !values.work) {
-	process.stdout.write(`Usage: node scripts/publish-atomgit.mjs --tag <tag> --input <dir> --work <dir>
+if (values.help || !values.tag || !values.commit || !values.input || !values.work) {
+	process.stdout.write(`Usage: node scripts/publish-atomgit.mjs --tag <tag> --commit <sha> --input <dir> --work <dir>
 
   --tag <tag>          Release tag in the assets repository (v20261031.1.0, nightly)
+  --commit <sha>       Commit the assets were built from; recorded in the README and
+                       in the nightly release notes, so "which main" is answerable
   --input <dir>        Directory holding the built bundles (and optional nanopi-<version>-source.tar.gz)
   --work <dir>         Assets repository checkout; created and reused between runs
   --remote <url>       Assets repository URL (default: ${DEFAULT_REMOTE})
@@ -129,7 +132,7 @@ function writeNotes(input, tag) {
 		writeFileSync(
 			join(ASSETS, NOTES),
 			[
-				`Nightly build of ${process.env.CNB_COMMIT ?? process.env.GITHUB_SHA ?? "main"}.`,
+				`Nightly build of ${values.commit}.`,
 				"",
 				`Bundles are raw files in this repository: ${rawBase}/nanopi.js, ${rawBase}/nanopi-base.js, ${rawBase}/nanopi-minimal.js.`,
 				`Verify with ${rawBase}/${CHECKSUMS}.`,
@@ -151,7 +154,7 @@ function writeReadme({ bundles, source }) {
 		"only carries the single-file bundles, so readers in mainland China do not have to",
 		"reach GitHub Releases.",
 		"",
-		`Current: **${tag}**${source ? "" : " (rebuilt every night from `main`)"}`,
+		`Current: **${tag}** built from ${values.commit}.`,
 		"",
 		"## Download",
 		"",

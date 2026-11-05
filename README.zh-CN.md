@@ -27,7 +27,7 @@ NanoPi 是从 Pi Coding Agent 深度裁剪、贴合个人工作流的轻量级 A
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
 
-国内访问 GitHub Releases 慢或者不通：同一批包在 AtomGit（[NanoPi/NanoPi](https://atomgit.com/NanoPi/NanoPi)）上留了一份，并每天更新到 [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets)。把那个仓库 README 里的镜像地址交给 `install.js`：
+国内访问 GitHub Releases 慢或者不通：同一批包由 GitHub Actions 的流水线自己发到 AtomGit 的 [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets)（每天一次 nightly，每次正式发布各一份）。把那个仓库 README 里的镜像地址交给 `install.js`：
 
 ```bash
 # 地址里带 tag，`nightly` 或 v20261031.1.0 这样的正式版本

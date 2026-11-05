@@ -42,11 +42,24 @@ assets/<tag>/nanopi-<version>-source.tar.gz   # 只有正式版
 - **tag 可以 force 移动**。nightly 当天重跑、正式版手动补发都落在同一个 tag 名上，
   这个 tag 是「这个版本现在长什么样」，不是历史记录；历史在提交里。
 
-nightly 与正式版都由 `.cnb.yml` 里的 `x-atomgit-release` 锚点跑，`main` 下的
-`crontab: 0 16 * * *`（Asia/Shanghai，对应 GitHub 那次 00:00 UTC）发 `nightly`，
-`$` 下的 `tag_push` 用 `CNB_BRANCH` 发正式版。两条都自己构建：正式版的产物流在
-GitHub 上，tag 被 mirror 带回 CNB 时只有源码树。三个口味共用一次
-`pnpm install` + `build:offline`，只有 bundle 那一步看 `NANOPI_BUILD_FLAVOR`。
+**发布在 GitHub Actions 里跑，不在 CNB 上。** 产物本来就在 GitHub 那边产：
+nightly 的 bundle 由 `nightly.yml` 的 `build` job 构建，正式版的三个口味由
+`build-binaries.yml` 的 `build` job 构建并在 `stage-github-release` 里校验过。
+两条流水线各加一个 `publish-atomgit` job，把已有的 artifact 交给
+`scripts/publish-atomgit.mjs`（`actions/download-artifact` → `--input release-assets`），
+不再有第二次构建，也就不会出现「GitHub Release 上的包和 AtomGit 上的包不是同一次
+构建」这种没人查得出来的偏差。
+
+`.cnb.yml` 里只剩一条 `crontab: 0 16 * * *`（Asia/Shanghai，对应 GitHub 那次
+00:00 UTC）跑 `x-atomgit-nightly`，是 nightly 的兜底：GitHub 会因为账单或者「60 天
+没有活动过的公开仓库」停掉 schedule，停掉时不会有人收到通知。两边都发时落的是同一个
+`nightly` tag，后到的覆盖先到的，两份都是 main 上的构建，没有对错。正式版在 CNB 上
+没有对应的触发（原来的 `tag_push` 与 `web_trigger` 已删）：那需要在 CNB 上重新构建
+一遍，只会多一份可能与 GitHub Release 不一致的包。
+
+`--commit <sha>` 是必需参数，写进 README 的 `Current:` 那行和 nightly 的 release
+notes：只写「nightly」回答不了「国内下载到的是哪个提交」，而这个仓库里
+`nightly.yml` 的 cron 可能已经停了好几天。
 
 读取侧是 raw 链接，没有 API、不用登录：
 
@@ -58,11 +71,10 @@ https://atomgit.com/nanopi/releases-assets/raw/main/nightly/SHA256SUMS
 `install.js --mirror=<该目录的 URL>` 就是为这条路径加的：镜像不解析 `latest`，
 所以 tag 写在 URL 里，`--version` 在给了 `--mirror` 时被忽略。
 
-正式版的 GitHub Release 仍由 `build-binaries.yml` 产出。CNB 的 `tag_push` 在发完
-AtomGit 之后用 `GH_KEY` 跑一次 `gh workflow run build-binaries.yml -f tag=<tag>`：
-tag 已经存在（触发要求 tag 先存在，`--ref main` 只提供工作流文件），被推迟的只是
-「有人去点一下」。GitHub 那边的 `nightly.yml` 不在这次改动里，nightly 的 bundle
-只在 AtomGit 上。
+正式版的 GitHub Release 与 AtomGit 是同一个 job 的两步：`build-binaries.yml` 在
+`stage-github-release` 之后、公开 Release 之前发 AtomGit。AtomGit 那一步失败会让
+这条流水线失败，`cleanup-draft-github-release` 随之删掉草稿 Release——国内下载路径
+和 GitHub Release 一起停，不会留下一个「发了一半」的版本。
 
 ## Alternatives considered
 
@@ -74,38 +86,40 @@ tag 已经存在（触发要求 tag 先存在，`--ref main` 只提供工作流�
   越慢，而且 `install.js` 要的是单个文件的 raw 链接，与源码树的更新节奏无关。
 - **资产放在 `nightly/`、`v20261031.1.0/` 两个固定目录，tag 只做标记**：主分支上要
   同时维护两份目录，旧文件还得自己删。tag 本身就能当目录名，一份布局省掉一套清理。
-- **在 GitHub 侧（`nightly.yml` / `build-binaries.yml`）直接推 AtomGit**：产物在
-  GitHub 上，只有一步之遥。但那要求 CNB 的 `CNB_KEY` 反向进 GitHub 的 secret 库，
-  而且 CNB 侧的 `tag_push` 本来就要存在（nightly 在 CNB 上），两套触发只会让「这次
-  发布到底谁写的发行仓库」更难追。
-- **正式版也从 CNB 侧构建并跳过 `build-binaries.yml`**：等于把发布流程搬到 CNB，
-  tag、Release、npm、GHCR 全在 GitHub 那一侧，搬一半比不搬更糟。
+- **放在 CNB 上跑（`tag_push` + CNB 的 crontab）**：第一版就是这么做的，实测下来
+  两个问题。一是同一次发布构建两遍：正式版在 `build-binaries.yml` 里已经构建并校验
+  过，CNB 又用同一棵源码树构建一次，两份产物只要有一分不同，AtomGit 与 GitHub
+  Release 就对不上，而没有任何东西会发现；二是 CNB 的 `tag_push` 依赖 tag 被
+  `sync-to-cnb` 镜像回来，链路比「tag 就在 GitHub 上打」长一环。留在 CNB 的只剩
+  nightly 的兜底 cron，因为那一份正是「GitHub 的 schedule 不跑了」时才需要的。
+- **nightly 也发 GitHub Release（`nightly` tag）**：可变引用去改一个已发布的
+  Release，与 `build-binaries.yml` 里「已发布的 Release 拒绝被改动」的约定冲突。
 - **把 nightly 的 bundle 也挂 GitHub Release（`nightly` tag）**：可变引用去改一个
   已发布的 Release，与 `build-binaries.yml` 里「已发布的 Release 拒绝被改动」的约定
   冲突。
 
 ## Consequences
 
-- 国内下载路径存在了，代价是每次发布多一份约 15 MiB 的存储（三个口味）和一次构建。
-  正式版因此在 GitHub 与 CNB 各构建一次，两份产物同为 tag 上那个提交的构建结果；
-  换掉其中任何一条都等于改发布流程，不在这次改动范围内。
-- 发行仓库的写权限来自密钥仓库 `shinytale/keys` 的 `ATOMGIT_KEY`
-  （`.cnb.yml` 的 `imports` 注入），token 由 `.cnb.yml` 的
-  `--token-env ATOMGIT_KEY` 指给脚本，走 `GIT_ASKPASS`，不进 argv、不进
+- 国内下载路径存在了，代价是每次发布多一份约 15 MiB 的存储（三个口味）。产物不再
+  构建两遍：两条流水线都复用自己 job 里已经校验过的 artifact。
+- 发行仓库的写权限来自 `ATOMGIT_KEY`：GitHub 侧存在仓库 secret 里（fork 上没有，
+  所以那一步会跳过），CNB 侧来自密钥仓库 `shinytale/keys` 的 `env.yml`。两处同名，
+  由 `--token-env ATOMGIT_KEY` 指名交给脚本，走 `GIT_ASKPASS`，不进 argv、不进
   `.git-credentials`。
 - `--token-env` 是 `--push` 的必需参数，不是可选项：脚本不猜凭据躺在哪个环境变量
   里。少了它直接报错，因为一个「没带 token 的 push」不会立刻失败——`GIT_TERMINAL_PROMPT=0`
-  把它变成 git 的 `could not read Username`，看起来像 URL 写错了——失败点离「少传了
-  一个参数」太远。凭据的名字放在 `.cnb.yml` 里也更好查：换密钥库里的变量名时，
-  改的是看得见的那一行。
-- **cron 不随代码生效**：只有「本次推送的变更包含 `.cnb.yml`」才会自动同步定时任务。
-  这条改动合进 main 时刚好满足，但以后单独改 cron 表达式要记得去
-  「云原生构建 → 定时任务」点一次同步。
+  把它变成 git 的 `could not read Username`，看起来像 URL 写错了——失败点离
+  「少传了一个参数」太远。
+- **GitHub 的 schedule 会静默停**：账户额度用尽或仓库 60 天没有活动时它就不跑了。
+  nightly 的 bundle 因此还有 CNB 那条 cron 兜底；但 CNB 那条 cron 不随代码生效
+  （只有「本次推送的变更包含 `.cnb.yml`」才会自动同步定时任务），以后单独改 cron
+  表达式要记得去「云原生构建 → 定时任务」点一次同步。
 - 发行仓库的 `main` 只留最新一份；要旧版本走 tag（`assets/<tag>/`）或源码镜像仓。
-- 验证：`node --test scripts/publish-atomgit.test.mjs`（四条：nightly 三个口味 +
-  checksums + tag 移动、正式版带源码包与原始 release notes、缺口味直接报错、不带
-  `--push` 不上传）。本地用 `file://` bare 仓库跑过整条链路；真机推送（AtomGit
-  HTTPS + token）只能靠第一次流水线确认。
+- 验证：`node --test scripts/publish-atomgit.test.mjs`（七条：nightly 三个口味 +
+  checksums + tag 移动、正式版带源码包与原始 release notes、缺口味直接报错、
+  缺 `--token-env`、`--token-env` 指向的变量为空、缺 `--commit`、不带 `--push`
+  不上传）。本地用 `file://` bare 仓库跑过整条链路；真机推送（AtomGit HTTPS +
+  token）与 GitHub / CNB 的触发只能靠第一次发布确认。
 
 Related: [Single-file nanopi.js release artifact](2026-10-11-single-file-release-artifact.md)
 （产物集与 sidecar 清单）、[Tag 镜像与 main 分开处理](2026-10-16-tag-mirroring-between-github-and-cnb.md)
