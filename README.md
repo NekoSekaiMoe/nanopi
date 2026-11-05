@@ -27,6 +27,18 @@ Download bundle js in release, or let `install.js` fetch one for you:
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
 
+In mainland China, GitHub Releases is slow or unreachable. The same bundles are mirrored to AtomGit ([NanoPi/NanoPi](https://atomgit.com/NanoPi/NanoPi)) and published daily to [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets); pass the mirror URL printed in that repository's README to `install.js`:
+
+```bash
+# the URL carries the tag, `nightly` or a release like v20261031.1.0
+curl -fsSL https://atomgit.com/NanoPi/NanoPi/raw/main/install.js | node - --mirror=https://atomgit.com/nanopi/releases-assets/raw/main/nightly
+
+# or fetch the file itself, there is no API and no login
+curl -fsSLO https://atomgit.com/nanopi/releases-assets/raw/main/nightly/nanopi.js
+```
+
+The AtomGit source repository is a mirror, and the release notes, source archive and npm packages stay on GitHub.
+
 That installs the `full` bundle as `~/.local/bin/nanopi.js` and puts a `nanopi` shim beside it, so `nanopi` runs once `~/.local/bin` is on `PATH` (`install.js` says so when it is not).
 `install.js` takes the same arguments either way:
 
@@ -52,6 +64,7 @@ node install.js --out=./nanopi.js
 - `--version=<tag>` (default: latest release) accepts the tag with or without the leading `v`.
 - `--prefix=<dir>` (default `~/.local`) installs into `<dir>/bin`: the bundle as `<asset name>` plus a `nanopi` shim (`nanopi.cmd` on Windows) that runs `node <dir>/bin/<asset name>`. Run it with `nanopi`.
 - `--out=<path>` writes the bundle to exactly that path and nothing else. It cannot be combined with `--prefix`.
+- `--mirror=<url>` takes the bundles from a mirror instead of GitHub Releases. The URL is the one printed in that mirror's README and it carries the tag, because a mirror resolves nothing for `latest`; `--version` is then ignored.
 
 The download is checked against the release's `SHA256SUMS` and fails on a mismatch. Run `node install.js --help` for the same summary.
 
