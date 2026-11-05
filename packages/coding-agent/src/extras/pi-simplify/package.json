@@ -28,7 +28,7 @@
 		"developer-tools"
 	],
 	"engines": {
-		"node": ">=18"
+		"node": "v26.13.0"
 	},
 	"files": [
 		"dist",
@@ -48,13 +48,13 @@
 		"@nanopi/pi-coding-agent": ">=0.74.0",
 		"@nanopi/pi-ai": ">=0.74.0",
 		"@nanopi/pi-tui": ">=0.74.0",
-		"@sinclair/typebox": "^0.34.0"
+		"@sinclair/typebox": "0.34.52"
 	},
 	"scripts": {
 		"test": "vitest --run --config vitest.config.ts"
 	},
 	"devDependencies": {
-		"vitest": "5.0.5",
+		"vitest": "5.1.0",
 		"@types/node": "24.19.2"
 	}
 }
