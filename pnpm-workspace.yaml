@@ -10,6 +10,15 @@ packages:
 # use plain semver ranges, not the workspace: protocol.
 linkWorkspacePackages: true
 
+# pnpm 12 的默认值，这里写成声明而不是靠默认。这不是无意义的复述：
+# 它同时决定了 lockfile 的表示方式。packages/ai 把 zod 声明成 optional peer，
+# 开启时 pnpm 会把 zod 装进 importer 的 dependencies 段供 peer 解析，于是
+# lock 里 packages/ai 多出 zod@4.6.7、@anthropic-ai/sdk 与 openai 的 zod 从
+# 3.25.76 提到 4.6.7（68c5d7527 清 zod advisory 的实际来源）。关掉它这些行会
+# 消失，advisory 回来，声明的 zod 4.6.7 也成了一个没人实现的空话。改这里等于
+# 改 lock，需要连带跑一次 pnpm install --lockfile-only 并复核 diff。
+autoInstallPeers: true
+
 overrides:
   protobufjs: 7.6.6
 
