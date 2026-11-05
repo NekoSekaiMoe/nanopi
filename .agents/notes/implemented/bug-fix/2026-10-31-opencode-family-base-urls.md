@@ -75,7 +75,10 @@ unused `isV2InferenceBaseUrl` export is gone.
 - Chat completions, Responses, Anthropic and Google requests now reach a route
   the gateway serves. The request URL is asserted end to end in
   `packages/ai/test/opencode-baseurl.test.ts`, one case per protocol, against the
-  generated catalog.
+  generated catalog. The Anthropic case asserts
+  `.../anthropic/v1/messages` with no query string: up to `@anthropic-ai/sdk`
+  1.2.0 the client put `?beta=true` on that route, and 1.3.0 stopped sending it,
+  so the test tracks the SDK rather than the gateway.
 - The Anthropic base URL no longer ends in `/v1`, which is a shape change
   visible to anything reading `model.baseUrl`. Nothing joined `/v1` onto it by
   hand; the SDK owns that path segment.
