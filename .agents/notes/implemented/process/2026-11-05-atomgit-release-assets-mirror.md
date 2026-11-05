@@ -50,12 +50,11 @@ nightly 的 bundle 由 `nightly.yml` 的 `build` job 构建，正式版的三个
 不再有第二次构建，也就不会出现「GitHub Release 上的包和 AtomGit 上的包不是同一次
 构建」这种没人查得出来的偏差。
 
-`.cnb.yml` 里只剩一条 `crontab: 0 16 * * *`（Asia/Shanghai，对应 GitHub 那次
-00:00 UTC）跑 `x-atomgit-nightly`，是 nightly 的兜底：GitHub 会因为账单或者「60 天
-没有活动过的公开仓库」停掉 schedule，停掉时不会有人收到通知。两边都发时落的是同一个
-`nightly` tag，后到的覆盖先到的，两份都是 main 上的构建，没有对错。正式版在 CNB 上
-没有对应的触发（原来的 `tag_push` 与 `web_trigger` 已删）：那需要在 CNB 上重新构建
-一遍，只会多一份可能与 GitHub Release 不一致的包。
+CNB 上没有任何发布触发。曾经有一条 `crontab: 0 16 * * *` 跑 `x-atomgit-nightly`
+兜底 GitHub 的 schedule，已去掉（#497）：它在 CNB 上把同一批 bundle 重新构建一遍，
+只为了一个「GitHub 那边可能不跑了」的假设，代价是每天一次双份构建和一条天天报错的
+定时任务。正式版同样没有对应的触发（原来的 `tag_push` 与 `web_trigger` 已删）：那需要
+在 CNB 上重新构建一遍，只会多一份可能与 GitHub Release 不一致的包。
 
 `--commit <sha>` 是必需参数，写进 README 的 `Current:` 那行和 nightly 的 release
 notes：只写「nightly」回答不了「国内下载到的是哪个提交」，而这个仓库里
@@ -90,8 +89,8 @@ https://atomgit.com/nanopi/releases-assets/raw/main/nightly/SHA256SUMS
   两个问题。一是同一次发布构建两遍：正式版在 `build-binaries.yml` 里已经构建并校验
   过，CNB 又用同一棵源码树构建一次，两份产物只要有一分不同，AtomGit 与 GitHub
   Release 就对不上，而没有任何东西会发现；二是 CNB 的 `tag_push` 依赖 tag 被
-  `sync-to-cnb` 镜像回来，链路比「tag 就在 GitHub 上打」长一环。留在 CNB 的只剩
-  nightly 的兜底 cron，因为那一份正是「GitHub 的 schedule 不跑了」时才需要的。
+  `sync-to-cnb` 镜像回来，链路比「tag 就在 GitHub 上打」长一环。当时留在 CNB 的只剩
+  nightly 的兜底 cron，那一份后来也被证明是同一类双份构建，一并去掉（#497）。
 - **nightly 也发 GitHub Release（`nightly` tag）**：可变引用去改一个已发布的
   Release，与 `build-binaries.yml` 里「已发布的 Release 拒绝被改动」的约定冲突。
 - **把 nightly 的 bundle 也挂 GitHub Release（`nightly` tag）**：可变引用去改一个
@@ -102,18 +101,16 @@ https://atomgit.com/nanopi/releases-assets/raw/main/nightly/SHA256SUMS
 
 - 国内下载路径存在了，代价是每次发布多一份约 15 MiB 的存储（三个口味）。产物不再
   构建两遍：两条流水线都复用自己 job 里已经校验过的 artifact。
-- 发行仓库的写权限来自 `ATOMGIT_KEY`：GitHub 侧存在仓库 secret 里（fork 上没有，
-  所以那一步会跳过），CNB 侧来自密钥仓库 `shinytale/keys` 的 `env.yml`。两处同名，
-  由 `--token-env ATOMGIT_KEY` 指名交给脚本，走 `GIT_ASKPASS`，不进 argv、不进
-  `.git-credentials`。
+- 发行仓库的写权限来自 `ATOMGIT_KEY`：现在只有 GitHub 侧用得上，存在仓库 secret 里
+  （fork 上没有，所以那一步会跳过）。脚本仍要求 `--token-env` 指名变量，走
+  `GIT_ASKPASS`，不进 argv、不进 `.git-credentials`。
 - `--token-env` 是 `--push` 的必需参数，不是可选项：脚本不猜凭据躺在哪个环境变量
   里。少了它直接报错，因为一个「没带 token 的 push」不会立刻失败——`GIT_TERMINAL_PROMPT=0`
   把它变成 git 的 `could not read Username`，看起来像 URL 写错了——失败点离
   「少传了一个参数」太远。
 - **GitHub 的 schedule 会静默停**：账户额度用尽或仓库 60 天没有活动时它就不跑了。
-  nightly 的 bundle 因此还有 CNB 那条 cron 兜底；但 CNB 那条 cron 不随代码生效
-  （只有「本次推送的变更包含 `.cnb.yml`」才会自动同步定时任务），以后单独改 cron
-  表达式要记得去「云原生构建 → 定时任务」点一次同步。
+  `nightly.yml` 现在是 nightly 唯一的触发（CNB 的兜底 cron 已去掉，见 #497），所以
+  停了就是停了：要补只能手动 `workflow_dispatch`，或者重新加一条兜底并接受双份构建。
 - 发行仓库的 `main` 只留最新一份；要旧版本走 tag（`assets/<tag>/`）或源码镜像仓。
 - 验证：`node --test scripts/publish-atomgit.test.mjs`（七条：nightly 三个口味 +
   checksums + tag 移动、正式版带源码包与原始 release notes、缺口味直接报错、
