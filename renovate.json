@@ -41,14 +41,14 @@
       "automerge": false
     },
     {
-      "description": "engines.node 不是依赖版本，禁止 Renovate 改写：rangeStrategy=pin 会把它钉成当轮最高的精确版本，而 engines 不做任何事，CI/esbuild/@types 全绿也测不出错位。范围写死在这里，Node 大版本迁移时手工改（下限跟着 Debian testing 的 nodejs 走，见 .agents/notes/implemented/process/2026-11-02-node-floor-follows-debian.md）。@types/node 的 major 由下一条规则挂在同一个值上。",
+      "description": "engines.node 不是依赖版本，禁止 Renovate 改写：rangeStrategy=pin 会把它钉成当轮最高的精确版本（实测 v26.13.0），而 engines 不做任何事、CI/esbuild/@types 全绿也测不出错位。allowedVersions 拦不住这种改写：它筛的是 datasource 返回的候选版本，范围改写走 rangeStrategy 直接产出 currentValue 的替换，且正则 /^>=24\\.0\\.0$/ 匹配的是字面串而非纯版本号，没有任何候选能命中（见 shinytale/nanopi#516 的 A/B 实证）。enabled: false 直接关掉 Renovate 对 engines depType 的提取/改写能力，是 11-02~11-04 八个 PR 实证有效的写法。范围写死在 package.json 里，Node 大版本迁移时按五处一起手工改（下限跟着 Debian testing 的 nodejs 走，见 .agents/notes/implemented/process/2026-11-02-node-floor-follows-debian.md）。这条规则与下一条 @types/node 规则互不引用：后者用自己独立的取反正则 !/^(?:0|[1-9]\\d*)\\./ 拦 major，不读 engines 的值。",
       "matchDepTypes": [
         "engines"
       ],
-      "allowedVersions": "/^>=24\\.0\\.0$/"
+      "enabled": false
     },
     {
-      "description": "Node 大版本迁移时 @types/node 跟着一起动：@types/node 只能比 engines.node 老、不能比它新，而 engines.node 由上面那条规则锁着，所以这里的 major 升级一律拦下。写法上不能再带 matchUpdateTypes：Renovate 拒绝在同一规则里同时出现 matchUpdateTypes 与 allowedVersions/versioning，所以这里只写 versioning + allowedVersions，npm 版本一律被取反正则判为越界，major 自然包含在内。迁移时人工按五处一起改（engines、workflow 的 node-version、Dockerfile 底图、esbuild target、@types/node），见 .agents/notes/implemented/process/2026-10-27-node-24-floor.md。不写 enabled: false 是为了留升级线索：这条规则不产生 PR，但 Renovate 会照常把这批版本记进日志，靠人盯 Debian testing 的 nodejs 换大版本。",
+      "description": "Node 大版本迁移时 @types/node 跟着一起动：@types/node 只能比 engines.node 老、不能比它新，而 engines.node 由上面那条规则用 enabled: false 冻住，所以这里的 major 升级一律拦下。这条规则与上面那条互不引用：它用自己独立的取反正则判越界，不读 engines 的值（见 shinytale/nanopi#516）。写法上不能再带 matchUpdateTypes：Renovate 拒绝在同一规则里同时出现 matchUpdateTypes 与 allowedVersions/versioning，所以这里只写 versioning + allowedVersions，npm 版本一律被取反正则判为越界，major 自然包含在内。迁移时人工按五处一起改（engines、workflow 的 node-version、Dockerfile 底图、esbuild target、@types/node），见 .agents/notes/implemented/process/2026-10-27-node-24-floor.md。不写 enabled: false 是为了留升级线索：这条规则不产生 PR，但 Renovate 会照常把这批版本记进日志，靠人盯 Debian testing 的 nodejs 换大版本。",
       "matchPackageNames": [
         "@types/node"
       ],

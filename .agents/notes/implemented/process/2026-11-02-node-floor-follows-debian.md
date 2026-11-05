@@ -31,20 +31,26 @@ Debian testing 的 `nodejs` 包，没有第二套运行时在跑。
 testing 里换大版本，就说明下游用户手里的 node 换了版本 —— 那一刻才值得动下限。
 Node 上游发 26 与我们无关，只要 Debian 还在 24。
 
-落到配置上：
+落到配置上（`renovate.json` 的 `packageRules`）：
 
 ```json
 {
   "matchDepTypes": ["engines"],
-  "allowedVersions": "/^>=24\\.0\\.0$/"
+  "enabled": false
 }
 ```
 
-放进 `renovate.json` 的 `packageRules`。`matchDepTypes` 只命中 `engines`，不动任何
-真实依赖；`allowedVersions` 让「范围写死」这件事本身成为拦截条件——写了别的就判为
-不允许的更新，不产生 PR，也就不会每轮重开再被人手动关一次。这一项后来从
-`enabled: false` 改过来，好让 `@types/node` 的 major 规则能引用同一个值，
-见 [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
+`matchDepTypes` 只命中 `engines`，不动任何真实依赖；`enabled: false` 直接关掉
+Renovate 对这个 depType 的提取/改写能力，从源头掐断 `rangeStrategy: "pin"` 把
+`engines.node` 钉成精确版本的副作用。
+
+这里曾一度换成 `allowedVersions` 并声称「好让 `@types/node` 的 major 规则引用同一个
+值」，后被 `shinytale/nanopi#516` 的 A/B 实证推翻：`allowedVersions` 筛的是候选版本
+号，拦不住 `rangeStrategy` 的范围改写，且那两条规则在配置里并不互相引用。回归与
+修法见 [engines.node 改回 enabled: false](../bug-fix/2026-11-05-engines-allowedversions-regression.md)，
+原始决策见 [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
+现在 `pnpm run check` 里 `scripts/check-pinned-deps.mjs` 还会校验所有 `engines.node`
+等于 `>=24.0.0`，兜住 Renovate 之外的人误改。
 
 下限真要动的时候，按 [node 24 floor](./2026-10-27-node-24-floor.md) 那五处一起改：
 `engines.node`、workflow 的 `node-version`（现在是 `24.22.2`）、esbuild `target`、`@types/node`、
@@ -67,9 +73,11 @@ Node 上游发 26 与我们无关，只要 Debian 还在 24。
 
 - `engines.node` 从此是纯人工决策点，Renovate dashboard 上不再出现它。
   代价是：Debian testing 真的换了大版本时，没人提醒，得自己看包版本。
-- `engines` 声明与 `@types/node` 之间那层「类型库不得新于运行时」的约束后来
-  变成了配置：`@types/node` 的 major 升级被同一条规则引用的
-  `allowedVersions` 拦下，见
-  [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
+- `engines` 声明与 `@types/node` 之间那层「类型库不得新于运行时」的约束
+  是一条独立的 `packageRules`（`matchPackageNames: ["@types/node"]` +
+  取反正则 `!/^(?:0|[1-9]\d*)\./`），不读 `engines` 的值、与上面那条规则互不引用；
+  「引用同一个值」是当初的笔误，见
+  [engines.node 改回 enabled: false](../bug-fix/2026-11-05-engines-allowedversions-regression.md)。
+  原始决策见 [运行时版本声明只有一个源](./2026-11-05-runtime-version-declarations-single-source.md)。
 - 本条只解决「谁来决定」，「怎么改」仍归
   [node 24 floor](./2026-10-27-node-24-floor.md)。
