@@ -5,7 +5,8 @@
 //
 // Usage:
 //   node scripts/publish-atomgit.mjs --tag <tag> --input <dir> --work <dir> \
-//     [--remote <url>] [--repo-slug <owner>/<repo>] [--token-env <VAR>] [--push]
+//     [--remote <url>] [--repo-slug <owner>/<repo>] [--token-env <VAR>] \
+//     [--token-user <name>] [--push]
 //
 // 这条脚本只做「组装」和「推送」两件事，构建本身留在调用方（.cnb.yml 的
 // nightly 用 build-single-file.mjs，正式版直接取构建产物）：它决定发什么、
@@ -47,7 +48,7 @@ if (values.help || !values.tag || !values.input || !values.work) {
   --work <dir>         Assets repository checkout; created and reused between runs
   --remote <url>       Assets repository URL (default: ${DEFAULT_REMOTE})
   --repo-slug <slug>   <owner>/<repo> used to build asset download URLs (default: ${DEFAULT_SLUG})
-  --token-env <VAR>    Environment variable holding the push token
+  --token-env <VAR>    Environment variable holding the push token (required by --push)
   --token-user <name>  User name the token authenticates as (default: atomgit)
   --push               Push the branch and the tag; without it the checkout is only assembled
 `);
@@ -200,9 +201,13 @@ function publish() {
 		process.stdout.write(`Assembled ${relative(process.cwd(), ASSETS)}; pass --push to upload\n`);
 		return;
 	}
+	// 没有 token 就推不上去。用 URL 里的用户名当口令登录会静默失败（AtomGit 的
+	// https 打开凭据提示，GIT_TERMINAL_PROMPT=0 把它变成一句难懂的错误），所以在
+	// 这里直接拒绝，让人看到该加哪个环境变量。
 	const tokenEnv = values["token-env"];
-	const token = tokenEnv ? process.env[tokenEnv] : undefined;
-	if (tokenEnv && !token) throw new Error(`${tokenEnv} is unset; it is needed to push to ${remote}`);
+	if (!tokenEnv) throw new Error(`--push needs --token-env <VAR>; the push token is never read from the environment implicitly`);
+	const token = process.env[tokenEnv];
+	if (!token) throw new Error(`${tokenEnv} is unset; it is needed to push to ${remote}`);
 
 	// token 走 GIT_ASKPASS 而不是 URL：argv 与报错里都不会出现它，这份配置也
 	// 只活在这个进程里。

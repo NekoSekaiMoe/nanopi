@@ -40,10 +40,12 @@ x-notify-failure: &notify-failure
 # 镜像回 CNB 后触发（tag_push）。判定与推送都在 scripts/publish-atomgit.mjs 里：
 # 它自己组装资产的目录、写 README 与 SHA256SUMS、提交、打 tag、推送。
 #
-# 发行仓库的写权限来自密钥仓库里的 ATOMGIT_TOKEN（由 --token-env 指定的环境变量
-# 交给 scripts/publish-atomgit.mjs）。正式版的 tag 由 GitHub 侧打出、由 main push
-# 时的 mirror tags 带回 CNB，所以 tag_push 里拿到的只有源码树；nightly 与正式版
-# 都在这条流水线里自己构建（三个口味共用一次 install/build）。
+# 发行仓库的写权限来自密钥仓库里的 ATOMGIT_KEY（imports 注入的环境变量），由
+# --token-env ATOMGIT_KEY 指名交给 scripts/publish-atomgit.mjs；脚本不猜变量名，
+# 少写这个参数时 --push 直接报错，而不是拿匿名身份去推、把失败拖到 git push。
+# 正式版的 tag 由 GitHub 侧打出、由 main push 时的 mirror tags 带回 CNB，所以
+# tag_push 里拿到的只有源码树；nightly 与正式版都在这条流水线里自己构建（三个
+# 口味共用一次 install/build）。
 #
 # 要让 nightly 的 cron 生效，推送这份文件之后还需要在「云原生构建 → 定时任务」里
 # 同步一次 main 分支：只有「本次推送的变更包含 .cnb.yml」才会自动同步。
@@ -71,7 +73,7 @@ x-atomgit-release: &atomgit-release
           node "release-assets/$bundle.js" --version
           node "release-assets/$bundle.js" --help > /dev/null
         done
-        node scripts/publish-atomgit.mjs --tag "$TAG" --input release-assets --work "${TMPDIR:-/tmp}/atomgit-assets" --push
+        node scripts/publish-atomgit.mjs --tag "$TAG" --input release-assets --work "${TMPDIR:-/tmp}/atomgit-assets" --token-env ATOMGIT_KEY --push
 
         # 正式版的流程是反的：GitHub 打 tag → GitHub 构建 Release → tag 才回到
         # CNB。这一步把「构建」钉在 CNB 上，正式的 GitHub Release 仍由

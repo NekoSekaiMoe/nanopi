@@ -18,6 +18,8 @@ const gitEnv = {
 	GIT_CONFIG_GLOBAL: "/dev/null",
 	GIT_CONFIG_NOSYSTEM: "1",
 	GIT_TERMINAL_PROMPT: "0",
+	// 推送要一个非空的 token；file:// 的 bare 仓库不校验它，脚本只要求它在。
+	ATOMGIT_KEY: "test-token",
 };
 
 function git(cwd, args) {
@@ -51,7 +53,7 @@ function publish(fixture, args, extraEnv = {}) {
 test("nightly publishes the three bundles with checksums and moves its tag", async (t) => {
 	const fixturePaths = await fixture(t);
 
-	const first = publish(fixturePaths, ["--tag", "nightly", "--push"]);
+	const first = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
 	assert.equal(first.status, 0, first.stderr);
 
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/heads/main"]).split("\n");
@@ -78,7 +80,7 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 
 	// 同一天重跑：新提交叠在上面，tag 挪过去，主分支不出现 force。
 	writeFileSync(join(fixturePaths.input, "nanopi.js"), "rebuilt\n");
-	const second = publish(fixturePaths, ["--tag", "nightly", "--push"]);
+	const second = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
 	assert.equal(second.status, 0, second.stderr);
 	assert.equal(git(fixturePaths.remote, ["rev-list", "--count", "refs/heads/main"]), "2");
 	const tagged = git(fixturePaths.remote, ["rev-parse", "refs/tags/nightly^{commit}"]);
@@ -90,7 +92,7 @@ test("a release tag carries the source archive and keeps the official notes", as
 	// 正式版的 RELEASE_NOTES.md 由 release-notes.mjs 生成，这里只验证它被原样带上。
 	writeFileSync(join(fixturePaths.input, "RELEASE_NOTES.md"), "### Changed\n\n- something\n");
 
-	const result = publish(fixturePaths, ["--tag", "v20261031.1.0", "--push"]);
+	const result = publish(fixturePaths, ["--tag", "v20261031.1.0", "--token-env", "ATOMGIT_KEY", "--push"]);
 	assert.equal(result.status, 0, result.stderr);
 
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/tags/v20261031.1.0"]).split("\n");
@@ -106,10 +108,27 @@ test("a missing flavor is an error, not a silently smaller release", async (t) =
 	const fixturePaths = await fixture(t);
 	rmSync(join(fixturePaths.input, "nanopi-base.js"));
 
-	const result = publish(fixturePaths, ["--tag", "nightly", "--push"]);
+	const result = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
 	assert.equal(result.status, 1);
 	assert.match(result.stderr, /nanopi-base\.js is missing/);
 	assert.equal(existsSync(fixturePaths.remote), true);
+});
+
+test("--push without --token-env fails before reaching git", async (t) => {
+	const fixturePaths = await fixture(t);
+
+	const result = publish(fixturePaths, ["--tag", "nightly", "--push"]);
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /--push needs --token-env/);
+	assert.equal(spawnSync("git", ["for-each-ref", "--count=1"], { cwd: fixturePaths.remote, encoding: "utf8", env: gitEnv }).stdout.trim(), "");
+});
+
+test("--push with an unset token variable names it", async (t) => {
+	const fixturePaths = await fixture(t);
+
+	const result = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"], { ATOMGIT_KEY: "" });
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /ATOMGIT_KEY is unset/);
 });
 
 test("without --push nothing is uploaded", async (t) => {
