@@ -1,5 +1,12 @@
 // Core TUI interfaces and classes
 
+// Named exports, not `export *` per source: this root is a deliberately small
+// rendering contract, so a name reaches it only when a line here says so —
+// the coding-agent root barrel reached the opposite conclusion because it
+// already hands out a whole agent.
+// Cost is unbudgeted in `scripts/check-entry-graphs.mjs`; if that changes, cap
+// this entry rather than growing it.
+
 export { Marked, type Token, type Tokens } from "marked";
 // Autocomplete support
 export {
