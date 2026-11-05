@@ -31,8 +31,12 @@ const LITERAL_NAME = /\{\s*name: "([^"]+)"/g;
 export function readBuiltinModuleNames(repoRoot) {
 	const path = join(repoRoot, codingAgentSrcDir, "modules", "index.ts");
 	const source = readFileSync(path, "utf8");
-	const start = source.indexOf("export const BUILTIN_MODULES");
-	if (start === -1) throw new Error(`${path} no longer exports BUILTIN_MODULES`);
+	// The table is declared `export const` in older sources and as a bare
+	// `const` paired with `export { BUILTIN_MODULES }` after issue #517; both
+	// spellings hold the same array, so match the declaration itself.
+	const declaration = /(?:export )?const BUILTIN_MODULES\b[^=\n]*=\s*\[/.exec(source);
+	if (declaration === null) throw new Error(`${path} no longer declares the BUILTIN_MODULES array`);
+	const start = declaration.index;
 	const end = source.indexOf("\n];", start);
 	if (end === -1) throw new Error(`${path}: could not find the end of BUILTIN_MODULES`);
 	const body = source.slice(start, end);
