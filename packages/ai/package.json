@@ -105,7 +105,7 @@
 		"directory": "packages/ai"
 	},
 	"engines": {
-		"node": ">=24.0.0"
+		"node": "v26.13.0"
 	},
 	"devDependencies": {
 		"@types/node": "24.19.2",

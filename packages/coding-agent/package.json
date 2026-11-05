@@ -95,6 +95,6 @@
 		"directory": "packages/coding-agent"
 	},
 	"engines": {
-		"node": ">=24.0.0"
+		"node": "v26.13.0"
 	}
 }
