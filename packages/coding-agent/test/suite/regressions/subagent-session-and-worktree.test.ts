@@ -33,6 +33,16 @@ function createRepo(): string {
 	return dir;
 }
 
+/** Make `pnpm run check` in `repo` end with `exitCode` instead of shelling out to the toolchain. */
+function stubCheck(repo: string, exitCode: number): void {
+	writeFileSync(
+		join(repo, "package.json"),
+		`${JSON.stringify({ name: "fixture", scripts: { check: `exit ${exitCode}` } })}\n`,
+	);
+	git(repo, ["add", "package.json"]);
+	git(repo, ["commit", "-qm", "add check script"]);
+}
+
 type SubagentTool = ToolDefinition<never, unknown, never>;
 
 /** The subagent tool the module registers, captured as the registry receives it. */
@@ -139,6 +149,119 @@ describe("subagent worktree", () => {
 		// and the tool says so instead of silently starting a fresh agent.
 		const text = await call(job, { action: "continue", task: "Task: y", jobId: "sa-1" });
 		expect(text).toMatch(/no child session to continue|continuing an existing child session/);
+	});
+});
+
+/**
+ * The pre-merge self-check (#504).
+ *
+ * An isolated job's branch used to land in the main checkout with `git merge` and
+ * nothing in between: a half-finished or unchecked commit went in, and a tree with
+ * uncommitted edits was deleted by `worktree remove --force` without a trace. The
+ * branch now passes three gates first, and a refusal keeps the tree instead.
+ */
+describe("subagent worktree merge self-check", () => {
+	const cleanups: (() => void)[] = [];
+
+	afterEach(() => {
+		while (cleanups.length > 0) cleanups.pop()?.();
+	});
+
+	it("drops the branch of a killed isolated job without merging it", async () => {
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-sa-1`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		const job = await register(repo);
+		cleanups.push(() => job.harness.cleanup());
+
+		await call(job, { action: "spawn", task: "Task: change one file", isolated: true, timeoutSec: 1 });
+		writeFileSync(join(worktree, "shipped.txt"), "child work\n");
+		git(worktree, ["add", "shipped.txt"]);
+		git(worktree, ["commit", "-qm", "child commit"]);
+		await call(job, { action: "kill", jobId: "sa-1" });
+
+		// `kill` is the one path that never merges, by design; the completed path is
+		// what `mergeWorktree` covers below.
+		expect(git(repo, ["branch", "--list", "subagent/sa-1"])).toBe("");
+		expect(existsSync(join(repo, "shipped.txt"))).toBe(false);
+	});
+
+	it("returns the changed-file list and the gate outcome to the caller", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		stubCheck(repo, 0);
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-ok`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-ok", worktree, "HEAD"]);
+		writeFileSync(join(worktree, "shipped.txt"), "child work\n");
+		git(worktree, ["add", "shipped.txt"]);
+		git(worktree, ["commit", "-qm", "child commit"]);
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-ok" }, repo);
+		expect(result.merged).toBe(true);
+		expect(result.report).toContain("merged 1 file (check passed)");
+		expect(result.report).toContain("A\tshipped.txt");
+		expect(existsSync(join(repo, "shipped.txt"))).toBe(true);
+		// The ref is dropped by `removeWorktree` after the tree is gone: git refuses to
+		// delete a branch a worktree still has checked out.
+	});
+
+	it("refuses to merge while the main checkout has uncommitted changes", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-dirty`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-dirty", worktree, "HEAD"]);
+		writeFileSync(join(worktree, "shipped.txt"), "child work\n");
+		git(worktree, ["add", "shipped.txt"]);
+		git(worktree, ["commit", "-qm", "child commit"]);
+		writeFileSync(join(repo, "README.md"), "# edited in the main checkout\n");
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-dirty" }, repo);
+		expect(result.kept).toBe(true);
+		expect(result.report).toContain("uncommitted changes");
+		expect(result.report).toContain("README.md");
+		expect(existsSync(join(worktree, "shipped.txt"))).toBe(true);
+		expect(existsSync(join(repo, "shipped.txt"))).toBe(false);
+	});
+
+	it("refuses to merge a branch whose check fails, and keeps the tree", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		stubCheck(repo, 1);
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-fail`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-fail", worktree, "HEAD"]);
+		writeFileSync(join(worktree, "broken.txt"), "half done\n");
+		git(worktree, ["add", "broken.txt"]);
+		git(worktree, ["commit", "-qm", "unchecked commit"]);
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-fail" }, repo);
+		expect(result.kept).toBe(true);
+		expect(result.report).toContain("check command failed");
+		expect(existsSync(join(worktree, "broken.txt"))).toBe(true);
+		expect(existsSync(join(repo, "broken.txt"))).toBe(false);
+	});
+
+	it("treats a directory without package.json as no gate, not as a failure", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-nogate`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-nogate", worktree, "HEAD"]);
+		writeFileSync(join(worktree, "shipped.txt"), "child work\n");
+		git(worktree, ["add", "shipped.txt"]);
+		git(worktree, ["commit", "-qm", "child commit"]);
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-nogate" }, repo);
+		expect(result.merged).toBe(true);
+		expect(result.report).toContain("check skipped: no package.json");
+		expect(existsSync(join(repo, "shipped.txt"))).toBe(true);
 	});
 });
 

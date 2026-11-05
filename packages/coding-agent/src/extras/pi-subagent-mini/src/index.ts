@@ -3,6 +3,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs";
 import path from "node:path";
 import { Type } from "typebox";
 import type { ModuleApi, ModuleContext, ModuleUIContext, SessionStartEvent, ToolLoadout, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface, ModuleSessionSurface } from "../../../core/modules/types.ts";
+import { mergeWorktree, type Worktree } from "./worktree.ts";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
@@ -125,7 +126,7 @@ export interface Job {
 	/** Child session id, so a later `continue` resumes the same transcript. */
 	sessionId?: string;
 	/** `git worktree add` result: the directory comes from the tool, not from the model. */
-	worktree?: { path: string; branch: string; merged?: boolean };
+	worktree?: Worktree;
 	/** True for a continue round: it appends to an existing transcript. */
 	isContinue: boolean;
 	/** Tail of the previous round's report, so a continue brief has the thread. */
@@ -168,7 +169,7 @@ type RestoredJob = {
 	scope: string;
 	report: string;
 	sessionId?: string;
-	worktree?: { path: string; branch: string; merged?: boolean };
+	worktree?: Worktree;
 	usage?: { input: number; output: number };
 	startedAt: number;
 	durationMs?: number;
@@ -439,7 +440,9 @@ export default function subagentMini(pi: ModuleEventsSurface &
 	 * starting a turn with no reader, which is how reports used to disappear.
 	 */
 	const notify = (job: Job, scope: string): void => {
-		const { text, truncated } = clipReport(job.finalOutput || job.errorMessage || "(no output)");
+		const { text, truncated } = clipReport(
+			withWorktreeReport(job, job.finalOutput || job.errorMessage || "(no output)"),
+		);
 		const message = {
 			customType: "subagent-complete",
 			content: text,
@@ -487,6 +490,22 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		})();
 	};
 
+	/**
+	 * Append the merge self-check to a report. The parent decides what happens to a
+	 * branch that did not land, so the reason and the file list belong in the report
+	 * instead of only in `details`.
+	 */
+	const withWorktreeReport = (job: Job, text: string): string => {
+		const worktree = job.worktree;
+		// The gate runs before the merge, so it is settled by the time `merged` is set.
+		if (!worktree?.report || worktree.merged === undefined) return text;
+		// Only an unmerged tree still exists on disk; naming its path otherwise points at
+		// a directory that is already gone.
+		const where = worktree.kept ? `${worktree.branch} at ${worktree.path}` : worktree.branch;
+		const label = worktree.kept ? "worktree not merged" : worktree.merged ? "worktree merged" : "worktree";
+		return `${text}\n\n${label} (${where}):\n${worktree.report}`;
+	};
+
 	/** Run `git` in the job's directory. Returns stdout; throws with stderr on failure. */
 	const git = (cwd: string, args: string[]): string => {
 		const result = spawnSync("git", args, { cwd, encoding: "utf8" });
@@ -514,19 +533,35 @@ export default function subagentMini(pi: ModuleEventsSurface &
 	 * branch; a failed or abandoned job drops the branch instead, so a half-finished
 	 * tree never lands in the main checkout. The tree itself is always removed — it is
 	 * scratch space, not an archive.
+	 *
+	 * `merged` is only a request: `mergeWorktree` runs the self-check first, and a
+	 * refusal keeps the tree instead of discarding the work it holds.
 	 */
 	const removeWorktree = (job: Job, baseCwd: string, merged: boolean): void => {
 		const worktree = job.worktree;
 		if (!worktree || worktree.merged !== undefined) return;
-		worktree.merged = merged;
+		worktree.merged = false;
+		if (merged) {
+			mergeWorktree(worktree, baseCwd);
+			// Neither merged nor dropped: the parent decides, and the tree stays until it does.
+			if (worktree.kept) return;
+		}
+		let top: string;
 		try {
-			const top = git(baseCwd, ["rev-parse", "--show-toplevel"]);
-			git(top, ["worktree", "remove", "--force", worktree.path]);
-			git(top, ["worktree", "prune"]);
-			if (merged) git(top, ["merge", "--no-edit", worktree.branch]);
-			else git(top, ["branch", "-D", worktree.branch]);
+			top = git(baseCwd, ["rev-parse", "--show-toplevel"]);
 		} catch {
 			// The tree is a convenience; a failed cleanup must not fail the job.
+			rmSync(worktree.path, { recursive: true, force: true });
+			return;
+		}
+		try {
+			git(top, ["worktree", "remove", "--force", worktree.path]);
+			git(top, ["worktree", "prune"]);
+			// After the tree is gone, not before: git will not delete a branch that a
+			// worktree still has checked out. `-D` because a merged branch is not an
+			// ancestor of HEAD in the no-op case, and `-d` would refuse it there.
+			git(top, ["branch", "-D", worktree.branch]);
+		} catch {
 			rmSync(worktree.path, { recursive: true, force: true });
 		}
 	};
@@ -1101,7 +1136,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		promptGuidelines: [
 			"Delegate context-heavy but self-contained work (multi-file reconnaissance, code review, long test/build runs) with read-only tools; keep only the final report here. Add write/edit to tools only when the subagent should modify files.",
 			"Write every brief as GOAL / CONTEXT / EXPECTED OUTPUT / STOP RULES; a brief without paths and stop rules comes back as a question or a wrong guess, because the child sees none of this conversation.",
-			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree.",
+			"Subagents share one working tree and `bash` makes every child a potential writer: run at most one writing subagent at a time, or pass `isolated: true` so each writer gets its own git worktree. An isolated job's branch is merged back only when the main checkout is clean and `pnpm run check` passes; a refusal keeps the tree and the report says why, so read it before assuming the work landed.",
 			"Chain jobs with `dependsOn` instead of polling: the dependent starts when the jobs it names settle, with their reports already in its brief, so do not copy them in. `onFailure: \"retry\"` retries a failed attempt (3 attempts total).",
 			"`action: \"continue\"` runs another turn on a child's own session; the transcript and the previous report are kept, so the brief only says what changed.",
 		],
@@ -1281,7 +1316,10 @@ export default function subagentMini(pi: ModuleEventsSurface &
 
 			if (params.action === "status") {
 				const elapsed = Math.round((job.durationMs ?? Date.now() - job.startedAt) / 1000);
-				const tail = (job.finalOutput || job.errorMessage || "(still running, no final output yet)").slice(-1500);
+				const tail = withWorktreeReport(
+					job,
+					job.finalOutput || job.errorMessage || "(still running, no final output yet)",
+				).slice(-1500);
 				const session = job.sessionId ? `\nsession: ${job.sessionId} (action=continue resumes it)` : "";
 				return textResult(
 					`${jobSummary(job)} (${elapsed}s)\nscope: ${scopeOf(job.task)}${attemptHistory(job)}${session}\n\n${tail}`,
@@ -1297,7 +1335,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 						setTimeout(() => resolve(true), waitSec * 1000).unref?.();
 					}),
 				]);
-				const report = job.finalOutput || job.errorMessage || "(no output)";
+				const report = withWorktreeReport(job, job.finalOutput || job.errorMessage || "(no output)");
 				// A waiting caller gets more than the notification's clipped text, but not
 				// an unbounded report: MAX_REPORT_CHARS is a floor, MAX_ARCHIVE_CHARS the cap.
 				const keep = Math.min(report.length, Math.max(MAX_REPORT_CHARS, MAX_ARCHIVE_CHARS));
