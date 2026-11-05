@@ -3,24 +3,7 @@
 // Build flavor surface: what a flavor (buildconfig.json) turned on for this
 // build. SDK users ask these before offering a feature whose code the build may
 // not carry.
-export {
-	buildToolset,
-	builtinApiIds,
-	builtinProviderIds,
-	builtinToolNames,
-	enabledOAuthFlows,
-	formatIncludedApis,
-	hasOAuthFlows,
-	isApiIncluded,
-	isBashOnlyBuild,
-	isBuildComponentEnabled,
-	isNoBuiltinProviderBuild,
-	isOAuthFlowEnabled,
-	isProviderIncluded,
-	isShellToolName,
-	OAUTH_FLOW_IDS,
-	type Toolset,
-} from "./build-components.ts";
+export * from "./build-components.ts";
 export { type Args, parseArgs } from "./cli/args.ts";
 
 // Config paths
@@ -47,7 +30,7 @@ export {
 } from "./core/agent-session.ts";
 export { AuthStorage, ReadOnlyAuthStorage, readStoredCredential } from "./core/auth-storage.ts";
 // Process and shell helpers
-export { type BashExecutorOptions, type BashResult, executeBashWithOperations } from "./core/bash-executor.ts";
+export * from "./core/bash-executor.ts";
 export type { CacheWarmingDecision, CacheWarmingStatus } from "./core/cache-warmer.ts";
 // Compaction
 export {
@@ -73,8 +56,8 @@ export {
 	serializeConversation,
 	shouldCompact,
 } from "./core/compaction/index.ts";
-export { DEFAULT_THINKING_LEVEL, THINKING_LEVEL_OPTIONS } from "./core/defaults.ts";
-export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.ts";
+export * from "./core/defaults.ts";
+export * from "./core/event-bus.ts";
 export { execCommand } from "./core/exec.ts";
 // Footer data provider (git branch + extension statuses - data not otherwise available to extensions)
 export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.ts";
@@ -99,13 +82,7 @@ export {
 	resolveModelScopeWithDiagnostics,
 	type ScopedModel,
 } from "./core/model-resolver.ts";
-export {
-	type CreateModelRuntimeOptions,
-	CredentialSynchronizationError,
-	type CredentialSynchronizationOperation,
-	ModelRuntime,
-	type ModelRuntimeAuthOverrides,
-} from "./core/model-runtime.ts";
+export * from "./core/model-runtime.ts";
 // RegisteredModule system
 export type {
 	AgentActivityOutcome,
@@ -281,11 +258,7 @@ export {
 } from "./core/modules/index.ts";
 export { resolveProjectTrusted } from "./core/project-trust.ts";
 export { expandPromptTemplate } from "./core/prompt-templates.ts";
-export {
-	type PathMetadata,
-	type ResolvedResource,
-	resolveLocalResources,
-} from "./core/resource-discovery.ts";
+export * from "./core/resource-discovery.ts";
 export type { ResourceCollision, ResourceDiagnostic, ResourceLoader } from "./core/resource-loader.ts";
 export { DefaultResourceLoader, loadProjectContextFiles } from "./core/resource-loader.ts";
 // SDK for programmatic usage
@@ -383,7 +356,7 @@ export {
 	buildSystemPrompt,
 	normalizeBuildSystemPromptOptions,
 } from "./core/system-prompt.ts";
-export { createToolNameMatcher } from "./core/tool-patterns.ts";
+export * from "./core/tool-patterns.ts";
 export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./core/tools/edit-diff.ts";
 // Tools
 export {
@@ -536,11 +509,10 @@ export {
 } from "./modes/interactive/theme/theme.ts";
 // Broad core surface: these are the interfaces users compose when they extend
 // nanopi programmatically (see docs/sdk.md).
-export { BUILTIN_MODULES, enabledModules } from "./modules/index.ts";
-
+export * from "./modules/index.ts";
 // Clipboard utilities
 export { copyToClipboard } from "./utils/clipboard.ts";
-export { parseFrontmatter, stripFrontmatter } from "./utils/frontmatter.ts";
+export * from "./utils/frontmatter.ts";
 export { convertToPng } from "./utils/image-convert.ts";
 export {
 	formatDimensionNote,
