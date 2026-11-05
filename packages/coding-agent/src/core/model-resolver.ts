@@ -11,7 +11,7 @@ import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 
 /** Default chat model IDs for providers with built-in chat models. */
-export const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
+const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	"amazon-bedrock": "us.anthropic.claude-opus-4-6-v1",
 	antigravity: "gemini-3.1-pro",
 	anthropic: "claude-opus-4-8",
@@ -85,10 +85,7 @@ function isAlias(id: string): boolean {
  * Supports either a bare model id or a canonical provider/modelId reference.
  * When matching by bare id, ambiguous matches across providers are rejected.
  */
-export function findExactModelReferenceMatch(
-	modelReference: string,
-	availableModels: Model<Api>[],
-): Model<Api> | undefined {
+function findExactModelReferenceMatch(modelReference: string, availableModels: Model<Api>[]): Model<Api> | undefined {
 	const trimmedReference = modelReference.trim();
 	if (!trimmedReference) {
 		return undefined;
@@ -165,7 +162,7 @@ function tryMatchModel(modelPattern: string, availableModels: Model<Api>[]): Mod
 	}
 }
 
-export interface ParsedModelResult {
+interface ParsedModelResult {
 	model: Model<Api> | undefined;
 	/** Thinking level if explicitly specified in pattern, undefined otherwise */
 	thinkingLevel?: ThinkingLevel;
@@ -201,7 +198,7 @@ function buildFallbackModel(provider: string, modelId: string, availableModels: 
  *
  * @internal Exported for testing
  */
-export function parseModelPattern(
+function parseModelPattern(
 	pattern: string,
 	availableModels: Model<Api>[],
 	options?: { allowInvalidThinkingLevelFallback?: boolean },
@@ -279,10 +276,7 @@ export interface ResolveModelScopeResult {
 	diagnostics: ModelScopeDiagnostic[];
 }
 
-export function resolveModelScopeFromModels(
-	patterns: string[],
-	models: readonly Model<Api>[],
-): ResolveModelScopeResult {
+function resolveModelScopeFromModels(patterns: string[], models: readonly Model<Api>[]): ResolveModelScopeResult {
 	const availableModels = [...models];
 	const scopedModels: ScopedModel[] = [];
 	const diagnostics: ModelScopeDiagnostic[] = [];
@@ -369,7 +363,7 @@ export async function resolveModelScopeWithDiagnostics(
 	return resolveModelScopeFromModels(patterns, await modelRuntime.getAvailable(undefined, options));
 }
 
-export async function resolveModelScope(
+async function resolveModelScope(
 	patterns: string[],
 	modelRuntime: ModelRuntime,
 	options?: AuthOperationOptions,
@@ -605,7 +599,7 @@ export function resolveCliModel(options: {
 	};
 }
 
-export interface InitialModelResult {
+interface InitialModelResult {
 	model: Model<Api> | undefined;
 	thinkingLevel: ThinkingLevel;
 	fallbackMessage: string | undefined;
@@ -711,7 +705,7 @@ export async function findInitialModel(options: {
 /**
  * Restore model from session, with fallback to available models
  */
-export async function restoreModelFromSession(
+async function restoreModelFromSession(
 	savedProvider: string,
 	savedModelId: string,
 	currentModel: Model<Api> | undefined,
@@ -781,3 +775,16 @@ export async function restoreModelFromSession(
 	// No models available
 	return { model: undefined, fallbackMessage: undefined };
 }
+
+export type { InitialModelResult, ParsedModelResult };
+// Package-internal: `resolveCliModel` and `findInitialModel` are the two the CLI and the SDK call;
+// everything below is a step inside them. `resolveModelScopeWithDiagnostics` stays public because it
+// is the one that reports *why* a scope matched nothing.
+export {
+	defaultModelPerProvider,
+	findExactModelReferenceMatch,
+	parseModelPattern,
+	resolveModelScope,
+	resolveModelScopeFromModels,
+	restoreModelFromSession,
+};

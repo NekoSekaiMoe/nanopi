@@ -33,6 +33,10 @@ import {
 	sessionEntryToContextMessages,
 } from "../session-projection.ts";
 import type { CompactionEntry, ProjectedSessionEntry, SessionEntry, SessionProjection } from "../session-store.ts";
+import { SETTINGS_DEFAULTS } from "../settings-defaults.ts";
+// The block `shouldCompact` and `prepareCompaction` take, declared next to the schema it comes from.
+// It used to be declared here as well, under the same name but a narrower shape.
+import type { CompactionSettings } from "../settings-schema.ts";
 import { combineUsage } from "../usage-totals.ts";
 import { getPromptCacheTtlMs, priceTokens } from "./costs.ts";
 import { withCompactionRequestMetadata } from "./request-metadata.ts";
@@ -157,17 +161,8 @@ export interface CompactionResult<T = unknown> {
 // Types
 // ============================================================================
 
-export interface CompactionSettings {
-	enabled: boolean;
-	reserveTokens: number;
-	keepRecentTokens: number;
-}
-
-export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = {
-	enabled: true,
-	reserveTokens: 16384,
-	keepRecentTokens: 20000,
-};
+/** The enabled-by-default block, i.e. the numbers `settings.json` leaves out. */
+export const DEFAULT_COMPACTION_SETTINGS: CompactionSettings = { ...SETTINGS_DEFAULTS.compaction };
 
 // ============================================================================
 // Token calculation
@@ -1469,3 +1464,6 @@ export async function compactInContext(
 		details: { readFiles, modifiedFiles, inContext: { status: "used" } } satisfies CompactionDetails,
 	};
 }
+
+// Re-exported because this module is where callers already look for the compaction types.
+export type { CompactionSettings, CompactionSettingsInput } from "../settings-schema.ts";

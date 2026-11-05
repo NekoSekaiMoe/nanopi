@@ -405,22 +405,39 @@ export const SettingsSchema = Type.Object(
 type SettingsInput = Static<typeof SettingsSchema>;
 
 export interface CompactionModelOverride extends Static<typeof CompactionModelOverrideSchema> {}
-export interface CompactionSettings extends Static<typeof CompactionSettingsSchema> {}
+export interface CompactionSettingsInput extends Static<typeof CompactionSettingsSchema> {}
+
+/**
+ * The same block after the defaults are merged: what `shouldCompact` / `prepareCompaction` receive.
+ *
+ * The schema fields are all optional (a user writes three numbers out of six), so the raw `Static`
+ * type is a bag of `number | undefined`. Compaction only runs once `SettingsManager` has filled the
+ * defaults in, and `contextWindow - settings.reserveTokens` is a number there.
+ */
+export interface CompactionSettings extends CompactionSettingsInput {
+	enabled: boolean;
+	reserveTokens: number;
+	keepRecentTokens: number;
+}
 export interface BranchSummarySettings extends Static<typeof BranchSummarySettingsSchema> {}
 export interface ProviderRetrySettings extends Static<typeof ProviderRetrySettingsSchema> {}
 export interface RetrySettings extends Omit<Static<typeof RetrySettingsSchema>, "maxDelayMs"> {}
 export interface TerminalSettings extends Static<typeof TerminalSettingsSchema> {}
-export interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
+interface ImageSettings extends Static<typeof ImageSettingsSchema> {}
 export interface ThinkingBudgetsSettings extends Static<typeof ThinkingBudgetsSettingsSchema> {}
 export type MermaidRenderingMode = NonNullable<Static<typeof MarkdownSettingsSchema>["mermaid"]>;
 export interface MarkdownSettings extends Static<typeof MarkdownSettingsSchema> {}
 export interface WarningSettings extends Static<typeof WarningSettingsSchema> {}
 export interface LlamaCppSettings extends Static<typeof LlamaCppSettingsSchema> {}
-export type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
-export type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
+type DefaultProjectTrust = NonNullable<SettingsInput["defaultProjectTrust"]>;
+type QuietStartup = NonNullable<SettingsInput["quietStartup"]>;
 export type TransportSetting = NonNullable<SettingsInput["transport"]>;
-export type CacheWarmingMode = NonNullable<SettingsInput["cacheWarming"]>;
+type CacheWarmingMode = NonNullable<SettingsInput["cacheWarming"]>;
 export interface Settings extends Omit<SettingsInput, "queueMode" | "retry" | "skills" | "websockets"> {
 	retry?: RetrySettings;
 	skills?: string[];
 }
+
+// The names a `SettingsManager` caller hands back to the manager. The rest of the schema stays the
+// manager's business: it describes `settings.json`, not an SDK argument list.
+export type { CacheWarmingMode, DefaultProjectTrust, ImageSettings, QuietStartup };

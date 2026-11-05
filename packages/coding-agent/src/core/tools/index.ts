@@ -92,19 +92,10 @@ import { createPowerShellTool, createPowerShellToolDefinition, type PowerShellTo
 import { createReadTool, createReadToolDefinition, type ReadToolOptions } from "./read.ts";
 import { createWriteTool, createWriteToolDefinition, type WriteToolOptions } from "./write.ts";
 
-export type Tool = AgentTool<any>;
-export type ToolDef = ToolDefinition<any, any>;
-export type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep" | "find" | "ls";
-export const allToolNames: Set<ToolName> = new Set([
-	"read",
-	"bash",
-	"powershell",
-	"edit",
-	"write",
-	"grep",
-	"find",
-	"ls",
-]);
+type Tool = AgentTool<any>;
+type ToolDef = ToolDefinition<any, any>;
+type ToolName = "read" | "bash" | "powershell" | "edit" | "write" | "grep" | "find" | "ls";
+const allToolNames: Set<ToolName> = new Set(["read", "bash", "powershell", "edit", "write", "grep", "find", "ls"]);
 
 export interface ToolsOptions {
 	read?: ReadToolOptions;
@@ -117,7 +108,7 @@ export interface ToolsOptions {
 	ls?: LsToolOptions;
 }
 
-export function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
+function createToolDefinition(toolName: ToolName, cwd: string, options?: ToolsOptions): ToolDef {
 	switch (toolName) {
 		case "read":
 			return createReadToolDefinition(cwd, options?.read);
@@ -140,7 +131,7 @@ export function createToolDefinition(toolName: ToolName, cwd: string, options?: 
 	}
 }
 
-export function createTool(toolName: ToolName, cwd: string, options?: ToolsOptions): Tool {
+function createTool(toolName: ToolName, cwd: string, options?: ToolsOptions): Tool {
 	switch (toolName) {
 		case "read":
 			return createReadTool(cwd, options?.read);
@@ -163,7 +154,7 @@ export function createTool(toolName: ToolName, cwd: string, options?: ToolsOptio
 	}
 }
 
-export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
+function createCodingToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
 	return [
 		createReadToolDefinition(cwd, options?.read),
 		createBashToolDefinition(cwd, options?.bash),
@@ -172,7 +163,7 @@ export function createCodingToolDefinitions(cwd: string, options?: ToolsOptions)
 	];
 }
 
-export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
+function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOptions): ToolDef[] {
 	return [
 		createReadToolDefinition(cwd, options?.read),
 		createGrepToolDefinition(cwd, options?.grep),
@@ -187,13 +178,13 @@ export function createReadOnlyToolDefinitions(cwd: string, options?: ToolsOption
  * (`scripts/build-tools.mjs`); the result then holds only those names.
  */
 /** Every built-in tool definition; `names` narrows which ones get constructed. */
-export function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef>;
-export function createAllToolDefinitions(
+function createAllToolDefinitions(cwd: string, options?: ToolsOptions): Record<ToolName, ToolDef>;
+function createAllToolDefinitions(
 	cwd: string,
 	options: ToolsOptions | undefined,
 	names: readonly string[] | undefined,
 ): Record<ToolName, ToolDef> | Partial<Record<ToolName, ToolDef>>;
-export function createAllToolDefinitions(
+function createAllToolDefinitions(
 	cwd: string,
 	options?: ToolsOptions,
 	names?: readonly string[],
@@ -220,7 +211,7 @@ export function createAllToolDefinitions(
  * of them. Bash-only builds register the shell tools alone, so the rest cannot
  * be activated by settings, `--tools`, a resumed transcript, or a module.
  */
-export function filterToolDefinitions<T extends Record<string, unknown>>(
+function filterToolDefinitions<T extends Record<string, unknown>>(
 	definitions: T,
 	names: readonly string[] | undefined,
 ): T {
@@ -246,7 +237,7 @@ export function createReadOnlyTools(cwd: string, options?: ToolsOptions): Tool[]
 	];
 }
 
-export function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool> {
+function createAllTools(cwd: string, options?: ToolsOptions): Record<ToolName, Tool> {
 	return {
 		read: createReadTool(cwd, options?.read),
 		bash: createBashTool(cwd, options?.bash),
@@ -258,3 +249,19 @@ export function createAllTools(cwd: string, options?: ToolsOptions): Record<Tool
 		ls: createLsTool(cwd, options?.ls),
 	};
 }
+
+export type { Tool, ToolDef, ToolName };
+// Package-internal: `createCodingTools` / `createReadOnlyTools` (typed `Tool[]`, re-exported through
+// `core/sdk.ts`) are what an SDK caller builds tools with, and the `*ToolDefinition` factories are
+// what a module composes. The generic dispatch below them (`createTool(name)`, the `ToolName`
+// catalogue, the definition filter) is how the session wires its own toolset.
+export {
+	allToolNames,
+	createAllToolDefinitions,
+	createAllTools,
+	createCodingToolDefinitions,
+	createReadOnlyToolDefinitions,
+	createTool,
+	createToolDefinition,
+	filterToolDefinitions,
+};

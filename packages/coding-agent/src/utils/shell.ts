@@ -199,15 +199,15 @@ export function sanitizeBinaryOutput(str: string): string {
  */
 const trackedDetachedChildPids = new Set<number>();
 
-export function trackDetachedChildPid(pid: number): void {
+function trackDetachedChildPid(pid: number): void {
 	trackedDetachedChildPids.add(pid);
 }
 
-export function untrackDetachedChildPid(pid: number): void {
+function untrackDetachedChildPid(pid: number): void {
 	trackedDetachedChildPids.delete(pid);
 }
 
-export function killTrackedDetachedChildren(): void {
+function killTrackedDetachedChildren(): void {
 	for (const pid of trackedDetachedChildPids) {
 		killProcessTree(pid);
 	}
@@ -253,3 +253,7 @@ export function killProcessTree(pid: number, signal: NodeJS.Signals = "SIGKILL")
 		}
 	}
 }
+
+// Package-internal: the detached-child registry that `killProcessTree` and the bash tool keep in
+// step; a caller kills one pid, not the registry.
+export { killTrackedDetachedChildren, trackDetachedChildPid, untrackDetachedChildPid };

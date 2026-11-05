@@ -56,7 +56,7 @@ async function copyViaWindowsClipboard(text: string): Promise<boolean> {
 }
 
 /** Read plain text from the system clipboard. */
-export async function readClipboardText(): Promise<string | null> {
+async function readClipboardText(): Promise<string | null> {
 	const commands: [string, string[]][] = [];
 	// Termux reports platform "android", not "linux" (#10391).
 	if (process.env.TERMUX_VERSION) commands.push(["termux-clipboard-get", []]);
@@ -78,7 +78,7 @@ export async function readClipboardText(): Promise<string | null> {
 }
 
 /** Read file paths, such as Finder file copies, from the native clipboard. */
-export async function readClipboardFilePaths(): Promise<string[] | null> {
+async function readClipboardFilePaths(): Promise<string[] | null> {
 	const paths = await getNativeClipboard()?.getFilePaths?.();
 	return paths?.length ? paths : null;
 }
@@ -148,3 +148,7 @@ export async function copyToClipboard(text: string): Promise<void> {
 	}
 	throw new Error("Clipboard unavailable");
 }
+
+// Package-internal: only `copyToClipboard` is an SDK affordance (copy a diff to the user's
+// clipboard); reading the clipboard back belongs to the composer's paste handling.
+export { readClipboardFilePaths, readClipboardText };

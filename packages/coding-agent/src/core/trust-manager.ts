@@ -18,7 +18,7 @@ export interface ProjectTrustUpdate {
 	decision: ProjectTrustDecision;
 }
 
-export interface ProjectTrustOption {
+interface ProjectTrustOption {
 	label: string;
 	trusted: boolean;
 	updates: ProjectTrustUpdate[];
@@ -56,13 +56,13 @@ function findNearestTrustEntry(data: TrustFile, cwd: string): ProjectTrustStoreE
 	}
 }
 
-export function getProjectTrustParentPath(cwd: string): string | undefined {
+function getProjectTrustParentPath(cwd: string): string | undefined {
 	const trustPath = normalizeCwd(cwd);
 	const parentDir = dirname(trustPath);
 	return parentDir === trustPath ? undefined : parentDir;
 }
 
-export function getProjectTrustOptions(cwd: string, options?: { includeSessionOnly?: boolean }): ProjectTrustOption[] {
+function getProjectTrustOptions(cwd: string, options?: { includeSessionOnly?: boolean }): ProjectTrustOption[] {
 	const trustPath = normalizeCwd(cwd);
 	const trustOptions: ProjectTrustOption[] = [
 		{ label: "Trust", trusted: true, updates: [{ path: trustPath, decision: true }], savedPath: trustPath },
@@ -242,3 +242,7 @@ export class ProjectTrustStore {
 		});
 	}
 }
+
+// Package-internal: the trust dialog reads its option list from here; an SDK caller asks the store
+// whether a project is trusted instead.
+export { getProjectTrustOptions, getProjectTrustParentPath, type ProjectTrustOption };

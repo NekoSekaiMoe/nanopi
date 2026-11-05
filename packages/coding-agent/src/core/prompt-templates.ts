@@ -22,7 +22,7 @@ export interface PromptTemplate {
  * Parse command arguments respecting quoted strings (bash-style)
  * Returns array of arguments
  */
-export function parseCommandArgs(argsString: string): string[] {
+function parseCommandArgs(argsString: string): string[] {
 	const args: string[] = [];
 	let current = "";
 	let inQuote: string | null = null;
@@ -68,7 +68,7 @@ export function parseCommandArgs(argsString: string): string[] {
  * Note: Replacement happens on the template string only. Argument and default values
  * containing patterns like $1, $@, or $ARGUMENTS are NOT recursively substituted.
  */
-export function substituteArgs(content: string, args: string[]): string {
+function substituteArgs(content: string, args: string[]): string {
 	const allArgs = args.join(" ");
 
 	return content.replace(
@@ -197,7 +197,7 @@ function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => 
 	return { templates, diagnostics };
 }
 
-export interface LoadPromptTemplatesOptions {
+interface LoadPromptTemplatesOptions {
 	/** Working directory for project-local templates. */
 	cwd: string;
 	/** Agent config directory for global templates. */
@@ -208,7 +208,7 @@ export interface LoadPromptTemplatesOptions {
 	includeDefaults: boolean;
 }
 
-export interface LoadPromptTemplatesResult {
+interface LoadPromptTemplatesResult {
 	templates: PromptTemplate[];
 	diagnostics: ResourceDiagnostic[];
 }
@@ -219,7 +219,7 @@ export interface LoadPromptTemplatesResult {
  * 2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
  * 3. Explicit prompt paths
  */
-export function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTemplatesResult {
+function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTemplatesResult {
 	const resolvedCwd = resolvePath(options.cwd);
 	const resolvedAgentDir = resolvePath(options.agentDir);
 	const promptPaths = options.promptPaths;
@@ -318,3 +318,8 @@ export function expandPromptTemplate(text: string, templates: PromptTemplate[]):
 
 	return text;
 }
+
+export type { LoadPromptTemplatesOptions, LoadPromptTemplatesResult };
+// Package-internal: `expandPromptTemplate` is the only entry point the SDK needs; loading the
+// template directory and the `$1` / `$@` substitution are how it does that.
+export { loadPromptTemplates, parseCommandArgs, substituteArgs };

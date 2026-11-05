@@ -400,7 +400,7 @@ function escapeXml(str: string): string {
 		.replace(/'/g, "&apos;");
 }
 
-export interface LoadSkillsOptions {
+interface LoadSkillsOptions {
 	/** Working directory for project-local skills. */
 	cwd: string;
 	/** Agent config directory for global skills. */
@@ -516,3 +516,6 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 		diagnostics: [...allDiagnostics, ...collisionDiagnostics],
 	};
 }
+
+// Package-internal: `loadSkills` takes it; `loadSkillsFromDir` is the one the docs name.
+export type { LoadSkillsOptions };

@@ -8,7 +8,7 @@ import { waitForChildProcess } from "../utils/child-process.ts";
 /**
  * Options for executing shell commands.
  */
-export interface ExecOptions {
+interface ExecOptions {
 	/** AbortSignal to cancel the command */
 	signal?: AbortSignal;
 	/** Timeout in milliseconds */
@@ -20,7 +20,7 @@ export interface ExecOptions {
 /**
  * Result of executing a shell command.
  */
-export interface ExecResult {
+interface ExecResult {
 	stdout: string;
 	stderr: string;
 	code: number;
@@ -105,3 +105,7 @@ export async function execCommand(
 			});
 	});
 }
+
+// Package-internal: `execCommand` is the one the tool code calls, and its parameters describe the
+// two option bags well enough. `modules-api.ts` keeps publishing them for module authors.
+export type { ExecOptions, ExecResult };

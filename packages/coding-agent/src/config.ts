@@ -15,7 +15,7 @@ const __dirname = dirname(__filename);
 
 /** Detect the esbuild-bundled Node.js distribution. */
 declare const NANOPI_BUNDLED_NODE: boolean;
-export const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOPI_BUNDLED_NODE;
+const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOPI_BUNDLED_NODE;
 
 // =============================================================================
 // Package Asset Paths (shipped with executable)
@@ -25,7 +25,7 @@ export const isBundledNode = typeof NANOPI_BUNDLED_NODE !== "undefined" && NANOP
  * Get the base directory for resolving package assets (package.json, README.md, CHANGELOG.md):
  * the package root containing package.json.
  */
-export function findNodePackageDir(startDir: string): string {
+function findNodePackageDir(startDir: string): string {
 	let dir = startDir;
 	while (dir !== dirname(dir)) {
 		if (existsSync(join(dir, "package.json"))) {
@@ -51,7 +51,7 @@ export function findNodePackageDir(startDir: string): string {
  * nanopi installation (`npx`, a global install shadowed by PATH) still spawns
  * the binary the user has.
  */
-export function resolveHostEntry(): { cmd: string; args: string[] } {
+function resolveHostEntry(): { cmd: string; args: string[] } {
 	const entryPoint = process.argv[1];
 	if (isSingleNodeFileRuntime() && entryPoint) return { cmd: process.execPath, args: [entryPoint] };
 	try {
@@ -83,14 +83,14 @@ export function getPackageDir(): string {
  * - For Node.js (dist/): dist/core/export-html/
  * - For source (src/): src/core/export-html/
  */
-export function getExportTemplateDir(): string {
+function getExportTemplateDir(): string {
 	const packageDir = getPackageDir();
 	const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
 	return join(packageDir, srcOrDist, "core", "export-html");
 }
 
 /** Get path to package.json */
-export function getPackageJsonPath(): string {
+function getPackageJsonPath(): string {
 	return join(getPackageDir(), "package.json");
 }
 
@@ -110,11 +110,11 @@ export function getExamplesPath(): string {
 }
 
 /** Get path to CHANGELOG.md */
-export function getChangelogPath(): string {
+function getChangelogPath(): string {
 	return resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
-export type InstallChange = { kind: "updated"; version: string } | { kind: "removed" };
+type InstallChange = { kind: "updated"; version: string } | { kind: "removed" };
 
 /**
  * Detect that the package this process runs from changed on disk, for example after the package
@@ -123,7 +123,7 @@ export type InstallChange = { kind: "updated"; version: string } | { kind: "remo
  * Checks the package.json read at startup. Resolving it again would walk up past a deleted install
  * and could find an unrelated package.json, such as one in the home directory.
  */
-export function detectInstallChange(packageJsonPath = startupPackageJsonPath): InstallChange | undefined {
+function detectInstallChange(packageJsonPath = startupPackageJsonPath): InstallChange | undefined {
 	if (!packageJsonPath) return undefined;
 	let installed: PackageJson;
 	try {
@@ -162,9 +162,9 @@ try {
 }
 
 const nanopiConfigName: string | undefined = pkg.nanopiConfig?.name;
-export const PACKAGE_NAME: string = pkg.name || "@nanopi/pi-coding-agent";
-export const APP_NAME: string = nanopiConfigName || "nanopi";
-export const APP_TITLE: string = nanopiConfigName ? APP_NAME : "nanopi";
+const PACKAGE_NAME: string = pkg.name || "@nanopi/pi-coding-agent";
+const APP_NAME: string = nanopiConfigName || "nanopi";
+const APP_TITLE: string = nanopiConfigName ? APP_NAME : "nanopi";
 export const CONFIG_DIR_NAME: string = pkg.nanopiConfig?.configDir || ".nanopi";
 /** Standalone builds without embedded assets inject the version instead. */
 declare const NANOPI_SINGLE_FILE_VERSION_FALLBACK: string | undefined;
@@ -175,10 +175,10 @@ export const VERSION: string =
 	"0.0.0";
 
 // e.g., NANOPI_CODING_AGENT_DIR or TAU_CODING_AGENT_DIR
-export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
-export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
+const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
+const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
 
-export function expandTildePath(path: string): string {
+function expandTildePath(path: string): string {
 	return normalizePath(path);
 }
 
@@ -196,12 +196,12 @@ export function getAgentDir(): string {
 }
 
 /** Get path to models.json */
-export function getModelsPath(): string {
+function getModelsPath(): string {
 	return join(getAgentDir(), "models.json");
 }
 
 /** Get path to auth.json */
-export function getAuthPath(): string {
+function getAuthPath(): string {
 	return join(getAgentDir(), "auth.json");
 }
 
@@ -211,26 +211,55 @@ export function getSettingsPath(): string {
 }
 
 /** Get path to tools directory */
-export function getToolsDir(): string {
+function getToolsDir(): string {
 	return join(getAgentDir(), "tools");
 }
 
 /** Get path to managed binaries directory (fd, rg) */
-export function getBinDir(): string {
+function getBinDir(): string {
 	return join(getAgentDir(), "bin");
 }
 
 /** Get path to prompt templates directory */
-export function getPromptsDir(): string {
+function getPromptsDir(): string {
 	return join(getAgentDir(), "prompts");
 }
 
 /** Get path to sessions directory */
-export function getSessionsDir(): string {
+function getSessionsDir(): string {
 	return join(getAgentDir(), "sessions");
 }
 
 /** Get path to debug log file */
-export function getDebugLogPath(): string {
+function getDebugLogPath(): string {
 	return join(getAgentDir(), `${APP_NAME}-debug.log`);
 }
+
+// The rest of the paths in this file stay path-importable (`../config.ts`) but are not on the
+// package root: `getAuthPath`, the session/tool/prompt directories and the install-detection helpers
+// describe where this app keeps its own files, and publishing them made every one a promise. The
+// block below is what `src/index.ts` used to hand out, kept for the callers that import this module
+// directly.
+export {
+	APP_NAME,
+	APP_TITLE,
+	detectInstallChange,
+	ENV_AGENT_DIR,
+	ENV_SESSION_DIR,
+	expandTildePath,
+	findNodePackageDir,
+	getAuthPath,
+	getBinDir,
+	getChangelogPath,
+	getDebugLogPath,
+	getExportTemplateDir,
+	getModelsPath,
+	getPackageJsonPath,
+	getPromptsDir,
+	getSessionsDir,
+	getToolsDir,
+	type InstallChange,
+	isBundledNode,
+	PACKAGE_NAME,
+	resolveHostEntry,
+};

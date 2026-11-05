@@ -320,7 +320,7 @@ export class RuntimeReloadError extends Error {
 	}
 }
 
-export interface RuntimeReloadCallbacks {
+interface RuntimeReloadCallbacks {
 	beforeReload?(): void | Promise<void>;
 	beforeSessionStart?(): void | Promise<void>;
 	afterReload?(): void | Promise<void>;
@@ -396,7 +396,7 @@ export interface AgentSessionConfig {
 	sessionStartEvent?: SessionStartEvent;
 }
 
-export interface ModuleBindings {
+interface ModuleBindings {
 	uiContext?: ModuleUIContext;
 	mode?: ModuleMode;
 	commandContextActions?: ModuleCommandContextActions;
@@ -406,8 +406,8 @@ export interface ModuleBindings {
 	reloadHooks?: RuntimeReloadCallbacks;
 }
 
-export type QueuedInputDisposition = "handled" | "queued";
-export type PromptDisposition = QueuedInputDisposition | "started";
+type QueuedInputDisposition = "handled" | "queued";
+type PromptDisposition = QueuedInputDisposition | "started";
 
 /** Options for AgentSession.prompt() */
 export interface PromptOptions {
@@ -429,7 +429,7 @@ export interface PromptOptions {
 }
 
 /** Options for model/thinking mutations. */
-export interface ModelMutationOptions {
+interface ModelMutationOptions {
 	/** Persist the new value to global defaults. Defaults to session-only. */
 	persist?: boolean;
 }
@@ -5173,3 +5173,9 @@ export class AgentSession {
 		return this._moduleRegistry.messageCodecs;
 	}
 }
+
+// Package-internal: `ModuleBindings` is how the registry attaches to a session, the two
+// dispositions describe what `send()` did with a message it took over, and the reload/mutation
+// option bags belong to `AgentSessionRuntime` and the ACP surface. `send()` returns
+// `PromptDisposition`, so the union stays inferable without naming it.
+export type { ModelMutationOptions, ModuleBindings, PromptDisposition, QueuedInputDisposition, RuntimeReloadCallbacks };

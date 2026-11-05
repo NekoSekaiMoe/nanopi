@@ -10,7 +10,7 @@ import { parseExportFormat, pdfExportHint, type SessionExportFormat } from "../c
 import { getToolListError } from "../core/settings-manager.ts";
 
 /** `--output <mode>`: which output interface the process speaks. */
-export type OutputMode = "text" | "json" | "rpc";
+type OutputMode = "text" | "json" | "rpc";
 
 export interface Args {
 	provider?: string;
@@ -67,11 +67,11 @@ export interface Args {
 
 const VALID_THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 
-export function isValidThinkingLevel(level: string): level is ThinkingLevel {
+function isValidThinkingLevel(level: string): level is ThinkingLevel {
 	return VALID_THINKING_LEVELS.includes(level as ThinkingLevel);
 }
 
-export function normalizeSessionName(value: string): string | undefined {
+function normalizeSessionName(value: string): string | undefined {
 	const name = value.trim();
 	return name.length > 0 ? name : undefined;
 }
@@ -271,7 +271,7 @@ export function parseArgs(args: string[]): Args {
 	return result;
 }
 
-export function printHelp(moduleFlags?: ModuleFlag[]): void {
+function printHelp(moduleFlags?: ModuleFlag[]): void {
 	const moduleFlagsText =
 		moduleFlags && moduleFlags.length > 0
 			? `\n${chalk.bold("Module CLI Flags:")}\n${moduleFlags
@@ -462,3 +462,7 @@ ${chalk.bold("Built-in Tool Names:")}
   ls         - List directory contents (read-only, off by default)
 `);
 }
+
+// Package-internal: `parseArgs` returns the `Args` a caller needs, and the CLI is the only caller of
+// the help text and of the two validators it applies while parsing.
+export { isValidThinkingLevel, normalizeSessionName, type OutputMode, printHelp };

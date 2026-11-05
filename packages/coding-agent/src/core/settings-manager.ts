@@ -27,7 +27,6 @@ export type {
 	BranchSummarySettings,
 	CacheWarmingMode,
 	CompactionModelOverride,
-	CompactionSettings,
 	DefaultProjectTrust,
 	ImageSettings,
 	LlamaCppSettings,
@@ -42,8 +41,9 @@ export type {
 	TransportSetting,
 	WarningSettings,
 } from "./settings-schema.ts";
+
 /** Cache-warming profile. "idle" also warms between agent runs. */
-export const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const satisfies readonly CacheWarmingMode[];
+const CACHE_WARMING_MODES = ["off", "streaming", "idle"] as const satisfies readonly CacheWarmingMode[];
 
 const DEFAULT_COMPACTION_TOKEN_SETTINGS: Required<CompactionModelOverride> = {
 	reserveTokens: SETTINGS_DEFAULTS.compaction.reserveTokens,
@@ -1337,3 +1337,6 @@ export class SettingsManager {
 		this.save();
 	}
 }
+
+// Package-internal: the valid cache-warming values, for the settings selector.
+export { CACHE_WARMING_MODES };

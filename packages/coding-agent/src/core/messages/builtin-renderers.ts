@@ -12,9 +12,9 @@
  * structural anyway. The one import left is erased before Node sees it.
  */
 
-import type { MessageRunRenderOptions } from "./codec.ts";
+import type { MessageCodecRenderOptions } from "./codec.ts";
 
-type RenderRun = (message: never, options: MessageRunRenderOptions) => Renderable;
+type RenderRun = (message: never, options: MessageCodecRenderOptions) => Renderable;
 
 /** The slice of `Component` a transcript view is drawn through. */
 interface Renderable {
@@ -53,13 +53,13 @@ export const renderCompactionSummary: RenderRun = (message, options) =>
 class DeferredMessageComponent implements Renderable {
 	private readonly source: Promise<new (message: never, theme: never, outputPad: number) => MessageComponent>;
 	private readonly message: never;
-	private readonly options: MessageRunRenderOptions;
+	private readonly options: MessageCodecRenderOptions;
 	private inner: MessageComponent | undefined;
 
 	constructor(
 		source: Promise<new (message: never, theme: never, outputPad: number) => MessageComponent>,
 		message: never,
-		options: MessageRunRenderOptions,
+		options: MessageCodecRenderOptions,
 	) {
 		this.source = source;
 		this.message = message;
