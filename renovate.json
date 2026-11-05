@@ -17,7 +17,7 @@
   },
   "packageRules": [
     {
-      "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了直接合进 main。platformAutomerge 关掉，让 Renovate 自己在 CI 之后合，而不是等 GitHub 的 native auto-merge。",
+      "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了交给 GitHub 原生 auto-merge 合进 main。platformAutomerge: true 是关键：Renovate 自合并（false）走 checkAutoMerge，只在没有新 commit 的那一轮才检查 branch status、再由 mergePr 过 ruleset，GitHub #3~#17 实测从未生效、全是人工合并；而 GitHub 原生 auto-merge 直接评估 ruleset 点名的 check-run（实测 ruleset context=build-check-test、#17 head 的 build-check-test=success），不依赖 Renovate 轮询时序。见 .agents/notes/implemented/bug-fix/2026-11-05-renovate-platform-automerge.md。",
       "matchManagers": [
         "npm"
       ],
@@ -25,7 +25,7 @@
       "groupSlug": "npm-dependencies",
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
+      "platformAutomerge": true
     },
     {
       "description": "Node 底图只升 patch：跨 minor 会换掉运行时，得人工确认 Node 版本后再动。这条必须排在上面 npm 组之前，否则被分组的规则吞掉。",
@@ -66,7 +66,7 @@
       "enabled": false
     },
     {
-      "description": "GitHub Actions 的 sha 固定不分组：每个 action 一条分支、一个 PR。sha 固定时即便只有单个 action 变了，整份文件的 regex 也会重新算一遍，把别人刚推上去的 sha 一起带上——分组的话，Renovate 每合一次都要重建上一次的 PR 分支，而重建出来的分支是不带 automerge 的。",
+      "description": "GitHub Actions 的 sha 固定不分组：每个 action 一条分支、一个 PR。sha 固定时即便只有单个 action 变了，整份文件的 regex 也会重新算一遍，把别人刚推上去的 sha 一起带上——分组的话，Renovate 每合一次都要重建上一次的 PR 分支，而重建出来的分支是不带 automerge 的。platformAutomerge: true 同上，交给 GitHub 原生 auto-merge（见 npm 组说明）。",
       "matchManagers": [
         "custom.regex"
       ],
@@ -74,7 +74,7 @@
       "groupSlug": null,
       "automerge": true,
       "automergeType": "pr",
-      "platformAutomerge": false
+      "platformAutomerge": true
     }
   ],
   "customManagers": [

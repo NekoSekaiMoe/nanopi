@@ -2,6 +2,17 @@
 
 Status: implemented
 
+> **已被推翻（2026-11-05，`shinytale/nanopi#518` 之后重查）**：本篇把「绿了不合」
+> 归因为「分支保护必选检查名 `ci / build-check-test` 与工作流全名对不上」，并据此
+> 把工作流改名 `checks.yml` / `name: Checks`、要求管理员同步改 ruleset。GitHub API
+> 实测不支持这条因果：ruleset `26337009` 的 `context` 是裸 `build-check-test`、
+> `integration_id=15368`（GitHub Actions），与 check-run 名（job 名）一字不差，
+> 且 ruleset 匿名可读；改名与「同步改 ruleset」都不是必要的。真因是
+> `renovate.json` 的 `platformAutomerge: false` 让合并依赖 Renovate 自合并的轮询
+> 时序，已改回 `true` 交给 GitHub 原生 auto-merge。改名本身保留（命名统一，无害），
+> 但本篇关于「必选检查名带工作流名、改名才能对上」的结论不再成立。见
+> [绿了不合的真因是 platformAutomerge: false](../bug-fix/2026-11-05-renovate-platform-automerge.md)。
+
 ## Problem
 
 `renovate.json` 从 `45c3118b2` 起就在给 npm 依赖和 GitHub Actions 的 sha 开

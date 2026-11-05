@@ -1,12 +1,17 @@
 name: Checks
 
-# 文件名必须是 checks.yml、工作流名必须是 Checks，不能改回 ci.yml / CI。
+# job 名必须是 build-check-test，不能改。
 #
-# 分支保护上的必选检查名是全名 `<工作流名> / <job 名>`，这里就是
-# `Checks / build-check-test`。Renovate 的 automerge 只看分支保护要的那些
-# 检查（不是「所有检查」），名字对不上它就永远等下去 —— 一个跑了也不会
-# 满足要求的检查等于没有（#419）。改名之后必须同步改 GitHub 的 ruleset /
-# 分支保护里的必选检查，否则所有 PR 都会卡住。
+# GitHub ruleset 的必选检查（实测 ruleset 26337009，context=build-check-test，
+# integration_id=15368 指向 GitHub Actions）匹配的是 check-run 的 name，也就是这里
+# 的 job 名，与工作流 `name:`/文件名无关（#419 当初以为是 `<工作流名> / <job 名>`
+# 全名、且记成小写 ci，与实测不符）。改名后 ruleset 不必跟着改，但改 job 名会立刻
+# 让必选检查落空、所有 PR 卡住。
+#
+# 文件叫 checks.yml、工作流叫 Checks 只是 #420 定的命名统一，保留不动即可；真正
+# 决定「绿了能不能合」的是 platformAutomerge（见 renovate.json）：交给 GitHub 原生
+# auto-merge 才会评估这条 check-run。见
+# .agents/notes/implemented/bug-fix/2026-11-05-renovate-platform-automerge.md。
 
 on:
   # push 也要跑：直推 main 的提交（含从 CNB 镜像过来的合并提交）同样要过
