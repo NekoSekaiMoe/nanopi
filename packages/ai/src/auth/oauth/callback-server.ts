@@ -49,7 +49,8 @@ function sendPage(response: ServerResponse, status: number, html: string, pageOr
 		"content-type": "text/html; charset=utf-8",
 		"cache-control": "no-store",
 		// The page is a status message, not an origin. A provider that hides its callback in an
-		// embedded frame (Anthropic does) only renders a `frame-ancestors` source it allows.
+		// embedded frame (Anthropic does) only renders a page whose `frame-ancestors` allows it.
+		// `style-src` stays inline for the page's single <style>; scripts are not used at all.
 		"content-security-policy": `default-src 'none'; style-src 'unsafe-inline'; frame-ancestors ${pageOrigin}`,
 	});
 	response.end(html);

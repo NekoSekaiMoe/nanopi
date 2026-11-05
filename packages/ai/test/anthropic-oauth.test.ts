@@ -1,6 +1,7 @@
 import { createServer, type Server } from "node:http";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { anthropicOAuth } from "../src/auth/oauth/anthropic.ts";
+import { startOAuthCallbackServer } from "../src/auth/oauth/callback-server.ts";
 import type { AuthEvent, AuthPrompt } from "../src/auth/types.ts";
 
 // `platform.claude.com/v1/oauth/token` answers only browser-originated requests (403 otherwise),
@@ -277,6 +278,34 @@ describe("Anthropic OAuth", { concurrent: false }, () => {
 		expect(login.pageText).toContain("Signed in to Anthropic.");
 		// Claude's consent screen renders this page inside a frame on claude.ai.
 		expect(login.pageCsp).toContain("frame-ancestors https://claude.ai");
+	});
+
+	// Claude's consent screen renders the loopback page inside a frame on claude.ai, so every
+	// response the server writes has to allow it, not only the success page.
+	it("allows Claude's frame ancestor on the rejected-callback page", async () => {
+		const callback = await startOAuthCallbackServer({
+			providerName: "Anthropic",
+			host: "127.0.0.1",
+			port: 0,
+			path: "/callback",
+			pageOrigin: "https://claude.ai",
+			state: "expected-state",
+			complete: async (code) => code,
+		});
+		try {
+			const callbackUrl = `${callback.redirectUri}?code=late-code&state=expected-state`;
+			const first = await nativeFetch(callbackUrl);
+			await first.text();
+			const response = await nativeFetch(callbackUrl);
+			const body = await response.text();
+
+			expect(first.status).toBe(200);
+			expect(response.status).toBe(409);
+			expect(response.headers.get("content-security-policy")).toContain("frame-ancestors https://claude.ai");
+			expect(body).toContain("already been handled");
+		} finally {
+			callback.close();
+		}
 	});
 
 	// #10571
