@@ -3,6 +3,7 @@
 //
 //   curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 //   node install.js --sku=minimal --version=v20261013 --prefix=~/.local
+//   node install.js --mirror=https://atomgit.com/nanopi/releases-assets/raw/main/v20261031.1.0
 
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, writeFileSync } from "node:fs";
@@ -38,7 +39,7 @@ const text = async (url, description) => (await download(url, description)).text
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 const parseArguments = (arguments_) => {
-	const options = { sku: "full", version: "latest", out: undefined, prefix: undefined, help: false };
+	const options = { sku: "full", version: "latest", out: undefined, prefix: undefined, mirror: undefined, help: false };
 	for (let index = 0; index < arguments_.length; index++) {
 		const expression = arguments_[index];
 		const equals = expression.indexOf("=");
@@ -49,7 +50,8 @@ const parseArguments = (arguments_) => {
 			case "--sku":
 			case "--version":
 			case "--out":
-			case "--prefix": {
+			case "--prefix":
+			case "--mirror": {
 				const result = value();
 				if (!result) throw new InstallError(`${name} needs a value`);
 				options[name.slice(2)] = result;
@@ -72,7 +74,7 @@ const parseArguments = (arguments_) => {
 	return options;
 };
 
-const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--prefix=<dir>] [--out=<path>]
+const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [--version=<tag>] [--prefix=<dir>] [--out=<path>] [--mirror=<url>]
 
   --sku       bundle to download: full (default), base, minimal
   --version   release tag, with or without the leading v (default: latest);
@@ -80,6 +82,9 @@ const usage = () => `Usage: install.js [--sku=${Object.keys(SKUS).join("|")}] [-
   --prefix    install directory, like npm's prefix (default: ${DEFAULT_PREFIX});
               the bundle goes to <prefix>/bin and a \`nanopi\` shim to <prefix>/bin
   --out       write the bundle to this path and nothing else
+  --mirror    download from a mirror that carries the release assets instead of
+              GitHub Releases; the full asset URL belongs in it, tag included
+              (each mirror's README prints it)
   --help      print this summary
 
   --out and --prefix are mutually exclusive. Without either, the bundle is
@@ -90,7 +95,8 @@ Examples:
   curl -fsSL https://raw.githubusercontent.com/${REPOSITORY}/main/install.js | node - --sku=minimal
   node install.js --version=v20261013 --prefix=~/.local
   node install.js --version=20261031.1 --prefix=~/.local
-  node install.js --out=./nanopi.js`;
+  node install.js --out=./nanopi.js
+  node install.js --mirror=https://atomgit.com/nanopi/releases-assets/raw/main/v20261031.1.0`;
 
 const releaseTag = async (version) => {
 	if (version !== "latest") {
@@ -136,9 +142,11 @@ const main = async () => {
 		return 0;
 	}
 
-	const tag = await releaseTag(options.version);
+	// A mirror carries the release assets as raw files, so its tag is part of the
+	// URL and nothing resolves "latest" for it.
+	const tag = options.mirror ?? (await releaseTag(options.version));
 	const asset = SKUS[options.sku];
-	const base = `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(tag)}`;
+	const base = options.mirror ?? `https://github.com/${REPOSITORY}/releases/download/${encodeURIComponent(tag)}`;
 
 	// The checksum file is the release's own record of what was uploaded; without
 	// it a truncated bundle would only fail later, as a syntax error at run time.

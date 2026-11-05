@@ -27,6 +27,7 @@
 - `grep` keeps ripgrep's line numbers for files that contain an isolated `\r`: the file was split on `\r` as well as `\n`, which inflated the line count, so every context line after a stray CR was printed under the wrong number and away from the match
 - Skill diagnostics are no longer all labelled `[Skill conflicts]`: only name collisions are conflicts, and a missing frontmatter or unreadable `SKILL.md` is reported under `[Skill warnings]`. Same split for prompts
 - `pi-memory` no longer writes its `/remember` reminder into the footer. The extraction now runs once in the background after the session has gone somewhere, the result is cached for the session, and `/remember` becomes a pure confirmation step that costs no extra model call. A background run reports itself with one transcript notice naming the file, so the reminder no longer competes with the mode badges, checkpoints, and the shell label for the bottom bar's width; sessions with no UI (print, RPC) skip the extraction entirely instead of paying for an answer nobody can confirm (issue [#470](https://cnb.cool/shinytale/nanopi/-/issues/470))
+- `install.js --mirror=<url>` downloads the bundle from a mirror that carries the release assets instead of GitHub Releases, which makes installation usable where GitHub is slow or blocked. The URL carries the tag (`nightly` or a release), so `--version` is ignored; `--sku`, `--prefix` and `--out` behave as before (issue [#481](https://cnb.cool/shinytale/nanopi/-/issues/481))
 
 ## [20261031.1.0]
 

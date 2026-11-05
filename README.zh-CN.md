@@ -27,6 +27,18 @@ NanoPi 是从 Pi Coding Agent 深度裁剪、贴合个人工作流的轻量级 A
 curl -fsSL https://raw.githubusercontent.com/NekoSekaiMoe/nanopi/main/install.js | node
 ```
 
+国内访问 GitHub Releases 慢或者不通：同一批包由 GitHub Actions 的流水线自己发到 AtomGit 的 [nanopi/releases-assets](https://atomgit.com/nanopi/releases-assets)（每天一次 nightly，每次正式发布各一份）。把那个仓库 README 里的镜像地址交给 `install.js`：
+
+```bash
+# 地址里带 tag，`nightly` 或 v20261031.1.0 这样的正式版本
+curl -fsSL https://atomgit.com/NanoPi/NanoPi/raw/main/install.js | node - --mirror=https://atomgit.com/nanopi/releases-assets/raw/main/nightly
+
+# 也可以直接取文件，没有 API，也不用登录
+curl -fsSLO https://atomgit.com/nanopi/releases-assets/raw/main/nightly/nanopi.js
+```
+
+AtomGit 上的源码仓是镜像，发布说明、源码包和 npm 包仍以 GitHub 为准。
+
 这会把 `full` 包安装为 `~/.local/bin/nanopi.js`，并在旁边放一个 `nanopi` 垫片；只要 `~/.local/bin` 在 `PATH` 里，`nanopi` 就能直接运行（不在 `PATH` 里时 `install.js` 会提示）。两种用法下 `install.js` 的参数一致：
 
 ```bash
@@ -51,6 +63,7 @@ node install.js --out=./nanopi.js
 - `--version=<tag>`（默认最新 Release）接受带不带前导 `v` 的 tag。
 - `--prefix=<dir>`（默认 `~/.local`）安装到 `<dir>/bin`：包文件按 asset 名落盘，外加一个 `nanopi` 垫片（Windows 上是 `nanopi.cmd`），它执行 `node <dir>/bin/<asset 名>`。用 `nanopi` 启动。
 - `--out=<path>` 只把包文件写到指定路径，别的什么都不做，不能与 `--prefix` 同时使用。
+- `--mirror=<url>` 从镜像而不是 GitHub Releases 取包。URL 用镜像 README 里给的那一个，它自带 tag——镜像不帮你解析「最新版」，此时 `--version` 不起作用。
 
 下载内容会对照 Release 的 `SHA256SUMS` 校验，不一致就失败。运行 `node install.js --help` 可以看到同样的说明。
 
