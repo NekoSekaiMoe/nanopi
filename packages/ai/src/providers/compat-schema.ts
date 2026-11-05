@@ -448,7 +448,7 @@ export const AnthropicMessagesCompatSchema = Type.Object(
 		supportsTemperature: Type.Optional(
 			Type.Boolean({
 				description:
-					"Whether the model accepts the Anthropic temperature request field. Claude Opus 4.7+ rejects non-default values.",
+					"Whether the model accepts the Anthropic temperature request field. API version 2026-10-21 rejects any value; set this false for endpoints on it. Endpoints still on 2023-06-01 keep accepting the field.",
 				default: true,
 			}),
 		),

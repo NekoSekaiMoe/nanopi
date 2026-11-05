@@ -116,6 +116,38 @@ describe("Anthropic temperature compatibility", () => {
 		expect(body?.temperature).toBe(0);
 	});
 
+	// 2023-06-01 is not deprecated and stays supported, so a model pinned to it still needs the
+	// field. The client default is 2026-10-21; `model.headers` is what puts a request back on the
+	// older version. This asserts both halves of that contract.
+	it("puts 2023-06-01 on the wire when the model pins it, and the client default otherwise", async () => {
+		const send = async (model: Model<"anthropic-messages">): Promise<Record<string, string>> => {
+			let headers: Record<string, string> = {};
+			const fetchStub = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+				headers = Object.fromEntries(new Headers(init?.headers).entries());
+				return new Response("data: [DONE]\n\n", {
+					status: 200,
+					headers: { "content-type": "text/event-stream" },
+				});
+			};
+			const s = streamSimple(model, makeContext(), {
+				apiKey: "fake-key",
+				temperature: 0,
+				fetch: fetchStub as typeof fetch,
+			});
+			await s.result().catch(() => undefined);
+			return headers;
+		};
+
+		const pinned = await send({
+			...getModel("anthropic", "claude-sonnet-4-6"),
+			headers: { "anthropic-version": "2023-06-01" },
+		});
+		expect(pinned["anthropic-version"]).toBe("2023-06-01");
+
+		const unpinned = await send(getModel("anthropic", "claude-sonnet-4-6"));
+		expect(unpinned["anthropic-version"]).toBe("2026-10-21");
+	});
+
 	it("omits temperature for custom models with supportsTemperature disabled", async () => {
 		const payload = await capturePayload(makeCustomModel({ supportsTemperature: false }), { temperature: 0 });
 
