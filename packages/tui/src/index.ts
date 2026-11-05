@@ -36,6 +36,14 @@ export {
 	type TextAttributes,
 	type TextStyle,
 } from "./colors.ts";
+// Component interface and mouse events (what a component is, what a mouse event looks like)
+export type {
+	Component,
+	TuiMouseButton,
+	TuiMouseEvent,
+	TuiMouseEventResult,
+	TuiMouseEventType,
+} from "./component.ts";
 // Components
 export { Box } from "./components/box.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";
@@ -108,6 +116,24 @@ export {
 } from "./keys.ts";
 // LaTeX rendering
 export { type RenderLatexOptions, renderLatex } from "./latex.ts";
+// Layout contracts shared by stack and scroll components
+export {
+	getLayoutNode,
+	LAYOUT_NODE,
+	type LayoutComponent,
+	type LayoutNode,
+	type LayoutViewport,
+	type ScrollLayoutNode,
+	type ScrollLayoutState,
+	type StackLayoutEntry,
+	type StackLayoutNode,
+} from "./layout-node.ts";
+// Native prebuild lookup
+export {
+	getNativeModuleCandidates,
+	getNativeModulePath,
+	type NativeModuleCandidateOptions,
+} from "./native-module-path.ts";
 // Native platform integration
 export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
 export { oklabToOkhslLightness } from "./oklab.ts";
@@ -163,7 +189,6 @@ export {
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
 export {
-	type Component,
 	Container,
 	CURSOR_MARKER,
 	compositeTuiLine,
@@ -182,10 +207,6 @@ export {
 	type TuiInputListener,
 	type TuiInputListenerResult,
 	type TuiMode,
-	type TuiMouseButton,
-	type TuiMouseEvent,
-	type TuiMouseEventResult,
-	type TuiMouseEventType,
 	type TuiStopOptions,
 	type ViewportTUI,
 } from "./tui.ts";
