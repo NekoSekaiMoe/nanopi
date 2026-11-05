@@ -92,6 +92,7 @@ import { exportSessionToMarkdown } from "./export-markdown/index.ts";
 import type { MemorySample } from "./memory-usage.ts";
 import type { MessageTypeCodecMap } from "./messages/codec.ts";
 import { type BashExecutionMessage, type CustomMessage, convertToLlm } from "./messages.ts";
+import { modelsMatch, readEchoedModel } from "./model-identity.ts";
 import { ModelRegistry } from "./model-registry.ts";
 import type { ModelRuntime } from "./model-runtime.ts";
 import {
@@ -185,6 +186,13 @@ import {
 // ============================================================================
 
 /** Parsed skill block from a user message */
+/**
+ * Re-issues allowed per user turn when a response comes back on a model other than the requested one.
+ * One covers a relay that substitutes every request; a second pins it as a hard replacement instead of
+ * looping against an endpoint that cannot serve the selected model anyway.
+ */
+const MAX_MODEL_REISSUES_PER_TURN = 1;
+
 export interface ParsedSkillBlock {
 	name: string;
 	location: string;
@@ -609,6 +617,20 @@ export class AgentSession {
 	/** Forced system prompt of the last finished run, which its cached provider requests used. */
 	private _lastRunForcedSystemPrompt?: string;
 
+	/**
+	 * Model a response was actually served as when that differs from the one asked for, and whether
+	 * the first re-issue on the requested model already happened for it.
+	 */
+	private _modelMismatch?: {
+		requested: string;
+		observed: string;
+		/** Transcript leaf before the substituted response, so a re-issue can drop it. */
+		leafId?: string | null;
+		reinjected: boolean;
+	};
+	/** How many times the current user turn re-issued a request on the requested model. */
+	private _modelReissueCount = 0;
+
 	constructor(config: AgentSessionConfig) {
 		this.agent = config.agent;
 		this.sessionManager = config.sessionManager;
@@ -638,6 +660,7 @@ export class AgentSession {
 		// (session persistence, extensions, auto-compaction, retry logic)
 		this._unsubscribeAgent = this.agent.subscribe(this._handleAgentEvent);
 		this._installAgentToolHooks();
+		this._installModelIdentityCheck();
 		this._installAgentNextTurnRefresh();
 		this._installAgentRequestProjection();
 		this._installAgentBoundaryHooks();
@@ -937,6 +960,68 @@ export class AgentSession {
 		return { ...turn.context, messages: this.sessionManager.buildSessionProjection().messages };
 	}
 
+	/**
+	 * Install the silent model-identity check on the Agent instance.
+	 *
+	 * Headers are the only pre-body evidence of which model answered, and nothing else in the
+	 * session reads them, so the hook records what it saw for the re-issue decided in
+	 * `_installAgentBoundaryHooks`. The check is silent: a mismatch never reaches a message, a
+	 * footer marker, an extension event, or an error.
+	 */
+	private _installModelIdentityCheck(): void {
+		const previousOnResponse = this.agent.onResponse;
+		this.agent.onResponse = async (response, model) => {
+			await previousOnResponse?.(response, model);
+			const echoed = readEchoedModel(response.headers);
+			if (!echoed || modelsMatch(model.id, echoed.id)) return;
+			// A virtual selection is routed on purpose, so the selector's route is not a substitution.
+			if (isVirtualModel(this.agent.state.model)) return;
+			this._modelMismatch ??= {
+				requested: model.id,
+				observed: echoed.id,
+				leafId: this.sessionManager.getLeafId(),
+				reinjected: false,
+			};
+		};
+	}
+
+	/**
+	 * Move the transcript leaf back so the substituted response leaves the active branch.
+	 *
+	 * The entry is already persisted by the time the re-issue is decided, and the session is
+	 * append-only, so the re-issued turn is written as a sibling of the discarded one. Only the
+	 * branch is rewound; nothing is deleted from disk.
+	 */
+	private _dropSubstitutedResponse(): void {
+		const leafId = this._modelMismatch?.leafId;
+		// A null leaf means the substituted response was the first entry, which leaves nothing to
+		// rewind to: `branch()` needs an existing entry id.
+		if (!leafId) return;
+		const leaf = this.sessionManager.getEntry(leafId);
+		// Only rewind when the leaf is still where the substituted response was appended; a
+		// compaction or boundary entry in between belongs to that turn's accounting.
+		if (leaf?.type !== "message") return;
+		this.sessionManager.branch(leafId);
+		this._refreshFinalizedContext();
+	}
+
+	/**
+	 * Whether the next request must be re-issued on the requested model.
+	 *
+	 * A relay that swaps models usually swaps them for every request, so the check is worth exactly
+	 * one re-issue per user turn. A second mismatch means the endpoint cannot serve the requested
+	 * model at all; retrying again would loop.
+	 */
+	private _shouldReissueOnRequestedModel(): boolean {
+		const mismatch = this._modelMismatch;
+		if (!mismatch || mismatch.reinjected) return false;
+		if (mismatch.requested !== this.agent.state.model?.id) return false;
+		if (this._modelReissueCount >= MAX_MODEL_REISSUES_PER_TURN) return false;
+		mismatch.reinjected = true;
+		this._modelReissueCount++;
+		return true;
+	}
+
 	private _installAgentRequestProjection(): void {
 		const previousPrepareRequest = this.agent.prepareRequest;
 		this.agent.prepareRequest = async (request, signal) => {
@@ -962,8 +1047,8 @@ export class AgentSession {
 				return { previous, context: previous?.context ?? canonicalContext, projection };
 			};
 			let { previous, context, projection } = await prepare();
-			const model = previous?.model ?? this.agent.state.model;
 			const thinkingLevel = previous?.thinkingLevel ?? this.agent.state.thinkingLevel;
+			const model = previous?.model ?? this.agent.state.model;
 			if (!isVirtualModel(model)) {
 				const growth = Math.max(
 					0,
@@ -1059,6 +1144,11 @@ export class AgentSession {
 			const extensionContinue = await this._dispatchTurnEndBoundary(turn.message, turn.toolResults);
 			const previousDecision = await previousFinishTurn?.(turn, signal);
 			if (previousDecision?.action === "end") return previousDecision;
+			// A substituted response is answered again on the requested model instead of ending the run.
+			if (this._shouldReissueOnRequestedModel()) {
+				this._dropSubstitutedResponse();
+				return { action: "continue" };
+			}
 			if (extensionContinue || previousDecision?.action === "continue") return { action: "continue" };
 			return undefined;
 		};
@@ -1070,7 +1160,7 @@ export class AgentSession {
 			(this.agent.prepareNextTurn
 				? async (_turn: PrepareNextTurnContext, signal?: AbortSignal) => await this.agent.prepareNextTurn?.(signal)
 				: undefined);
-		this.agent.prepareNextTurnWithContext = async (turn, signal) => {
+		const refreshNextTurn = async (turn: PrepareNextTurnContext, signal?: AbortSignal) => {
 			const context = await this._compactBeforeNextAssistantResponse(turn);
 			const previousSnapshot = await previousPrepareNextTurnWithContext?.({ ...turn, context }, signal);
 			const nextContext = previousSnapshot?.context ?? context;
@@ -1098,6 +1188,7 @@ export class AgentSession {
 				thinkingLevel: this.agent.state.thinkingLevel,
 			};
 		};
+		this.agent.prepareNextTurnWithContext = refreshNextTurn;
 	}
 
 	// =========================================================================
@@ -1636,6 +1727,10 @@ export class AgentSession {
 	private async _emitExtensionEvent(event: AgentEvent): Promise<void> {
 		if (event.type === "agent_start") {
 			this._turnIndex = 0;
+			// A substitution seen during an earlier run says nothing about this one, and the re-issue
+			// budget is per user turn.
+			this._modelMismatch = undefined;
+			this._modelReissueCount = 0;
 			await this._moduleRegistry.emit({ type: "agent_start" });
 		} else if (event.type === "agent_end") {
 			await this._moduleRegistry.emit({ type: "agent_end", messages: event.messages });

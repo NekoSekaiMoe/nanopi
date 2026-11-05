@@ -181,11 +181,25 @@ function streamGoogleContent<TApi extends GoogleApiType, TOptions extends Google
 			let currentBlock: TextContent | ThinkingContent | null = null;
 			const blocks = output.content;
 			const blockIndex = () => blocks.length - 1;
+			// The SDK exposes no response object, so the headers arrive on the first chunk and are
+			// reported once, before any of that chunk's content is normalized.
+			let responseReported = false;
 			for await (const chunk of googleStream) {
 				await options?.onProviderStreamEvent?.(chunk, model);
 				// @google/genai documents GenerateContentResponse.responseId as an output-only
 				// identifier for each response. Keep the first non-empty one from the stream.
 				output.responseId ||= chunk.responseId;
+				output.responseModel ||= chunk.modelVersion;
+				if (!responseReported) {
+					const http = chunk.sdkHttpResponse;
+					if (http) {
+						responseReported = true;
+						await options?.onResponse?.(
+							{ status: http.responseInternal.status, headers: http.headers ?? {} },
+							model,
+						);
+					}
+				}
 				const candidate = chunk.candidates?.[0];
 				if (candidate?.content?.parts) {
 					for (const part of candidate.content.parts) {
