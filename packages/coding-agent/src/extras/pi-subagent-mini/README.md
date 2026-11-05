@@ -79,9 +79,24 @@ instead of waiting forever.
 
 **Isolation.** `isolated: true` runs `git worktree add <dir> -b subagent/<jobId>`
 next to the repository root and passes that directory as the child's cwd. The
-directory is derived by the tool, so no model copies a path. On `completed` the
-branch is merged back and the tree removed; on failure, kill, or timeout the tree
-is removed and the branch dropped.
+directory is derived by the tool, so no model copies a path. On failure, kill, or
+timeout the tree is removed and the branch dropped.
+
+**The merge self-check.** A completed job's branch is not merged as it is. Three
+gates run in the main checkout first (source: `src/worktree.ts`):
+
+- `git status --porcelain` must be empty, or the merge would mix the parent's
+  uncommitted edits into the child's commit;
+- `pnpm run check` must pass — `skipped`, not `failed`, when the directory has no
+  `package.json`, because a non-JS repo has no gate to run;
+- the changed files (`git diff --name-status`) go into the report, so the parent
+  reads what arrived instead of guessing.
+
+Any refusal keeps the tree and the branch and reports why: `worktree not merged
+(<branch> at <path>)` plus the failing gate's output. The parent then inspects,
+fixes, or drops the branch — the previous behaviour was `worktree remove --force`
+followed by nothing, which deleted a child's uncommitted work without a trace. A
+job with no commits of its own is simply dropped.
 
 **Failure semantics.** `onFailure: "retry"` reruns a failed attempt with the
 failure text prepended to the brief, up to 3 attempts in total. The limit is a
