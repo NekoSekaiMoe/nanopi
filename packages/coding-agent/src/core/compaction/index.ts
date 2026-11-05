@@ -51,6 +51,7 @@ export {
 	generateSummaryWithUsage,
 	getInContextCompactionOutcome,
 	getLastAssistantUsage,
+	getSummarizationFailure,
 	IN_CONTEXT_COMPACTION_INSTRUCTIONS,
 	IN_CONTEXT_COMPACTION_PROMPT,
 	InContextCompactionError,
