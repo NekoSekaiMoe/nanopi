@@ -18,6 +18,7 @@
 		"check:package-install": "node scripts/check-package-install.mjs",
 		"check:ts-imports": "node scripts/check-ts-relative-imports.mjs",
 		"check:entry-graphs": "node scripts/check-entry-graphs.mjs",
+		"check:agent-notes": "node scripts/check-agent-notes.mjs",
 		"ensure:model-catalogs": "pnpm --filter ./packages/ai run ensure-model-catalogs",
 		"generate:models": "pnpm --filter ./packages/ai run generate-models",
 		"hydrate:model-data": "pnpm --filter ./packages/ai run hydrate-model-data",

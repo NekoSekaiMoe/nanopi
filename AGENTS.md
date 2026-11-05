@@ -103,6 +103,20 @@ When closing issues via commit:
 
 - Include `fixes #<number>` or `closes #<number>` in the message so merging auto-closes the issue. For multiple issues, repeat the keyword per issue (`closes #1, closes #2`); a shared keyword (`closes #1, #2`) only closes the first.
 
+## Agent Notes
+
+Decisions, rejected options, and cross-file contracts live in `.agents/notes/`; the workflow is [.agents/skills/write-notes-like-deepseek/SKILL.md](.agents/skills/write-notes-like-deepseek/SKILL.md). Read that skill before writing or updating one.
+
+When to write: answer the four questions in SKILL section 4 against your diff. Any "no" with diff evidence means write. Three triggers need no judgment:
+
+- The commit adds a regression test for a defect you just fixed → `implemented/bug-fix/`.
+- You answered the same "why" question a second time, in a PR or issue thread → write it down.
+- The PR description needed sections to stay readable → re-run the four questions.
+
+Prefer updating the note that already owns the decision over creating a new one. Code and note land in the same commit.
+
+`pnpm run check:agent-notes` prints a reminder when a diff is large and touches no note. It never fails, so a silent run means "nothing to see", not "noted".
+
 ## Testing nanopi Interactive Mode with tmux
 
 For testing nanopi's interactive mode, load and follow [.nanopi/skills/interactive-testing.md](.nanopi/skills/interactive-testing.md).

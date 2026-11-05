@@ -147,6 +147,16 @@ main:
             apt-get update && apt-get install nodejs -y
             node scripts/check-merge-result-cnb.mjs
 
+        # 笔记提醒，不是门禁：脚本退出码恒为 0，这一步永远不会红。它只回答
+        # 「diff 够大又一行笔记没碰，要不要回去过一遍四问」，判定仍归 SKILL §4。
+        # 和 check-merge-result 放在同一条流水线里，是因为两者都要 origin/main
+        # 当基线，而这条流水线的 runner 已经装过了 node。
+        - name: remind-agent-notes
+          script: |
+            set -euo pipefail
+            apt-get update && apt-get install nodejs -y
+            node scripts/check-agent-notes.mjs --base origin/main
+
 # 兜底：没被上面的 main 规则接住的事件（新分支的 push、手动触发）也要有钩子。
 # `$` 的匹配是在 glob 之后，两类规则不会互相顶掉。
 $:
