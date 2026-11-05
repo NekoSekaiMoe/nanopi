@@ -48,6 +48,40 @@ function extraModule(): SessionModule[] {
 		strictEqual(readBuiltinModuleNames(root).join(","), "extra,llama.cpp");
 	});
 
+	it("reads a bare const paired with a separate export block (issue #523)", () => {
+		// Regression: issue #517 moved `export` off the declaration into a paired
+		// `export { BUILTIN_MODULES }` block. The parser used to look only for
+		// `export const BUILTIN_MODULES`, so every bundle/single-file build died
+		// with "no longer exports BUILTIN_MODULES" before reading a single entry.
+		const root = repoWith(`const BUILTIN_MODULES: SessionModule[] = [
+	{ name: "llama.cpp", factory: llamaExtension },
+	{ name: "pi-ui", factory: piUi, hidden: true },
+];
+
+export function enabledModules(): SessionModule[] {
+	return BUILTIN_MODULES.filter(() => true);
+}
+
+// Package-internal: the paired block keeps the name importable by path.
+export { BUILTIN_MODULES };
+`);
+		strictEqual(readBuiltinModuleNames(root).join(","), "llama.cpp,pi-ui");
+	});
+
+	it("fails the build when the array declaration is gone", () => {
+		const root = repoWith(`export function enabledModules(): SessionModule[] {
+	return [];
+}
+`);
+		let message;
+		try {
+			readBuiltinModuleNames(root);
+		} catch (error) {
+			message = error.message;
+		}
+		strictEqual(message?.includes("no longer declares the BUILTIN_MODULES array"), true, message);
+	});
+
 	it("fails the build when a spread helper registers no literal name", () => {
 		const root = repoWith(`export const BUILTIN_MODULES: SessionModule[] = [
 	...extraModule(),
