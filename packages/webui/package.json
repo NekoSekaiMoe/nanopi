@@ -16,7 +16,7 @@
 		"clsx": "2.1.1",
 		"dompurify": "3.4.17",
 		"lucide-react": "0.575.0",
-		"marked": "12.0.2",
+		"marked": "18.1.2",
 		"shiki": "4.5.0",
 		"next": "16.4.3",
 		"react": "19.3.1",

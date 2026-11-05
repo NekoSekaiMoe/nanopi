@@ -1,7 +1,7 @@
 "use client";
 
 import DOMPurify from "dompurify";
-import { marked } from "marked";
+import { marked, type Tokens } from "marked";
 import { useMemo } from "react";
 import { createHighlighterCoreSync } from "shiki/core";
 import { createJavaScriptRegexEngine } from "shiki/engine/javascript";
@@ -85,9 +85,8 @@ function escapeHtml(value: string): string {
 marked.setOptions({ gfm: true, breaks: false });
 
 const renderer = new marked.Renderer();
-renderer.code = function code(source: string, infostring?: string) {
-	const text = source ?? "";
-	const language = (infostring ?? "").split(/\s+/)[0] ?? "";
+renderer.code = function code({ text, lang }: Tokens.Code) {
+	const language = (lang ?? "").split(/\s+/)[0] ?? "";
 	const body = highlight(text, language);
 	return (
 		`<div class="code-block" data-language="${language}">` +
