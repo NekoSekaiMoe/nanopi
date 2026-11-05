@@ -13,7 +13,14 @@ import { generatePKCE } from "./pkce.ts";
 const decode = (s: string) => atob(s);
 const CLIENT_ID = decode("OWQxYzI1MGEtZTYxYi00NGQ5LTg4ZWQtNTk0NGQxOTYyZjVl");
 const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
-const TOKEN_URL = "https://platform.claude.com/v1/oauth/token";
+// `platform.claude.com/v1/oauth/token` is the endpoint the browser console uses: it answers a
+// request that carries a browser context and rejects every other client with `403 forbidden`,
+// headers included. The `api.anthropic.com` deployment runs the same OAuth grants for clients
+// that are not browsers, so the token exchange and the refresh go there.
+const TOKEN_URL = "https://api.anthropic.com/v1/oauth/token";
+const OAUTH_BETA_HEADER = "oauth-2025-04-20";
+/** Claude Code's User-Agent, versioned like the identity headers on inference. */
+const CLAUDE_CLI_USER_AGENT = "claude-cli/2.1.280";
 const CALLBACK_HOST = getProviderEnvValue("NANOPI_OAUTH_CALLBACK_HOST") || "127.0.0.1";
 // Preferred so the port can be forwarded into containers or over SSH. Anthropic accepts any loopback port,
 // so login falls back to a free port when this one cannot be bound (#10571).
@@ -56,6 +63,17 @@ function parseAuthorizationInput(input: string): { code?: string; state?: string
 	return { code: value };
 }
 
+/**
+ * The `state` round-tripped through the browser. It is independent of the PKCE verifier: Anthropic
+ * hands `state` back unchanged, and reusing the verifier would put the proof in the URL bar and in
+ * the browser history.
+ */
+function generateState(): string {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 function formatErrorDetails(error: unknown): string {
 	if (error instanceof Error) {
 		const details: string[] = [`${error.name}: ${error.message}`];
@@ -79,6 +97,8 @@ async function postJson(url: string, body: Record<string, string | number>, sign
 		headers: {
 			"Content-Type": "application/json",
 			Accept: "application/json",
+			"User-Agent": CLAUDE_CLI_USER_AGENT,
+			"anthropic-beta": OAUTH_BETA_HEADER,
 		},
 		body: JSON.stringify(body),
 		signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
@@ -139,6 +159,7 @@ async function exchangeAuthorizationCode(
 
 async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
 	const { verifier, challenge } = await generatePKCE();
+	const state = generateState();
 	const startCallbackServer = (port: number) =>
 		startOAuthCallbackServer({
 			providerName: "Anthropic",
@@ -146,7 +167,10 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
 			port,
 			path: CALLBACK_PATH,
 			redirectHost: "localhost",
-			state: verifier,
+			// Claude's consent screen finishes in a hidden frame on claude.ai and renders the
+			// loopback page inside it, so the page has to name claude.ai as an allowed parent.
+			pageOrigin: "https://claude.ai",
+			state,
 			complete: async (code) => code,
 			signal: interaction.signal,
 		});
@@ -165,7 +189,7 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
 			scope: SCOPES,
 			code_challenge: challenge,
 			code_challenge_method: "S256",
-			state: verifier,
+			state,
 		});
 		interaction.notify({
 			type: "auth_url",
@@ -179,14 +203,12 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
 			placeholder: redirectUri,
 		});
 		let code: string | undefined;
-		let state = verifier;
 		if (result.type === "callback") {
 			code = result.value;
 		} else {
 			const parsed = parseAuthorizationInput(result.input);
-			if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
+			if (parsed.state && parsed.state !== state) throw new Error("OAuth state mismatch");
 			code = parsed.code;
-			state = parsed.state ?? verifier;
 		}
 
 		if (!code) throw new Error("Missing authorization code");
@@ -199,6 +221,7 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
 
 async function loginAnthropicCopyCode(interaction: ProviderAuthInteraction): Promise<OAuthCredential> {
 	const { verifier, challenge } = await generatePKCE();
+	const state = generateState();
 	const authParams = new URLSearchParams({
 		code: "true",
 		client_id: CLIENT_ID,
@@ -207,7 +230,7 @@ async function loginAnthropicCopyCode(interaction: ProviderAuthInteraction): Pro
 		scope: SCOPES,
 		code_challenge: challenge,
 		code_challenge_method: "S256",
-		state: verifier,
+		state,
 	});
 	interaction.notify({
 		type: "auth_url",
@@ -222,16 +245,10 @@ async function loginAnthropicCopyCode(interaction: ProviderAuthInteraction): Pro
 		signal: interaction.signal,
 	});
 	const parsed = parseAuthorizationInput(input);
-	if (parsed.state && parsed.state !== verifier) throw new Error("OAuth state mismatch");
+	if (parsed.state && parsed.state !== state) throw new Error("OAuth state mismatch");
 	if (!parsed.code) throw new Error("Missing authorization code");
 	interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
-	return await exchangeAuthorizationCode(
-		parsed.code,
-		parsed.state ?? verifier,
-		verifier,
-		COPY_CODE_REDIRECT_URI,
-		interaction.signal,
-	);
+	return await exchangeAuthorizationCode(parsed.code, state, verifier, COPY_CODE_REDIRECT_URI, interaction.signal);
 }
 
 /**

@@ -95,6 +95,27 @@ describe("Anthropic temperature compatibility", () => {
 		expect(payload.temperature).toBe(0);
 	});
 
+	// The SDK 1.x request type has no `temperature` field, so the assignment goes through a
+	// widened cast. This runs the field through the real client to prove it still reaches the body.
+	it("puts temperature on the wire for models that accept it", async () => {
+		let body: { temperature?: number } | undefined;
+		const fetchStub = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+			body = JSON.parse(String(init?.body)) as { temperature?: number };
+			return new Response("data: [DONE]\n\n", {
+				status: 200,
+				headers: { "content-type": "text/event-stream" },
+			});
+		};
+		const s = streamSimple(getModel("anthropic", "claude-sonnet-4-6"), makeContext(), {
+			apiKey: "fake-key",
+			temperature: 0,
+			fetch: fetchStub as typeof fetch,
+		});
+		await s.result().catch(() => undefined);
+
+		expect(body?.temperature).toBe(0);
+	});
+
 	it("omits temperature for custom models with supportsTemperature disabled", async () => {
 		const payload = await capturePayload(makeCustomModel({ supportsTemperature: false }), { temperature: 0 });
 

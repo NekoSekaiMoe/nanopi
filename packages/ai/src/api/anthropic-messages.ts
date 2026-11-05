@@ -1274,11 +1274,12 @@ function buildParams(
 		model.compat?.supportsMidConvoEffort !== true &&
 		compat.supportsTemperature
 	) {
-		// SDK 1.x drops `temperature` from the request types: its client defaults the
-		// `anthropic-version` header to 2026-10-21, where the field is gone. Gateways serving the
-		// older protocol do accept it, but they see 2026-10-21 unless the model config carries its
-		// own `anthropic-version` header, so the field only survives where the endpoint says so.
-		// Widening the literal keeps the option working there instead of dropping it for everyone.
+		// SDK 1.x types every request as the 2026-10-21 API version, which dropped `temperature`
+		// from the body, so the field has no slot left in `MessageCreateParamsStreaming`. The wire
+		// body is unchanged: `buildParams` returns a fresh object cast to the SDK type, and the
+		// endpoint (custom gateways, OpenRouter, Bedrock) decides per `anthropic-version` whether
+		// the field still means something. Widening keeps `supportsTemperature` working there
+		// instead of dropping the option for every model.
 		(params as MessageCreateParamsStreaming & { temperature?: number }).temperature = options.temperature;
 	}
 
