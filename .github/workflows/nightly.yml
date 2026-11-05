@@ -8,10 +8,11 @@ name: Nightly
 #
 # cron 走 UTC：0:00 UTC 是北京时间 08:00，要北京时间 0:00 就写 '0 16 * * *'。
 #
+# 这里是 nightly 唯一的触发：CNB 上那条同时间的兜底 crontab 已去掉（#497），
+# GitHub 的 schedule 停掉时 nightly 就是停掉，不会再有第二条流水线补发。
+#
 # 这里的 schedule 用 ATOMGIT_KEY，所以只在「仓库自己的 schedule 还跑得动」时发
 # AtomGit：fork、手动触发、key 没配都会跳过这一步，但 nightly 的包与镜像照发。
-# 账户额度用尽时 GitHub 会停掉本仓库的公开 schedule，那个月的 nightly 改由
-# .cnb.yml 里同一条 crontab 补（那里用得着 CNB 的定时任务）。
 
 on:
   schedule:
