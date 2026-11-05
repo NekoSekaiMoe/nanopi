@@ -60,6 +60,10 @@ if (needsBrowserSmoke) {
 	}
 }
 
+// Notes are a reminder, not a gate: it prints and returns 0 either way, so the
+// reminder never decides whether the commit lands. See scripts/check-agent-notes.mjs.
+run("check:agent-notes");
+
 // Formatting may have rewritten staged files; stage them again so the commit
 // contains what was checked. Deleted files no longer exist and are skipped.
 for (const file of files) {
