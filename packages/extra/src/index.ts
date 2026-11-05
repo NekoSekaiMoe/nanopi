@@ -8,11 +8,15 @@
  * to an inert stub.
  */
 
-// `export *` per source, not a hand-maintained whitelist: a name cannot go
-// missing quietly, and the cost stays a number in `scripts/check-entry-graphs.mjs`
-// (see `packages/coding-agent/test/root-barrel-exports.test.ts`). A symbol that
-// should not be public loses its `export` at the declaration — here the wildcard
-// would carry it out, and no edit to this file can.
+// Named lists per source, not `export *`: this package mixes names a host
+// embeds (`extraBridge`, `extraInlineExtension`, the mode and permission
+// brokers) with helpers that exist for its own modules. A wildcard would publish
+// every one of them and there is no build-time cost to argue against it.
+//
+// The one convention: a name is listed here only when a caller outside this
+// package uses it, and a type ships with the value it describes. Same
+// per-source argument as the coding-agent root, opposite conclusion, because
+// that root already hands out a whole agent.
 
 export type { JudgeModelRegistry } from "./ai-judge.ts";
 export { judgeWithModel } from "./ai-judge.ts";
