@@ -29,13 +29,17 @@ import { createInterface } from "readline";
 import { StringDecoder } from "string_decoder";
 import { APP_NAME, getAgentDir as getDefaultAgentDir, getSessionsDir } from "../config.ts";
 import { normalizePath, resolvePath } from "../utils/paths.ts";
+import type { BashExecutionMessage, CustomMessage } from "./messages.ts";
+// Projection helpers live in a pure module; re-exported so every existing
+// `from "./session-manager.ts"` import keeps working.
 import {
-	type BashExecutionMessage,
-	type CustomMessage,
-	createBranchSummaryMessage,
-	createCompactionSummaryMessage,
-	createCustomMessage,
-} from "./messages.ts";
+	buildContextEntries,
+	buildSessionContext,
+	buildSessionProjection,
+	getEntriesAfterLatestCompaction,
+	getLatestCompactionEntry,
+	sessionEntryToContextMessages,
+} from "./session-projection.ts";
 import {
 	type BranchSummaryEntry,
 	type CompactionEntry,
@@ -47,7 +51,6 @@ import {
 	type LabelEntry,
 	type ModelChangeEntry,
 	type NewSessionOptions,
-	type ProjectedSessionEntry,
 	type SessionContext,
 	type SessionEntry,
 	type SessionHeader,
@@ -60,7 +63,15 @@ import {
 } from "./session-store.ts";
 
 export type * from "./session-store.ts";
-export { CURRENT_SESSION_VERSION };
+export {
+	buildContextEntries,
+	buildSessionContext,
+	buildSessionProjection,
+	CURRENT_SESSION_VERSION,
+	getEntriesAfterLatestCompaction,
+	getLatestCompactionEntry,
+	sessionEntryToContextMessages,
+};
 
 export interface SessionInfo {
 	path: string;
@@ -203,232 +214,6 @@ export function parseSessionEntries(content: string): FileEntry[] {
 	}
 
 	return entries;
-}
-
-export function getLatestCompactionEntry(entries: SessionEntry[]): CompactionEntry | null {
-	for (let i = entries.length - 1; i >= 0; i--) {
-		if (entries[i].type === "compaction") {
-			return entries[i] as CompactionEntry;
-		}
-	}
-	return null;
-}
-
-/**
- * Entries on `path` recorded after its latest compaction, or undefined without one.
- * An inserted compaction precedes the entries it keeps in the tree, so path order alone
- * cannot tell kept history from newer entries. Kept entries are timestamped strictly
- * before the summary (see `appendCompaction`); later entries are at or after it.
- */
-export function getEntriesAfterLatestCompaction(path: SessionEntry[]): SessionEntry[] | undefined {
-	const compaction = getLatestCompactionEntry(path);
-	if (!compaction) return undefined;
-	const compactedAt = Date.parse(compaction.timestamp);
-	return path.slice(path.indexOf(compaction) + 1).filter((entry) => Date.parse(entry.timestamp) >= compactedAt);
-}
-
-function buildEntryIndex(entries: SessionEntry[], byId?: Map<string, SessionEntry>): Map<string, SessionEntry> {
-	if (byId) return byId;
-	const index = new Map<string, SessionEntry>();
-	for (const entry of entries) {
-		index.set(entry.id, entry);
-	}
-	return index;
-}
-
-function buildSessionPath(
-	entries: SessionEntry[],
-	leafId?: string | null,
-	byId?: Map<string, SessionEntry>,
-): SessionEntry[] {
-	const index = buildEntryIndex(entries, byId);
-	let leaf: SessionEntry | undefined;
-	if (leafId === null) {
-		return [];
-	}
-	if (leafId) {
-		leaf = index.get(leafId);
-	}
-	leaf ??= entries[entries.length - 1];
-	if (!leaf) {
-		return [];
-	}
-
-	const path: SessionEntry[] = [];
-	let current: SessionEntry | undefined = leaf;
-	while (current) {
-		path.push(current);
-		current = current.parentId ? index.get(current.parentId) : undefined;
-	}
-	path.reverse();
-	return path;
-}
-
-function getSessionContextSettings(path: SessionEntry[]): Pick<SessionContext, "thinkingLevel" | "model"> {
-	let thinkingLevel = "off";
-	let model: { provider: string; modelId: string } | null = null;
-
-	for (const entry of path) {
-		if (entry.type === "thinking_level_change") {
-			thinkingLevel = entry.thinkingLevel;
-		} else if (entry.type === "model_change") {
-			model = { provider: entry.provider, modelId: entry.modelId };
-		} else if (entry.type === "message" && entry.message.role === "assistant") {
-			model = { provider: entry.message.provider, modelId: entry.message.model };
-		}
-	}
-
-	return { thinkingLevel, model };
-}
-
-/**
- * Project one selected session entry into LLM/runtime messages.
- * Plain custom entries are display/state entries and do not participate in context.
- */
-export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage[] {
-	if (entry.type === "message") {
-		const message = entry.message;
-		// Session files are parsed without validation; old versions, forks, or
-		// hand-edited files can contain messages with null/missing content.
-		if (message.role === "system" && message.content == null) return [{ ...message, content: "" }];
-		if (
-			(message.role === "user" || message.role === "assistant" || message.role === "toolResult") &&
-			message.content == null
-		) {
-			return [{ ...message, content: [] }];
-		}
-		return [message];
-	}
-	if (entry.type === "custom_message") {
-		return [
-			createCustomMessage(entry.customType, entry.content ?? [], entry.display, entry.details, entry.timestamp),
-		];
-	}
-	if (entry.type === "branch_summary" && entry.summary) {
-		return [createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp)];
-	}
-	if (entry.type === "compaction") {
-		const summary = createCompactionSummaryMessage(entry.summary, entry.tokensBefore, entry.timestamp);
-		return entry.systemMessage ? [entry.systemMessage, summary] : [summary];
-	}
-	return [];
-}
-
-/**
- * Build the active, compaction-aware session entry list.
- *
- * This follows the current leaf path. If the path contains compaction entries,
- * the latest compaction is represented by the compaction entry itself, followed
- * by the kept entries starting at firstKeptEntryId and all entries after the
- * compaction entry. Older summarized entries are omitted.
- */
-export function buildContextEntries(
-	entries: SessionEntry[],
-	leafId?: string | null,
-	byId?: Map<string, SessionEntry>,
-): SessionEntry[] {
-	const path = buildSessionPath(entries, leafId, byId);
-	let compaction: CompactionEntry | null = null;
-
-	for (const entry of path) {
-		if (entry.type === "compaction") {
-			compaction = entry;
-		}
-	}
-
-	if (!compaction) {
-		return path;
-	}
-
-	const compactionIdx = path.findIndex((entry) => entry.id === compaction.id);
-	if (compactionIdx < 0) {
-		return path;
-	}
-
-	const contextEntries: SessionEntry[] = [compaction];
-	let foundFirstKept = false;
-	for (let i = 0; i < compactionIdx; i++) {
-		const entry = path[i];
-		if (entry.id === compaction.firstKeptEntryId) {
-			foundFirstKept = true;
-		}
-		if (foundFirstKept && !(entry.type === "message" && entry.message.role === "system")) {
-			contextEntries.push(entry);
-		}
-	}
-	contextEntries.push(...path.slice(compactionIdx + 1));
-	return contextEntries;
-}
-
-/**
- * Build the session context from entries using tree traversal.
- * If leafId is provided, walks from that entry to root.
- * Handles compaction and branch summaries along the path.
- */
-function projectContextEntry(entry: SessionEntry, edit: ContextEditEntry | undefined): AgentMessage[] {
-	const messages = sessionEntryToContextMessages(entry);
-	if (!edit) return messages;
-	const replacement = edit.replacement;
-	if (replacement === null) return [];
-
-	return messages.map((message) => {
-		if (
-			message.role !== "user" &&
-			message.role !== "assistant" &&
-			message.role !== "toolResult" &&
-			message.role !== "custom"
-		) {
-			return message;
-		}
-		const content =
-			(message.role === "assistant" || message.role === "toolResult") && typeof replacement.content === "string"
-				? [{ type: "text" as const, text: replacement.content }]
-				: replacement.content;
-		return { ...message, content } as AgentMessage;
-	});
-}
-
-/** Build provenance-preserving, compaction-aware model context. */
-export function buildSessionProjection(
-	entries: SessionEntry[],
-	leafId?: string | null,
-	byId?: Map<string, SessionEntry>,
-): SessionProjection {
-	const path = buildSessionPath(entries, leafId, byId);
-	const { thinkingLevel, model } = getSessionContextSettings(path);
-	const contextEntries = buildContextEntries(entries, leafId, byId);
-	const edits = new Map<string, ContextEditEntry>();
-	for (const entry of contextEntries) {
-		if (entry.type === "context_edit") edits.set(entry.targetId, entry);
-	}
-	const projectedEntries = contextEntries.map(
-		(sourceEntry, index): ProjectedSessionEntry => ({
-			sourceEntry,
-			// buildContextEntries() may retain an older compaction entry because its
-			// raw ID lies inside the newest retained range. Only the newest compaction
-			// at index zero contributes a checkpoint and summary.
-			messages:
-				sourceEntry.type === "compaction" && index > 0
-					? []
-					: projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
-		}),
-	);
-	return {
-		entries: projectedEntries,
-		messages: projectedEntries.flatMap((entry) => entry.messages),
-		thinkingLevel,
-		model,
-	};
-}
-
-/** Build the finalized model context from the canonical session projection. */
-export function buildSessionContext(
-	entries: SessionEntry[],
-	leafId?: string | null,
-	byId?: Map<string, SessionEntry>,
-): SessionContext {
-	const { messages, thinkingLevel, model } = buildSessionProjection(entries, leafId, byId);
-	return { messages, thinkingLevel, model };
 }
 
 /**

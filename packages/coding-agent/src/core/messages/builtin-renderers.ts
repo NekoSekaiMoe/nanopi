@@ -7,16 +7,25 @@
  * so they are loaded lazily and only when the transcript actually draws such a message.
  *
  * The deferral is why this file exists; a static import from `builtin-codecs.ts` would put the
- * cost straight back.
+ * cost straight back. That is also why nothing here imports `@nanopi/pi-tui`: its barrel pulls the
+ * renderer, the terminal and the key parser, and the transcript's own component types are
+ * structural anyway. The one import left is erased before Node sees it.
  */
 
-import type { Component } from "@nanopi/pi-tui";
-import type { MessageRunRenderOptions, MessageTypeCodec } from "./codec.ts";
+import type { MessageRunRenderOptions } from "./codec.ts";
 
-type RenderRun = NonNullable<MessageTypeCodec["renderRun"]>;
+type RenderRun = (message: never, options: MessageRunRenderOptions) => Renderable;
 
-interface MessageComponentClass {
-	new (message: never, markdownTheme: never, outputPad: number): Component & { setExpanded?(expanded: boolean): void };
+/** The slice of `Component` a transcript view is drawn through. */
+interface Renderable {
+	render(width: number): string[];
+	invalidate(): void;
+}
+
+interface MessageComponent {
+	setExpanded?(expanded: boolean): void;
+	render(width: number): string[];
+	invalidate(): void;
 }
 
 export const renderBranchSummary: RenderRun = (message, options) =>
@@ -24,7 +33,7 @@ export const renderBranchSummary: RenderRun = (message, options) =>
 		import("../../modes/interactive/components/branch-summary-message.ts").then(
 			(m) => m.BranchSummaryMessageComponent,
 		),
-		message as never,
+		message,
 		options,
 	);
 
@@ -33,7 +42,7 @@ export const renderCompactionSummary: RenderRun = (message, options) =>
 		import("../../modes/interactive/components/compaction-summary-message.ts").then(
 			(m) => m.CompactionSummaryMessageComponent,
 		),
-		message as never,
+		message,
 		options,
 	);
 
@@ -41,15 +50,19 @@ export const renderCompactionSummary: RenderRun = (message, options) =>
  * Stand-in that fills in once the lazily loaded component module resolves. Until then it renders
  * nothing; the transcript redraws after the microtask queue drains, which is before the next frame.
  */
-class DeferredMessageComponent implements Component {
-	private readonly source: Promise<MessageComponentClass>;
+class DeferredMessageComponent implements Renderable {
+	private readonly source: Promise<new (message: never, theme: never, outputPad: number) => MessageComponent>;
 	private readonly message: never;
 	private readonly options: MessageRunRenderOptions;
-	private inner: (Component & { setExpanded?(expanded: boolean): void }) | undefined;
+	private inner: MessageComponent | undefined;
 
-	constructor(source: Promise<MessageComponentClass>, message: never, options: MessageRunRenderOptions) {
+	constructor(
+		source: Promise<new (message: never, theme: never, outputPad: number) => MessageComponent>,
+		message: never,
+		options: MessageRunRenderOptions,
+	) {
 		this.source = source;
-		this.message = message as never;
+		this.message = message;
 		this.options = options;
 		void this.source.then(async (Component) => {
 			const { getMarkdownTheme } = await import("../../modes/interactive/theme/theme.ts");

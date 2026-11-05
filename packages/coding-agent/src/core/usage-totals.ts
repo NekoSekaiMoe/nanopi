@@ -1,4 +1,4 @@
-import type { Usage } from "@nanopi/pi-ai/compat";
+import type { Usage } from "@nanopi/pi-ai";
 import type { SessionEntry } from "./session-manager.ts";
 
 export interface UsageTotals {

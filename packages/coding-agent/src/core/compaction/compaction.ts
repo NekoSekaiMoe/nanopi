@@ -26,16 +26,16 @@ import type {
 	Usage,
 } from "@nanopi/pi-ai/compat";
 import { completeSimple } from "@nanopi/pi-ai/compat";
-import { getPromptCacheTtlMs, priceTokens } from "../cache-warmer.ts";
 import type { MessageTypeCodecMap } from "../messages/codec.ts";
 import { convertToLlm } from "../messages.ts";
 import {
 	buildSessionProjection,
 	getEntriesAfterLatestCompaction,
 	sessionEntryToContextMessages,
-} from "../session-manager.ts";
+} from "../session-projection.ts";
 import type { CompactionEntry, ProjectedSessionEntry, SessionEntry, SessionProjection } from "../session-store.ts";
 import { combineUsage } from "../usage-totals.ts";
+import { getPromptCacheTtlMs, priceTokens } from "./costs.ts";
 import { withCompactionRequestMetadata } from "./request-metadata.ts";
 import {
 	computeFileLists,

@@ -43,6 +43,22 @@ const BUDGETS = {
 	"packages/coding-agent": {
 		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
 		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
+		// Not an entry point, so no `exports` lookup: `sourcePath` budgets the source file itself.
+		// This barrel is what a summarizer imports. It used to reach 181 files because it dragged
+		// the transcript, the theme and the session file I/O along; the transcript and the session
+		// projection are out, so what is left is the compaction code plus `pi-ai/compat`.
+		//
+		// The ceiling has a floor under it: `pi-ai/compat` is 111 files on its own, because it
+		// re-exports the built-in provider catalog (`providers/all.ts` imports every
+		// `<provider>.models.ts`). Nothing on this side can get below that, so 20 is not a promise
+		// about today's graph, it is the size the graph becomes once `compat` stops exporting the
+		// catalog. Until then this budget fails and prints the 123-file graph; making it pass is
+		// the next piece of work, changing the number is not.
+		"core/compaction/index.ts": {
+			sourcePath: true,
+			maxFiles: 20,
+			forbid: ["modes/interactive/", "core/session-manager.ts", "pi-ai/src/providers/"],
+		},
 	},
 };
 
@@ -101,9 +117,40 @@ function expand(pkgDir, entry, target) {
 }
 
 let failures = 0;
+
+/** Enforces one budget against one source file: the graph size and every forbidden pattern. */
+function checkGraph(pkgDir, label, source, budget) {
+	if (!existsSync(source)) {
+		console.error(`${pkgDir} ${label} has no source file at ${relative(ROOT, source)}`);
+		failures += 1;
+		return;
+	}
+	const graph = [...walk(source)].map((file) => relative(ROOT, file));
+	if (graph.length > budget.maxFiles) {
+		console.error(
+			`${pkgDir} "${label}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
+				graph.map((file) => `    ${file}`).join("\n"),
+		);
+		failures += 1;
+	}
+	for (const pattern of budget.forbid ?? []) {
+		const hit = graph.filter((file) => file.includes(pattern));
+		if (hit.length > 0) {
+			console.error(`${pkgDir} "${label}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
+			failures += 1;
+		}
+	}
+}
+
 for (const [pkgDir, budgets] of Object.entries(BUDGETS)) {
 	const manifest = JSON.parse(readFileSync(resolve(ROOT, pkgDir, "package.json"), "utf8"));
 	for (const [entry, budget] of Object.entries(budgets)) {
+		// A source path rather than an entry point: the budget holds the graph behind a barrel
+		// the package reaches internally, so there is no `exports` entry to look up.
+		if (budget.sourcePath) {
+			checkGraph(pkgDir, entry, resolve(ROOT, pkgDir, "src", entry), budget);
+			continue;
+		}
 		const declared = manifest.exports?.[entry];
 		if (!declared) {
 			console.error(`${pkgDir} declares no export "${entry}" but a budget exists for it`);
@@ -118,21 +165,7 @@ for (const [pkgDir, budgets] of Object.entries(BUDGETS)) {
 				failures += 1;
 				continue;
 			}
-			const graph = [...walk(source)].map((file) => relative(ROOT, file));
-			if (graph.length > budget.maxFiles) {
-				console.error(
-					`${pkgDir} export "${name}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
-						graph.map((file) => `    ${file}`).join("\n"),
-				);
-				failures += 1;
-			}
-			for (const pattern of budget.forbid ?? []) {
-				const hit = graph.filter((file) => file.includes(pattern));
-				if (hit.length > 0) {
-					console.error(`${pkgDir} export "${name}" must not reach ${pattern}:\n${hit.map((f) => `    ${f}`).join("\n")}`);
-					failures += 1;
-				}
-			}
+			checkGraph(pkgDir, name, source, budget);
 		}
 	}
 }

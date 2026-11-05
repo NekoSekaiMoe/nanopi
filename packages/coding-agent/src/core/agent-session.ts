@@ -145,12 +145,11 @@ import {
 	type CompactionEntry,
 	type ContextEditEntry,
 	type CustomEntry,
-	getEntriesAfterLatestCompaction,
-	getLatestCompactionEntry,
 	type SessionEntry,
 	SessionManager,
 	type SessionProjection,
 } from "./session-manager.ts";
+import { getEntriesAfterLatestCompaction, getLatestCompactionEntry } from "./session-projection.ts";
 import {
 	applyToolModifiers,
 	type CacheWarmingMode,
