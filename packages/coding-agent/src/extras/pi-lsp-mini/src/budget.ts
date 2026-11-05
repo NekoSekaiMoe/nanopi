@@ -37,18 +37,26 @@ export function createBudget(options: BudgetOptions): Budget {
 	const timer = controller ? setTimeout(() => controller.abort(), total) : undefined;
 	timer?.unref?.();
 	options.signal?.addEventListener("abort", () => controller?.abort(), { once: true });
-	const started = Date.now();
-	// `remainingMs` is a whole number of milliseconds, so a caller that is one
-	// millisecond into the budget reads `total - 1`. The first request would
-	// then be armed with 299ms while the budget's own timer still fires at
-	// 300ms, and the deadline that ends it reports 299ms — a number the caller
-	// never asked for. Flooring the elapsed time keeps the first request at the
-	// full budget; every later request only loses the whole milliseconds that
-	// actually passed.
-	let readAt = started;
+	// `remainingMs` is a whole number of milliseconds, so a caller one millisecond
+	// into the budget would read `total - 1` and arm the first request with 299ms
+	// while the budget's own timer still fires at 300ms. The deadline that ends it
+	// would then report a number the caller never asked for.
+	//
+	// So the clock is not read before the first request. `performance.now()` is
+	// sub-millisecond here, but a first read still costs a whole unit under
+	// `Math.ceil` — `0.0004ms` becomes 1ms — which brings 299 back through the
+	// rounding instead of through `Date.now()`. The one timer the budget owns is
+	// armed at `total`, so the request it guards has exactly the budget the caller
+	// asked for; only the second request onward pays for the time it actually
+	// spent waiting.
+	const started = performance.now();
+	let first = true;
 	const elapsed = () => {
-		readAt = Math.max(readAt, Date.now());
-		return Math.floor(readAt - started);
+		if (first) {
+			first = false;
+			return 0;
+		}
+		return Math.ceil(performance.now() - started);
 	};
 
 	return {

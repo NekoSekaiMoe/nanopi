@@ -203,8 +203,8 @@ describe("client requests", () => {
 				(error: Error) => error.message,
 			);
 		// The name carries the budget the request was armed with, which is the
-		// caller's 300ms: the hover must not shave a whole millisecond off just
-		// because it was submitted 1ms after the budget was created.
-		expect(answer).toMatch(/timed out after 300ms/);
+		// caller's 300ms: the hover must not shave a fraction of a millisecond off
+		// just because it was submitted a moment after the budget was created.
+		expect(answer).toContain("timed out after 300ms");
 	});
 });
