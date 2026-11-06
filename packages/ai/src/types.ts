@@ -102,7 +102,6 @@ export type KnownProvider =
 	| "zai-coding-cn"
 	| "zhipuai"
 	| "moonshotai"
-	| "moonshotai-cn"
 	| "huggingface"
 	| "fireworks"
 	| "together"

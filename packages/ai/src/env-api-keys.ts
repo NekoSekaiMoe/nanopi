@@ -110,7 +110,6 @@ function getApiKeyEnvVars(provider: string): readonly string[] | undefined {
 		"siliconflow-cn": "SILICONFLOW_CN_API_KEY",
 		"ollama-cloud-token-plan": "OLLAMA_CLOUD_TOKEN_PLAN_API_KEY",
 		moonshotai: "MOONSHOT_API_KEY",
-		"moonshotai-cn": "MOONSHOT_API_KEY",
 		huggingface: "HF_TOKEN",
 		fireworks: "FIREWORKS_API_KEY",
 		together: "TOGETHER_API_KEY",

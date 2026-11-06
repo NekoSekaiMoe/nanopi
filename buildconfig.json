@@ -312,7 +312,7 @@
 	},
 	"providerSets": {
 		"all": {
-			"description": "Every built-in provider catalog in packages/ai. A curated list, not everything models.dev lists: a catalog is kept when someone can plausibly type its key on purpose — the assistants people reach for first (openai, anthropic, google, glm/z.ai, kimi, qwen, xai, meta, deepseek, moonshot), the subscription plans (github-copilot, openrouter, vercel-ai-gateway, ollama-cloud, the token plans), and the hosts a large account brings (amazon-bedrock, azure, google-vertex). The rest of models.dev — the aggregators nobody has heard of, the hosts that resize a catalog of someone else's models, and the vendors with one or two models — is a `models.json` entry away and ships no data. `full` and `presets` ship this set; the model generator writes the concrete list back here, so a build never ships a provider the catalog does not have",
+			"description": "Every built-in provider catalog in packages/ai. A curated list, not everything models.dev lists: a catalog is kept when someone can plausibly type its key on purpose — the assistants people reach for first (openai, anthropic, google, glm/z.ai, kimi, qwen, xai, meta, deepseek, moonshot), the subscription plans (github-copilot, openrouter, vercel-ai-gateway, the token plans), and the hosts a large account brings (amazon-bedrock, azure, google-vertex). A host that resizes someone else's catalog into its own list does not qualify: `ollama-cloud` is `ollama-cloud-token-plan`'s models (same 25 ids, same `https://ollama.com/v1` endpoint) under a per-token key, so the shipped catalog is the subscription entry point and the pay-as-you-go one is a `models.json` entry. The rest of models.dev — the aggregators nobody has heard of, the hosts that resize a catalog of someone else's models, and the vendors with one or two models — is a `models.json` entry away and ships no data. `full` and `presets` ship this set; the model generator writes the concrete list back here, so a build never ships a provider the catalog does not have",
 			"providers": [
 				"amazon-bedrock",
 				"anthropic",
@@ -329,7 +329,6 @@
 				"meta",
 				"moonshotai",
 				"moonshotai-cn",
-				"ollama-cloud-token-plan",
 				"openai",
 				"openai-codex",
 				"opencode",
@@ -351,13 +350,13 @@
 			]
 		},
 		"core": {
-			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi) plus the two subscription aggregators with a real install base (openrouter, opencode + opencode-go). Every other catalog stays a one-entry `models.json` away but ships no data, which is where the rest of the bundle's model data goes. `base` ships this set; `full` ships `all`",
+			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi) plus the two subscription aggregators with a real install base (openrouter, opencode + opencode-go) and the Ollama Cloud plan, whose subscription key is the picker's entry to that catalog. Every other catalog stays a one-entry `models.json` away but ships no data, which is where the rest of the bundle's model data goes. `base` ships this set; `full` ships `all`. `moonshotai-cn` stays out on purpose: it is `moonshotai` with a China base URL, and the URL is a `models.json` override, so one catalog covers both",
 			"providers": [
 				"anthropic",
 				"google",
 				"kimi-coding",
 				"moonshotai",
-				"moonshotai-cn",
+				"ollama-cloud-token-plan",
 				"openai",
 				"opencode",
 				"opencode-go",

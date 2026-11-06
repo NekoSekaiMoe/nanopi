@@ -162,10 +162,6 @@ describe("builtin providers", () => {
 			["moonshotai", "kimi-k2.7-code"],
 			["moonshotai", "kimi-k2.7-code-highspeed"],
 			["moonshotai", "kimi-k3"],
-			["moonshotai-cn", "kimi-k2.6"],
-			["moonshotai-cn", "kimi-k2.7-code"],
-			["moonshotai-cn", "kimi-k2.7-code-highspeed"],
-			["moonshotai-cn", "kimi-k3"],
 			["fireworks", "accounts/fireworks/models/kimi-k3"],
 			["fireworks", "accounts/fireworks/routers/kimi-k3-fast"],
 			["openai", "gpt-5.4"],
@@ -269,12 +265,12 @@ describe("builtin providers", () => {
 			supportsMidConvoToolChanges: true,
 		});
 		// Kimi-style tool-bearing system messages survive Moonshot and OpenCode but not Copilot.
-		for (const provider of ["moonshotai", "moonshotai-cn", "opencode", "opencode-go"] as const) {
+		for (const provider of ["moonshotai", "opencode", "opencode-go"] as const) {
 			expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
 				supportsMidConvoToolAdditions: true,
 			});
 		}
-		for (const provider of ["moonshotai", "moonshotai-cn"] as const) {
+		for (const provider of ["moonshotai"] as const) {
 			for (const modelId of ["kimi-k2.6", "kimi-k2.7-code", "kimi-k2.7-code-highspeed"] as const) {
 				expect(models.getModel(provider, modelId)?.compat, `${provider}/${modelId}`).not.toHaveProperty(
 					"supportsMidConvoToolAdditions",
@@ -289,7 +285,7 @@ describe("builtin providers", () => {
 
 	it("uses official Kimi K3 pricing for Moonshot providers", () => {
 		const models = builtinModels();
-		for (const provider of ["moonshotai", "moonshotai-cn"]) {
+		for (const provider of ["moonshotai"]) {
 			expect(models.getModel(provider, "kimi-k3")?.cost).toEqual({
 				input: 3,
 				output: 15,

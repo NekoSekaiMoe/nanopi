@@ -1477,7 +1477,7 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("omits disabled thinking for Moonshot Kimi K2.7 Code models", async () => {
-		const cases = [getModel("moonshotai", "kimi-k2.7-code"), getModel("moonshotai-cn", "kimi-k2.7-code")];
+		const cases = [getModel("moonshotai", "kimi-k2.7-code")];
 
 		for (const model of cases) {
 			expect(model).toBeDefined();
@@ -1503,7 +1503,7 @@ describe("openai-completions tool_choice", () => {
 	});
 
 	it("keeps disabled thinking for Moonshot Kimi K2.6 when thinking is off", async () => {
-		const model = getModel("moonshotai-cn", "kimi-k2.6")!;
+		const model = getModel("moonshotai", "kimi-k2.6")!;
 		let payload: unknown;
 
 		await streamSimple(
