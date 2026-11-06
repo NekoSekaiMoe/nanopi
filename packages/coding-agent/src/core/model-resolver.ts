@@ -31,7 +31,6 @@ const defaultModelPerProvider: Partial<Record<KnownProvider, string>> = {
 	zai: "glm-5.3",
 	"zai-coding-cn": "glm-5.3",
 	moonshotai: "kimi-k2.6",
-	"moonshotai-cn": "kimi-k2.6",
 	huggingface: "moonshotai/Kimi-K2.6",
 	fireworks: "accounts/fireworks/models/kimi-k3",
 	together: "moonshotai/Kimi-K3",

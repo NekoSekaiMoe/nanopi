@@ -512,6 +512,9 @@ const EXPLICIT_MODELS_DEV_PROVIDERS = new Set([
 	"minimax-cn",
 	"mistral",
 	"moonshotai",
+	// The China endpoint shares `moonshotai`'s catalog (same model ids, different
+	// base URL), so no flavor ships a second copy: the generator stays out of it
+	// and the generic pass below would otherwise manufacture one.
 	"moonshotai-cn",
 	"nvidia",
 	"openai",
@@ -1057,7 +1060,7 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		baseUrl.includes("open.bigmodel.cn");
 	const isTogether =
 		provider === "together" || baseUrl.includes("api.together.ai") || baseUrl.includes("api.together.xyz");
-	const isMoonshot = provider === "moonshotai" || provider === "moonshotai-cn" || baseUrl.includes("api.moonshot.");
+	const isMoonshot = provider === "moonshotai" || baseUrl.includes("api.moonshot.");
 	const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
 	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
 	const isCloudflareAiGateway = provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
@@ -1538,10 +1541,7 @@ function applyThinkingLevelMetadata(model: Model<any>): void {
 	if (model.provider === "openai-codex" && supportsOpenAiXhigh(model.id)) {
 		mergeThinkingLevelMap(model, { minimal: "low" });
 	}
-	if (
-		(model.provider === "moonshotai" || model.provider === "moonshotai-cn") &&
-		(model.id === "kimi-k2.7-code" || model.id === "kimi-k2.7-code-highspeed")
-	) {
+	if (model.provider === "moonshotai" && (model.id === "kimi-k2.7-code" || model.id === "kimi-k2.7-code-highspeed")) {
 		// Kimi K2.7 Code is always-thinking. Official docs say
 		// `thinking: { type: "disabled" }` is rejected, and callers can omit
 		// the thinking parameter to use the enabled default.
@@ -3031,10 +3031,11 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			}
 		}
 
-		// Process Moonshot AI models
+		// Process Moonshot AI models. One catalog: `moonshotai-cn` is the same
+		// models behind the China base URL, and the URL is what `models.json`
+		// overrides, so a second catalog would ship the same 6 entries twice.
 		const moonshotVariants = [
 			{ key: "moonshotai", provider: "moonshotai", baseUrl: "https://api.moonshot.ai/v1" },
-			{ key: "moonshotai-cn", provider: "moonshotai-cn", baseUrl: "https://api.moonshot.cn/v1" },
 		] as const;
 		const moonshotCompat: OpenAICompletionsCompat = {
 			supportsStore: false,
@@ -3044,13 +3045,12 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 			supportsStrictMode: false,
 			thinkingFormat: "deepseek",
 		};
-		const getMoonshotProviderModels = (key: "moonshotai" | "moonshotai-cn"): Record<string, ModelsDevModel> => {
+		const getMoonshotProviderModels = (key: "moonshotai"): Record<string, ModelsDevModel> => {
 			const providerModels = data[key]?.models as Record<string, ModelsDevModel> | undefined;
 			return providerModels ? { ...providerModels } : {};
 		};
 		const moonshotModels = {
 			moonshotai: getMoonshotProviderModels("moonshotai"),
-			"moonshotai-cn": getMoonshotProviderModels("moonshotai-cn"),
 		};
 
 		for (const { key, provider, baseUrl } of moonshotVariants) {

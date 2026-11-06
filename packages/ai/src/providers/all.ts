@@ -23,7 +23,6 @@ import { kiroProvider } from "./kiro.ts";
 import { metaProvider } from "./meta.ts";
 import { modalProvider } from "./modal.ts";
 import { moonshotaiProvider } from "./moonshotai.ts";
-import { moonshotaiCnProvider } from "./moonshotai-cn.ts";
 import { nvidiaProvider } from "./nvidia.ts";
 import { ollamaCloudTokenPlanProvider } from "./ollama-cloud-token-plan.ts";
 import { openaiProvider } from "./openai.ts";
@@ -160,7 +159,6 @@ export function builtinProviders(): Provider[] {
 		metaProvider(),
 		modalProvider(),
 		moonshotaiProvider(),
-		moonshotaiCnProvider(),
 		nvidiaProvider(),
 		openaiProvider(),
 		openaiCodexProvider(),
