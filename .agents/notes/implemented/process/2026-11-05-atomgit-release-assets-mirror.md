@@ -118,7 +118,8 @@ https://atomgit.com/nanopi/releases-assets/raw/main/nightly/SHA256SUMS
   不上传）。本地用 `file://` bare 仓库跑过整条链路；真机推送（AtomGit HTTPS +
   token）与 GitHub / CNB 的触发只能靠第一次发布确认。
 
-Related: [Single-file nanopi.js release artifact](2026-10-11-single-file-release-artifact.md)
+Related: [TUI sidecar tarball mirrored here](2026-11-06-tui-sidecar-mirror-and-prebuilds.md)
+（同一批里还发 `nanopi-sidecars-<version>.tgz`）、[Single-file nanopi.js release artifact](2026-10-11-single-file-release-artifact.md)
 （产物集与 sidecar 清单）、[Tag 镜像与 main 分开处理](2026-10-16-tag-mirroring-between-github-and-cnb.md)
 （正式版的 tag 怎么到 CNB）、[镜像凭据由 scripts/mirror.mjs 自己落盘](2026-10-27-mirror-credential-in-script.md)
 （同一套「凭据不进 argv」的写法）、[job 级 if 读不到 env/secrets](../bug-fix/2026-11-06-job-if-cannot-read-env-or-secrets.md)

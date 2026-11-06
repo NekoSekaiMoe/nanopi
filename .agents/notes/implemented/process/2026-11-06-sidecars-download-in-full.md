@@ -32,7 +32,9 @@ flavor `full`): 11,517,558 → 10,213,090 bytes, −1.24 MiB. `base` and
 `minimal` are unchanged (6.7 MiB / 2.7 MiB) — they never embedded.
 
 The release workflow still emits `nanopi-sidecars-<version>.tgz` and still
-asserts it exists, because the download path now carries every platform.
+asserts it exists, because the download path now carries every platform —
+and that tarball is now also mirrored to AtomGit, see
+[the sidecar mirror note](./2026-11-06-tui-sidecar-mirror-and-prebuilds.md).
 
 ## Alternatives considered
 

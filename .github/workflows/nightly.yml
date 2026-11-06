@@ -92,19 +92,48 @@ jobs:
       # 三个口味共用这一次 install/build，只有 bundle 那一步看
       # NANOPI_BUILD_FLAVOR；构建与冒烟都在 scripts/publish-atomgit.mjs 之外，
       # 脚本只管「发什么、怎么命名、校验和对不对得上、推到哪里」。
+      #
+      # base/minimal 的 sidecar tgz 是同一份（名字只带 TUI 版本），所以先丢
+      # full 在 packages/coding-agent/binaries 里产出的那个，免得 release-assets
+      # 里出现两份同名文件。
       - name: Build smaller flavors
         run: |
           set -euo pipefail
+          rm -f packages/coding-agent/binaries/nanopi-sidecars-*.tgz
           for flavor in base minimal; do
             NANOPI_BUILD_FLAVOR="${flavor}" node scripts/build-coding-agent-single-file.mjs --out "release-assets/nanopi-${flavor}.js"
           done
 
+      # full 不再内嵌原生 sidecar，安装时下载的就是这份 tgz。它由 full 那一步
+      # 写在 nanopi.js 旁边（bundle 的 sidecar manifest 按同名拼 URL），搬进
+      # release-assets 才能随 artifact 一起发出去——AtomGit 那份镜像靠它。
+      - name: Collect TUI native prebuilds
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          sidecars=(packages/coding-agent/binaries/nanopi-sidecars-*.tgz)
+          if [[ ${#sidecars[@]} -ne 1 ]]; then
+            echo "::error::expected exactly one sidecar tarball in packages/coding-agent/binaries, found ${#sidecars[@]}"
+            exit 1
+          fi
+          mv "${sidecars[0]}" release-assets/
+          tar -tzf "release-assets/$(basename "${sidecars[0]}")" | grep -q '\.node$' || {
+            echo "::error::sidecar tarball carries no prebuilt .node file"
+            exit 1
+          }
+
+      # 每个 bundle 都跑一次：sidecar 的下载优先级和备用镜像地址是编译进产物
+      # 里的，只有真跑一遍才知道 full 能不能拿到原生剪贴板、base/minimal 有没有
+      # 被这一步弄坏。HOME 指到临时目录，装好的 sidecar 不会留在 runner 上影响
+      # 下一个 bundle。
       - name: Smoke-test bundle
         run: |
           set -euo pipefail
           for bundle in nanopi nanopi-base nanopi-minimal; do
-            node "release-assets/${bundle}.js" --version
-            node "release-assets/${bundle}.js" --help > /dev/null
+            home="$(mktemp -d)"
+            HOME="${home}" node "release-assets/${bundle}.js" --version
+            HOME="${home}" node "release-assets/${bundle}.js" --help > /dev/null
+            rm -rf "${home}"
           done
 
       # 下游是独立的 job，只能通过 artifact 拿到产物。
@@ -155,6 +184,10 @@ jobs:
   # 国内用户下载 bundle 只有 AtomGit 一条路（GitHub Releases 到不了），所以
   # nightly 也要发过去。tag 就是 `nightly`：它表示「当前最新一份」，当天重跑、
   # CNB 那条兜底 cron 都落在同一个 tag 上（脚本里 tag 是 force 更新的）。
+  #
+  # 发的不只是三个 bundle：TUI 原生 prebuild 的 tgz 也在这一批里。full 从
+  # #534 起不再内嵌 sidecar，安装后要下载的就是它，而 bundle 里的备用地址正
+  # 是这个仓库的 raw 文件——不发等于那条备用路径永远 404。
   publish-atomgit:
     name: Publish nightly bundle to AtomGit
     runs-on: ubuntu-latest

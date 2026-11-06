@@ -11,10 +11,15 @@
 // 这条脚本只做「组装」和「推送」两件事，构建本身留在调用方（GitHub Actions 的
 // nightly.yml 用 build-single-file.mjs，正式版的资产直接取 build-binaries.yml
 // 的 artifact）：它决定发什么、怎么命名、校验和对不对得上，以及推到哪里。
+//
+// 除了三个 bundle，输入目录里如果有 TUI 原生 prebuild 包
+// （nanopi-sidecars-<version>.tgz，由 build-coding-agent-single-file.mjs 产出）
+// 也要带上：full 不再内嵌原生 sidecar，那份 tgz 就是安装时唯一能下载到的地方，
+// 不发出去等于把功能留在 GitHub 上。
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -23,6 +28,9 @@ const DEFAULT_SLUG = "nanopi/releases-assets";
 // 与 .github/workflows/build-binaries.yml 的资产集同名，install.js 的 --sku
 // 才能从两个来源取到同一个文件名。
 const BUNDLES = ["nanopi.js", "nanopi-base.js", "nanopi-minimal.js"];
+// 名字里带版本，所以只能在输入目录里按形状认：build-coding-agent-single-file.mjs
+// 用 packages/tui 的版本命名，bundle 的 sidecar manifest 用同一个名字拼 URL。
+const SIDECARS_RE = /^nanopi-sidecars-.+\.tgz$/;
 const CHECKSUMS = "SHA256SUMS";
 const NOTES = "RELEASE_NOTES.md";
 
@@ -102,7 +110,10 @@ function assetsOf(input, tag) {
 	// 版本的身份证。
 	const source = tag.startsWith("v") ? `nanopi-${tag.slice(1)}-source.tar.gz` : undefined;
 	if (source && !existsSync(join(input, source))) throw new Error(`${source} is missing from ${input}`);
-	return { bundles, source };
+	// 可选，但名字一旦出现在输入目录里就必须发出去：bundle 的 sidecar manifest
+	// 按这个名字拼下载 URL，漏发时坏的是安装后的第一次剪贴板/图片操作。
+	const sidecars = readdirSync(input).filter((name) => SIDECARS_RE.test(name)).sort();
+	return { bundles, source, sidecars };
 }
 
 // 只发最新一份：发行仓库的主分支只服务「最新 nightly / 最新正式版」这条读取
@@ -112,8 +123,8 @@ function clearAssets() {
 	mkdirSync(ASSETS, { recursive: true });
 }
 
-function writeAssets(input, { bundles, source }) {
-	const names = [...bundles];
+function writeAssets(input, { bundles, source, sidecars }) {
+	const names = [...bundles, ...sidecars];
 	if (source) names.push(source);
 	for (const name of names) copyFileSync(join(input, name), join(ASSETS, name));
 	// `sha256sum -c SHA256SUMS` 是 install.js 与用户共用的校验入口，格式就得是
@@ -125,25 +136,28 @@ function writeAssets(input, { bundles, source }) {
 	writeFileSync(join(ASSETS, CHECKSUMS), `${sums}\n`);
 }
 
-function writeNotes(input, tag) {
+function writeNotes(input, tag, { sidecars }) {
 	const notes = join(input, NOTES);
 	if (tag.startsWith("v") && existsSync(notes)) cpSync(notes, join(ASSETS, NOTES));
 	else {
-		writeFileSync(
-			join(ASSETS, NOTES),
-			[
-				`Nightly build of ${values.commit}.`,
-				"",
-				`Bundles are raw files in this repository: ${rawBase}/nanopi.js, ${rawBase}/nanopi-base.js, ${rawBase}/nanopi-minimal.js.`,
-				`Verify with ${rawBase}/${CHECKSUMS}.`,
-				"",
-				"The official release lives on GitHub Releases; this repository mirrors the bundles for readers in mainland China.",
-			].join("\n") + "\n",
+		const lines = [
+			`Nightly build of ${values.commit}.`,
+			"",
+			`Bundles are raw files in this repository: ${rawBase}/nanopi.js, ${rawBase}/nanopi-base.js, ${rawBase}/nanopi-minimal.js.`,
+			`Verify with ${rawBase}/${CHECKSUMS}.`,
+			"",
+		];
+		for (const name of sidecars) {
+			lines.push(`The TUI native prebuilds of this build are ${rawBase}/${name}.`, "");
+		}
+		lines.push(
+			"The official release lives on GitHub Releases; this repository mirrors the bundles for readers in mainland China.",
 		);
+		writeFileSync(join(ASSETS, NOTES), lines.join("\n") + "\n");
 	}
 }
 
-function writeReadme({ bundles, source }) {
+function writeReadme({ source, sidecars }) {
 	const tag = TAG;
 	const lines = [
 		`# ${slug}`,
@@ -151,8 +165,8 @@ function writeReadme({ bundles, source }) {
 		"Bundle distribution for [NanoPi](https://atomgit.com/NanoPi/NanoPi). The official",
 		"release, changelog and source archive live on GitHub",
 		"([NekoSekaiMoe/nanopi](https://github.com/NekoSekaiMoe/nanopi)). This repository",
-		"only carries the single-file bundles, so readers in mainland China do not have to",
-		"reach GitHub Releases.",
+		"carries the single-file bundles and the TUI native prebuilds they download on",
+		"first use, so readers in mainland China do not have to reach GitHub Releases.",
 		"",
 		`Current: **${tag}** built from ${values.commit}.`,
 		"",
@@ -175,6 +189,21 @@ function writeReadme({ bundles, source }) {
 		`sha256sum -c ${CHECKSUMS} --ignore-missing`,
 		"```",
 		"",
+		"## Native sidecars",
+		"",
+	]
+	for (const name of sidecars) {
+		lines.push(
+			`${rawBase}/${name} carries the TUI native prebuilds (clipboard, modifier`,
+			"keys) for darwin, linux and win32 on x64 and arm64. The bundle fetches it on",
+			"the first clipboard or image access; the file layout inside the tarball is",
+			"the agent bin directory layout, and every file is pinned by sha256.",
+			"",
+		);
+	}
+	lines.push(
+		"Without it the TUI falls back to command-line clipboard tools.",
+		"",
 		"## Install",
 		"",
 		"`install.js` can fetch from here, which also installs the `nanopi` shim beside",
@@ -190,7 +219,7 @@ function writeReadme({ bundles, source }) {
 		"",
 		"Check `RELEASE_NOTES.md` for what changed.",
 		"",
-	];
+	);
 	writeFileSync(join(values.work, "README.md"), lines.join("\n"));
 }
 
@@ -241,7 +270,7 @@ function main() {
 	const layout = assetsOf(values.input, TAG);
 	clearAssets();
 	writeAssets(values.input, layout);
-	writeNotes(values.input, TAG);
+	writeNotes(values.input, TAG, layout);
 	writeReadme(layout);
 	publish();
 }
