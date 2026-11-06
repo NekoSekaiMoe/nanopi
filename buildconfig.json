@@ -231,7 +231,7 @@
 			}
 		},
 		"base": {
-			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi, openrouter, opencode), every API implementation, and the export to Markdown and HTML; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Any other vendor is one `models.json` entry away",
+			"description": "Core CLI with the standard tool set (read, edit, write, bash), a curated model catalog (openai, google, anthropic, glm/z.ai, qwen, kimi, openrouter, opencode), every endpoint API implementation, and the export to Markdown and HTML; none of the bundled extras, docs, examples, the browser UI, sidecars or OAuth flows, so a login that needs a flow has to use an API key. Bedrock is not in this SKU: its implementations are dropped with the AWS SDK they pull (see `apiSets.endpoint`), so a `models.json` entry naming a bedrock api is skipped. Any other vendor is one `models.json` entry away",
 			"components": {
 				"*": false,
 				"module/*": true,
@@ -250,7 +250,7 @@
 				"module/websearch": false,
 				"syntax-highlight": true,
 				"providers": "core",
-				"apis": "all",
+				"apis": "endpoint",
 				"jiti-modules": true,
 				"export-html": true,
 				"export-markdown": true
@@ -308,6 +308,23 @@
 			"apis": [
 				"openai-completions"
 			]
+		},
+		"endpoint": {
+			"description": "Every endpoint implementation except the cloud-vendor ones: the AWS Bedrock APIs (bedrock-converse-stream, bedrock-mantle-*) and the two shapes nothing in a trimmed build registers (cloudflare-workers-ai-system-one, openai-decisions) are dropped. A build on this set carries no AWS SDK and no `@aws/bedrock-token-generator` client, so `models.json` cannot name a bedrock api: an entry that does is skipped at load time (packages/coding-agent/src/core/provider-composer.ts). Measured on the base artifact: 870 KiB, 428 KiB of it the Bedrock implementations and the rest a second copy of @smithy that only the AWS variant of the openai client pulls",
+			"apis": [
+				"anthropic-messages",
+				"azure-openai-responses",
+				"google-generative-ai",
+				"google-vertex",
+				"llama-cpp-classify",
+				"nanopi-messages",
+				"openai-codex-responses",
+				"openai-completions",
+				"openrouter-images",
+				"qoder",
+				"typesafe-system-one",
+				"antigravity"
+			]
 		}
 	},
 	"providerSets": {
@@ -351,8 +368,9 @@
 			]
 		},
 		"core": {
-			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi) plus the two subscription aggregators with a real install base (openrouter, opencode + opencode-go). Every other catalog stays a one-entry `models.json` away but ships no data, which is where the rest of the bundle's model data goes. `base` ships this set; `full` ships `all`",
+			"description": "The vendors a trimmed CLI keeps in its model picker: the assistants people reach for first (openai, google, anthropic, glm/z.ai, qwen, kimi) plus the two subscription aggregators with a real install base (openrouter, opencode + opencode-go) and amazon-bedrock, the one host whose credentials a server-side CLI already has through the environment (`bedrockAuth.resolve` reads AWS_BEARER_TOKEN_BEDROCK, AWS_PROFILE and the AWS credential chain, so `base` can use it without an OAuth flow). Every other catalog stays a one-entry `models.json` away but ships no data, which is where the rest of the bundle's model data goes. `base` ships this set; `full` ships `all`",
 			"providers": [
+				"amazon-bedrock",
 				"anthropic",
 				"google",
 				"kimi-coding",

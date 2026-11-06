@@ -145,6 +145,23 @@ function selectProviderIds(providerIds: readonly string[]): string[] {
 }
 
 /**
+ * `selectProviderIds` against a list the caller already knows: the set is
+ * checked against the catalogs this run produced, not against the ones a
+ * previous run left on disk.
+ */
+function selectProviderIdsFrom(selectedIds: readonly string[], knownIds: readonly string[]): string[] {
+	if (selectedIds.length === 1 && selectedIds[0] === NO_PROVIDERS) return [];
+	const unknown = selectedIds.filter((providerId) => !knownIds.includes(providerId));
+	if (unknown.length > 0) {
+		throw new Error(
+			`${BUILD_FLAVOR_ENV}/--providers names providers without a built-in catalog: ${unknown.join(", ")} ` +
+				`(known: ${[...knownIds].sort().join(", ")})`,
+		);
+	}
+	return knownIds.filter((providerId) => selectedIds.includes(providerId));
+}
+
+/**
  * The provider ids the current flavor ships, or undefined to generate all of
  * them. Only a flavor that is asked for explicitly narrows the run: the default
  * flavor keeps the generator's historical behavior of writing every catalog.
@@ -2224,8 +2241,121 @@ function processFireworksModels(provider: ModelsDevProvider | undefined): Model<
 	return models;
 }
 
+/**
+ * The Amazon Bedrock catalog: the converse-stream models plus the two Mantle
+ * shapes. Only a build whose provider set carries `amazon-bedrock` ships it, but
+ * `providerSets.core` names it for `base` too, so a flavored run still needs
+ * this catalog even though the endpoint APIs are dropped (`apiSets.endpoint`).
+ */
+function processBedrockModels(data: ModelsDevCatalog): Model<any>[] {
+	const models: Model<any>[] = [];
+	if (data["amazon-bedrock"]?.models) {
+		for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
+			const m = model as ModelsDevModel;
+			if (m.tool_call !== true) continue;
+
+			let id = modelId;
+
+			if (isBedrockMantleAnthropicMessagesModelId(id)) {
+				models.push({
+					id,
+					name: m.name || id,
+					api: "anthropic-messages" as const,
+					provider: "amazon-bedrock" as const,
+					baseUrl: getBedrockMantleAnthropicMessagesBaseUrl(id),
+					reasoning: m.reasoning === true,
+					input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
+					cost: {
+						input: m.cost?.input || 0,
+						output: m.cost?.output || 0,
+						cacheRead: m.cost?.cache_read || 0,
+						cacheWrite: m.cost?.cache_write || 0,
+					},
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+				});
+				recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
+				continue;
+			}
+
+			if (isBedrockMantleOpenAIResponsesModelId(id)) {
+				models.push({
+					id,
+					name: m.name || id,
+					api: "openai-responses" as const,
+					provider: "amazon-bedrock" as const,
+					baseUrl: getBedrockMantleOpenAIResponsesBaseUrl(id),
+					reasoning: m.reasoning === true,
+					input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
+					cost: {
+						input: m.cost?.input || 0,
+						output: m.cost?.output || 0,
+						cacheRead: m.cost?.cache_read || 0,
+						cacheWrite: m.cost?.cache_write || 0,
+					},
+					contextWindow: m.limit?.context || 4096,
+					maxTokens: m.limit?.output || 4096,
+					...(m.reasoning === true && { thinkingLevelMap: { off: null } }),
+					compat: {
+						sessionAffinityFormat: "openai-nosession" as const,
+						...(m.structured_output === true && { supportsStrictMode: true }),
+					},
+				});
+				recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
+				continue;
+			}
+
+			if (BEDROCK_INFERENCE_PROFILE_ONLY_MODEL_IDS.has(modelId)) continue;
+
+			if (id.startsWith("ai21.jamba")) {
+				// These models doesn't support tool use in streaming mode
+				continue;
+			}
+
+			if (id.startsWith("mistral.mistral-7b-instruct-v0")) {
+				// These models doesn't support system messages
+				continue;
+			}
+
+			models.push({
+				id,
+				name: m.name || id,
+				api: "bedrock-converse-stream" as const,
+				provider: "amazon-bedrock" as const,
+				baseUrl: getBedrockBaseUrl(id),
+				reasoning: m.reasoning === true,
+				input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
+				// Includes models.dev pricing tiers, e.g. the long-context tier for OpenAI models (#10326).
+				cost: getModelsDevCost(m.cost),
+				contextWindow: m.limit?.context || 4096,
+				maxTokens: m.limit?.output || 4096,
+				...(m.structured_output === true && { compat: { supportsStrictMode: true } }),
+			});
+			recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
+		}
+
+		const bedrockModelIds = new Set(models.filter((model) => model.provider === "amazon-bedrock").map((model) => model.id));
+		for (const model of BEDROCK_MANTLE_ANTHROPIC_MESSAGES_SUPPLEMENTAL_MODELS) {
+			if (!bedrockModelIds.has(model.id)) {
+				models.push(model);
+			}
+		}
+		for (const model of BEDROCK_MANTLE_OPENAI_RESPONSES_SUPPLEMENTAL_MODELS) {
+			if (!bedrockModelIds.has(model.id)) {
+				models.push(model);
+			}
+		}
+	}
+	return models;
+}
+
 async function loadModelsDevData(): Promise<Model<any>[]> {
 	try {
+		// A run narrowed to a few providers has no use for the ~200 vendor entries
+		// of the full catalog, but the request is one file either way. What it does
+		// need is the vendors it asks for: `base` ships `amazon-bedrock` while
+		// dropping its endpoint APIs (`apiSets.endpoint`), and models.dev publishes
+		// the Bedrock entries under that id.
 		console.log("Fetching models from models.dev API...");
 		const response = await fetch("https://models.dev/api.json");
 		if (!response.ok) throw new Error(`models.dev API returned ${response.status}`);
@@ -2234,104 +2364,7 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 		const models: Model<any>[] = [];
 		const nvidiaNimModelIds = data.nvidia?.models ? await fetchNvidiaNimModelIds() : new Map<string, string>();
 
-		// Process Amazon Bedrock models
-		if (data["amazon-bedrock"]?.models) {
-			for (const [modelId, model] of Object.entries(data["amazon-bedrock"].models)) {
-				const m = model as ModelsDevModel;
-				if (m.tool_call !== true) continue;
-
-				let id = modelId;
-
-				if (isBedrockMantleAnthropicMessagesModelId(id)) {
-					models.push({
-						id,
-						name: m.name || id,
-						api: "anthropic-messages" as const,
-						provider: "amazon-bedrock" as const,
-						baseUrl: getBedrockMantleAnthropicMessagesBaseUrl(id),
-						reasoning: m.reasoning === true,
-						input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
-						cost: {
-							input: m.cost?.input || 0,
-							output: m.cost?.output || 0,
-							cacheRead: m.cost?.cache_read || 0,
-							cacheWrite: m.cost?.cache_write || 0,
-						},
-						contextWindow: m.limit?.context || 4096,
-						maxTokens: m.limit?.output || 4096,
-					});
-					recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
-					continue;
-				}
-
-				if (isBedrockMantleOpenAIResponsesModelId(id)) {
-					models.push({
-						id,
-						name: m.name || id,
-						api: "openai-responses" as const,
-						provider: "amazon-bedrock" as const,
-						baseUrl: getBedrockMantleOpenAIResponsesBaseUrl(id),
-						reasoning: m.reasoning === true,
-						input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
-						cost: {
-							input: m.cost?.input || 0,
-							output: m.cost?.output || 0,
-							cacheRead: m.cost?.cache_read || 0,
-							cacheWrite: m.cost?.cache_write || 0,
-						},
-						contextWindow: m.limit?.context || 4096,
-						maxTokens: m.limit?.output || 4096,
-						...(m.reasoning === true && { thinkingLevelMap: { off: null } }),
-						compat: {
-							sessionAffinityFormat: "openai-nosession" as const,
-							...(m.structured_output === true && { supportsStrictMode: true }),
-						},
-					});
-					recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
-					continue;
-				}
-
-				if (BEDROCK_INFERENCE_PROFILE_ONLY_MODEL_IDS.has(modelId)) continue;
-
-				if (id.startsWith("ai21.jamba")) {
-					// These models doesn't support tool use in streaming mode
-					continue;
-				}
-
-				if (id.startsWith("mistral.mistral-7b-instruct-v0")) {
-					// These models doesn't support system messages
-					continue;
-				}
-
-				models.push({
-					id,
-					name: m.name || id,
-					api: "bedrock-converse-stream" as const,
-					provider: "amazon-bedrock" as const,
-					baseUrl: getBedrockBaseUrl(id),
-					reasoning: m.reasoning === true,
-					input: (m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"]) as ("text" | "image")[],
-					// Includes models.dev pricing tiers, e.g. the long-context tier for OpenAI models (#10326).
-					cost: getModelsDevCost(m.cost),
-					contextWindow: m.limit?.context || 4096,
-					maxTokens: m.limit?.output || 4096,
-					...(m.structured_output === true && { compat: { supportsStrictMode: true } }),
-				});
-				recordModelsDevReasoningOptions("amazon-bedrock" as const, id, m);
-			}
-
-			const bedrockModelIds = new Set(models.filter((model) => model.provider === "amazon-bedrock").map((model) => model.id));
-			for (const model of BEDROCK_MANTLE_ANTHROPIC_MESSAGES_SUPPLEMENTAL_MODELS) {
-				if (!bedrockModelIds.has(model.id)) {
-					models.push(model);
-				}
-			}
-			for (const model of BEDROCK_MANTLE_OPENAI_RESPONSES_SUPPLEMENTAL_MODELS) {
-				if (!bedrockModelIds.has(model.id)) {
-					models.push(model);
-				}
-			}
-		}
+		models.push(...processBedrockModels(data));
 
 		// Process Anthropic models
 		if (data.anthropic?.models) {
@@ -3591,7 +3624,18 @@ async function generateModels() {
 	// A run with no provider writes the empty catalog and touches no network:
 	// fetching every upstream catalog to then drop it would make a small build
 	// depend on all of them being reachable.
-	if (selectProviderIds(["*"]).length === 0) {
+	const requestedProviderIds = generatorOptions.providers;
+	if (requestedProviderIds !== undefined) {
+		// A flavored run is checked against the catalogs this run produces, not
+		// against the ones the previous run left on disk: `base` ships
+		// `amazon-bedrock` (providerSets.core) while dropping its endpoint APIs
+		// (apiSets.endpoint), and a clean checkout has no bedrock data file for the
+		// on-disk record to match. The end-of-run check below is the one that runs.
+		if (requestedProviderIds.size === 1 && requestedProviderIds.has(NO_PROVIDERS)) {
+			writeEmptyCatalog();
+			return;
+		}
+	} else if (selectProviderIds(["*"]).length === 0) {
 		writeEmptyCatalog();
 		return;
 	}
@@ -4204,7 +4248,18 @@ async function generateModels() {
 	for (const providerId of ["qoder", "qoder-cn"]) {
 		providers[providerId] ??= { chat: {}, image: {}, classifier: {} };
 	}
-	const sortedProviderIds = selectProviderIds(Object.keys(providers).sort());
+	// A flavored run can name a provider the data directory has not recorded yet:
+	// `base` ships `amazon-bedrock` (providerSets.core) while dropping its
+	// endpoint APIs (apiSets.endpoint), and on a clean checkout the "known" list
+	// is the previous run's data files, which need not hold a bedrock one. The
+	// catalogs generated above are the authority, so that check runs against
+	// them, and only for the ids the run asks for.
+	const selectedProviderIds = generatorOptions.providers;
+	const selectedIds = selectedProviderIds === undefined ? undefined : [...selectedProviderIds].sort();
+	const sortedProviderIds =
+		selectedIds === undefined || (selectedIds.length === 1 && selectedIds[0] === NO_PROVIDERS)
+			? selectProviderIds(Object.keys(providers).sort())
+			: selectProviderIdsFrom(selectedIds, Object.keys(providers));
 	if (sortedProviderIds.length === 0) {
 		throw new Error("No provider left to generate after filtering the upstream catalogs");
 	}
