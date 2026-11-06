@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2, Trash2, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useTerminal } from "@/lib/use-terminal";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,7 @@ import { t } from "@/lib/i18n";
  * per connection) and stay out of the agent transcript, so a quick `git status`
  * costs no context.
  */
-export function TerminalPane({ cwd }: { cwd: string }) {
+export function TerminalPane({ cwd, onClose }: { cwd: string; onClose: () => void }) {
 	const { entries, connected, error, run, clear } = useTerminal(cwd);
 	const [command, setCommand] = useState("");
 	const [history, setHistory] = useState<string[]>([]);
@@ -33,8 +33,13 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-				<span className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground" title={cwd}>
+			{/* Same split as the file viewer: the MobileBar names the pane, so on a
+			    phone this row is only a toolbar. */}
+			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 max-md:justify-end">
+				<span
+					className="min-w-0 flex-1 truncate font-mono text-caption text-muted-foreground max-md:hidden"
+					title={cwd}
+				>
 					{cwd || t("本地工作区")}
 				</span>
 				<span
@@ -52,6 +57,19 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 				>
 					<Trash2 className="size-3.5" strokeWidth={1.75} />
+				</button>
+				{/* Desktop has no MobileBar above the pane, so the pane owns its way
+				    back to the chat; without it the terminal was a dead end. On a
+				    phone the back arrow in the MobileBar already exits, so this one
+				    would be a second control for the same move. */}
+				<button
+					type="button"
+					aria-label={t("关闭终端")}
+					title={t("关闭终端")}
+					onClick={onClose}
+					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground max-md:hidden"
+				>
+					<X className="size-4" strokeWidth={1.75} />
 				</button>
 			</header>
 
@@ -88,7 +106,7 @@ export function TerminalPane({ cwd }: { cwd: string }) {
 				<div ref={bottomRef} />
 			</div>
 
-			<div className="shrink-0 border-t border-border p-2">
+			<div className="shrink-0 border-t border-border p-2 pb-[max(8px,env(safe-area-inset-bottom))]">
 				<div className="flex items-center gap-1.5 rounded-xl bg-muted px-2.5">
 					<span className="shrink-0 font-mono text-label text-brand">$</span>
 					<input
