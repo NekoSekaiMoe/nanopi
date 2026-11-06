@@ -75,6 +75,21 @@
       "automerge": true,
       "automergeType": "pr",
       "platformAutomerge": true
+    },
+    {
+      "description": "biome.json 的 $schema 由 customManager 提取，depName 就是 @biomejs/biome，所以 npm 组的 matchManagers 与这条的 matchFileNames 拿 depName 取交集时命中的是同一个包：版本升的时候 biome.json 里那个数字改在同一个 PR、同一个分支里，不另开一条。rangeStrategy=replace 是必须的：默认 pin 会往配置里塞 pnpm.overrides 并在根 package.json 加一条 dep，那是改依赖清单，不是改 schema 链接。",
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchFileNames": [
+        "biome.json"
+      ],
+      "rangeStrategy": "replace",
+      "groupName": "@biomejs/biome schema",
+      "groupSlug": "biome-schema",
+      "automerge": true,
+      "automergeType": "pr",
+      "platformAutomerge": true
     }
   ],
   "customManagers": [
@@ -89,6 +104,19 @@
       ],
       "datasourceTemplate": "github-releases",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "biome.json 的 $schema 里带着 CLI 版本号（https://biomejs.dev/schemas/2.6.5/schema.json），它是这个仓库唯一记录 biome 版本的地方，而 @biomejs/biome 的 npm 包里没有 schema 字段，Renovate 没有内置 manager 认它。这里把它当成 @biomejs/biome 的一条依赖提取，由下面 @biomejs/biome schema 那条 packageRule 用 rangeStrategy=replace 原地改数字，和 npm 组同一轮升。biome.json 的写法不用改；万一提取失效（有人重排了这一行）导致 $schema 落后，scripts/check-biome-schema.mjs 会在 CI 上红。",
+      "managerFilePatterns": [
+        "/^biome\\.json$/"
+      ],
+      "matchStrings": [
+        "\"\\$schema\":\\s+\"https://biomejs\\.dev/schemas/(?<currentValue>\\d+\\.\\d+\\.\\d+)/schema\\.json\""
+      ],
+      "depNameTemplate": "@biomejs/biome",
+      "datasourceTemplate": "npm",
+      "versioningTemplate": "npm"
     }
   ]
 }
