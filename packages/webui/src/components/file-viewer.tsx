@@ -87,8 +87,21 @@ export function FileViewer({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col">
-			<header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-3">
-				<span className="min-w-0 flex-1 truncate font-mono text-label text-muted-foreground" title={path}>
+			{/* On a phone the pane name is in the MobileBar and the back arrow
+			    there is the way out, so this row keeps only the actions that have
+			    no MobileBar counterpart. With nothing to show (PATH is hidden, the
+			    file is clean) the row would be an empty 48px strip, so it only
+			    exists on a phone once Save is reachable. */}
+			<header
+				className={cn(
+					"flex h-12 shrink-0 items-center gap-2 border-b border-border px-3 max-md:justify-end",
+					!dirty && "max-md:hidden",
+				)}
+			>
+				<span
+					className="min-w-0 flex-1 truncate font-mono text-label text-muted-foreground max-md:hidden"
+					title={path}
+				>
 					{path}
 				</span>
 				{dirty ? (
@@ -105,8 +118,9 @@ export function FileViewer({
 				<button
 					type="button"
 					aria-label={t("关闭文件")}
+					title={t("关闭文件")}
 					onClick={onClose}
-					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+					className="grid size-8 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground max-md:hidden"
 				>
 					<X className="size-4" strokeWidth={1.75} />
 				</button>
