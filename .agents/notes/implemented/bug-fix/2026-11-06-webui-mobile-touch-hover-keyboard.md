@@ -9,7 +9,12 @@ first three. All three are things a phone user hits directly:
 
 1. Touch targets below 44px outside the composer. Permission buttons, follow-up
    option chips, model-sheet rows, sidebar session rows (`min-h-[2.125rem]` =
-   34px), rename field and context-menu rows were `h-8`/`size-7`.
+   34px), rename field and context-menu rows were `h-8`/`size-7`. A follow-up
+   (issue #554 comment, "这个可以统一一下") extended the same rule to the
+   remaining secondary 32-36px targets in the mobile drawer that item 1 did not
+   name: search/close icon buttons (`size-8`), the search field (`h-9`), quick
+   action rows and file-tree rows (`h-8`/`h-9`/`size-7`), delete-confirm buttons
+   (`h-8`), nav tabs, and the model-sheet close button (`size-9`).
 2. Hover was not split by device. `globals.css` defined the `can-hover` custom
    variant but nothing used it. The sidebar session timestamp and the `...`
    (rename/delete) menu were `opacity-0` + `group-hover:opacity-100`; a phone
@@ -46,7 +51,16 @@ first three. All three are things a phone user hits directly:
 - Gap 1: mobile (`max-md`) bumps to `min-h-11`/`h-11`/`size-11` (44px) on
   session rows, the rename field, session-menu rows, permission buttons,
   follow-up chips and buttons, and model-sheet rows. Desktop geometry is
-  unchanged; the same `max-md:` pattern the composer already used.
+  unchanged; the same `max-md:` pattern the composer already used. The follow-up
+  makes this a **completeness invariant**, not an enumerated list: every
+  `size-7/8/9`, `h-8/h-9`, `min-h-8`, `min-h-[2.125rem]` control inside the
+  drawer (`sidebar.tsx` + the sheet close in `model-picker.tsx`) must carry a
+  `max-md:` 44px override on the same line. Icon buttons get
+  `max-md:size-11`, pill buttons / the search field get `max-md:h-11`, and the
+  `h-8`/`h-9` flex rows get `max-md:min-h-11` — the same "grow, don't clip"
+  treatment #559 gave the session row, so a long label can never be cut off.
+  A line-scan regression test enforces the invariant so a newly added small
+  control cannot silently ship below 44px again.
 
 The wiring is guarded by `packages/webui/test/mobile-shell.test.ts`: it runs
 the inline script against a fake `visualViewport`/`window` (publish, keyboard
@@ -75,12 +89,18 @@ contracts. Without it, a rename of `--app-height` or a dropped
   keeps the two geometries independent, matching the existing composer pattern.
 - **Fix gaps 4-6 too (12px inputs, wide-screen, file/terminal back button)**:
   rejected — the user asked for 1, 2, 3 only; those remain separate work.
+- **Leave the unnamed secondary targets at 32-36px** (treat item 1's five
+  groups as a closed list): rejected in the follow-up — the user asked to
+  "统一一下". A drawer where session rows are 44px but the search, close,
+  file-tree and delete-confirm controls beside them are still 32-36px is
+  visibly inconsistent on a phone and is the same defect. Completeness is now
+  the rule rather than a fixed enumeration.
 
 ## Consequences
 
-- Benefit: rename/delete is visible on touch; tap targets meet 44px on mobile;
-  the composer stays above the keyboard on iOS; hover states no longer stick
-  after a tap.
+- Benefit: rename/delete is visible on touch; every drawer tap target meets
+  44px on mobile (not just the five originally named groups); the composer stays
+  above the keyboard on iOS; hover states no longer stick after a tap.
 - Cost: one inline script and three new CSS rules to keep in sync; the
   `--app-height` contract spans `layout.tsx`, `globals.css`, and four
   components, which is why the regression test exists. The script assumes
@@ -88,11 +108,12 @@ contracts. Without it, a rename of `--app-height` or a dropped
   deficit means a keyboard (browser chrome also counts, which is equally worth
   following). Fine-pointer browsers keep the old `dvh` behavior unchanged.
 - Testing: `pnpm --filter @nanopi/webui exec vitest --run
-  test/mobile-shell.test.ts` (10 cases); `pnpm run typecheck` (webui) passed;
-  `pnpm run check` passed through `check:browser-smoke` and only fails the
-  final `check:openai-client-size`, which needs a prebuilt
-  `packages/ai/dist/api/openai-chat-completions-client.js` in this fresh
-  checkout (unrelated to this change).
+  test/mobile-shell.test.ts` (11 cases, 18 in the package); webui
+  `pnpm run typecheck` passed; root `pnpm run check` passed fully after a local
+  `packages/ai` build (`build:offline`) produced the
+  `dist/api/openai-chat-completions-client.js` that the final
+  `check:openai-client-size` reads. On a fresh checkout without that artifact
+  the final check alone fails, unrelated to the webui change.
 
 Related: [webui-arkloop-restyle](../feature/2026-10-12-webui-arkloop-restyle.md)
 (where the 768px shell and `h-dvh` layout originated).

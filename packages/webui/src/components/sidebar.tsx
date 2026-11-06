@@ -238,12 +238,12 @@ export function Sidebar({
 						setView("sessions");
 						setSearchOpen((open) => !open);
 					}}
-					className="size-8"
+					className="size-8 max-md:size-11"
 				>
 					<Search className="size-[17px]" strokeWidth={1.7} />
 				</IconButton>
 				{mobile ? (
-					<IconButton label={t("关闭导航")} onClick={onClose} className="size-8">
+					<IconButton label={t("关闭导航")} onClick={onClose} className="size-8 max-md:size-11">
 						<X className="size-[17px]" strokeWidth={1.7} />
 					</IconButton>
 				) : null}
@@ -294,7 +294,7 @@ export function Sidebar({
 							value={query}
 							onChange={(event) => setQuery(event.target.value)}
 							placeholder={t("搜索会话")}
-							className="h-9 w-full rounded-lg bg-overlay-hover-light px-3 text-control text-foreground outline-none placeholder:text-muted-foreground focus:bg-overlay-hover"
+							className="h-9 w-full rounded-lg bg-overlay-hover-light px-3 text-control text-foreground outline-none placeholder:text-muted-foreground focus:bg-overlay-hover max-md:h-11"
 						/>
 					</div>
 				) : null}
@@ -437,7 +437,7 @@ export function Sidebar({
 										setOpenDirs([]);
 										setDir(parentPath(dir));
 									}}
-									className="size-7"
+									className="size-7 max-md:size-11"
 								>
 									<ChevronLeft className="size-4" />
 								</IconButton>
@@ -460,7 +460,7 @@ export function Sidebar({
 											type="button"
 											onClick={() => toggleDir(path)}
 											aria-expanded={Boolean(open)}
-											className="flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control text-sidebar-foreground/90 transition-colors hover:bg-sidebar-hover"
+											className="flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control text-sidebar-foreground/90 transition-colors hover:bg-sidebar-hover max-md:min-h-11"
 										>
 											{open ? (
 												<FolderOpen className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.7} />
@@ -482,7 +482,7 @@ export function Sidebar({
 														key={`sub-${child}`}
 														type="button"
 														onClick={() => setDir(joinPath(path, child))}
-														className="flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label text-muted-foreground transition-colors hover:bg-sidebar-hover hover:text-foreground"
+														className="flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label text-muted-foreground transition-colors hover:bg-sidebar-hover hover:text-foreground max-md:min-h-11"
 													>
 														<Folder className="size-3.5 shrink-0" strokeWidth={1.7} />
 														<span className="min-w-0 flex-1 truncate">{child}</span>
@@ -496,7 +496,7 @@ export function Sidebar({
 															type="button"
 															onClick={() => onOpenFile(childPath)}
 															className={cn(
-																"flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label transition-colors",
+																"flex h-8 w-full items-center gap-2 rounded-lg px-[11px] text-left text-label transition-colors max-md:min-h-11",
 																childPath === activeFile
 																	? "bg-sidebar-accent text-sidebar-foreground"
 																	: "text-sidebar-foreground/80 hover:bg-sidebar-hover hover:text-foreground",
@@ -525,7 +525,7 @@ export function Sidebar({
 										type="button"
 										onClick={() => onOpenFile(path)}
 										className={cn(
-											"flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control transition-colors",
+											"flex h-9 w-full items-center gap-2 rounded-[9px] px-[11px] text-left text-control transition-colors max-md:min-h-11",
 											path === activeFile
 												? "bg-sidebar-accent text-sidebar-foreground"
 												: "text-muted-foreground hover:bg-sidebar-hover hover:text-foreground",
@@ -559,7 +559,7 @@ export function Sidebar({
 							<button
 								type="button"
 								onClick={() => setConfirmingDelete(null)}
-								className="h-8 rounded-full px-3 text-label text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+								className="h-8 max-md:h-11 rounded-full px-3 text-label text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("取消")}
 							</button>
@@ -569,7 +569,7 @@ export function Sidebar({
 									onDelete(confirmingDelete);
 									setConfirmingDelete(null);
 								}}
-								className="h-8 rounded-full bg-destructive px-3 text-label font-medium text-destructive-foreground"
+								className="h-8 max-md:h-11 rounded-full bg-destructive px-3 text-label font-medium text-destructive-foreground"
 							>
 								{t("删除")}
 							</button>
@@ -615,7 +615,7 @@ function SidebarAction({
 		<button
 			type="button"
 			onClick={onClick}
-			className="flex h-9 w-full items-center gap-[9px] rounded-lg px-[11px] text-left text-control font-medium text-sidebar-foreground/90 transition-colors select-none hover:bg-sidebar-hover hover:text-foreground"
+			className="flex h-9 w-full items-center gap-[9px] rounded-lg px-[11px] text-left text-control font-medium text-sidebar-foreground/90 transition-colors select-none hover:bg-sidebar-hover hover:text-foreground max-md:min-h-11"
 		>
 			<span className="shrink-0 text-muted-foreground">{icon}</span>
 			<span className="min-w-0 flex-1 truncate">{label}</span>
@@ -648,7 +648,7 @@ function NavTab({
 			aria-label={label}
 			title={label}
 			className={cn(
-				"inline-flex h-8 min-w-0 shrink-0 cursor-pointer items-center justify-start rounded-full px-2 text-muted-foreground outline-none",
+				"inline-flex h-8 min-w-0 shrink-0 cursor-pointer items-center justify-start rounded-full px-2 text-muted-foreground outline-none max-md:min-h-11",
 				"transition-[margin,padding,color,background-color] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]",
 				"hover:bg-sidebar-hover hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring",
 				active && "-ml-[3px] bg-sidebar-accent pl-2.5 pr-3.5 text-sidebar-foreground/90",
