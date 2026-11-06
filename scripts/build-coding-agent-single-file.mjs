@@ -46,6 +46,7 @@ import {
 import { createApiStubPlugin, validateStubs } from "./build-apis.mjs";
 import {
 	createComponentStubPlugin,
+	createGrammarDropPlugin,
 	createLazyImportDropPlugin,
 	resolveComponentSwitches,
 	validateComponentStubExports,
@@ -69,7 +70,7 @@ const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 // embedded assets and, for OAuth flows, from the statically registered
 // loaders (see the partial shim below).
 const resolved = resolveBuildFlavor(repoRoot);
-const { flavor, toolset, toolNames, providers, apis } = resolved;
+const { flavor, toolset, toolNames, providers, apis, grammars } = resolved;
 // The single file never loads disk modules: it keeps jiti external so the
 // artifact stays zero-dependency, so the component is off here whatever the
 // flavor says.
@@ -392,6 +393,7 @@ const plugins = [
 	apiStubPlugin,
 	componentStubPlugin,
 	createLazyImportDropPlugin({ components }),
+	createGrammarDropPlugin({ excludedGrammars: grammars }),
 	moduleStubPlugin,
 	toolStubPlugin,
 	httpsProxyAgentNamedExportPlugin(repoRoot),
@@ -439,7 +441,7 @@ try {
 		banner: SINGLE_FILE_BANNER,
 		bundle: true,
 		define: {
-			...buildDefines({ flavor, components, toolset, toolNames, builtinProviderIds, builtinApiIds, buildCommit }),
+			...buildDefines({ flavor, components, toolset, toolNames, builtinProviderIds, builtinApiIds, excludedGrammars: grammars, buildCommit }),
 			// Single-file specifics: the embedded assets and sidecars, the version
 			// of the artifact, and the flag that tells the runtime it is the
 			// standalone build.

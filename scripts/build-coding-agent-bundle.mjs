@@ -25,7 +25,7 @@ import {
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
 import { httpsProxyAgentNamedExportPlugin } from "./proxy-agent-plugin.mjs";
-import { createLazyImportDropPlugin, createComponentStubPlugin, resolveComponentSwitches, validateComponentStubExports } from "./build-components.mjs";
+import { createLazyImportDropPlugin, createComponentStubPlugin, createGrammarDropPlugin, resolveComponentSwitches, validateComponentStubExports } from "./build-components.mjs";
 import { createModuleStubPlugin } from "./build-modules.mjs";
 import { createToolStubPlugin, validateToolSet } from "./build-tools.mjs";
 import { readBuiltinModuleNames, resolveModuleBundles } from "./module-registry.mjs";
@@ -42,7 +42,7 @@ const bundleDir = join(codingAgentDistDir, "bundle");
 // resolved map is injected as a define so the runtime reports disabled
 // components cleanly (see isBuildComponentEnabled in the packages).
 const resolved = resolveBuildFlavor(repoRoot);
-const { flavor, toolset, toolNames, providers, apis } = resolved;
+const { flavor, toolset, toolNames, providers, apis, grammars } = resolved;
 const components = resolveComponentSwitches({ components: resolved.components });
 // A provider set that ships every catalog has no runtime filter; a set that
 // ships none resolves to an empty list and the build keeps no built-in provider.
@@ -118,6 +118,7 @@ function commonBuildOptions() {
 			toolNames,
 			builtinProviderIds,
 			builtinApiIds,
+			excludedGrammars: grammars,
 			buildCommit,
 		}),
 		external: ["@silvia-odwyer/photon-node"],
@@ -138,6 +139,7 @@ function commonBuildOptions() {
 			toolStubPlugin,
 			componentStubPlugin,
 			createLazyImportDropPlugin({ components }),
+			createGrammarDropPlugin({ excludedGrammars: grammars }),
 			lazyJitiPlugin,
 			httpsProxyAgentNamedExportPlugin(repoRoot),
 		],

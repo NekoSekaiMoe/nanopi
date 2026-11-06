@@ -175,6 +175,49 @@ export function createComponentStubPlugin({ components, codingAgentDir }) {
 	};
 }
 
-function inertPlugin() {
-	return { name: "component-module-stubs", setup() {} };
+function inertPlugin(name = "component-module-stubs") {
+	return { name, setup() {} };
+}
+
+/**
+ * Keeps the grammars a flavor excludes out of the artifact. `preloadLanguage`
+ * writes one `import("highlight.js/lib/languages/<tag>")` per bundled tag;
+ * esbuild follows every one of those specifiers even though the load is
+ * deferred at runtime (the failure createComponentStubPlugin documents), and a
+ * runtime guard alone folds the call site but leaves the grammar module in the
+ * graph. Resolving the excluded specifiers to an empty stand-in drops the bytes
+ * the same way createLazyImportDropPlugin drops `jiti`.
+ *
+ * The runtime half is NANOPI_BUILD_GRAMMARS: `supportsLanguage` refuses an
+ * excluded tag before `preloadLanguage` is called, so the stand-in is never
+ * actually loaded in normal use and an excluded code block renders plain
+ * without a "Unknown language" throw from highlight.js. The stand-in is the
+ * safety net for a caller that reaches `highlight()` with such a tag directly.
+ *
+ * `highlight.js/lib/common` is not a per-language specifier and stays: the
+ * switch's default arm still needs it, and nothing in a trimmed set names it.
+ *
+ * @param {{ excludedGrammars: readonly string[] }} options
+ * @returns {import("esbuild").Plugin}
+ */
+export function createGrammarDropPlugin({ excludedGrammars }) {
+	const dropped = new Set(excludedGrammars);
+	if (dropped.size === 0) return inertPlugin("grammar-import-drops");
+	const prefix = "highlight.js/lib/languages/";
+	return {
+		name: "grammar-import-drops",
+		setup(build) {
+			build.onResolve({ filter: /^highlight\.js\/lib\/languages\// }, (args) => {
+				const tag = args.path.slice(prefix.length);
+				return dropped.has(tag) ? { path: `grammar:${tag}`, namespace: "dropped-grammar" } : undefined;
+			});
+			build.onLoad({ filter: /.*/, namespace: "dropped-grammar" }, () => ({
+				// `preloadLanguage` unwraps `default` and registers only a function;
+				// a non-function stand-in leaves the tag unregistered, exactly like
+				// a grammar that failed to load.
+				contents: "export default undefined;",
+				loader: "js",
+			}));
+		},
+	};
 }

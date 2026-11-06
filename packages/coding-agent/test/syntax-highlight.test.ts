@@ -1,5 +1,5 @@
 import { resetCapabilitiesCache, setCapabilities } from "@nanopi/pi-tui";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getMarkdownTheme, highlightCode, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	highlight,
@@ -113,5 +113,34 @@ describe("theme syntax highlighting", () => {
 		);
 		expect(highlightCode("@decorator", "python")[0]).toBe(theme.fg("muted", "@decorator"));
 		expect(highlightCode("<div></div>", "html")[0]).toContain(`${theme.getFgAnsi("syntaxKeyword")}div\x1b[39m`);
+	});
+});
+
+// Issue #528 item 2: `full` drops the six cold grammars. The build injects
+// their tags through NANOPI_BUILD_GRAMMARS; outside a flavored bundle that
+// define is absent and every bundled tag is supported.
+describe("trimmed grammar sets", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("reports an excluded tag as unsupported, like an unknown language", () => {
+		vi.stubGlobal("NANOPI_BUILD_GRAMMARS", ["1c", "mathematica", "isbl", "gml", "sqf", "maxima"]);
+		for (const tag of ["1c", "mathematica", "isbl", "gml", "sqf", "maxima"]) {
+			expect(supportsLanguage(tag)).toBe(false);
+		}
+	});
+
+	it("keeps every other bundled grammar supported", () => {
+		vi.stubGlobal("NANOPI_BUILD_GRAMMARS", ["1c", "sqf"]);
+		expect(supportsLanguage("typescript")).toBe(true);
+		expect(supportsLanguage("python")).toBe(true);
+		expect(supportsLanguage("notalanguage")).toBe(false);
+	});
+
+	it("supports every bundled tag when the build defines no grammar set", () => {
+		vi.stubGlobal("NANOPI_BUILD_GRAMMARS", undefined);
+		expect(supportsLanguage("1c")).toBe(true);
+		expect(supportsLanguage("sqf")).toBe(true);
 	});
 });

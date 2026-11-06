@@ -66,7 +66,7 @@ export function resolveBuildCommit(repoRoot) {
  * passing a different set to the two builds is the failure this function
  * exists to prevent.
  *
- * @param {{ flavor: string, components: Record<string, boolean | string>, toolset: string, toolNames: readonly string[] | undefined, builtinProviderIds: readonly string[] | undefined, builtinApiIds: readonly string[], buildCommit: string }} input
+ * @param {{ flavor: string, components: Record<string, boolean | string>, toolset: string, toolNames: readonly string[] | undefined, builtinProviderIds: readonly string[] | undefined, builtinApiIds: readonly string[], excludedGrammars: readonly string[], buildCommit: string }} input
  * @returns {Record<string, string>}
  */
 export function buildDefines({
@@ -76,6 +76,7 @@ export function buildDefines({
 	toolNames,
 	builtinProviderIds,
 	builtinApiIds,
+	excludedGrammars,
 	buildCommit,
 }) {
 	return {
@@ -101,6 +102,10 @@ export function buildDefines({
 		// esbuild rejects an undefined define value, so a tool set that names no
 		// tools injects the empty list the runtime reads as "every tool".
 		NANOPI_BUILD_TOOLS: JSON.stringify(toolNames ?? []),
+		// Bundled grammar tags this flavor leaves out. An empty list is the
+		// default (every grammar ships), so a build that names no grammar set
+		// injects "[]" and the runtime keeps every tag bundled.
+		NANOPI_BUILD_GRAMMARS: JSON.stringify(excludedGrammars ?? []),
 	};
 }
 

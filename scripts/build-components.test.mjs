@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, it } from "node:test";
 import {
 	createComponentStubPlugin,
+	createGrammarDropPlugin,
 	createLazyImportDropPlugin,
 	resolveComponentSwitches,
 	validateComponentStubExports,
@@ -141,3 +142,30 @@ describe("createLazyImportDropPlugin", () => {
 	});
 });
 
+
+
+describe("createGrammarDropPlugin", () => {
+	function resolvePath(plugin, path) {
+		let handler;
+		plugin.setup({ onResolve: (_options, callback) => (handler = callback), onLoad: () => {} });
+		return handler === undefined ? undefined : handler({ path });
+	}
+
+	it("does nothing when no grammar is excluded", () => {
+		const plugin = createGrammarDropPlugin({ excludedGrammars: [] });
+		strictEqual(resolvePath(plugin, "highlight.js/lib/languages/1c"), undefined);
+	});
+
+	it("resolves an excluded grammar specifier to an empty stand-in", () => {
+		const plugin = createGrammarDropPlugin({ excludedGrammars: ["1c", "sqf"] });
+		strictEqual(resolvePath(plugin, "highlight.js/lib/languages/1c")?.namespace, "dropped-grammar");
+		strictEqual(resolvePath(plugin, "highlight.js/lib/languages/sqf")?.namespace, "dropped-grammar");
+	});
+
+	it("leaves the grammars the flavor keeps, and the common entry, alone", () => {
+		const plugin = createGrammarDropPlugin({ excludedGrammars: ["1c"] });
+		strictEqual(resolvePath(plugin, "highlight.js/lib/languages/typescript"), undefined);
+		strictEqual(resolvePath(plugin, "highlight.js/lib/common"), undefined);
+		strictEqual(resolvePath(plugin, "some-other-package"), undefined);
+	});
+});

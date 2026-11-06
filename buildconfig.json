@@ -52,6 +52,9 @@
 		"syntax-highlight": {
 			"description": "highlight.js grammars and the code highlighting the TUI uses; dropping it renders code blocks in the plain output color and takes ~1.4 MiB of grammars out of the bundle"
 		},
+		"grammars": {
+			"description": "highlight.js grammar set the build ships: one entry from the top-level \"grammarSets\" map. A set lists the bundled language tags whose grammar bytes stay out of the artifact; those tags render plain (supportsLanguage reports false, like an unknown language). Like providers/apis this is a set name, not a switch, and every flavor that names no set ships all grammars"
+		},
 		"goal": {
 			"description": "Goal tracking module (planned; registered so its build wiring lands with the module)"
 		},
@@ -227,7 +230,8 @@
 				"providers": "presets",
 				"apis": "all",
 				"sidecar/tui-native": false,
-				"sidecar/photon-wasm": false
+				"sidecar/photon-wasm": false,
+				"grammars": "curated"
 			}
 		},
 		"base": {
@@ -324,6 +328,19 @@
 				"qoder",
 				"typesafe-system-one",
 				"antigravity"
+			]
+		}
+	},
+	"grammarSets": {
+		"curated": {
+			"description": "The full set minus the six grammars an agent session never reads and whose bytes are the worst value in the bundle: 1c (1C:Enterprise), mathematica, isbl, gml (GameMaker), sqf (Arma), maxima. Together ~492 KiB of highlight.js language data (1c 156, mathematica 121, isbl 82, gml 60, sqf 45, maxima 28 KiB) that a full build paid for in full despite lazy loading. `full` ships this set; `base` ships every grammar",
+			"excluded": [
+				"1c",
+				"mathematica",
+				"isbl",
+				"gml",
+				"sqf",
+				"maxima"
 			]
 		}
 	},
