@@ -130,6 +130,12 @@ curated vendors.
   [curated provider catalog](2026-10-26-curated-provider-catalog.md).
 - `base` reports its providers through `--list-models` and answers `/login`
   with only the six curated vendors. Any other vendor is a `models.json` entry.
+- `minimal` moved again after this budget was written: 2,655,211 B -> 2,266,491 B
+  (2.5 -> 2.2 MiB) on a tree that already had the undici define of #535, once
+  the `openai` package stopped coming in whole for a build with one API
+  implementation. The undici dead branch of #535 and the
+  narrow client are separate levers; see
+  [narrow openai client](../simplification/2026-11-06-narrow-openai-client-for-minimal.md).
 - A `minimal` artifact no longer creates `~/.cache/nanopi/standalone/<version>`
   and no longer reads `package.json` for its version; both are asserted in the
   build output (`embedded assets: none`) and by `--version`.
