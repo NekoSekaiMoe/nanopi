@@ -25,12 +25,29 @@ concurrency:
   group: nightly
   cancel-in-progress: false
 
-# 只有一个 job 需要它，但 GitHub 不允许把仓库级的 secret 直接写在
-# `if: secrets.X != ''` 里；env 可以，而 job 的 if 看得见 env。
-env:
-  ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
-
 jobs:
+  # job 级 if 读不到 env，也读不到 secrets（那里只有 github/needs/vars/inputs），
+  # 所以用一个零依赖的 job 把「ATOMGIT_KEY 是否配置」翻成 needs 输出，交给
+  # publish-atomgit 判断。secret 只落在要用到它的两个 step 的 env 里，不铺到
+  # 工作流级（那会让每个 job 都拿到这把 key）。
+  check-atomgit-key:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      has_key: ${{ steps.check.outputs.has_key }}
+    steps:
+      - name: Check whether ATOMGIT_KEY is set
+        id: check
+        env:
+          ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ATOMGIT_KEY:-}" ]]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build bundle and image
     runs-on: ubuntu-latest
@@ -143,8 +160,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - build
-    # 没配 key 就别跑：这一步需要往别人的仓库推东西，fork 上永远没有。
-    if: ${{ env.ATOMGIT_KEY != '' }}
+      - check-atomgit-key
+    # job 级 if 看不到 env/secrets，只能读 needs 输出；没配 key（fork）就跳过整个 job。
+    if: ${{ needs.check-atomgit-key.outputs.has_key == 'true' }}
     permissions:
       contents: read
     steps:
@@ -167,7 +185,7 @@ jobs:
       # --commit 记进 README 与 release notes：这份 nightly 是从哪个提交构建的。
       - name: Publish to AtomGit
         env:
-          ATOMGIT_KEY: ${{ env.ATOMGIT_KEY }}
+          ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
         run: |
           set -euo pipefail
           node scripts/publish-atomgit.mjs \
