@@ -486,7 +486,7 @@ export function AppClient() {
 
 	if (!booted) {
 		return (
-			<div className="grid h-dvh w-screen place-items-center bg-background">
+			<div className="grid h-app w-screen place-items-center bg-background">
 				<div className="flex flex-col items-center gap-3">
 					<Logo size={40} />
 					<div className="h-0.5 w-20 overflow-hidden rounded-full bg-muted">
@@ -498,7 +498,7 @@ export function AppClient() {
 	}
 
 	return (
-		<div className="flex h-dvh w-screen overflow-hidden bg-background text-foreground">
+		<div className="flex h-app w-screen overflow-hidden bg-background text-foreground">
 			<div className="hidden h-full shrink-0 md:block">
 				<Sidebar
 					sessions={sessions}
@@ -585,7 +585,7 @@ export function AppClient() {
 			{/* Mobile navigation sheet */}
 			<div
 				className={cn(
-					"fixed inset-0 z-40 md:hidden",
+					"overlay-fullscreen fixed inset-0 z-40 md:hidden",
 					navOpen ? "pointer-events-auto" : "pointer-events-none",
 				)}
 				aria-hidden={!navOpen}

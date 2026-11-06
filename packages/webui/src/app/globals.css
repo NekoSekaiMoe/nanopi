@@ -385,7 +385,12 @@ body {
 	scale: 0.97;
 }
 
-.press:hover::before,
+@media (hover: hover) {
+	.press:hover::before {
+		background-color: var(--ui-hover);
+	}
+}
+
 .press[data-open="true"]::before {
 	background-color: var(--ui-hover);
 }
@@ -400,16 +405,20 @@ body {
 	background-color: var(--btn-primary);
 }
 
-.press-fill:hover::before {
-	background-color: var(--btn-primary-hover);
+@media (hover: hover) {
+	.press-fill:hover::before {
+		background-color: var(--btn-primary-hover);
+	}
 }
 
 .press-brand::before {
 	background-color: var(--brand);
 }
 
-.press-brand:hover::before {
-	background-color: var(--brand-hover);
+@media (hover: hover) {
+	.press-brand:hover::before {
+		background-color: var(--brand-hover);
+	}
 }
 
 /* One subtle press/pulse used by streaming status words. */
@@ -612,9 +621,11 @@ body {
 	border-radius: 4px;
 }
 
-.code-block-head button:hover {
-	background: var(--accent);
-	color: var(--foreground);
+@media (hover: hover) {
+	.code-block-head button:hover {
+		background: var(--accent);
+		color: var(--foreground);
+	}
 }
 
 .code-block pre {
@@ -646,4 +657,22 @@ body {
 	clip: rect(0, 0, 0, 0);
 	white-space: nowrap;
 	border: 0;
+}
+
+/* ── Mobile shell height ──────────────────────────────────────────────────
+ * iOS Safari keeps `dvh` at the full screen height while the soft keyboard is
+ * open, so anything docked to the shell's bottom (the composer) ends up behind
+ * the keyboard. The head script sets `--app-height` from
+ * `visualViewport.height` on touch devices; this utility uses it when present
+ * and falls back to `100dvh` everywhere else. */
+.h-app {
+	height: 100dvh;
+	height: var(--app-height, 100dvh);
+}
+
+/* Fixed, full-bleed overlays (nav drawer, model sheet, settings) must also
+ * stop at the shrunken viewport, or their bottom-anchored content is hidden
+ * by the keyboard while it is open. */
+.keyboard-open .overlay-fullscreen {
+	height: var(--app-height, 100dvh);
 }

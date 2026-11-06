@@ -42,7 +42,7 @@ export function PermissionCard({
 								<button
 									type="button"
 									onClick={() => onAnswer("explain")}
-									className="h-8 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+									className="h-8 max-md:h-11 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 								>
 									{t("解释这次调用")}
 								</button>
@@ -50,28 +50,28 @@ export function PermissionCard({
 							<button
 								type="button"
 								onClick={() => onAnswer("deny")}
-								className="h-8 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+								className="h-8 max-md:h-11 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("拒绝")}
 							</button>
 							<button
 								type="button"
 								onClick={() => onAnswer("ai_decide")}
-								className="h-8 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+								className="h-8 max-md:h-11 rounded-lg px-2.5 text-label text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 							>
 								{t("让 AI 决定")}
 							</button>
 							<button
 								type="button"
 								onClick={() => onAnswer("allow_session")}
-								className="h-8 rounded-lg border border-border px-2.5 text-label text-foreground transition-colors hover:bg-overlay-hover"
+								className="h-8 max-md:h-11 rounded-lg border border-border px-2.5 text-label text-foreground transition-colors hover:bg-overlay-hover"
 							>
 								{t("本次会话允许")}
 							</button>
 							<button
 								type="button"
 								onClick={() => onAnswer("allow_once")}
-								className="h-8 rounded-lg border border-border px-2.5 text-label text-foreground transition-colors hover:bg-overlay-hover"
+								className="h-8 max-md:h-11 rounded-lg border border-border px-2.5 text-label text-foreground transition-colors hover:bg-overlay-hover"
 							>
 								{t("只允许这一次")}
 							</button>
