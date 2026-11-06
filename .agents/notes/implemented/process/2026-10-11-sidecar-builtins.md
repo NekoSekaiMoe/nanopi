@@ -30,7 +30,9 @@ six-platform embed costs ~0.9 MiB packed; each machine installs only its own
 `process.platform/arch` file, so one artifact stays portable.
 
 Related: [build flavors via buildconfig.json](./2026-10-11-build-flavors-buildconfig.md)
-defines the component/flavor contract this extends.
+defines the component/flavor contract this extends. `full` later turned both
+components off again — [the embed cost more than the 404 noise it
+removed](./2026-11-06-sidecars-download-in-full.md).
 
 ## Alternatives considered
 
