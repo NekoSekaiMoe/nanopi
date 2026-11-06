@@ -32,9 +32,14 @@ const MODULE_INDEX_NAMES = ["index.ts", "index.mts", "index.js", "index.mjs", "i
  * the flavor dropped the `jiti-modules` component, or the artifact is the
  * single file, which keeps jiti external to stay zero-dependency, so a disk
  * import there would fail with MODULE_NOT_FOUND.
+ *
+ * An esbuild bundle is *not* one of them. `NANOPI_BUNDLED_NODE` marks the npm
+ * package's `dist/bundle/`, which ships jiti as a dependency and resolves it
+ * at runtime; reading the marker as "no disk modules" made an installed nanopi
+ * silently ignore every file the docs say it loads.
  */
 export function diskModulesIncluded(): boolean {
-	return isBuildComponentEnabled("jiti-modules") && !isBundledNode && !isSingleNodeFileRuntime();
+	return isBuildComponentEnabled("jiti-modules") && !isSingleNodeFileRuntime();
 }
 
 /**
@@ -84,6 +89,12 @@ function jitiAliases(): Record<string, string> {
 	] as const) {
 		const entry = workspace(workspacePackage, specifier);
 		if (entry !== undefined) aliases[specifier] = entry;
+	}
+	// A tool definition's schema has to come from the TypeBox instance the host
+	// validates with. `typebox` is a dependency of this package, so it resolves
+	// from here even though the module file lives somewhere else.
+	for (const specifier of ["typebox", "typebox/compile", "typebox/value"]) {
+		aliases[specifier] = fileURLToPath(import.meta.resolve(specifier));
 	}
 	return aliases;
 }
@@ -202,10 +213,35 @@ function moduleNameFor(file: string): string {
 	return base.replace(MODULE_FILE_PATTERN, "");
 }
 
+let virtualModulesPromise: Promise<Record<string, unknown>> | undefined;
+
+function getVirtualModules(): Promise<Record<string, unknown>> {
+	virtualModulesPromise ??= import("./virtual-modules.ts").then((module) => module.VIRTUAL_MODULES);
+	return virtualModulesPromise;
+}
+
+/**
+ * How a module file's bare imports resolve.
+ *
+ * A bundled runtime answers from the namespaces it already has. A path alias
+ * there would name a *file*, and the only file left in the npm package is the
+ * unbundled `dist/` tree — a second copy of the host, so a module's `Text` or
+ * `CustomEditor` would fail the `instanceof` checks the process runs against
+ * its own bundled classes.
+ *
+ * Every other runtime aliases to a path: the host and the module file then
+ * import the same files, and instance identity holds either way.
+ */
+async function resolutionOptions(): Promise<Record<string, unknown>> {
+	if (isBundledNode) return { virtualModules: await getVirtualModules(), tryNative: false };
+	return { alias: jitiAliases() };
+}
+
 async function loadDiskModule(file: string, createJiti: CreateJiti): Promise<SessionModule> {
+	const resolution = await resolutionOptions();
 	const jiti = createJiti(import.meta.url, {
 		moduleCache: false,
-		alias: jitiAliases(),
+		...resolution,
 		// A module file imports its siblings by their source spelling and may
 		// name a bare package without a tsconfig; jiti resolves both.
 		interopDefault: true,

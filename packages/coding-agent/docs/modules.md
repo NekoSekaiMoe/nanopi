@@ -165,10 +165,12 @@ Compiled-in modules are the whole story for a build without jiti support. The
 
 A module file default-exports either a `SessionModule` or a bare factory. jiti
 transforms it in-process, so a `.ts` file runs as written and `import type`
-lines cost nothing at runtime. Aliases point `@nanopi/pi-coding-agent` (and its
-`/modules` and `/ui` subpaths), `@nanopi/pi-agent-core`, `@nanopi/pi-ai`, and
-`@nanopi/pi-tui` at the running installation, so a module sees the same classes,
-tools, and theme helpers the CLI uses.
+lines cost nothing at runtime. `@nanopi/pi-coding-agent` (and its `/modules` and
+`/ui` subpaths), `@nanopi/pi-agent-core`, `@nanopi/pi-ai`, `@nanopi/pi-tui`, and
+`typebox` resolve to the running installation, so a module sees the same
+classes, schema objects, tools, and theme helpers the CLI uses. That identity
+matters: the host compares by class, so a second copy of `Text` or
+`CustomEditor` is a component the TUI will not recognize.
 
 ```ts
 // .nanopi/extensions/hello.ts
