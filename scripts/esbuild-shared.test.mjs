@@ -27,7 +27,14 @@ describe("buildDefines", () => {
 			"NANOPI_BUILD_TOOLS",
 			"NANOPI_BUILD_TOOLSET",
 			"NANOPI_BUNDLED_NODE",
+			"esbuildDetection",
 		]);
+	});
+
+	it("tells undici the graph is bundled, dropping the unused Milo parser", () => {
+		// undici guards `typeof esbuildDetection === 'undefined'` and ships both the
+		// llhttp parser and the Milo WASM payload when the identifier is left bare.
+		strictEqual(buildDefines(selection).esbuildDetection, "true");
 	});
 
 	it("never emits an undefined value esbuild would reject", () => {
