@@ -127,7 +127,7 @@ export function ModelSheet({
 	if (!open) return null;
 
 	return (
-		<div className="fixed inset-0 z-50 flex items-end justify-center md:items-center">
+		<div className="overlay-fullscreen fixed inset-0 z-50 flex items-end justify-center md:items-center">
 			<button
 				type="button"
 				aria-label={t("关闭")}
@@ -146,7 +146,7 @@ export function ModelSheet({
 					// One max-height cap for both sizes: two utilities (`max-h-…` and
 					// `md:max-h-…`) land in the same property and the emitted order
 					// made the desktop cap win below md as well.
-					"max-h-[80dvh]",
+					"max-h-[min(80dvh,calc(var(--app-height,100dvh)-2rem))]",
 					// Desktop lifts the card off the bottom edge; the padding lives on
 					// the wrapper, because the sheet itself is pinned to the edge and a
 					// margin would only show a seam of scrim underneath it.
@@ -179,7 +179,7 @@ export function ModelSheet({
 									onClose();
 									onConfigure();
 								}}
-								className="mt-2 h-8 rounded-full bg-foreground px-3 text-label text-background"
+								className="mt-2 h-8 rounded-full bg-foreground px-3 text-label text-background max-md:h-11"
 							>
 								{t("去设置")}
 							</button>
@@ -198,7 +198,7 @@ export function ModelSheet({
 										onClose();
 									}}
 									className={cn(
-										"flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors",
+										"flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors max-md:min-h-11",
 										model.available ? "hover:bg-overlay-hover" : "opacity-45",
 									)}
 								>
@@ -240,7 +240,7 @@ export function ModelSheet({
 												onEffort?.(level);
 												onClose();
 											}}
-											className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover"
+											className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover max-md:min-h-11"
 										>
 											<span className="grid size-4 shrink-0 place-items-center">
 												{active ? <Check className="size-3.5 text-brand" strokeWidth={2.25} /> : null}
@@ -276,7 +276,7 @@ export function ModelSheet({
 										onApprovalMode(mode.value);
 										onClose();
 									}}
-									className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover"
+									className="flex w-full items-start gap-2.5 rounded-xl px-2.5 py-2 text-left transition-colors hover:bg-overlay-hover max-md:min-h-11"
 								>
 									<span className="mt-0.5 grid size-4 shrink-0 place-items-center">
 										{active ? <Check className="size-3.5 text-brand" strokeWidth={2.25} /> : null}

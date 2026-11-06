@@ -325,7 +325,7 @@ export function Sidebar({
 												<li key={session.id} className="relative">
 													<div
 														className={cn(
-															"group flex min-h-[2.125rem] w-full items-center rounded-[9px] px-[11px] transition-colors",
+															"group flex min-h-[2.125rem] w-full items-center rounded-[9px] px-[11px] transition-colors max-md:min-h-11",
 															session.id === currentSessionId
 																? "bg-sidebar-accent text-sidebar-foreground"
 																: "text-sidebar-foreground/90 hover:bg-sidebar-hover",
@@ -346,7 +346,7 @@ export function Sidebar({
 																	}
 																	if (event.key === "Escape") setRenaming(null);
 																}}
-																className="mx-1 h-7 min-w-0 flex-1 rounded-lg bg-overlay-hover px-2 text-control text-foreground outline-none"
+																className="mx-1 h-7 min-w-0 flex-1 rounded-lg bg-overlay-hover px-2 text-control text-foreground outline-none max-md:h-11"
 															/>
 														) : (
 															<button
@@ -355,12 +355,12 @@ export function Sidebar({
 																	setRenaming(null);
 																	onSelectSession(session);
 																}}
-																className="flex min-h-8 min-w-0 flex-1 items-center text-left"
+																className="flex min-h-8 min-w-0 flex-1 items-center text-left max-md:min-h-11"
 															>
 																<span className="min-w-0 flex-1 truncate text-control">
 																	{session.name || t("新会话")}
 																</span>
-																<span className="shrink-0 pl-2 text-caption text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+																<span className="shrink-0 pl-2 text-caption text-muted-foreground opacity-100 transition-opacity can-hover:opacity-0 can-hover:group-hover:opacity-100">
 																	{relativeTime(session.updated_at)}
 																</span>
 															</button>
@@ -373,7 +373,7 @@ export function Sidebar({
 																event.stopPropagation();
 																setMenuFor(menuFor === session.id ? null : session.id);
 															}}
-															className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-0 transition-colors hover:bg-overlay-hover hover:text-foreground group-hover:opacity-100"
+															className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground opacity-100 can-hover:opacity-0 can-hover:group-hover:opacity-100 can-hover:group-focus-within:opacity-100 max-md:size-11 transition-colors hover:bg-overlay-hover hover:text-foreground"
 														>
 															<MoreHorizontal className="size-3.5" />
 														</button>
@@ -394,7 +394,7 @@ export function Sidebar({
 																		setRenaming(session.id);
 																		setRenameValue(session.name || t("新会话"));
 																	}}
-																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-foreground hover:bg-overlay-hover"
+																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-foreground hover:bg-overlay-hover max-md:h-11"
 																>
 																	<Pencil className="size-3.5 text-muted-foreground" />
 																	{t("重命名")}
@@ -405,7 +405,7 @@ export function Sidebar({
 																		setMenuFor(null);
 																		setConfirmingDelete(session);
 																	}}
-																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-destructive hover:bg-destructive/12"
+																	className="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-left text-label text-destructive hover:bg-destructive/12 max-md:h-11"
 																>
 																	<Trash2 className="size-3.5" />
 																	{t("删除")}

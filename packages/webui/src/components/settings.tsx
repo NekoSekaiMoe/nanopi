@@ -114,7 +114,7 @@ export function SettingsOverlay({
 	}
 
 	return (
-		<div className="fixed inset-0 z-50 flex bg-background">
+		<div className="overlay-fullscreen fixed inset-0 z-50 flex bg-background">
 			<aside className="hidden w-[264px] shrink-0 flex-col border-r border-border bg-sidebar p-3 md:flex">
 				<div className="flex h-11 items-center px-2">
 					<span className="text-[15px] font-medium tracking-[-0.01em]">{t("设置")}</span>

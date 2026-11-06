@@ -85,7 +85,7 @@ export function UserInputCard({
 													}
 												}}
 												className={cn(
-													"rounded-full border px-2.5 py-1 text-[12px] transition-colors",
+													"rounded-full border px-2.5 py-1 text-[12px] transition-colors max-md:min-h-11 max-md:px-3.5",
 													selected
 														? "border-brand bg-brand text-brand-foreground"
 														: "border-border bg-background text-foreground hover:bg-overlay-hover",
@@ -102,7 +102,7 @@ export function UserInputCard({
 									value={answers[index]?.text ?? ""}
 									onChange={(event) => update(index, { text: event.target.value })}
 									placeholder={question.mode === "text" ? t("输入回答") : t("或输入自定义回答")}
-									className="mt-2 h-8 w-full rounded-lg border border-border bg-background px-2.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/25"
+									className="mt-2 h-8 w-full rounded-lg border border-border bg-background px-2.5 text-[12.5px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/25 max-md:h-11"
 								/>
 							) : null}
 						</div>
@@ -112,7 +112,7 @@ export function UserInputCard({
 					<button
 						type="button"
 						onClick={() => onAnswer({ declined: true, selected: [], text: null })}
-						className="h-8 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+						className="h-8 max-md:h-11 rounded-lg px-2.5 text-[12px] text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
 					>
 						{t("跳过")}
 					</button>
@@ -127,7 +127,7 @@ export function UserInputCard({
 							)
 						}
 						className={cn(
-							"h-8 rounded-lg px-3 text-[12px] font-medium transition-opacity",
+							"h-8 max-md:h-11 rounded-lg px-3 text-[12px] font-medium transition-opacity",
 							ready
 								? "bg-foreground text-background hover:opacity-85"
 								: "bg-muted text-muted-foreground",
