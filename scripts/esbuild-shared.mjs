@@ -79,6 +79,15 @@ export function buildDefines({
 	buildCommit,
 }) {
 	return {
+		// undici guards its llhttp-vs-Milo parser switch with
+		// `typeof esbuildDetection === 'undefined'` (client-h1.js, web/fetch/index.js),
+		// expecting a bundler to fold the branch away. esbuild does not invent that
+		// bare identifier, so without this define both sides ship: the Milo WASM
+		// payload (simd + no-simd, ~165 KiB) is pulled in even though
+		// `getMiloEnabled()` is false unless UNDICI_USE_MILO=1, and the user agent
+		// resolves to 'undici' instead of 'node'. Defining it makes every undici
+		// bundle take the Node.js path the package documents for bundled builds.
+		esbuildDetection: "true",
 		NANOPI_BUNDLED_NODE: "true",
 		NANOPI_BUILD_COMMIT: JSON.stringify(buildCommit),
 		NANOPI_BUILD_COMPONENTS: JSON.stringify(components),
