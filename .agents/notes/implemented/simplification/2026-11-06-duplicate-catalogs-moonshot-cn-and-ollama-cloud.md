@@ -30,7 +30,7 @@ Status: implemented
   进 `providerSets.all` / `presets` / `core`。留下的那条是订阅套餐的入口：
   除了 `OLLAMA_CLOUD_TOKEN_PLAN_API_KEY` 还有 `/login` 的套餐语义，而
   `ollama-cloud` 只是同一批模型的按量计费 key。它进 `core` 之后 `base`
-  仍然 15 个 catalog，但多了一个订阅 SKU。
+  从 14 个 catalog 变成 15 个，多出来的正是这个订阅 SKU。
 
 `presets` 与 `all` 的分工不变：两者今天成员相同，分开的理由写在
 [build flavors via buildconfig.json](../process/2026-10-11-build-flavors-buildconfig.md)。

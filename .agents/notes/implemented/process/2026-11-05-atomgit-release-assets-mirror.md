@@ -121,4 +121,5 @@ https://atomgit.com/nanopi/releases-assets/raw/main/nightly/SHA256SUMS
 Related: [Single-file nanopi.js release artifact](2026-10-11-single-file-release-artifact.md)
 （产物集与 sidecar 清单）、[Tag 镜像与 main 分开处理](2026-10-16-tag-mirroring-between-github-and-cnb.md)
 （正式版的 tag 怎么到 CNB）、[镜像凭据由 scripts/mirror.mjs 自己落盘](2026-10-27-mirror-credential-in-script.md)
-（同一套「凭据不进 argv」的写法）。
+（同一套「凭据不进 argv」的写法）、[job 级 if 读不到 env/secrets](../bug-fix/2026-11-06-job-if-cannot-read-env-or-secrets.md)
+（两条流水线的 publish-atomgit 为什么用 needs 输出当没配 key 时的闸门）。
