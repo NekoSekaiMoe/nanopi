@@ -7,12 +7,17 @@ export { Type } from "typebox";
 // "@nanopi/pi-ai/api/*", the old global API under
 // "@nanopi/pi-ai/compat".
 //
-// Mixed by kind, not by policy: `export *` where the source is core plumbing
-// whose every name belongs here (and where a whitelist already lost one — the
-// `./compat` case below), named lists where the source mixes core with
-// provider-specific option/API shapes. When a wildcard would reach the provider
-// folder, the line stays named; that is what keeps `createFauxCore` and friends
-// reachable without dragging the catalog in.
+// Mixed by kind, not by policy. A wildcard is preferred wherever it can be
+// taken: a named list over `./utils/retry.ts` would be a second copy of that
+// module's export table. The sources above and below stop being wildcardable for
+// one reason each — `./api/*` mixes provider-specific option shapes into a
+// namespace whose core is pipeline types, `providers/` is the generated catalog
+// and stays off this entry on purpose, and the `./compat` case is the one time a
+// list was tried and lost a name: this entry used to re-export by name, stopped
+// reaching `./providers/faux.ts` when the file moved, and published `fauxProvider`
+// and `createFauxCore` as nothing until someone noticed. So the rule is the
+// opposite of "list what looks safe": every line below is named for a reason
+// visible in the comment next to it.
 export type { AnthropicEffort, AnthropicOptions, AnthropicThinkingDisplay } from "./api/anthropic-messages.ts";
 export type { AzureOpenAIResponsesOptions } from "./api/azure-openai-responses.ts";
 export type { BedrockOptions, BedrockThinkingDisplay } from "./api/bedrock-converse-stream.ts";

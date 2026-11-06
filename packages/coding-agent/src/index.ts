@@ -1,10 +1,19 @@
 // Core session management
 //
-// The rest of this file is 43 `export *` lines and nothing else: names arrive
-// whole from their sources, ambiguity is TS2308 at the typecheck rather than a
-// silent omission, and the surface is measured against the emitted `.d.ts`
-// rather than counted by hand. Hiding a symbol is a one-line diff at its
-// declaration; unpublishing one later is a breaking change.
+// Why `export *` per source instead of a hand-maintained whitelist: the list is
+// one row per source, so it is the whitelist — what changed is that a name can
+// no longer arrive as a half-edited line. A whitelist has to be edited twice for
+// every new export (once in the source, once here) and rots silently when it is
+// not; it had already done so before #506 — `ExecOptions`, `copyToClipboard` and
+// `main` were listed as public after their sources stopped exporting them, and
+// nothing failed until CI typechecked the barrel.
+//
+// The two costs that made the list look necessary are covered elsewhere:
+// ambiguity is TS2308 at the typecheck, not the runtime's silent omission, so a
+// collision cannot reach CI unnoticed; and hiding a symbol is a one-line diff at
+// its declaration, which `export *` cannot override. The surface is measured
+// against the emitted `.d.ts` rather than counted by hand; unpublishing a name
+// later is still a breaking change.
 
 // Build flavor surface: what a flavor (buildconfig.json) turned on for this
 // build. SDK users ask these before offering a feature whose code the build may

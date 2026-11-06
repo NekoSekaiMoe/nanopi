@@ -1,9 +1,10 @@
 // Core TUI interfaces and classes
 
 // Named exports, not `export *` per source: this root is a deliberately small
-// rendering contract, so a name reaches it only when a line here says so —
-// the coding-agent root barrel reached the opposite conclusion because it
-// already hands out a whole agent.
+// rendering contract, so a name reaches it only when a line here says so. That is
+// not the same argument as the coding-agent root's, where a wildcard is right
+// because that root already hands out a whole agent and per-source lists only
+// drifted — here the list is the contract, and there are more sources than names.
 // Cost is unbudgeted in `scripts/check-entry-graphs.mjs`; if that changes, cap
 // this entry rather than growing it.
 
