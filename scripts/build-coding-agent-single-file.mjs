@@ -289,10 +289,26 @@ function buildSidecarManifest(collected) {
 	// TUI prebuilds ship as a release asset next to nanopi.js. Unreleased local
 	// builds keep working: the download 404s and the optional accelerators
 	// stay off (photon still comes from npm).
+	//
+	// Several hosts, tried in order: GitHub Releases is the official site, and
+	// the AtomGit release-assets repository mirrors the same file for readers who
+	// cannot reach it. All of them are named here because the URLs are baked into
+	// the artifact — a bundle that only knows GitHub keeps failing in exactly the
+	// place the mirror exists for. Each host must carry the file under its own
+	// release tag, which is what both publish flows do.
 	const repositoryUrl = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).repository.url;
 	const repository = repositoryUrl.replace(/^git\+https:\/\/github\.com\//, "").replace(/\.git$/, "");
-	const githubTarballUrl = (version, name) =>
-		`https://github.com/${repository}/releases/download/v${version}/${name}`;
+	const sidecarTarballUrls = (version, name) => [
+		`https://github.com/${repository}/releases/download/v${version}/${name}`,
+		// AtomGit serves raw files per tag, not per release. A release and a
+		// nightly both publish the tarball under their own tag there, and the
+		// version in the name is the same for both (it is the TUI package
+		// version), so either tag serves the same bytes. `v<version>` is the
+		// exact tag; `nightly` is only the fallback for builds whose version has
+		// not been released yet (an unreleased version 404s on GitHub too).
+		`https://atomgit.com/nanopi/releases-assets/raw/main/v${version}/${name}`,
+		`https://atomgit.com/nanopi/releases-assets/raw/main/nightly/${name}`,
+	];
 
 	const { photon, photonVersion, tuiFiles, tuiVersion } = collected;
 	return {
@@ -300,13 +316,13 @@ function buildSidecarManifest(collected) {
 			{
 				packageName: "@silvia-odwyer/photon-node",
 				version: photonVersion,
-				url: npmTarballUrl("@silvia-odwyer/photon-node", photonVersion),
+				urls: [npmTarballUrl("@silvia-odwyer/photon-node", photonVersion)],
 				files: [photon.info],
 			},
 			{
 				packageName: "@nanopi/pi-tui",
 				version: tuiVersion,
-				url: githubTarballUrl(tuiVersion, `nanopi-sidecars-${tuiVersion}.tgz`),
+				urls: sidecarTarballUrls(tuiVersion, `nanopi-sidecars-${tuiVersion}.tgz`),
 				// The tarball mirrors the agent bin directory layout.
 				files: tuiFiles.map((file) => ({ ...file.info, tarPath: file.info.destPath })),
 			},

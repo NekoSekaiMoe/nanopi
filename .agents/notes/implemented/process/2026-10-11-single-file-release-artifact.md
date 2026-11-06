@@ -107,4 +107,6 @@ bin dir (`.nanopi/agent/bin`) by `src/utils/sidecars.ts`:
   KB); the same precedent as the old `dist/bun/`.
 
 Related: [webui port](../architecture/2026-10-11-port-atomcode-webui.md) (its
-`dist/webui` output is one of the embedded asset trees).
+`dist/webui` output is one of the embedded asset trees), [TUI sidecar tarball
+mirrored to AtomGit](2026-11-06-tui-sidecar-mirror-and-prebuilds.md) (that
+release asset now has a second host).

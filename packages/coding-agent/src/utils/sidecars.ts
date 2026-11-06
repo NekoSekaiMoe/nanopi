@@ -63,8 +63,12 @@ export interface SidecarSource {
 	/** npm package name, e.g. "@silvia-odwyer/photon-node". */
 	packageName: string;
 	version: string;
-	/** Registry tarball URL. */
-	url: string;
+	/**
+	 * Tarball URLs in preference order: the first one that answers wins. The
+	 * fork's TUI prebuilds live on GitHub Releases with an AtomGit mirror behind
+	 * it, because either host is unreachable for some readers.
+	 */
+	urls: string[];
 	files: SidecarFile[];
 }
 
@@ -98,6 +102,14 @@ const DOWNLOAD_TIMEOUT_MS = 120_000;
 
 let manifest: SidecarManifest | undefined;
 const inflightSources = new Map<string, Promise<void>>();
+
+/**
+ * Drops the memoized manifest. Exported for tests only: the manifest is a
+ * build-time constant, so nothing in the runtime has a reason to re-read it.
+ */
+export function resetSidecarManifestCache(): void {
+	manifest = undefined;
+}
 
 /** Returns the embedded sidecar manifest, or undefined outside single-file bundles. */
 export function getSidecarManifest(): SidecarManifest | undefined {
@@ -210,6 +222,27 @@ async function downloadTo(url: string, destPath: string): Promise<void> {
 }
 
 /**
+ * Downloads the first URL that answers. A failed candidate leaves nothing
+ * behind: a partial file from a mirror that dropped mid-transfer must not be
+ * extracted, and a stale one must not survive into the next attempt. Serial,
+ * not racing — the later hosts exist because a host is unreachable for some
+ * readers, not to be faster.
+ */
+async function downloadFirst(urls: string[], destPath: string): Promise<void> {
+	const failures: string[] = [];
+	for (const url of urls) {
+		try {
+			await downloadTo(url, destPath);
+			return;
+		} catch (error) {
+			rmSync(destPath, { force: true });
+			failures.push(`${url}: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+	throw new Error(failures.join("; "));
+}
+
+/**
  * Verifies and moves the wanted files from an extracted tarball into binDir.
  * Exported for tests; throws on the first checksum mismatch.
  */
@@ -243,7 +276,7 @@ async function installSource(
 	const archivePath = `${tempDir}.tgz`;
 	try {
 		onStatus?.({ type: "info", message: `Downloading ${source.packageName}@${source.version} sidecars...` });
-		await downloadTo(source.url, archivePath);
+		await downloadFirst(source.urls, archivePath);
 		mkdirSync(tempDir, { recursive: true });
 		extractTarball(archivePath, tempDir);
 		installSidecarFiles(tempDir, files, binDir);
@@ -295,10 +328,11 @@ export async function ensureSidecars(
 			continue;
 		}
 
-		let inflight = inflightSources.get(source.url);
+		const key = source.urls.join(" ");
+		let inflight = inflightSources.get(key);
 		if (!inflight) {
-			inflight = installSource(source, wanted, options.onStatus).finally(() => inflightSources.delete(source.url));
-			inflightSources.set(source.url, inflight);
+			inflight = installSource(source, wanted, options.onStatus).finally(() => inflightSources.delete(key));
+			inflightSources.set(key, inflight);
 		}
 		try {
 			await inflight;

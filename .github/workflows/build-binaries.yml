@@ -174,17 +174,19 @@ jobs:
           name: release-assets-${{ github.event.inputs.tag || github.ref_name }}
           path: release-assets
 
+      # HOME 指到临时目录：bundle 启动时会去装 sidecar，装在用户目录里会让下
+      # 一个 bundle 看到「已经装好」而跳过下载，这条冒烟就测不到下载路径了。
       - name: Smoke-test single-file CLI
         shell: bash
         run: |
           set -euo pipefail
 
-          node release-assets/nanopi.js --help
-          node release-assets/nanopi.js --version
-          node release-assets/nanopi-base.js --help
-          node release-assets/nanopi-base.js --version
-          node release-assets/nanopi-minimal.js --help
-          node release-assets/nanopi-minimal.js --version
+          for bundle in nanopi nanopi-base nanopi-minimal; do
+            home="$(mktemp -d)"
+            HOME="${home}" node "release-assets/${bundle}.js" --help > /dev/null
+            HOME="${home}" node "release-assets/${bundle}.js" --version
+            rm -rf "${home}"
+          done
 
   stage-github-release:
     runs-on: ubuntu-latest
