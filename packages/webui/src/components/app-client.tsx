@@ -338,11 +338,16 @@ export function AppClient() {
 		: null;
 	const projectName =
 		project?.name || workingDir.split("/").filter(Boolean).pop() || "";
-	const title = currentSession?.name || "NanoPi";
+	const sessionTitle = currentSession?.name || "NanoPi";
+	// While a pane replaces the chat, the phone header names the pane: the
+	// session title would otherwise label a screen that is not the chat.
+	const paneTitle = terminalOpen ? t("终端") : openFile ? openFile.split("/").filter(Boolean).pop() : "";
+	const title = paneTitle || sessionTitle;
 
+	// The notification names the session, not whatever pane happens to be open.
 	useEffect(() => {
-		titleRef.current = title;
-	}, [title]);
+		titleRef.current = sessionTitle;
+	}, [sessionTitle]);
 
 	const onSend = useCallback(() => {
 		// The prompt carries the documents; only images have a wire type of their
@@ -357,13 +362,19 @@ export function AppClient() {
 		void chat.send(text, pendingImages);
 	}, [chat, composer, files, images]);
 
+	const closePanes = useCallback(() => {
+		setOpenFile(null);
+		setTerminalOpen(false);
+	}, []);
+
 	const onNew = useCallback(() => {
 		chat.newSession();
 		setComposer("");
 		setImages([]);
 		setFiles([]);
 		setNavOpen(false);
-	}, [chat]);
+		closePanes();
+	}, [chat, closePanes]);
 
 	const onSelectSession = useCallback(
 		(session: SessionMetaWithProject) => {
@@ -372,8 +383,12 @@ export function AppClient() {
 			setImages([]);
 			setFiles([]);
 			void chat.loadSession(session.id);
+			// A pane replaces the chat, so picking a session while one is open
+			// must also reveal the chat it just loaded; otherwise the selection
+			// looks ignored.
+			closePanes();
 		},
-		[chat],
+		[chat, closePanes],
 	);
 
 	const onRenameSession = useCallback(
@@ -503,7 +518,16 @@ export function AppClient() {
 			</div>
 
 			<main className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
-				<MobileBar title={title} onOpenMenu={() => setNavOpen(true)} onNew={onNew} />
+				<MobileBar
+					title={title}
+					onOpenMenu={() => setNavOpen(true)}
+					onNew={onNew}
+					back={
+						terminalOpen || openFile
+							? { label: t("返回对话"), onBack: closePanes }
+							: undefined
+					}
+				/>
 
 				{bootError ? (
 					<div className="mx-auto w-full max-w-[840px] px-4 pt-4">
@@ -514,9 +538,9 @@ export function AppClient() {
 				) : null}
 
 				{terminalOpen ? (
-					<TerminalPane cwd={workingDir} />
+					<TerminalPane cwd={workingDir} onClose={closePanes} />
 				) : openFile ? (
-					<FileViewer path={openFile} onClose={() => setOpenFile(null)} />
+					<FileViewer path={openFile} onClose={closePanes} />
 				) : (
 					<ChatPane
 						messages={chat.messages}
@@ -548,7 +572,7 @@ export function AppClient() {
 						files={files}
 						onFiles={setFiles}
 						onNotice={chat.setNotice}
-						sessionName={title}
+						sessionName={sessionTitle}
 						modelSheetOpen={modelSheetOpen}
 						onModelSheet={(open) => {
 							if (open) void refreshProviders();

@@ -422,7 +422,7 @@ export function Sidebar({
 						)
 					) : view === "terminal" ? (
 						<div className="px-2 py-4">
-							<p className="text-label text-muted-foreground">{t("终端已在右侧打开。")}</p>
+							<p className="text-label text-muted-foreground">{t("终端已打开。")}</p>
 							<p className="mt-1 text-caption text-muted-foreground">
 								{t("命令只在本机执行，不进入对话上下文。")}
 							</p>
