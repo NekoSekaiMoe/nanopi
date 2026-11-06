@@ -761,6 +761,13 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 	} satisfies OpenAICompletionsOptions);
 };
 
+/**
+ * The part of the SDK client this API calls. A flavor narrowed to
+ * openai-completions alone ships a client with only this resource; the full SDK
+ * satisfies it structurally.
+ */
+type OpenAICompletionsClient = Pick<OpenAI["chat"], "completions">;
+
 function createClient(
 	model: Model<"openai-completions">,
 	context: TranscriptContext,
@@ -797,13 +804,19 @@ function createClient(
 		Object.assign(headers, optionsHeaders);
 	}
 
-	return new OpenAI({
+	const client = new OpenAI({
 		apiKey,
 		baseURL: model.baseUrl,
 		dangerouslyAllowBrowser: true,
 		fetch,
 		defaultHeaders: headers,
 	});
+	// A build whose API set is openai-completions alone swaps the `openai`
+	// specifier for a client that carries only this resource
+	// (scripts/build-openai-client.mjs). The swap is a runtime shape the SDK's
+	// types cannot describe, so it is read through a cast.
+	const narrow = client as { chat: OpenAICompletionsClient };
+	return { chat: narrow.chat };
 }
 
 function buildParams(
