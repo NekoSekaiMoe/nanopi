@@ -119,12 +119,25 @@ $:
 
   # AI 助手（NPC）被 @ 时跑的流水线。cpus: 2 即 2c4g（内存 = 核数 x 2GiB）。
   #
+  # NPC 按云原生开发的核时计费，所以 cpus 同时是账单口径：不写它就拿平台
+  # 默认节点的 8c16g，同样的会话是 4 倍核时（#542）。tags 显式写成默认架构，
+  # 免得将来默认架构变了，「2 核」的意图落空还看不出来。
+  #
+  # Job 级 timeout: 2h。平台的 timeout 是一个字段管两件事：Job 最长执行时间
+  # 和「连续无输出」超时，拆不开（#544）。取 2h 是与平台默认对齐的下限选择：
+  # 单次工具执行上限回到默认 2h，无输出阈值从 10 分钟放宽到 2h，
+  # 会话本身也不会超过 2h——卡死的会话最多冻 4 核时（2 核 x 2h）。
+  # 代价：一次会话到 2h 会被硬切；pre-commit 跑 pnpm run check 超过 2h 同样被切。
+  # 要更长就改这一行，别删——删掉等于回到默认的 10 分钟无输出。
+  #
   # install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
   # 而 pnpm install 的 --ignore-scripts 会把 prepare 一起跳过。hooks 装不上时
   # .husky/commit-msg 不会运行，NPC 提交就没有 Change-Id。
   issue.comment@npc:
     - runner:
+        tags: cnb:arch:amd64
         cpus: 2
+      timeout: 2h
       endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
@@ -138,7 +151,9 @@ $:
           type: npc:go
   pull_request.comment@npc:
     - runner:
+        tags: cnb:arch:amd64
         cpus: 2
+      timeout: 2h
       endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
