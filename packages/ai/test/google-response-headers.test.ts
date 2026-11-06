@@ -6,8 +6,6 @@ const googleGenAiMock = vi.hoisted(() => ({
 
 vi.mock("@google/genai", () => {
 	class GoogleGenAI {
-		constructor(_config: Record<string, unknown>) {}
-
 		models = {
 			generateContentStream: async function* () {
 				yield* googleGenAiMock.chunks;
