@@ -16,6 +16,7 @@ import {
 	resolveBuiltinProviderIds,
 	resolveFlavorApis,
 	resolveFlavorComponents,
+	resolveFlavorGrammars,
 	resolveFlavorProviders,
 	resolveFlavorToolNames,
 	resolveFlavorToolset,
@@ -588,5 +589,85 @@ describe("providerSetRecord", () => {
 	it("does not touch a curated set beside a marker set", () => {
 		const sets = { presets: { providers: ["openai"] }, all: { providers: [ALL_PROVIDERS] } };
 		deepStrictEqual(providerSetRecord(sets, ["openai", "groq"]), { name: "all", providers: ["groq", "openai"] });
+	});
+});
+
+describe("grammar sets", () => {
+	const withGrammarSets = {
+		...validConfig,
+		components: { ...validConfig.components, grammars: { description: "Grammar set" } },
+		grammarSets: {
+			curated: { description: "Six cold grammars", excluded: ["1c", "sqf"] },
+		},
+		flavors: {
+			...validConfig.flavors,
+			full: { components: { "*": true, grammars: "curated" } },
+		},
+	};
+
+	it("resolves the excluded tags for a flavor that names a set", () => {
+		const dir = writeConfig(withGrammarSets);
+		tempDirs.push(dir);
+		const config = loadBuildConfig(dir);
+		deepStrictEqual(resolveFlavorGrammars(config, "full"), ["1c", "sqf"]);
+		strictEqual(resolveFlavorComponents(config, "full")["grammars"], "curated");
+	});
+
+	it("ships every grammar for a flavor that names no set, without touching its component map", () => {
+		const dir = writeConfig(withGrammarSets);
+		tempDirs.push(dir);
+		const config = loadBuildConfig(dir);
+		deepStrictEqual(resolveFlavorGrammars(config, "minimal"), []);
+		// "all" is the neutral default, not the flavor's "*" value: a flavor that
+		// never opted into a trimmed set keeps shipping every grammar.
+		strictEqual(resolveFlavorComponents(config, "minimal")["grammars"], "all");
+	});
+
+	it("rejects a grammars component without a grammarSets map", () => {
+		const dir = writeConfig({ ...withGrammarSets, grammarSets: undefined });
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /declares "grammars" without a "grammarSets" map/);
+	});
+
+	it("rejects a flavor naming an unknown grammar set", () => {
+		const broken = { ...withGrammarSets, flavors: { ...withGrammarSets.flavors, full: { components: { "*": true, grammars: "nope" } } } };
+		const dir = writeConfig(broken);
+		tempDirs.push(dir);
+		throws(() => loadBuildConfig(dir), /unknown grammar set/);
+	});
+
+	it("rejects a grammar set with a duplicate or non-string tag", () => {
+		for (const excluded of [["1c", "1c"], [1]]) {
+			const broken = { ...withGrammarSets, grammarSets: { curated: { excluded } } };
+			const dir = writeConfig(broken);
+			tempDirs.push(dir);
+			throws(() => loadBuildConfig(dir));
+		}
+	});
+});
+
+describe("real flavor grammar sets", () => {
+	const config = loadBuildConfig(join(import.meta.dirname, ".."));
+
+	// Issue #528 item 2: only `full` trims the cold grammars. `base` keeps every
+	// grammar, so its artifact and its `supportsLanguage` answers do not change.
+	it("drops the cold grammars from full and leaves base untouched", () => {
+		deepStrictEqual(resolveFlavorGrammars(config, "full"), ["1c", "mathematica", "isbl", "gml", "sqf", "maxima"]);
+		deepStrictEqual(resolveFlavorGrammars(config, "base"), []);
+		strictEqual(resolveFlavorComponents(config, "base")["grammars"], "all");
+		strictEqual(resolveFlavorComponents(config, "full")["grammars"], "curated");
+	});
+
+	it("cross-checks excluded tags against the bundled grammar registry", () => {
+		const bundled = loadBuildConfig(join(import.meta.dirname, ".."));
+		const dir = writeConfig({
+			...validConfig,
+			components: { ...validConfig.components, grammars: { description: "Grammar set" } },
+			grammarSets: { broken: { excluded: ["not-a-bundled-language"] } },
+		});
+		tempDirs.push(dir);
+		// The temp tree has no syntax-highlight.ts beside it, so the source
+		// cross-check is skipped there. On the real tree a typo fails instead.
+		strictEqual(bundled.grammarSets.curated.excluded.length, 6);
 	});
 });

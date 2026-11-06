@@ -23,13 +23,17 @@
  *   list of `@nanopi/pi-ai` provider ids, or the `__NONE__` marker for a build
  *   that ships none). It decides which provider catalogs the model generator
  *   writes and the runtime registers, so a provider set only ships whole.
+ * - `apis` picks one entry from `apiSets`; `grammars` picks one from
+ *   `grammarSets`, whose `excluded` list names bundled language tags whose
+ *   grammar bytes stay out of the artifact (see
+ *   scripts/build-components.mjs createGrammarDropPlugin).
  * - `module/<name>` names each built-in module (packages/coding-agent/src/modules).
  *   Every `module/*` entry must match a name in the module list the bundle
  *   script passes to validateFlavorModules, so a new module cannot silently
  *   stay out of a flavor.
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 export const BUILD_FLAVOR_ENV = "NANOPI_BUILD_FLAVOR";
@@ -41,6 +45,8 @@ const WILDCARD_KEY = "*";
 export const TOOLSET_COMPONENT = "toolset";
 /** Component whose value names a provider set instead of switching inclusion on. */
 export const PROVIDERS_COMPONENT = "providers";
+/** Component whose value names a grammar set instead of switching inclusion on. */
+export const GRAMMARS_COMPONENT = "grammars";
 /** Component whose value names an API set instead of switching inclusion on. */
 export const APIS_COMPONENT = "apis";
 /** API set entry meaning "every API implementation in packages/ai". */
@@ -66,6 +72,31 @@ export const MODULE_COMPONENT_PREFIX = "module/";
 export const ALL_PROVIDERS = "__ALL__";
 /** Provider set entry meaning "no built-in catalog", checked at build time. */
 export const NO_PROVIDERS = "__NONE__";
+
+/**
+ * The language tags `BUNDLED_LANGUAGES` in
+ * packages/coding-agent/src/utils/syntax-highlight.ts names. Read from the
+ * source at validation time so a grammar set cannot exclude a tag that is not
+ * bundled (a typo that would silently trim nothing).
+ *
+ * @returns {Set<string>}
+ */
+function allBundledGrammars(repoRoot) {
+	const sourcePath = join(repoRoot, "packages", "coding-agent", "src", "utils", "syntax-highlight.ts");
+	// A buildconfig.json kept in a temp tree (the loader's own tests) has no
+	// coding-agent source beside it. No grammar set can be cross-checked there;
+	// the real tree always carries the file, and a missing one there is a bug in
+	// the path below, not a reason to skip validation on a real build.
+	if (!existsSync(sourcePath)) return undefined;
+	const source = readFileSync(sourcePath, "utf8");
+	const table = /const BUNDLED_LANGUAGES = new Set\(\s*\[([\s\S]*?)\]\s*\.join\(" "\)\s*\.split/.exec(source);
+	if (table === null) throw new Error("Could not read BUNDLED_LANGUAGES from syntax-highlight.ts");
+	return new Set(
+		[...table[1].matchAll(/"([^"]+)"/g)]
+			.flatMap((match) => match[1].split(" "))
+			.filter((tag) => tag.length > 0),
+	);
+}
 
 /** Extracts `--flavor <name>` / `--flavor=<name>` from an argv array. */
 export function parseFlavorArg(argv) {
@@ -105,7 +136,7 @@ export function loadBuildConfig(repoRoot) {
 
 	const unknownKeys = Object.keys(raw).filter(
 		(key) =>
-			!["defaultFlavor", "components", "flavors", "toolsetComponents", "providerSets", "apiSets", "moduleBundles"].includes(
+			!["defaultFlavor", "components", "flavors", "toolsetComponents", "providerSets", "apiSets", "grammarSets", "moduleBundles"].includes(
 				key,
 			),
 	);
@@ -299,6 +330,51 @@ export function loadBuildConfig(repoRoot) {
 	}
 	const apiSetNames = apiSets === undefined ? [] : Object.keys(apiSets);
 
+	const grammarSets = raw.grammarSets;
+	if (grammarSets !== undefined) {
+		if (typeof grammarSets !== "object" || grammarSets === null || Array.isArray(grammarSets)) {
+			throw new Error(`${BUILD_CONFIG_FILENAME} "grammarSets" must be an object of grammar set names`);
+		}
+		if (Object.keys(grammarSets).length === 0) throw new Error(`${BUILD_CONFIG_FILENAME} "grammarSets" declares no grammar sets`);
+		const bundledGrammars = allBundledGrammars(repoRoot);
+		for (const [name, spec] of Object.entries(grammarSets)) {
+			if (typeof spec !== "object" || spec === null || Array.isArray(spec)) {
+				throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} must be an object`);
+			}
+			const unknownGrammarSetKeys = Object.keys(spec).filter((key) => key !== "description" && key !== "excluded");
+			if (unknownGrammarSetKeys.length > 0) {
+				throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} has unknown keys: ${unknownGrammarSetKeys.join(", ")}`);
+			}
+			if (spec.description !== undefined && typeof spec.description !== "string") {
+				throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string description`);
+			}
+			if (!Array.isArray(spec.excluded)) {
+				throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} needs an "excluded" list of bundled language tags`);
+			}
+			for (const tag of spec.excluded) {
+				if (typeof tag !== "string" || tag.length === 0) {
+					throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} has a non-string language tag`);
+				}
+			}
+			if (new Set(spec.excluded).size !== spec.excluded.length) {
+				throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} lists a language tag twice`);
+			}
+			if (bundledGrammars !== undefined) {
+				for (const tag of spec.excluded) {
+					if (!bundledGrammars.has(tag)) {
+						throw new Error(`Grammar set "${name}" in ${BUILD_CONFIG_FILENAME} excludes "${tag}", which is not a bundled grammar`);
+					}
+				}
+			}
+		}
+	} else if (componentNames.includes(GRAMMARS_COMPONENT)) {
+		throw new Error(`${BUILD_CONFIG_FILENAME} declares "${GRAMMARS_COMPONENT}" without a "grammarSets" map`);
+	}
+	// A flavor that names no set reaches the fallback in resolveFlavor(), so the
+	// config does not have to declare a distinct "__ALL__" set: the marker is a
+	// value of the resolver, not a set to write into buildconfig.json.
+	const grammarSetNames = grammarSets === undefined ? [] : Object.keys(grammarSets);
+
 	const flavorNames = Object.keys(raw.flavors);
 	if (flavorNames.length === 0) {
 		throw new Error(`${BUILD_CONFIG_FILENAME} declares no flavors`);
@@ -353,6 +429,15 @@ export function loadBuildConfig(repoRoot) {
 				}
 				continue;
 			}
+			if (key === GRAMMARS_COMPONENT) {
+				if (typeof value !== "string" || !grammarSetNames.includes(value)) {
+					throw new Error(
+						`Flavor "${flavorName}" sets "${GRAMMARS_COMPONENT}" to an unknown grammar set ` +
+							`(declared: ${grammarSetNames.join(", ") || "none"})`,
+					);
+				}
+				continue;
+			}
 			if (typeof value !== "boolean") {
 				throw new Error(`Flavor "${flavorName}" sets component "${key}" to a non-boolean value`);
 			}
@@ -369,6 +454,7 @@ export function loadBuildConfig(repoRoot) {
 		toolsetTools,
 		providerSets: providerSets ?? {},
 		apiSets: apiSets ?? {},
+		grammarSets: grammarSets ?? {},
 		moduleBundles: moduleBundles ?? {},
 		moduleBundleNames,
 		flavors: raw.flavors,
@@ -402,7 +488,7 @@ function requireFlavor(config, flavorName) {
  * set name, the tool names, the provider set and the API set, and the old code
  * re-derived each of them (and re-checked the flavor) at every entry point.
  *
- * @returns {{ flavor: Record<string, unknown>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[], components: Record<string, boolean | string> }}
+ * @returns {{ flavor: Record<string, unknown>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[], grammars: string[], components: Record<string, boolean | string> }}
  */
 function resolveFlavor(config, flavorName) {
 	const flavor = requireFlavor(config, flavorName);
@@ -440,6 +526,18 @@ function resolveFlavor(config, flavorName) {
 		apis = apiSet.apis.includes(ALL_APIS) ? [ALL_APIS] : [...apiSet.apis];
 	}
 
+	// Grammar sets name the bundled tags a flavor leaves out. A flavor that names
+	// no set ships every grammar: both its `grammars` component ("all") and the
+	// excluded list stay at that default, so a build that never opted into a
+	// trimmed set carries no excluded tag and drops no grammar case.
+	const grammarsValue = flavor.components[GRAMMARS_COMPONENT];
+	let excludedGrammars = [];
+	if (typeof grammarsValue === "string") {
+		const grammarSet = config.grammarSets[grammarsValue];
+		if (!grammarSet) throw new Error(`Unknown grammar set "${grammarsValue}" in flavor "${flavorName}"`);
+		excludedGrammars = [...grammarSet.excluded];
+	}
+
 	const groupKeys = Object.keys(flavor.components).filter((key) => isDeclaredGroupKey(key, config.componentNames));
 	const components = {};
 	for (const name of config.componentNames) {
@@ -451,15 +549,17 @@ function resolveFlavor(config, flavorName) {
 					? providers
 					: name === APIS_COMPONENT
 						? apis
-						: name.startsWith(TOOLS_COMPONENT_PREFIX) && toolNames !== undefined
-							? toolNames.includes(name.slice(TOOLS_COMPONENT_PREFIX.length))
-							: (flavor.components[name] ??
-								(groupValue === undefined ? undefined : flavor.components[groupValue]) ??
-								flavor.components[WILDCARD_KEY] ??
-								true);
+						: name === GRAMMARS_COMPONENT
+							? (flavor.components[name] ?? "all")
+							: name.startsWith(TOOLS_COMPONENT_PREFIX) && toolNames !== undefined
+								? toolNames.includes(name.slice(TOOLS_COMPONENT_PREFIX.length))
+								: (flavor.components[name] ??
+									(groupValue === undefined ? undefined : flavor.components[groupValue]) ??
+									flavor.components[WILDCARD_KEY] ??
+									true);
 	}
 
-	return { toolset, toolNames, providers, apis, components };
+	return { toolset, toolNames, providers, apis, grammars: excludedGrammars, components };
 }
 
 /**
@@ -527,6 +627,17 @@ export function resolveFlavorProviders(config, flavorName) {
  */
 export function resolveFlavorApis(config, flavorName) {
 	return resolveFlavor(config, flavorName).apis;
+}
+
+/**
+ * The bundled grammar tags a flavor omits, or an empty list when it ships every
+ * grammar. The build turns this into the runtime define and the drop plugin, so
+ * an excluded tag is neither loadable at runtime nor present in the artifact.
+ *
+ * @returns {string[]}
+ */
+export function resolveFlavorGrammars(config, flavorName) {
+	return resolveFlavor(config, flavorName).grammars;
 }
 
 /**
@@ -683,11 +794,11 @@ export function validateFlavorProviders(repoRoot, providerIds, flavorName) {
  * resolved against the config. `toolset` is the selected tool set name and
  * `providers` the selected provider ids.
  *
- * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[] }}
+ * @returns {{ flavor: string, components: Record<string, boolean | string>, toolset: string, toolNames: string[] | undefined, providers: string[], apis: string[], grammars: string[] }}
  */
 export function resolveBuildFlavor(repoRoot, { argv = process.argv, env = process.env } = {}) {
 	const config = loadBuildConfig(repoRoot);
 	const flavorName = parseFlavorArg(argv) ?? env[BUILD_FLAVOR_ENV] ?? config.defaultFlavor;
-	const { toolset, toolNames, providers, apis, components } = resolveFlavor(config, flavorName);
-	return { flavor: flavorName, toolset, toolNames, providers, apis, components };
+	const { toolset, toolNames, providers, apis, grammars, components } = resolveFlavor(config, flavorName);
+	return { flavor: flavorName, toolset, toolNames, providers, apis, grammars, components };
 }

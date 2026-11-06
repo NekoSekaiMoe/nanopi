@@ -13,6 +13,7 @@ const selection = {
 	toolNames: ["bash"],
 	builtinProviderIds: [],
 	builtinApiIds: ["openai-completions"],
+	excludedGrammars: [],
 	buildCommit: "abc123",
 };
 
@@ -23,6 +24,7 @@ describe("buildDefines", () => {
 			"NANOPI_BUILD_COMMIT",
 			"NANOPI_BUILD_COMPONENTS",
 			"NANOPI_BUILD_FLAVOR",
+			"NANOPI_BUILD_GRAMMARS",
 			"NANOPI_BUILD_PROVIDERS",
 			"NANOPI_BUILD_TOOLS",
 			"NANOPI_BUILD_TOOLSET",
@@ -35,6 +37,12 @@ describe("buildDefines", () => {
 		// undici guards `typeof esbuildDetection === 'undefined'` and ships both the
 		// llhttp parser and the Milo WASM payload when the identifier is left bare.
 		strictEqual(buildDefines(selection).esbuildDetection, "true");
+	});
+
+	it("injects the excluded grammar tags as a JSON list", () => {
+		const defines = buildDefines({ ...selection, excludedGrammars: ["1c", "sqf"] });
+		deepStrictEqual(JSON.parse(defines.NANOPI_BUILD_GRAMMARS), ["1c", "sqf"]);
+		deepStrictEqual(JSON.parse(buildDefines({ ...selection, excludedGrammars: undefined }).NANOPI_BUILD_GRAMMARS), []);
 	});
 
 	it("never emits an undefined value esbuild would reject", () => {

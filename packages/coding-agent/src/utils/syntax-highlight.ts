@@ -2,6 +2,10 @@ import type { LanguageFn } from "highlight.js";
 import hljs from "highlight.js/lib/core";
 import { decodeHtmlEntityAt } from "./html.ts";
 
+// Bundled grammar tags this flavor leaves out (buildconfig.json grammarSets).
+// Outside a flavored bundle the define is absent and every grammar is bundled.
+declare const NANOPI_BUILD_GRAMMARS: string[] | undefined;
+
 /**
  * The language tags that name a bundled grammar, six per line to keep the table
  * scannable. Nothing is imported until a code block in one of them is rendered:
@@ -609,6 +613,18 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
 }
 
 /**
+ * Whether the build ships the grammar behind a bundled tag. A flavor that
+ * excludes a tag keeps its `import()` case (and therefore its bytes) out of the
+ * artifact; answering "not supported" here makes `highlightCode` fall back to a
+ * plain render instead of starting a load the build cannot serve. The preload
+ * switch still lists every tag on purpose: it is the single registry of what
+ * highlight.js bundles, and the build drops the excluded specifiers from it.
+ */
+function isGrammarIncluded(name: string): boolean {
+	return typeof NANOPI_BUILD_GRAMMARS === "undefined" || !NANOPI_BUILD_GRAMMARS.includes(name);
+}
+
+/**
  * Whether a code block in `name` would be colored. A grammar that has not been
  * loaded yet is still supported: it starts loading here, and a caller that
  * renders again once `pendingHighlightLanguages()` settles picks the color up.
@@ -616,6 +632,7 @@ export function highlight(code: string, options: HighlightOptions = {}): string 
  * block languages pays the bundler entry for all 191 grammars.
  */
 export function supportsLanguage(name: string): boolean {
+	if (!isGrammarIncluded(name)) return false;
 	if (hljs.getLanguage(name)) return true;
 	if (!BUNDLED_LANGUAGES.has(name)) return false;
 	preloadLanguage(name);
