@@ -123,9 +123,10 @@ $:
   # 默认节点的 8c16g，同样的会话是 4 倍核时（#542）。tags 显式写成默认架构，
   # 免得将来默认架构变了，「2 核」的意图落空还看不出来。
   #
-  # timeout 1h 也是钱：npc:go 的会话没有整体超时，Job 默认能跑到 2 小时，等于
-  # 2c4g 一直冻着配额。注意这个值同时是 agent 单次工具执行的上限与无输出超时，
-  # 长构建或长命令会被它掐断，需要时改这一行。
+  # timeout 6h 是上限，不是预期时长：正常会话几十分钟就结束，Job 一到点就释放。
+  # 给到 6h 是因为它同时是 agent 单次工具执行的上限与无输出超时（见平台超时策略），
+  # 本仓库 pre-commit 跑 pnpm run check，2c4g 上很容易超过 1h，1h 会截断提交。
+  # 平台侧的 Job 上限是 12h，再往上要改的是这一行，别删。
   #
   # install git hooks 这一步不能省：husky 只在 pnpm prepare 里执行，
   # 而 pnpm install 的 --ignore-scripts 会把 prepare 一起跳过。hooks 装不上时
@@ -134,7 +135,7 @@ $:
     - runner:
         tags: cnb:arch:amd64
         cpus: 2
-      timeout: 1h
+      timeout: 6h
       endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
@@ -150,7 +151,7 @@ $:
     - runner:
         tags: cnb:arch:amd64
         cpus: 2
-      timeout: 1h
+      timeout: 6h
       endStages: *notify-failure
       docker:
         image: cnbcool/default-npc:latest
