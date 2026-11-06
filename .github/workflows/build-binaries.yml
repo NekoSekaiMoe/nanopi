@@ -21,12 +21,29 @@ concurrency:
   group: build-binaries-${{ github.event.inputs.tag || github.ref_name }}
   cancel-in-progress: false
 
-# 发 AtomGit 的那一步用它。GitHub 不允许在 `if:` 里直接读 secrets，所以先落到
-# env 再判断——没配 key 时那一步跳过，其余发布流程照常。
-env:
-  ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
-
 jobs:
+  # job 级 if 读不到 env，也读不到 secrets（那里只有 github/needs/vars/inputs），
+  # 所以用一个零依赖的 job 把「ATOMGIT_KEY 是否配置」翻成 needs 输出，交给
+  # publish-atomgit 判断。secret 只落在要用到它的两个 step 的 env 里，不铺到
+  # 工作流级（那会让每个 job 都拿到这把 key）。
+  check-atomgit-key:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      has_key: ${{ steps.check.outputs.has_key }}
+    steps:
+      - name: Check whether ATOMGIT_KEY is set
+        id: check
+        env:
+          ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${ATOMGIT_KEY:-}" ]]; then
+            echo "has_key=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_key=false" >> "$GITHUB_OUTPUT"
+          fi
+
   # Keep the public GitHub Release publication last. Binary assets are staged in
   # a draft release first; cleanup removes the draft if later publishing fails.
   build:
@@ -360,8 +377,9 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - stage-github-release
-    # 没配 key 就跳过：fork 上永远没有这个 secret，而那一步要往别人的仓库推东西。
-    if: ${{ env.ATOMGIT_KEY != '' }}
+      - check-atomgit-key
+    # job 级 if 看不到 env/secrets，只能读 needs 输出；没配 key（fork）就跳过整个 job。
+    if: ${{ needs.check-atomgit-key.outputs.has_key == 'true' }}
     permissions:
       actions: read
     env:
@@ -392,7 +410,7 @@ jobs:
 
       - name: Publish to AtomGit
         env:
-          ATOMGIT_KEY: ${{ env.ATOMGIT_KEY }}
+          ATOMGIT_KEY: ${{ secrets.ATOMGIT_KEY }}
         run: |
           set -euo pipefail
           node scripts/publish-atomgit.mjs \
