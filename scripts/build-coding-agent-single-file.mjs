@@ -44,6 +44,7 @@ import {
 	validateExternalImports,
 } from "./esbuild-shared.mjs";
 import { createApiStubPlugin, validateStubs } from "./build-apis.mjs";
+import { createNarrowOpenAIClientPlugin, usesNarrowOpenAIClient } from "./build-openai-client.mjs";
 import {
 	createComponentStubPlugin,
 	createGrammarDropPlugin,
@@ -387,9 +388,15 @@ const { plugin: apiStubPlugin, disabledApis, disabledProviders } = createApiStub
 	apis,
 	builtinProviderIds,
 });
+// An API set that resolves to openai-completions alone carries no use for the
+// rest of the `openai` SDK, so the bare specifier resolves to the narrow client
+// instead of the package barrel (see scripts/build-openai-client.mjs).
+const narrowOpenAIClient = usesNarrowOpenAIClient(builtinApiIds);
+const narrowOpenAIClientPlugin = createNarrowOpenAIClientPlugin({ aiDistDir, enabled: narrowOpenAIClient });
 const plugins = [
 	// The bundled extras import the SDK by package name (see selfReferencePlugin).
 	selfReferencePlugin({ packageName: packageName, packageDir: codingAgentDir }),
+	narrowOpenAIClientPlugin,
 	apiStubPlugin,
 	componentStubPlugin,
 	createLazyImportDropPlugin({ components }),
@@ -507,6 +514,7 @@ console.log(
 		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
 		(disabledModules.length > 0 ? `, excluded modules: ${disabledModules.join(", ")}` : "") +
 		(disabledComponentModules.length > 0 ? `, stubbed: ${disabledComponentModules.join(", ")}` : "") +
+		(narrowOpenAIClient ? ", narrow openai client" : "") +
 		(disabledApis.length > 0 ? `, stubbed APIs: ${disabledApis.length}` : "") +
 		(disabledProviders.length > 0 ? `, stubbed catalogs: ${disabledProviders.length}` : "") +
 		")",

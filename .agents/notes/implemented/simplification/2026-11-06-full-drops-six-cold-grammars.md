@@ -70,7 +70,7 @@ base 的字节与行为都不变**。
 ## Consequences
 
 - 实测（同一棵已合入 1/3/4 的 main，`NANOPI_BUILD_METAFILE_DIR` 归因）：
-  `full` 单文件 `10,060,199 → 9,556,039` 字节，省 **504,160 字节 / 492 KiB**，
+  `full` 单文件 `10,060,170 → 9,556,010` 字节，省 **504,160 字节 / 492 KiB**，
   与六个 grammar 的估算吻合；metafile 里 `1c`/`mathematica`/`isbl`/`gml`/
   `sqf`/`maxima` 六个 language 模块从 inputs 消失。`base`（5.8 MiB）、
   `minimal`（2.5 MiB）字节不变，`base` 产物里不出现被排除列表。

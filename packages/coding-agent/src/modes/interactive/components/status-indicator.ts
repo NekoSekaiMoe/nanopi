@@ -45,7 +45,7 @@ export class WorkingStatusIndicator extends StatusIndicator {
 	private rowRenderer: WorkingIndicatorRenderer | undefined;
 	private startedAt = Date.now();
 	/** Wall time of the last frame handed to the row renderer. */
-	private lastFrameAt = Date.now();
+	private lastFrameAt: number | undefined;
 	private frameTimer: ReturnType<typeof setInterval> | undefined;
 	/** Loader owns a private `ui`; keep the repaint target under its own name. */
 	private readonly repaintTarget: TUI;
@@ -64,8 +64,11 @@ export class WorkingStatusIndicator extends StatusIndicator {
 
 	/** Install a `registerWorkingIndicator` renderer; undefined restores the default row. */
 	setRowRenderer(renderer: WorkingIndicatorRenderer | undefined): void {
+		// `dtMs` is the gap since the previous frame; a new renderer has no previous
+		// frame, so leaving `lastFrameAt` stale reports the idle time before the
+		// install as one huge step.
 		this.rowRenderer = renderer;
-		this.lastFrameAt = Date.now();
+		this.lastFrameAt = undefined;
 		if (renderer) this.startFrameLoop();
 		else this.stopFrameLoop();
 		this.invalidate();
@@ -103,7 +106,7 @@ export class WorkingStatusIndicator extends StatusIndicator {
 		let result: { text: string; hidden?: boolean } | undefined;
 		try {
 			const now = Date.now();
-			const dtMs = Math.max(0, now - this.lastFrameAt);
+			const dtMs = this.lastFrameAt === undefined ? 0 : Math.max(0, now - this.lastFrameAt);
 			this.lastFrameAt = now;
 			result = renderer(
 				{
