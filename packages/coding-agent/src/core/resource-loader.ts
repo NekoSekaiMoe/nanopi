@@ -11,8 +11,16 @@ import { stripBom } from "../utils/text.ts";
 import { createEventBus, type EventBus } from "./event-bus.ts";
 import { findGitPaths } from "./footer-data-provider.ts";
 import { MessageTypeRegistry } from "./messages/registry.ts";
-import { diskModulesIncluded, loadDiskModules, scanDiskModules } from "./modules/jiti-loader.ts";
-import { createModuleRuntime, loadModules } from "./modules/registry.ts";
+import { type ModuleHotReloadTarget, ModuleHotReloadWatcher } from "./modules/hot-reload.ts";
+import {
+	diskModuleName,
+	diskModuleStatKey,
+	diskModulesIncluded,
+	loadDiskModuleFile,
+	loadDiskModules,
+	scanDiskModules,
+} from "./modules/jiti-loader.ts";
+import { createModuleRuntime, loadModule, loadModules } from "./modules/registry.ts";
 import type { LoadModulesResult, RegisteredModule, SessionModule } from "./modules/types.ts";
 import type { PromptTemplate } from "./prompt-templates.ts";
 import { loadPromptTemplates } from "./prompt-templates.ts";
@@ -32,6 +40,22 @@ interface ResourceLoaderReloadOptions {
 	resolveProjectTrust?: (input: { modulesResult: LoadModulesResult }) => Promise<boolean>;
 }
 
+/** What one disk reconciliation did, per file. */
+export interface DiskModuleReloadResult {
+	applied: Array<{ path: string; module: string; action: "loaded" | "reloaded" | "unloaded" }>;
+	failures: Array<{ path: string; error: string }>;
+}
+
+/** One module file as it was loaded: what to compare, and what to tear down. */
+interface DiskModuleRecord {
+	/** Stat identity at load time; a different key means the file changed. */
+	key: string;
+	/** Module name the file produced, or undefined when it failed to load. */
+	name?: string;
+	/** Failure from the last attempt; unchanged broken files are not retried. */
+	error?: string;
+}
+
 export interface ResourceLoader {
 	getModules(): LoadModulesResult;
 	getSkills(): { skills: Skill[]; diagnostics: ResourceDiagnostic[] };
@@ -43,6 +67,24 @@ export interface ResourceLoader {
 	getAppendSystemPromptSources(): Array<{ path: string }>;
 	extendResources(paths: ResourceExtensionPaths): void;
 	reload(options?: ResourceLoaderReloadOptions): Promise<void>;
+	/**
+	 * Reconcile the module files on disk against the files that were loaded, and
+	 * swap only what changed.
+	 *
+	 * `target` is the live registry: the loader decides what changed and builds
+	 * the replacement module objects, the target performs the swap so teardown
+	 * (the module's `dispose` and its `session_shutdown{reason:"unload"}`) runs
+	 * against the running session rather than a detached copy.
+	 *
+	 * Optional because a hand-written loader (the SDK escape hatch) owns its own
+	 * module set: it has no files to reconcile, and the session treats its
+	 * absence as "nothing to hot reload" rather than an error.
+	 */
+	reloadDiskModules?(target: ModuleHotReloadTarget): Promise<DiskModuleReloadResult>;
+	/** Start watching the module directories. No-op when nothing can be watched. */
+	watchDiskModules?(onChange: () => void): void;
+	/** Stop watching. Called on session teardown and when the loader is replaced. */
+	stopWatchingDiskModules?(): void;
 }
 
 function resolvePromptInput(input: string | undefined, description: string): string | undefined {
@@ -201,6 +243,14 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private modulesOverride?: (base: LoadModulesResult) => LoadModulesResult;
 	private modulesLoaded = false;
 	private diskModuleErrors: Array<{ path: string; error: string }> = [];
+	/**
+	 * One record per module file that was loaded or attempted, keyed by absolute
+	 * path. This is the ledger a hot reload reconciles against: what the directory
+	 * holds is compared with what was loaded, so a file nobody loaded never
+	 * triggers work and a deleted one is remembered by path.
+	 */
+	private diskModules: Map<string, DiskModuleRecord> = new Map();
+	private hotWatcher?: ModuleHotReloadWatcher;
 	private skillsOverride?: (base: { skills: Skill[]; diagnostics: ResourceDiagnostic[] }) => {
 		skills: Skill[];
 		diagnostics: ResourceDiagnostic[];
@@ -296,17 +346,30 @@ export class DefaultResourceLoader implements ResourceLoader {
 	private async withDiskModules(): Promise<SessionModule[]> {
 		this.diskModuleErrors = [];
 		if (!diskModulesIncluded()) return this.staticModules;
-		const scan = scanDiskModules({
-			cwd: this.cwd,
-			agentDir: this.agentDir,
-			projectTrusted: this.settingsManager.isProjectTrusted(),
-		});
+		const scan = this.scan();
 		for (const path of scan.missing) {
 			this.diskModuleErrors.push({ path, error: "no module file at this path" });
 		}
 		const { modules, errors } = await loadDiskModules(scan.files);
 		this.diskModuleErrors.push(...errors);
+		const failed = new Map(errors.map((error) => [error.path, error.error]));
+		for (const file of scan.files) {
+			const module = modules.find((candidate) => candidate.name === diskModuleName(file));
+			this.diskModules.set(file, {
+				key: diskModuleStatKey(file) ?? "",
+				name: module?.name,
+				...(failed.has(file) ? { error: failed.get(file) } : {}),
+			});
+		}
 		return modules.length === 0 ? this.staticModules : [...this.staticModules, ...modules];
+	}
+
+	private scan() {
+		return scanDiskModules({
+			cwd: this.cwd,
+			agentDir: this.agentDir,
+			projectTrusted: this.settingsManager.isProjectTrusted(),
+		});
 	}
 
 	private applyModulesOverride(base: LoadModulesResult): LoadModulesResult {
@@ -367,6 +430,108 @@ export class DefaultResourceLoader implements ResourceLoader {
 			);
 			this.updatePromptsFromPaths(this.lastPromptPaths, this.resourceMetadataByPath);
 		}
+	}
+
+	/**
+	 * Reconcile the module files on disk against the load ledger and swap only
+	 * what changed.
+	 *
+	 * Four outcomes per file, all decided by comparing the ledger with disk:
+	 *
+	 * - recorded, file gone          -> unload
+	 * - recorded, stat key changed   -> unload, then run the factory again
+	 * - recorded, stat key unchanged -> nothing, failed files included
+	 * - not recorded, file present   -> load
+	 *
+	 * Unloads run before the loads so a changed file is replaced in place and a
+	 * renamed one cannot collide with the module it replaces.
+	 */
+	async reloadDiskModules(target: ModuleHotReloadTarget): Promise<DiskModuleReloadResult> {
+		const result: DiskModuleReloadResult = { applied: [], failures: [] };
+		if (!diskModulesIncluded() || !this.modulesLoaded) return result;
+
+		const scan = this.scan();
+		const onDisk = new Set(scan.files);
+		/** Files whose contents changed: unloaded here, re-run below. */
+		const stale = new Set<string>();
+		for (const [path, record] of this.diskModules) {
+			if (!onDisk.has(path)) {
+				this.diskModules.delete(path);
+				if (record.name === undefined) continue;
+				await target.unloadModule(record.name);
+				result.applied.push({ path, module: record.name, action: "unloaded" });
+				continue;
+			}
+			const key = diskModuleStatKey(path);
+			if (key === record.key) continue;
+			this.diskModules.delete(path);
+			if (record.name !== undefined) await target.unloadModule(record.name);
+			stale.add(path);
+		}
+
+		for (const path of scan.files.filter((file) => stale.has(file) || !this.diskModules.has(file))) {
+			try {
+				const sessionModule = await loadDiskModuleFile(path);
+				const loaded = await loadModule(sessionModule, {
+					cwd: this.cwd,
+					eventBus: this.eventBus,
+					runtime: this.extensionsResult.runtime,
+					messageTypes: this.extensionsResult.messageTypes,
+					loadedNames: this.extensionsResult.modules.map((module) => module.name),
+				});
+				loaded.diskPath = path;
+				target.loadModule(loaded);
+				this.diskModules.set(path, { key: diskModuleStatKey(path) ?? "", name: loaded.name });
+				result.applied.push({
+					path,
+					module: loaded.name,
+					action: stale.has(path) ? "reloaded" : "loaded",
+				});
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				this.diskModules.set(path, { key: diskModuleStatKey(path) ?? "", error: message });
+				result.failures.push({ path, error: message });
+			}
+		}
+
+		this.syncDiskModuleErrors(result);
+		return result;
+	}
+
+	/**
+	 * Fold this pass into the diagnostics the UI renders.
+	 *
+	 * A file that loaded cleanly drops its old diagnostic; a failure that is
+	 * already on the list is not added twice.
+	 */
+	private syncDiskModuleErrors(result: DiskModuleReloadResult): void {
+		// A file that loaded cleanly drops its old diagnostic, whatever it said.
+		// Both ledgers are cleaned: `diskModuleErrors` is this pass's list, and the
+		// `errors` on the result snapshot is what `/status` and the startup report
+		// read, so a fixed file must stop being reported there too.
+		const healed = new Set(result.applied.map((entry) => entry.path));
+		this.diskModuleErrors = this.diskModuleErrors.filter((error) => !healed.has(error.path));
+		this.extensionsResult.errors = this.extensionsResult.errors.filter((error) => !healed.has(error.path));
+		for (const failure of result.failures) {
+			const existing = this.diskModuleErrors.find((error) => error.path === failure.path);
+			if (existing) existing.error = failure.error;
+			else this.diskModuleErrors.push({ ...failure });
+			if (!this.extensionsResult.errors.some((error) => error.path === failure.path)) {
+				this.extensionsResult.errors.push({ ...failure });
+			}
+		}
+	}
+
+	/** Directories a hot reload has to watch: exactly the ones a scan reads. */
+	watchDiskModules(onChange: () => void): void {
+		if (!diskModulesIncluded()) return;
+		this.hotWatcher ??= new ModuleHotReloadWatcher(onChange);
+		this.hotWatcher.start(this.scan().directories);
+	}
+
+	stopWatchingDiskModules(): void {
+		this.hotWatcher?.close();
+		this.hotWatcher = undefined;
 	}
 
 	async reload(options?: ResourceLoaderReloadOptions): Promise<void> {

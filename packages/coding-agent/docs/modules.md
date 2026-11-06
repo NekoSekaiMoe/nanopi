@@ -189,6 +189,48 @@ export default hello;
 
 One broken file is reported as a diagnostic and skipped; the rest still load.
 
+### Hot reload
+
+A module file on disk can be edited while the process runs. With hot reload on
+(`--hot`, or `"modules": {"hotReload": true}` in settings), nanopi watches the
+three directories above and reconciles them at the next idle moment:
+
+- a changed file is unloaded and its factory runs again;
+- a deleted file is unloaded, so its tools leave the model's tool list and its
+  commands leave autocomplete;
+- a new file is loaded.
+
+The swap waits for idle. A turn that is already streaming finishes against the
+module set it started with, because replacing the tool list mid-turn changes
+what the model was told it could call. `ctx.requestReload()` and the
+operation-completion path use the same queue.
+
+Unloading is real teardown, in this order:
+
+1. `session_shutdown` with `reason: "unload"`, delivered to that module alone.
+   This is the event a module already cleans up on, so sockets, child
+   processes, and timers release without new code.
+2. The module's own `dispose` hook, when the exported object has one.
+3. Every registration the factory made is undone: handlers, tools, commands,
+   shortcuts, flags, renderers, settings rows, widget draws.
+
+```ts
+export default {
+	name: "hello",
+	factory: (nanopi) => { /* ... */ },
+	// Optional. Only for state the factory acquired outside the registration API.
+	dispose: () => socket.close(),
+} satisfies SessionModule;
+```
+
+Two limits worth knowing. A changed *helper* — a sibling file one module
+imports — is not tracked: editing it leaves the module alone, so restart or
+touch the module file itself. And adding or removing a file only takes effect
+while hot reload is on; without it, the module set is read once per session.
+
+`minimal` builds and the single-file `nanopi.js` have no jiti, so the watcher
+is not started there and the diagnostics say why.
+
 The `minimal` build and every single-file `nanopi.js` have no jiti: the
 `jiti-modules` component is off, and a disk module there is never read. The npm
 bundle carries jiti as a dependency and loads jiti only when it actually has a
@@ -196,8 +238,11 @@ file to import.
 
 ## What a module cannot do
 
-- Be reloaded. Editing a module means restarting the process; the module set is
-  read once per session.
+- Be replaced as a whole. Hot reload swaps only module files from disk; a
+  compiled-in module still needs a restart. The host itself (the registry, the
+  session, the TUI, the message codec table) is never swapped: re-importing it
+  would produce a second copy of every class and break `instanceof` across the
+  module boundary.
 - Reach events that no consumer uses. The event set above is the surface; events that no built-in consumer needed (`resources_discover`, `user_bash`, and a dozen others) were removed rather than kept as empty hooks.
 
 Skills, prompt templates, and context files are still local files that nanopi discovers at startup. They are separate from modules and do not need code.

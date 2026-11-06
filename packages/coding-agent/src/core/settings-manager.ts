@@ -931,6 +931,23 @@ export class SettingsManager {
 		this.save();
 	}
 
+	/**
+	 * Whether module files from disk are reloaded as they change.
+	 *
+	 * Global only: a project-local setting could turn the watcher on for code
+	 * nobody trusted yet, and the trust decision is exactly what a reload must
+	 * re-evaluate.
+	 */
+	getModuleHotReload(): boolean {
+		return this.globalSettings.modules?.hotReload ?? SETTINGS_DEFAULTS.modules.hotReload;
+	}
+
+	setModuleHotReload(enabled: boolean): void {
+		this.globalSettings.modules = { ...this.globalSettings.modules, hotReload: enabled };
+		this.markModified("modules");
+		this.save();
+	}
+
 	getProviderRetrySettings(): { timeoutMs?: number; maxRetries?: number; maxRetryDelayMs: number } {
 		return {
 			timeoutMs: this.settings.retry?.provider?.timeoutMs,

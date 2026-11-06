@@ -555,6 +555,73 @@ export class ModuleRegistry {
 		return this.modules.map((m) => m.name);
 	}
 
+	/**
+	 * Swap the module list.
+	 *
+	 * The registry owns the list, not the objects: a hot reload hands back the
+	 * same `RegisteredModule` instances minus what it replaced. Registrations read
+	 * through this list on every call, so the next tool resolution and the next
+	 * event see the new set without any cache to clear.
+	 */
+	setModules(modules: RegisteredModule[]): void {
+		this.modules = modules;
+	}
+
+	/**
+	 * Append one module and tell the host to recompute what the model sees.
+	 *
+	 * The refresh goes through the same `runtime.refreshTools` hook a module's
+	 * `registerTool()` uses, so a hot-loaded tool reaches the active set exactly
+	 * like one registered during startup.
+	 */
+	loadModule(module: RegisteredModule): void {
+		this.modules = [...this.modules.filter((existing) => existing !== module), module];
+		this.runtime.refreshTools();
+	}
+
+	/**
+	 * Tear a module down and drop it from the list.
+	 *
+	 * Returns false when no module has that name, so a caller reconciling a
+	 * directory can treat "already gone" as success.
+	 *
+	 * The module sees `session_shutdown{reason: "unload"}` first: that is the
+	 * event its handlers already clean up on (sockets, child processes, timers),
+	 * and it is delivered to this module alone. Only then are its registrations
+	 * undone, so a handler torn down by the event still finds them installed.
+	 */
+	async unloadModule(name: string): Promise<boolean> {
+		const index = this.modules.findIndex((module) => module.name === name);
+		if (index === -1) return false;
+		const [module] = this.modules.splice(index, 1);
+		if (!module) return true;
+		await this._emitShutdownTo(module, { type: "session_shutdown", reason: "unload" });
+		await module.dispose?.();
+		// The removal itself already happened, so refresh even when teardown threw:
+		// a tool the module registered must stop being offered either way.
+		this.runtime.refreshTools();
+		return true;
+	}
+
+	/** Deliver one event to a single module, for teardown that is not session-wide. */
+	private async _emitShutdownTo(module: RegisteredModule, event: SessionShutdownEvent): Promise<void> {
+		const handlers = module.handlers.get(event.type)?.slice() ?? [];
+		if (handlers.length === 0) return;
+		const ctx = this.createContext();
+		for (const handler of handlers) {
+			try {
+				await handler(event, ctx);
+			} catch (err) {
+				this.emitError({
+					moduleName: module.name,
+					event: event.type,
+					error: err instanceof Error ? err.message : String(err),
+					stack: err instanceof Error ? err.stack : undefined,
+				});
+			}
+		}
+	}
+
 	hasActiveOperation(): boolean {
 		return this.operationDepth > 0;
 	}
@@ -1501,9 +1568,13 @@ function createModuleApi(
 	eventBus: EventBus,
 	getModuleNames: () => string[],
 	messageTypes: MessageTypeRegistry,
-): { api: ModuleApi; commit: () => void; discard: () => void } {
+): { api: ModuleApi; commit: () => void; discard: () => void; dispose: () => void } {
 	const pendingFlagValues = new Map<string, boolean | string>();
 	const pendingRuntimeChanges: Array<() => void> = [];
+	// Undo one registration. Hot reload replays the whole list before the module
+	// object is dropped, so a replacement leaves no handler, tool, or row behind.
+	const undoStack: Array<() => void> = [];
+	let undone = false;
 	let state: "loading" | "active" | "failed" = "loading";
 	const applyRuntimeChange = (change: () => void) => {
 		if (state === "loading") pendingRuntimeChanges.push(change);
@@ -1512,6 +1583,10 @@ function createModuleApi(
 	const clearPending = () => {
 		pendingFlagValues.clear();
 		pendingRuntimeChanges.length = 0;
+	};
+	const undo = (fn: () => void) => {
+		if (undone) return;
+		undoStack.push(fn);
 	};
 
 	const api = {
@@ -1522,7 +1597,7 @@ function createModuleApi(
 			list.push(registeredHandler);
 			module.handlers.set(event, list);
 
-			return () => {
+			const unsubscribe = () => {
 				const handlers = module.handlers.get(event);
 				if (!handlers) return;
 				const handlerIndex = handlers.indexOf(registeredHandler);
@@ -1530,6 +1605,8 @@ function createModuleApi(
 				handlers.splice(handlerIndex, 1);
 				if (handlers.length === 0) module.handlers.delete(event);
 			};
+			undo(unsubscribe);
+			return unsubscribe;
 		},
 
 		registerTool(tool: ToolDefinition): void {
@@ -1538,9 +1615,12 @@ function createModuleApi(
 					`Tool "${tool.name}" registered by module "${module.name}" must define an object parameter schema.`,
 				);
 			}
-			module.tools.set(tool.name, {
-				definition: tool,
-				sourceInfo: module.sourceInfo,
+			const registered: RegisteredTool = { definition: tool, sourceInfo: module.sourceInfo };
+			module.tools.set(tool.name, registered);
+			undo(() => {
+				// A re-registration under the same name owns the slot: only drop ours.
+				if (module.tools.get(tool.name) !== registered) return;
+				module.tools.delete(tool.name);
 			});
 			runtime.refreshTools();
 		},
@@ -1554,10 +1634,15 @@ function createModuleApi(
 			if (typeof options?.handler !== "function") {
 				throw new Error(`Command "/${name}" registered by module "${module.name}" must define handler().`);
 			}
-			module.commands.set(name, {
+			const registered: RegisteredCommand = {
 				name,
 				sourceInfo: module.sourceInfo,
 				...options,
+			};
+			module.commands.set(name, registered);
+			undo(() => {
+				if (module.commands.get(name) !== registered) return;
+				module.commands.delete(name);
 			});
 		},
 
@@ -1568,7 +1653,12 @@ function createModuleApi(
 				handler: (ctx: ModuleContext) => Promise<void> | void;
 			},
 		): void {
-			module.shortcuts.set(shortcut, { shortcut, moduleName: module.name, ...options });
+			const registered: ModuleShortcut = { shortcut, moduleName: module.name, ...options };
+			module.shortcuts.set(shortcut, registered);
+			undo(() => {
+				if (module.shortcuts.get(shortcut) !== registered) return;
+				module.shortcuts.delete(shortcut);
+			});
 		},
 
 		registerFlag(
@@ -1580,7 +1670,14 @@ function createModuleApi(
 					`Invalid default for flag "${name}": expected ${options.type}, got ${typeof options.default}`,
 				);
 			}
-			module.flags.set(name, { name, moduleName: module.name, ...options });
+			const registered: ModuleFlag = { name, moduleName: module.name, ...options };
+			module.flags.set(name, registered);
+			undo(() => {
+				if (module.flags.get(name) !== registered) return;
+				module.flags.delete(name);
+				// The default went into the shared map, which outlives the module.
+				runtime.flagValues.delete(name);
+			});
 			if (options.default !== undefined && !runtime.flagValues.has(name)) {
 				if (state === "loading") {
 					if (!pendingFlagValues.has(name)) pendingFlagValues.set(name, options.default);
@@ -1591,7 +1688,12 @@ function createModuleApi(
 		},
 
 		registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
-			module.messageRenderers.set(customType, renderer as MessageRenderer);
+			const registered = renderer as MessageRenderer;
+			module.messageRenderers.set(customType, registered);
+			undo(() => {
+				if (module.messageRenderers.get(customType) !== registered) return;
+				module.messageRenderers.delete(customType);
+			});
 		},
 
 		registerMessageType(options: MessageTypeRegistration): MessageTypeRegistrationHandle {
@@ -1605,62 +1707,109 @@ function createModuleApi(
 			};
 			const registry = messageTypes;
 			const customType = options.customType;
+			const previous = customType ? registry.customTypes.get(customType) : registry.kinds.get(options.kind);
 			registry.register(codec, customType);
 			const current = () =>
 				customType ? registry.customTypes.get(customType) : registry.codecForKind(options.kind);
-			return {
-				isRegistered: () => current() === codec,
-				unregister: () => {
-					if (current() !== codec) return;
-					if (customType) registry.customTypes.delete(customType);
-					else registry.unregister(options.kind);
-				},
+			const unregister = () => {
+				if (current() !== codec) return;
+				if (customType) registry.customTypes.delete(customType);
+				else registry.unregister(options.kind);
 			};
+			// Restore what the kind had before, so unloading a module cannot leave a
+			// hole where a built-in or an earlier module's codec was.
+			undo(() => {
+				if (current() !== codec) return;
+				if (previous) registry.register(previous, customType);
+				else if (customType) registry.customTypes.delete(customType);
+				else registry.unregister(options.kind);
+			});
+			return { isRegistered: () => current() === codec, unregister };
 		},
 
 		registerMessageRunRenderer(kind: string, renderer: MessageRunRenderer): void {
 			// Keep whatever projection the kind already has; only the drawing changes.
-			const existing = messageTypes.codecForKind(kind);
-			messageTypes.register({
+			const existing = messageTypes.kinds.get(kind);
+			const registered: MessageTypeCodec = {
 				kind,
 				toLlm: existing?.toLlm ?? ((message) => [message as never]),
 				estimateTokens: existing?.estimateTokens ?? (() => 0),
 				renderRun: (message, options) => renderer(message, options),
+			};
+			messageTypes.register(registered);
+			undo(() => {
+				if (messageTypes.kinds.get(kind) !== registered) return;
+				if (existing) messageTypes.kinds.set(kind, existing);
+				else messageTypes.kinds.delete(kind);
 			});
 		},
 
 		registerMarkdownTransformer(transformer: MarkdownTransformer): void {
+			const previous = module.markdownTransformer;
 			module.markdownTransformer = transformer;
+			undo(() => {
+				if (module.markdownTransformer !== transformer) return;
+				module.markdownTransformer = previous;
+			});
 		},
 
 		registerEntryRenderer<T>(customType: string, renderer: EntryRenderer<T>): void {
 			module.entryRenderers ??= new Map();
-			module.entryRenderers.set(customType, renderer as EntryRenderer);
+			const registered = renderer as EntryRenderer;
+			module.entryRenderers.set(customType, registered);
+			undo(() => {
+				if (module.entryRenderers?.get(customType) !== registered) return;
+				module.entryRenderers.delete(customType);
+			});
 		},
 
 		registerToolRenderer(resolver: ToolRendererResolver): void {
 			module.toolRenderers ??= [];
-			module.toolRenderers.push(resolver);
+			const list = module.toolRenderers;
+			list.push(resolver);
+			undo(() => {
+				const index = list.indexOf(resolver);
+				if (index !== -1) list.splice(index, 1);
+			});
 		},
 
 		registerToolRowRenderer(resolver: ToolRowRendererResolver): void {
 			module.toolRowRenderers ??= [];
-			module.toolRowRenderers.push(resolver);
+			const list = module.toolRowRenderers;
+			list.push(resolver);
+			undo(() => {
+				const index = list.indexOf(resolver);
+				if (index !== -1) list.splice(index, 1);
+			});
 		},
 
 		registerShellRenderer(resolver: ShellRendererResolver): void {
 			module.shellRenderers ??= [];
-			module.shellRenderers.push(resolver);
+			const list = module.shellRenderers;
+			list.push(resolver);
+			undo(() => {
+				const index = list.indexOf(resolver);
+				if (index !== -1) list.splice(index, 1);
+			});
 		},
 
 		registerAssistantMessageRenderer(renderer: AssistantMessageRenderer): void {
 			module.assistantMessageRenderers ??= [];
-			module.assistantMessageRenderers.push(renderer);
+			const list = module.assistantMessageRenderers;
+			list.push(renderer);
+			undo(() => {
+				const index = list.indexOf(renderer);
+				if (index !== -1) list.splice(index, 1);
+			});
 		},
 
 		registerSettingsItem(item: ModuleSettingsItem): void {
 			module.settingsItems ??= new Map();
 			module.settingsItems.set(item.id, item);
+			undo(() => {
+				if (module.settingsItems?.get(item.id) !== item) return;
+				module.settingsItems.delete(item.id);
+			});
 		},
 
 		redrawWidget(key: string, content: ModuleWidgetContent | undefined, options?: ModuleWidgetOptions): void {
@@ -1668,16 +1817,30 @@ function createModuleApi(
 			module.widgetKeys.add(key);
 			runtime.widgetDraws ??= new Map();
 			runtime.widgetDraws.set(key, { content, options });
+			undo(() => {
+				module.widgetKeys?.delete(key);
+				runtime.widgetDraws?.delete(key);
+			});
 		},
 
 		unregisterSettingsItem(id: string): void {
+			const previous = module.settingsItems?.get(id);
 			module.settingsItems?.delete(id);
 			module.removedSettingsItems ??= new Set();
 			module.removedSettingsItems.add(id);
+			undo(() => {
+				module.removedSettingsItems?.delete(id);
+				if (previous) module.settingsItems?.set(id, previous);
+			});
 		},
 
 		registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void {
+			const previous = module.workingIndicatorRenderer;
 			module.workingIndicatorRenderer = renderer;
+			undo(() => {
+				if (module.workingIndicatorRenderer !== renderer) return;
+				module.workingIndicatorRenderer = previous;
+			});
 		},
 
 		// Flag access - checks module registered it, reads from runtime
@@ -1823,6 +1986,20 @@ function createModuleApi(
 			state = "failed";
 			clearPending();
 		},
+		dispose: () => {
+			if (undone) return;
+			undone = true;
+			// LIFO: a handler registered later may already refer to the one before it.
+			for (const fn of undoStack.reverse()) {
+				try {
+					fn();
+				} catch {
+					// An undo that throws must not keep the rest from running.
+				}
+			}
+			undoStack.length = 0;
+			clearPending();
+		},
 	};
 }
 
@@ -1862,8 +2039,41 @@ async function initializeModule(
 		load.discard();
 		throw error;
 	}
+	module.dispose = async () => {
+		// The module's own teardown runs before its registrations go, so a
+		// `dispose` hook that still reaches a handler or a tool sees it live.
+		await sessionModule.dispose?.();
+		load.dispose();
+	};
 	time(`${sessionModule.name} factory`, "extensions");
 	return module;
+}
+
+/**
+ * Run one module factory and collect its registrations.
+ *
+ * The event bus and message-type table come from the caller because a hot
+ * reload has to keep talking on the bus the running session already listens
+ * to, and register its message kinds in the same table `convertToLlm` reads.
+ */
+export async function loadModule(
+	sessionModule: SessionModule,
+	options: {
+		cwd: string;
+		eventBus: EventBus;
+		runtime: ModuleRuntime;
+		messageTypes: MessageTypeRegistry;
+		loadedNames: readonly string[];
+	},
+): Promise<RegisteredModule> {
+	return initializeModule(
+		sessionModule,
+		resolvePath(options.cwd),
+		options.eventBus,
+		options.runtime,
+		options.loadedNames,
+		options.messageTypes,
+	);
 }
 
 /** Run module factories in order and collect their registrations. */

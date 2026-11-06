@@ -1356,6 +1356,48 @@ export class AgentSession {
 		}
 	}
 
+	/**
+	 * Reconcile the module files on disk and apply only what changed.
+	 *
+	 * This is the hot-reload path: no settings reload, no provider reset, no
+	 * second `session_start`. A module replaced here keeps its name, its position
+	 * in the load order, and — because the session only swaps the registry's list
+	 * — every context handed out earlier.
+	 *
+	 * On a busy session the request is queued instead: the swap changes the tool
+	 * list and the handler set, and a turn already running is using both. Returns
+	 * false when the caller should expect the change to land later (queued or
+	 * refused because a reload is already in flight).
+	 */
+	async reloadDiskModules(): Promise<boolean> {
+		if (this._runtimeAvailability !== "available") {
+			if (this._runtimeAvailability === "reloadRequested") return false;
+			throw new Error("Runtime reload in progress");
+		}
+		if (!this.isIdle || this.isCompacting || this._moduleRegistry.hasActiveOperation()) {
+			this._requestReload();
+			return false;
+		}
+		await this._performDiskModuleReload();
+		return true;
+	}
+
+	/** The hot-reload pass itself: reconcile, then refresh the tools the model sees. */
+	private async _performDiskModuleReload(): Promise<void> {
+		const reconcile = this._resourceLoader.reloadDiskModules?.bind(this._resourceLoader);
+		if (!reconcile) return;
+		const result = await reconcile(this._moduleRegistry);
+		if (result.applied.length === 0 && result.failures.length === 0) return;
+		this._refreshToolRegistry({ includeAllExtensionTools: true });
+		for (const failure of result.failures) {
+			this._moduleRegistry.emitError({
+				moduleName: failure.path,
+				event: "reload",
+				error: failure.error,
+			});
+		}
+	}
+
 	private _cancelRequestedReload(): void {
 		if (this._runtimeAvailability === "reloadRequested") {
 			this._runtimeAvailability = "available";
@@ -1854,6 +1896,7 @@ export class AgentSession {
 			this._cacheWarmer.onWarmed = undefined;
 			this._cacheWarmer.cancel();
 		}
+		this._resourceLoader.stopWatchingDiskModules?.();
 		cleanupSessionResources(this.sessionId);
 	}
 
@@ -4015,7 +4058,33 @@ export class AgentSession {
 		this._replayModuleFlagValues();
 		await this._startRuntime(this._sessionStartEvent);
 		this._modulesBound = true;
+		this._startDiskModuleWatcher();
 		await this._flushRequestedReload();
+	}
+
+	/**
+	 * Start watching module directories when hot reload is on.
+	 *
+	 * The watcher only signals; every change goes through `reloadDiskModules()`,
+	 * which queues on a busy session and reconciles on an idle one. Keeping one
+	 * path means the busy/idle rules a module already relies on
+	 * (`ctx.requestReload()`, `onOperationComplete`) apply here unchanged.
+	 */
+	private _startDiskModuleWatcher(): void {
+		if (!this.settingsManager.getModuleHotReload() || !this._resourceLoader.watchDiskModules) {
+			this._resourceLoader.stopWatchingDiskModules?.();
+			return;
+		}
+		this._resourceLoader.watchDiskModules(() => {
+			if (this._runtimeAvailability === "shuttingDown") return;
+			void this.reloadDiskModules().catch((error) => {
+				this._moduleRegistry.emitError({
+					moduleName: "<hot-reload>",
+					event: "reload",
+					error: error instanceof Error ? error.message : String(error),
+				});
+			});
+		});
 	}
 
 	/**
@@ -4424,6 +4493,11 @@ export class AgentSession {
 			}
 			this._bindExtensionCore(this._moduleRegistry);
 			this._applyModuleBindings(this._moduleRegistry);
+		} else {
+			// A hot reload swaps the module set on the registry the session already
+			// bound, so command contexts, event handlers, and tool contexts handed
+			// out earlier keep pointing at the live object.
+			this._moduleRegistry.setModules(extensionsResult.modules);
 		}
 
 		const defaultActiveToolNames = this._baseToolsOverride

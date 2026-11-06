@@ -12,11 +12,11 @@
  */
 
 import { existsSync, readdirSync, statSync } from "node:fs";
+import { createRequire } from "node:module";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBuildComponentEnabled } from "../../build-components.ts";
-import { APP_NAME, CONFIG_DIR_NAME, isBundledNode } from "../../config.ts";
-import { isSingleNodeFileRuntime } from "../../standalone/assets.ts";
+import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import type { ModuleFactory, SessionModule } from "./types.ts";
 
@@ -28,13 +28,36 @@ const MODULE_FILE_PATTERN = /\.[cm]?[jt]s$/;
 const MODULE_INDEX_NAMES = ["index.ts", "index.mts", "index.js", "index.mjs", "index.cts", "index.cjs"];
 
 /**
- * Whether this build can load modules from disk at all. Two ways to get no:
- * the flavor dropped the `jiti-modules` component, or the artifact is the
- * single file, which keeps jiti external to stay zero-dependency, so a disk
- * import there would fail with MODULE_NOT_FOUND.
+ * Whether this build can load modules from disk at all.
+ *
+ * The component switch answers for a flavor that dropped the module entirely
+ * (the stub replaces this file, so this code does not even ship there). What
+ * decides the rest is whether jiti can be resolved: the npm bundle keeps it
+ * external and lists it as a dependency, so it resolves; the single file is
+ * zero-dependency and has no jiti on disk, so it does not. Probing replaces a
+ * build-time guess: a bundled CLI whose node is vendored, and a source checkout
+ * whose jiti is linked, both answer correctly.
  */
 export function diskModulesIncluded(): boolean {
-	return isBuildComponentEnabled("jiti-modules") && !isBundledNode && !isSingleNodeFileRuntime();
+	if (!isBuildComponentEnabled("jiti-modules")) return false;
+	return canResolveJiti();
+}
+
+let jitiResolvable: boolean | undefined;
+
+/** Whether `jiti` resolves from here, cached: the answer cannot change mid-process. */
+function canResolveJiti(): boolean {
+	jitiResolvable ??= (() => {
+		try {
+			// `createRequire` matches how the lazy `import("jiti")` below resolves,
+			// so a probe that succeeds means the import will too.
+			createRequire(import.meta.url).resolve("jiti");
+			return true;
+		} catch {
+			return false;
+		}
+	})();
+	return jitiResolvable;
 }
 
 /**
@@ -50,10 +73,15 @@ export function diskModulesIncluded(): boolean {
  */
 function jitiAliases(): Record<string, string> {
 	const here = dirname(fileURLToPath(import.meta.url));
-	// src/core/modules -> src, dist/core/modules -> dist
-	const entryDir = resolve(here, "..", "..");
-	// The package root (`packages/coding-agent`) is two levels above either one.
-	const packagesRoot = resolve(entryDir, "..", "..");
+	// The tree this file runs from, found by its own contents instead of by
+	// counting `..`s: a module file that imports `@nanopi/pi-coding-agent` must
+	// land on the code that is actually running, or it gets a second copy of the
+	// host classes and every `instanceof` across the boundary fails. Counting
+	// depth broke as soon as a build moved this file (the bundle emits it into
+	// `dist/bundle/chunks`, whose `../..` is `dist`, one tree too high).
+	const entryDir = findHostTreeRoot(here);
+	// The monorepo root above the packages, for the sibling workspace packages.
+	const packagesRoot = findWorkspacePackagesDir(here) ?? resolve(entryDir, "..", "..");
 	const workspaceEntry = (workspacePackage: string, specifier: string): string => {
 		for (const tree of ["src", "dist"]) {
 			for (const file of ["index.ts", "index.js"]) {
@@ -86,6 +114,39 @@ function jitiAliases(): Record<string, string> {
 		if (entry !== undefined) aliases[specifier] = entry;
 	}
 	return aliases;
+}
+
+/**
+ * The directory holding the running host entry: the nearest ancestor of
+ * `startDir` that carries both the package entry and the modules entry. In a
+ * source checkout that is `src/`, in a compiled checkout `dist/`, and in the
+ * bundled build `dist/bundle/`, which has its own copies of both.
+ */
+function findHostTreeRoot(startDir: string): string {
+	let dir = startDir;
+	while (dir !== dirname(dir)) {
+		const hasEntry = ["index.ts", "index.js"].some((file) => existsSync(join(dir, file)));
+		const hasModulesEntry = ["modules-api.ts", "modules-api.js"].some((file) => existsSync(join(dir, file)));
+		if (hasEntry && hasModulesEntry) return dir;
+		dir = dirname(dir);
+	}
+	return resolve(startDir, "..", "..");
+}
+
+/**
+ * The directory whose children are the workspace packages (`agent`, `ai`, ...),
+ * found by walking up to the repository root rather than by counting `..`s.
+ * Undefined in an installed package, where there is no workspace beside the
+ * module and only `import.meta.resolve` answers.
+ */
+function findWorkspacePackagesDir(startDir: string): string | undefined {
+	let dir = startDir;
+	while (dir !== dirname(dir)) {
+		const packagesDir = join(dir, "packages");
+		if (existsSync(join(dir, "pnpm-workspace.yaml")) && existsSync(packagesDir)) return packagesDir;
+		dir = dirname(dir);
+	}
+	return undefined;
 }
 
 interface JitiInstance {
@@ -196,7 +257,7 @@ export function scanDiskModules(options: ScanDiskModulesOptions): DiskModuleScan
 }
 
 /** `foo/index.ts` is module `foo`, everything else is its file name without the extension. */
-function moduleNameFor(file: string): string {
+export function diskModuleName(file: string): string {
 	const base = basename(file);
 	if (MODULE_INDEX_NAMES.includes(base)) return basename(dirname(file));
 	return base.replace(MODULE_FILE_PATTERN, "");
@@ -213,20 +274,52 @@ async function loadDiskModule(file: string, createJiti: CreateJiti): Promise<Ses
 	// `default: true` unwraps the default export, but only when the module has
 	// one; a `SessionModule` object comes back as-is, a bare factory wrapped.
 	const exported = await jiti.import(file, { default: true });
+	// `default: true` unwraps a default export, but a `SessionModule` object
+	// comes back whole, so the factory may sit on it rather than be it.
+	const exportedObject = typeof exported === "object" && exported !== null ? (exported as SessionModule) : undefined;
 	const candidate =
 		typeof exported === "function"
 			? exported
-			: ((exported as { default?: unknown; factory?: unknown } | undefined)?.default ??
+			: ((exported as { default?: unknown } | undefined)?.default ??
 				(exported as { factory?: unknown } | undefined)?.factory);
 	if (typeof candidate !== "function") {
 		throw new Error("does not default-export a session module or a module factory function");
 	}
-	return { name: moduleNameFor(file), factory: candidate as ModuleFactory };
+	const module: SessionModule = { name: diskModuleName(file), factory: candidate as ModuleFactory };
+	// The file's own teardown matters as much as its factory: without it a
+	// reloaded module cannot release the socket or child process it opened.
+	const dispose = exportedObject?.dispose ?? (exported as { default?: SessionModule } | undefined)?.default?.dispose;
+	if (typeof dispose === "function") module.dispose = dispose.bind(exportedObject ?? exported);
+	return module;
 }
 
 export interface LoadDiskModulesResult {
 	modules: SessionModule[];
 	errors: Array<{ path: string; error: string }>;
+}
+
+/**
+ * Identity of the file's current contents: inode, size, and modification time.
+ *
+ * The inode catches a rename over the file (editors write to a temp file and
+ * rename), which keeps size and mtime unchanged often enough to matter. Two
+ * writes within the same timestamp tick are indistinguishable, which is why the
+ * watcher debounces instead of relying on the key alone.
+ */
+export function diskModuleStatKey(file: string): string | undefined {
+	try {
+		const stats = statSync(file);
+		if (!stats.isFile()) return undefined;
+		return `${stats.ino}:${stats.size}:${stats.mtimeMs}`;
+	} catch {
+		return undefined;
+	}
+}
+
+/** Load one module file. The building block a hot reload re-runs one file with. */
+export async function loadDiskModuleFile(file: string): Promise<SessionModule> {
+	const createJiti = await getCreateJiti();
+	return loadDiskModule(file, createJiti);
 }
 
 /**
