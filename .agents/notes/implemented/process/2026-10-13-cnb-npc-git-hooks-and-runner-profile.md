@@ -55,3 +55,20 @@ CNB 上的提交长期没有 `Change-Id`，此前的排查把它归为「平台�
   若 `cnbcool/default-npc:latest` 里没有 `pnpm`，第一次触发即可看到明确报错。
 - 与 [buildconfig-gated builtin sidecars](2026-10-11-sidecar-builtins.md) 无关；
   此处只动流水线资源与 hook 注入。
+
+## Update 2026-11-06 (#542): 核时口径与 Job 超时
+
+`cpus: 2` 已在 `aa3c286e0` 落地，但当时只说「用不上 8c16g」，没说它是账单口径：
+NPC 事件按**云原生开发**用量计费（1600 核时/月的免费额度），同一个会话在 8c16g
+上就是 4 倍核时。所以这两条流水线的 `cpus` 不是性能参数，是花钱开关，改它前先看
+[定价](https://docs.cnb.cool/zh/pricing.md)。
+
+同一处补两件当时漏掉的事：
+
+- `runner.tags: cnb:arch:amd64` —— 原先只写 `cpus: 2`，落在默认标签 `cnb:arch:default`
+  上。默认架构哪天变了，「2 核」的意图就没了依据，也看不出是哪天变的。显式写死，
+  与 `main.push` 的 `mirror-to-github` 一致。
+- Job 级 `timeout: 1h` —— `npc:go` 的会话没有整体超时，Job 默认最长 2 小时，
+  2c4g 挂在那里就是在冻配额。这个值同时作用于 agent 的每次工具执行（超时或无输出
+  都会被掐断，默认无输出 10 分钟），所以定在 1h 而非平台最小值：够一次正常会话，
+  又不至于让卡死的会话烧满两小时。要更长的 agent 会话就改这一行，别删。
