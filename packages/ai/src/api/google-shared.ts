@@ -463,6 +463,8 @@ export function mapStopReason(reason: FinishReason): StopReason {
 		// The model ran out of its output window and asked to continue. `automaticContinuation`
 		// handles it inside the SDK when enabled; on its own it is an incomplete turn, not a stop.
 		case FinishReason.CONTINUATION:
+		// Added in @google/genai 3.0.0: generation stopped because the response was malformed.
+		case FinishReason.MALFORMED_RESPONSE:
 			return "error";
 		default: {
 			const _exhaustive: never = reason;

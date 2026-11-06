@@ -67,6 +67,7 @@ vi.mock("@google/genai", () => {
 			OTHER: "OTHER",
 			LANGUAGE: "LANGUAGE",
 			MALFORMED_FUNCTION_CALL: "MALFORMED_FUNCTION_CALL",
+			MALFORMED_RESPONSE: "MALFORMED_RESPONSE",
 			UNEXPECTED_TOOL_CALL: "UNEXPECTED_TOOL_CALL",
 			NO_IMAGE: "NO_IMAGE",
 		},
@@ -189,6 +190,19 @@ describe("Google raw stop reasons", () => {
 		expect(message.stopReason).toBe("toolUse");
 		expect(message.rawStopReason).toBe("STOP");
 		expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
+	});
+
+	// @google/genai 3.0.0 added MALFORMED_RESPONSE to FinishReason; mapStopReason's exhaustive
+	// check is what broke the build when the SDK bumped, so the new value needs its own case.
+	it.each(adapters)("maps MALFORMED_RESPONSE to error for $name", async ({ createStream }) => {
+		googleGenAiMock.finishReason = "MALFORMED_RESPONSE";
+		googleGenAiMock.includeFunctionCall = false;
+
+		const message = await createStream().result();
+
+		expect(message.stopReason).toBe("error");
+		expect(message.rawStopReason).toBe("MALFORMED_RESPONSE");
+		expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_RESPONSE");
 	});
 });
 
