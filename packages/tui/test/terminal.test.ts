@@ -67,6 +67,15 @@ describe("normalizeAppleTerminalInput", () => {
 		assert.equal(normalizeAppleTerminalInput("\x1b[13;2u", true, true), "\x1b[13;2u");
 		assert.equal(normalizeAppleTerminalInput("a", true, true), "a");
 	});
+
+	// Some Terminal.app versions send ESC + Return for Shift+Enter, which would otherwise parse as Alt+Enter.
+	it("rewrites Apple Terminal ESC+Return to CSI-u Shift+Enter when Shift is pressed", () => {
+		assert.equal(normalizeAppleTerminalInput("\x1b\r", true, true), "\x1b[13;2u");
+	});
+
+	it("leaves Apple Terminal ESC+Return unchanged when Shift is not pressed", () => {
+		assert.equal(normalizeAppleTerminalInput("\x1b\r", true, false), "\x1b\r");
+	});
 });
 
 describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {

@@ -69,6 +69,8 @@ export function normalizeNativeShiftEnterInput(
 }
 
 export function normalizeAppleTerminalInput(data: string, isAppleTerminal: boolean, isShiftPressed: boolean): string {
+	// Apple Terminal sends ESC + Return for Shift+Enter in some versions, which would otherwise parse as Alt+Enter.
+	if (isAppleTerminal && data === "\x1b\r" && isShiftPressed) return NATIVE_SHIFT_ENTER_SEQUENCE;
 	return normalizeNativeShiftEnterInput(data, isAppleTerminal, isShiftPressed);
 }
 
@@ -389,8 +391,18 @@ export class ProcessTerminal implements Terminal {
 
 	private forwardInputSequence(sequence: string): void {
 		if (!this.inputHandler) return;
-		const shouldDetectNativeShiftEnter =
-			sequence === "\r" && (isAppleTerminalSession() || process.platform === "win32");
+		if (isAppleTerminalSession()) {
+			// Terminal.app reports Shift+Enter as ESC + CR in some versions; treat both forms the same way.
+			const shouldDetectNativeShiftEnter = sequence === "\r" || sequence === "\x1b\r";
+			const input = normalizeAppleTerminalInput(
+				sequence,
+				shouldDetectNativeShiftEnter,
+				shouldDetectNativeShiftEnter && isNativeModifierPressed("shift"),
+			);
+			this.inputHandler(input);
+			return;
+		}
+		const shouldDetectNativeShiftEnter = sequence === "\r" && process.platform === "win32";
 		const input = normalizeNativeShiftEnterInput(
 			sequence,
 			shouldDetectNativeShiftEnter,
