@@ -40,6 +40,48 @@ jobs:
         with:
           fetch-depth: 0
 
+      # 工作流文件本身的语法错误，`pnpm run check` 抓不到：biome 只覆盖 *.ts，而一份
+      # 解析失败的工作流不产生 check-run，ruleset 的必选检查也不会拦，结果就是整条
+      # 流水线静默不跑（#530、#569：job 级 `if` 读了不允许的 `env` 上下文，两个发布
+      # job 一个都没跑过）。actionlint 报的就是 GitHub 那句 `Invalid workflow file`
+      # 的同一条错误，本地能跑、CI 能拦，是这条缺口最便宜的补法。
+      #
+      # 带上 shellcheck 是因为 `run:` 块里同样的错只会在运行时炸：把两个参数塞进一个
+      # 变量再展开（`GH_REPO_FLAG="-R org/repo"`）平时能跑，仓库名带空格或空值就散架。
+      # 打开这一步时它报了 9 条既有问题，已在本步骤落地时一并改掉，没有留 ignore。
+      # pyflakes 关掉：仓库里没有 Python 步骤，装了也只会拖长装依赖的时间。
+      #
+      # 两个二进制都来自 GitHub Releases，不经 npm，Renovate 管不到，所以版本与
+      # sha256 一起钉死在这里。升级时成对改：版本号、URL 里的版本号、校验和。
+      #
+      # 放在 checkout 之后、装依赖之前：工作流写坏了应该 10 秒内红，而不是等一轮
+      # 完整的 build。
+      - name: Lint workflows
+        env:
+          ACTIONLINT_VERSION: 1.7.12
+          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
+          SHELLCHECK_VERSION: 0.11.0
+          SHELLCHECK_SHA256: b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
+        run: |
+          set -euo pipefail
+          tools="${RUNNER_TEMP}/workflow-lint"
+          mkdir -p "${tools}"
+          fetch() {
+            curl -fsSL --retry 3 -o "${tools}/$1" "$2"
+            echo "$3  ${tools}/$1" | sha256sum -c -
+          }
+          fetch actionlint.tar.gz \
+            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
+            "${ACTIONLINT_SHA256}"
+          fetch shellcheck.tar.gz \
+            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
+            "${SHELLCHECK_SHA256}"
+          tar -xzf "${tools}/actionlint.tar.gz" -C "${tools}" actionlint
+          tar -xzf "${tools}/shellcheck.tar.gz" -C "${tools}"
+          "${tools}/actionlint" \
+            -shellcheck "${tools}/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" \
+            -pyflakes=
+
       - name: Setup pnpm
         run: npm install -g pnpm@12.15.0
 
@@ -52,7 +94,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev fd-find ripgrep
-          sudo ln -s $(which fdfind) /usr/local/bin/fd
+          sudo ln -s "$(command -v fdfind)" /usr/local/bin/fd
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
