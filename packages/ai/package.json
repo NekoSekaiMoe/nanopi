@@ -82,9 +82,9 @@
 		"@smithy/types": "4.20.0",
 		"http-proxy-agent": "9.1.0",
 		"https-proxy-agent": "9.1.0",
-		"openai": "7.52.0",
+		"openai": "7.53.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.4.4",
+		"typebox": "1.4.5",
 		"@aws/bedrock-token-generator": "1.1.0"
 	},
 	"keywords": [
