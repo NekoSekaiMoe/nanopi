@@ -1,7 +1,10 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-const SKIPPED_DIRECTORIES = new Set(["dist", "node_modules"]);
+// Build output, not workspace packages. `next build` writes package.json files
+// under .next that carry no name or version, and the release scripts read those
+// fields, so a checkout that has built the webui must not discover them.
+const SKIPPED_DIRECTORIES = new Set(["dist", "node_modules", ".next"]);
 
 // Vendored bundled extras directories (packages/coding-agent/src/extras/<name>)
 // are jiti-loaded at runtime via loader aliases, not workspace packages: they
