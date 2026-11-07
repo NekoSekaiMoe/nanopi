@@ -50,7 +50,9 @@ searches faster"。写"照常调用"是因为错误的替代方案是模型自�
 ## Alternatives considered
 
 **把 ripgrep 编进进程**（omp 的 `pi-natives` 路线）。正确，但 nanopi 是单文件
-分发 + 6 平台 × 双 AVX2，为此背 8 万行 Rust 不成立。
+分发 + 6 平台 × 双 AVX2，为此背 8 万行 Rust 不成立。这条路线连同内嵌 shell、
+tree-sitter 摘要一起否在
+[不把 ripgrep、shell、AST 链进进程](../../rejected/architecture/2026-11-07-no-native-runtime-from-omp.md)。
 
 **只把错误信息改清楚**（告诉用户 `pkg install ripgrep`）。成本近乎零，但
 `NANOPI_OFFLINE=1` 的用户明确表示不要网络，换不来工具可用。
