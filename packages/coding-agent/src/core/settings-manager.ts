@@ -14,7 +14,6 @@ import type {
 	CacheWarmingMode,
 	CompactionModelOverride,
 	DefaultProjectTrust,
-	LlamaCppSettings,
 	MermaidRenderingMode,
 	QuietStartup,
 	Settings,
@@ -33,7 +32,6 @@ export type {
 	CacheWarmingMode,
 	CompactionModelOverride,
 	DefaultProjectTrust,
-	LlamaCppSettings,
 	MarkdownSettings,
 	MermaidRenderingMode,
 	ProviderRetrySettings,
@@ -789,11 +787,6 @@ export class SettingsManager {
 		this.globalSettings.transport = transport;
 		this.markModified("transport");
 		this.save();
-	}
-
-	/** Read from global settings only because project settings must not choose a command to execute. */
-	getLlamaCppSettings(): LlamaCppSettings {
-		return structuredClone(this.globalSettings.llamaCpp ?? {});
 	}
 
 	getCompactionEnabled(): boolean {

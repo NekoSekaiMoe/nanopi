@@ -70,9 +70,6 @@
 		"module/extra": {
 			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); a flavor that drops it aliases the module to an inert stub"
 		},
-		"module/llama.cpp": {
-			"description": "llama.cpp provider and llama-server supervisor"
-		},
 		"module/builtin-commands": {
 			"description": "Built-in slash commands (/compact, /context, /status, /init)"
 		},
@@ -169,9 +166,6 @@
 				"extraBridge",
 				"extraInlineExtension"
 			]
-		},
-		"llama.cpp": {
-			"source": "packages/coding-agent/src/modules/llama/index.ts"
 		},
 		"builtin-commands": {
 			"source": "packages/coding-agent/src/modules/builtin-commands/index.ts"
@@ -320,7 +314,6 @@
 				"azure-openai-responses",
 				"google-generative-ai",
 				"google-vertex",
-				"llama-cpp-classify",
 				"nanopi-messages",
 				"openai-codex-responses",
 				"openai-completions",

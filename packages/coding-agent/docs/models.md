@@ -8,7 +8,7 @@ For a built-in provider, start with `/login`, then choose a model with `/model`.
 |---|---|
 | A supported subscription | Sign in through `/login` |
 | A provider API key | Store it through `/login` or set its environment variable |
-| A local GGUF model | Connect nanopi to the llama.cpp router |
+| A local GGUF model | Add the llama.cpp router to `models.json` |
 | An OpenAI-, Anthropic-, or Google-compatible endpoint | Add it to `models.json` |
 | A provider with a custom protocol or authentication flow | Build a provider module |
 
@@ -36,11 +36,24 @@ A session records model and thinking-level changes. Resuming the session restore
 
 ## Connect local models
 
-nanopi integrates directly with the llama.cpp router. The router discovers GGUF files and loads models on demand. nanopi's `/llama` command manages the router, while `/model` selects one of its loaded models.
+Local servers are compatible endpoints: [configure them](#configure-a-compatible-endpoint) in `models.json`. That covers Ollama, LM Studio, vLLM, SGLang, and llama.cpp.
 
-Follow [Local Models with llama.cpp](llama-cpp.md) for server startup, model layout, downloads, and connection troubleshooting.
+A llama.cpp router discovers the GGUF files it was started with and loads one on first request, so a `models.json` entry only needs its `/v1` URL and the model IDs the router serves:
 
-For Ollama, LM Studio, vLLM, SGLang, and other compatible servers, [configure a compatible endpoint](#configure-a-compatible-endpoint) in `models.json`.
+```json
+{
+  "providers": {
+    "llama.cpp": {
+      "baseUrl": "http://127.0.0.1:8080/v1",
+      "api": "openai-completions",
+      "apiKey": "local",
+      "models": [{ "id": "qwen3-4b", "contextWindow": 32768 }]
+    }
+  }
+}
+```
+
+llama.cpp ignores the key unless it was started with `--api-key`. Set `contextWindow` to the router's `-c` value; the request fails once the prompt exceeds it.
 
 ## Configure a compatible endpoint
 
@@ -144,8 +157,6 @@ Classifier models do not chat. They answer typed questions about JSON state: pic
 | `opencode` | `jev-1.13`, `jev-1.13-free` | `OPENCODE_API_KEY` |
 | `openai` | `gpt-6-luna` | `OPENAI_API_KEY` |
 
-Chat models on a [llama.cpp router](llama-cpp.md#classification) are also listed as classifier models.
-
 OpenAI's Decisions API needs an API key. Sign in with ChatGPT credentials do not work with it, so `gpt-6-luna` is not listed as available while `openai` is logged in through `/login`, even when `OPENAI_API_KEY` is set; log out of `openai` to use the key. GPT-6 Luna also judges images passed in `images`; other classifier models return an error for them. The API rejects inputs above 922K tokens, but requests that run longer than about five seconds, currently above roughly 600K input tokens, fail with a gateway timeout.
 
 Classifier models do not appear in `/model`; modules reach them through `ctx.modelRegistry`. Find one with `ctx.modelRegistry.getModelOfType("classifier", "typesafe", "jev-latest")` and call `ctx.modelRegistry.classify(model, { state, questions })`:
@@ -195,7 +206,7 @@ Use a module when the provider needs custom streaming, model discovery, or authe
 
 ### A model does not appear
 
-Confirm that its provider has usable authentication. Custom models can load from `models.json` but remain unavailable in `/model` until nanopi can resolve credentials. For llama.cpp, only models currently loaded by the router appear.
+Confirm that its provider has usable authentication. Custom models can load from `models.json` but remain unavailable in `/model` until nanopi can resolve credentials.
 
 ### Authentication works in one shell only
 

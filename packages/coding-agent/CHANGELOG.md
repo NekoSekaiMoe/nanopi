@@ -33,6 +33,11 @@
 - `pi-memory` no longer writes its `/remember` reminder into the footer. The extraction now runs once in the background after the session has gone somewhere, the result is cached for the session, and `/remember` becomes a pure confirmation step that costs no extra model call. A background run reports itself with one transcript notice naming the file, so the reminder no longer competes with the mode badges, checkpoints, and the shell label for the bottom bar's width; sessions with no UI (print, RPC) skip the extraction entirely instead of paying for an answer nobody can confirm (issue [#470](https://cnb.cool/shinytale/nanopi/-/issues/470))
 - `install.js --mirror=<url>` downloads the bundle from a mirror that carries the release assets instead of GitHub Releases, which makes installation usable where GitHub is slow or blocked. The URL carries the tag (`nightly` or a release), so `--version` is ignored; `--sku`, `--prefix` and `--out` behave as before (issue [#481](https://cnb.cool/shinytale/nanopi/-/issues/481))
 
+### Removed
+
+- llama.cpp support: the built-in module (`/llama`, the managed `llama-server` supervisor started through `--internal-llama-supervisor`, Hugging Face search and download, the `llamaCpp` settings keys, and the dynamic catalog that mapped a router's loaded models onto chat and classifier models), its documentation page, and its tests are gone. A llama.cpp router is a compatible endpoint: `models.json` names its `/v1` URL and the model IDs it serves, which needs no code here because the router loads a model on first request. The provider was the one built-in serving a single-digit audience while costing a hand-written merge every time the upstream module changed shape (issue [#584](https://cnb.cool/shinytale/nanopi/-/issues/584))
+- The `llama.cpp`-specific post-login message in interactive mode, which pointed at `/llama`. The generic per-provider message covers a provider with no default model, which is what a `models.json` provider is
+
 ## [20261031.1.0]
 
 ### Changed

@@ -16,6 +16,10 @@
 - Fixed `openai-completions` silently corrupting three non-standard stream shapes: a `delta.content` parts array (Mistral Medium) was concatenated into `"[object Object]"`, an object-form `function.arguments` (MiniMax) turned the whole argument payload into `"[object Object]"` and lost the tool call, and a continuation chunk carrying neither `index` nor `id` split one logical tool call into two blocks, the second nameless and argument-truncated. Content parts are joined as text, object arguments are merged recursively, and argument-only chunks continue the previous call unless they name a different tool (issue [#580](https://cnb.cool/shinytale/nanopi/-/issues/580))
 - Fixed `openai-codex` listing models the signed-in ChatGPT plan cannot use: the bundled catalog carries every tier, so a Free account still saw `gpt-6-astra` and failed on the first turn. The provider now filters by the account catalog `GET /models` reports, which the Codex login and each model refresh store on the credential the same way `openai` already does (issue [#473](https://cnb.cool/shinytale/nanopi/-/issues/473))
 
+### Removed
+
+- The `llama-cpp-classify` API: `api/llama-cpp-classify.ts`, its `.lazy` wrapper, the build stand-in, its test file, and the `KnownClassifierApi` member, which leaves `typesafe-system-one`, `cloudflare-workers-ai-system-one`, and `openai-decisions` (issue [shinytale/nanopi#584](https://cnb.cool/shinytale/nanopi/-/issues/584)). It turned a llama.cpp `llama-server` chat model into a classifier by reading next-token label probabilities, and it existed for the provider module that removed it (issue [#584](https://cnb.cool/shinytale/nanopi/-/issues/584)). Decision models served through `/v1/systemone` keep working over `typesafe-system-one`, and the llama.cpp quirks this package carries (the `insufficient_system_resource` retry, `exceeds the available context size` overflow detection, `thinking_budget_tokens`) stay: they apply to a llama.cpp endpoint a user declares in `models.json`
+
 ## [20261031.1.0]
 
 ### Fixed

@@ -78,7 +78,6 @@ import { runMigrations, showDeprecationWarnings } from "./migrations.ts";
 import { DEFAULT_WEBUI_PORT, InteractiveMode, runPrintMode, runRpcMode, runWebuiMode } from "./modes/index.ts";
 import { initTheme } from "./modes/interactive/theme/theme.ts";
 import { enabledModules } from "./modules/index.ts";
-import { LLAMA_SUPERVISOR_FLAG, runLlamaSupervisorProcess } from "./modules/llama/managed.ts";
 import { isLocalPath, normalizePath, resolvePath } from "./utils/paths.ts";
 
 const MODULE_LOAD_FAILURE_HINT =
@@ -656,10 +655,6 @@ function parseModulesFlag(args: readonly string[]): Set<string> | undefined {
 }
 
 export async function main(args: string[], options?: MainOptions) {
-	if (args[0] === LLAMA_SUPERVISOR_FLAG) {
-		await runLlamaSupervisorProcess();
-		return;
-	}
 	resetTimings();
 	const requestedModules = parseModulesFlag(args);
 	// A flavor can leave out built-in modules; `--modules` narrows that set, it

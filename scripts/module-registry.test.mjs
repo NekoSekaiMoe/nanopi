@@ -24,11 +24,11 @@ afterEach(() => {
 describe("readBuiltinModuleNames", () => {
 	it("reads literal entries in registration order", () => {
 		const root = repoWith(`export const BUILTIN_MODULES: SessionModule[] = [
-	{ name: "llama.cpp", factory: llamaExtension },
+	{ name: "ask-lite", factory: askLite },
 	{ name: "pi-ui", factory: piUi, hidden: true },
 ];
 `);
-		strictEqual(readBuiltinModuleNames(root).join(","), "llama.cpp,pi-ui");
+		strictEqual(readBuiltinModuleNames(root).join(","), "ask-lite,pi-ui");
 	});
 
 	it("counts the module a spread helper registers", () => {
@@ -37,7 +37,7 @@ describe("readBuiltinModuleNames", () => {
 		// failed validateFlavorModules.
 		const root = repoWith(`export const BUILTIN_MODULES: SessionModule[] = [
 	...extraModule(),
-	{ name: "llama.cpp", factory: llamaExtension },
+	{ name: "ask-lite", factory: askLite },
 ];
 
 function extraModule(): SessionModule[] {
@@ -45,7 +45,7 @@ function extraModule(): SessionModule[] {
 	return factory ? [{ name: "extra", factory, hidden: true }] : [];
 }
 `);
-		strictEqual(readBuiltinModuleNames(root).join(","), "extra,llama.cpp");
+		strictEqual(readBuiltinModuleNames(root).join(","), "extra,ask-lite");
 	});
 
 	it("reads a bare const paired with a separate export block (issue #523)", () => {
@@ -54,7 +54,7 @@ function extraModule(): SessionModule[] {
 		// `export const BUILTIN_MODULES`, so every bundle/single-file build died
 		// with "no longer exports BUILTIN_MODULES" before reading a single entry.
 		const root = repoWith(`const BUILTIN_MODULES: SessionModule[] = [
-	{ name: "llama.cpp", factory: llamaExtension },
+	{ name: "ask-lite", factory: askLite },
 	{ name: "pi-ui", factory: piUi, hidden: true },
 ];
 
@@ -65,7 +65,7 @@ export function enabledModules(): SessionModule[] {
 // Package-internal: the paired block keeps the name importable by path.
 export { BUILTIN_MODULES };
 `);
-		strictEqual(readBuiltinModuleNames(root).join(","), "llama.cpp,pi-ui");
+		strictEqual(readBuiltinModuleNames(root).join(","), "ask-lite,pi-ui");
 	});
 
 	it("fails the build when the array declaration is gone", () => {
