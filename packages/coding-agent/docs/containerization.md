@@ -85,9 +85,10 @@ docker run --rm -it \
 ```
 
 `latest` follows release tags; pin a tag (`:v20261022`) to keep a version. The image
-ships `node`, `git` and `ripgrep` so the read-only tools work inside the container,
-and runs as the non-root user `nanopi`, whose agent directory is
-`/home/nanopi/.nanopi/agent`.
+ships `node`, `git` and `ripgrep` so the read-only tools run at full speed inside the
+container, and runs as the non-root user `nanopi`, whose agent directory is
+`/home/nanopi/.nanopi/agent`. Without `ripgrep`/`fd` the `grep` and `find` tools still
+work through an in-process walker, just slower.
 
 ### Build your own image
 

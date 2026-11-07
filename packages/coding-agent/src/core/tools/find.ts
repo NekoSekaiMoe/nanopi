@@ -1,10 +1,12 @@
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { spawn, spawnSync } from "child_process";
+import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
+import { relativeToRoot, walkFiles } from "./fallback-walker.ts";
 import { pathExists, resolveToCwd } from "./path-utils.ts";
 import { findRenderers } from "./renderers/find.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -42,9 +44,15 @@ function isUnknownFdOptionError(stderr: string): boolean {
 	return stderr.includes("which wasn't expected") || stderr.includes("isn't valid in this context");
 }
 
-function formatFindResult(lines: string[], searchPath: string, effectiveLimit: number) {
+function formatFindResult(lines: string[], searchPath: string, effectiveLimit: number, fallback = false) {
 	if (lines.length === 0) {
-		return { content: [{ type: "text" as const, text: "No files found matching pattern" }], details: undefined };
+		const text = fallback
+			? `No files found matching pattern\n\n[${FALLBACK_NOTICE}]`
+			: "No files found matching pattern";
+		return {
+			content: [{ type: "text" as const, text }],
+			details: fallback ? { fallback: true } : undefined,
+		};
 	}
 	// Relativize paths against the search root for stable output.
 	const relativized = lines.map((line) => relativizeFindResultPath(line, searchPath));
@@ -60,6 +68,10 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 	if (truncation.truncated) {
 		notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
 		details.truncation = truncation;
+	}
+	if (fallback) {
+		notices.push(FALLBACK_NOTICE);
+		details.fallback = true;
 	}
 	if (notices.length > 0) {
 		resultOutput += `\n\n[${notices.join(". ")}]`;
@@ -78,10 +90,53 @@ export const findToolSystemPromptContribution = {
 export type FindToolInput = Static<typeof findSchema>;
 
 const DEFAULT_LIMIT = 1000;
+/** Appended when fd is missing and the in-process walker ran instead. */
+const FALLBACK_NOTICE =
+	"fd was not found, so this search used a slower in-process walker with the same ignore rules. Call find normally; install fd to make searches faster";
+
+/**
+ * fd's glob contract for the in-process walker. A pattern without a slash is
+ * matched against the file name, which is what fd --glob does by default; one
+ * with a slash is matched against the path relative to the search root, the
+ * same expansion the --full-path branch below performs for fd.
+ */
+function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
+	const normalized = pattern.replaceAll("\\", "/");
+	if (!normalized.includes("/")) {
+		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
+	}
+	const anchored =
+		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
+			? normalized
+			: `**/${normalized}`;
+	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
+}
+
+/** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
+async function walkForFdFallback(
+	pattern: string,
+	searchPath: string,
+	effectiveLimit: number,
+	signal?: AbortSignal,
+): Promise<string[]> {
+	const matcher = compileFindGlob(pattern);
+	const matches: string[] = [];
+	await walkFiles(searchPath, {
+		signal,
+		visit: (filePath) => {
+			if (!matcher(relativeToRoot(searchPath, filePath), path.basename(filePath))) return true;
+			matches.push(filePath);
+			return matches.length < effectiveLimit;
+		},
+	});
+	return matches;
+}
 
 export interface FindToolDetails {
 	truncation?: TruncationResult;
 	resultLimitReached?: number;
+	/** True when fd was missing, so the in-process walker ran instead. */
+	fallback?: boolean;
 }
 
 /**
@@ -183,14 +238,19 @@ export function createFindToolDefinition(
 							return;
 						}
 
-						// Default implementation uses fd.
+						// Default implementation uses fd, and walks in process when it is missing.
 						const fdPath = await ensureTool("fd");
 						if (signal?.aborted) {
 							settle(() => reject(new Error("Operation aborted")));
 							return;
 						}
 						if (!fdPath) {
-							settle(() => reject(new Error("fd is not available and could not be downloaded")));
+							const matches = await walkForFdFallback(pattern, searchPath, effectiveLimit, signal);
+							if (signal?.aborted) {
+								settle(() => reject(new Error("Operation aborted")));
+								return;
+							}
+							settle(() => resolve(formatFindResult(matches, searchPath, effectiveLimit, true)));
 							return;
 						}
 

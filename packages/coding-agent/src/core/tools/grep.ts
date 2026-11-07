@@ -2,10 +2,12 @@ import { readFile as fsReadFile, stat as fsStat } from "node:fs/promises";
 import { createInterface } from "node:readline";
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import { spawn } from "child_process";
+import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
+import { relativeToRoot, walkFiles } from "./fallback-walker.ts";
 import { resolveToCwd } from "./path-utils.ts";
 import { grepRenderers } from "./renderers/grep.ts";
 import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
@@ -45,6 +47,9 @@ const PER_FILE_LIMIT = 20;
 const MATCH_LINE = /:\d+: /;
 /** Files named in the "more matches than shown" notice before it summarizes the rest. */
 const TRIMMED_FILES_NAMED = 3;
+/** Appended when ripgrep is missing and the in-process walker ran instead. */
+const FALLBACK_NOTICE =
+	"ripgrep (rg) was not found, so this search used a slower in-process walker with the same ignore rules. Call grep normally; install ripgrep to make searches faster";
 
 /** A file whose matches were not all shown, and how many were dropped. */
 export interface GrepTrimmedFile {
@@ -63,6 +68,8 @@ export interface GrepToolDetails {
 	stoppedEarly?: boolean;
 	/** Files that lost matches to the limit or to byte truncation. */
 	trimmedFiles?: GrepTrimmedFile[];
+	/** True when ripgrep was missing, so the in-process walker ran instead. */
+	fallback?: boolean;
 }
 
 /**
@@ -80,6 +87,46 @@ const defaultGrepOperations: GrepOperations = {
 	isDirectory: async (p) => (await fsStat(p)).isDirectory(),
 	readFile: (p) => fsReadFile(p, "utf-8"),
 };
+
+/**
+ * The in-process walker must match what ripgrep matches: one line at a time,
+ * literal mode through a regex escape, and a pattern that does not compile
+ * surfacing the same failure the binary would exit with.
+ */
+function compilePattern(pattern: string, options: { ignoreCase?: boolean; literal?: boolean }): RegExp {
+	// Escaped by hand: the regex escape helper is not in the runtime the CLI targets.
+	const source = options.literal ? pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") : pattern;
+	try {
+		return new RegExp(source, options.ignoreCase ? "i" : "");
+	} catch (error) {
+		throw new Error(`Invalid pattern: ${error instanceof Error ? error.message : String(error)}`);
+	}
+}
+
+/**
+ * `glob` narrows both implementations, but not the same way. ripgrep applies it
+ * to the file name, so `*.ts` matches `src/a.ts` at any depth; minimatch would
+ * read that pattern as root-only. A `**` slash prefix keeps the ripgrep reading;
+ * a pattern that already contains a slash keeps its own path meaning.
+ */
+function compilePathGlob(glob: string): (relativePath: string) => boolean {
+	const pattern = glob.includes("/") ? glob : `**/${glob}`;
+	return (relativePath) => minimatch(relativePath, pattern, { dot: true });
+}
+
+/** ripgrep arguments for one search. `--no-config` keeps the tool contract out of RIPGREP_CONFIG_PATH. */
+function ripgrepArgs(
+	pattern: string,
+	searchPath: string,
+	options: { ignoreCase?: boolean; literal?: boolean; glob?: string },
+): string[] {
+	const args: string[] = ["--no-config", "--json", "--line-number", "--color=never", "--hidden"];
+	if (options.ignoreCase) args.push("--ignore-case");
+	if (options.literal) args.push("--fixed-strings");
+	if (options.glob) args.push("--glob", options.glob);
+	args.push("--", pattern, searchPath);
+	return args;
+}
 
 export interface GrepToolOptions {
 	/** Custom operations for grep. Default: local filesystem plus ripgrep */
@@ -136,10 +183,6 @@ export function createGrepToolDefinition(
 				(async () => {
 					try {
 						const rgPath = await ensureTool("rg");
-						if (!rgPath) {
-							settle(() => reject(new Error("ripgrep (rg) is not available and could not be downloaded")));
-							return;
-						}
 
 						const searchPath = resolveToCwd(searchDir || ".", ctx?.cwd || cwd);
 						const ops = customOps ?? defaultGrepOperations;
@@ -183,14 +226,12 @@ export function createGrepToolDefinition(
 
 						// --no-config: the tool contract (literal, glob, limit, ...) must not depend on
 						// ambient user config like RIPGREP_CONFIG_PATH.
-						const args: string[] = ["--no-config", "--json", "--line-number", "--color=never", "--hidden"];
-						if (ignoreCase) args.push("--ignore-case");
-						if (literal) args.push("--fixed-strings");
-						if (glob) args.push("--glob", glob);
-						args.push("--", pattern, searchPath);
-
-						const child = spawn(rgPath, args, { stdio: ["ignore", "pipe", "pipe"] });
-						const rl = createInterface({ input: child.stdout });
+						const child = rgPath
+							? spawn(rgPath, ripgrepArgs(pattern, searchPath, { ignoreCase, literal, glob }), {
+									stdio: ["ignore", "pipe", "pipe"],
+								})
+							: null;
+						const rl = child ? createInterface({ input: child.stdout }) : null;
 						let stderr = "";
 						let matchCount = 0;
 						let matchLimitReached = false;
@@ -198,6 +239,10 @@ export function createGrepToolDefinition(
 						let aborted = false;
 						let killedDueToLimit = false;
 						let stoppedEarly = false;
+						// No ripgrep means the in-process walker runs instead, and that is the only
+						// time the model pays for the notice: a missing binary is not a detail it
+						// can discover from the output, and the walker is slower.
+						const fallback = rgPath === undefined;
 						const outputLines: string[] = [];
 						// Per-file budget: without it one chatty file spends the whole global
 						// match limit and the handful of files ripgrep had already scanned are
@@ -210,13 +255,19 @@ export function createGrepToolDefinition(
 						// Lines each file actually contributed, context lines included; the
 						// difference against fileMatchCounts is what byte truncation dropped.
 						const printedByFile = new Map<string, number>();
+						// Matches collected during the search, then formatted once it ends.
+						const matches: Array<{ filePath: string; lineNumber: number; lineText?: string }> = [];
+						// Matches ripgrep reported for a file that was already over its own
+						// budget. Counted, never printed, so the notice can say how much was
+						// dropped instead of silently losing it.
+						const overflow = new Map<string, number>();
 
 						const cleanup = () => {
-							rl.close();
+							rl?.close();
 							signal?.removeEventListener("abort", onAbort);
 						};
 						const stopChild = (dueToLimit = false) => {
-							if (!child.killed) {
+							if (child && !child.killed) {
 								killedDueToLimit = dueToLimit;
 								child.kill();
 							}
@@ -226,9 +277,6 @@ export function createGrepToolDefinition(
 							stopChild();
 						};
 						signal?.addEventListener("abort", onAbort, { once: true });
-						child.stderr?.on("data", (chunk) => {
-							stderr += chunk.toString();
-						});
 
 						const formatBlock = async (filePath: string, lineNumber: number): Promise<string[]> => {
 							const relativePath = formatPath(filePath);
@@ -250,56 +298,71 @@ export function createGrepToolDefinition(
 							return block;
 						};
 
-						// Collect matches during streaming, then format them after rg exits.
-						const matches: Array<{ filePath: string; lineNumber: number; lineText?: string }> = [];
-						// Matches ripgrep reported for a file that was already over its own
-						// budget. Counted, never printed, so the notice can say how much was
-						// dropped instead of silently losing it.
-						const overflow = new Map<string, number>();
-						rl.on("line", (line) => {
-							if (!line.trim() || matchLimitReached) return;
-							let event: any;
-							try {
-								event = JSON.parse(line);
-							} catch {
-								return;
+						/**
+						 * Records one match against the limit, the per-file budget and the
+						 * stopping condition. Shared by the ripgrep stream and the walker so both
+						 * report the same notices. Returns false once no further match is wanted.
+						 */
+						const recordMatch = (filePath: string, lineNumber: number, lineText?: string): boolean => {
+							if (matchLimitReached) return false;
+							const seenInFile = fileMatchCounts.get(filePath) ?? 0;
+							if (seenInFile >= perFileLimit) {
+								overflow.set(filePath, (overflow.get(filePath) ?? 0) + 1);
+								return true;
 							}
-							if (event.type === "match") {
-								const filePath = event.data?.path?.text;
-								const lineNumber = event.data?.line_number;
-								const lineText = event.data?.lines?.text;
-								if (!filePath || typeof lineNumber !== "number") return;
-								const seenInFile = fileMatchCounts.get(filePath) ?? 0;
-								if (seenInFile >= perFileLimit) {
-									overflow.set(filePath, (overflow.get(filePath) ?? 0) + 1);
-									return;
-								}
-								fileMatchCounts.set(filePath, seenInFile + 1);
-								matchCount++;
-								matches.push({ filePath, lineNumber, lineText });
-								if (matchCount >= effectiveLimit) {
-									matchLimitReached = true;
-									// Stopping here means every file further along the walk was
-									// never searched, which is not the same as "no matches there".
-									stoppedEarly = true;
-									stopChild(true);
-								}
+							fileMatchCounts.set(filePath, seenInFile + 1);
+							matchCount++;
+							matches.push({ filePath, lineNumber, lineText });
+							if (matchCount >= effectiveLimit) {
+								matchLimitReached = true;
+								// Stopping here means every file further along the walk was
+								// never searched, which is not the same as "no matches there".
+								stoppedEarly = true;
+								return false;
 							}
-						});
+							return true;
+						};
 
-						child.on("error", (error) => {
-							cleanup();
-							settle(() => reject(new Error(`Failed to run ripgrep: ${error.message}`)));
-						});
-						child.on("close", async (code) => {
-							cleanup();
+						const runFallback = async (): Promise<void> => {
+							const patternMatcher = compilePattern(pattern, { ignoreCase, literal });
+							const fileFilter = glob ? compilePathGlob(glob) : null;
+							if (isDirectory) {
+								await walkFiles(searchPath, {
+									signal,
+									visit: async (filePath) => {
+										if (fileFilter && !fileFilter(relativeToRoot(searchPath, filePath))) return true;
+										const lines = await getFileLines(filePath);
+										for (let index = 0; index < lines.length; index++) {
+											patternMatcher.lastIndex = 0;
+											if (!patternMatcher.test(lines[index])) continue;
+											if (!recordMatch(filePath, index + 1)) return false;
+										}
+										return true;
+									},
+								});
+							} else {
+								// A single-file search keeps ripgrep's behaviour: the glob filters the
+								// File's own name, and it still has to match.
+								const fileName = path.basename(searchPath);
+								if (!fileFilter || fileFilter(fileName)) {
+									const lines = await getFileLines(searchPath);
+									for (let index = 0; index < lines.length; index++) {
+										patternMatcher.lastIndex = 0;
+										if (!patternMatcher.test(lines[index])) continue;
+										if (!recordMatch(searchPath, index + 1)) break;
+									}
+								}
+							}
+						};
+
+						/** Formats the collected matches and resolves. The search is over by now. */
+						const finish = async (errorText?: string): Promise<void> => {
 							if (aborted) {
 								settle(() => reject(new Error("Operation aborted")));
 								return;
 							}
-							if (!killedDueToLimit && code !== 0 && code !== 1) {
-								const errorMsg = stderr.trim() || `ripgrep exited with code ${code}`;
-								settle(() => reject(new Error(errorMsg)));
+							if (errorText !== undefined) {
+								settle(() => reject(new Error(errorText)));
 								return;
 							}
 							if (matchCount === 0) {
@@ -310,19 +373,19 @@ export function createGrepToolDefinition(
 									omitted === 0
 										? "No matches found"
 										: `No matches shown, but ${omitted} match(es) exceeded the ${perFileLimit}-match per-file budget. Use path= to search one file at a time`;
+								const noMatchDetails: GrepToolDetails = {};
+								if (fallback) noMatchDetails.fallback = true;
+								if (omitted > 0) {
+									noMatchDetails.trimmedFiles = [...overflow].map(([file, n]) => ({
+										file: formatPath(file),
+										shown: 0,
+										omitted: n,
+									}));
+								}
 								settle(() =>
 									resolve({
-										content: [{ type: "text", text }],
-										details:
-											omitted === 0
-												? undefined
-												: {
-														trimmedFiles: [...overflow].map(([file, n]) => ({
-															file: formatPath(file),
-															shown: 0,
-															omitted: n,
-														})),
-													},
+										content: [{ type: "text", text: fallback ? `${text}\n\n[${FALLBACK_NOTICE}]` : text }],
+										details: Object.keys(noMatchDetails).length > 0 ? noMatchDetails : undefined,
 									}),
 								);
 								return;
@@ -366,6 +429,10 @@ export function createGrepToolDefinition(
 							const notices: string[] = [];
 							const trimmedFiles: GrepTrimmedFile[] = [];
 							const filesSearched = fileMatchCounts.size;
+							if (fallback) {
+								notices.push(FALLBACK_NOTICE);
+								details.fallback = true;
+							}
 							if (matchLimitReached) {
 								notices.push(
 									`${effectiveLimit} matches limit reached after ${filesSearched} file${filesSearched === 1 ? "" : "s"}. Use limit=${effectiveLimit * 2} for more, or refine pattern`,
@@ -440,6 +507,53 @@ export function createGrepToolDefinition(
 									details: Object.keys(details).length > 0 ? details : undefined,
 								}),
 							);
+						};
+
+						if (!child) {
+							// No ripgrep: walk in process. Errors surface through `finish`'s
+							// reject path so both branches share one exit.
+							try {
+								await runFallback();
+							} catch (error) {
+								settle(() => reject(error instanceof Error ? error : new Error(String(error))));
+								return;
+							}
+							if (signal?.aborted) {
+								settle(() => reject(new Error("Operation aborted")));
+								return;
+							}
+							await finish();
+							return;
+						}
+
+						child.stderr?.on("data", (chunk) => {
+							stderr += chunk.toString();
+						});
+						rl?.on("line", (line) => {
+							if (!line.trim() || matchLimitReached) return;
+							let event: any;
+							try {
+								event = JSON.parse(line);
+							} catch {
+								return;
+							}
+							if (event.type !== "match") return;
+							const filePath = event.data?.path?.text;
+							const lineNumber = event.data?.line_number;
+							if (!filePath || typeof lineNumber !== "number") return;
+							if (!recordMatch(filePath, lineNumber, event.data?.lines?.text)) stopChild(true);
+						});
+						child.on("error", (error) => {
+							cleanup();
+							settle(() => reject(new Error(`Failed to run ripgrep: ${error.message}`)));
+						});
+						child.on("close", async (code) => {
+							cleanup();
+							if (!killedDueToLimit && code !== 0 && code !== 1) {
+								await finish(stderr.trim() || `ripgrep exited with code ${code}`);
+								return;
+							}
+							await finish();
 						});
 					} catch (err) {
 						settle(() => reject(err as Error));

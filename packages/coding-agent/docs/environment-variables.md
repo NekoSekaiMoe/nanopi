@@ -83,7 +83,7 @@ These variables are read by nanopi itself:
 | `NANOPI_EXTENSIONS` | Extra module files or directories to load from disk, `:`-separated; ignored by builds without jiti (`minimal`, the single-file `nanopi.js`). See [Modules from disk](modules.md#modules-from-disk) |
 | `NANOPI_DEBUG` | Debug mode. Appends a memory sample to `nanopi-debug.log` in the agent dir every `NANOPI_DEBUG_INTERVAL_MS` (default `5000`), plus one at startup, because interactive mode paints over stderr and the file is the only place these numbers survive. Interactive mode also writes a diagnostic bundle to `<agent dir>/diagnostics/` at startup and at exit: environment, model and provider (credentials redacted), loaded modules, settings, failed assistant turns, recorded crashes, the session transcript, and the tail of `nanopi-debug.log`. Nothing is uploaded; the directory is printed when the session ends |
 | `NANOPI_PACKAGE_DIR` | Override the package directory, useful for Nix/Guix store paths |
-| `NANOPI_OFFLINE` | Disable automatic network activity, including model catalog refreshes |
+| `NANOPI_OFFLINE` | Disable automatic network activity, including model catalog refreshes. `grep` and `find` keep working: without `ripgrep`/`fd` they fall back to an in-process walker and say so in the output |
 | `NANOPI_TELEMETRY` | Override provider attribution headers: `1`/`true`/`yes` or `0`/`false`/`no` |
 | `NANOPI_CACHE_RETENTION` | Set to `long` for extended provider prompt caching where supported |
 | `NANOPI_HARDWARE_CURSOR` | Set to `1` to show the hardware cursor; see [Terminal setup](terminal-setup.md) |
