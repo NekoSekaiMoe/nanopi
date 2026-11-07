@@ -28,6 +28,7 @@ import {
 	createWriteTool,
 } from "../src/index.ts";
 import * as shellModule from "../src/utils/shell.ts";
+import * as toolsManager from "../src/utils/tools-manager.ts";
 
 const readTool = createReadTool(process.cwd());
 const writeTool = createWriteTool(process.cwd());
@@ -1147,6 +1148,133 @@ describe("Coding Agent Tools", () => {
 			});
 
 			expect(getTextOutput(result)).toContain("No files found matching pattern");
+		});
+	});
+
+	// Regression for the offline gap: an offline run with no rg/fd preinstalled
+	// made `ensureTool` return undefined and grep fail outright. Both tools now
+	// walk in process and say so. `ensureTool` is mocked because the CI image
+	// ships the real binaries, which would otherwise take the fast path.
+	const withoutSearchBinary = () => vi.spyOn(toolsManager, "ensureTool").mockResolvedValue(undefined);
+
+	describe("grep tool without ripgrep", () => {
+		beforeEach(() => {
+			withoutSearchBinary();
+		});
+
+		it("finds matches with the in-process walker and says why it is slower", async () => {
+			writeFileSync(join(testDir, "a.txt"), "first\nneedle here\nlast\n");
+			mkdirSync(join(testDir, "nested"));
+			writeFileSync(join(testDir, "nested", "b.txt"), "another needle\n");
+			const tool = createGrepToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-grep-fallback",
+				{ pattern: "needle" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("a.txt:2: needle here");
+			expect(output).toContain("nested/b.txt:1: another needle");
+			expect(output).toContain("ripgrep (rg) was not found");
+			expect(result.details?.fallback).toBe(true);
+		});
+
+		it("honors .gitignore and glob in the walker", async () => {
+			writeFileSync(join(testDir, ".gitignore"), "ignored.txt\n");
+			writeFileSync(join(testDir, "ignored.txt"), "needle\n");
+			writeFileSync(join(testDir, "kept.txt"), "needle\n");
+			writeFileSync(join(testDir, "kept.md"), "needle\n");
+			const tool = createGrepToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-grep-fallback-glob",
+				{ pattern: "needle", glob: "*.txt" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("kept.txt:1: needle");
+			expect(output).not.toContain("ignored.txt");
+			expect(output).not.toContain("kept.md");
+		});
+
+		it("reports no matches without failing", async () => {
+			writeFileSync(join(testDir, "a.txt"), "nothing here\n");
+			const tool = createGrepToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-grep-fallback-empty",
+				{ pattern: "needle" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+
+			expect(getTextOutput(result)).toContain("No matches found");
+			expect(result.details?.fallback).toBe(true);
+		});
+	});
+
+	describe("find tool without fd", () => {
+		beforeEach(() => {
+			withoutSearchBinary();
+		});
+
+		it("matches by name and by path, and says why it is slower", async () => {
+			mkdirSync(join(testDir, "src"));
+			writeFileSync(join(testDir, "src", "a.ts"), "");
+			writeFileSync(join(testDir, "src", "a.md"), "");
+			writeFileSync(join(testDir, "root.ts"), "");
+			const tool = createFindToolDefinition(testDir);
+
+			const byName = await tool.execute(
+				"test-call-find-fallback-name",
+				{ pattern: "*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const byNameOutput = getTextOutput(byName);
+			expect(byNameOutput).toContain("src/a.ts");
+			expect(byNameOutput).toContain("root.ts");
+			expect(byNameOutput).not.toContain("a.md");
+			expect(byNameOutput).toContain("fd was not found");
+			expect(byName.details?.fallback).toBe(true);
+
+			const byPath = await tool.execute(
+				"test-call-find-fallback-path",
+				{ pattern: "src/*.md" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			expect(getTextOutput(byPath)).toContain("src/a.md");
+			expect(getTextOutput(byPath)).not.toContain("a.ts");
+		});
+
+		it("honors .gitignore in the walker", async () => {
+			writeFileSync(join(testDir, ".gitignore"), "ignored.ts\n");
+			writeFileSync(join(testDir, "ignored.ts"), "");
+			writeFileSync(join(testDir, "kept.ts"), "");
+			const tool = createFindToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-find-fallback-ignore",
+				{ pattern: "*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("kept.ts");
+			expect(output).not.toContain("ignored.ts");
 		});
 	});
 
