@@ -177,8 +177,8 @@
         },
         "baseDelayMs": {
           "type": "number",
-          "description": "Exponential backoff base delay in milliseconds: 2s, 4s, 8s.",
-          "default": 2000
+          "description": "Exponential backoff base delay in milliseconds: 15s, 30s, 60s.",
+          "default": 15000
         },
         "maxAgentDelayMs": {
           "type": "number",

@@ -1,3 +1,4 @@
+import { retryDelayMs } from "@nanopi/pi-ai";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
@@ -311,7 +312,7 @@ describe("SettingsManager", () => {
 			expect(SettingsManager.inMemory().getRetrySettings()).toEqual({
 				enabled: true,
 				maxRetries: 3,
-				baseDelayMs: 2000,
+				baseDelayMs: 15000,
 				maxAgentDelayMs: 60000,
 			});
 			expect(
@@ -319,6 +320,13 @@ describe("SettingsManager", () => {
 					retry: { enabled: true, maxRetries: 10, baseDelayMs: 500, maxAgentDelayMs: 5000 },
 				}).getRetrySettings(),
 			).toEqual({ enabled: true, maxRetries: 10, baseDelayMs: 500, maxAgentDelayMs: 5000 });
+		});
+
+		// Regression for #574: the default agent-level backoff used to be 2s/4s/8s (14s total),
+		// which gave up before a 429 that asked for `retry_after: 30`. The default is now 15s/30s/60s.
+		it("defaults agent retry backoff to 15s, 30s, 60s (#574)", () => {
+			const settings = SettingsManager.inMemory().getRetrySettings();
+			expect([1, 2, 3].map((attempt) => retryDelayMs(settings, attempt))).toEqual([15000, 30000, 60000]);
 		});
 
 		it("normalizes non-retryable error patterns", () => {
