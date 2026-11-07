@@ -40,14 +40,14 @@ describe("specifierFor", () => {
 describe("createModuleStubPlugin", () => {
 	const modules = [
 		{ name: "ask-lite", specifiers: ["../extras/ask-lite/index.js"] },
-		{ name: "llama.cpp", specifiers: ["../modules/llama/index.js"] },
+		{ name: "pi-ui", specifiers: ["../extras/pi-ui/src/index.js"] },
 	];
 
 	it("leaves every module alone when the flavor keeps them all", () => {
 		const { disabled } = createModuleStubPlugin({
 			stubDir: stubDir(),
 			modules,
-			components: { "module/ask-lite": true, "module/llama.cpp": true },
+			components: { "module/ask-lite": true, "module/pi-ui": true },
 		});
 		strictEqual(disabled.length, 0);
 	});
@@ -57,13 +57,13 @@ describe("createModuleStubPlugin", () => {
 		const { plugin, disabled } = createModuleStubPlugin({
 			stubDir: dir,
 			modules,
-			components: { "module/ask-lite": false, "module/llama.cpp": true },
+			components: { "module/ask-lite": false, "module/pi-ui": true },
 		});
 		strictEqual(disabled.join(","), "ask-lite");
 		const resolved = resolveWith(plugin, "../extras/ask-lite/index.js");
 		strictEqual(resolved.path, join(dir, "module-0.mjs"));
 		strictEqual(readFileSync(resolved.path, "utf8").includes("export default function noopModule"), true);
 		// An enabled module keeps its real import.
-		strictEqual(resolveWith(plugin, "../modules/llama/index.js"), undefined);
+		strictEqual(resolveWith(plugin, "../extras/pi-ui/src/index.js"), undefined);
 	});
 });

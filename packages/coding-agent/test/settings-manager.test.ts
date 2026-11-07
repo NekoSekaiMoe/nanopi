@@ -525,11 +525,11 @@ describe("SettingsManager", () => {
 		});
 
 		it("applies +name and -name to the default selection", () => {
-			expect(SettingsManager.inMemory({ defaultTools: ["+llama", "-write"] }).getDefaultTools()).toEqual([
+			expect(SettingsManager.inMemory({ defaultTools: ["+todo", "-write"] }).getDefaultTools()).toEqual([
 				"read",
 				"bash",
 				"edit",
-				"llama",
+				"todo",
 			]);
 			expect(SettingsManager.inMemory({ defaultTools: ["read", "+grep", "+read"] }).getDefaultTools()).toEqual([
 				"read",
@@ -538,28 +538,28 @@ describe("SettingsManager", () => {
 		});
 
 		it("layers project modifiers on top of the global selection", () => {
-			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultTools: ["read", "bash", "+llama"] }));
+			writeFileSync(join(agentDir, "settings.json"), JSON.stringify({ defaultTools: ["read", "bash", "+todo"] }));
 			writeFileSync(
 				join(projectDir, ".nanopi", "settings.json"),
-				JSON.stringify({ defaultTools: ["-llama", "+grep"] }),
+				JSON.stringify({ defaultTools: ["-todo", "+grep"] }),
 			);
 
 			const manager = SettingsManager.create(projectDir, agentDir);
 			expect(manager.getDefaultTools()).toEqual(["read", "bash", "grep"]);
 
-			manager.applyOverrides({ defaultTools: ["+llama"] });
-			expect(manager.getDefaultTools()).toEqual(["read", "bash", "grep", "llama"]);
+			manager.applyOverrides({ defaultTools: ["+todo"] });
+			expect(manager.getDefaultTools()).toEqual(["read", "bash", "grep", "todo"]);
 		});
 
 		it("applies project modifiers to the built-in defaults without a global setting", () => {
-			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ defaultTools: ["+llama"] }));
+			writeFileSync(join(projectDir, ".nanopi", "settings.json"), JSON.stringify({ defaultTools: ["+todo"] }));
 
 			expect(SettingsManager.create(projectDir, agentDir).getDefaultTools()).toEqual([
 				"read",
 				"bash",
 				"edit",
 				"write",
-				"llama",
+				"todo",
 			]);
 		});
 	});

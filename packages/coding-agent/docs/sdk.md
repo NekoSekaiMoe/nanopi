@@ -124,7 +124,7 @@ code that assumes a tool or module is present.
 
 ### Modules
 
-Modules are the only extension mechanism: pass `SessionModule` objects (`{ name, factory }`, where the factory receives a `ModuleApi`) to `DefaultResourceLoader` via the `modules` option, or compose them in your own entry point with `createAgentSession({ modules })`. Nothing is loaded from disk; the built-in modules (run modes, llama.cpp, compaction, the bundled extras) are compiled in.
+Modules are the only extension mechanism: pass `SessionModule` objects (`{ name, factory }`, where the factory receives a `ModuleApi`) to `DefaultResourceLoader` via the `modules` option, or compose them in your own entry point with `createAgentSession({ modules })`. Nothing is loaded from disk; the built-in modules (run modes, compaction, the bundled extras) are compiled in.
 
 There is no loader to call and no path to drop a file into, so a module runs only when your code imports it:
 

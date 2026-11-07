@@ -406,13 +406,13 @@ describe("parseArgs", () => {
 		});
 
 		test("parses +name and -name tool modifiers", () => {
-			const result = parseArgs(["-t", "+llama,-write"]);
-			expect(result.tools).toEqual(["+llama", "-write"]);
+			const result = parseArgs(["-t", "+todo,-write"]);
+			expect(result.tools).toEqual(["+todo", "-write"]);
 			expect(result.diagnostics).toEqual([]);
 		});
 
 		test("rejects tool names mixed with modifiers", () => {
-			const result = parseArgs(["--tools", "read,+llama"]);
+			const result = parseArgs(["--tools", "read,+todo"]);
 			expect(result.tools).toBeUndefined();
 			expect(result.diagnostics).toEqual([
 				{ type: "error", message: "--tools: tool names cannot be mixed with +name or -name entries" },
@@ -420,12 +420,12 @@ describe("parseArgs", () => {
 		});
 
 		test("rejects patterns in tool modifiers", () => {
-			const result = parseArgs(["-t", "+llama*"]);
+			const result = parseArgs(["-t", "+todo*"]);
 			expect(result.tools).toBeUndefined();
 			expect(result.diagnostics).toEqual([
 				{
 					type: "error",
-					message: "-t: +name and -name entries take exact tool names, not patterns: +llama*",
+					message: "-t: +name and -name entries take exact tool names, not patterns: +todo*",
 				},
 			]);
 		});

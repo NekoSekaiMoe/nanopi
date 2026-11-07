@@ -138,32 +138,6 @@
         }
       }
     },
-    "llamaCpp": {
-      "type": "object",
-      "properties": {
-        "command": {
-          "type": "string",
-          "default": "llama-server"
-        },
-        "modelsDir": {
-          "type": "string",
-          "description": "Directory with GGUF models. Default: <agentDir>/llama/models; supports leading ~ expansion."
-        },
-        "args": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          },
-          "description": "Extra llama-server arguments; host, port, API key, and models dir are managed by nanopi."
-        },
-        "idleShutdownSeconds": {
-          "type": "integer",
-          "minimum": 0,
-          "maximum": 9007199254740991,
-          "default": 30
-        }
-      }
-    },
     "retry": {
       "type": "object",
       "properties": {

@@ -140,17 +140,6 @@ Keep `retry.provider.maxRetries` at `0` unless provider-level retries are requir
 
 See [Shell aliases](shell-aliases.md) for shell setup.
 
-## llama.cpp
-
-Settings for the managed `llama-server` that nanopi starts itself. **Can only be set in agent-directory settings.** See [llama.cpp](llama-cpp.md#managed-server).
-
-| Setting | Type | Default | Description |
-|---|---|---|---|
-| `llamaCpp.command` | string | `"llama-server"` | Executable to run. Supports a leading `~`. |
-| `llamaCpp.modelsDir` | string | `~/.nanopi/agent/llama/models` | Directory with local GGUF files. Supports a leading `~`. |
-| `llamaCpp.args` | `string[]` | `[]` | Extra `llama-server` arguments. Host, port, API key, models directory, and single-model options are controlled by nanopi. |
-| `llamaCpp.idleShutdownSeconds` | number | `30` | Seconds the server keeps running after the last nanopi process exits. |
-
 ## Resources
 
 Resource paths in user settings resolve from the agent directory. Paths in project settings resolve from the project `.nanopi` directory. Absolute paths and `~` are supported.
@@ -163,8 +152,6 @@ Resource paths in user settings resolve from the agent directory. Paths in proje
 | `enableSkillCommands` | boolean | `true` | Register skills as `/skill:name` commands. |
 
 Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+path`, and exact exclusion with `-path`. nanopi loads resources listed in both user-level and project settings.
-
-The built-in extension is named `builtin:llama.cpp` in `extensions`. It loads by default; `-builtin:llama.cpp` disables it. A `+builtin:<name>` or `-builtin:<name>` entry in project settings overrides the user setting. `nanopi config` lists it under Built-in. `--no-extensions` disables it too, and `-e builtin:<name>` loads it explicitly.
 
 ## Updates, telemetry, and warnings
 

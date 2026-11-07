@@ -403,7 +403,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} --tools read,grep,find,ls -p "Review the code in src/"
 
   # Add a module tool to the default tools
-  ${APP_NAME} --tools +llama
+  ${APP_NAME} --tools +todo
 
   # Disable one tool while keeping the rest available
   ${APP_NAME} --exclude-tools ask_question
