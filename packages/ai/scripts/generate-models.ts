@@ -22,6 +22,7 @@ import {
 	CLOUDFLARE_WORKERS_AI_BASE_URL,
 	CLOUDFLARE_WORKERS_AI_REST_BASE_URL,
 } from "../src/api/cloudflare.ts";
+import { isSelfHostedEndpoint } from "../src/utils/endpoint.ts";
 import type {
 	AnthropicMessagesCompat,
 	AnyModel,
@@ -828,6 +829,9 @@ const XAI_BUILTIN_EXCLUDED_MODEL_IDS = new Set([
 	"grok-code-fast-1",
 ]);
 const XAI_RESPONSES_COMPAT: OpenAIResponsesCompat = {
+	// xAI keys prompt-cache routing on x-grok-conv-id, not on the OpenAI
+	// session_id / x-client-request-id headers.
+	sessionAffinityFormat: "xai",
 	supportsLongCacheRetention: false,
 };
 
@@ -1069,6 +1073,8 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 	const isTogetherReasoningOnly = isTogether && TOGETHER_REASONING_ONLY_MODELS.has(model.id);
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
 
+	const isSelfHosted = isSelfHostedEndpoint(baseUrl);
+
 	const isNonStandard =
 		isNvidia ||
 		isCerebras ||
@@ -1082,7 +1088,8 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		provider === "opencode" ||
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
-		isCloudflareAiGateway;
+		isCloudflareAiGateway ||
+		isSelfHosted;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -1091,7 +1098,8 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		isCloudflareAiGateway ||
 		isTogether ||
 		isNvidia ||
-		isZai;
+		isZai ||
+		isSelfHosted;
 
 	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
 	const isOpenRouterDeveloperRoleModel =
@@ -1103,8 +1111,15 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
 		supportsReasoningEffort:
-			!isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
-		supportsUsageInStreaming: true,
+			!isGrok &&
+			!isZai &&
+			!isMoonshot &&
+			!isTogether &&
+			!isCloudflareAiGateway &&
+			!isNvidia &&
+			!isCerebras &&
+			!isSelfHosted,
+		supportsUsageInStreaming: !isCerebras,
 		supportsFinishReason: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
 		requiresToolResultName: false,
@@ -1131,7 +1146,8 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		supportsMidConvoSystemMessages: false,
 		supportsMidConvoToolAdditions: false,
 		...(cacheControlFormat ? { cacheControlFormat } : {}),
-		sendSessionAffinityHeaders: isOpenRouter,
+		sendSessionAffinityHeaders: isOpenRouter || isGrok,
+		...(isGrok ? { sessionAffinityFormat: "xai" as const } : {}),
 		supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia),
 	};
 }
@@ -2448,6 +2464,8 @@ async function loadModelsDevData(): Promise<Model<any>[]> {
 					api: "openai-completions",
 					provider: "cerebras",
 					baseUrl: "https://api.cerebras.ai/v1",
+					// Cerebras rejects stream_options.include_usage on streaming requests.
+					compat: { supportsUsageInStreaming: false },
 					reasoning: m.reasoning === true,
 					input: m.modalities?.input?.includes("image") ? ["text", "image"] : ["text"],
 					cost: getModelsDevCost(m.cost),
