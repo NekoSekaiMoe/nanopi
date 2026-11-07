@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [20261107]
+
+### Added
+
+- Ctrl+Enter interrupts the current sequential tool batch: the loop drains the steering queue between calls instead of waiting for every call in the batch to finish, so a user can correct a wrong multi-call plan after the first result. Calls that already ran keep their results, the remaining ones are reported as interrupted with the steering text, and parallel batches still deliver at the next turn boundary (issue [#411](https://cnb.cool/shinytale/nanopi/-/issues/411))
 
 ## [20261031.1.0]
 

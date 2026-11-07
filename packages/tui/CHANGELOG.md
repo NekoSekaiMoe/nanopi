@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [20261107]
+
+### Fixed
+
+- modifyOtherKeys functional keys are matched as keys instead of inserted as text: a terminal without known Kitty keyboard support reports every key through xterm modifyOtherKeys, so PageUp arrives as `CSI 27;1;57421~`, matched nothing, and the editor fell through to the printable path and inserted the raw codepoint U+E04D into the prompt (Home and End did the same). `resolveModifyOtherKeysCodepoint` reports the held modifiers like any other modifyOtherKeys sequence but drops the functional keys modifyOtherKeys cannot express, since they are keys and not text (issue [#431](https://cnb.cool/shinytale/nanopi/-/issues/431))
 
 ## [20261031.1.0]
 
