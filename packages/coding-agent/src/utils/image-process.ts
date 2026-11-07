@@ -1,3 +1,4 @@
+import { getImageDimensions } from "@nanopi/pi-tui";
 import { convertImageBytesToPng } from "./image-convert.ts";
 import {
 	formatDimensionNote,
@@ -5,6 +6,7 @@ import {
 	type ImageResizeOptions,
 	resizeImage,
 } from "./image-resize.ts";
+import { resolveImageResizeOptions } from "./image-resize-core.ts";
 import { loadPhoton } from "./photon.ts";
 
 export interface ProcessImageOptions {
@@ -78,6 +80,29 @@ function conversionHint(from: string | undefined, to: string): string | undefine
 	return `[Image converted from ${from} to ${to}.]`;
 }
 
+/**
+ * Whether an unprocessed image is already safe to inline.
+ *
+ * Photon is the only thing here that can shrink an image, so when it is missing the
+ * choice is between sending the original bytes and dropping the image. Dropping wins
+ * when the image breaks a limit the provider would reject the whole request over;
+ * one that already fits is better sent unresized than not sent at all.
+ *
+ * Both limits the resize path enforces are checked: the base64 payload budget and the
+ * pixel bounds. A byte-small but huge image would pass a payload check and still be
+ * refused, which is the failure mode the resize stage exists to prevent.
+ */
+function fitsInlineLimits(bytes: Uint8Array, mimeType: string, options: ImageResizeOptions | undefined): boolean {
+	const limits = resolveImageResizeOptions(options);
+	// `4 * ceil(n / 3)` is exactly what `Buffer.toString("base64")` produces.
+	if (Math.ceil(bytes.byteLength / 3) * 4 >= limits.maxBytes) return false;
+	const dimensions = getImageDimensions(Buffer.from(bytes).toString("base64"), mimeType);
+	// An unreadable header is not evidence of an oversized image; the four formats that
+	// reach this point all parse, so a null here means the bytes are already broken and
+	// sending them costs one failed request instead of silently hiding the file.
+	return dimensions === null || (dimensions.widthPx <= limits.maxWidth && dimensions.heightPx <= limits.maxHeight);
+}
+
 function resizeFailureMessage(reason: ImageResizeFailureReason, maxBytes: number | undefined): string {
 	switch (reason) {
 		case "photon-unavailable":
@@ -115,6 +140,23 @@ export async function processImage(
 	if (autoResizeImages) {
 		const result = await resizeImage(normalized.bytes, normalized.mimeType, options?.resizeOptions);
 		if (!result.ok) {
+			// Nothing here can re-encode an image without Photon, so "the backend is missing"
+			// is not a reason to throw the image away when it already satisfies the limits.
+			// EXIF orientation goes unapplied on this path; a rotated image the model can still
+			// see beats an omitted one, and the hint says what was skipped.
+			if (
+				result.reason === "photon-unavailable" &&
+				fitsInlineLimits(normalized.bytes, normalized.mimeType, options?.resizeOptions)
+			) {
+				const hints = passThroughHints(normalized);
+				hints.push("[Image not resized: the image backend is unavailable, so the image was sent as-is.]");
+				return {
+					ok: true,
+					data: Buffer.from(normalized.bytes).toString("base64"),
+					mimeType: normalized.mimeType,
+					hints,
+				};
+			}
 			return {
 				ok: false,
 				reason: result.reason,
@@ -137,14 +179,18 @@ export async function processImage(
 		};
 	}
 
-	const hints: string[] = [];
-	const convertedHint = conversionHint(normalized.convertedFrom, normalized.mimeType);
-	if (convertedHint) hints.push(convertedHint);
-
 	return {
 		ok: true,
 		data: Buffer.from(normalized.bytes).toString("base64"),
 		mimeType: normalized.mimeType,
-		hints,
+		hints: passThroughHints(normalized),
 	};
+}
+
+/** Hints for an image that goes into the conversation without being re-encoded. */
+function passThroughHints(normalized: NormalizedImage): string[] {
+	const hints: string[] = [];
+	const convertedHint = conversionHint(normalized.convertedFrom, normalized.mimeType);
+	if (convertedHint) hints.push(convertedHint);
+	return hints;
 }

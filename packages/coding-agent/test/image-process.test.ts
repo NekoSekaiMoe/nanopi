@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { processImage } from "../src/utils/image-process.ts";
+import * as imageResize from "../src/utils/image-resize.ts";
 import { detectSupportedImageMimeType } from "../src/utils/mime.ts";
 import * as photon from "../src/utils/photon.ts";
 
@@ -72,6 +73,54 @@ describe("image processing pipeline", () => {
 			if (result.ok) return;
 			expect(result.reason).toBe("photon-unavailable");
 			expect(result.message).toContain("image backend is unavailable");
+		} finally {
+			vi.restoreAllMocks();
+		}
+	});
+
+	it("passes an image through unresized when the backend is missing but the payload fits", async () => {
+		// Photon is the only re-encoder in this pipeline, so a missing sidecar used to drop
+		// every image, including the ones that already fit the provider limit (#586).
+		vi.spyOn(imageResize, "resizeImage").mockResolvedValue({ ok: false, reason: "photon-unavailable" });
+		try {
+			const result = await processImage(TINY_PNG, "image/png");
+
+			expect(result.ok).toBe(true);
+			if (!result.ok) return;
+			expect(result.data).toBe(TINY_PNG.toString("base64"));
+			expect(result.mimeType).toBe("image/png");
+			expect(result.hints.join("\n")).toContain("sent as-is");
+		} finally {
+			vi.restoreAllMocks();
+		}
+	});
+
+	it("still omits an image the missing backend cannot shrink below the byte limit", async () => {
+		vi.spyOn(imageResize, "resizeImage").mockResolvedValue({ ok: false, reason: "photon-unavailable" });
+		try {
+			const result = await processImage(TINY_PNG, "image/png", { resizeOptions: { maxBytes: 8 } });
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.reason).toBe("photon-unavailable");
+			expect(result.message).toContain("image backend is unavailable");
+		} finally {
+			vi.restoreAllMocks();
+		}
+	});
+
+	it("omits a pixel-oversized image the missing backend cannot shrink even when the bytes are small", async () => {
+		// The payload budget is not the only limit the resize stage enforces: a 3000px-wide
+		// image passes it and is still rejected by the provider.
+		const oversized = Buffer.from(TINY_PNG);
+		oversized.writeUInt32BE(3000, 16);
+		vi.spyOn(imageResize, "resizeImage").mockResolvedValue({ ok: false, reason: "photon-unavailable" });
+		try {
+			const result = await processImage(oversized, "image/png");
+
+			expect(result.ok).toBe(false);
+			if (result.ok) return;
+			expect(result.reason).toBe("photon-unavailable");
 		} finally {
 			vi.restoreAllMocks();
 		}
