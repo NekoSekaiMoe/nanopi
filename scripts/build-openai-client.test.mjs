@@ -11,12 +11,17 @@ import {
 
 let tempDirs = [];
 
-function tempAiDist({ withClient = true } = {}) {
+/**
+ * A stand-in package root with the narrow client under `tree`, named with the
+ * extension that tree holds (`dist` is compiled `.js`, `src` is `.ts`).
+ */
+function tempAiDir({ tree = "dist", withClient = true } = {}) {
 	const dir = mkdtempSync(join(tmpdir(), "nanopi-narrow-openai-test-"));
 	tempDirs.push(dir);
 	if (withClient) {
-		mkdirSync(join(dir, "api"), { recursive: true });
-		writeFileSync(join(dir, "api", "openai-chat-completions-client.js"), "export default class {}\n");
+		const extension = tree === "dist" ? ".js" : ".ts";
+		mkdirSync(join(dir, tree, "api"), { recursive: true });
+		writeFileSync(join(dir, tree, "api", `openai-chat-completions-client${extension}`), "export default class {}\n");
 	}
 	return dir;
 }
@@ -60,26 +65,54 @@ describe("narrow openai client scope", () => {
 });
 
 describe("narrow openai client plugin", () => {
-	it("resolves the bare specifier to the compiled client", () => {
-		const aiDistDir = tempAiDist();
-		const plugin = createNarrowOpenAIClientPlugin({ aiDistDir, enabled: true });
+	it("resolves the bare specifier to the client of the tree being bundled", () => {
+		const distDir = tempAiDir({ tree: "dist" });
+		// A build reads `dist`, so the stand-in is the compiled sibling.
+		const distPlugin = createNarrowOpenAIClientPlugin({ aiDir: distDir, mode: "dist", enabled: true });
+		const distResolved = resolveWith(distPlugin, { path: "openai", importer: "", kind: "import-statement" });
+		strictEqual(distResolved.path, join(distDir, "dist", "api", "openai-chat-completions-client.js"));
 
-		const resolved = resolveWith(plugin, { path: "openai", importer: "", kind: "import-statement" });
-		strictEqual(resolved.path, join(aiDistDir, "api", "openai-chat-completions-client.js"));
+		// The size check has no build to read, so it bundles `src` instead.
+		const srcDir = tempAiDir({ tree: "src" });
+		const srcPlugin = createNarrowOpenAIClientPlugin({ aiDir: srcDir, mode: "src", enabled: true });
+		const srcResolved = resolveWith(srcPlugin, { path: "openai", importer: "", kind: "import-statement" });
+		strictEqual(srcResolved.path, join(srcDir, "src", "api", "openai-chat-completions-client.ts"));
+	});
+
+	it("resolves subpaths and other specifiers unchanged", () => {
+		const aiDir = tempAiDir();
+		const plugin = createNarrowOpenAIClientPlugin({ aiDir, mode: "dist", enabled: true });
+
 		// Only the barrel: subpath imports name one module already, and the filter
 		// is anchored so `openai/...` never matches.
 		strictEqual(resolveWith(plugin, { path: "openai/resources/chat/completions.js" }), undefined);
 	});
 
 	it("registers nothing when the flavor keeps the full SDK", () => {
-		const aiDistDir = tempAiDist({ withClient: false });
-		const plugin = createNarrowOpenAIClientPlugin({ aiDistDir, enabled: false });
+		const aiDir = tempAiDir({ withClient: false });
+		const plugin = createNarrowOpenAIClientPlugin({ aiDir, mode: "dist", enabled: false });
 		// An empty setup never calls onResolve, and a missing client must not throw.
 		plugin.setup({ onResolve: () => throws(new Error("hook registered")) });
 	});
 
 	it("fails the build when the compiled client is missing", () => {
-		const aiDistDir = tempAiDist({ withClient: false });
-		throws(() => createNarrowOpenAIClientPlugin({ aiDistDir, enabled: true }), /Build the workspace packages first/);
+		const aiDir = tempAiDir({ tree: "dist", withClient: false });
+		throws(
+			() => createNarrowOpenAIClientPlugin({ aiDir, mode: "dist", enabled: true }),
+			/Build the workspace packages first/,
+		);
+	});
+
+	it("fails the check when the unconverted client is missing", () => {
+		const aiDir = tempAiDir({ tree: "src", withClient: false });
+		throws(
+			() => createNarrowOpenAIClientPlugin({ aiDir, mode: "src", enabled: true }),
+			/tracked in git; restore it/,
+		);
+	});
+
+	it("rejects an unknown tree instead of guessing an extension", () => {
+		const aiDir = tempAiDir();
+		throws(() => createNarrowOpenAIClientPlugin({ aiDir, mode: "build", enabled: true }), /Unknown narrow openai client mode/);
 	});
 });

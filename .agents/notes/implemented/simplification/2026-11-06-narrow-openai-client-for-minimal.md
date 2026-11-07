@@ -70,6 +70,14 @@ than 300 KiB. It is a tripwire for the two silent regressions: the swap stopping
 (the barrel is back) and an SDK bump growing the narrow surface. It is not a
 byte-for-byte lock.
 
+It bundles `packages/ai/src`, not `packages/ai/dist`: a check that reads a build
+artifact only runs after `pnpm run build`, which is not what `pnpm run check`
+promises on a checkout ([#567](../../implemented/bug-fix/2026-11-07-openai-size-check-reads-src-not-dist.md)).
+`createNarrowOpenAIClientPlugin`'s `mode` keeps the stand-in the sibling of the
+importing module in both cases — compiled `.js` under `dist` for builds, `.ts`
+under `src` for this check — so neither graph gains a second copy of the AI
+package. The measurement is the same 61 KiB / 11 modules either way.
+
 ## Alternatives considered
 
 - **Keep the full SDK and accept the 119 KiB (option 4 in #540).** The undici fix

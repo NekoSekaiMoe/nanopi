@@ -392,7 +392,11 @@ const { plugin: apiStubPlugin, disabledApis, disabledProviders } = createApiStub
 // rest of the `openai` SDK, so the bare specifier resolves to the narrow client
 // instead of the package barrel (see scripts/build-openai-client.mjs).
 const narrowOpenAIClient = usesNarrowOpenAIClient(builtinApiIds);
-const narrowOpenAIClientPlugin = createNarrowOpenAIClientPlugin({ aiDistDir, enabled: narrowOpenAIClient });
+const narrowOpenAIClientPlugin = createNarrowOpenAIClientPlugin({
+	aiDir,
+	mode: "dist",
+	enabled: narrowOpenAIClient,
+});
 const plugins = [
 	// The bundled extras import the SDK by package name (see selfReferencePlugin).
 	selfReferencePlugin({ packageName: packageName, packageDir: codingAgentDir }),

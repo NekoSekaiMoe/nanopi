@@ -21,6 +21,12 @@
  * The budget is generous on purpose: it is a tripwire for an order-of-magnitude
  * regression, not a byte-for-byte lock (an SDK release legitimately moves this
  * by a few KiB). Raise it with the measurement in the commit message.
+ *
+ * It reads `packages/ai/src`, not `packages/ai/dist`: `dist` only exists after
+ * `pnpm run build`, and `pnpm run check` is meant to run on a checkout, so
+ * depending on it failed everyone who had not built first (#567). esbuild
+ * strips the same types the compiler would, so the measurement is unchanged,
+ * and the swap it measures is the module the build swaps in.
  */
 
 import { dirname, join, resolve } from "node:path";
@@ -30,12 +36,12 @@ import { createNarrowOpenAIClientPlugin, usesNarrowOpenAIClient } from "./build-
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
-const aiDistDir = join(repoRoot, "packages", "ai", "dist");
+const aiDir = join(repoRoot, "packages", "ai");
 
 /** Bytes the `openai` package may contribute to the narrowed request path. */
 const OPENAI_BUDGET_BYTES = 300 * 1024;
 
-const entry = join(aiDistDir, "api", "openai-completions.js");
+const entry = join(aiDir, "src", "api", "openai-completions.ts");
 
 if (!usesNarrowOpenAIClient(["openai-completions"])) {
 	throw new Error("the openai-completions API set no longer selects the narrow openai client");
@@ -49,7 +55,7 @@ const result = await build({
 	logLevel: "silent",
 	metafile: true,
 	platform: "node",
-	plugins: [createNarrowOpenAIClientPlugin({ aiDistDir, enabled: true })],
+	plugins: [createNarrowOpenAIClientPlugin({ aiDir, mode: "src", enabled: true })],
 	tsconfigRaw: { compilerOptions: {} },
 	write: false,
 });

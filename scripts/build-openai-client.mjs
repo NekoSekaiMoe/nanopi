@@ -32,8 +32,11 @@ import { join } from "node:path";
 /** The only API set whose runtime path the narrow client covers. */
 export const NARROW_CLIENT_API_SET = ["openai-completions"];
 
-/** Module the bare `openai` specifier is redirected to, inside packages/ai/src. */
-const NARROW_CLIENT_MODULE = "api/openai-chat-completions-client.ts";
+/** Module the bare `openai` specifier is redirected to, under the tree read below. */
+const NARROW_CLIENT_MODULE = "api/openai-chat-completions-client";
+
+/** Tree under the AI package root, with the extension the swap must name there. */
+const NARROW_CLIENT_EXTENSIONS = { dist: ".js", src: ".ts" };
 
 /**
  * Whether this build can ship the narrow client. `builtinApiIds` is the
@@ -52,19 +55,26 @@ export function usesNarrowOpenAIClient(builtinApiIds) {
 /**
  * Redirects the bare `openai` specifier to the narrow client.
  *
- * The target is the compiled sibling of the importing module: this build runs
- * from `packages/ai/dist`, and resolving the stand-in from `packages/ai/src`
- * would put a second copy of the AI package's modules in the graph.
+ * `mode` must match where the caller's entry points come from, so that the
+ * stand-in is the sibling of the importing module: a build bundles
+ * `packages/ai/dist` and takes the compiled `.js`, while a check that has no
+ * build to read (`check-openai-client-size.mjs`) bundles `packages/ai/src` and
+ * takes the `.ts`. Mixing the two would put a second copy of the AI package's
+ * modules in the graph.
  *
- * @param {{ aiDistDir: string, enabled: boolean }} options
+ * @param {{ aiDir: string, mode: "dist" | "src", enabled: boolean }} options
+ *   `aiDir` is the AI package root; `mode` picks `dist` or `src` under it.
  * @returns {import("esbuild").Plugin}
  */
-export function createNarrowOpenAIClientPlugin({ aiDistDir, enabled }) {
+export function createNarrowOpenAIClientPlugin({ aiDir, mode, enabled }) {
 	if (!enabled) return { name: "narrow-openai-client", setup() {} };
-	const target = join(aiDistDir, NARROW_CLIENT_MODULE.replace(/\.ts$/, ".js"));
+	const extension = NARROW_CLIENT_EXTENSIONS[mode];
+	if (!extension) throw new Error(`Unknown narrow openai client mode: ${mode}`);
+	const target = join(aiDir, mode, `${NARROW_CLIENT_MODULE}${extension}`);
 	if (!existsSync(target)) {
 		throw new Error(
-			`Narrow openai client is missing: ${target}. Build the workspace packages first.`,
+			`Narrow openai client is missing: ${target}. ` +
+				(mode === "dist" ? "Build the workspace packages first." : "The module is tracked in git; restore it."),
 		);
 	}
 	// Anchored: `openai/resources/chat/completions.js` and the other subpaths
