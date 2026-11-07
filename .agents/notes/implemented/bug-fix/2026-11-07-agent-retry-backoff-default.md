@@ -36,6 +36,10 @@ cap 截断后正好是 **15s / 30s / 60s**（#574 要求的三个值），总等
 
 ## Alternatives considered
 
+「换个模型就过去了」这条邻近方案（fallback chain / model role / 多凭据轮换）另记在
+[不做 model role / fallback chain](../../rejected/feature/2026-11-07-no-model-fallback-chain.md)，
+本文只处理退避时长。
+
 - **解析 `errorMessage` 里的 `retry_after: 30` 并 `max(建议值, 指数退避)`**：#574 的讨论里
   提过这条「最小改动」，但明确否掉了——从自由文本正则抓数字是错方向，provider 的 429
   body 格式各异，抓错会把等待时间算成任意数。正确做法是 adapter 在 429/503 时往
