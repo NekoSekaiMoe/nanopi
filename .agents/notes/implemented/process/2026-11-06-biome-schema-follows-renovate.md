@@ -2,6 +2,8 @@
 
 Status: implemented
 
+> **已被完全取代（2026-11-06，`shinytale/nanopi#561`）**：本篇的 customManager 提取是好的，但它配套的 `packageRule` 自带 `groupName`，于是 `biome.json` 的 `$schema` 更新落在独立的 `renovate/biome-schema` 分支，而 `branchConcurrentLimit`/`prConcurrentLimit` 都是 1，它排不进 npm 组那个 PR：锁文件先合进 main、`$schema` 仍停在旧版。文中「depName 相同就会落在同一分支」的说法是错的，Renovate 的分组判据是 groupName。现在改为 `$schema` 指向安装包自带的 schema，版本号不再有第二份，本篇的两条 `renovate.json` 配置与 `$schema` 正则均已删除。见 [biome.json 的 $schema 指向安装包](../process/2026-11-06-biome-schema-points-at-installed-package.md)。
+
 ## Problem
 
 `shinytale/nanopi#545`：`biome.json` 的 `$schema` 指向

@@ -1,42 +1,27 @@
 #!/usr/bin/env node
 
-// biome 版本升了、biome.json 的 $schema 没跟上时让 CI 红。
+// biome.json 的 $schema 必须指向安装包自带的那份 schema，不能是带版本号的 URL。
 //
-// 为什么需要这一层：biome 只把 schema 版本不匹配当 info 打，退出码 0（实测 2.6.5 的
-// CLI 读 2.6.4 的 schema，`biome check` 仍返回 0），所以「版本对了、schema 落后」能
-// 一直绿到有人肉眼看日志。Renovate 那边由 renovate.json 的 customManager 负责把
-// $schema 里的版本号当成 @biomejs/biome 的依赖一起升；这一层兜住托管版 Renovate 不
-// 跑 postUpgradeTasks、或别人手工改 package.json 的情况。
+// 带版本号的写法（https://biomejs.dev/schemas/<版本>/schema.json）把 CLI 版本在仓库里
+// 记了第二遍，而 Renovate 升 @biomejs/biome 只改 package.json 与 lockfile，那条 URL
+// 不会跟着动（shinytale/nanopi#545、#561）。错位还不会自己暴露：biome 只把 schema
+// 版本不匹配当 info 打、退出码 0（实测 2.6.5 的 CLI 读 2.6.4 的 schema，`biome check`
+// 仍返回 0），于是「版本升了、schema 落后」一路绿到有人翻日志。#545 的做法是让
+// Renovate 用 customManager 把那个数字也一起改，但那条规则自带 groupName，就自成了
+// 一条 renovate/biome-schema 分支，在 branchConcurrentLimit/prConcurrentLimit 都是 1
+// 时排不进 npm 组所在的 PR，照样漏。
 //
-// 取版本的方式是跑 `biome --version`（走 PATH 上的 pnpm bin 垫片），不是读
-// node_modules：pnpm 的 node_modules/@biomejs/biome 是链到 .pnpm 的软链，靠包目录
-// 反推版本比直接问 CLI 更容易和实际执行的是不是同一个版本对不上。
+// 指向 ./node_modules/@biomejs/biome/configuration_schema.json 之后版本号只剩一处：
+// lockfile 里装的是哪个版本，校验按的就是哪个版本，没有第二份要同步的事实。biome
+// 官方文档的 $schema 一节把这种写法列在第一位。
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
-const SCHEMA_URL = /^https:\/\/biomejs\.dev\/schemas\/(\d+\.\d+\.\d+)\/schema\.json$/;
-
-function fail(message) {
-	console.error(message);
-	console.error("修复：pnpm exec biome migrate --write");
-	process.exit(1);
-}
+const LOCAL_SCHEMA = "./node_modules/@biomejs/biome/configuration_schema.json";
 
 const { $schema } = JSON.parse(readFileSync("biome.json", "utf8"));
-const schemaMatch = typeof $schema === "string" ? SCHEMA_URL.exec($schema) : null;
-if (!schemaMatch) {
-	fail(`biome.json: $schema 必须是 https://biomejs.dev/schemas/<版本>/schema.json，当前是 ${JSON.stringify($schema)}`);
-}
-
-let installed;
-try {
-	const versionOutput = execFileSync("biome", ["--version"], { encoding: "utf8" });
-	installed = versionOutput.trim().replace(/^Version:\s*/, "");
-} catch (error) {
-	fail(`读不到本地 biome 的版本（biome --version 失败）：${error.message}`);
-}
-
-if (installed !== schemaMatch[1]) {
-	fail(`biome.json: $schema 指向 ${schemaMatch[1]}，本地装的 biome 是 ${installed}`);
+if ($schema !== LOCAL_SCHEMA) {
+	console.error(`biome.json: $schema 必须是 ${LOCAL_SCHEMA}，当前是 ${JSON.stringify($schema)}`);
+	console.error("带版本号的 URL 会与 @biomejs/biome 的实际版本各自漂移，改成本地路径即可。");
+	process.exit(1);
 }
