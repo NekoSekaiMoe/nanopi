@@ -93,6 +93,22 @@ describe("provider retry classification", () => {
 		).toBe(true);
 	});
 
+	it("retries llama.cpp insufficient_system_resource finish reasons (#580)", () => {
+		const message = fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "Provider finish_reason: insufficient_system_resource",
+		});
+		expect(isRetryableAssistantError(message)).toBe(true);
+	});
+
+	it("retries EOS-only empty completions (#580)", () => {
+		const message = fauxAssistantMessage("", {
+			stopReason: "error",
+			errorMessage: "Provider returned an empty completion (EOS-only)",
+		});
+		expect(isRetryableAssistantError(message)).toBe(true);
+	});
+
 	it("matches Azure peak-load capacity errors", () => {
 		// Regression for #9669.
 		expect(
