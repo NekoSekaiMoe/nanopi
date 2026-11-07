@@ -16,7 +16,8 @@ import { createRequire } from "node:module";
 import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isBuildComponentEnabled } from "../../build-components.ts";
-import { APP_NAME, CONFIG_DIR_NAME } from "../../config.ts";
+import { APP_NAME, CONFIG_DIR_NAME, isBundledNode } from "../../config.ts";
+import { isSingleNodeFileRuntime } from "../../standalone/assets.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import type { ModuleFactory, SessionModule } from "./types.ts";
 
@@ -30,16 +31,22 @@ const MODULE_INDEX_NAMES = ["index.ts", "index.mts", "index.js", "index.mjs", "i
 /**
  * Whether this build can load modules from disk at all.
  *
- * The component switch answers for a flavor that dropped the module entirely
- * (the stub replaces this file, so this code does not even ship there). What
- * decides the rest is whether jiti can be resolved: the npm bundle keeps it
- * external and lists it as a dependency, so it resolves; the single file is
- * zero-dependency and has no jiti on disk, so it does not. Probing replaces a
- * build-time guess: a bundled CLI whose node is vendored, and a source checkout
- * whose jiti is linked, both answer correctly.
+ * Two gates, for two different questions. The component switch answers for a
+ * flavor that dropped the module entirely (the stub replaces this file, so
+ * this code does not even ship there), and the single-file artifact answers for
+ * itself: it keeps jiti external to stay zero-dependency and is meant to load
+ * no module at all, so its own marker decides.
+ *
+ * Everything else asks whether jiti resolves, which is what the lazy
+ * `import("jiti")` below will do. A build-time guess gets this wrong in both
+ * directions: `NANOPI_BUNDLED_NODE` is *not* a reason to say no — the npm
+ * package's `dist/bundle/` ships jiti as a dependency and resolves it — while a
+ * bundled CLI whose node is vendored, and a source checkout whose jiti is
+ * linked, are exactly the cases a probe gets right.
  */
 export function diskModulesIncluded(): boolean {
 	if (!isBuildComponentEnabled("jiti-modules")) return false;
+	if (isSingleNodeFileRuntime()) return false;
 	return canResolveJiti();
 }
 
@@ -112,6 +119,12 @@ function jitiAliases(): Record<string, string> {
 	] as const) {
 		const entry = workspace(workspacePackage, specifier);
 		if (entry !== undefined) aliases[specifier] = entry;
+	}
+	// A tool definition's schema has to come from the TypeBox instance the host
+	// validates with. `typebox` is a dependency of this package, so it resolves
+	// from here even though the module file lives somewhere else.
+	for (const specifier of ["typebox", "typebox/compile", "typebox/value"]) {
+		aliases[specifier] = fileURLToPath(import.meta.resolve(specifier));
 	}
 	return aliases;
 }
@@ -263,10 +276,35 @@ export function diskModuleName(file: string): string {
 	return base.replace(MODULE_FILE_PATTERN, "");
 }
 
+let virtualModulesPromise: Promise<Record<string, unknown>> | undefined;
+
+function getVirtualModules(): Promise<Record<string, unknown>> {
+	virtualModulesPromise ??= import("./virtual-modules.ts").then((module) => module.VIRTUAL_MODULES);
+	return virtualModulesPromise;
+}
+
+/**
+ * How a module file's bare imports resolve.
+ *
+ * A bundled runtime answers from the namespaces it already has. A path alias
+ * there would name a *file*, and the only file left in the npm package is the
+ * unbundled `dist/` tree — a second copy of the host, so a module's `Text` or
+ * `CustomEditor` would fail the `instanceof` checks the process runs against
+ * its own bundled classes.
+ *
+ * Every other runtime aliases to a path: the host and the module file then
+ * import the same files, and instance identity holds either way.
+ */
+async function resolutionOptions(): Promise<Record<string, unknown>> {
+	if (isBundledNode) return { virtualModules: await getVirtualModules(), tryNative: false };
+	return { alias: jitiAliases() };
+}
+
 async function loadDiskModule(file: string, createJiti: CreateJiti): Promise<SessionModule> {
+	const resolution = await resolutionOptions();
 	const jiti = createJiti(import.meta.url, {
 		moduleCache: false,
-		alias: jitiAliases(),
+		...resolution,
 		// A module file imports its siblings by their source spelling and may
 		// name a bare package without a tsconfig; jiti resolves both.
 		interopDefault: true,

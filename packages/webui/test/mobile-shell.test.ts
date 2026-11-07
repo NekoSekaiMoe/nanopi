@@ -138,4 +138,26 @@ describe("sidebar hover and touch targets (issue #554)", () => {
 			expect(component(file)).toMatch(/max-md:(h-11|min-h-11)/);
 		}
 	});
+
+	// Issue #554: #559 item 1 covered the five named control groups; these
+	// secondary 32-36px targets in the sidebar/nav were left out. "这个可以统一一下"
+	// extends the same max-md:44px rule to every small tap target in the drawer.
+	it("keeps every small sidebar/nav tap target at >=44px on mobile", () => {
+		const sidebar = component("sidebar.tsx");
+		// Every 32-36px control still present must carry a max-md bump on the
+		// same line. Catch a future small control added without the override.
+		for (const line of sidebar.split("\n")) {
+			if (!/\b(?:size-(?:7|8|9)|h-(?:8|9)|min-h-8|min-h-\[2\.125rem\])\b/.test(line)) continue;
+			expect(line, line.trim()).toMatch(/max-md:(?:size-11|h-11|min-h-11)/);
+		}
+		// Named groups from the follow-up: search/close (size-8), file-tree rows
+		// (h-8/h-9), delete-confirm buttons (h-8), the search field (h-9), and the
+		// model sheet close (size-9) all get a 44px override on the same line.
+		const bumpedLines = (file: string, size: RegExp) =>
+			component(file).split("\n").some((line) => size.test(line) && /max-md:(?:size-11|h-11|min-h-11)/.test(line));
+		for (const size of [/size-8/, /size-7/, /h-9/, /h-8/]) {
+			expect(bumpedLines("sidebar.tsx", size), size.toString()).toBe(true);
+		}
+		expect(bumpedLines("model-picker.tsx", /size-9/)).toBe(true);
+	});
 });

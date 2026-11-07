@@ -162,7 +162,7 @@ export function ModelSheet({
 						type="button"
 						aria-label={t("关闭")}
 						onClick={onClose}
-						className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground"
+						className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground transition-colors hover:bg-overlay-hover hover:text-foreground max-md:size-11"
 					>
 						<X className="size-4" strokeWidth={1.75} />
 					</button>

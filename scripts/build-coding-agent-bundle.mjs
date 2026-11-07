@@ -121,7 +121,11 @@ function commonBuildOptions() {
 			excludedGrammars: grammars,
 			buildCommit,
 		}),
-		external: ["@silvia-odwyer/photon-node"],
+		// The one list the runtime resolves by package name. It used to be a
+		// hardcoded `["@silvia-odwyer/photon-node"]` here, which silently bundled
+		// jiti: the bundled copy then required `../dist/babel.cjs` relative to a
+		// hashed chunk, so every disk module failed to transform.
+		external: [...BUNDLE_EXTERNAL_PACKAGES],
 		format: "esm",
 		legalComments: "none",
 		logLevel: "warning",
