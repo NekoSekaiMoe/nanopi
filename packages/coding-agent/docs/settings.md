@@ -119,7 +119,7 @@ See [Terminal Setup](terminal-setup.md) for platform details.
 | `websocketConnectTimeoutMs` | number | `15000` | WebSocket connection timeout in milliseconds. Set to `0` to disable. |
 | `retry.enabled` | boolean | `true` | Enable automatic agent-level retry for transient failures. |
 | `retry.maxRetries` | number | `3` | Maximum agent-level retry attempts. |
-| `retry.baseDelayMs` | number | `2000` | Initial exponential-backoff delay in milliseconds. |
+| `retry.baseDelayMs` | number | `15000` | Initial exponential-backoff delay in milliseconds. |
 | `retry.maxAgentDelayMs` | number | `60000` | Maximum agent-level retry delay in milliseconds. |
 | `retry.nonRetryableErrorPatterns` | string[] | None | Extra case-insensitive `errorMessage` substrings that skip auto-retry, in addition to the built-in quota/billing patterns. |
 | `retry.provider.timeoutMs` | number | `httpIdleTimeoutMs` | Provider request timeout in milliseconds. |
