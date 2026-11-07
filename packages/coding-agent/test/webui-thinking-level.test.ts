@@ -6,6 +6,7 @@ import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { createAgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { createAgentSessionFromServices, createAgentSessionServices } from "../src/core/agent-session-services.ts";
 import { SessionManager } from "../src/core/session-manager.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
 import { readSessionMessages, runWebuiMode } from "../src/modes/webui/webui-server.ts";
 
 // Regression for the webui model sheet losing the thinking level it had just
@@ -66,7 +67,12 @@ async function writeAgentConfig(): Promise<void> {
 
 async function startWebui(): Promise<void> {
 	const sessionManager = SessionManager.create(cwd, join(agentDir, "sessions"));
-	const services = await createAgentSessionServices({ cwd, agentDir });
+	// The catalog points at a closed port, so every turn fails with a connection
+	// error. Auto-retry is on by default with a 15 s backoff (3 attempts), which
+	// turns each turn into a two-minute wait; the tests only need the turn to
+	// settle, so retries are off.
+	const settingsManager = SettingsManager.inMemory({ retry: { enabled: false } });
+	const services = await createAgentSessionServices({ cwd, agentDir, settingsManager });
 	const model = services.modelRuntime.getModel("faux", "alpha");
 	if (!model) throw new Error("faux/alpha is missing from the test catalog");
 	const created = await createAgentSessionFromServices({ services, sessionManager, model, thinkingLevel: "medium" });
