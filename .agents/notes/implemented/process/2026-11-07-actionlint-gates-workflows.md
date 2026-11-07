@@ -54,9 +54,10 @@ job 把 `-R <repo>` 塞进 `GH_REPO_FLAG` 再靠无引号展开拆词，`checks.
 - **`-pyflakes=`**：仓库里没有 Python 步骤，装了只是多一次 `pipx install`。
 - **`shellcheck` 用官方 0.11.0，不用 runner 预装的那份**：ubuntu-24.04 镜像自带 0.9.0，
   版本随镜像变，同一份工作流在镜像升级前后可能一绿一红。钉死之后 lint 结果只由仓库决定。
-- **`shellcheck` 是真门禁**：11 条既有报错（8 条 SC2086、1 条 SC2046，另外两条是
-  `checks.yml` 里的 `$(which)`）在这一个 PR 里一起改掉，不留 ignore。做法是
-  `-R "${GH_REPO}"`（两个独立参数）与 `"$(command -v fdfind)"`，不改行为。
+- **`shellcheck` 是真门禁**：打开时报 9 条既有问题（`build-binaries.yml` 的 8 条
+  SC2086、`checks.yml` 自己 `$(which fdfind)` 的 1 条 SC2046），在这一个 PR 里一起改掉，
+  不留 ignore。做法是 `-R "${GH_REPO}"`（两个独立参数）与 `"$(command -v fdfind)"`，
+  不改行为。
 
 ## Alternatives considered
 
@@ -92,7 +93,7 @@ job 把 `-R <repo>` 塞进 `GH_REPO_FLAG` 再靠无引号展开拆词，`checks.
 ## Verification
 
 - 修改前：`actionlint 1.7.12` + `shellcheck 0.11.0` 对 `.github/workflows/*.yml` 报 9 条
-  SC2086/SC2046；对修完的树全量无输出（exit 0）。
+  （8 条 SC2086、1 条 SC2046）；对修完的树全量无输出（exit 0）。
 - 反例对照：在临时仓库里放一份 job 级 `if: ${{ env.FOO != '' }}`，同一命令报
   `context "env" is not allowed here`，确认门禁真能拦住 #530 那类错误。
 - `Lint workflows` 的 `run` 块本身过 `shellcheck`（`-s bash`）无输出；把 `env` 按

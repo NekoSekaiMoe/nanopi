@@ -48,6 +48,7 @@ jobs:
       #
       # 带上 shellcheck 是因为 `run:` 块里同样的错只会在运行时炸：把两个参数塞进一个
       # 变量再展开（`GH_REPO_FLAG="-R org/repo"`）平时能跑，仓库名带空格或空值就散架。
+      # 打开这一步时它报了 9 条既有问题，已在本步骤落地时一并改掉，没有留 ignore。
       # pyflakes 关掉：仓库里没有 Python 步骤，装了也只会拖长装依赖的时间。
       #
       # 两个二进制都来自 GitHub Releases，不经 npm，Renovate 管不到，所以版本与
