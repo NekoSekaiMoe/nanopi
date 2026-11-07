@@ -103,7 +103,9 @@ uses, which is what makes `registerTool` with a `typebox` schema work.
 ## Consequences
 
 - `base`, `full`, and the npm bundle can be extended without a rebuild; `minimal`
-  and the single-file artifact cannot, and the docs say so.
+  and the single-file artifact cannot, and the docs say so. The npm half of that
+  claim was only true after
+  [the bundled-build fix](../bug-fix/2026-11-07-npm-bundle-loads-disk-modules.md).
 - `.nanopi/extensions/` changes meaning: it was documentation-only sample
   storage, and in a trusted project it is now loaded by default. The three
   sample modules in this repository are reachable through
