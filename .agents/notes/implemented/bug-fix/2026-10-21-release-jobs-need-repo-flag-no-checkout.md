@@ -31,8 +31,8 @@ fatal: not a git repository (or any of the parent directories): .git
 
 ## Decision
 
-三个 job 的 gh 调用显式带 `-R ${{ github.repository }}`（每个 step 的 env 里定成
-`GH_REPO_FLAG`，避免在 run 块里重复），不新增 checkout：
+三个 job 的 gh 调用显式带 `-R "${GH_REPO}"`（`-R` 与仓库名各是一个参数，不放进
+同一个变量再展开，理由见下），不新增 checkout：
 
 - `gh release view` / `delete` / `create` / `edit` 一律带 `-R`。
 - `-R` 非空 ⇒ `opts.RepoOverride` 非空 ⇒ `gh` 跳过 `gitTagInfo`、`git rev-parse --show-toplevel`、
@@ -42,6 +42,12 @@ fatal: not a git repository (or any of the parent directories): .git
 判定标准不变：`--verify-tag` 查的是远端 tag 存在性（GraphQL），与本地无关，所以
 「draft 建好 → 资产名集合核对 → `--draft=false` 发布」这条链在无 checkout 下完整可用。
 
+写法上有个约束：`-R` 与仓库名是两个 argv 元素，必须各自引号。早先版本把它们塞进
+一个变量（`GH_REPO_FLAG: -R ${{ github.repository }}`）再靠无引号的 `${GH_REPO_FLAG}`
+展开拆词，能跑，但 shellcheck 会（正确地）报 SC2086，而 `checks.yml` 现在跑
+actionlint + shellcheck（见 [工作流语法错误进不了门禁](../process/2026-11-07-actionlint-gates-workflows.md)）：
+仓库名带空格或变量为空时那种展开直接散架。现在每个调用点是 `-R "${GH_REPO}"`。
+
 ## Alternatives considered
 
 - **给三个 job 加 `actions/checkout`。** 最贴近 gh 默认假设，但 checkout 只为了给三个纯 API
@@ -49,6 +55,9 @@ fatal: not a git repository (or any of the parent directories): .git
   路径，它出错的概率应当尽量低，多加一个 action 就是多加一次失败机会。`build` 里已有 checkout，
   但跨 job 不共享工作区，救不了它们。
 - **只设 `GH_REPO`，不加 `-R`。** 如上，`RepoOverride` 仍为空，本地 git 分支照跑，实测不解决。
+- **把 `-R <repo>` 整段放进一个环境变量、展开时靠拆词。** 少写四个字符，但要靠
+  「不加引号的展开会按空格切」这条 shell 隐式规则；仓库名带空格、或变量没设成空串时
+  行为不同。写成两个独立参数后，shellcheck 没有可报的，读的人也不用在脑子里模拟拆词。
 - **`gh release create` 去掉 `--notes-file`，改用 `--generate-notes` 走 Release Notes API。**
   与缺陷无关（缺陷在仓库定位，不在 notes），而且 release notes 由
   `scripts/release-notes.mjs` 从 CHANGELOG 提取，换成 API 生成等于改发版内容。
