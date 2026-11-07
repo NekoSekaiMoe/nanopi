@@ -180,7 +180,11 @@ describe("xAI Responses provider", () => {
 		expect(captured.url).toBe("https://api.x.ai/v1/responses");
 		expect(captured.headers.get("authorization")).toBe("Bearer xai-test-token");
 		expect(captured.headers.get("user-agent")).toBe(NANOPI_USER_AGENT);
-		expect(captured.headers.get("session_id")).toBe("nanopi-session-123");
+		// xAI keys prompt-cache routing on x-grok-conv-id; the OpenAI header family does not
+		// reach the same replica. https://github.com/shinytale/nanopi/issues/580
+		expect(captured.headers.get("x-grok-conv-id")).toBe("nanopi-session-123");
+		expect(captured.headers.get("session_id")).toBeNull();
+		expect(captured.headers.get("x-client-request-id")).toBeNull();
 		expect(captured.body).toMatchObject({
 			model: "grok-4.5",
 			store: false,
@@ -289,6 +293,39 @@ describe("xAI Responses provider", () => {
 		);
 
 		expect(captured.headers.get("user-agent")).toBe("custom-agent");
+	});
+
+	it("sends x-grok-conv-id from sessionId on Completions requests", async () => {
+		let headers: Headers | undefined;
+		vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+			headers = new Request(input, init).headers;
+			const chunks = [
+				{
+					id: "chatcmpl-xai",
+					choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+					usage: {
+						prompt_tokens: 1,
+						completion_tokens: 1,
+						prompt_tokens_details: { cached_tokens: 0 },
+						completion_tokens_details: { reasoning_tokens: 0 },
+					},
+				},
+			];
+			const body = `${chunks.map((chunk) => `data: ${JSON.stringify(chunk)}`).join("\n\n")}\n\ndata: [DONE]\n\n`;
+			return new Response(body, { status: 200, headers: { "content-type": "text/event-stream" } });
+		});
+
+		const result = await streamOpenAICompletions(
+			customCompletionsModel,
+			normalizeContext({ messages: [{ role: "user", content: "hello", timestamp: 1 }] }),
+			{ apiKey: "xai-test-token", sessionId: "xai-conv-1" },
+		).result();
+
+		expect(result.stopReason, result.errorMessage).toBe("stop");
+		expect(headers?.get("x-grok-conv-id")).toBe("xai-conv-1");
+		expect(headers?.get("session_id")).toBeNull();
+		expect(headers?.get("x-client-request-id")).toBeNull();
+		expect(headers?.get("x-session-affinity")).toBeNull();
 	});
 
 	it("uses nanopi's User-Agent by default for Completions requests", async () => {

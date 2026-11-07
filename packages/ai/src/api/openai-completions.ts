@@ -17,6 +17,7 @@ import type {
 	CacheRetention,
 	ChatTemplateKwargValue,
 	ImageContent,
+	JsonObject,
 	JsonValue,
 	Message,
 	Model,
@@ -35,6 +36,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "../types.ts";
+import { isSelfHostedEndpoint } from "../utils/endpoint.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
@@ -69,6 +71,7 @@ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copi
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import {
 	buildBaseOptions,
+	clampMaxTokensToContext,
 	clampThinkingBudgetToAnswerRoom,
 	resolveSamplingParams,
 	thinkingBudgetForLevel,
@@ -129,6 +132,49 @@ function isReasoningDetailObject(detail: unknown): detail is Record<string, unkn
 	return typeof detail === "object" && detail !== null && !Array.isArray(detail);
 }
 
+/**
+ * Some backends (e.g. Mistral Medium) stream `delta.content` as a parts array
+ * instead of a string. Concatenating the array directly produced
+ * "[object Object]", which silently corrupted every such completion.
+ */
+function normalizeStreamingContentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	let text = "";
+	for (const part of content) {
+		if (typeof part === "string") {
+			text += part;
+		} else if (
+			isReasoningDetailObject(part) &&
+			(part.type === undefined || part.type === "text") &&
+			typeof part.text === "string"
+		) {
+			text += part.text;
+		}
+	}
+	return text;
+}
+
+function isJsonObjectValue(value: unknown): value is JsonObject {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Some backends (e.g. MiniMax) stream `function.arguments` as incremental JSON
+ * objects instead of JSON text. Merging keeps the call usable; treating the
+ * object as text turned the whole argument payload into "[object Object]".
+ */
+function mergeStreamingArgumentObject(target: JsonObject, delta: JsonObject): void {
+	for (const [key, value] of Object.entries(delta)) {
+		const existing = target[key];
+		if (isJsonObjectValue(existing) && isJsonObjectValue(value)) {
+			mergeStreamingArgumentObject(existing, value);
+			continue;
+		}
+		target[key] = value;
+	}
+}
+
 function hasValidCommonReasoningDetailFields(candidate: Record<string, unknown>): boolean {
 	return (
 		(candidate.id === undefined || candidate.id === null || typeof candidate.id === "string") &&
@@ -158,6 +204,12 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
 
 export interface OpenAICompletionsOptions extends StreamOptions {
 	toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
+	/**
+	 * An output cap in `maxTokens` that the model catalog already implied. `stream` measures
+	 * the thinking budget against it but leaves the request field out when no caller asked
+	 * for one, so OpenRouter keeps every upstream in a configured `provider.order`.
+	 */
+	implicitMaxTokens?: boolean;
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	/** Token budgets per thinking level. Used when `compat.thinkingTokenBudgetField` or `compat.supportsThinkingTokenBudget` is set, or by `{ "$var": "thinking.budget" }`. */
 	thinkingBudgets?: ThinkingBudgets;
@@ -403,7 +455,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				index?: number;
 				id?: string;
 				type?: string;
-				function?: { name?: string; arguments?: string };
+				function?: { name?: string; arguments?: string | JsonObject };
 				custom?: { name?: string; input?: string };
 			};
 
@@ -412,6 +464,9 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			let hasFinishReason = false;
 			const toolCallBlocksByIndex = new Map<number, StreamingToolCallBlock>();
 			const toolCallBlocksById = new Map<string, StreamingToolCallBlock>();
+			// Continuation chunks often omit both `index` and `id`, so the last block is
+			// the only thing that says where their arguments belong.
+			let lastToolCallBlock: StreamingToolCallBlock | undefined;
 			const blocks = output.content as StreamingBlock[];
 			const getContentIndex = (block: StreamingBlock) => blocks.indexOf(block);
 			const getCustomToolCallInput = (block: StreamingToolCallBlock): string => {
@@ -510,6 +565,15 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				if (!block && toolCall.id) {
 					block = toolCallBlocksById.get(toolCall.id);
 				}
+				if (!block && streamIndex === undefined && !toolCall.id && lastToolCallBlock) {
+					// Only a chunk that names a different call starts a new block; argument-only
+					// chunks continue the previous one instead of splitting it in two.
+					const last = lastToolCallBlock;
+					const startsAnotherCall = name.length > 0 && last.name.length > 0 && name !== last.name;
+					if (!startsAnotherCall) {
+						block = last;
+					}
+				}
 				if (!block) {
 					// Note: the "input" fallback here should/must not be taken.  in case the LLM makes up
 					// a tool we don't knwo about, we at least have a place to stash our stuff.
@@ -550,6 +614,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				if (!block.name && name) {
 					block.name = name;
 				}
+				lastToolCallBlock = block;
 				if (toolCall.custom && !toolCall.function && !block.customInput) {
 					const customInputProperty = grammarToolInputProperties.get(block.name) ?? "input";
 					block.arguments = { [customInputProperty]: "" };
@@ -596,17 +661,14 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				}
 
 				if (choice.delta) {
-					if (
-						choice.delta.content !== null &&
-						choice.delta.content !== undefined &&
-						choice.delta.content.length > 0
-					) {
+					const contentText = normalizeStreamingContentText(choice.delta.content);
+					if (contentText.length > 0) {
 						const block = ensureTextBlock();
-						block.text += choice.delta.content;
+						block.text += contentText;
 						stream.push({
 							type: "text_delta",
 							contentIndex: getContentIndex(block),
-							delta: choice.delta.content,
+							delta: contentText,
 							partial: output,
 						});
 					}
@@ -657,10 +719,16 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 							}
 
 							let delta = "";
-							if (toolCall.function?.arguments) {
-								delta = toolCall.function.arguments;
-								block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
+							const args = toolCall.function?.arguments;
+							if (typeof args === "string" && args.length > 0) {
+								delta = args;
+								block.partialArgs = (block.partialArgs ?? "") + args;
 								block.arguments = parseStreamingJson(block.partialArgs);
+							} else if (isJsonObjectValue(args)) {
+								// Object-form deltas only show up through `partial`; the serialized
+								// form keeps the finished call and the delta text consistent.
+								mergeStreamingArgumentObject(block.arguments, args);
+								block.partialArgs = JSON.stringify(block.arguments);
 							} else if (toolCall.custom?.input) {
 								const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
 								delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
@@ -709,6 +777,14 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				throw new Error("Stream ended without finish_reason");
 			}
 
+			// An EOS-only completion (finish_reason "stop" with no content blocks and no
+			// generated tokens) otherwise ends the turn as a normal success, leaving the
+			// user with a silent round. Report it as a retryable error so the existing
+			// agent retry loop re-issues the request instead (#580).
+			if (output.stopReason === "stop" && output.content.length === 0 && output.usage.output === 0) {
+				throw new Error("Provider returned an empty completion (EOS-only)");
+			}
+
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
 		} catch (error) {
@@ -747,10 +823,17 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 ): AssistantMessageEventStream => {
 	getClientApiKey(model.provider, options?.apiKey, options?.headers);
 
-	const base = {
+	const base: OpenAICompletionsOptions = {
 		...buildBaseOptions(model, context, options, options?.apiKey),
 		toolChoice: options?.toolChoice,
-	} satisfies OpenAICompletionsOptions;
+	};
+	// buildBaseOptions leaves maxTokens unset where the provider picks its own default (OpenRouter
+	// without a caller cap). Hand the resolved catalog figure to `stream` so the thinking budget is
+	// clamped against a real ceiling, flagged so buildParams still omits the request field.
+	if (base.maxTokens === undefined) {
+		base.maxTokens = clampMaxTokensToContext(model, context, model.maxTokens);
+		base.implicitMaxTokens = true;
+	}
 	const clampedReasoning = options?.reasoning ? clampThinkingLevel(model, options.reasoning) : undefined;
 	const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
@@ -788,7 +871,11 @@ function createClient(
 	}
 
 	if (sessionId && compat.sendSessionAffinityHeaders) {
-		if (compat.sessionAffinityFormat === "openrouter") {
+		// xAI routes prompt-cache hits with its own conversation id header; the OpenAI
+		// family of headers does not reach the same replica.
+		if (compat.sessionAffinityFormat === "xai") {
+			headers["x-grok-conv-id"] = sessionId;
+		} else if (compat.sessionAffinityFormat === "openrouter") {
 			headers["x-session-id"] = sessionId;
 		} else {
 			if (compat.sessionAffinityFormat === "openai") {
@@ -859,7 +946,7 @@ function buildParams(
 		params.store = false;
 	}
 
-	if (options?.maxTokens) {
+	if (options?.maxTokens && !options.implicitMaxTokens) {
 		if (compat.maxTokensField === "max_tokens") {
 			// Deprecated by OpenAI, but some OpenAI-compatible providers only accept max_tokens.
 			(params as { max_tokens?: number }).max_tokens = options.maxTokens;
@@ -895,7 +982,7 @@ function buildParams(
 	}
 
 	const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
-	const thinkingBudget = resolveClampedThinkingBudget(model, options, params);
+	const thinkingBudget = resolveClampedThinkingBudget(model, options, params, context);
 
 	if (compat.thinkingFormat === "zai" && model.reasoning) {
 		const zaiParams = params as Omit<typeof params, "reasoning_effort"> & {
@@ -1036,9 +1123,13 @@ function resolveClampedThinkingBudget(
 	model: Model<"openai-completions">,
 	options: OpenAICompletionsOptions | undefined,
 	params: { max_tokens?: number | null; max_completion_tokens?: number | null },
+	context: TranscriptContext,
 ): number | undefined {
 	if (!options?.reasoningEffort || !model.reasoning) return undefined;
-	const ceiling = params.max_tokens ?? params.max_completion_tokens ?? model.maxTokens;
+	// The request may omit the output cap (an OpenRouter call without a caller cap), but the
+	// thinking budget still has to fit inside what the provider will actually allow.
+	const ceiling =
+		params.max_tokens ?? params.max_completion_tokens ?? clampMaxTokensToContext(model, context, model.maxTokens);
 	const budget = clampThinkingBudgetToAnswerRoom(
 		thinkingBudgetForLevel(options.reasoningEffort, options.thinkingBudgets),
 		ceiling,
@@ -1630,6 +1721,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
 
+	const isSelfHosted = isSelfHostedEndpoint(baseUrl);
+
 	const isNonStandard =
 		isNvidia ||
 		isCerebras ||
@@ -1643,7 +1736,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		provider === "opencode" ||
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
-		isCloudflareAiGateway;
+		isCloudflareAiGateway ||
+		isSelfHosted;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -1652,7 +1746,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		isCloudflareAiGateway ||
 		isTogether ||
 		isNvidia ||
-		isZai;
+		isZai ||
+		isSelfHosted;
 
 	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
 	const isOpenRouterDeveloperRoleModel =
@@ -1662,8 +1757,17 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	return {
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-		supportsReasoningEffort: !isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
-		supportsUsageInStreaming: true,
+		supportsReasoningEffort:
+			!isGrok &&
+			!isZai &&
+			!isMoonshot &&
+			!isTogether &&
+			!isCloudflareAiGateway &&
+			!isNvidia &&
+			!isCerebras &&
+			!isSelfHosted,
+		// Cerebras rejects stream_options.include_usage on streaming requests.
+		supportsUsageInStreaming: !isCerebras,
 		supportsFinishReason: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
 		requiresToolResultName: false,
@@ -1692,8 +1796,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		supportsMidConvoSystemMessages: false,
 		supportsMidConvoToolAdditions: false,
 		cacheControlFormat,
-		sendSessionAffinityHeaders: isOpenRouter,
-		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+		sendSessionAffinityHeaders: isOpenRouter || isGrok,
+		sessionAffinityFormat: isGrok ? "xai" : isOpenRouter ? "openrouter" : "openai",
 		supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia),
 	};
 }

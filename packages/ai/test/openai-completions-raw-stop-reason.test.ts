@@ -59,7 +59,12 @@ describe("OpenAI completions raw stop reasons", () => {
 	});
 
 	it("preserves raw finish reasons for successful stops", async () => {
-		mockState.chunks = [{ id: "chatcmpl-1", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] }];
+		// A bare stop chunk with no content is an EOS-only empty completion, which
+		// #580 now reports as a retryable error. A successful stop carries content.
+		mockState.chunks = [
+			{ id: "chatcmpl-1", choices: [{ index: 0, delta: { content: "done" } }] },
+			{ id: "chatcmpl-1", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] },
+		];
 
 		const message = await streamOpenAICompletions(model, context, { apiKey: "test" }).result();
 

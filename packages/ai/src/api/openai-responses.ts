@@ -62,6 +62,7 @@ function getClientApiKey(provider: string, apiKey: string | undefined, headers: 
 }
 
 function detectSessionAffinityFormat(model: Pick<Model<"openai-responses">, "provider" | "baseUrl">) {
+	if (model.provider === "xai" || model.baseUrl.includes("api.x.ai")) return "xai";
 	return model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai") ? "openrouter" : "openai";
 }
 
@@ -278,7 +279,11 @@ function createClient(
 	}
 
 	if (sessionId) {
-		if (compat.sessionAffinityFormat === "openrouter") {
+		// xAI routes prompt-cache hits with its own conversation id header; the OpenAI
+		// family of headers does not reach the same replica.
+		if (compat.sessionAffinityFormat === "xai") {
+			headers["x-grok-conv-id"] = sessionId;
+		} else if (compat.sessionAffinityFormat === "openrouter") {
 			headers["x-session-id"] = sessionId;
 		} else {
 			if (compat.sessionAffinityFormat === "openai") {

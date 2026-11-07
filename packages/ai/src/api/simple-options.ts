@@ -11,6 +11,7 @@ import type {
 	TranscriptContext,
 } from "../types.ts";
 import { estimateContextTokens } from "../utils/estimate.ts";
+import { isOpenRouterModel } from "../utils/openrouter-cost.ts";
 
 const CONTEXT_SAFETY_TOKENS = 4096;
 const MIN_MAX_TOKENS = 1;
@@ -33,6 +34,23 @@ export function resolveSamplingParams(
 		: undefined;
 }
 
+/**
+ * OpenRouter drops any upstream whose max output is below the request's cap, so
+ * sending the catalog figure defeats a configured `provider.order` fallback chain.
+ *
+ * Only an explicit caller cap goes out. The catalog value still applies when the
+ * provider needs one: Anthropic requires max_tokens, and the completions adapter
+ * falls back to the catalog figure for the thinking-budget ceiling.
+ */
+function resolveBaseMaxTokens(
+	model: Model<Api>,
+	context: TranscriptContext,
+	options?: SimpleStreamOptions,
+): number | undefined {
+	if (options?.maxTokens === undefined && isOpenRouterModel(model)) return undefined;
+	return clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens);
+}
+
 export function buildBaseOptions(
 	model: Model<Api>,
 	context: TranscriptContext,
@@ -43,7 +61,7 @@ export function buildBaseOptions(
 	return {
 		temperature: options?.temperature,
 		samplingParams,
-		maxTokens: clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens),
+		maxTokens: resolveBaseMaxTokens(model, context, options),
 		signal: options?.signal,
 		apiKey: apiKey || options?.apiKey,
 		fetch: options?.fetch,
