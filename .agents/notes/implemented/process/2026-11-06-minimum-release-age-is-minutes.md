@@ -2,6 +2,16 @@
 
 Status: implemented
 
+> **后续（2026-11-07，`shinytale/nanopi#568`）**：本篇 `## Alternatives considered` 里
+> 「同时在 `renovate.json` 里设 `minimumReleaseAge`：这次不做，等有人确认 PR 红 36 小时真的
+> 碍事再单独加」——确认了。GitHub 的依赖 PR `NekoSekaiMoe/nanopi#23` 就是那个窗口：Renovate
+> 提议刚发布 13 小时的 `@biomejs/biome@2.6.6`，pnpm 的冷却期拒绝写 lockfile，PR 上挂一条
+> Artifact update problem、CI 里一条 `ERR_PNPM_OUTDATED_LOCKFILE`。现在两侧对齐（Renovate
+> `1 day` + `30 minutes` buffer，pnpm `1440` 分钟），并由
+> `scripts/check-renovate-release-age.mjs` 在 CI 里断言。阈值同期从 2160 调到 1440
+> （`04db1f603`），本篇正文里的 2160 是当时的判断，保留不改。见
+> [Renovate 的冷却期必须与 pnpm 对齐](./2026-11-07-renovate-must-wait-as-long-as-pnpm.md)。
+
 ## Problem
 
 `pnpm-workspace.yaml` 里写着：
