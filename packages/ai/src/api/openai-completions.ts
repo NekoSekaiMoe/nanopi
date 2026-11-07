@@ -17,6 +17,7 @@ import type {
 	CacheRetention,
 	ChatTemplateKwargValue,
 	ImageContent,
+	JsonObject,
 	JsonValue,
 	Message,
 	Model,
@@ -127,6 +128,49 @@ function isImageContentBlock(block: { type: string }): block is ImageContent {
 
 function isReasoningDetailObject(detail: unknown): detail is Record<string, unknown> {
 	return typeof detail === "object" && detail !== null && !Array.isArray(detail);
+}
+
+/**
+ * Some backends (e.g. Mistral Medium) stream `delta.content` as a parts array
+ * instead of a string. Concatenating the array directly produced
+ * "[object Object]", which silently corrupted every such completion.
+ */
+function normalizeStreamingContentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	let text = "";
+	for (const part of content) {
+		if (typeof part === "string") {
+			text += part;
+		} else if (
+			isReasoningDetailObject(part) &&
+			(part.type === undefined || part.type === "text") &&
+			typeof part.text === "string"
+		) {
+			text += part.text;
+		}
+	}
+	return text;
+}
+
+function isJsonObjectValue(value: unknown): value is JsonObject {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Some backends (e.g. MiniMax) stream `function.arguments` as incremental JSON
+ * objects instead of JSON text. Merging keeps the call usable; treating the
+ * object as text turned the whole argument payload into "[object Object]".
+ */
+function mergeStreamingArgumentObject(target: JsonObject, delta: JsonObject): void {
+	for (const [key, value] of Object.entries(delta)) {
+		const existing = target[key];
+		if (isJsonObjectValue(existing) && isJsonObjectValue(value)) {
+			mergeStreamingArgumentObject(existing, value);
+			continue;
+		}
+		target[key] = value;
+	}
 }
 
 function hasValidCommonReasoningDetailFields(candidate: Record<string, unknown>): boolean {
@@ -403,7 +447,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				index?: number;
 				id?: string;
 				type?: string;
-				function?: { name?: string; arguments?: string };
+				function?: { name?: string; arguments?: string | JsonObject };
 				custom?: { name?: string; input?: string };
 			};
 
@@ -412,6 +456,9 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 			let hasFinishReason = false;
 			const toolCallBlocksByIndex = new Map<number, StreamingToolCallBlock>();
 			const toolCallBlocksById = new Map<string, StreamingToolCallBlock>();
+			// Continuation chunks often omit both `index` and `id`, so the last block is
+			// the only thing that says where their arguments belong.
+			let lastToolCallBlock: StreamingToolCallBlock | undefined;
 			const blocks = output.content as StreamingBlock[];
 			const getContentIndex = (block: StreamingBlock) => blocks.indexOf(block);
 			const getCustomToolCallInput = (block: StreamingToolCallBlock): string => {
@@ -510,6 +557,15 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				if (!block && toolCall.id) {
 					block = toolCallBlocksById.get(toolCall.id);
 				}
+				if (!block && streamIndex === undefined && !toolCall.id && lastToolCallBlock) {
+					// Only a chunk that names a different call starts a new block; argument-only
+					// chunks continue the previous one instead of splitting it in two.
+					const last = lastToolCallBlock;
+					const startsAnotherCall = name.length > 0 && last.name.length > 0 && name !== last.name;
+					if (!startsAnotherCall) {
+						block = last;
+					}
+				}
 				if (!block) {
 					// Note: the "input" fallback here should/must not be taken.  in case the LLM makes up
 					// a tool we don't knwo about, we at least have a place to stash our stuff.
@@ -550,6 +606,7 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				if (!block.name && name) {
 					block.name = name;
 				}
+				lastToolCallBlock = block;
 				if (toolCall.custom && !toolCall.function && !block.customInput) {
 					const customInputProperty = grammarToolInputProperties.get(block.name) ?? "input";
 					block.arguments = { [customInputProperty]: "" };
@@ -596,17 +653,14 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				}
 
 				if (choice.delta) {
-					if (
-						choice.delta.content !== null &&
-						choice.delta.content !== undefined &&
-						choice.delta.content.length > 0
-					) {
+					const contentText = normalizeStreamingContentText(choice.delta.content);
+					if (contentText.length > 0) {
 						const block = ensureTextBlock();
-						block.text += choice.delta.content;
+						block.text += contentText;
 						stream.push({
 							type: "text_delta",
 							contentIndex: getContentIndex(block),
-							delta: choice.delta.content,
+							delta: contentText,
 							partial: output,
 						});
 					}
@@ -657,10 +711,16 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 							}
 
 							let delta = "";
-							if (toolCall.function?.arguments) {
-								delta = toolCall.function.arguments;
-								block.partialArgs = (block.partialArgs ?? "") + toolCall.function.arguments;
+							const args = toolCall.function?.arguments;
+							if (typeof args === "string" && args.length > 0) {
+								delta = args;
+								block.partialArgs = (block.partialArgs ?? "") + args;
 								block.arguments = parseStreamingJson(block.partialArgs);
+							} else if (isJsonObjectValue(args)) {
+								// Object-form deltas only show up through `partial`; the serialized
+								// form keeps the finished call and the delta text consistent.
+								mergeStreamingArgumentObject(block.arguments, args);
+								block.partialArgs = JSON.stringify(block.arguments);
 							} else if (toolCall.custom?.input) {
 								const nextInput = getCustomToolCallInput(block) + toolCall.custom.input;
 								delta = appendCustomToolCallInput(block, nextInput, false) ?? "";
