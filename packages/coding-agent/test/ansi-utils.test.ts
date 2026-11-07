@@ -130,4 +130,11 @@ describe("stripAnsi", () => {
 		expect(stripAnsi("\x1b[>0;276;0c")).toBe("");
 		expect(stripAnsi("a\x1b[>0;276;0c\x1b[1mz")).toBe("az");
 	});
+
+	it("strips DECSED replies whose `=` prefix precedes the parameters", () => {
+		// `CSI = Ps h/l` (DECSED send/receive). The `=` is a marker, so the parameters belong to the
+		// same sequence; treating it as a final byte leaked `5h` into the text.
+		expect(stripAnsi("\x1b[=5h")).toBe("");
+		expect(stripAnsi("a\x1b[=5hb")).toBe("ab");
+	});
 });

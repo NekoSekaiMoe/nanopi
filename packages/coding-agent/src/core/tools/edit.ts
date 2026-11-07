@@ -6,6 +6,7 @@ import { splitBom } from "../../utils/text.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import {
 	applyEditsToNormalizedContent,
+	decodeFileForEdit,
 	detectLineEnding,
 	type Edit,
 	generateDiffString,
@@ -182,7 +183,7 @@ export function createEditToolDefinition(
 				// direction for an advisory hint.
 				const snapshot = await ops.stat?.(absolutePath).catch(() => undefined);
 				const buffer = await ops.readFile(absolutePath);
-				const rawContent = buffer.toString("utf-8");
+				const rawContent = decodeFileForEdit(buffer, path);
 				throwIfAborted();
 
 				// Advisory staleness check: the model may be matching against text it
