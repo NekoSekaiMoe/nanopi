@@ -46,6 +46,11 @@ const DEFAULT_OPTIONS: Required<ImageResizeOptions> = {
 	jpegQuality: 80,
 };
 
+/** Fills the profile defaults. Callers that need the effective limits (not just to resize) share it. */
+export function resolveImageResizeOptions(options?: ImageResizeOptions): Required<ImageResizeOptions> {
+	return { ...DEFAULT_OPTIONS, ...options };
+}
+
 interface EncodedCandidate {
 	data: string;
 	encodedSize: number;
@@ -79,7 +84,7 @@ export async function resizeImageInProcess(
 	mimeType: string,
 	options?: ImageResizeOptions,
 ): Promise<ImageResizeResult> {
-	const opts = { ...DEFAULT_OPTIONS, ...options };
+	const opts = resolveImageResizeOptions(options);
 	const inputBase64Size = Math.ceil(inputBytes.byteLength / 3) * 4;
 
 	const photon = await loadPhoton();
