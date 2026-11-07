@@ -46,6 +46,10 @@ export interface Args {
 	promptTemplates?: string[];
 	noPromptTemplates?: boolean;
 	noContextFiles?: boolean;
+	/** `--hot`: reload module files from disk as they change. */
+	hot?: boolean;
+	/** `--no-hot`: keep modules static even when settings turn hot reload on. */
+	noHot?: boolean;
 	listModels?: string | true;
 	/** `--list-models --refresh`: refetch provider catalogs before listing. */
 	listModelsRefresh?: boolean;
@@ -217,6 +221,10 @@ export function parseArgs(args: string[]): Args {
 			result.noPromptTemplates = true;
 		} else if (arg === "--no-context-files" || arg === "-nc") {
 			result.noContextFiles = true;
+		} else if (arg === "--hot") {
+			result.hot = true;
+		} else if (arg === "--no-hot") {
+			result.noHot = true;
 		} else if (arg === "--list-models") {
 			// Check if next arg is a search pattern (not a flag or file arg)
 			if (i + 1 < args.length && !args[i + 1].startsWith("-") && !args[i + 1].startsWith("@")) {
@@ -322,6 +330,8 @@ ${chalk.bold("Options:")}
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
   --no-prompt-templates, -np     Disable prompt template discovery and loading
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
+  --hot                          Reload module files from disk as they change
+  --no-hot                       Keep modules static even when settings enable hot reload
   --export <file>                Export a session file and exit (format from the extension)
   --export-format <format>       Export format: md, html, or jsonl (overrides the extension)
   --list-models [search]         List available models (with optional fuzzy search)

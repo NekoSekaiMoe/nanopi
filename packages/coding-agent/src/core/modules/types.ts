@@ -904,7 +904,13 @@ export interface SessionCompactEvent {
 /** Fired before an extension runtime is torn down due to quit, reload, or session replacement. */
 export interface SessionShutdownEvent {
 	type: "session_shutdown";
-	reason: "quit" | "reload" | "new" | "resume" | "fork";
+	/**
+	 * `unload` is a module being removed or replaced by a hot reload: the event
+	 * goes to that module alone and the session keeps running. Handlers that
+	 * release resources should not distinguish it from the other reasons; code
+	 * that must not run mid-session (closing a UI the new module inherits) can.
+	 */
+	reason: "quit" | "reload" | "new" | "resume" | "fork" | "unload";
 	/** Destination session file when shutting down due to session replacement. */
 	targetSessionFile?: string;
 }
@@ -2347,6 +2353,16 @@ export interface SessionModule<TSurface extends object = ModuleApi> {
 	factory: ModuleFactory<TSurface>;
 	/** Omit this module from the loaded-modules listing. */
 	hidden?: boolean;
+	/**
+	 * Release what the factory acquired outside the registration API: sockets,
+	 * child processes, temporary directories, timers.
+	 *
+	 * Registrations (handlers, tools, commands, flags, renderers) are undone by
+	 * the registry; this is only for state the module owns itself. It runs when
+	 * the module is replaced or removed by a hot reload, and after
+	 * `session_shutdown` when the session ends.
+	 */
+	dispose?: () => void | Promise<void>;
 }
 
 // ============================================================================
@@ -2576,6 +2592,18 @@ export interface RegisteredModule {
 	/** Widget keys the module recorded with `redrawWidget()`, dropped when it unloads. */
 	widgetKeys?: Set<string>;
 	workingIndicatorRenderer?: WorkingIndicatorRenderer;
+	/**
+	 * The file this module was loaded from, when it came from disk. A hot reload
+	 * matches records by path, so an in-memory module has no record and is never
+	 * reloaded that way.
+	 */
+	diskPath?: string;
+	/**
+	 * Tear the module down: run its `SessionModule.dispose` hook, then undo every
+	 * registration it made. Set for modules that came through `loadModules` /
+	 * `loadModule`; absent for hand-built objects.
+	 */
+	dispose?: () => Promise<void>;
 }
 
 /** Result of loading extensions. */

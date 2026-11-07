@@ -55,4 +55,7 @@ export const SETTINGS_DEFAULTS = {
 		anthropicExtraUsage: true,
 	},
 	cacheWarming: "streaming",
+	modules: {
+		hotReload: false,
+	},
 } as const;

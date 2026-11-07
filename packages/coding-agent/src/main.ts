@@ -870,6 +870,11 @@ export async function main(args: string[], options?: MainOptions) {
 				parsed.projectTrustOverride ??
 				(!hasTrustRequiringResources || trustStore.get(cwd) === true));
 		const runtimeSettingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted });
+		// The flags are an override on top of settings.json, so `--hot` turns the
+		// watcher on for this run only and `--no-hot` turns it off the same way.
+		if (parsed.hot !== undefined || parsed.noHot !== undefined) {
+			runtimeSettingsManager.applyOverrides({ modules: { hotReload: parsed.noHot !== true } });
+		}
 		const services = await createAgentSessionServices({
 			cwd,
 			agentDir,

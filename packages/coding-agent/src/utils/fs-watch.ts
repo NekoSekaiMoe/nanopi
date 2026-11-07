@@ -18,9 +18,10 @@ export function watchWithErrorHandler(
 	path: string,
 	listener: WatchListener<string>,
 	onError: () => void,
+	options?: { recursive?: boolean },
 ): FSWatcher | null {
 	try {
-		const watcher = watch(path, listener);
+		const watcher = options?.recursive ? watch(path, { recursive: true }, listener) : watch(path, listener);
 		watcher.on("error", onError);
 		return watcher;
 	} catch {

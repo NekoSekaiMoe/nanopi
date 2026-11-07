@@ -6,6 +6,7 @@
 export type * from "../../modules-api.ts";
 export type { SlashCommandInfo, SlashCommandSource } from "../slash-commands.ts";
 export type { SourceInfo } from "../source-info.ts";
+export { MODULE_WATCH_DEBOUNCE_MS, type ModuleHotReloadTarget, ModuleHotReloadWatcher } from "./hot-reload.ts";
 export type {
 	BeforeAgentStartTrigger,
 	ForkHandler,
@@ -19,6 +20,7 @@ export {
 	createModuleRuntime,
 	emitProjectTrustEvent,
 	emitSessionShutdownEvent,
+	loadModule,
 	loadModules,
 	ModuleRegistry,
 } from "./registry.ts";

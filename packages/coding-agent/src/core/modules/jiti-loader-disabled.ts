@@ -44,3 +44,17 @@ export interface LoadDiskModulesResult {
 export async function loadDiskModules(): Promise<LoadDiskModulesResult> {
 	return { modules: [], errors: [] };
 }
+
+/** Unreachable in a build with no disk modules; the hot watcher is off there too. */
+export function diskModuleName(file: string): string {
+	return file;
+}
+
+export function diskModuleStatKey(): string | undefined {
+	return undefined;
+}
+
+/** Unreachable in a build with no disk modules. */
+export async function loadDiskModuleFile(): Promise<SessionModule> {
+	throw new Error("This build cannot load module files from disk");
+}

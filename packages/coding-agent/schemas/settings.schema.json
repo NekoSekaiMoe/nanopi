@@ -638,6 +638,17 @@
       "type": "boolean",
       "description": "Legacy setting migrated to transport.",
       "deprecated": true
+    },
+    "modules": {
+      "type": "object",
+      "properties": {
+        "hotReload": {
+          "type": "boolean",
+          "description": "Reload module files from disk as they change. Off by default: a module edit takes effect at the next idle moment instead of at the next restart.",
+          "default": false
+        }
+      },
+      "additionalProperties": true
     }
   },
   "additionalProperties": true,

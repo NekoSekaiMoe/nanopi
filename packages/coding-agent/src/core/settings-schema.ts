@@ -398,6 +398,20 @@ export const SettingsSchema = Type.Object(
 		websockets: Type.Optional(
 			Type.Boolean({ description: "Legacy setting migrated to transport.", deprecated: true }),
 		),
+		modules: Type.Optional(
+			Type.Object(
+				{
+					hotReload: Type.Optional(
+						Type.Boolean({
+							description:
+								"Reload module files from disk as they change. Off by default: a module edit takes effect at the next idle moment instead of at the next restart.",
+							default: SETTINGS_DEFAULTS.modules.hotReload,
+						}),
+					),
+				},
+				{ additionalProperties: true },
+			),
+		),
 	},
 	{ additionalProperties: true },
 );
