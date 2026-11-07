@@ -777,6 +777,14 @@ export const stream: StreamFunction<"openai-completions", OpenAICompletionsOptio
 				throw new Error("Stream ended without finish_reason");
 			}
 
+			// An EOS-only completion (finish_reason "stop" with no content blocks and no
+			// generated tokens) otherwise ends the turn as a normal success, leaving the
+			// user with a silent round. Report it as a retryable error so the existing
+			// agent retry loop re-issues the request instead (#580).
+			if (output.stopReason === "stop" && output.content.length === 0 && output.usage.output === 0) {
+				throw new Error("Provider returned an empty completion (EOS-only)");
+			}
+
 			stream.push({ type: "done", reason: output.stopReason, message: output });
 			stream.end();
 		} catch (error) {

@@ -86,6 +86,12 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"service.?(?:is.?)?(?:temporarily.?)?unavailable",
 	"server.?error",
 	"internal.?error",
+	// llama.cpp rejects a request when the local runtime has no free slot / VRAM.
+	// It is a transient capacity failure: a later attempt usually succeeds (#580).
+	"insufficient_system_resource",
+	// A stop-only stream with no content blocks and no output tokens is a
+	// transient empty turn, not a completed answer; let the agent retry it (#580).
+	"empty completion",
 	// HTTP statuses a provider or gateway reports verbatim ("429 status code (no body)",
 	// "OpenAI API error (503): ..."). Kept separate from the substring patterns above
 	// so a digit inside a longer number is not read as a throttle.
