@@ -79,10 +79,16 @@ resolution、snapshot 的键。`protobufjs` 的 override 仍是 7.6.6：3.0.0 �
   这是特性不是缺陷：那正是「有一个新原因需要我们决定怎么归类」的时刻，
   照 2.31.0 加 `CONTINUATION`、3.0.0 加 `MALFORMED_RESPONSE` 的先例，改动量是一行 case
   加一条 mock 键。
-- `MALFORMED_RESPONSE` 走 `error` 之后，`isTerminalFinishReason` 目前不认它：
+- `MALFORMED_RESPONSE` 走 `error` 之后，`isTerminalFinishReason` 不认它：
   `NON_RETRYABLE_FINISH_REASON_PATTERN`（`packages/ai/src/utils/retry.ts`）里列的
   Google 值是 `SAFETY` / `BLOCKLIST` / `PROHIBITED_CONTENT` / `SPII` / `RECITATION` /
-  `IMAGE_SAFETY` / `LANGUAGE` / `NO_IMAGE`。畸形响应更像 `malformed_function_call`
-  那种「重试会原样复现」，但这条升级不该顺手改重试策略，所以留给后续判断。
+  `IMAGE_SAFETY` / `LANGUAGE` / `NO_IMAGE`。这不是「会重复打一次」：这条缺失不改变
+  重试结果。`isRetryableAssistantError` 读的是 `errorMessage`，实测值是
+  `Provider stopped with: MALFORMED_RESPONSE`，既不命中 `RETRYABLE_PROVIDER_ERROR_PATTERN`
+  （`provider.?returned.?(?:an.?)?error` 要求 `returned`，这里没有），也不命中别处，
+  所以判定为不重试，行为与把它加进 terminate 名单一致。缺的只是一层保险：将来某人给
+  `RETRYABLE_PROVIDER_ERROR_PATTERN` 加一条能被这段文本命中的宽泛模式（例如裸
+  `malformed`），畸形响应就会开始重试，而那时没有第二道闸。要补就补这条保险，
+  不是补一个重复请求的漏洞。
 - `pnpm run check` 与 `node ./test.mjs` 全绿：ai 1489、coding-agent 2619、agent 102、
   extra 134、webui 7。

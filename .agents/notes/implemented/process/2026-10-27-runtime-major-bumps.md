@@ -55,7 +55,8 @@ protobufjs 8 也说不通：那是 `^7.5.4` 之外的版本，上游未验证的
 
 ## Alternatives considered
 
-- **去掉 `overrides` 让 pnpm 自动解析**：在 `minimumReleaseAge: 2` 与
+- **去掉 `overrides` 让 pnpm 自动解析**：在 `minimumReleaseAge: 2`（当时的写法，
+  单位是分钟，见[那篇笔记](./2026-11-06-minimum-release-age-is-minutes.md)）与
   `allowBuilds` 都在位的配置下试过，lockfile 会指向 `protobufjs@8.8.1`，因为
   override 一撤，`^7.5.4` 之外的版本就没人拦了。这与「跟着上游的兼容范围」相反。
 - **升 `@google/genai` 到支持 protobufjs 8 的版本**：npm 上 `@google/genai` 的

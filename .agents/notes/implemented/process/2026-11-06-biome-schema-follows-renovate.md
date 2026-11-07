@@ -52,7 +52,7 @@ Renovate runner。两层：
 - **在 `renovate.json` 里写 `postUpgradeTasks: "pnpm exec biome migrate --write"`**：
   这是最常见的答案，在这个仓库不成立。托管版 Renovate（GitHub App）默认禁用
   `postUpgradeTasks`，要用得自建 runner；就算自建，Renovate 建分支时写的是精确版本
-  `@biomejs/biome@2.6.6`，而仓库里 `minimumReleaseAge` 那套冷却期会让 1 天前刚发的
+  `@biomejs/biome@2.6.6`，而仓库里 `minimumReleaseAge` 那套 36 小时冷却期会让 1 天前刚发的
   包 `pnpm install` 失败，整条依赖 PR 全红。customManager 不跑命令，没有这个前提。
 - **`.github/workflows` 里加一步 `biome migrate --write` 并自动提交**：需要一个能推
   分支的 token，而且它只能在事后补，PR 已经被看到是红的；`renovate.json` 这条在
@@ -61,7 +61,7 @@ Renovate runner。两层：
   校验，配置里用了旧版才有的键就报错；去掉就失去编辑器补全。两者都是拿开发体验换
   「不用维护」。
 - **只留 CI 断言，不做自动更新**：也能保证合进 main 的树是自洽的，但每次 biome
-  升级都要人补一条命令，而 `minimumReleaseAge` 让 PR 有一天的窗口，期间红的是整组
+  升级都要人补一条命令，而 `minimumReleaseAge` 让 PR 有 36 小时的窗口，期间红的是整组
   npm PR——这正是要消掉的摩擦。
 
 ## Consequences

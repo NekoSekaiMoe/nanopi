@@ -22,12 +22,32 @@ autoInstallPeers: true
 overrides:
   protobufjs: 7.6.6
 
-# 2 天冷却期，挡住刚发布的供应链投毒版本。
+# 36 小时冷却期，挡住刚发布的供应链投毒版本。
+# 单位是分钟，不是天：pnpm 的惯例是分钟（默认 1440 = 1 天），写 2 只等于 2 分钟，
+# 比默认还松。见 .agents/notes/implemented/process/2026-11-06-minimum-release-age-is-minutes.md。
+#
+# 这台 lockfile 是按旧值装的，把阈值抬到 2160 会有条目落进冷却窗，pnpm 的
+# lockfile 校验（trustLockfile: false 时每装一次都跑）会直接 ERR_PNPM_MINIMUM_RELEASE_AGE_VIOLATION。
+# 下面这些是「已经在 main 上跑了一段时间、只是还没满 36 小时」的版本，按版本号
+# 拉清单放行，不回退阈值。它们是显式豁免，不是政策的一部分：下次同包升级不受影响，
+# 老条目过期后由 minimumReleaseAgeExcludePrune 在写 lock 时自动清掉。
+#
 # ignoreMissingTime: 少数包（如 @biomejs/cli-android-arm64@2.6.3）的 manifest
 # 没带 version 级发布时间字段，pnpm 会按"版本不在 manifest 里"拒绝安装。
 # 这类包仍受 integrity、签名、tarball URL 绑定校验，所以放行仍然安全。
-minimumReleaseAge: 2
+minimumReleaseAge: 2160
+minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeIgnoreMissingTime: true
+minimumReleaseAgeExclude:
+  - '@anthropic-ai/sdk@1.6.0'
+  - '@aws-sdk/client-bedrock-runtime@3.1163.0'
+  - '@aws-sdk/token-providers@3.1163.0'
+  - '@google/genai@3.0.0'
+  - '@isaacs/nonrecursive-glob-match@1.1.0'
+  - 'lucide-react@1.69.0'
+  - 'minimatch@11.0.5'
+  - 'openai@7.52.0'
+  - 'undici@8.12.4'
 
 allowBuilds:
   '@google/genai': true
