@@ -2,7 +2,10 @@ import { type Static, type TProperties, type TSchemaOptions, Type } from "typebo
 import { ModelCostSchema } from "./model-schema.ts";
 
 function sessionAffinityFormat(options?: TSchemaOptions) {
-	return Type.Union([Type.Literal("openai"), Type.Literal("openai-nosession"), Type.Literal("openrouter")], options);
+	return Type.Union(
+		[Type.Literal("openai"), Type.Literal("openai-nosession"), Type.Literal("openrouter"), Type.Literal("xai")],
+		options,
+	);
 }
 
 export const SessionAffinityFormatSchema = sessionAffinityFormat({
@@ -333,7 +336,7 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 		}),
 		sessionAffinityFormat: optionalSessionAffinityFormat({
 			description:
-				"Session-affinity header format. openai sends session_id, x-client-request-id, and x-session-affinity; openai-nosession sends x-client-request-id and x-session-affinity; openrouter sends x-session-id. Does not affect prompt_cache_key. Default: auto-detected.",
+				"Session-affinity header format. openai sends session_id, x-client-request-id, and x-session-affinity; openai-nosession sends x-client-request-id and x-session-affinity; openrouter sends x-session-id; xai sends x-grok-conv-id. Does not affect prompt_cache_key. Default: auto-detected.",
 		}),
 		supportsLongCacheRetention: optionalCompatBoolean({
 			description:
@@ -371,7 +374,7 @@ export const OpenAIResponsesCompatSchema = Type.Object(
 		}),
 		sessionAffinityFormat: optionalSessionAffinityFormat({
 			description:
-				"Session-affinity header format. openai sends session_id and x-client-request-id; openai-nosession sends x-client-request-id; openrouter sends x-session-id. Does not affect prompt_cache_key. Default: auto-detected.",
+				"Session-affinity header format. openai sends session_id and x-client-request-id; openai-nosession sends x-client-request-id; openrouter sends x-session-id; xai sends x-grok-conv-id. Does not affect prompt_cache_key. Default: auto-detected.",
 		}),
 		supportsLongCacheRetention: optionalCompatBoolean({
 			description:

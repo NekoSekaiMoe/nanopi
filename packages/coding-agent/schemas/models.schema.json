@@ -973,6 +973,10 @@
             {
               "type": "string",
               "const": "openrouter"
+            },
+            {
+              "type": "string",
+              "const": "xai"
             }
           ],
           "description": "Session-affinity header format. Defaults are API-specific or auto-detected."

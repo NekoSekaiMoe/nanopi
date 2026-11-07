@@ -35,6 +35,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "../types.ts";
+import { isSelfHostedEndpoint } from "../utils/endpoint.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
@@ -69,6 +70,7 @@ import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copi
 import { clampOpenAIPromptCacheKey } from "./openai-prompt-cache.ts";
 import {
 	buildBaseOptions,
+	clampMaxTokensToContext,
 	clampThinkingBudgetToAnswerRoom,
 	resolveSamplingParams,
 	thinkingBudgetForLevel,
@@ -158,6 +160,12 @@ function isOpenAIReasoningDetail(detail: unknown): detail is OpenAIReasoningDeta
 
 export interface OpenAICompletionsOptions extends StreamOptions {
 	toolChoice?: OpenAI.Chat.Completions.ChatCompletionToolChoiceOption;
+	/**
+	 * An output cap in `maxTokens` that the model catalog already implied. `stream` measures
+	 * the thinking budget against it but leaves the request field out when no caller asked
+	 * for one, so OpenRouter keeps every upstream in a configured `provider.order`.
+	 */
+	implicitMaxTokens?: boolean;
 	reasoningEffort?: "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 	/** Token budgets per thinking level. Used when `compat.thinkingTokenBudgetField` or `compat.supportsThinkingTokenBudget` is set, or by `{ "$var": "thinking.budget" }`. */
 	thinkingBudgets?: ThinkingBudgets;
@@ -747,10 +755,17 @@ export const streamSimple: StreamFunction<"openai-completions", SimpleStreamOpti
 ): AssistantMessageEventStream => {
 	getClientApiKey(model.provider, options?.apiKey, options?.headers);
 
-	const base = {
+	const base: OpenAICompletionsOptions = {
 		...buildBaseOptions(model, context, options, options?.apiKey),
 		toolChoice: options?.toolChoice,
-	} satisfies OpenAICompletionsOptions;
+	};
+	// buildBaseOptions leaves maxTokens unset where the provider picks its own default (OpenRouter
+	// without a caller cap). Hand the resolved catalog figure to `stream` so the thinking budget is
+	// clamped against a real ceiling, flagged so buildParams still omits the request field.
+	if (base.maxTokens === undefined) {
+		base.maxTokens = clampMaxTokensToContext(model, context, model.maxTokens);
+		base.implicitMaxTokens = true;
+	}
 	const clampedReasoning = options?.reasoning ? clampThinkingLevel(model, options.reasoning) : undefined;
 	const reasoningEffort = clampedReasoning === "off" ? undefined : clampedReasoning;
 
@@ -788,7 +803,11 @@ function createClient(
 	}
 
 	if (sessionId && compat.sendSessionAffinityHeaders) {
-		if (compat.sessionAffinityFormat === "openrouter") {
+		// xAI routes prompt-cache hits with its own conversation id header; the OpenAI
+		// family of headers does not reach the same replica.
+		if (compat.sessionAffinityFormat === "xai") {
+			headers["x-grok-conv-id"] = sessionId;
+		} else if (compat.sessionAffinityFormat === "openrouter") {
 			headers["x-session-id"] = sessionId;
 		} else {
 			if (compat.sessionAffinityFormat === "openai") {
@@ -859,7 +878,7 @@ function buildParams(
 		params.store = false;
 	}
 
-	if (options?.maxTokens) {
+	if (options?.maxTokens && !options.implicitMaxTokens) {
 		if (compat.maxTokensField === "max_tokens") {
 			// Deprecated by OpenAI, but some OpenAI-compatible providers only accept max_tokens.
 			(params as { max_tokens?: number }).max_tokens = options.maxTokens;
@@ -895,7 +914,7 @@ function buildParams(
 	}
 
 	const thinkingTokenBudgetField = resolveThinkingTokenBudgetField(compat);
-	const thinkingBudget = resolveClampedThinkingBudget(model, options, params);
+	const thinkingBudget = resolveClampedThinkingBudget(model, options, params, context);
 
 	if (compat.thinkingFormat === "zai" && model.reasoning) {
 		const zaiParams = params as Omit<typeof params, "reasoning_effort"> & {
@@ -1036,9 +1055,13 @@ function resolveClampedThinkingBudget(
 	model: Model<"openai-completions">,
 	options: OpenAICompletionsOptions | undefined,
 	params: { max_tokens?: number | null; max_completion_tokens?: number | null },
+	context: TranscriptContext,
 ): number | undefined {
 	if (!options?.reasoningEffort || !model.reasoning) return undefined;
-	const ceiling = params.max_tokens ?? params.max_completion_tokens ?? model.maxTokens;
+	// The request may omit the output cap (an OpenRouter call without a caller cap), but the
+	// thinking budget still has to fit inside what the provider will actually allow.
+	const ceiling =
+		params.max_tokens ?? params.max_completion_tokens ?? clampMaxTokensToContext(model, context, model.maxTokens);
 	const budget = clampThinkingBudgetToAnswerRoom(
 		thinkingBudgetForLevel(options.reasoningEffort, options.thinkingBudgets),
 		ceiling,
@@ -1630,6 +1653,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
 	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
 
+	const isSelfHosted = isSelfHostedEndpoint(baseUrl);
+
 	const isNonStandard =
 		isNvidia ||
 		isCerebras ||
@@ -1643,7 +1668,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		provider === "opencode" ||
 		baseUrl.includes("opencode.ai") ||
 		isCloudflareWorkersAI ||
-		isCloudflareAiGateway;
+		isCloudflareAiGateway ||
+		isSelfHosted;
 
 	const useMaxTokens =
 		baseUrl.includes("chutes.ai") ||
@@ -1652,7 +1678,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		isCloudflareAiGateway ||
 		isTogether ||
 		isNvidia ||
-		isZai;
+		isZai ||
+		isSelfHosted;
 
 	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
 	const isOpenRouterDeveloperRoleModel =
@@ -1662,8 +1689,17 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	return {
 		supportsStore: !isNonStandard,
 		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
-		supportsReasoningEffort: !isGrok && !isZai && !isMoonshot && !isTogether && !isCloudflareAiGateway && !isNvidia,
-		supportsUsageInStreaming: true,
+		supportsReasoningEffort:
+			!isGrok &&
+			!isZai &&
+			!isMoonshot &&
+			!isTogether &&
+			!isCloudflareAiGateway &&
+			!isNvidia &&
+			!isCerebras &&
+			!isSelfHosted,
+		// Cerebras rejects stream_options.include_usage on streaming requests.
+		supportsUsageInStreaming: !isCerebras,
 		supportsFinishReason: true,
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
 		requiresToolResultName: false,
@@ -1692,8 +1728,8 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		supportsMidConvoSystemMessages: false,
 		supportsMidConvoToolAdditions: false,
 		cacheControlFormat,
-		sendSessionAffinityHeaders: isOpenRouter,
-		sessionAffinityFormat: isOpenRouter ? "openrouter" : "openai",
+		sendSessionAffinityHeaders: isOpenRouter || isGrok,
+		sessionAffinityFormat: isGrok ? "xai" : isOpenRouter ? "openrouter" : "openai",
 		supportsLongCacheRetention: !(isTogether || isCloudflareWorkersAI || isCloudflareAiGateway || isNvidia),
 	};
 }
