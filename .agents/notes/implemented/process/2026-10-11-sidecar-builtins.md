@@ -50,6 +50,8 @@ removed](./2026-11-06-sidecars-download-in-full.md).
 
 - Benefit: `full` single-file installs work fully offline with zero stderr
   noise (verified: sandboxed agent dir, hashes match sources, no warning).
+  The embedding itself did not survive 20261107 — see
+  [the sidecars-download-in-full note](./2026-11-06-sidecars-download-in-full.md).
 - Cost: `nanopi.js` grows ~0.9 MiB packed; the manifest/github URL code stays
   as dead weight for `full` but live fallback for `minimal`.
 - `test/standalone.test.ts` covers builtin install/skip/repair/platform-filter/

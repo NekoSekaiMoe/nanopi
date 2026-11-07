@@ -56,6 +56,11 @@ and that tarball is now also mirrored to AtomGit, see
 
 - Cost: first image touch / first clipboard use on a fresh machine goes to
   the network. Offline mode keeps the old warning and degrades as before.
+  Superseded for offline mode: see
+  [the offline-sidecar-probe note](./2026-11-08-offline-sidecars-probe-hosts.md).
+  `full` embeds nothing, so "offline keeps the old warning" meant the wasm was
+  missing on any machine that sets `NANOPI_OFFLINE`, which is why #586 saw
+  every image dropped.
 - Benefit: −1.24 MiB, and the four-platform embed no longer scales with every
   platform the TUI gains a prebuild for.
 - The `full` flavor description and both component descriptions now say the

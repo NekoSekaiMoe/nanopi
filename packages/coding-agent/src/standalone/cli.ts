@@ -20,5 +20,6 @@ function reportSidecarStatus(status: SidecarStatus): void {
 }
 
 // Prefetch sidecars (photon wasm, TUI native prebuilds) in the background;
-// photon also awaits its sidecar on demand before the first image read.
+// photon also awaits its sidecar on demand before the first image read. Offline
+// mode still installs them, it only probes the hosts first.
 void ensureSidecars({ onStatus: reportSidecarStatus }).catch(() => undefined);

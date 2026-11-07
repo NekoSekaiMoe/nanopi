@@ -99,9 +99,17 @@ export interface BuiltinSidecarPayload {
 export type SidecarStatus = { type: "info" | "warning"; message: string };
 
 const DOWNLOAD_TIMEOUT_MS = 120_000;
+/**
+ * Budget for the reachability probe that decides whether offline mode may
+ * download. Offline mode is set for machines that cannot reach the hosts, so a
+ * probe that hangs on a blackholed connection would stall startup for the whole
+ * download budget; it gets one short attempt per host instead.
+ */
+const PROBE_TIMEOUT_MS = 4_000;
 
 let manifest: SidecarManifest | undefined;
 const inflightSources = new Map<string, Promise<void>>();
+const reachableUrls = new Map<string, boolean>();
 
 /**
  * Drops the memoized manifest. Exported for tests only: the manifest is a
@@ -265,6 +273,18 @@ export function installSidecarFiles(extractDir: string, files: SidecarFile[], bi
 	}
 }
 
+/**
+ * Stops at the first configured host that answers. Ordered, not raced: the URLs
+ * are a preference list, and the question is whether any of them is reachable
+ * at all.
+ */
+async function anyHostAnswers(urls: string[]): Promise<boolean> {
+	for (const url of urls) {
+		if (await hostAnswers(url)) return true;
+	}
+	return false;
+}
+
 async function installSource(
 	source: SidecarSource,
 	files: SidecarFile[],
@@ -287,9 +307,49 @@ async function installSource(
 }
 
 /**
+ * Whether a tarball host answers at all.
+ *
+ * Offline mode means "this machine has no network", which is a guess about the
+ * environment rather than a user preference: a container that sets it to keep a
+ * startup offline still reaches the mirror, and refusing to fetch there is what
+ * left every offline install without the photon wasm. Servers that do not
+ * answer OPTIONS fall back to a ranged GET. Any HTTP status counts as reachable
+ * — a 404 is a host that answered, and the download's own retry reports it.
+ *
+ * The answer is memoized per URL for the process lifetime: the probe runs once
+ * per source per start, and the hosts do not change under a running process.
+ */
+async function hostAnswers(url: string): Promise<boolean> {
+	const cached = reachableUrls.get(url);
+	if (cached !== undefined) return cached;
+	let reachable = false;
+	try {
+		// One attempt: the probe exists to time out, and a retry only doubles the wait.
+		// An OPTIONS that the host answers with an error status still proves it is up.
+		const response = await fetchWithRetry(
+			url,
+			{ method: "OPTIONS" },
+			{ attemptTimeoutMs: PROBE_TIMEOUT_MS, maxRetries: 0 },
+		);
+		reachable = true;
+		void response.body?.cancel().catch(() => undefined);
+	} catch {
+		reachable = false;
+	}
+	reachableUrls.set(url, reachable);
+	return reachable;
+}
+
+/**
  * Ensures the sidecar files for this platform are installed. No-op when the
- * manifest is absent (npm installs), when the requested files are already
- * present, or when offline mode is enabled.
+ * manifest is absent (npm installs) or when the requested files are already
+ * present.
+ *
+ * Offline mode does not turn the download into a no-op: it only makes the hosts
+ * prove they answer first (see `hostAnswers`). A `full` build embeds nothing —
+ * both `sidecar/*` components are off — so "offline means no download" would
+ * leave the wasm and the native prebuilds permanently missing on every machine
+ * that sets the flag, which is what issue #586 walked into.
  */
 export async function ensureSidecars(
 	options: { kind?: SidecarKind; onStatus?: (status: SidecarStatus) => void } = {},
@@ -320,10 +380,10 @@ export async function ensureSidecars(
 		);
 		if (wanted.length === 0 || wanted.every(fileIsInstalled)) continue;
 
-		if (isOfflineModeEnabled()) {
+		if (isOfflineModeEnabled() && !(await anyHostAnswers(source.urls))) {
 			options.onStatus?.({
 				type: "warning",
-				message: `Sidecars for ${source.packageName} missing; offline mode skips download.`,
+				message: `Sidecars for ${source.packageName} missing; offline mode and no host answered.`,
 			});
 			continue;
 		}

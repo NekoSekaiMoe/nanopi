@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Offline mode no longer refuses the sidecar download outright: a `full` build embeds neither the photon wasm nor the TUI native prebuilds, so skipping the fetch under `NANOPI_OFFLINE` left a machine that sets the flag (a container, CI, an NPC session) without the image backend and without the native clipboard, permanently. `ensureSidecars` now probes each tarball host with one short attempt (4 s) and downloads when a host answers; only an unreachable host keeps the old warning and the degraded image path (issue [#586](https://cnb.cool/shinytale/nanopi/-/issues/586))
 - Images survive a missing photon sidecar: the resize stage was the only thing in the pipeline that could re-encode an image, so `photon-unavailable` dropped the attachment and the model got `[Image omitted: …]` instead of base64 — which is every image in an offline install, because `ensureSidecars` skips the download when `NANOPI_OFFLINE` is set. An image that already fits both limits the resize stage enforces (the base64 payload budget and the 2000x2000 pixel bound) is now sent as-is with a hint saying it was not resized; only an image that still needs shrinking is omitted. EXIF orientation goes unapplied on that path, which is a rotation the model can see through rather than an image it cannot see at all (issue [#586](https://cnb.cool/shinytale/nanopi/-/issues/586))
 
 ## [20261107]

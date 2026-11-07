@@ -196,10 +196,12 @@ describe("ensureSidecars mirror fallback", () => {
 	let baseUrl: string;
 	const requests: string[] = [];
 
-	// The suite runs with NANOPI_OFFLINE=1 by default, which turns the download
-	// path into a no-op. This server is a local fixture, not the network, so each
-	// test flips the switch itself: a hook here would run before the file-level
-	// env is applied and be overwritten.
+	// The suite runs with NANOPI_OFFLINE=1 by default, which sends ensureSidecars
+	// through the host probe before it downloads anything. The fixture gives that
+	// probe a real answer, so a case testing the download path (whose URLs point at
+	// this server) needs no env change; the cases that set offline themselves race
+	// a tag nothing listens on. A hook here would run before the file-level env is
+	// applied and be overwritten.
 	beforeAll(async () => {
 		const content = Buffer.alloc(10, "x");
 		const tree = mkdtempSync(join(testRoot, "serve-"));
@@ -297,6 +299,34 @@ describe("ensureSidecars mirror fallback", () => {
 		await withSidecars(manifest([`${baseUrl}/dead.tgz`, `${baseUrl}/alive.tgz`]), () => ensureSidecars());
 		expect(requests).toEqual(["/dead.tgz", "/alive.tgz"]);
 		expect(readFileSync(join(agentDir, "bin", "native", "tui", "test.node"))).toEqual(Buffer.alloc(10, "x"));
+	});
+
+	it("installs from a host that answers while offline mode is set", async () => {
+		// Offline mode is a statement about the machine's network, not a per-host
+		// switch: a container that sets NANOPI_OFFLINE=1 to keep startup quiet still
+		// reaches the mirror. `full` embeds no sidecar, so refusing here is what left
+		// the photon wasm permanently missing (#586).
+		nextCase();
+		requests.length = 0;
+		const agentDir = useAgentDir("offline-reachable");
+		await withSidecars(manifest([`${baseUrl}/alive.tgz`]), () => ensureSidecars());
+		expect(requests).toContain("/alive.tgz");
+		expect(readFileSync(join(agentDir, "bin", "native", "tui", "test.node"))).toEqual(Buffer.alloc(10, "x"));
+	});
+
+	it("skips the download when offline mode is set and no host answers", async () => {
+		nextCase();
+		requests.length = 0;
+		const agentDir = useAgentDir("offline-unreachable");
+		const warnings: string[] = [];
+		// Nothing listens on the reserved discard port, so the probe fails fast and
+		// the download is never attempted.
+		await withSidecars(manifest(["http://127.0.0.1:9/dead.tgz"]), () =>
+			ensureSidecars({ onStatus: (status) => warnings.push(status.message) }),
+		);
+		expect(requests).toEqual([]);
+		expect(warnings.at(-1)).toMatch(/offline mode and no host answered/);
+		expect(existsSync(join(agentDir, "bin", "native", "tui", "test.node"))).toBe(false);
 	});
 
 	it("reports every host it tried when all of them fail", async () => {
