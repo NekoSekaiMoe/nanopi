@@ -9,6 +9,7 @@ import {
 	type SSEEvent,
 	type UserInputRequestEvent,
 	type UserInputResponse,
+	ApiError,
 	createSession,
 	getChatActive,
 	getSession,
@@ -248,6 +249,11 @@ function turnErrorFrom(cause: unknown): TurnError {
 	return { message, code, retrying: false };
 }
 
+/** Whether a session id from the daemon names the session a tab holds (full or short id). */
+function sessionIdMatches(known: string, held: string): boolean {
+	return known === held || known.startsWith(held) || held.startsWith(known);
+}
+
 export function useChat({
 	projectHash,
 	workingDir,
@@ -280,10 +286,14 @@ export function useChat({
 
 	const detachStream = useCallback(() => {
 		const alias = requestIdRef.current;
+		const owner = sessionIdRef.current;
 		abortRef.current?.abort();
 		abortRef.current = null;
 		requestIdRef.current = null;
-		if (alias) void stopChat(alias).catch(() => {});
+		// Stop only the turn this hook started: the daemon matches the request id
+		// (and the session that owns it), so leaving this session no longer aborts a
+		// turn another tab is streaming there.
+		if (alias) void stopChat(owner ?? "", alias).catch(() => {});
 	}, []);
 
 	const loadSession = useCallback(
@@ -600,12 +610,20 @@ export function useChat({
 				const aborted = cause instanceof Error && cause.name === "AbortError";
 				if (!aborted && generationRef.current === generation) {
 					const message = cause instanceof Error ? cause.message : String(cause);
-					setError(turnErrorFrom(cause));
-					setMessages((current) =>
-						updateLastAssistant(current, (blocks) =>
-							appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
-						),
-					);
+					// The lock is per session, so a 409 here means another tab is running
+					// *this* session: the prompt was not sent. Say so, and drop the empty
+					// exchange that the optimistic update added.
+					if (cause instanceof ApiError && cause.status === 409) {
+						setError({ ...turnErrorFrom(cause), message: t("该会话正在另一处运行，请等它结束或先停止") });
+						setMessages((current) => current.slice(0, -2));
+					} else {
+						setError(turnErrorFrom(cause));
+						setMessages((current) =>
+							updateLastAssistant(current, (blocks) =>
+								appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
+							),
+						);
+					}
 				}
 			} finally {
 				if (generationRef.current === generation) {
@@ -646,14 +664,16 @@ export function useChat({
 		let timer: number | undefined;
 		const tick = () => {
 			void getChatActive()
-				.then((sessions) => {
+				.then((turns) => {
 					if (cancelled) return;
-					const active = sessions.length > 0;
+					// A turn in another session is not this tab's business: the daemon runs
+					// sessions in parallel, so only what happens *here* may reload the view.
+					const mine = sessionIdRef.current;
+					const active = mine !== null && turns.some((turn) => sessionIdMatches(turn.session_id, mine));
 					const previous = backgroundWatchRef.current;
 					if (previous.busy && !active && previous.generation === generationRef.current) {
 						// The background turn just settled: reload the transcript it wrote.
-						const id = sessionIdRef.current;
-						if (id) void loadSession(id);
+						if (mine) void loadSession(mine);
 						onSessionsChanged();
 					}
 					backgroundWatchRef.current = {
@@ -675,16 +695,22 @@ export function useChat({
 		};
 	}, [streaming, loadSession, onSessionsChanged]);
 
+	/**
+	 * Stop this tab's turn, and only this tab's: the daemon matches the request id
+	 * inside the session, so a second tab looking at the same session keeps running.
+	 */
 	const stop = useCallback(async () => {
 		const alias = requestIdRef.current;
+		const owner = sessionIdRef.current ?? "";
 		abortRef.current?.abort();
 		abortRef.current = null;
+		requestIdRef.current = null;
 		setStreaming(false);
 		setPermission(null);
 		setUserInput(null);
 		if (!alias) return;
 		try {
-			await stopChat(alias);
+			await stopChat(owner, alias);
 		} catch {
 			/* the stream is already detached */
 		}

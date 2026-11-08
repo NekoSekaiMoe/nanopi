@@ -53,6 +53,11 @@ const EN: Record<string, string> = {
 	"保存中…": "Saving…",
 	"保存修改": "Save changes",
 	"停止": "Stop",
+	"停止全部": "Stop all",
+	"正在停止…": "Stopping…",
+	"运行中": "Running",
+	"该会话正在另一处运行，请等它结束或先停止":
+		"This chat is running elsewhere; wait for it to finish or stop it first",
 	"允许": "Allow",
 	"关于": "About",
 	"关闭会话菜单": "Close chat menu",

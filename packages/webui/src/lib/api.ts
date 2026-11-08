@@ -506,21 +506,52 @@ export interface StreamChatBody {
 	approval_mode?: ApprovalMode;
 }
 
-/** Session ids with a turn running in the daemon. Empty when it is idle. */
-export async function getChatActive(): Promise<string[]> {
+/** One turn the daemon is running, in some session. */
+export interface ActiveTurn {
+	session_id: string;
+	turn_id: string;
+	started_at: number;
+}
+
+/** Turns running in the daemon, across every session. Empty when it is idle. */
+export async function getChatActive(): Promise<ActiveTurn[]> {
 	const response = await fetch("/chat/active", { headers: authHeaders() });
 	if (!response.ok) throw await failure(response);
 	const body = (await response.json()) as unknown;
-	return Array.isArray(body) ? body.filter((id): id is string => typeof id === "string") : [];
+	if (!Array.isArray(body)) return [];
+	return body.filter(
+		(item): item is ActiveTurn =>
+			typeof item === "object" &&
+			item !== null &&
+			typeof (item as ActiveTurn).session_id === "string" &&
+			typeof (item as ActiveTurn).turn_id === "string",
+	) as ActiveTurn[];
 }
 
-export async function stopChat(sessionId: string): Promise<void> {
+/**
+ * Stop one turn.
+ *
+ * `sessionId` names the session and `requestId` the turn, so the daemon stops the
+ * turn this tab started rather than whatever session happens to be open. Without
+ * `requestId` it stops the whole session, which is what `/stop-all` is for.
+ */
+export async function stopChat(sessionId: string, requestId?: string): Promise<void> {
 	const response = await fetch("/chat/stop", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", ...authHeaders() },
-		body: JSON.stringify({ session_id: sessionId }),
+		body: JSON.stringify(requestId ? { session_id: sessionId, request_id: requestId } : { session_id: sessionId }),
 	});
 	if (!response.ok) throw new Error(`stop chat failed: ${response.status}`);
+}
+
+/** Stop every running turn, in every session (`/stop-all`). */
+export async function stopAllChat(): Promise<{ stopped: boolean; turns: string[] }> {
+	const response = await fetch("/chat/stop-all", {
+		method: "POST",
+		headers: authHeaders(),
+	});
+	if (!response.ok) throw new Error(`stop all chats failed: ${response.status}`);
+	return (await response.json()) as { stopped: boolean; turns: string[] };
 }
 
 export async function streamChat(

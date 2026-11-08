@@ -18,6 +18,7 @@ import {
 	type SessionMetaWithProject,
 	changeDir,
 	deleteSession,
+	getChatActive,
 	getConfig,
 	getModels,
 	getProject,
@@ -27,6 +28,7 @@ import {
 	renameSession,
 	resolveSession,
 	setReasoningEffort,
+	stopAllChat,
 } from "@/lib/api";
 import { type TextAttachment, promptWithAttachments } from "@/lib/attachments";
 import { useChat } from "@/lib/use-chat";
@@ -471,6 +473,34 @@ export function AppClient() {
 		setNavOpen(false);
 	}, []);
 
+	/**
+	 * Sessions the daemon is running, polled while idle. The list is shared, not
+	 * per tab: a turn started in another tab (or another instance on the same
+	 * daemon) shows up here too, which is what makes "switched back and it is
+	 * still running" true.
+	 */
+	const [runningSessions, setRunningSessions] = useState<string[]>([]);
+	const [stoppingAll, setStoppingAll] = useState(false);
+	const refreshRunning = useCallback(() => {
+		void getChatActive()
+			.then((turns) => setRunningSessions(turns.map((turn) => turn.session_id)))
+			.catch(() => {});
+	}, []);
+	useEffect(() => {
+		refreshRunning();
+		const timer = window.setInterval(refreshRunning, 2000);
+		return () => window.clearInterval(timer);
+	}, [refreshRunning]);
+	const stopAll = useCallback(() => {
+		setStoppingAll(true);
+		void stopAllChat()
+			.then(() => {
+				refreshRunning();
+				refreshSessions();
+			})
+			.finally(() => setStoppingAll(false));
+	}, [refreshRunning, refreshSessions]);
+
 	const onOpenTerminal = useCallback(() => {
 		setOpenFile(null);
 		setTerminalOpen(true);
@@ -514,6 +544,9 @@ export function AppClient() {
 					activeFile={openFile}
 					branch={branch}
 					onOpenTerminal={onOpenTerminal}
+					runningSessions={runningSessions}
+					onStopAll={runningSessions.length > 0 ? stopAll : undefined}
+					stoppingAll={stoppingAll}
 				/>
 			</div>
 
@@ -626,6 +659,9 @@ export function AppClient() {
 						activeFile={openFile}
 						branch={branch}
 						onOpenTerminal={onOpenTerminal}
+						runningSessions={runningSessions}
+						onStopAll={runningSessions.length > 0 ? stopAll : undefined}
+						stoppingAll={stoppingAll}
 					/>
 				</div>
 			</div>
