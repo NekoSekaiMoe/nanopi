@@ -787,6 +787,7 @@ export interface ProviderAccountInfo {
 	id: string;
 	provider: string;
 	display_name?: string;
+	/** Listing protocol (`openai` / `anthropic`): which path and header `/providers/discover-models` probes. */
 	type: string;
 	base_url?: string;
 	has_api_key: boolean;
@@ -805,6 +806,7 @@ export interface ProviderAccountInfo {
 export interface ProviderPresetInfo {
 	id: string;
 	display_name: string;
+	/** Listing protocol, as on `ProviderAccountInfo`. The api id models.json gets stays on the server. */
 	type: string;
 	default_base_url?: string;
 	requires_api_key: boolean;

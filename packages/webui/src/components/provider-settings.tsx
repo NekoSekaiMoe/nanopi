@@ -368,6 +368,7 @@ function AddProviderForm({
 	error: string | null;
 	onCancel: () => void;
 	onSubmit: (body: {
+		id?: string;
 		provider: string;
 		display_name?: string;
 		base_url?: string;
@@ -376,6 +377,7 @@ function AddProviderForm({
 	}) => void;
 }) {
 	const [presetId, setPresetId] = useState(presets[0]?.id ?? "openai");
+	const [id, setId] = useState("");
 	const preset = presets.find((item) => item.id === presetId) ?? presets[0];
 	const [displayName, setDisplayName] = useState("");
 	const [baseUrl, setBaseUrl] = useState(preset?.default_base_url ?? "");
@@ -426,6 +428,7 @@ function AddProviderForm({
 					const discovered = discoveries.filter((entry) => picked.includes(entry.id));
 					if (!manual && discovered.length === 0) return;
 					onSubmit({
+						id: id.trim() || undefined,
 						provider: presetId,
 						display_name: displayName.trim() || undefined,
 						base_url: baseUrl.trim() || undefined,
@@ -450,6 +453,15 @@ function AddProviderForm({
 							</option>
 						))}
 					</select>
+				</Field>
+
+				<Field label={t("账号 ID")} hint={t("可选；留空用服务商 id，再加同协议的账号时必填")}>
+					<input
+						value={id}
+						onChange={(event) => setId(event.target.value)}
+						placeholder={presetId}
+						className={inputClass}
+					/>
 				</Field>
 
 				<Field label={t("名称")} hint={t("可选，例如“公司网关”")}>

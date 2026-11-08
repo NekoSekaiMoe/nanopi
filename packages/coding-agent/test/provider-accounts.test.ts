@@ -120,6 +120,42 @@ describe("provider accounts over models.json", () => {
 		);
 	});
 
+	// Regression for #609: every preset wrote the listing protocol (`openai`,
+	// `anthropic`) into models.json as the model's `api`, but the runtime
+	// registers the implementations under their api ids, so an account added from
+	// the webui could be created and listed yet every turn failed with
+	// "No API provider registered for api: openai".
+	it("writes the registered api id, not the listing protocol", async () => {
+		const ids: Array<[string, string]> = [
+			["anthropic", "anthropic-messages"],
+			["openai", "openai-completions"],
+			["openrouter", "openai-completions"],
+			["deepseek", "openai-completions"],
+			["moonshot", "openai-completions"],
+			["zhipu", "openai-completions"],
+			["ollama", "openai-completions"],
+			["lmstudio", "openai-completions"],
+			["openai-compatible", "openai-completions"],
+			["anthropic-compatible", "anthropic-messages"],
+		];
+		for (const [provider, api] of ids) {
+			const path = freshPath();
+			await createAccount(path, { provider, api_key: "k", models: [{ model: "m1" }] });
+			const onDisk = JSON.parse(readFileSync(path, "utf8")) as {
+				providers: Record<string, { api?: string }>;
+			};
+			assert.strictEqual(onDisk.providers[provider]?.api, api, provider);
+		}
+	});
+
+	it("reports a stored account's api as the listing protocol", async () => {
+		const path = freshPath();
+		await createAccount(path, { provider: "anthropic-compatible", api_key: "k", models: [{ model: "m1" }] });
+		// The page sends this back to /providers/discover-models, which picks the
+		// path and header by protocol, so the view keeps the short name.
+		assert.strictEqual((await listAccounts(path))[0]?.type, "anthropic");
+	});
+
 	it("adds, edits, and deletes models per account", async () => {
 		const path = freshPath();
 		await createAccount(path, { provider: "ollama", models: [{ model: "a" }] });

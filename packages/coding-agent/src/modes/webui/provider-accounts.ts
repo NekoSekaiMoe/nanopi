@@ -19,7 +19,16 @@ import { stripBom } from "../../utils/text.ts";
 export interface ProviderPresetInfo {
 	id: string;
 	display_name: string;
+	/** Listing protocol: which path and header an endpoint's `/models` takes. */
 	type: string;
+	/**
+	 * The `api` this preset writes to models.json. It is a registered api id
+	 * (`openai-completions`), not the listing protocol above (`openai`): the
+	 * runtime streams by exactly this string, so a preset that wrote the short
+	 * name produced an account whose every turn failed with "No API provider
+	 * registered for api: openai".
+	 */
+	api: string;
 	default_base_url?: string;
 	requires_api_key: boolean;
 	model_source?: "embedded" | "discovery_api" | "manual";
@@ -45,6 +54,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "anthropic",
 		display_name: "Anthropic",
 		type: "anthropic",
+		api: "anthropic-messages",
 		default_base_url: "https://api.anthropic.com",
 		requires_api_key: true,
 		discoverable: true,
@@ -53,6 +63,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "openai",
 		display_name: "OpenAI",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "https://api.openai.com/v1",
 		requires_api_key: true,
 		discoverable: true,
@@ -61,6 +72,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "openrouter",
 		display_name: "OpenRouter",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "https://openrouter.ai/api/v1",
 		requires_api_key: true,
 		discoverable: true,
@@ -69,6 +81,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "deepseek",
 		display_name: "DeepSeek",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "https://api.deepseek.com/v1",
 		requires_api_key: true,
 		discoverable: true,
@@ -77,6 +90,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "moonshot",
 		display_name: "Moonshot AI",
 		type: "openai",
+		api: "openai-completions",
 		// The international host, which is also the built-in catalog's baseUrl and
 		// the fallback when the key's own site cannot be probed
 		// (see packages/ai/src/providers/moonshotai.ts). A key from the China site
@@ -91,6 +105,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "zhipu",
 		display_name: "Zhipu (GLM)",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "https://open.bigmodel.cn/api/paas/v4",
 		requires_api_key: true,
 		discoverable: true,
@@ -99,6 +114,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "ollama",
 		display_name: "Ollama (local)",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "http://localhost:11434/v1",
 		requires_api_key: false,
 		discoverable: true,
@@ -107,6 +123,7 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "lmstudio",
 		display_name: "LM Studio (local)",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "http://localhost:1234/v1",
 		requires_api_key: false,
 		discoverable: true,
@@ -119,6 +136,7 @@ export const PROVIDER_PROTOCOLS: readonly ProviderPresetInfo[] = [
 		id: "openai-compatible",
 		display_name: "OpenAI-compatible",
 		type: "openai",
+		api: "openai-completions",
 		default_base_url: "https://gateway.example/v1",
 		requires_api_key: false,
 		discoverable: true,
@@ -127,6 +145,7 @@ export const PROVIDER_PROTOCOLS: readonly ProviderPresetInfo[] = [
 		id: "anthropic-compatible",
 		display_name: "Anthropic-compatible",
 		type: "anthropic",
+		api: "anthropic-messages",
 		default_base_url: "https://gateway.example",
 		requires_api_key: false,
 		discoverable: true,
@@ -244,6 +263,18 @@ function modelToEntry(input: NewModelInput): ModelsJsonModel {
 	return entry;
 }
 
+/**
+ * The listing protocol behind an `api` id. A models.json account written before
+ * the two were separated carries the short name (`openai`), which is also a
+ * protocol, so reading one still names the header and path to probe.
+ */
+function listingProtocol(api: string | undefined): string {
+	if (!api) return "openai";
+	const choice = [...PROVIDER_PRESETS, ...PROVIDER_PROTOCOLS].find((preset) => preset.api === api);
+	if (choice) return choice.type;
+	return api === "anthropic-messages" || api === "anthropic" ? "anthropic" : "openai";
+}
+
 function resolveChoice(provider: string): ProviderPresetInfo {
 	const choice = [...PROVIDER_PRESETS, ...PROVIDER_PROTOCOLS].find((preset) => preset.id === provider);
 	if (!choice) throw new ProviderAccountError(`unknown provider preset or protocol: ${provider}`, 400);
@@ -262,14 +293,14 @@ function checkAccountId(id: string): void {
 function toView(id: string, entry: ModelsJsonProvider): ProviderAccountView {
 	const preset =
 		PROVIDER_PRESETS.find((p) => p.id === id) ??
-		PROVIDER_PRESETS.find((p) => p.type === entry.api && p.default_base_url === entry.baseUrl);
-	const protocol = PROVIDER_PROTOCOLS.find((p) => p.type === entry.api);
+		PROVIDER_PRESETS.find((p) => p.api === entry.api && p.default_base_url === entry.baseUrl);
+	const protocol = PROVIDER_PROTOCOLS.find((p) => p.api === entry.api);
 	const choice = preset ?? protocol;
 	return {
 		id,
 		provider: preset && preset.id === id ? preset.id : (protocol?.id ?? "openai-compatible"),
 		display_name: entry.name,
-		type: entry.api ?? "openai",
+		type: listingProtocol(entry.api),
 		base_url: entry.baseUrl,
 		has_api_key: typeof entry.apiKey === "string" && entry.apiKey.length > 0,
 		model_ids: (entry.models ?? []).map((model) => model.id),
@@ -318,7 +349,7 @@ export async function createAccount(
 		throw new ProviderAccountError(`${choice.display_name} requires an API key`, 400);
 	}
 
-	const entry: ModelsJsonProvider = { api: choice.type };
+	const entry: ModelsJsonProvider = { api: choice.api };
 	if (input.display_name?.trim()) entry.name = input.display_name.trim();
 	if (baseUrl) entry.baseUrl = baseUrl;
 	if (input.api_key?.trim()) entry.apiKey = input.api_key.trim();
