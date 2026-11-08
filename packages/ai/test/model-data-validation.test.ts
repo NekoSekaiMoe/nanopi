@@ -6,6 +6,7 @@ import { hydrateModelCatalog } from "../scripts/hydrate-model-catalog.ts";
 import {
 	assertExactModelIds,
 	createModelDataManifest,
+	findMissingShardNames,
 	MODEL_DATA_MANIFEST_FILE,
 	MODEL_DATA_SCHEMA_VERSION,
 	type ModelDataStructure,
@@ -392,6 +393,78 @@ describe("provider-capped generation", () => {
 
 		expect(() => hydrateModelCatalog(packageRoot, catalogPath)).toThrow(
 			"Model catalog is missing provider: test-provider",
+		);
+	});
+});
+
+describe("catalogs left by a narrower build flavor", () => {
+	/**
+	 * Issue #603: a `base`-flavor run writes 16 of the 32 providers, and the
+	 * checkout then has an aggregator, shards and data files that agree with
+	 * each other. `all.ts` still imports every provider module, so `tsc` reported
+	 * one TS2307 per omitted provider, and `ensure-model-catalogs` exited 0
+	 * because the two files it looked for were there.
+	 */
+	function createTrimmedCatalogState() {
+		const fixture = createFixture();
+		const { packageRoot } = fixture;
+		const providersDir = join(packageRoot, "src", "providers");
+		// `all.ts` is checked in and imports both provider modules; only one of
+		// them has a shard, which is exactly the state a trimmed run leaves.
+		writeFileSync(
+			join(providersDir, "all.ts"),
+			'import { testProvider } from "./test-provider.ts";\nimport { otherProvider } from "./other-provider.ts";\n',
+		);
+		writeFileSync(
+			join(providersDir, "other-provider.ts"),
+			'import { OTHER_MODELS } from "./other-provider.models.ts";\nexport const otherProvider = OTHER_MODELS;\n',
+		);
+		writeFileSync(join(providersDir, "all.models.ts"), 'export const TRIMMED = "other-provider.models.ts";\n');
+		return { ...fixture, providersDir };
+	}
+
+	it("lists the shards the checked-in source imports but the catalog omits", () => {
+		const { packageRoot } = createTrimmedCatalogState();
+		expect(findMissingShardNames(packageRoot)).toEqual(["other-provider.models.ts"]);
+	});
+
+	it("reports nothing missing for a catalog that matches every import", () => {
+		const { dataDir, packageRoot, providersDir } = createTrimmedCatalogState();
+		writeFileSync(join(providersDir, "other-provider.models.ts"), "export const OTHER_MODELS = {};\n");
+		writeFileSync(join(dataDir, "other-provider.json"), `${JSON.stringify({ "openai-completions": {} })}\n`);
+		expect(findMissingShardNames(packageRoot)).toEqual([]);
+	});
+
+	it("does not read the generated aggregator as the list of expected shards", () => {
+		const { packageRoot } = createTrimmedCatalogState();
+		// A trimmed run writes an aggregator naming only its own providers; using
+		// it as the expected set would make the omission look correct.
+		writeFileSync(
+			join(packageRoot, "src", "models.generated.ts"),
+			'import { TEST_PROVIDER_CLASSIFIER_MODELS, TEST_PROVIDER_IMAGE_MODELS, TEST_PROVIDER_MODELS } from "./providers/test-provider.models.ts";\n',
+		);
+		expect(findMissingShardNames(packageRoot)).toEqual(["other-provider.models.ts"]);
+	});
+
+	// A data-only hydration writes the data files for a catalog whose shards it
+	// leaves alone, so an empty shard directory is "not written yet" rather than
+	// a mismatch. Anything else is checked in full, which is why
+	// `findMissingShardNames` — not this check — is what catches the trimmed
+	// catalog: an aggregator naming 16 providers over 16 shards agrees with
+	// itself while `all.ts` imports 32.
+	it("treats a catalog with no shard written yet as hydrated, not mismatched", () => {
+		const { packageRoot } = createFixture();
+		rmSync(join(packageRoot, "src", "providers", "test-provider.models.ts"));
+		expect(() => readModelDataStructure(packageRoot)).not.toThrow();
+	});
+
+	it("rejects an aggregator naming a provider whose shard is gone", () => {
+		const { packageRoot } = createFixture();
+		const providersDir = join(packageRoot, "src", "providers");
+		rmSync(join(providersDir, "test-provider.models.ts"));
+		writeFileSync(join(providersDir, "other.models.ts"), "export const OTHER_MODELS = {};\n");
+		expect(() => readModelDataStructure(packageRoot)).toThrow(
+			"aggregator and provider shards do not match (missing: test-provider.models.ts; extra: other.models.ts)",
 		);
 	});
 });
