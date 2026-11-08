@@ -2,6 +2,7 @@
 
 import {
 	ChevronDown,
+	CircleStop,
 	ChevronLeft,
 	ChevronRight,
 	FileCode,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { IconButton } from "@/components/icon-button";
-import { type FsListResult, type SessionMetaWithProject, listDir } from "@/lib/api";
+import { type ActiveTurn, type FsListResult, type SessionMetaWithProject, listDir } from "@/lib/api";
 import { asMs, cn, relativeTime } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
@@ -35,6 +36,11 @@ interface OpenDir {
 }
 
 const C_EXTENSIONS = new Set(["ts", "tsx", "js", "jsx", "mjs", "cjs", "mts", "cts", "json", "css", "py", "rs", "go", "sh"]);
+
+/** Whether a session id from the daemon names the session a row holds (full or short id). */
+function sessionMatches(known: string, held: string): boolean {
+	return known === held || known.startsWith(held) || held.startsWith(known);
+}
 
 function fileIcon(name: string): React.ReactNode {
 	const ext = name.slice(name.lastIndexOf(".") + 1).toLowerCase();
@@ -81,6 +87,9 @@ export function Sidebar({
 	branch,
 	onOpenTerminal,
 	mobile,
+	runningSessions,
+	onStopAll,
+	stoppingAll,
 }: {
 	sessions: SessionMetaWithProject[];
 	currentSessionId: string | null;
@@ -97,6 +106,11 @@ export function Sidebar({
 	branch?: string;
 	onOpenTerminal: () => void;
 	mobile?: boolean;
+	/** Session ids with a turn in flight. Shared by every tab: the daemon runs them. */
+	runningSessions?: readonly string[];
+	/** Stops every running turn; absent while nothing runs. */
+	onStopAll?: () => void;
+	stoppingAll?: boolean;
 }) {
 	const [view, setView] = useState<SidebarView>("sessions");
 	const [searchOpen, setSearchOpen] = useState(false);
@@ -265,6 +279,13 @@ export function Sidebar({
 						icon={<SquarePen className="size-[18px]" strokeWidth={1.75} />}
 						onClick={onNew}
 					/>
+					{onStopAll ? (
+						<SidebarAction
+							label={stoppingAll ? t("正在停止…") : t("停止全部")}
+							icon={<CircleStop className="size-[18px]" strokeWidth={1.75} />}
+							onClick={onStopAll}
+						/>
+					) : null}
 					<SidebarAction
 						label={t("设置")}
 						icon={<Settings className="size-[18px]" strokeWidth={1.75} />}
@@ -321,7 +342,9 @@ export function Sidebar({
 									<section key={label}>
 										<SidebarGroupLabel>{label}</SidebarGroupLabel>
 										<ul className="space-y-px">
-											{items.map((session) => (
+											{items.map((session) => {
+												const isRunning = (runningSessions ?? []).some((id) => sessionMatches(id, session.id));
+												return (
 												<li key={session.id} className="relative">
 													<div
 														className={cn(
@@ -360,6 +383,15 @@ export function Sidebar({
 																<span className="min-w-0 flex-1 truncate text-control">
 																	{session.name || t("新会话")}
 																</span>
+																{isRunning ? (
+																	// The turn outlives the tab that started it, so the
+																	// marker is what tells a fresh tab the session is busy.
+																	<span
+																		aria-label={t("运行中")}
+																		title={t("运行中")}
+																		className="ml-2 size-1.5 shrink-0 animate-pulse rounded-full bg-emerald-500"
+																	/>
+																) : null}
 																<span className="shrink-0 pl-2 text-caption text-muted-foreground opacity-100 transition-opacity can-hover:opacity-0 can-hover:group-hover:opacity-100">
 																	{relativeTime(session.updated_at)}
 																</span>
@@ -414,7 +446,8 @@ export function Sidebar({
 														</>
 													) : null}
 												</li>
-											))}
+											);
+											})}
 										</ul>
 									</section>
 								))}

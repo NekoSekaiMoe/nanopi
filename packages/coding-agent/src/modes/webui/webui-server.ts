@@ -32,7 +32,11 @@ import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
 import { isBuildComponentEnabled } from "../../build-components.ts";
 import { getAgentDir, getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
-import type { AgentSessionRuntime, CreateAgentSessionRuntimeResult } from "../../core/agent-session-runtime.ts";
+import {
+	AgentSessionRuntime,
+	type CreateAgentSessionRuntimeFactory,
+	type CreateAgentSessionRuntimeResult,
+} from "../../core/agent-session-runtime.ts";
 import {
 	type AgentSessionServices,
 	createAgentSessionFromServices,
@@ -163,6 +167,11 @@ interface ChatRequestBody {
 	 */
 	approval_mode?: string;
 	session_id?: string;
+	/**
+	 * Client-generated id of this request, echoed to `/chat/active` and matched by
+	 * `/chat/stop`, so a stop names one turn instead of every turn of a session.
+	 */
+	request_id?: string;
 	provider?: string;
 	images?: { media_type: string; data: string }[];
 	/**
@@ -182,8 +191,17 @@ type SseEvent = Record<string, unknown> & { type: string };
  */
 interface WebuiTurn {
 	sessionId: string;
+	/** Id the browser sent on `/chat`; `/chat/active` reports it and `/chat/stop` matches it. */
+	turnId: string;
 	attach(req: IncomingMessage, res: ServerResponse): void;
 	runDetached(): void;
+}
+
+/** One running turn, as `/chat/active` reports it and `/chat` answers in its 409. */
+interface TurnHolder {
+	turn_id: string;
+	session_id: string;
+	started_at: number;
 }
 
 /** Stable identifier for a working directory, used as the project bucket hash. */
@@ -328,7 +346,7 @@ async function isDirectory(target: string): Promise<boolean> {
 async function replaceSessionCwd(
 	runtime: AgentSessionRuntime,
 	cwd: string,
-	bindSession: (() => Promise<void>) | undefined,
+	bindSession: ((runtime: AgentSessionRuntime) => Promise<void>) | undefined,
 ): Promise<void> {
 	const previousSessionFile = runtime.session.sessionFile;
 	const internals = runtime as unknown as {
@@ -361,7 +379,7 @@ async function replaceSessionCwd(
 	try {
 		await internals.finishSessionReplacement();
 	} finally {
-		runtime.setRebindSession(bindSession);
+		runtime.setRebindSession(bindSession ? () => bindSession(runtime) : undefined);
 	}
 }
 
@@ -831,18 +849,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	// run outside a module hook. Binding here is what keeps the mode marker alive
 	// across a `/cd`; it is the same call switching sessions makes, so it cannot
 	// start the runtime twice.
-	const bindSession = async (): Promise<void> => {
-		await runtime.session.bindModules({ mode: "webui" });
+	const bindSession = async (target: AgentSessionRuntime): Promise<void> => {
+		await target.session.bindModules({ mode: "webui" });
 	};
-	await bindSession();
-	runtime.setRebindSession(bindSession);
+	await bindSession(runtime);
 	// The runtime factory closes over the launch directory's services, so every
 	// session replacement rebuilds them there and the runtime's fixed `cwd` can
 	// never move. This hop rebuilds them for the directory the incoming session
 	// manager points at and then creates the session on top of them; it is the
 	// platform's own two-step replace (`createAgentSessionServices` +
 	// `createAgentSessionFromServices`), just rooted somewhere the caller chose.
-	runtime.setServicesHop(async (next) => {
+	const servicesHop: CreateAgentSessionRuntimeFactory = async (next) => {
 		const cwd = next.sessionManager.getCwd();
 		const services = await createAgentSessionServices({
 			cwd,
@@ -857,7 +874,49 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			sessionStartEvent: next.sessionStartEvent,
 		});
 		return { ...created, services, diagnostics: services.diagnostics };
-	});
+	};
+	runtime.setServicesHop(servicesHop);
+	runtime.setRebindSession(() => bindSession(runtime));
+
+	/**
+	 * A runtime beside the process's own, for a session a tab is running on.
+	 *
+	 * One `AgentSession` holds one open session, and replacing it (`switchSession`)
+	 * aborts the run it takes over, so "two tabs on two sessions, both streaming"
+	 * cannot be served by the runtime the process started with: whichever tab
+	 * switches would kill the other's turn. A session that needs its own turn gets
+	 * its own runtime object instead, built through the same hop (so its
+	 * cwd-bound services are rooted at that session's directory) over the shared
+	 * model catalog and settings path, which are per-path maps and safe to share.
+	 */
+	async function openRuntimeAt(
+		sessionPath: string,
+		cache: Map<string, Promise<AgentSessionRuntime>>,
+	): Promise<AgentSessionRuntime> {
+		const existing = cache.get(sessionPath);
+		if (existing) return existing;
+		const pending = (async () => {
+			const sessionManager = SessionManager.open(sessionPath);
+			const created = await servicesHop({
+				cwd: sessionManager.getCwd(),
+				agentDir: runtime.services.agentDir,
+				sessionManager,
+				sessionStartEvent: { type: "session_start", reason: "resume" },
+			});
+			const opened = new AgentSessionRuntime(created.session, created.services, servicesHop, created.diagnostics);
+			opened.setServicesHop(servicesHop);
+			opened.setRebindSession(() => bindSession(opened));
+			await bindSession(opened);
+			return opened;
+		})();
+		cache.set(sessionPath, pending);
+		try {
+			return await pending;
+		} catch (error) {
+			cache.delete(sessionPath);
+			throw error;
+		}
+	}
 
 	const server = createServer((req, res) => {
 		void handleRequest(req, res).catch((error) => {
@@ -927,11 +986,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		})();
 	});
 
-	// Single in-flight turn; the frontend blocks sending while a turn streams.
-	let turnActive = false;
-	// Prompts parked behind the running turn (`/chat` with `queue: true`). Only the
+	// Turns in flight, keyed by session id. The lock is per session, not per
+	// process, so two tabs on different sessions both run; a second turn on the
+	// same session is refused because one AgentSession serves one run.
+	const runningTurns = new Map<string, TurnHolder>();
+	// Runtimes opened for sessions other than the process's own (see
+	// openRuntimeAt). Keyed by session file path, so two tabs on the same session
+	// share one object instead of opening it twice.
+	const sessionRuntimes = new Map<string, Promise<AgentSessionRuntime>>();
+	// Prompts parked behind a running turn (`/chat` with `queue: true`). Only the
 	// producer that cannot retry later asks for this; see ChatRequestBody.queue.
-	const chatQueue: ChatRequestBody[] = [];
+	const chatQueue: Array<{ sessionId: string; body: ChatRequestBody }> = [];
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
 	const oauthFlows = new Map<string, OAuthFlowState>();
 
@@ -1085,13 +1150,22 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 
 	/**
-	 * Start one `/chat` turn. The run is independent of any HTTP response: a turn
-	 * nobody is attached to (a job reporting in, a queued prompt) still runs, and a
-	 * browser that reconnects picks it up from the next round on. `attach` is what
-	 * turns the run into an SSE stream; it can be called once per request.
+	 * Start one `/chat` turn on `target`. The run is independent of any HTTP
+	 * response: a turn nobody is attached to (a job reporting in, a queued prompt)
+	 * still runs, and a browser that reconnects picks it up from the next round on.
+	 * `attach` is what turns the run into an SSE stream; it can be called once per
+	 * request.
+	 *
+	 * The turn owns the session lock (`runningTurns`) from here until it settles, so
+	 * a second `/chat` on the same session is refused while a turn on another
+	 * session runs normally.
 	 */
-	function beginTurn(body: ChatRequestBody, opts: { abortOnDetach: boolean }): WebuiTurn {
-		const session = currentSession();
+	function beginTurn(
+		target: AgentSessionRuntime,
+		body: ChatRequestBody,
+		opts: { abortOnDetach: boolean; turnId: string },
+	): WebuiTurn {
+		const session = target.session;
 		const startedAt = Date.now();
 		const state = {
 			ended: false,
@@ -1301,7 +1375,11 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const finish = () => {
 			state.finished = true;
 			detachAll();
-			turnActive = false;
+			// Only the turn that holds the lock may release it: a stop-and-restart can
+			// leave an older turn settling after its session already accepted a new one.
+			if (runningTurns.get(session.sessionId)?.turn_id === opts.turnId) {
+				runningTurns.delete(session.sessionId);
+			}
 			endTurn();
 		};
 
@@ -1331,6 +1409,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		const turn: WebuiTurn = {
 			sessionId: session.sessionId,
+			turnId: opts.turnId,
 			attach(req, res) {
 				// The SSE head is written with the first event: a queued turn may wait,
 				// and an open response with no body reads as a hang to the browser.
@@ -1382,17 +1461,119 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 
 	/**
-	 * Start the next queued prompt, if any. Two prompts cannot run at once, so a
-	 * turn asked to queue is parked here and started when the running one settles.
+	 * Start the next queued prompt, if any. A queued prompt waits for the turn on
+	 * *its* session, not for any turn anywhere: prompts parked behind session A must
+	 * not be held up by a turn that is running in session B.
 	 *
 	 * The queued prompt has nobody attached: its reporter already got its answer, and
 	 * the turn it starts writes into the transcript, which is where the user reads it.
 	 */
 	function releaseQueuedTurn(): void {
-		const next = chatQueue.shift();
+		const index = chatQueue.findIndex((entry) => !runningTurns.has(entry.sessionId));
+		if (index === -1) return;
+		const [next] = chatQueue.splice(index, 1);
 		if (!next) return;
-		turnActive = true;
-		beginTurn(next, { abortOnDetach: false }).runDetached();
+		void startTurnFor(next.sessionId, next.body).catch(() => {
+			/* the producer is gone; the transcript keeps what ran */
+		});
+	}
+
+	/**
+	 * Resolve the runtime a turn should run on, and whether it has to be opened.
+	 *
+	 * The runtime the process started with serves the session it already holds.
+	 * Any other session gets its own runtime from the pool, so opening a second tab
+	 * on a different session never replaces (and therefore never aborts) the run
+	 * the first tab is streaming.
+	 */
+	async function runtimeFor(sessionId: string | undefined): Promise<{ target: AgentSessionRuntime; key: string }> {
+		const info = sessionId ? await findSessionFile(sessionId) : undefined;
+		if (!info) return { target: runtime, key: runtime.session.sessionId };
+		if (info.id === runtime.session.sessionId) return { target: runtime, key: info.id };
+		if (!info.path) throw new Error(`session ${sessionId} has no file to open`);
+		return { target: await openRuntimeAt(info.path, sessionRuntimes), key: info.id };
+	}
+
+	/**
+	 * Apply the per-request model and run mode to the runtime the turn will use.
+	 * Split out of the request handler so a queued prompt gets the same treatment
+	 * when it finally starts.
+	 */
+	async function applyTurnSettings(target: AgentSessionRuntime, body: ChatRequestBody): Promise<void> {
+		// Apply the requested model before the turn. Model ids may contain
+		// slashes, so match the composite key against the catalog instead of
+		// splitting the string. Switching persists to the shared default so
+		// the CLI and webui agree (single source of truth).
+		if (body.provider) {
+			const model = (await modelCatalog()).find((candidate) => modelKey(candidate) === body.provider);
+			if (model) {
+				await target.session.setModel(model, { persist: true });
+				// `setModel` only applies the per-model level when this provider has
+				// one stored; otherwise it falls back to the global default and
+				// overwrites the level this model's sheet wrote earlier (with "off"
+				// when there is no default). The picker the user just closed asked
+				// for a model *and* a level, so the stored level wins here.
+				await restoreStoredThinkingLevel(target.session);
+			}
+		}
+		// Apply the requested mode before the turn, next to the model switch: the
+		// mode decides the tool set the turn runs with. An invalid value is
+		// ignored rather than failing the turn, which already has a user prompt in it.
+		if (body.approval_mode) extraBridge.setMode(body.approval_mode);
+	}
+
+	/**
+	 * Every model the catalog knows, for matching the `provider` a `/chat` names.
+	 *
+	 * This is the shared `modelRuntime` behind every runtime, but which models
+	 * count as *active* depends on the session, so the lookup walks the process's
+	 * own list plus its current model the same way `/models` does.
+	 */
+	async function modelCatalog(): Promise<Model<any>[]> {
+		const models: Model<any>[] = [];
+		mergeModelLists(models, runtime.services.modelRuntime.getAvailableSnapshot());
+		mergeModelLists(models, runtime.services.modelRuntime.getModels());
+		const current = runtime.session.model;
+		if (current) mergeModelLists(models, [current]);
+		return models;
+	}
+
+	/** Start a turn on an already-resolved runtime and session id. */
+	function startTurnOn(target: AgentSessionRuntime, key: string, body: ChatRequestBody): WebuiTurn {
+		const turnId = body.request_id ?? randomBytes(8).toString("hex");
+		runningTurns.set(key, { turn_id: turnId, session_id: key, started_at: Date.now() });
+		return beginTurn(target, body, { abortOnDetach: true, turnId });
+	}
+
+	/**
+	 * Send one prompt as a new turn on the session named by `body.session_id`
+	 * (`undefined` means the process's own session). Resolves the runtime the turn
+	 * has to run on, which is what keeps two tabs on two sessions apart.
+	 */
+	async function startTurnFor(
+		sessionId: string | undefined,
+		body: ChatRequestBody,
+	): Promise<{ turn: WebuiTurn; target: AgentSessionRuntime }> {
+		const { target, key } = await runtimeFor(sessionId);
+		await applyTurnSettings(target, body);
+		return { turn: startTurnOn(target, key, body), target };
+	}
+
+	/**
+	 * The runtime that currently holds a running turn for `sessionId`. Used by the
+	 * stop endpoints, which must reach the session's own runtime instead of the
+	 * process's: aborting the wrong one would leave the turn running.
+	 */
+	async function runtimeForRunningTurn(sessionId: string): Promise<AgentSessionRuntime | undefined> {
+		if (sessionId === runtime.session.sessionId) return runtime;
+		const info = await findSessionFile(sessionId);
+		if (!info) return undefined;
+		return sessionRuntimes.get(info.path)?.catch(() => undefined);
+	}
+
+	/** Whether two session ids name the same session, allowing the short id a tab keeps. */
+	function sameSessionId(known: string, wanted: string): boolean {
+		return known === wanted || known.startsWith(wanted);
 	}
 
 	async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -1760,18 +1941,22 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				return;
 			}
 			if (sessionId && !action && req.method === "DELETE") {
-				if (turnActive) {
-					json(res, 409, { error: "a turn is running; stop it before deleting a session" });
-					return;
-				}
 				const info = await findSessionFile(sessionId);
 				if (!info) {
 					json(res, 404, { error: "session not found" });
 					return;
 				}
+				// Only the session being deleted has to be idle. Its turn runs on its own
+				// runtime, so another tab's turn elsewhere neither blocks the delete nor
+				// gets deleted underneath itself.
+				if (runningTurns.has(info.id)) {
+					json(res, 409, { error: "a turn is running in this session; stop it before deleting" });
+					return;
+				}
 				if (info.id === runtime.session.sessionId) {
 					await runtime.newSession();
 				}
+				sessionRuntimes.delete(info.path);
 				await rm(info.path, { force: true });
 				json(res, 200, {});
 				return;
@@ -1781,84 +1966,70 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// --- Chat (default transport) ---
 		if (path === "/chat" && req.method === "POST") {
 			const body = await readBody(req);
-			// A producer that cannot ask again later (a background job reporting in)
-			// queues instead of taking a 409: the turn it lands in is real work whose
-			// only reader is the transcript, and dropping it loses the report.
-			if (turnActive && body.queue === true) {
-				// The prompt is written to the transcript when its turn starts, not when
-				// it is queued, and the producing client is usually gone by then: answer
-				// now with what the queue accepted, and let the turn run detached. The
-				// report lands in the transcript, which is what the user reads next.
-				chatQueue.push({ message: typeof body.message === "string" ? body.message : "" });
-				json(res, 200, { queued: true, position: chatQueue.length });
-				return;
-			}
-			if (turnActive) {
-				json(res, 409, { error: "a turn is already running in this webui", code: "busy" });
-				return;
-			}
 			const chatBody: ChatRequestBody = {
 				message: typeof body.message === "string" ? body.message : "",
 				approval_mode: typeof body.approval_mode === "string" ? body.approval_mode : undefined,
 				session_id: typeof body.session_id === "string" ? body.session_id : undefined,
+				request_id: typeof body.request_id === "string" ? body.request_id : undefined,
 				provider: typeof body.provider === "string" ? body.provider : undefined,
 				images: undefined,
 			};
 			if (Array.isArray(body.images)) {
 				chatBody.images = body.images as { media_type: string; data: string }[];
 			}
-			// Honour a working directory the SPA believes it is in (it survives a
-			// `/cd`); a stale path is ignored rather than failing the turn. The
-			// comparison is against the session's cwd, the one a `/cd` moved.
-			if (typeof body.working_dir === "string" && body.working_dir) {
+			// Which session the turn belongs to. An explicit id wins; without one the
+			// process's own session answers, and a `working_dir` the SPA believes it is
+			// in (it survives a `/cd`) may re-root that session first.
+			let target = runtime;
+			let targetId = runtime.session.sessionId;
+			if (chatBody.session_id) {
+				const info = await findSessionFile(chatBody.session_id);
+				if (!info) {
+					json(res, 404, { error: `session ${chatBody.session_id} not found` });
+					return;
+				}
+				targetId = info.id;
+				if (info.id !== runtime.session.sessionId) {
+					target = await openRuntimeAt(info.path, sessionRuntimes);
+				}
+			} else if (typeof body.working_dir === "string" && body.working_dir) {
 				const wanted = resolveWorkspacePath(body.working_dir, runtime.cwd);
 				if (wanted && wanted !== sessionCwdOf(runtime) && (await isDirectory(wanted))) {
 					try {
 						await replaceSessionCwd(runtime, wanted, bindSession);
+						targetId = runtime.session.sessionId;
 					} catch {
 						// Keep serving the current directory.
 					}
 				}
 			}
-			// Switch to the requested session when it is not the active one.
-			if (chatBody.session_id) {
-				const wanted = chatBody.session_id;
-				const currentId = runtime.session.sessionId;
-				if (wanted !== currentId && !currentId.startsWith(wanted)) {
-					const info = await findSessionFile(wanted);
-					if (!info) {
-						json(res, 404, { error: `session ${wanted} not found` });
-						return;
-					}
-					await runtime.switchSession(info.path);
+			// The lock is per session: another tab on another session is not busy here.
+			if (runningTurns.has(targetId)) {
+				// A producer that cannot ask again later (a background job reporting in)
+				// queues instead of taking a 409: the turn it lands in is real work whose
+				// only reader is the transcript, and dropping it loses the report. The
+				// prompt is written to the transcript when its turn starts, not when it
+				// is queued, so answer now with what the queue accepted.
+				if (body.queue === true) {
+					chatQueue.push({ sessionId: targetId, body: chatBody });
+					json(res, 200, { queued: true, position: chatQueue.length });
+					return;
 				}
+				// The 409 names the turn that holds this session, so the UI can say which
+				// tab is running it (and offer to stop that one) instead of "busy".
+				json(res, 409, {
+					error: "a turn is already running in this session",
+					code: "busy",
+					holder: runningTurns.get(targetId),
+				});
+				return;
 			}
-			// Apply the requested model before the turn. Model ids may contain
-			// slashes, so match the composite key against the catalog instead of
-			// splitting the string. Switching persists to the shared default so
-			// the CLI and webui agree (single source of truth).
-			if (chatBody.provider) {
-				const models = await chatModels();
-				const model = models.find((candidate) => modelKey(candidate) === chatBody.provider);
-				if (model) {
-					await runtime.session.setModel(model, { persist: true });
-					// `setModel` only applies the per-model level when this provider has
-					// one stored; otherwise it falls back to the global default and
-					// overwrites the level this model's sheet wrote earlier (with "off"
-					// when there is no default). The picker the user just closed asked
-					// for a model *and* a level, so the stored level wins here.
-					await restoreStoredThinkingLevel(runtime.session);
-				}
-			}
-			// Apply the requested mode before the turn, next to the model switch: the
-			// mode decides the tool set the turn runs with. An invalid value is
-			// ignored rather than failing the turn, which already has a user prompt in it.
-			if (chatBody.approval_mode) extraBridge.setMode(chatBody.approval_mode);
 			// The provider adapters drop images for a model without image input and
 			// send a placeholder instead (transform-messages.ts), so a turn with an
 			// attachment on such a model costs tokens and answers nothing. Refuse it
 			// here, where the browser can say which model to switch to.
-			const turnModel = runtime.session.model;
+			await applyTurnSettings(target, chatBody);
+			const turnModel = target.session.model;
 			if (chatBody.images?.length && turnModel && !turnModel.input.includes("image")) {
 				json(res, 400, {
 					error: `${turnModel.id} does not accept images; switch to a vision model and resend`,
@@ -1866,17 +2037,53 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 				return;
 			}
-			turnActive = true;
-			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
+			startTurnOn(target, targetId, chatBody).attach(req, res);
 			return;
 		}
+		// Stop one turn. `session_id` picks the session (without it the process's own
+		// session answers) and `request_id` narrows that to the turn the browser
+		// started, so two tabs on one session never stop each other's work either. A
+		// stop that matches nothing answers 200 with `stopped: false` rather than
+		// failing: the client's own abort already detached its stream, and a 404
+		// there would only surface as a silent error.
 		if (path === "/chat/stop" && req.method === "POST") {
-			await session.abort();
-			json(res, 200, {});
+			const body = await readBody(req);
+			const wantedSession = typeof body.session_id === "string" ? body.session_id : undefined;
+			const wantedTurn = typeof body.request_id === "string" ? body.request_id : undefined;
+			const stopped: string[] = [];
+			for (const [sessionId, holder] of [...runningTurns]) {
+				if (wantedSession && !sameSessionId(sessionId, wantedSession)) continue;
+				if (wantedTurn && holder.turn_id !== wantedTurn) continue;
+				const target = await runtimeForRunningTurn(sessionId);
+				if (!target) continue;
+				stopped.push(holder.turn_id);
+				await target.session.abort();
+				// `abort()` waits for the settle, so the normal path already released the
+				// lock; clearing it here keeps a turn that never emits `agent_settled`
+				// from wedging its session.
+				if (runningTurns.get(sessionId)?.turn_id === holder.turn_id) runningTurns.delete(sessionId);
+			}
+			json(res, 200, { stopped: stopped.length > 0, turns: stopped });
 			return;
 		}
+		// Stop every turn in every session. Backs `/stop-all`; only sessions that are
+		// really running are touched, so this never wakes an idle runtime.
+		if (path === "/chat/stop-all" && req.method === "POST") {
+			const stopped: string[] = [];
+			for (const [sessionId, holder] of [...runningTurns]) {
+				const target = await runtimeForRunningTurn(sessionId);
+				if (!target) continue;
+				stopped.push(holder.turn_id);
+				await target.session.abort();
+				if (runningTurns.get(sessionId)?.turn_id === holder.turn_id) runningTurns.delete(sessionId);
+			}
+			json(res, 200, { stopped: stopped.length > 0, turns: stopped });
+			return;
+		}
+		// Sessions with a turn in flight, with the ids a client needs to tell its own
+		// turn from another tab's.
 		if (path === "/chat/active" && req.method === "GET") {
-			json(res, 200, turnActive ? [session.sessionId] : []);
+			json(res, 200, [...runningTurns.values()]);
 			return;
 		}
 		if (path === "/chat/permission" && req.method === "POST") {
@@ -2215,7 +2422,10 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 				return;
 			}
-			if (turnActive) {
+			// `/cd` re-roots the process's own session, so only a turn on *that*
+			// session blocks it: a turn another tab runs in another session is not
+			// moving any directory this request touches.
+			if (runningTurns.has(runtime.session.sessionId)) {
 				// The running turn, its transcript and its tool results belong to the
 				// directory it started in; moving underneath it would split a session
 				// across two places with no way to tell which is which.

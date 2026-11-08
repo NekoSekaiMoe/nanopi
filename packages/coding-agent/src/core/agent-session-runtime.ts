@@ -134,6 +134,11 @@ export class AgentSessionRuntime {
 		this.servicesHop = hop;
 	}
 
+	/** The hop set by {@link setServicesHop}, so a second runtime rooted elsewhere can reuse it. */
+	get servicesHopFactory(): CreateAgentSessionRuntimeFactory | undefined {
+		return this.servicesHop;
+	}
+
 	/**
 	 * Set a synchronous callback that runs after `session_shutdown` handlers finish
 	 * but before the current session is invalidated.
