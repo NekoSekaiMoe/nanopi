@@ -2666,14 +2666,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			const accountId = str(body.provider_id);
 			const account = accountId ? accounts.find((entry) => entry.id === accountId) : undefined;
 			const saved = await storedAccountAuth(accountId);
+			// A vendor with per-site keys is probed by its hosts, so the form does not
+			// have to know which site issued the key. Asking for `preset` overrides a
+			// base URL the user typed: an explicit host and "find my site" disagree.
+			const site = PROVIDER_PRESETS.find((preset) => preset.id === str(body.preset))?.site_endpoints;
 			try {
-				const models = await discoverModels({
+				const listing = await discoverModels({
 					type: str(body.type) ?? account?.type ?? "openai",
-					base_url: str(body.base_url) ?? account?.base_url ?? "",
+					base_url: str(body.base_url) ?? account?.base_url,
 					api_key: str(body.api_key) ?? saved.apiKey,
 					headers: saved.headers,
+					site,
 				});
-				json(res, 200, { models });
+				json(res, 200, listing);
 			} catch (error) {
 				if (error instanceof ProviderAccountError) {
 					json(res, error.status, { error: error.message });

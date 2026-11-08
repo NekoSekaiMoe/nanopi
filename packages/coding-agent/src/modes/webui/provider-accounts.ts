@@ -11,7 +11,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "../../config.ts";
-import { fetchModelListing } from "../../core/model-listing.ts";
+import { fetchModelListing, resolveSiteBaseUrl, type SiteEndpoints } from "../../core/model-listing.ts";
 import { stripJsonComments } from "../../utils/json.ts";
 import { stripBom } from "../../utils/text.ts";
 
@@ -24,7 +24,20 @@ export interface ProviderPresetInfo {
 	requires_api_key: boolean;
 	model_source?: "embedded" | "discovery_api" | "manual";
 	discoverable?: boolean;
+	/**
+	 * The vendor's other host, when its keys are issued per site. Listing the
+	 * key's models is what picks between them, so the page reaches the right
+	 * endpoint without asking the user which site they registered on.
+	 */
+	site_endpoints?: SiteEndpoints;
 }
+
+/** Site endpoints of the presets whose China and international hosts split a key space. */
+const MOONSHOT_SITES: SiteEndpoints = {
+	vendor: "Moonshot AI",
+	site: "https://api.moonshot.cn/v1",
+	global: "https://api.moonshot.ai/v1",
+};
 
 /** Vendor presets: known services with their endpoint and key requirement. */
 export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
@@ -64,12 +77,15 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "moonshot",
 		display_name: "Moonshot AI",
 		type: "openai",
-		// Same endpoint as the built-in `moonshotai` catalog. The China proxy is
-		// only a base URL override, so the preset must not point elsewhere either
-		// (see packages/ai/src/providers/moonshotai.ts).
-		default_base_url: "https://api.moonshot.ai/v1",
+		// The international host, which is also the built-in catalog's baseUrl and
+		// the fallback when the key's own site cannot be probed
+		// (see packages/ai/src/providers/moonshotai.ts). A key from the China site
+		// is detected by listing it there first, so the default is only what an
+		// unprobed form submits.
+		default_base_url: MOONSHOT_SITES.global,
 		requires_api_key: true,
 		discoverable: true,
+		site_endpoints: MOONSHOT_SITES,
 	},
 	{
 		id: "zhipu",
@@ -159,6 +175,8 @@ export interface ProviderAccountView {
 	custom?: boolean;
 	discoverable?: boolean;
 	probeable?: boolean;
+	/** The preset's per-site endpoints, so the page can label which site the account points at. */
+	site_endpoints?: SiteEndpoints;
 }
 
 /** Model body from the webui (NewModelBody). */
@@ -262,6 +280,7 @@ function toView(id: string, entry: ModelsJsonProvider): ProviderAccountView {
 		custom: !preset || preset.id !== id,
 		discoverable: choice?.discoverable ?? true,
 		probeable: Boolean(entry.baseUrl),
+		site_endpoints: preset?.id === id ? preset.site_endpoints : undefined,
 	};
 }
 
@@ -429,21 +448,47 @@ export interface DiscoveredModel {
 	name?: string;
 }
 
+export interface DiscoverModelsResult {
+	models: DiscoveredModel[];
+	/** The endpoint that answered. Present when `site` was asked to probe the vendor's hosts. */
+	base_url?: string;
+	/** Which host it was: `cn` for the domestic site, `global` for the international one. */
+	site?: "cn" | "global";
+}
+
 /**
  * List models from the endpoint, through the same reader the built-in catalog
  * refresh uses: `{base}/models`, falling back to `{base}/v1/models` (or the
  * reverse for an Anthropic-shaped gateway), so a models.json entry is listed
  * whether or not its baseUrl carries the version segment.
+ *
+ * With `site`, the vendor's hosts are probed instead and the answer says which
+ * one took the key: a vendor whose China and international sites issue separate
+ * keys can be set up from the key alone.
  */
 export async function discoverModels(input: {
 	type: string;
-	base_url: string;
+	base_url?: string;
 	api_key?: string;
 	headers?: Record<string, string>;
-}): Promise<DiscoveredModel[]> {
-	if (!input.base_url.trim()) throw new ProviderAccountError("base_url is required", 400);
+	site?: SiteEndpoints;
+}): Promise<DiscoverModelsResult> {
+	if (input.site) {
+		try {
+			const resolved = await resolveSiteBaseUrl(input.site, {
+				type: input.type,
+				apiKey: input.api_key,
+				headers: input.headers,
+			});
+			return { models: resolved.models ?? [], base_url: resolved.baseUrl, site: resolved.site };
+		} catch (error) {
+			throw new ProviderAccountError(error instanceof Error ? error.message : String(error), 502);
+		}
+	}
+	const baseUrl = input.base_url?.trim() ?? "";
+	if (!baseUrl) throw new ProviderAccountError("base_url is required", 400);
 	try {
-		return (await fetchModelListing({ ...input, baseUrl: input.base_url })) ?? [];
+		return { models: (await fetchModelListing({ ...input, baseUrl })) ?? [] };
 	} catch (error) {
 		throw new ProviderAccountError(error instanceof Error ? error.message : String(error), 502);
 	}
