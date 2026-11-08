@@ -2,17 +2,18 @@
  * WebUI mode: serves the browser UI from packages/webui and bridges its HTTP/SSE
  * API onto a headless AgentSession.
  *
- * Frontend contract ported from AtomCode's webui (MIT). The default `/chat`
- * transport is implemented; the `?sync=1` `/live` transport is not. The extra
- * module (packages/extra) supplies run modes and per-call permission gating
- * through `extraBridge`; when a build flavor excludes it the bridge reports
- * unavailable, every /extra endpoint 404s, permission requests never surface,
- * and the webui hides its mode selector.
+ * Frontend contract ported from AtomCode's webui (MIT). Only the `/chat` + SSE
+ * transport exists: AtomCode's `?sync=1` `/live` transport has no caller here
+ * and its endpoints were removed rather than answered with a stub (#595). The
+ * extra module (packages/extra) supplies run modes and per-call permission
+ * gating through `extraBridge`; when a build flavor excludes it the bridge
+ * reports unavailable, every /extra endpoint 404s, permission requests never
+ * surface, and the webui hides its mode selector.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
@@ -28,9 +29,15 @@ import {
 	type ToolResultMessage,
 } from "@nanopi/pi-ai";
 import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
-import { getPackageDir } from "../../config.ts";
+import { isBuildComponentEnabled } from "../../build-components.ts";
+import { getAgentDir, getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
-import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
+import type { AgentSessionRuntime, CreateAgentSessionRuntimeResult } from "../../core/agent-session-runtime.ts";
+import {
+	type AgentSessionServices,
+	createAgentSessionFromServices,
+	createAgentSessionServices,
+} from "../../core/agent-session-services.ts";
 import {
 	type FileEntry,
 	parseSessionEntries,
@@ -38,6 +45,9 @@ import {
 	type SessionInfo,
 	SessionManager,
 } from "../../core/session-manager.ts";
+import { SettingsManager } from "../../core/settings-manager.ts";
+import { loadMcpConfig } from "../../extras/mcp-lite/src/config.ts";
+import { commandAvailable } from "../../extras/mcp-lite/src/executables.ts";
 import { killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../../utils/shell.ts";
 import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
@@ -59,6 +69,26 @@ import {
 
 /** Default port for `nanopi webui`. */
 export const DEFAULT_WEBUI_PORT = 5335;
+
+/**
+ * Version of the running build, read once for `/health`.
+ *
+ * A webui served from a build without the `module/mcp-lite` component and one
+ * with it answer `/mcp/status` differently, and the browser cannot tell them
+ * apart from the launch URL alone; this is what a report can quote so the next
+ * reader knows which binary produced the answer.
+ */
+const APP_VERSION: string = (() => {
+	try {
+		const manifest = JSON.parse(readFileSync(join(getPackageDir(), "package.json"), "utf8")) as {
+			version?: unknown;
+		};
+		return typeof manifest.version === "string" ? manifest.version : "";
+	} catch {
+		/* an install without a readable manifest still serves; the version is just empty */
+		return "";
+	}
+})();
 
 export interface WebuiModeOptions {
 	port: number;
@@ -268,6 +298,117 @@ async function isDirectory(target: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Replace the session the runtime serves with a fresh one rooted at the target
+ * working directory.
+ *
+ * None of the runtime's public replacements can move the directory:
+ * `switchSession` hands `cwdOverride` to `SessionManager.open`, which roots the
+ * manager at the override while the runtime rebuilds its cwd-bound services
+ * from the *previous* directory, and `newSession` is rooted at the process cwd
+ * by construction. So the replacement is done the way the runtime does it
+ * internally, with a session manager created at the target.
+ *
+ * `SessionManager.create(cwd)` gets no explicit session directory on purpose:
+ * `resolvePath` treats a path like `/project/nested` as already absolute, so
+ * reusing the old session directory silently pinned the manager back to the
+ * directory the server started in.
+ *
+ * The runtime's own factory would still build services for the launch
+ * directory; `setServicesHop` is what makes it build them for this one. The
+ * module rebind is skipped because `bindModules` starts the session again with
+ * the `session_start` event the factory already consumed, and that restart
+ * rebuilds cwd-bound state from the runtime's fixed cwd.
+ *
+ * The conversation stays behind in the old transcript. It was about the old
+ * directory, and carrying it along would mix two projects into one session.
+ */
+async function replaceSessionCwd(
+	runtime: AgentSessionRuntime,
+	cwd: string,
+	bindSession: (() => Promise<void>) | undefined,
+): Promise<void> {
+	const previousSessionFile = runtime.session.sessionFile;
+	const internals = runtime as unknown as {
+		services: AgentSessionServices;
+		createRuntime(options: {
+			cwd: string;
+			agentDir: string;
+			sessionManager: SessionManager;
+			sessionStartEvent?: {
+				type: "session_start";
+				reason: "new" | "resume";
+				previousSessionFile?: string;
+			};
+		}): Promise<CreateAgentSessionRuntimeResult>;
+		teardownCurrent(reason: "new" | "resume", targetSessionFile?: string): Promise<void>;
+		apply(result: CreateAgentSessionRuntimeResult): void;
+		finishSessionReplacement(): Promise<void>;
+	};
+	const sessionManager = SessionManager.create(cwd);
+	await internals.teardownCurrent("new", sessionManager.getSessionFile());
+	internals.apply(
+		await internals.createRuntime({
+			cwd: sessionManager.getCwd(),
+			agentDir: internals.services.agentDir,
+			sessionManager,
+			sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+		}),
+	);
+	runtime.setRebindSession(undefined);
+	try {
+		await internals.finishSessionReplacement();
+	} finally {
+		runtime.setRebindSession(bindSession);
+	}
+}
+
+/**
+ * The working directory the runtime is serving.
+ *
+ * The session's own cwd wins: a session opened through `switchSession` carries
+ * the directory of the file it came from, and a session replaced by
+ * `replaceSessionCwd` carries the target. The runtime's cwd is the fallback for
+ * the window where the two have not been reconciled, and it is the launch
+ * directory, so reporting it when the session knows better would undo a `/cd`.
+ */
+function sessionCwdOf(runtime: AgentSessionRuntime): string {
+	return runtime.session.sessionManager.getCwd() || runtime.cwd;
+}
+
+/**
+ * What `GET /mcp/status` answers.
+ *
+ * This is the MCP *configuration* read from `mcp-lite` (the module the agent's
+ * subagent bridge loads), not a live connection table: no server is connected
+ * until a session starts, and connecting from an HTTP handler would spawn
+ * processes nobody is waiting for on every settings-page render. Every server
+ * therefore reports `configured`, plus why its stdio command is missing when
+ * the lookup fails on this machine.
+ *
+ * `available: false` means the build excludes the `module/mcp-lite` component,
+ * which the settings page has to say out loud: an empty list would otherwise
+ * read as "nothing configured yet".
+ */
+function mcpStatusPayload(cwd: string, projectTrusted: boolean): Record<string, unknown> {
+	if (!isBuildComponentEnabled("module/mcp-lite")) {
+		return { available: false, servers: [], trusted: projectTrusted, blocked: [] };
+	}
+	const config = loadMcpConfig(cwd, { agentDir: getAgentDir() });
+	const servers = [...config.servers].map(([name, server]) => ({
+		name,
+		status: "configured",
+		transport: server.transport,
+		source: config.origins.get(name),
+		error:
+			server.transport === "stdio" && !commandAvailable(server.command)
+				? `${server.command} is not on PATH`
+				: undefined,
+	}));
+	const blocked = [...(projectTrusted ? [] : [join(cwd, ".nanopi", "mcp.json")]), ...config.problems];
+	return { available: true, servers, trusted: projectTrusted, blocked };
 }
 
 /** POSIX login shell for the scratch terminal. */
@@ -685,11 +826,38 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 	// Extensions run headless in webui mode: no UI context, but a mode marker so
 	// the extra module routes permission prompts through the bridge below.
-	const rebindSession = async (): Promise<void> => {
+	// Modules are rebound on every session replacement, and the webui's own
+	// replacements (`replaceSessionCwd`, a `/chat` naming another `working_dir`)
+	// run outside a module hook. Binding here is what keeps the mode marker alive
+	// across a `/cd`; it is the same call switching sessions makes, so it cannot
+	// start the runtime twice.
+	const bindSession = async (): Promise<void> => {
 		await runtime.session.bindModules({ mode: "webui" });
 	};
-	await rebindSession();
-	runtime.setRebindSession(rebindSession);
+	await bindSession();
+	runtime.setRebindSession(bindSession);
+	// The runtime factory closes over the launch directory's services, so every
+	// session replacement rebuilds them there and the runtime's fixed `cwd` can
+	// never move. This hop rebuilds them for the directory the incoming session
+	// manager points at and then creates the session on top of them; it is the
+	// platform's own two-step replace (`createAgentSessionServices` +
+	// `createAgentSessionFromServices`), just rooted somewhere the caller chose.
+	runtime.setServicesHop(async (next) => {
+		const cwd = next.sessionManager.getCwd();
+		const services = await createAgentSessionServices({
+			cwd,
+			agentDir: next.agentDir,
+			modelRuntime: runtime.services.modelRuntime,
+			settingsManager: SettingsManager.create(cwd, next.agentDir),
+			extensionFlagValues: runtime.services.extensionFlagValues,
+		});
+		const created = await createAgentSessionFromServices({
+			services,
+			sessionManager: next.sessionManager,
+			sessionStartEvent: next.sessionStartEvent,
+		});
+		return { ...created, services, diagnostics: services.diagnostics };
+	});
 
 	const server = createServer((req, res) => {
 		void handleRequest(req, res).catch((error) => {
@@ -1245,11 +1413,11 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// Health and static assets are unauthenticated; the SPA shows its own auth
 		// notice when API calls get 401.
 		if (path === "/health") {
-			json(res, 200, { ok: true });
+			json(res, 200, { ok: true, version: APP_VERSION });
 			return;
 		}
 		if (
-			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|tunnel|providers|provider-accounts|model-profiles|extra)\b/.test(
+			!/^\/(api|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|providers|provider-accounts|extra)\b/.test(
 				path,
 			)
 		) {
@@ -1475,10 +1643,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		// --- Project state ---
+		// The session's cwd, not the process's: they differ after `/cd` or after a
+		// `/chat` that named a `working_dir`, and the SPA keys its session list off
+		// this hash.
 		if (path === "/project" && req.method === "GET") {
 			json(res, 200, {
-				working_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				working_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 			});
 			return;
 		}
@@ -1512,8 +1683,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, {
 				id: runtime.session.sessionId,
 				name: "",
-				working_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				working_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 				created_at: Date.now(),
 			});
 			return;
@@ -1637,13 +1808,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				chatBody.images = body.images as { media_type: string; data: string }[];
 			}
 			// Honour a working directory the SPA believes it is in (it survives a
-			// `/cd`); a stale path is ignored rather than failing the turn.
+			// `/cd`); a stale path is ignored rather than failing the turn. The
+			// comparison is against the session's cwd, the one a `/cd` moved.
 			if (typeof body.working_dir === "string" && body.working_dir) {
 				const wanted = resolveWorkspacePath(body.working_dir, runtime.cwd);
-				if (wanted && wanted !== runtime.cwd && (await isDirectory(wanted))) {
+				if (wanted && wanted !== sessionCwdOf(runtime) && (await isDirectory(wanted))) {
 					try {
-						await runtime.newSession();
-						await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: wanted });
+						await replaceSessionCwd(runtime, wanted, bindSession);
 					} catch {
 						// Keep serving the current directory.
 					}
@@ -1950,16 +2121,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, { path: target });
 			return;
 		}
-		if (path === "/fs/search" && req.method === "GET") {
-			const requested = url.searchParams.get("path") ?? "";
-			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : runtime.cwd;
-			if (!target) {
-				json(res, 403, { error: `outside the workspace: ${requested}` });
-				return;
-			}
-			json(res, 200, { path: target, matches: [] });
-			return;
-		}
 		// The host cannot focus an external editor, so the viewer reads files over
 		// HTTP instead: the same bytes an editor would show, plus whether they are
 		// binary (the viewer shows a notice) and the size cap that keeps the API
@@ -2032,8 +2193,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		// --- Working directory ---
-		// The runtime's cwd is fixed for the process, so switching means opening a
-		// session rooted elsewhere; `/chat` then restores the requested dir.
+		// Switching means opening sessions rooted elsewhere: the runtime's own cwd is
+		// fixed for the process. The switch is real from here on — the runtime's
+		// sessions, `/project`, the default-directory terminal, and the `working_dir`
+		// the SPA echoes on `/chat` all report `target`, not the launch directory. A
+		// request that cannot be honoured says so instead of answering with the old
+		// directory and no error (#595).
 		if (path === "/cd" && req.method === "POST") {
 			const body = await readBody(req);
 			const requested = typeof body.path === "string" ? body.path.trim() : "";
@@ -2050,12 +2215,20 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 				return;
 			}
+			if (turnActive) {
+				// The running turn, its transcript and its tool results belong to the
+				// directory it started in; moving underneath it would split a session
+				// across two places with no way to tell which is which.
+				json(res, 409, {
+					success: false,
+					message: "a turn is running; stop it before switching directories",
+					current_dir: runtime.cwd,
+					project_hash: projectHash(runtime.cwd),
+				});
+				return;
+			}
 			try {
-				// Open a session rooted at `target`. A fresh session there has its
-				// own project hash; `/chat` switches back to the requested dir when
-				// a turn arrives with an explicit `working_dir`.
-				await runtime.newSession();
-				await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: target });
+				await replaceSessionCwd(runtime, target, bindSession);
 			} catch (error) {
 				json(res, 400, {
 					success: false,
@@ -2068,34 +2241,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, {
 				success: true,
 				message: "",
-				current_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				current_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 			});
 			return;
 		}
 
-		// --- Stubbed AtomCode facilities ---
+		// --- MCP ---
 		if (path === "/mcp/status" && req.method === "GET") {
-			json(res, 200, { servers: [], trusted: true, blocked: [] });
-			return;
-		}
-		if (path === "/tunnel/status" && req.method === "GET") {
-			json(res, 200, {
-				bind_host: host,
-				port,
-				reachable: false,
-				pgy: { installed: false, ipv4: null },
-				remote_url: null,
-				qr_svg: null,
-			});
+			json(res, 200, mcpStatusPayload(sessionCwdOf(runtime), runtime.session.settingsManager.isProjectTrusted()));
 			return;
 		}
 		if (path === "/command" && req.method === "POST") {
 			json(res, 200, { kind: "error", message: "slash commands are not available in the webui yet" });
-			return;
-		}
-		if (path === "/live/mcp/trust" && req.method === "POST") {
-			json(res, 200, { ok: false, error: "MCP is not available" });
 			return;
 		}
 		if (path === "/providers/discover-models" && req.method === "POST") {
@@ -2227,21 +2385,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				}
 				throw error;
 			}
-		}
-
-		// --- Live (sync) transport: not implemented ---
-		if (path === "/live" || path.startsWith("/live/")) {
-			json(res, 501, {
-				error: "the sync (/live) transport is not implemented; use the default mode",
-				code: "live_unsupported",
-			});
-			return;
-		}
-
-		// --- Model profiles: not mapped onto nanopi yet ---
-		if (path.startsWith("/model-profiles")) {
-			json(res, 400, { error: "model profiles are not available in the webui yet" });
-			return;
 		}
 
 		json(res, 404, { error: `no such endpoint: ${req.method} ${path}` });
