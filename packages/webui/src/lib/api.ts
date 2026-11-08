@@ -536,30 +536,60 @@ export interface StreamChatBody {
 	approval_mode?: ApprovalMode;
 }
 
-/** Session ids with a turn running in the daemon. Empty when it is idle. */
+/** One turn the daemon is running, in some session. */
+export interface ActiveTurn {
+	session_id: string;
+	turn_id: string;
+	started_at: number;
+}
+
 /**
- * Session ids with a turn running in the daemon.
+ * Turns running in the daemon, across every session. Empty when it is idle.
  *
  * With `waitSeconds`, this becomes a long poll: the daemon holds the request
  * until a turn starts or settles, or the timeout passes, and answers with a
  * fresh snapshot. A tab that did not start the turn has no stream of its own, so
  * this is how it learns the turn finished without asking every second.
  */
-export async function getChatActive(waitSeconds = 0, signal?: AbortSignal): Promise<string[]> {
+export async function getChatActive(waitSeconds = 0, signal?: AbortSignal): Promise<ActiveTurn[]> {
 	const query = waitSeconds > 0 ? `?wait_s=${Math.round(waitSeconds)}` : "";
 	const response = await fetch(`/chat/active${query}`, { headers: authHeaders(), signal });
 	if (!response.ok) throw await failure(response);
 	const body = (await response.json()) as unknown;
-	return Array.isArray(body) ? body.filter((id): id is string => typeof id === "string") : [];
+	if (!Array.isArray(body)) return [];
+	return body.filter(
+		(item): item is ActiveTurn =>
+			typeof item === "object" &&
+			item !== null &&
+			typeof (item as ActiveTurn).session_id === "string" &&
+			typeof (item as ActiveTurn).turn_id === "string",
+	) as ActiveTurn[];
 }
 
-export async function stopChat(sessionId: string): Promise<void> {
+/**
+ * Stop one turn.
+ *
+ * `sessionId` names the session and `requestId` the turn, so the daemon stops the
+ * turn this tab started rather than whatever session happens to be open. Without
+ * `requestId` it stops the whole session, which is what `/stop-all` is for.
+ */
+export async function stopChat(sessionId: string, requestId?: string): Promise<void> {
 	const response = await fetch("/chat/stop", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", ...authHeaders() },
-		body: JSON.stringify({ session_id: sessionId }),
+		body: JSON.stringify(requestId ? { session_id: sessionId, request_id: requestId } : { session_id: sessionId }),
 	});
 	if (!response.ok) throw new Error(`stop chat failed: ${response.status}`);
+}
+
+/** Stop every running turn, in every session (`/stop-all`). */
+export async function stopAllChat(): Promise<{ stopped: boolean; turns: string[] }> {
+	const response = await fetch("/chat/stop-all", {
+		method: "POST",
+		headers: authHeaders(),
+	});
+	if (!response.ok) throw new Error(`stop all chats failed: ${response.status}`);
+	return (await response.json()) as { stopped: boolean; turns: string[] };
 }
 
 export async function streamChat(
@@ -667,9 +697,13 @@ export interface McpServerInfo {
 	status: string;
 	tool_count?: number;
 	error?: string;
+	transport?: string;
+	source?: string;
 }
 
 export interface McpStatusInfo {
+	/** False when the build excludes the mcp-lite module; the server list is then meaningless. */
+	available: boolean;
 	servers: McpServerInfo[];
 	trusted?: boolean;
 	blocked?: string[];

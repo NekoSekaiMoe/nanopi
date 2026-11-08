@@ -83,7 +83,7 @@ Unified LLM API with provider collections, automatic auth resolution, token and 
 - **Together AI**
 - **Baseten**
 - **Hugging Face**
-- **Moonshot AI** (with separate China provider)
+- **Moonshot AI** (one catalog for both endpoints; point `baseUrl` at `https://api.moonshot.cn/v1` for China)
 - **GitHub Copilot** (requires OAuth, see below)
 - **Amazon Bedrock** (Converse and OpenAI-compatible Bedrock models)
 - **OpenCode Zen**
@@ -481,7 +481,7 @@ Built-in providers resolve these env vars (Node.js; in browsers pass `apiKey` ex
 | ZAI Coding Plan (Global) | `ZAI_API_KEY` |
 | ZAI Coding Plan (China) | `ZAI_CODING_CN_API_KEY` |
 | Google Antigravity (unofficial) | `ANTIGRAVITY_ACCESS_TOKEN` |
-| Moonshot AI / Moonshot AI (China) | `MOONSHOT_API_KEY` |
+| Moonshot AI (global and China) | `MOONSHOT_API_KEY` |
 | Hugging Face | `HF_TOKEN` |
 | OpenCode Zen / OpenCode Go | `OPENCODE_API_KEY` |
 | Kimi For Coding | `KIMI_API_KEY` |

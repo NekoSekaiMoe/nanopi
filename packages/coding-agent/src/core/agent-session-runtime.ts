@@ -73,10 +73,11 @@ function extractUserMessageText(content: string | Array<{ type: string; text?: s
  */
 export class AgentSessionRuntime {
 	private rebindSession?: (session: AgentSession) => Promise<void>;
+	private servicesHop?: CreateAgentSessionRuntimeFactory;
 	private beforeSessionInvalidate?: () => void;
 	private _session: AgentSession;
 	private _services: AgentSessionServices;
-	private readonly createRuntime: CreateAgentSessionRuntimeFactory;
+	private readonly createRuntimeFromFactory: CreateAgentSessionRuntimeFactory;
 	private _diagnostics: AgentSessionRuntimeDiagnostic[];
 	private _modelFallbackMessage?: string;
 
@@ -89,7 +90,7 @@ export class AgentSessionRuntime {
 	) {
 		this._session = _session;
 		this._services = _services;
-		this.createRuntime = createRuntime;
+		this.createRuntimeFromFactory = createRuntime;
 		this._diagnostics = _diagnostics;
 		this._modelFallbackMessage = _modelFallbackMessage;
 	}
@@ -119,6 +120,26 @@ export class AgentSessionRuntime {
 	}
 
 	/**
+	 * Re-root the runtime at another working directory by swapping the
+	 * cwd-bound services the runtime factory closes over.
+	 *
+	 * The directory is fixed at construction (`cwd` is `services.cwd`), and every
+	 * public replacement asks the factory for services at one of the directories
+	 * the runtime already knows. That makes the launch directory sticky: there is
+	 * no way to ask for a session somewhere else. Handing the factory a hop that
+	 * computes the next services from the session manager it is given restores
+	 * that ability, which is what a `/cd` in a host needs.
+	 */
+	setServicesHop(hop?: CreateAgentSessionRuntimeFactory): void {
+		this.servicesHop = hop;
+	}
+
+	/** The hop set by {@link setServicesHop}, so a second runtime rooted elsewhere can reuse it. */
+	get servicesHopFactory(): CreateAgentSessionRuntimeFactory | undefined {
+		return this.servicesHop;
+	}
+
+	/**
 	 * Set a synchronous callback that runs after `session_shutdown` handlers finish
 	 * but before the current session is invalidated.
 	 *
@@ -128,6 +149,12 @@ export class AgentSessionRuntime {
 	 */
 	setBeforeSessionInvalidate(beforeSessionInvalidate?: () => void): void {
 		this.beforeSessionInvalidate = beforeSessionInvalidate;
+	}
+
+	private createRuntime(
+		options: Parameters<CreateAgentSessionRuntimeFactory>[0],
+	): Promise<CreateAgentSessionRuntimeResult> {
+		return (this.servicesHop ?? this.createRuntimeFromFactory)(options);
 	}
 
 	private async emitBeforeFork(
