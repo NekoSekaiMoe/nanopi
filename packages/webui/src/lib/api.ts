@@ -167,6 +167,26 @@ export interface ToolResultInfo {
 	line_count: number;
 }
 
+/** What one assistant reply was billed for; the bubble's meta row shows it. */
+export interface TurnUsage {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+	/** Prompt the request carried, i.e. what the context window held. */
+	context: number;
+}
+
+/** Session usage summed over the transcript the same way the live session does. */
+export interface SessionStats {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+}
+
 export interface SessionMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string;
@@ -179,6 +199,8 @@ export interface SessionMessage {
 	tool_result?: ToolResultInfo;
 	artifacts?: unknown;
 	images?: ImageData[];
+	/** Usage of an assistant reply; absent for every other role. */
+	usage?: TurnUsage;
 	created_at?: number;
 }
 
@@ -197,6 +219,14 @@ export interface SessionDetail {
 	 * that never built one; present but empty after a `clear`.
 	 */
 	plan?: PlanItem[];
+	/** Session usage as the live session counts it; absent when nothing was billed. */
+	stats?: SessionStats;
+	/**
+	 * Why a transcript that billed tokens still reports no totals: one branch was
+	 * compacted, and the read path cannot tell which messages the summary already
+	 * covered, so it withholds the sum instead of charging that span twice.
+	 */
+	stats_unavailable?: "compacted";
 }
 
 export async function listSessions(): Promise<SessionMetaWithProject[]> {
@@ -507,8 +537,17 @@ export interface StreamChatBody {
 }
 
 /** Session ids with a turn running in the daemon. Empty when it is idle. */
-export async function getChatActive(): Promise<string[]> {
-	const response = await fetch("/chat/active", { headers: authHeaders() });
+/**
+ * Session ids with a turn running in the daemon.
+ *
+ * With `waitSeconds`, this becomes a long poll: the daemon holds the request
+ * until a turn starts or settles, or the timeout passes, and answers with a
+ * fresh snapshot. A tab that did not start the turn has no stream of its own, so
+ * this is how it learns the turn finished without asking every second.
+ */
+export async function getChatActive(waitSeconds = 0, signal?: AbortSignal): Promise<string[]> {
+	const query = waitSeconds > 0 ? `?wait_s=${Math.round(waitSeconds)}` : "";
+	const response = await fetch(`/chat/active${query}`, { headers: authHeaders(), signal });
 	if (!response.ok) throw await failure(response);
 	const body = (await response.json()) as unknown;
 	return Array.isArray(body) ? body.filter((id): id is string => typeof id === "string") : [];

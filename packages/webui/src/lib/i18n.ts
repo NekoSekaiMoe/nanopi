@@ -244,6 +244,14 @@ const EN: Record<string, string> = {
 	"切换到计划模式": "Switch to plan mode",
 	"切换到标准模式": "Switch to standard mode",
 	"切换到最小模式": "Switch to minimal mode",
+	"输入": "input",
+	"输出": "output",
+	"上下文": "context",
+	"缓存": "cache",
+	"tokens": "tokens",
+	"本轮": "Turn",
+	"上下文压缩过，会话累计无法从记录重建":
+		"The context was compacted, so the session total cannot be rebuilt from the transcript",
 };
 
 export function t(zh: string): string {

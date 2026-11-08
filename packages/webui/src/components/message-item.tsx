@@ -3,8 +3,9 @@
 import { AlertTriangle, Check, ChevronRight, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Markdown } from "@/components/markdown";
+import type { TurnUsage } from "@/lib/api";
 import type { ReasoningBlock, TextBlock, ToolBlock, UiBlock, UiMessage } from "@/lib/use-chat";
-import { cn } from "@/lib/utils";
+import { cacheHitRate, cn, formatCost, formatTokens } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
 function toolSummary(block: ToolBlock): string {
@@ -129,7 +130,30 @@ export function MessageItem({ message }: { message: UiMessage }) {
 					<ProcessGroup key={`${message.id}-process-${index}`} blocks={item.blocks} />
 				),
 			)}
+			{message.usage ? <UsageLine usage={message.usage} /> : null}
 		</div>
+	);
+}
+
+/**
+ * What the reply cost, under the reply itself: tokens it took and the share of
+ * its prompt a cache served.
+ *
+ * This is the only place the question "why was this slow, what did it cost" is
+ * answerable without opening the transcript file. A turn counts its own tool
+ * calls in the process group above, so the line leaves them out and stays
+ * focused on tokens.
+ */
+function UsageLine({ usage }: { usage: TurnUsage }) {
+	const hit = cacheHitRate(usage);
+	return (
+		<p className="select-none text-caption text-muted-foreground/70">
+			<span title={`${usage.input} ${t("输入")} · ${usage.output} ${t("输出")}`}>
+				{formatTokens(usage.context)} {t("上下文")} · {formatTokens(usage.output)} {t("输出")}
+			</span>
+			{hit !== null ? ` · ${t("缓存")} ${Math.round(hit * 100)}%` : null}
+			{usage.cost > 0 ? ` · ${formatCost(usage.cost)}` : null}
+		</p>
 	);
 }
 

@@ -26,10 +26,11 @@ import {
 	type Message,
 	type Model,
 	type ToolResultMessage,
+	type Usage,
 } from "@nanopi/pi-ai";
 import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
 import { getPackageDir } from "../../config.ts";
-import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
+import type { AgentSession, AgentSessionEvent, SessionStats } from "../../core/agent-session.ts";
 import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
 import {
 	type FileEntry,
@@ -104,6 +105,30 @@ interface WebuiSessionMeta {
 	file_size?: number;
 }
 
+/**
+ * What one assistant reply was billed for, so the transcript bubble can say
+ * how long it took and how many tokens it cost. `context` is the prompt the
+ * request carried, which is what fills the context window; `cache_read` is the
+ * part of it that a cache served.
+ */
+export interface WebuiTurnUsage {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+	context: number;
+}
+
+/** Session-level usage, summed from the transcript entries a live session counts. */
+export interface WebuiSessionStats {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+}
+
 interface WebuiSessionMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string;
@@ -113,6 +138,8 @@ interface WebuiSessionMessage {
 	tool_calls?: { id: string; name: string; arguments: string; display: string }[];
 	tool_result?: { call_id: string; success: boolean; summary: string; line_count: number };
 	images?: { media_type: string; data: string }[];
+	/** What this assistant reply was billed for; absent outside assistant replies. */
+	usage?: WebuiTurnUsage;
 	created_at?: number;
 }
 
@@ -122,6 +149,16 @@ interface SessionDetailContent {
 	thinking_level?: string;
 	/** Plan of the last todo result on the recorded branch; absent without one. */
 	plan?: PlanItem[];
+	/**
+	 * Why a transcript that billed tokens reports no totals: one branch was
+	 * compacted, so the split between the summarized and the live part is lost and
+	 * a sum over the file would charge the summarized span twice. The live session
+	 * knows the split (`AgentSession.getSessionStats`), so this one field is the
+	 * only part of the read path that has to refuse.
+	 */
+	stats_unavailable?: "compacted";
+	/** Session usage as the live session counts it; absent when nothing was billed. */
+	stats?: WebuiSessionStats;
 }
 
 interface ChatRequestBody {
@@ -526,6 +563,7 @@ function toWebuiMessage(message: AgentMessage): WebuiSessionMessage | null {
 			// produced it, so the transcript and the model list agree.
 			...(assistant.provider && assistant.model ? { provider: `${assistant.provider}/${assistant.model}` } : {}),
 			...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+			...(assistant.usage ? { usage: turnUsageOf(assistant.usage) } : {}),
 		};
 	}
 	if (message.role === "toolResult") {
@@ -571,16 +609,7 @@ export function planFromSessionEntries(entries: FileEntry[]): PlanItem[] | undef
 	for (const entry of entries) {
 		if (entry.type !== "session") byId.set(entry.id, entry);
 	}
-	const branch: SessionEntry[] = [];
-	const seen = new Set<string>();
-	const leaf = entries[entries.length - 1];
-	let current = leaf ? byId.get(leaf.id) : undefined;
-	while (current && !seen.has(current.id)) {
-		seen.add(current.id);
-		branch.push(current);
-		current = current.parentId ? byId.get(current.parentId) : undefined;
-	}
-	branch.reverse();
+	const branch = sessionBranchEntries(entries);
 
 	// An edit replaces the content the model sees, not the details, so every
 	// edited todo result is off the table regardless of how many edits hit it.
@@ -621,7 +650,120 @@ export function readSessionMessages(content: string): SessionDetailContent {
 			thinkingLevel = entry.thinkingLevel;
 		}
 	}
-	return { messages, thinking_level: thinkingLevel, plan: planFromSessionEntries(entries) };
+	// The messages come from the whole file (the UI reads a conversation, not a
+	// branch), but the totals must not, so they are summed over the branch alone.
+	const stats = sessionStatsFromEntries(entries);
+	return {
+		messages,
+		thinking_level: thinkingLevel,
+		plan: planFromSessionEntries(entries),
+		...(stats ? { stats } : {}),
+		...(!stats && entries.some((entry) => entry.type === "compaction" || entry.type === "branch_summary")
+			? { stats_unavailable: "compacted" }
+			: {}),
+	};
+}
+
+/**
+ * Map an `AssistantMessage` usage block to the wire shape of one reply.
+ */
+function turnUsageOf(usage: Usage): WebuiTurnUsage {
+	return {
+		input: usage.input,
+		output: usage.output,
+		cache_read: usage.cacheRead,
+		cache_write: usage.cacheWrite,
+		cost: usage.cost.total,
+		// What the request sent, which is what the window holds: fresh input plus
+		// the part a cache served or was written for.
+		context: usage.input + usage.cacheRead + usage.cacheWrite,
+	};
+}
+
+/**
+ * The transcript branch as the session manager walks it: every line is a node,
+ * the last one is the leaf, and `parentId` links rebuild root-to-leaf.
+ *
+ * A session file is a tree (a fork or a retry appends a sibling), so walking the
+ * file in order would mix branches that were never one conversation. Same shape
+ * as `SessionManager.buildSessionPath`, which parses each line on its own and so
+ * cannot be reused here.
+ */
+export function sessionBranchEntries(entries: FileEntry[]): SessionEntry[] {
+	const byId = new Map<string, SessionEntry>();
+	for (const entry of entries) {
+		if (entry.type !== "session") byId.set(entry.id, entry);
+	}
+	const branch: SessionEntry[] = [];
+	const seen = new Set<string>();
+	const leaf = entries[entries.length - 1];
+	let current = leaf ? byId.get(leaf.id) : undefined;
+	while (current && !seen.has(current.id)) {
+		seen.add(current.id);
+		branch.push(current);
+		current = current.parentId ? byId.get(current.parentId) : undefined;
+	}
+	branch.reverse();
+	return branch;
+}
+
+/**
+ * Session usage summed over the branch, the way `AgentSession.getSessionStats`
+ * sums what it holds in memory: message usage plus the `usage` entries the agent
+ * writes for work that is not a message (a title, a summary).
+ *
+ * `undefined` means the file cannot answer. A compaction or branch summary on
+ * the branch packs the conversation it replaced into one entry that carries the
+ * summarized span's usage too, while the summarized messages stay in the file as
+ * that entry's ancestors, so a sum charges that span twice. The live session
+ * knows which entries it no longer counts; a restored transcript does not.
+ */
+export function sessionStatsFromEntries(
+	entries: FileEntry[],
+	branch: SessionEntry[] = sessionBranchEntries(entries),
+): WebuiSessionStats | undefined {
+	const totals: WebuiSessionStats = { input: 0, output: 0, cache_read: 0, cache_write: 0, cost: 0 };
+	const add = (usage: Usage | undefined): void => {
+		// Fixtures and hand-edited transcripts carry messages without usage; a
+		// missing charge is not a zero charge, so skip it instead of crashing.
+		if (!usage) return;
+		totals.input += usage.input;
+		totals.output += usage.output;
+		totals.cache_read += usage.cacheRead;
+		totals.cache_write += usage.cacheWrite;
+		totals.cost += usage.cost.total;
+	};
+	for (const entry of branch) {
+		if (entry.type === "usage") {
+			add(entry.usage);
+			continue;
+		}
+		if (entry.type === "compaction" || entry.type === "branch_summary") return undefined;
+		if (entry.type !== "message") continue;
+		if (entry.message.role === "toolResult") {
+			if (entry.message.usage) add(entry.message.usage);
+			continue;
+		}
+		if (entry.message.role === "assistant") add(entry.message.usage);
+	}
+	if (totals.input + totals.output + totals.cache_read + totals.cache_write === 0) return undefined;
+	return totals;
+}
+
+/**
+ * Session usage as `AgentSession.getSessionStats` reports it, or undefined when
+ * the session has not billed anything yet.
+ */
+function sessionStatsOf(stats: SessionStats): WebuiSessionStats | undefined {
+	const { tokens } = stats;
+	if (tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite === 0) return undefined;
+	return {
+		input: tokens.input,
+		output: tokens.output,
+		cache_read: tokens.cacheRead,
+		cache_write: tokens.cacheWrite,
+		cost: stats.cost,
+	};
 }
 
 function sessionMeta(info: SessionInfo): WebuiSessionMeta & { project_hash: string } {
@@ -761,9 +903,17 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 	// Single in-flight turn; the frontend blocks sending while a turn streams.
 	let turnActive = false;
-	// Prompts parked behind the running turn (`/chat` with `queue: true`). Only the
-	// producer that cannot retry later asks for this; see ChatRequestBody.queue.
+	/** Prompts parked behind the running turn (`/chat` with `queue: true`). Only the
+	 * producer that cannot retry later asks for this; see ChatRequestBody.queue. */
 	const chatQueue: ChatRequestBody[] = [];
+	// Long-poll waiters on `/chat/active`; a turn end wakes them so a tab that did
+	// not start the turn learns it settled without polling the daemon.
+	const turnWaiters = new Set<() => void>();
+	/** Wake every `/chat/active` waiter: the answer it is parked on has changed. */
+	function notifyTurnChange(): void {
+		for (const wake of turnWaiters) wake();
+		turnWaiters.clear();
+	}
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
 	const oauthFlows = new Map<string, OAuthFlowState>();
 
@@ -1134,6 +1284,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			state.finished = true;
 			detachAll();
 			turnActive = false;
+			notifyTurnChange();
 			endTurn();
 		};
 
@@ -1224,6 +1375,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const next = chatQueue.shift();
 		if (!next) return;
 		turnActive = true;
+		notifyTurnChange();
 		beginTurn(next, { abortOnDetach: false }).runDetached();
 	}
 
@@ -1555,12 +1707,16 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					return;
 				}
 				const content = await readFile(info.path, "utf8");
-				const { messages, thinking_level, plan } = readSessionMessages(content);
+				const detail = readSessionMessages(content);
+				const { messages, thinking_level, plan } = detail;
 				const active = runtime.session.sessionId === info.id;
 				// The transcript records the thinking level per session; resuming this
 				// session (the open one included) restores it, so the picker reports
 				// the level the next turn will actually use.
 				const level = active ? runtime.session.thinkingLevel : thinking_level;
+				// The open session knows what it actually billed, the summarized branches
+				// included; a transcript that cannot answer reports why instead.
+				const stats = active ? sessionStatsOf(runtime.session.getSessionStats()) : detail.stats;
 				json(res, 200, {
 					id: info.id,
 					name: info.name ?? "",
@@ -1570,6 +1726,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					message_count: info.messageCount,
 					thinking_level: level,
 					messages,
+					...(stats ? { stats } : {}),
+					...(!stats && detail.stats_unavailable ? { stats_unavailable: detail.stats_unavailable } : {}),
 					// The plan lives in tool details the messages above drop, so a
 					// reloaded session would otherwise show no plan until the next todo
 					// call; the transcript is the only record of it.
@@ -1696,6 +1854,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				return;
 			}
 			turnActive = true;
+			notifyTurnChange();
 			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
 			return;
 		}
@@ -1705,6 +1864,37 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return;
 		}
 		if (path === "/chat/active" && req.method === "GET") {
+			// `wait_s` turns the poll into a long poll: the reply is sent when a turn
+			// starts or settles, capped by the timeout. The browser cannot see a turn
+			// it did not start (a job reporting in, a prompt queued behind the running
+			// one) any other way, and a client that sends no `wait_s` keeps the old
+			// one-shot behaviour.
+			const waitSeconds = Math.min(Math.max(Number(url.searchParams.get("wait_s") ?? "0"), 0), 30);
+			if (!Number.isFinite(waitSeconds) || waitSeconds === 0) {
+				json(res, 200, turnActive ? [session.sessionId] : []);
+				return;
+			}
+			await new Promise<void>((resolve) => {
+				const done = () => {
+					clearTimeout(timer);
+					res.off("close", done);
+					resolve();
+				};
+				const timer = setTimeout(() => {
+					turnWaiters.delete(done);
+					done();
+				}, waitSeconds * 1000);
+				turnWaiters.add(done);
+				// A closed request must not hold a waiter, or a tab that went away
+				// keeps a timer and a listener alive until it fires.
+				res.on("close", () => {
+					// Only the race lost: the waiter may have been cleared by a wake
+					// already, and `done` is idempotent either way.
+					turnWaiters.delete(done);
+					done();
+				});
+			});
+			if (res.writableEnded) return;
 			json(res, 200, turnActive ? [session.sessionId] : []);
 			return;
 		}

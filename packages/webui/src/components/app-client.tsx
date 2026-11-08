@@ -551,6 +551,9 @@ export function AppClient() {
 						permission={chat.permission}
 						userInput={chat.userInput}
 						plan={chat.plan}
+						stats={chat.stats}
+						statsUnavailable={chat.statsUnavailable}
+						lastCost={chat.lastCost}
 						models={usableModels}
 						provider={provider}
 						onProvider={setProvider}
