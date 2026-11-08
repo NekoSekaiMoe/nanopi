@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The Moonshot AI preset in the webui provider settings now defaults to `https://api.moonshot.ai/v1`, the endpoint the built-in `moonshotai` catalog uses. It defaulted to the China host (`https://api.moonshot.cn/v1`), so a Chinese key and a global key were told to use different hosts for the same catalog; the China endpoint stays a `models.json` `baseUrl` override (issue [#597](https://cnb.cool/shinytale/nanopi/-/issues/597))
+
 ## [20261107]
 
 ### Added

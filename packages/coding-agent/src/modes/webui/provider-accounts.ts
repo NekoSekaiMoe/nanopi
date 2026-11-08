@@ -64,7 +64,10 @@ export const PROVIDER_PRESETS: readonly ProviderPresetInfo[] = [
 		id: "moonshot",
 		display_name: "Moonshot AI",
 		type: "openai",
-		default_base_url: "https://api.moonshot.cn/v1",
+		// Same endpoint as the built-in `moonshotai` catalog. The China proxy is
+		// only a base URL override, so the preset must not point elsewhere either
+		// (see packages/ai/src/providers/moonshotai.ts).
+		default_base_url: "https://api.moonshot.ai/v1",
 		requires_api_key: true,
 		discoverable: true,
 	},
