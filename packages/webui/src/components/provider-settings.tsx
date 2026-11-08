@@ -19,6 +19,16 @@ import {
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
+/** Host of a base URL, so an endpoint can be matched to the site it belongs to. */
+function hostOf(url: string | undefined): string | undefined {
+	if (!url) return undefined;
+	try {
+		return new URL(url).host;
+	} catch {
+		return undefined;
+	}
+}
+
 const FALLBACK_PRESETS: ProviderPresetInfo[] = [
 	{ id: "anthropic", display_name: "Anthropic", type: "anthropic", default_base_url: "https://api.anthropic.com", requires_api_key: true },
 	{ id: "openai", display_name: "OpenAI", type: "openai", default_base_url: "https://api.openai.com/v1", requires_api_key: true },
@@ -271,6 +281,9 @@ function AccountCard({
 					{account.base_url ? (
 						<p className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
 							{account.base_url}
+							{account.site_endpoints && hostOf(account.base_url) === hostOf(account.site_endpoints.site)
+								? ` ${t("（中国站点）")}`
+								: null}
 						</p>
 					) : null}
 					<div className="mt-2 flex flex-wrap gap-1">
@@ -377,12 +390,18 @@ function AddProviderForm({
 	async function discover() {
 		setDiscovering(true);
 		setDiscoverError(null);
+		// A preset with per-site endpoints is probed by the vendor's hosts, so the
+		// key alone decides between them instead of the user guessing the site.
+		const probeSites = Boolean(preset?.site_endpoints);
 		try {
-			const found = await discoverProviderModels({
+			const result = await discoverProviderModels({
 				type: preset?.type ?? "openai",
-				base_url: baseUrl.trim() || undefined,
+				preset: preset?.id,
+				base_url: probeSites ? undefined : baseUrl.trim() || undefined,
 				api_key: apiKey.trim() || undefined,
 			});
+			const found = result.models;
+			if (result.base_url) setBaseUrl(result.base_url);
 			setDiscoveries(found);
 			setPicked(found.map((entry) => entry.id));
 			if (found.length === 0) setDiscoverError(t("接口没有返回模型"));
@@ -583,13 +602,19 @@ function EditProviderForm({
 	async function discover() {
 		setDiscovering(true);
 		setDiscoverError(null);
+		// Probing the site endpoints costs a request per host, so a host the user
+		// typed is respected and only a missing one triggers the search.
+		const probeSites = Boolean(account.site_endpoints) && !baseUrl.trim();
 		try {
-			const found = await discoverProviderModels({
+			const result = await discoverProviderModels({
 				type: account.type,
-				base_url: baseUrl.trim() || account.base_url,
+				preset: probeSites ? account.provider : undefined,
+				base_url: probeSites ? undefined : baseUrl.trim() || account.base_url,
 				api_key: apiKey.trim() || undefined,
 				provider_id: account.id,
 			});
+			const found = result.models;
+			if (result.base_url) setBaseUrl(result.base_url);
 			setDiscoveries(found);
 			if (found.length === 0) setDiscoverError(t("接口没有返回模型"));
 		} catch (cause) {

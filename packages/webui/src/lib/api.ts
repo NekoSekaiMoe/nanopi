@@ -798,6 +798,8 @@ export interface ProviderAccountInfo {
 	custom?: boolean;
 	discoverable?: boolean;
 	probeable?: boolean;
+	/** Present when the account's preset issues keys per site (China vs international). */
+	site_endpoints?: { vendor: string; site?: string; global?: string };
 }
 
 export interface ProviderPresetInfo {
@@ -807,6 +809,8 @@ export interface ProviderPresetInfo {
 	default_base_url?: string;
 	requires_api_key: boolean;
 	discoverable?: boolean;
+	/** Set when the vendor issues keys per site, so listing picks the endpoint. */
+	site_endpoints?: { vendor: string; site?: string; global?: string };
 }
 
 export interface ConfigInfo {
@@ -923,18 +927,27 @@ export interface DiscoveredModelInfo {
 	max_tokens?: number;
 }
 
+export interface DiscoveredModelsResult {
+	models: DiscoveredModelInfo[];
+	/** The endpoint that answered, when the server probed a vendor's hosts. */
+	base_url?: string;
+	/** Which host answered: `cn` for the domestic site, `global` for the international one. */
+	site?: "cn" | "global";
+}
+
 export async function discoverProviderModels(body: {
 	type: string;
 	base_url?: string;
 	api_key?: string;
 	/** Existing account whose saved key and base URL stand in for blank fields. */
 	provider_id?: string;
-}): Promise<DiscoveredModelInfo[]> {
+	/** A preset id whose site endpoints the server probes when it has any. */
+	preset?: string;
+}): Promise<DiscoveredModelsResult> {
 	const response = await fetch("/providers/discover-models", {
 		method: "POST",
 		headers: { "Content-Type": "application/json", ...authHeaders() },
 		body: JSON.stringify(body),
 	});
-	const payload = await readJson<{ models: DiscoveredModelInfo[] }>(response);
-	return payload.models;
+	return readJson<DiscoveredModelsResult>(response);
 }

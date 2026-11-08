@@ -27,6 +27,20 @@ export interface ModelListingRequest {
 }
 
 /**
+ * Vendors that serve one catalog from a China host and an international host.
+ * A key is issued by exactly one of them and the other answers 401, so a vendor
+ * with two hosts cannot be a single preset with one `base_url`.
+ */
+export interface SiteEndpoints {
+	/** Vendor id, for error messages. */
+	vendor: string;
+	/** `https://api.moonshot.cn/v1`. Null for a domestic-only vendor. */
+	site?: string;
+	/** `https://api.moonshot.ai/v1`. */
+	global?: string;
+}
+
+/**
  * `data[].id` (OpenAI-compatible) or `models[].id`/`models[].name` (Google-style).
  * Display names are read from the several spellings gateways use.
  */
@@ -119,6 +133,48 @@ export async function fetchModelListing(request: ModelListingRequest): Promise<L
 
 /** A listing failure the settings page can show verbatim. */
 export class ModelListingError extends Error {}
+
+export interface ResolvedSite {
+	/** The host that listed the key's models. */
+	baseUrl: string;
+	/** Which of `SiteEndpoints` that host is: the domestic site, the international one, or the only one. */
+	site: "cn" | "global";
+	/** What the listing answered with, so the caller does not have to ask the same host twice. */
+	models?: ListedModel[];
+}
+
+/**
+ * Find the host a key belongs to by asking the domestic site first: models a
+ * key may list is a stronger signal than a status code, because a proxy that
+ * answers 200 with an empty list would otherwise read as the wrong site. The
+ * international host is tried when the domestic one fails or lists nothing, and
+ * when it does too the domestic failure is what surfaces — that is the site the
+ * user most likely meant, and its error swallows the cascade of a vendor that
+ * runs a single host.
+ */
+export async function resolveSiteBaseUrl(
+	endpoints: SiteEndpoints,
+	request: Omit<ModelListingRequest, "baseUrl"> = {},
+): Promise<ResolvedSite> {
+	const candidates = [
+		...(endpoints.site ? [{ baseUrl: endpoints.site, site: "cn" as const }] : []),
+		...(endpoints.global ? [{ baseUrl: endpoints.global, site: "global" as const }] : []),
+	];
+	if (candidates.length === 0) throw new ModelListingError(`${endpoints.vendor} has no endpoint to probe`);
+	let firstError: unknown;
+	for (const candidate of candidates) {
+		let listing: ListedModel[] | undefined;
+		try {
+			listing = await fetchModelListing({ ...request, baseUrl: candidate.baseUrl });
+		} catch (error) {
+			firstError ??= error;
+			continue;
+		}
+		if (listing && listing.length > 0) return { ...candidate, models: listing };
+	}
+	if (firstError) throw firstError;
+	return { ...candidates[0], models: [] };
+}
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);

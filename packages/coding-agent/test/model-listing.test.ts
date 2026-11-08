@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchModelListing, modelListingUrls, parseModelListing } from "../src/core/model-listing.ts";
+import {
+	fetchModelListing,
+	modelListingUrls,
+	parseModelListing,
+	resolveSiteBaseUrl,
+} from "../src/core/model-listing.ts";
 
 const original = globalThis.fetch;
 afterEach(() => {
@@ -79,5 +84,84 @@ describe("fetchModelListing", () => {
 	it("reports the first rejection when every candidate path fails", async () => {
 		globalThis.fetch = vi.fn(async () => new Response("nope", { status: 401 })) as unknown as typeof fetch;
 		await expect(fetchModelListing({ baseUrl: "https://gw.example" })).rejects.toThrow(/answered 401/);
+	});
+});
+
+describe("resolveSiteBaseUrl", () => {
+	const sites = {
+		vendor: "Moonshot AI",
+		site: "https://api.moonshot.cn/v1",
+		global: "https://api.moonshot.ai/v1",
+	};
+
+	it("picks the China site when it lists the key's models", async () => {
+		const asked: string[] = [];
+		globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+			const url = String(input);
+			asked.push(url);
+			return url.startsWith("https://api.moonshot.cn")
+				? listing(["kimi-k2.6"])
+				: new Response("unauthorized", { status: 401 });
+		}) as unknown as typeof fetch;
+
+		const resolved = await resolveSiteBaseUrl(sites, { type: "openai", apiKey: "sk-cn" });
+
+		expect(resolved).toEqual({
+			baseUrl: "https://api.moonshot.cn/v1",
+			site: "cn",
+			models: [{ id: "kimi-k2.6" }],
+		});
+		// The international host is never asked once the domestic one answered.
+		expect(asked).toEqual(["https://api.moonshot.cn/v1/models"]);
+	});
+
+	it("falls back to the international site when the China site rejects the key", async () => {
+		globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+			const url = String(input);
+			return url.startsWith("https://api.moonshot.cn")
+				? new Response("unauthorized", { status: 401 })
+				: listing(["kimi-k2.6"]);
+		}) as unknown as typeof fetch;
+
+		const resolved = await resolveSiteBaseUrl(sites, { type: "openai", apiKey: "sk-ai" });
+
+		expect(resolved.baseUrl).toBe("https://api.moonshot.ai/v1");
+		expect(resolved.site).toBe("global");
+		expect(resolved.models?.map((model) => model.id)).toEqual(["kimi-k2.6"]);
+	});
+
+	it("treats an empty China listing as a miss", async () => {
+		const asked: string[] = [];
+		globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+			const url = String(input);
+			asked.push(url);
+			return url.startsWith("https://api.moonshot.cn") ? listing([]) : listing(["kimi-k3"]);
+		}) as unknown as typeof fetch;
+
+		const resolved = await resolveSiteBaseUrl(sites, { apiKey: "sk-ai" });
+
+		expect(resolved.site).toBe("global");
+		expect(asked).toEqual(["https://api.moonshot.cn/v1/models", "https://api.moonshot.ai/v1/models"]);
+	});
+
+	it("surfaces the China site's failure when neither site takes the key", async () => {
+		globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+			const url = String(input);
+			return url.startsWith("https://api.moonshot.cn")
+				? new Response("unauthorized", { status: 401 })
+				: new Response("forbidden", { status: 403 });
+		}) as unknown as typeof fetch;
+
+		await expect(resolveSiteBaseUrl(sites, { apiKey: "sk-bad" })).rejects.toThrow(
+			/https:\/\/api\.moonshot\.cn\/v1\/models answered 401/,
+		);
+	});
+
+	it("probes a vendor that only has an international site", async () => {
+		globalThis.fetch = vi.fn(async () => listing(["kimi-k3"])) as unknown as typeof fetch;
+
+		const resolved = await resolveSiteBaseUrl({ vendor: "Moonshot AI", global: "https://api.moonshot.ai/v1" });
+
+		expect(resolved.site).toBe("global");
 	});
 });
