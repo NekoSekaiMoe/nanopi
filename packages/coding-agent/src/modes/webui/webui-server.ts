@@ -2,17 +2,18 @@
  * WebUI mode: serves the browser UI from packages/webui and bridges its HTTP/SSE
  * API onto a headless AgentSession.
  *
- * Frontend contract ported from AtomCode's webui (MIT). The default `/chat`
- * transport is implemented; the `?sync=1` `/live` transport is not. The extra
- * module (packages/extra) supplies run modes and per-call permission gating
- * through `extraBridge`; when a build flavor excludes it the bridge reports
- * unavailable, every /extra endpoint 404s, permission requests never surface,
- * and the webui hides its mode selector.
+ * Frontend contract ported from AtomCode's webui (MIT). Only the `/chat` + SSE
+ * transport exists: AtomCode's `?sync=1` `/live` transport has no caller here
+ * and its endpoints were removed rather than answered with a stub (#595). The
+ * extra module (packages/extra) supplies run modes and per-call permission
+ * gating through `extraBridge`; when a build flavor excludes it the bridge
+ * reports unavailable, every /extra endpoint 404s, permission requests never
+ * surface, and the webui hides its mode selector.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { Socket } from "node:net";
@@ -26,11 +27,22 @@ import {
 	type Message,
 	type Model,
 	type ToolResultMessage,
+	type Usage,
 } from "@nanopi/pi-ai";
 import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
-import { getPackageDir } from "../../config.ts";
-import type { AgentSession, AgentSessionEvent } from "../../core/agent-session.ts";
-import type { AgentSessionRuntime } from "../../core/agent-session-runtime.ts";
+import { isBuildComponentEnabled } from "../../build-components.ts";
+import { getAgentDir, getPackageDir } from "../../config.ts";
+import type { AgentSession, AgentSessionEvent, SessionStats } from "../../core/agent-session.ts";
+import {
+	AgentSessionRuntime,
+	type CreateAgentSessionRuntimeFactory,
+	type CreateAgentSessionRuntimeResult,
+} from "../../core/agent-session-runtime.ts";
+import {
+	type AgentSessionServices,
+	createAgentSessionFromServices,
+	createAgentSessionServices,
+} from "../../core/agent-session-services.ts";
 import {
 	type FileEntry,
 	parseSessionEntries,
@@ -38,6 +50,9 @@ import {
 	type SessionInfo,
 	SessionManager,
 } from "../../core/session-manager.ts";
+import { SettingsManager } from "../../core/settings-manager.ts";
+import { loadMcpConfig } from "../../extras/mcp-lite/src/config.ts";
+import { commandAvailable } from "../../extras/mcp-lite/src/executables.ts";
 import { killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../../utils/shell.ts";
 import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {
@@ -59,6 +74,26 @@ import {
 
 /** Default port for `nanopi webui`. */
 export const DEFAULT_WEBUI_PORT = 5335;
+
+/**
+ * Version of the running build, read once for `/health`.
+ *
+ * A webui served from a build without the `module/mcp-lite` component and one
+ * with it answer `/mcp/status` differently, and the browser cannot tell them
+ * apart from the launch URL alone; this is what a report can quote so the next
+ * reader knows which binary produced the answer.
+ */
+const APP_VERSION: string = (() => {
+	try {
+		const manifest = JSON.parse(readFileSync(join(getPackageDir(), "package.json"), "utf8")) as {
+			version?: unknown;
+		};
+		return typeof manifest.version === "string" ? manifest.version : "";
+	} catch {
+		/* an install without a readable manifest still serves; the version is just empty */
+		return "";
+	}
+})();
 
 export interface WebuiModeOptions {
 	port: number;
@@ -104,6 +139,30 @@ interface WebuiSessionMeta {
 	file_size?: number;
 }
 
+/**
+ * What one assistant reply was billed for, so the transcript bubble can say
+ * how long it took and how many tokens it cost. `context` is the prompt the
+ * request carried, which is what fills the context window; `cache_read` is the
+ * part of it that a cache served.
+ */
+export interface WebuiTurnUsage {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+	context: number;
+}
+
+/** Session-level usage, summed from the transcript entries a live session counts. */
+export interface WebuiSessionStats {
+	input: number;
+	output: number;
+	cache_read: number;
+	cache_write: number;
+	cost: number;
+}
+
 interface WebuiSessionMessage {
 	role: "system" | "user" | "assistant" | "tool";
 	content: string;
@@ -113,6 +172,8 @@ interface WebuiSessionMessage {
 	tool_calls?: { id: string; name: string; arguments: string; display: string }[];
 	tool_result?: { call_id: string; success: boolean; summary: string; line_count: number };
 	images?: { media_type: string; data: string }[];
+	/** What this assistant reply was billed for; absent outside assistant replies. */
+	usage?: WebuiTurnUsage;
 	created_at?: number;
 }
 
@@ -122,6 +183,16 @@ interface SessionDetailContent {
 	thinking_level?: string;
 	/** Plan of the last todo result on the recorded branch; absent without one. */
 	plan?: PlanItem[];
+	/**
+	 * Why a transcript that billed tokens reports no totals: one branch was
+	 * compacted, so the split between the summarized and the live part is lost and
+	 * a sum over the file would charge the summarized span twice. The live session
+	 * knows the split (`AgentSession.getSessionStats`), so this one field is the
+	 * only part of the read path that has to refuse.
+	 */
+	stats_unavailable?: "compacted";
+	/** Session usage as the live session counts it; absent when nothing was billed. */
+	stats?: WebuiSessionStats;
 }
 
 interface ChatRequestBody {
@@ -133,6 +204,11 @@ interface ChatRequestBody {
 	 */
 	approval_mode?: string;
 	session_id?: string;
+	/**
+	 * Client-generated id of this request, echoed to `/chat/active` and matched by
+	 * `/chat/stop`, so a stop names one turn instead of every turn of a session.
+	 */
+	request_id?: string;
 	provider?: string;
 	images?: { media_type: string; data: string }[];
 	/**
@@ -152,8 +228,17 @@ type SseEvent = Record<string, unknown> & { type: string };
  */
 interface WebuiTurn {
 	sessionId: string;
+	/** Id the browser sent on `/chat`; `/chat/active` reports it and `/chat/stop` matches it. */
+	turnId: string;
 	attach(req: IncomingMessage, res: ServerResponse): void;
 	runDetached(): void;
+}
+
+/** One running turn, as `/chat/active` reports it and `/chat` answers in its 409. */
+interface TurnHolder {
+	turn_id: string;
+	session_id: string;
+	started_at: number;
 }
 
 /** Stable identifier for a working directory, used as the project bucket hash. */
@@ -268,6 +353,117 @@ async function isDirectory(target: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Replace the session the runtime serves with a fresh one rooted at the target
+ * working directory.
+ *
+ * None of the runtime's public replacements can move the directory:
+ * `switchSession` hands `cwdOverride` to `SessionManager.open`, which roots the
+ * manager at the override while the runtime rebuilds its cwd-bound services
+ * from the *previous* directory, and `newSession` is rooted at the process cwd
+ * by construction. So the replacement is done the way the runtime does it
+ * internally, with a session manager created at the target.
+ *
+ * `SessionManager.create(cwd)` gets no explicit session directory on purpose:
+ * `resolvePath` treats a path like `/project/nested` as already absolute, so
+ * reusing the old session directory silently pinned the manager back to the
+ * directory the server started in.
+ *
+ * The runtime's own factory would still build services for the launch
+ * directory; `setServicesHop` is what makes it build them for this one. The
+ * module rebind is skipped because `bindModules` starts the session again with
+ * the `session_start` event the factory already consumed, and that restart
+ * rebuilds cwd-bound state from the runtime's fixed cwd.
+ *
+ * The conversation stays behind in the old transcript. It was about the old
+ * directory, and carrying it along would mix two projects into one session.
+ */
+async function replaceSessionCwd(
+	runtime: AgentSessionRuntime,
+	cwd: string,
+	bindSession: ((runtime: AgentSessionRuntime) => Promise<void>) | undefined,
+): Promise<void> {
+	const previousSessionFile = runtime.session.sessionFile;
+	const internals = runtime as unknown as {
+		services: AgentSessionServices;
+		createRuntime(options: {
+			cwd: string;
+			agentDir: string;
+			sessionManager: SessionManager;
+			sessionStartEvent?: {
+				type: "session_start";
+				reason: "new" | "resume";
+				previousSessionFile?: string;
+			};
+		}): Promise<CreateAgentSessionRuntimeResult>;
+		teardownCurrent(reason: "new" | "resume", targetSessionFile?: string): Promise<void>;
+		apply(result: CreateAgentSessionRuntimeResult): void;
+		finishSessionReplacement(): Promise<void>;
+	};
+	const sessionManager = SessionManager.create(cwd);
+	await internals.teardownCurrent("new", sessionManager.getSessionFile());
+	internals.apply(
+		await internals.createRuntime({
+			cwd: sessionManager.getCwd(),
+			agentDir: internals.services.agentDir,
+			sessionManager,
+			sessionStartEvent: { type: "session_start", reason: "new", previousSessionFile },
+		}),
+	);
+	runtime.setRebindSession(undefined);
+	try {
+		await internals.finishSessionReplacement();
+	} finally {
+		runtime.setRebindSession(bindSession ? () => bindSession(runtime) : undefined);
+	}
+}
+
+/**
+ * The working directory the runtime is serving.
+ *
+ * The session's own cwd wins: a session opened through `switchSession` carries
+ * the directory of the file it came from, and a session replaced by
+ * `replaceSessionCwd` carries the target. The runtime's cwd is the fallback for
+ * the window where the two have not been reconciled, and it is the launch
+ * directory, so reporting it when the session knows better would undo a `/cd`.
+ */
+function sessionCwdOf(runtime: AgentSessionRuntime): string {
+	return runtime.session.sessionManager.getCwd() || runtime.cwd;
+}
+
+/**
+ * What `GET /mcp/status` answers.
+ *
+ * This is the MCP *configuration* read from `mcp-lite` (the module the agent's
+ * subagent bridge loads), not a live connection table: no server is connected
+ * until a session starts, and connecting from an HTTP handler would spawn
+ * processes nobody is waiting for on every settings-page render. Every server
+ * therefore reports `configured`, plus why its stdio command is missing when
+ * the lookup fails on this machine.
+ *
+ * `available: false` means the build excludes the `module/mcp-lite` component,
+ * which the settings page has to say out loud: an empty list would otherwise
+ * read as "nothing configured yet".
+ */
+function mcpStatusPayload(cwd: string, projectTrusted: boolean): Record<string, unknown> {
+	if (!isBuildComponentEnabled("module/mcp-lite")) {
+		return { available: false, servers: [], trusted: projectTrusted, blocked: [] };
+	}
+	const config = loadMcpConfig(cwd, { agentDir: getAgentDir() });
+	const servers = [...config.servers].map(([name, server]) => ({
+		name,
+		status: "configured",
+		transport: server.transport,
+		source: config.origins.get(name),
+		error:
+			server.transport === "stdio" && !commandAvailable(server.command)
+				? `${server.command} is not on PATH`
+				: undefined,
+	}));
+	const blocked = [...(projectTrusted ? [] : [join(cwd, ".nanopi", "mcp.json")]), ...config.problems];
+	return { available: true, servers, trusted: projectTrusted, blocked };
 }
 
 /** POSIX login shell for the scratch terminal. */
@@ -526,6 +722,7 @@ function toWebuiMessage(message: AgentMessage): WebuiSessionMessage | null {
 			// produced it, so the transcript and the model list agree.
 			...(assistant.provider && assistant.model ? { provider: `${assistant.provider}/${assistant.model}` } : {}),
 			...(toolCalls.length ? { tool_calls: toolCalls } : {}),
+			...(assistant.usage ? { usage: turnUsageOf(assistant.usage) } : {}),
 		};
 	}
 	if (message.role === "toolResult") {
@@ -571,16 +768,7 @@ export function planFromSessionEntries(entries: FileEntry[]): PlanItem[] | undef
 	for (const entry of entries) {
 		if (entry.type !== "session") byId.set(entry.id, entry);
 	}
-	const branch: SessionEntry[] = [];
-	const seen = new Set<string>();
-	const leaf = entries[entries.length - 1];
-	let current = leaf ? byId.get(leaf.id) : undefined;
-	while (current && !seen.has(current.id)) {
-		seen.add(current.id);
-		branch.push(current);
-		current = current.parentId ? byId.get(current.parentId) : undefined;
-	}
-	branch.reverse();
+	const branch = sessionBranchEntries(entries);
 
 	// An edit replaces the content the model sees, not the details, so every
 	// edited todo result is off the table regardless of how many edits hit it.
@@ -621,7 +809,120 @@ export function readSessionMessages(content: string): SessionDetailContent {
 			thinkingLevel = entry.thinkingLevel;
 		}
 	}
-	return { messages, thinking_level: thinkingLevel, plan: planFromSessionEntries(entries) };
+	// The messages come from the whole file (the UI reads a conversation, not a
+	// branch), but the totals must not, so they are summed over the branch alone.
+	const stats = sessionStatsFromEntries(entries);
+	return {
+		messages,
+		thinking_level: thinkingLevel,
+		plan: planFromSessionEntries(entries),
+		...(stats ? { stats } : {}),
+		...(!stats && entries.some((entry) => entry.type === "compaction" || entry.type === "branch_summary")
+			? { stats_unavailable: "compacted" }
+			: {}),
+	};
+}
+
+/**
+ * Map an `AssistantMessage` usage block to the wire shape of one reply.
+ */
+function turnUsageOf(usage: Usage): WebuiTurnUsage {
+	return {
+		input: usage.input,
+		output: usage.output,
+		cache_read: usage.cacheRead,
+		cache_write: usage.cacheWrite,
+		cost: usage.cost.total,
+		// What the request sent, which is what the window holds: fresh input plus
+		// the part a cache served or was written for.
+		context: usage.input + usage.cacheRead + usage.cacheWrite,
+	};
+}
+
+/**
+ * The transcript branch as the session manager walks it: every line is a node,
+ * the last one is the leaf, and `parentId` links rebuild root-to-leaf.
+ *
+ * A session file is a tree (a fork or a retry appends a sibling), so walking the
+ * file in order would mix branches that were never one conversation. Same shape
+ * as `SessionManager.buildSessionPath`, which parses each line on its own and so
+ * cannot be reused here.
+ */
+export function sessionBranchEntries(entries: FileEntry[]): SessionEntry[] {
+	const byId = new Map<string, SessionEntry>();
+	for (const entry of entries) {
+		if (entry.type !== "session") byId.set(entry.id, entry);
+	}
+	const branch: SessionEntry[] = [];
+	const seen = new Set<string>();
+	const leaf = entries[entries.length - 1];
+	let current = leaf ? byId.get(leaf.id) : undefined;
+	while (current && !seen.has(current.id)) {
+		seen.add(current.id);
+		branch.push(current);
+		current = current.parentId ? byId.get(current.parentId) : undefined;
+	}
+	branch.reverse();
+	return branch;
+}
+
+/**
+ * Session usage summed over the branch, the way `AgentSession.getSessionStats`
+ * sums what it holds in memory: message usage plus the `usage` entries the agent
+ * writes for work that is not a message (a title, a summary).
+ *
+ * `undefined` means the file cannot answer. A compaction or branch summary on
+ * the branch packs the conversation it replaced into one entry that carries the
+ * summarized span's usage too, while the summarized messages stay in the file as
+ * that entry's ancestors, so a sum charges that span twice. The live session
+ * knows which entries it no longer counts; a restored transcript does not.
+ */
+export function sessionStatsFromEntries(
+	entries: FileEntry[],
+	branch: SessionEntry[] = sessionBranchEntries(entries),
+): WebuiSessionStats | undefined {
+	const totals: WebuiSessionStats = { input: 0, output: 0, cache_read: 0, cache_write: 0, cost: 0 };
+	const add = (usage: Usage | undefined): void => {
+		// Fixtures and hand-edited transcripts carry messages without usage; a
+		// missing charge is not a zero charge, so skip it instead of crashing.
+		if (!usage) return;
+		totals.input += usage.input;
+		totals.output += usage.output;
+		totals.cache_read += usage.cacheRead;
+		totals.cache_write += usage.cacheWrite;
+		totals.cost += usage.cost.total;
+	};
+	for (const entry of branch) {
+		if (entry.type === "usage") {
+			add(entry.usage);
+			continue;
+		}
+		if (entry.type === "compaction" || entry.type === "branch_summary") return undefined;
+		if (entry.type !== "message") continue;
+		if (entry.message.role === "toolResult") {
+			if (entry.message.usage) add(entry.message.usage);
+			continue;
+		}
+		if (entry.message.role === "assistant") add(entry.message.usage);
+	}
+	if (totals.input + totals.output + totals.cache_read + totals.cache_write === 0) return undefined;
+	return totals;
+}
+
+/**
+ * Session usage as `AgentSession.getSessionStats` reports it, or undefined when
+ * the session has not billed anything yet.
+ */
+function sessionStatsOf(stats: SessionStats): WebuiSessionStats | undefined {
+	const { tokens } = stats;
+	if (tokens.input + tokens.output + tokens.cacheRead + tokens.cacheWrite === 0) return undefined;
+	return {
+		input: tokens.input,
+		output: tokens.output,
+		cache_read: tokens.cacheRead,
+		cache_write: tokens.cacheWrite,
+		cost: stats.cost,
+	};
 }
 
 function sessionMeta(info: SessionInfo): WebuiSessionMeta & { project_hash: string } {
@@ -685,11 +986,79 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 	// Extensions run headless in webui mode: no UI context, but a mode marker so
 	// the extra module routes permission prompts through the bridge below.
-	const rebindSession = async (): Promise<void> => {
-		await runtime.session.bindModules({ mode: "webui" });
+	// Modules are rebound on every session replacement, and the webui's own
+	// replacements (`replaceSessionCwd`, a `/chat` naming another `working_dir`)
+	// run outside a module hook. Binding here is what keeps the mode marker alive
+	// across a `/cd`; it is the same call switching sessions makes, so it cannot
+	// start the runtime twice.
+	const bindSession = async (target: AgentSessionRuntime): Promise<void> => {
+		await target.session.bindModules({ mode: "webui" });
 	};
-	await rebindSession();
-	runtime.setRebindSession(rebindSession);
+	await bindSession(runtime);
+	// The runtime factory closes over the launch directory's services, so every
+	// session replacement rebuilds them there and the runtime's fixed `cwd` can
+	// never move. This hop rebuilds them for the directory the incoming session
+	// manager points at and then creates the session on top of them; it is the
+	// platform's own two-step replace (`createAgentSessionServices` +
+	// `createAgentSessionFromServices`), just rooted somewhere the caller chose.
+	const servicesHop: CreateAgentSessionRuntimeFactory = async (next) => {
+		const cwd = next.sessionManager.getCwd();
+		const services = await createAgentSessionServices({
+			cwd,
+			agentDir: next.agentDir,
+			modelRuntime: runtime.services.modelRuntime,
+			settingsManager: SettingsManager.create(cwd, next.agentDir),
+			extensionFlagValues: runtime.services.extensionFlagValues,
+		});
+		const created = await createAgentSessionFromServices({
+			services,
+			sessionManager: next.sessionManager,
+			sessionStartEvent: next.sessionStartEvent,
+		});
+		return { ...created, services, diagnostics: services.diagnostics };
+	};
+	runtime.setServicesHop(servicesHop);
+	runtime.setRebindSession(() => bindSession(runtime));
+
+	/**
+	 * A runtime beside the process's own, for a session a tab is running on.
+	 *
+	 * One `AgentSession` holds one open session, and replacing it (`switchSession`)
+	 * aborts the run it takes over, so "two tabs on two sessions, both streaming"
+	 * cannot be served by the runtime the process started with: whichever tab
+	 * switches would kill the other's turn. A session that needs its own turn gets
+	 * its own runtime object instead, built through the same hop (so its
+	 * cwd-bound services are rooted at that session's directory) over the shared
+	 * model catalog and settings path, which are per-path maps and safe to share.
+	 */
+	async function openRuntimeAt(
+		sessionPath: string,
+		cache: Map<string, Promise<AgentSessionRuntime>>,
+	): Promise<AgentSessionRuntime> {
+		const existing = cache.get(sessionPath);
+		if (existing) return existing;
+		const pending = (async () => {
+			const sessionManager = SessionManager.open(sessionPath);
+			const created = await servicesHop({
+				cwd: sessionManager.getCwd(),
+				agentDir: runtime.services.agentDir,
+				sessionManager,
+				sessionStartEvent: { type: "session_start", reason: "resume" },
+			});
+			const opened = new AgentSessionRuntime(created.session, created.services, servicesHop, created.diagnostics);
+			opened.setServicesHop(servicesHop);
+			opened.setRebindSession(() => bindSession(opened));
+			await bindSession(opened);
+			return opened;
+		})();
+		cache.set(sessionPath, pending);
+		try {
+			return await pending;
+		} catch (error) {
+			cache.delete(sessionPath);
+			throw error;
+		}
+	}
 
 	const server = createServer((req, res) => {
 		void handleRequest(req, res).catch((error) => {
@@ -759,11 +1128,27 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		})();
 	});
 
-	// Single in-flight turn; the frontend blocks sending while a turn streams.
-	let turnActive = false;
-	// Prompts parked behind the running turn (`/chat` with `queue: true`). Only the
+	// Turns in flight, keyed by session id. The lock is per session, not per
+	// process, so two tabs on different sessions both run; a second turn on the
+	// same session is refused because one AgentSession serves one run.
+	const runningTurns = new Map<string, TurnHolder>();
+	// Runtimes opened for sessions other than the process's own (see
+	// openRuntimeAt). Keyed by session file path, so two tabs on the same session
+	// share one object instead of opening it twice.
+	const sessionRuntimes = new Map<string, Promise<AgentSessionRuntime>>();
+	// Prompts parked behind a running turn (`/chat` with `queue: true`). Only the
 	// producer that cannot retry later asks for this; see ChatRequestBody.queue.
-	const chatQueue: ChatRequestBody[] = [];
+	const chatQueue: Array<{ sessionId: string; body: ChatRequestBody }> = [];
+	// Long-poll waiters on `/chat/active`; a turn start or end wakes them so a tab
+	// that did not start the turn learns it settled without polling the daemon.
+	// The snapshot is per turn, so `runDetached` turns (which nobody started from a
+	// request) wake the waiters too.
+	const turnWaiters = new Set<() => void>();
+	/** Wake every `/chat/active` waiter: the answer it is parked on has changed. */
+	function notifyTurnChange(): void {
+		for (const wake of turnWaiters) wake();
+		turnWaiters.clear();
+	}
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
 	const oauthFlows = new Map<string, OAuthFlowState>();
 
@@ -917,13 +1302,22 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 
 	/**
-	 * Start one `/chat` turn. The run is independent of any HTTP response: a turn
-	 * nobody is attached to (a job reporting in, a queued prompt) still runs, and a
-	 * browser that reconnects picks it up from the next round on. `attach` is what
-	 * turns the run into an SSE stream; it can be called once per request.
+	 * Start one `/chat` turn on `target`. The run is independent of any HTTP
+	 * response: a turn nobody is attached to (a job reporting in, a queued prompt)
+	 * still runs, and a browser that reconnects picks it up from the next round on.
+	 * `attach` is what turns the run into an SSE stream; it can be called once per
+	 * request.
+	 *
+	 * The turn owns the session lock (`runningTurns`) from here until it settles, so
+	 * a second `/chat` on the same session is refused while a turn on another
+	 * session runs normally.
 	 */
-	function beginTurn(body: ChatRequestBody, opts: { abortOnDetach: boolean }): WebuiTurn {
-		const session = currentSession();
+	function beginTurn(
+		target: AgentSessionRuntime,
+		body: ChatRequestBody,
+		opts: { abortOnDetach: boolean; turnId: string },
+	): WebuiTurn {
+		const session = target.session;
 		const startedAt = Date.now();
 		const state = {
 			ended: false,
@@ -1133,7 +1527,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		const finish = () => {
 			state.finished = true;
 			detachAll();
-			turnActive = false;
+			// Only the turn that holds the lock may release it: a stop-and-restart can
+			// leave an older turn settling after its session already accepted a new one.
+			if (runningTurns.get(session.sessionId)?.turn_id === opts.turnId) {
+				runningTurns.delete(session.sessionId);
+			}
+			// Wake `/chat/active` long polls: the snapshot they are parked on changed.
+			notifyTurnChange();
 			endTurn();
 		};
 
@@ -1163,6 +1563,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 
 		const turn: WebuiTurn = {
 			sessionId: session.sessionId,
+			turnId: opts.turnId,
 			attach(req, res) {
 				// The SSE head is written with the first event: a queued turn may wait,
 				// and an open response with no body reads as a hang to the browser.
@@ -1214,17 +1615,120 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 
 	/**
-	 * Start the next queued prompt, if any. Two prompts cannot run at once, so a
-	 * turn asked to queue is parked here and started when the running one settles.
+	 * Start the next queued prompt, if any. A queued prompt waits for the turn on
+	 * *its* session, not for any turn anywhere: prompts parked behind session A must
+	 * not be held up by a turn that is running in session B.
 	 *
 	 * The queued prompt has nobody attached: its reporter already got its answer, and
 	 * the turn it starts writes into the transcript, which is where the user reads it.
 	 */
 	function releaseQueuedTurn(): void {
-		const next = chatQueue.shift();
+		const index = chatQueue.findIndex((entry) => !runningTurns.has(entry.sessionId));
+		if (index === -1) return;
+		const [next] = chatQueue.splice(index, 1);
 		if (!next) return;
-		turnActive = true;
-		beginTurn(next, { abortOnDetach: false }).runDetached();
+		void startTurnFor(next.sessionId, next.body).catch(() => {
+			/* the producer is gone; the transcript keeps what ran */
+		});
+	}
+
+	/**
+	 * Resolve the runtime a turn should run on, and whether it has to be opened.
+	 *
+	 * The runtime the process started with serves the session it already holds.
+	 * Any other session gets its own runtime from the pool, so opening a second tab
+	 * on a different session never replaces (and therefore never aborts) the run
+	 * the first tab is streaming.
+	 */
+	async function runtimeFor(sessionId: string | undefined): Promise<{ target: AgentSessionRuntime; key: string }> {
+		const info = sessionId ? await findSessionFile(sessionId) : undefined;
+		if (!info) return { target: runtime, key: runtime.session.sessionId };
+		if (info.id === runtime.session.sessionId) return { target: runtime, key: info.id };
+		if (!info.path) throw new Error(`session ${sessionId} has no file to open`);
+		return { target: await openRuntimeAt(info.path, sessionRuntimes), key: info.id };
+	}
+
+	/**
+	 * Apply the per-request model and run mode to the runtime the turn will use.
+	 * Split out of the request handler so a queued prompt gets the same treatment
+	 * when it finally starts.
+	 */
+	async function applyTurnSettings(target: AgentSessionRuntime, body: ChatRequestBody): Promise<void> {
+		// Apply the requested model before the turn. Model ids may contain
+		// slashes, so match the composite key against the catalog instead of
+		// splitting the string. Switching persists to the shared default so
+		// the CLI and webui agree (single source of truth).
+		if (body.provider) {
+			const model = (await modelCatalog()).find((candidate) => modelKey(candidate) === body.provider);
+			if (model) {
+				await target.session.setModel(model, { persist: true });
+				// `setModel` only applies the per-model level when this provider has
+				// one stored; otherwise it falls back to the global default and
+				// overwrites the level this model's sheet wrote earlier (with "off"
+				// when there is no default). The picker the user just closed asked
+				// for a model *and* a level, so the stored level wins here.
+				await restoreStoredThinkingLevel(target.session);
+			}
+		}
+		// Apply the requested mode before the turn, next to the model switch: the
+		// mode decides the tool set the turn runs with. An invalid value is
+		// ignored rather than failing the turn, which already has a user prompt in it.
+		if (body.approval_mode) extraBridge.setMode(body.approval_mode);
+	}
+
+	/**
+	 * Every model the catalog knows, for matching the `provider` a `/chat` names.
+	 *
+	 * This is the shared `modelRuntime` behind every runtime, but which models
+	 * count as *active* depends on the session, so the lookup walks the process's
+	 * own list plus its current model the same way `/models` does.
+	 */
+	async function modelCatalog(): Promise<Model<any>[]> {
+		const models: Model<any>[] = [];
+		mergeModelLists(models, runtime.services.modelRuntime.getAvailableSnapshot());
+		mergeModelLists(models, runtime.services.modelRuntime.getModels());
+		const current = runtime.session.model;
+		if (current) mergeModelLists(models, [current]);
+		return models;
+	}
+
+	/** Start a turn on an already-resolved runtime and session id. */
+	function startTurnOn(target: AgentSessionRuntime, key: string, body: ChatRequestBody): WebuiTurn {
+		const turnId = body.request_id ?? randomBytes(8).toString("hex");
+		runningTurns.set(key, { turn_id: turnId, session_id: key, started_at: Date.now() });
+		notifyTurnChange();
+		return beginTurn(target, body, { abortOnDetach: true, turnId });
+	}
+
+	/**
+	 * Send one prompt as a new turn on the session named by `body.session_id`
+	 * (`undefined` means the process's own session). Resolves the runtime the turn
+	 * has to run on, which is what keeps two tabs on two sessions apart.
+	 */
+	async function startTurnFor(
+		sessionId: string | undefined,
+		body: ChatRequestBody,
+	): Promise<{ turn: WebuiTurn; target: AgentSessionRuntime }> {
+		const { target, key } = await runtimeFor(sessionId);
+		await applyTurnSettings(target, body);
+		return { turn: startTurnOn(target, key, body), target };
+	}
+
+	/**
+	 * The runtime that currently holds a running turn for `sessionId`. Used by the
+	 * stop endpoints, which must reach the session's own runtime instead of the
+	 * process's: aborting the wrong one would leave the turn running.
+	 */
+	async function runtimeForRunningTurn(sessionId: string): Promise<AgentSessionRuntime | undefined> {
+		if (sessionId === runtime.session.sessionId) return runtime;
+		const info = await findSessionFile(sessionId);
+		if (!info) return undefined;
+		return sessionRuntimes.get(info.path)?.catch(() => undefined);
+	}
+
+	/** Whether two session ids name the same session, allowing the short id a tab keeps. */
+	function sameSessionId(known: string, wanted: string): boolean {
+		return known === wanted || known.startsWith(wanted);
 	}
 
 	async function readBody(req: IncomingMessage): Promise<Record<string, unknown>> {
@@ -1245,11 +1749,11 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// Health and static assets are unauthenticated; the SPA shows its own auth
 		// notice when API calls get 401.
 		if (path === "/health") {
-			json(res, 200, { ok: true });
+			json(res, 200, { ok: true, version: APP_VERSION });
 			return;
 		}
 		if (
-			!/^\/(api|live|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|tunnel|providers|provider-accounts|model-profiles|extra)\b/.test(
+			!/^\/(api|chat|sessions|projects|project|config|models|skills|fs|cd|command|approval_mode|mode|mcp|providers|provider-accounts|extra)\b/.test(
 				path,
 			)
 		) {
@@ -1475,10 +1979,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		// --- Project state ---
+		// The session's cwd, not the process's: they differ after `/cd` or after a
+		// `/chat` that named a `working_dir`, and the SPA keys its session list off
+		// this hash.
 		if (path === "/project" && req.method === "GET") {
 			json(res, 200, {
-				working_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				working_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 			});
 			return;
 		}
@@ -1512,8 +2019,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, {
 				id: runtime.session.sessionId,
 				name: "",
-				working_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				working_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 				created_at: Date.now(),
 			});
 			return;
@@ -1555,12 +2062,16 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					return;
 				}
 				const content = await readFile(info.path, "utf8");
-				const { messages, thinking_level, plan } = readSessionMessages(content);
+				const detail = readSessionMessages(content);
+				const { messages, thinking_level, plan } = detail;
 				const active = runtime.session.sessionId === info.id;
 				// The transcript records the thinking level per session; resuming this
 				// session (the open one included) restores it, so the picker reports
 				// the level the next turn will actually use.
 				const level = active ? runtime.session.thinkingLevel : thinking_level;
+				// The open session knows what it actually billed, the summarized branches
+				// included; a transcript that cannot answer reports why instead.
+				const stats = active ? sessionStatsOf(runtime.session.getSessionStats()) : detail.stats;
 				json(res, 200, {
 					id: info.id,
 					name: info.name ?? "",
@@ -1570,6 +2081,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 					message_count: info.messageCount,
 					thinking_level: level,
 					messages,
+					...(stats ? { stats } : {}),
+					...(!stats && detail.stats_unavailable ? { stats_unavailable: detail.stats_unavailable } : {}),
 					// The plan lives in tool details the messages above drop, so a
 					// reloaded session would otherwise show no plan until the next todo
 					// call; the transcript is the only record of it.
@@ -1589,18 +2102,22 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				return;
 			}
 			if (sessionId && !action && req.method === "DELETE") {
-				if (turnActive) {
-					json(res, 409, { error: "a turn is running; stop it before deleting a session" });
-					return;
-				}
 				const info = await findSessionFile(sessionId);
 				if (!info) {
 					json(res, 404, { error: "session not found" });
 					return;
 				}
+				// Only the session being deleted has to be idle. Its turn runs on its own
+				// runtime, so another tab's turn elsewhere neither blocks the delete nor
+				// gets deleted underneath itself.
+				if (runningTurns.has(info.id)) {
+					json(res, 409, { error: "a turn is running in this session; stop it before deleting" });
+					return;
+				}
 				if (info.id === runtime.session.sessionId) {
 					await runtime.newSession();
 				}
+				sessionRuntimes.delete(info.path);
 				await rm(info.path, { force: true });
 				json(res, 200, {});
 				return;
@@ -1610,84 +2127,70 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		// --- Chat (default transport) ---
 		if (path === "/chat" && req.method === "POST") {
 			const body = await readBody(req);
-			// A producer that cannot ask again later (a background job reporting in)
-			// queues instead of taking a 409: the turn it lands in is real work whose
-			// only reader is the transcript, and dropping it loses the report.
-			if (turnActive && body.queue === true) {
-				// The prompt is written to the transcript when its turn starts, not when
-				// it is queued, and the producing client is usually gone by then: answer
-				// now with what the queue accepted, and let the turn run detached. The
-				// report lands in the transcript, which is what the user reads next.
-				chatQueue.push({ message: typeof body.message === "string" ? body.message : "" });
-				json(res, 200, { queued: true, position: chatQueue.length });
-				return;
-			}
-			if (turnActive) {
-				json(res, 409, { error: "a turn is already running in this webui", code: "busy" });
-				return;
-			}
 			const chatBody: ChatRequestBody = {
 				message: typeof body.message === "string" ? body.message : "",
 				approval_mode: typeof body.approval_mode === "string" ? body.approval_mode : undefined,
 				session_id: typeof body.session_id === "string" ? body.session_id : undefined,
+				request_id: typeof body.request_id === "string" ? body.request_id : undefined,
 				provider: typeof body.provider === "string" ? body.provider : undefined,
 				images: undefined,
 			};
 			if (Array.isArray(body.images)) {
 				chatBody.images = body.images as { media_type: string; data: string }[];
 			}
-			// Honour a working directory the SPA believes it is in (it survives a
-			// `/cd`); a stale path is ignored rather than failing the turn.
-			if (typeof body.working_dir === "string" && body.working_dir) {
+			// Which session the turn belongs to. An explicit id wins; without one the
+			// process's own session answers, and a `working_dir` the SPA believes it is
+			// in (it survives a `/cd`) may re-root that session first.
+			let target = runtime;
+			let targetId = runtime.session.sessionId;
+			if (chatBody.session_id) {
+				const info = await findSessionFile(chatBody.session_id);
+				if (!info) {
+					json(res, 404, { error: `session ${chatBody.session_id} not found` });
+					return;
+				}
+				targetId = info.id;
+				if (info.id !== runtime.session.sessionId) {
+					target = await openRuntimeAt(info.path, sessionRuntimes);
+				}
+			} else if (typeof body.working_dir === "string" && body.working_dir) {
 				const wanted = resolveWorkspacePath(body.working_dir, runtime.cwd);
-				if (wanted && wanted !== runtime.cwd && (await isDirectory(wanted))) {
+				if (wanted && wanted !== sessionCwdOf(runtime) && (await isDirectory(wanted))) {
 					try {
-						await runtime.newSession();
-						await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: wanted });
+						await replaceSessionCwd(runtime, wanted, bindSession);
+						targetId = runtime.session.sessionId;
 					} catch {
 						// Keep serving the current directory.
 					}
 				}
 			}
-			// Switch to the requested session when it is not the active one.
-			if (chatBody.session_id) {
-				const wanted = chatBody.session_id;
-				const currentId = runtime.session.sessionId;
-				if (wanted !== currentId && !currentId.startsWith(wanted)) {
-					const info = await findSessionFile(wanted);
-					if (!info) {
-						json(res, 404, { error: `session ${wanted} not found` });
-						return;
-					}
-					await runtime.switchSession(info.path);
+			// The lock is per session: another tab on another session is not busy here.
+			if (runningTurns.has(targetId)) {
+				// A producer that cannot ask again later (a background job reporting in)
+				// queues instead of taking a 409: the turn it lands in is real work whose
+				// only reader is the transcript, and dropping it loses the report. The
+				// prompt is written to the transcript when its turn starts, not when it
+				// is queued, so answer now with what the queue accepted.
+				if (body.queue === true) {
+					chatQueue.push({ sessionId: targetId, body: chatBody });
+					json(res, 200, { queued: true, position: chatQueue.length });
+					return;
 				}
+				// The 409 names the turn that holds this session, so the UI can say which
+				// tab is running it (and offer to stop that one) instead of "busy".
+				json(res, 409, {
+					error: "a turn is already running in this session",
+					code: "busy",
+					holder: runningTurns.get(targetId),
+				});
+				return;
 			}
-			// Apply the requested model before the turn. Model ids may contain
-			// slashes, so match the composite key against the catalog instead of
-			// splitting the string. Switching persists to the shared default so
-			// the CLI and webui agree (single source of truth).
-			if (chatBody.provider) {
-				const models = await chatModels();
-				const model = models.find((candidate) => modelKey(candidate) === chatBody.provider);
-				if (model) {
-					await runtime.session.setModel(model, { persist: true });
-					// `setModel` only applies the per-model level when this provider has
-					// one stored; otherwise it falls back to the global default and
-					// overwrites the level this model's sheet wrote earlier (with "off"
-					// when there is no default). The picker the user just closed asked
-					// for a model *and* a level, so the stored level wins here.
-					await restoreStoredThinkingLevel(runtime.session);
-				}
-			}
-			// Apply the requested mode before the turn, next to the model switch: the
-			// mode decides the tool set the turn runs with. An invalid value is
-			// ignored rather than failing the turn, which already has a user prompt in it.
-			if (chatBody.approval_mode) extraBridge.setMode(chatBody.approval_mode);
 			// The provider adapters drop images for a model without image input and
 			// send a placeholder instead (transform-messages.ts), so a turn with an
 			// attachment on such a model costs tokens and answers nothing. Refuse it
 			// here, where the browser can say which model to switch to.
-			const turnModel = runtime.session.model;
+			await applyTurnSettings(target, chatBody);
+			const turnModel = target.session.model;
 			if (chatBody.images?.length && turnModel && !turnModel.input.includes("image")) {
 				json(res, 400, {
 					error: `${turnModel.id} does not accept images; switch to a vision model and resend`,
@@ -1695,17 +2198,84 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 				return;
 			}
-			turnActive = true;
-			beginTurn(chatBody, { abortOnDetach: true }).attach(req, res);
+			startTurnOn(target, targetId, chatBody).attach(req, res);
 			return;
 		}
+		// Stop one turn. `session_id` picks the session (without it the process's own
+		// session answers) and `request_id` narrows that to the turn the browser
+		// started, so two tabs on one session never stop each other's work either. A
+		// stop that matches nothing answers 200 with `stopped: false` rather than
+		// failing: the client's own abort already detached its stream, and a 404
+		// there would only surface as a silent error.
 		if (path === "/chat/stop" && req.method === "POST") {
-			await session.abort();
-			json(res, 200, {});
+			const body = await readBody(req);
+			const wantedSession = typeof body.session_id === "string" ? body.session_id : undefined;
+			const wantedTurn = typeof body.request_id === "string" ? body.request_id : undefined;
+			const stopped: string[] = [];
+			for (const [sessionId, holder] of [...runningTurns]) {
+				if (wantedSession && !sameSessionId(sessionId, wantedSession)) continue;
+				if (wantedTurn && holder.turn_id !== wantedTurn) continue;
+				const target = await runtimeForRunningTurn(sessionId);
+				if (!target) continue;
+				stopped.push(holder.turn_id);
+				await target.session.abort();
+				// `abort()` waits for the settle, so the normal path already released the
+				// lock; clearing it here keeps a turn that never emits `agent_settled`
+				// from wedging its session.
+				if (runningTurns.get(sessionId)?.turn_id === holder.turn_id) runningTurns.delete(sessionId);
+			}
+			json(res, 200, { stopped: stopped.length > 0, turns: stopped });
 			return;
 		}
+		// Stop every turn in every session. Backs `/stop-all`; only sessions that are
+		// really running are touched, so this never wakes an idle runtime.
+		if (path === "/chat/stop-all" && req.method === "POST") {
+			const stopped: string[] = [];
+			for (const [sessionId, holder] of [...runningTurns]) {
+				const target = await runtimeForRunningTurn(sessionId);
+				if (!target) continue;
+				stopped.push(holder.turn_id);
+				await target.session.abort();
+				if (runningTurns.get(sessionId)?.turn_id === holder.turn_id) runningTurns.delete(sessionId);
+			}
+			json(res, 200, { stopped: stopped.length > 0, turns: stopped });
+			return;
+		}
+		// Sessions with a turn in flight, with the ids a client needs to tell its own
+		// turn from another tab's.
 		if (path === "/chat/active" && req.method === "GET") {
-			json(res, 200, turnActive ? [session.sessionId] : []);
+			// `wait_s` turns the poll into a long poll: the reply is sent when a turn
+			// starts or settles, capped by the timeout. The browser cannot see a turn
+			// it did not start (a job reporting in, a prompt queued behind the running
+			// one) any other way, and a client that sends no `wait_s` keeps the
+			// one-shot behaviour.
+			const waitSeconds = Math.min(Math.max(Number(url.searchParams.get("wait_s") ?? "0"), 0), 30);
+			if (!Number.isFinite(waitSeconds) || waitSeconds === 0) {
+				json(res, 200, [...runningTurns.values()]);
+				return;
+			}
+			await new Promise<void>((resolve) => {
+				const done = () => {
+					clearTimeout(timer);
+					res.off("close", done);
+					resolve();
+				};
+				const timer = setTimeout(() => {
+					turnWaiters.delete(done);
+					done();
+				}, waitSeconds * 1000);
+				turnWaiters.add(done);
+				// A closed request must not hold a waiter, or a tab that went away
+				// keeps a timer and a listener alive until it fires.
+				res.on("close", () => {
+					// Only the race lost: the waiter may have been cleared by a wake
+					// already, and `done` is idempotent either way.
+					turnWaiters.delete(done);
+					done();
+				});
+			});
+			if (res.writableEnded) return;
+			json(res, 200, [...runningTurns.values()]);
 			return;
 		}
 		if (path === "/chat/permission" && req.method === "POST") {
@@ -1950,16 +2520,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, { path: target });
 			return;
 		}
-		if (path === "/fs/search" && req.method === "GET") {
-			const requested = url.searchParams.get("path") ?? "";
-			const target = requested ? resolveWorkspacePath(requested, runtime.cwd) : runtime.cwd;
-			if (!target) {
-				json(res, 403, { error: `outside the workspace: ${requested}` });
-				return;
-			}
-			json(res, 200, { path: target, matches: [] });
-			return;
-		}
 		// The host cannot focus an external editor, so the viewer reads files over
 		// HTTP instead: the same bytes an editor would show, plus whether they are
 		// binary (the viewer shows a notice) and the size cap that keeps the API
@@ -2032,8 +2592,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 		}
 
 		// --- Working directory ---
-		// The runtime's cwd is fixed for the process, so switching means opening a
-		// session rooted elsewhere; `/chat` then restores the requested dir.
+		// Switching means opening sessions rooted elsewhere: the runtime's own cwd is
+		// fixed for the process. The switch is real from here on — the runtime's
+		// sessions, `/project`, the default-directory terminal, and the `working_dir`
+		// the SPA echoes on `/chat` all report `target`, not the launch directory. A
+		// request that cannot be honoured says so instead of answering with the old
+		// directory and no error (#595).
 		if (path === "/cd" && req.method === "POST") {
 			const body = await readBody(req);
 			const requested = typeof body.path === "string" ? body.path.trim() : "";
@@ -2050,12 +2614,23 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 				return;
 			}
+			// `/cd` re-roots the process's own session, so only a turn on *that*
+			// session blocks it: a turn another tab runs in another session is not
+			// moving any directory this request touches.
+			if (runningTurns.has(runtime.session.sessionId)) {
+				// The running turn, its transcript and its tool results belong to the
+				// directory it started in; moving underneath it would split a session
+				// across two places with no way to tell which is which.
+				json(res, 409, {
+					success: false,
+					message: "a turn is running; stop it before switching directories",
+					current_dir: runtime.cwd,
+					project_hash: projectHash(runtime.cwd),
+				});
+				return;
+			}
 			try {
-				// Open a session rooted at `target`. A fresh session there has its
-				// own project hash; `/chat` switches back to the requested dir when
-				// a turn arrives with an explicit `working_dir`.
-				await runtime.newSession();
-				await runtime.switchSession(runtime.session.sessionFile ?? "", { cwdOverride: target });
+				await replaceSessionCwd(runtime, target, bindSession);
 			} catch (error) {
 				json(res, 400, {
 					success: false,
@@ -2068,34 +2643,19 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, {
 				success: true,
 				message: "",
-				current_dir: runtime.cwd,
-				project_hash: projectHash(runtime.cwd),
+				current_dir: sessionCwdOf(runtime),
+				project_hash: projectHash(sessionCwdOf(runtime)),
 			});
 			return;
 		}
 
-		// --- Stubbed AtomCode facilities ---
+		// --- MCP ---
 		if (path === "/mcp/status" && req.method === "GET") {
-			json(res, 200, { servers: [], trusted: true, blocked: [] });
-			return;
-		}
-		if (path === "/tunnel/status" && req.method === "GET") {
-			json(res, 200, {
-				bind_host: host,
-				port,
-				reachable: false,
-				pgy: { installed: false, ipv4: null },
-				remote_url: null,
-				qr_svg: null,
-			});
+			json(res, 200, mcpStatusPayload(sessionCwdOf(runtime), runtime.session.settingsManager.isProjectTrusted()));
 			return;
 		}
 		if (path === "/command" && req.method === "POST") {
 			json(res, 200, { kind: "error", message: "slash commands are not available in the webui yet" });
-			return;
-		}
-		if (path === "/live/mcp/trust" && req.method === "POST") {
-			json(res, 200, { ok: false, error: "MCP is not available" });
 			return;
 		}
 		if (path === "/providers/discover-models" && req.method === "POST") {
@@ -2227,21 +2787,6 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				}
 				throw error;
 			}
-		}
-
-		// --- Live (sync) transport: not implemented ---
-		if (path === "/live" || path.startsWith("/live/")) {
-			json(res, 501, {
-				error: "the sync (/live) transport is not implemented; use the default mode",
-				code: "live_unsupported",
-			});
-			return;
-		}
-
-		// --- Model profiles: not mapped onto nanopi yet ---
-		if (path.startsWith("/model-profiles")) {
-			json(res, 400, { error: "model profiles are not available in the webui yet" });
-			return;
 		}
 
 		json(res, 404, { error: `no such endpoint: ${req.method} ${path}` });

@@ -89,6 +89,40 @@ export function providerArtifactName(providerId: string): string {
 	return providerId.replace(/\./g, "-");
 }
 
+const SHARD_SPECIFIER_PATTERN = /from "(\.{1,2}\/[^"]*\.models\.ts)"/g;
+const GENERATED_SOURCE_PATTERN = /^src[\\/]models\.generated\.ts$/;
+
+/**
+ * Shard module names (`<provider>.models.ts`) the checkout's TypeScript imports.
+ *
+ * These files are gitignored build products, so the checked-in source — not the
+ * shard directory — is what says which of them a type check needs. A provider
+ * module imports its own shard, and the aggregator imports every shard the run
+ * wrote; either way the importing file is checked in.
+ */
+export function findReferencedShardNames(sourceDir: string): string[] {
+	const referenced = new Set<string>();
+	const walk = (dir: string): void => {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name);
+			if (entry.isDirectory()) {
+				if (entry.name !== "data" && entry.name !== "disabled") walk(path);
+				continue;
+			}
+			if (!entry.name.endsWith(".ts")) continue;
+			const relative = path.slice(sourceDir.length + 1);
+			// The aggregator is generated: it imports exactly the shards a run wrote,
+			// so reading it would make the narrow set it names the expected one.
+			if (GENERATED_SOURCE_PATTERN.test(relative)) continue;
+			for (const match of readFileSync(path, "utf8").matchAll(SHARD_SPECIFIER_PATTERN)) {
+				referenced.add(match[1].slice(match[1].lastIndexOf("/") + 1));
+			}
+		}
+	};
+	walk(sourceDir);
+	return Array.from(referenced).sort();
+}
+
 function readProviderStructure(path: string, providerId: string): Record<string, string> {
 	const errors: string[] = [];
 	const groups = readJsonObject(path, `${providerId}.json`, errors);
@@ -175,15 +209,28 @@ function readDataDirectoryProviderIds(dataDir: string): string[] {
 
 /**
  * The generated shard names next to the data directory. They are build products
- * too, so a checkout without them is listed rather than rejected: the shard set
- * is only checked when it exists, which is what `validateGeneratedModelData`
- * does after the generator or the build wrote it.
+ * too, so a checkout that never generated has none.
  */
 function readProviderShardNames(providersDir: string): string[] {
 	if (!existsSync(providersDir)) return [];
 	return readdirSync(providersDir)
 		.filter((entry) => entry.endsWith(".models.ts"))
 		.sort();
+}
+
+/**
+ * Shards the checkout's source imports but the catalog on disk does not have.
+ *
+ * A catalog a narrower build flavor wrote is internally consistent — its
+ * aggregator names exactly its own shards and its data directory matches — so
+ * every catalog-shaped check passes on it. What it cannot satisfy is the
+ * imports that are checked in: `src/providers/all.ts` names every provider
+ * module, and each of those imports its own shard. Type checking then reports
+ * one `TS2307` per provider the last run left out.
+ */
+export function findMissingShardNames(packageRoot: string): string[] {
+	const shards = new Set(readProviderShardNames(join(packageRoot, "src", "providers")));
+	return findReferencedShardNames(join(packageRoot, "src")).filter((name) => !shards.has(name));
 }
 
 export function readModelDataStructure(packageRoot: string): ModelDataStructure {
@@ -193,10 +240,14 @@ export function readModelDataStructure(packageRoot: string): ModelDataStructure 
 	const expectedShards = providerIds
 		.map((providerId) => `${providerArtifactName(providerId)}.models.ts`)
 		.sort();
-	const actualShards = readProviderShardNames(providersDir);
-	if (actualShards.length > 0 && !sameStrings(expectedShards, actualShards)) {
+	const shardNames = readdirSync(providersDir).filter((entry) => entry.endsWith(".models.ts"));
+	// A data-only hydration writes the data files for a catalog whose shards it
+	// leaves alone, so a directory with no shard at all is "not written yet".
+	// Once any shard is there, the set has to be complete: the aggregator naming
+	// a provider whose shard is gone is a catalog `tsc` reads as TS2307.
+	if (shardNames.length > 0 && !sameStrings(expectedShards, [...shardNames].sort())) {
 		throw new Error(
-			`Generated model aggregator and provider shards do not match (${describeSetDifference(expectedShards, actualShards)})`,
+			`Generated model aggregator and provider shards do not match (${describeSetDifference(expectedShards, [...shardNames].sort())})`,
 		);
 	}
 

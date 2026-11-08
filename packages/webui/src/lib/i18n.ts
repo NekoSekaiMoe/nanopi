@@ -53,6 +53,11 @@ const EN: Record<string, string> = {
 	"保存中…": "Saving…",
 	"保存修改": "Save changes",
 	"停止": "Stop",
+	"停止全部": "Stop all",
+	"正在停止…": "Stopping…",
+	"运行中": "Running",
+	"该会话正在另一处运行，请等它结束或先停止":
+		"This chat is running elsewhere; wait for it to finish or stop it first",
 	"允许": "Allow",
 	"关于": "About",
 	"关闭会话菜单": "Close chat menu",
@@ -244,6 +249,14 @@ const EN: Record<string, string> = {
 	"切换到计划模式": "Switch to plan mode",
 	"切换到标准模式": "Switch to standard mode",
 	"切换到最小模式": "Switch to minimal mode",
+	"输入": "input",
+	"输出": "output",
+	"上下文": "context",
+	"缓存": "cache",
+	"tokens": "tokens",
+	"本轮": "Turn",
+	"上下文压缩过，会话累计无法从记录重建":
+		"The context was compacted, so the session total cannot be rebuilt from the transcript",
 };
 
 export function t(zh: string): string {

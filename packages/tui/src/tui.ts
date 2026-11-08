@@ -1124,7 +1124,6 @@ export abstract class TuiBase extends Container implements TUI {
 				return false;
 			}
 			this.clearHeldColorReplyFragment();
-			this.extendTerminalColorReplyWindow();
 			return true;
 		}
 		if (
@@ -1142,8 +1141,14 @@ export abstract class TuiBase extends Container implements TUI {
 		return true;
 	}
 
+	/**
+	 * A query being answered keeps the window open. Once every query is answered nothing is waiting for
+	 * a reply, so the window closes: it would only swallow the user's own typing, or a reply the terminal
+	 * sends again.
+	 */
 	private extendTerminalColorReplyWindow(): void {
-		this.terminalColorReplyWindowEnd = Date.now() + TERMINAL_COLOR_REPLY_WINDOW_MS;
+		this.terminalColorReplyWindowEnd =
+			this.pendingTerminalColorQueries.length > 0 ? Date.now() + TERMINAL_COLOR_REPLY_WINDOW_MS : 0;
 	}
 
 	private clearHeldColorReplyFragment(): void {

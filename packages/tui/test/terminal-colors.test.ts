@@ -216,6 +216,9 @@ describe("TUI.queryTerminalColors", () => {
 			terminal.sendInput("\x1b]11;#ffffff\x07");
 			terminal.sendInput(DA1);
 			assert.deepStrictEqual(late, [{ foreground: undefined, background: WHITE, palette: undefined }]);
+			// The replies are handed over on the next macrotask, once the input handler returned: see
+			// .agents/notes/implemented/bug-fix/2026-11-08-color-reply-window-outlives-its-queries.md.
+			await wait(0);
 			assert.deepStrictEqual(component.inputs, []);
 
 			// With no query pending, color replies are ordinary input again.

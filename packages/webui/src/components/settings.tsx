@@ -357,53 +357,70 @@ export function SettingsOverlay({
 									<p className="mt-4 text-[12px] text-muted-foreground">{t('加载中…')}</p>
 								) : (
 									<>
-										{mcp.trusted === false ? (
-											<p className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11.5px] text-warning">
-												{t("当前项目尚未信任 MCP，服务器可能被隐藏。")}
-											</p>
-										) : null}
-										<div className="mt-3 space-y-1.5">
-											{mcp.servers.length === 0 ? (
-												<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
-													<p className="text-[12.5px] text-muted-foreground">{t('还没有 MCP 服务器')}</p>
-													<p className="mt-1 text-[11px] text-muted-foreground/70">
-														{t("在配置文件中添加 MCP server 后刷新。")}
+										{mcp.available === false ? (
+											<div className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-4 py-3">
+												<p className="text-[12px] text-warning">{t("当前构建不含 MCP")}</p>
+												<p className="mt-1 text-[11px] text-muted-foreground">
+													{t("此构建剔除了 mcp-lite，配置了 MCP 服务器也不会被加载。")}
+												</p>
+											</div>
+										) : (
+											<>
+												{mcp.trusted === false ? (
+													<p className="mt-4 rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-[11.5px] text-warning">
+														{t("当前项目尚未信任 MCP，服务器可能被隐藏。")}
 													</p>
-												</div>
-											) : (
-												mcp.servers.map((server) => (
-													<div
-														key={server.name}
-														className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"
-													>
-														<span
-															className={cn(
-																"size-2 shrink-0 rounded-full",
-																server.status === "connected" || server.status === "ready"
-																	? "bg-success"
-																	: server.status === "error"
-																		? "bg-destructive"
-																		: "bg-muted-foreground/50",
-															)}
-														/>
-														<span className="min-w-0 flex-1">
-															<span className="block truncate font-mono text-[12px] text-foreground">
-																{server.name}
-															</span>
-															<span className="block text-[10.5px] text-muted-foreground">
-																{server.status}
-																{server.tool_count != null ? ` · ${server.tool_count} tools` : ""}
-															</span>
-															{server.error ? (
-																<span className="mt-0.5 block text-[10.5px] text-destructive">
-																	{server.error}
+												) : null}
+												<div className="mt-3 space-y-1.5">
+													{mcp.servers.length === 0 ? (
+														<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
+															<p className="text-[12.5px] text-muted-foreground">{t('还没有 MCP 服务器')}</p>
+															<p className="mt-1 text-[11px] text-muted-foreground/70">
+																{t("在配置文件中添加 MCP server 后刷新。")}
+															</p>
+														</div>
+													) : (
+														mcp.servers.map((server) => (
+															<div
+																key={server.name}
+																className="flex items-center gap-3 rounded-xl border border-border px-3 py-2.5"
+															>
+																<span
+																	className={cn(
+																		"size-2 shrink-0 rounded-full",
+																		server.error
+																			? "bg-destructive"
+																			: server.status === "connected" || server.status === "ready"
+																				? "bg-success"
+																				: "bg-muted-foreground/50",
+																	)}
+																/>
+																<span className="min-w-0 flex-1">
+																	<span className="block truncate font-mono text-[12px] text-foreground">
+																		{server.name}
+																	</span>
+																	<span className="block text-[10.5px] text-muted-foreground">
+																		{server.status}
+																		{server.transport ? ` · ${server.transport}` : ""}
+																		{server.tool_count != null ? ` · ${server.tool_count} tools` : ""}
+																	</span>
+																	{server.source ? (
+																		<span className="mt-0.5 block truncate text-[10.5px] text-muted-foreground/70">
+																			{server.source}
+																		</span>
+																	) : null}
+																	{server.error ? (
+																		<span className="mt-0.5 block text-[10.5px] text-destructive">
+																			{server.error}
+																		</span>
+																	) : null}
 																</span>
-															) : null}
-														</span>
-													</div>
-												))
-											)}
-										</div>
+															</div>
+														))
+													)}
+												</div>
+											</>
+										)}
 									</>
 								)}
 							</div>

@@ -12,13 +12,21 @@ import type {
 	ImageData,
 	ModelInfo,
 	PlanItem,
+	SessionStats,
 	UserInputRequestEvent,
 	UserInputResponse,
 } from "@/lib/api";
 import type { TextAttachment } from "@/lib/attachments";
 import { type Poem, randomPoem } from "@/lib/greeting";
-import type { PendingPermission, PermissionRequest, TurnError, UiMessage } from "@/lib/use-chat";
-import { cn } from "@/lib/utils";
+import type {
+	PendingPermission,
+	PermissionRequest,
+	SessionStatsUnavailable,
+	TurnCost,
+	TurnError,
+	UiMessage,
+} from "@/lib/use-chat";
+import { cacheHitRate, cn, formatCost, formatDuration, formatTokens } from "@/lib/utils";
 import { getLocale, t } from "@/lib/i18n";
 
 const EFFORT_LABELS: Record<string, string> = {
@@ -46,6 +54,9 @@ export function ChatPane({
 	permission,
 	userInput,
 	plan,
+	stats,
+	statsUnavailable,
+	lastCost,
 	models,
 	provider,
 	onProvider,
@@ -79,6 +90,12 @@ export function ChatPane({
 	permission: PendingPermission | null;
 	userInput: UserInputRequestEvent | null;
 	plan: PlanItem[];
+	/** Session usage as the transcript counts it; absent for an empty session. */
+	stats?: SessionStats;
+	/** Why a restored transcript reports no totals (it compacted). */
+	statsUnavailable?: SessionStatsUnavailable;
+	/** The settled turn's accounting, docked under the transcript. */
+	lastCost: TurnCost | null;
 	models: ModelInfo[];
 	provider: string;
 	onProvider: (provider: string) => void;
@@ -198,6 +215,8 @@ export function ChatPane({
 
 						<PlanCard items={plan} streaming={streaming} />
 
+						<UsageDock stats={stats} unavailable={statsUnavailable} cost={lastCost} streaming={streaming} />
+
 						{permission ? (
 							<PermissionCard
 								key={`${permission.callId}-${permission.toolName}`}
@@ -244,6 +263,65 @@ export function ChatPane({
 					</div>
 				</div>
 				<span className="sr-only">{sessionName}</span>
+			</div>
+		</div>
+	);
+}
+
+/**
+ * The session's running total, docked one line above the composer.
+ *
+ * Every number here was already on hand: the transcript sums it
+ * (`SessionStats`) and the turn's own settlement reports the rest. What was
+ * missing was a place to read them together: what has this chat cost so far,
+ * and how long did the last turn take, without opening the transcript file.
+ *
+ * The turn line is dropped while a turn streams: its numbers are not settled
+ * yet, and a readout that keeps changing under the cursor reads as a progress
+ * bar rather than a bill.
+ */
+function UsageDock({
+	stats,
+	unavailable,
+	cost,
+	streaming,
+}: {
+	stats?: SessionStats;
+	unavailable?: SessionStatsUnavailable;
+	cost: TurnCost | null;
+	streaming: boolean;
+}) {
+	const turn = cost && !streaming ? cost : null;
+	if (!stats && !unavailable && !turn) return null;
+
+	const context = stats ? stats.input + stats.cache_read + stats.cache_write : 0;
+	const hit = stats ? cacheHitRate({ context, cache_read: stats.cache_read }) : null;
+	const tokens = stats ? stats.input + stats.output + stats.cache_read + stats.cache_write : 0;
+	const turnTokens = turn ? turn.usage.context + turn.usage.output : 0;
+
+	return (
+		<div className="mx-auto w-full max-w-[840px] px-4 pb-1.5 sm:px-6 lg:px-10">
+			<div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 text-caption text-muted-foreground">
+				{unavailable ? (
+					<span>{t("上下文压缩过，会话累计无法从记录重建")}</span>
+				) : stats ? (
+					<>
+						<span title={`${stats.input} ${t("输入")} · ${stats.output} ${t("输出")}`}>
+							{formatTokens(tokens)} {t("tokens")}
+						</span>
+						{hit !== null ? (
+							<span>
+								· {t("缓存")} {Math.round(hit * 100)}%
+							</span>
+						) : null}
+						{stats.cost > 0 ? <span>· {formatCost(stats.cost)}</span> : null}
+					</>
+				) : null}
+				{turn ? (
+					<span className={cn("text-muted-foreground/70", stats && "ml-0.5")}>
+						{t("本轮")} {formatDuration(turn.durationMs)} · {formatTokens(turnTokens)} {t("tokens")}
+					</span>
+				) : null}
 			</div>
 		</div>
 	);

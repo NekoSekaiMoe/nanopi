@@ -6,9 +6,13 @@ import {
 	type ImageData,
 	type PlanItem,
 	type SessionMessage,
+	type SessionStats,
 	type SSEEvent,
+	type TurnStats,
+	type TurnUsage,
 	type UserInputRequestEvent,
 	type UserInputResponse,
+	ApiError,
 	createSession,
 	getChatActive,
 	getSession,
@@ -23,6 +27,15 @@ import { randomId } from "@/lib/utils";
 import { t } from "@/lib/i18n";
 
 /**
+ * How long one `/chat/active` long poll parks before answering "nothing yet".
+ * The daemon answers early whenever a turn starts or settles, so this only sets
+ * how often an idle tab repeats the request; 30s is also the daemon's cap.
+ */
+const BACKGROUND_WAIT_SECONDS = 30;
+/** Pause before the next long poll, after the daemon answered or the request failed. */
+const BACKGROUND_RETRY_MS = 1000;
+
+/**
  * Answers a permission card can send.
  *
  * `allow_once` runs the call the card is about and nothing else; `deny` is
@@ -33,6 +46,9 @@ export type PermissionAnswer = "allow" | "deny" | "allow_session" | "allow_once"
 
 /** Asking the model to describe the call: not an answer, it pauses the prompt. */
 export type PermissionRequest = PermissionAnswer | "explain";
+
+/** Why a restored transcript reports no usage totals; see `SessionDetail`. */
+export type SessionStatsUnavailable = "compacted";
 
 export interface TextBlock {
 	kind: "text";
@@ -64,8 +80,25 @@ export interface UiMessage {
 	blocks: UiBlock[];
 	/** `provider/model` that produced an assistant reply, when the transcript knows it. */
 	provider?: string;
+	/** What an assistant reply was billed for, once its turn settled. */
+	usage?: TurnUsage;
 	images?: ImageData[];
 	createdAt?: number;
+}
+
+/**
+ * What the turn cost, as the bubble and the session readout show it.
+ *
+ * This is the stream's per-turn accounting (`done.stats`): the tokens the turn
+ * streamed, the tool calls it made, and how long it ran. It is not the transcript
+ * usage, which also counts the summarization and title calls a turn makes on the
+ * side; the two agree on ordinary turns and the transcript wins after a reload.
+ */
+export interface TurnCost {
+	durationMs: number;
+	rounds: number;
+	toolCalls: number;
+	usage: TurnUsage;
 }
 
 /** A turn failure the UI can show verbatim, including the provider status. */
@@ -131,6 +164,7 @@ function fromSessionMessages(messages: SessionMessage[]): UiMessage[] {
 				role: "assistant",
 				blocks,
 				provider: message.provider,
+				usage: message.usage,
 				createdAt: message.created_at,
 			});
 			continue;
@@ -184,6 +218,37 @@ function updateLastAssistant(
 		return copy;
 	}
 	return messages;
+}
+
+/** Attach the settled turn's cost to the reply it produced. */
+function attachTurnCost(messages: UiMessage[], cost: TurnCost): UiMessage[] {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index];
+		if (message.role !== "assistant") continue;
+		const copy = [...messages];
+		copy[index] = { ...message, usage: cost.usage };
+		return copy;
+	}
+	return messages;
+}
+
+/** The stream's `done.stats` in the shape the bubble reads. */
+function turnCostOf(stats: TurnStats): TurnCost {
+	return {
+		durationMs: stats.duration_ms,
+		rounds: stats.rounds,
+		toolCalls: stats.tool_calls,
+		usage: {
+			input: stats.prompt_tokens,
+			output: stats.completion_tokens,
+			cache_read: stats.cached_tokens,
+			cache_write: 0,
+			// The stream carries no per-call price; a reload from the transcript
+			// fills it in from what the provider actually reported.
+			cost: 0,
+			context: stats.prompt_tokens + stats.cached_tokens,
+		},
+	};
 }
 
 function appendStreamBlock(
@@ -248,6 +313,11 @@ function turnErrorFrom(cause: unknown): TurnError {
 	return { message, code, retrying: false };
 }
 
+/** Whether a session id from the daemon names the session a tab holds (full or short id). */
+function sessionIdMatches(known: string, held: string): boolean {
+	return known === held || known.startsWith(held) || held.startsWith(known);
+}
+
 export function useChat({
 	projectHash,
 	workingDir,
@@ -266,12 +336,35 @@ export function useChat({
 	const [userInput, setUserInput] = useState<UserInputRequestEvent | null>(null);
 	const [plan, setPlan] = useState<PlanItem[]>([]);
 	const [approvalMode, setApprovalModeState] = useState<ApprovalMode>("standard");
+	// Session usage as the transcript counts it; undefined until a reply exists.
+	const [stats, setStats] = useState<SessionStats | undefined>(undefined);
+	// Why a restored transcript cannot report totals (it compacted); the read path
+	// knows the answer the open session does, so the readout says so instead.
+	const [statsUnavailable, setStatsUnavailable] = useState<SessionStatsUnavailable | undefined>(undefined);
+	// The settled turn's accounting, shown in the composer dock until the next send.
+	const [lastCost, setLastCost] = useState<TurnCost | null>(null);
 
 	const abortRef = useRef<AbortController | null>(null);
 	const requestIdRef = useRef<string | null>(null);
 	const sessionIdRef = useRef<string | null>(null);
 	const generationRef = useRef(0);
 	const artifactRef = useRef<{ lang: string; buffer: string } | null>(null);
+	// Set by the SSE `done` handler, read by the `finally` that runs after it: the
+	// turn's totals are fetched once, at settle, not in the event handler (which
+	// would race the transcript write the daemon is still doing).
+	const turnSettledRef = useRef(false);
+
+	/** Read the session's usage back from the daemon; a failure just keeps the last one. */
+	const refreshStats = useCallback(async (id: string) => {
+		if (!projectHash) return;
+		try {
+			const detail = await getSession(projectHash, id);
+			setStats(detail.stats);
+			setStatsUnavailable(detail.stats_unavailable);
+		} catch {
+			/* the readout is not worth a banner */
+		}
+	}, [projectHash]);
 
 	const setCurrentSession = useCallback((id: string | null) => {
 		sessionIdRef.current = id;
@@ -280,10 +373,14 @@ export function useChat({
 
 	const detachStream = useCallback(() => {
 		const alias = requestIdRef.current;
+		const owner = sessionIdRef.current;
 		abortRef.current?.abort();
 		abortRef.current = null;
 		requestIdRef.current = null;
-		if (alias) void stopChat(alias).catch(() => {});
+		// Stop only the turn this hook started: the daemon matches the request id
+		// (and the session that owns it), so leaving this session no longer aborts a
+		// turn another tab is streaming there.
+		if (alias) void stopChat(owner ?? "", alias).catch(() => {});
 	}, []);
 
 	const loadSession = useCallback(
@@ -297,6 +394,7 @@ export function useChat({
 			setUserInput(null);
 			setPlan([]);
 			setError(null);
+			setLastCost(null);
 			artifactRef.current = null;
 			setLoading(true);
 			setCurrentSession(id);
@@ -304,6 +402,8 @@ export function useChat({
 				const detail = await getSession(projectHash, id);
 				if (generationRef.current !== generation) return;
 				setMessages(fromSessionMessages(detail.messages));
+				setStats(detail.stats);
+				setStatsUnavailable(detail.stats_unavailable);
 				// The plan is a tool detail the transcript does not carry per message,
 				// so the backend derives it from the log; without it a reloaded
 				// session would stay plan-less until the next todo call.
@@ -333,6 +433,9 @@ export function useChat({
 		setUserInput(null);
 		setPlan([]);
 		setError(null);
+		setStats(undefined);
+		setStatsUnavailable(undefined);
+		setLastCost(null);
 		artifactRef.current = null;
 		setMessages([]);
 		setCurrentSession(null);
@@ -544,6 +647,10 @@ export function useChat({
 			generationRef.current = generation;
 			setError(null);
 			setNotice(null);
+			// The previous turn's cost belongs to the previous turn; the next reply
+			// brings its own.
+			setLastCost(null);
+			turnSettledRef.current = false;
 			artifactRef.current = null;
 
 			let targetSession = sessionIdRef.current;
@@ -600,12 +707,20 @@ export function useChat({
 				const aborted = cause instanceof Error && cause.name === "AbortError";
 				if (!aborted && generationRef.current === generation) {
 					const message = cause instanceof Error ? cause.message : String(cause);
-					setError(turnErrorFrom(cause));
-					setMessages((current) =>
-						updateLastAssistant(current, (blocks) =>
-							appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
-						),
-					);
+					// The lock is per session, so a 409 here means another tab is running
+					// *this* session: the prompt was not sent. Say so, and drop the empty
+					// exchange that the optimistic update added.
+					if (cause instanceof ApiError && cause.status === 409) {
+						setError({ ...turnErrorFrom(cause), message: t("该会话正在另一处运行，请等它结束或先停止") });
+						setMessages((current) => current.slice(0, -2));
+					} else {
+						setError(turnErrorFrom(cause));
+						setMessages((current) =>
+							updateLastAssistant(current, (blocks) =>
+								appendStreamBlock(blocks, "text", `\n\n${t("连接中断：")}${message}`),
+							),
+						);
+					}
 				}
 			} finally {
 				if (generationRef.current === generation) {
@@ -631,10 +746,10 @@ export function useChat({
 	 *
 	 * A background turn (a job reporting in, a prompt queued behind the running one)
 	 * has no HTTP response behind it: its events go nowhere, so the report only lands
-	 * in the transcript and the chat sits unchanged until a reload. Polling
-	 * `/chat/active` catches the start, and a session reload is what turns a settled
-	 * turn into what the user sees. While a local turn streams, its own SSE handler
-	 * already updates the view.
+	 * in the transcript and the chat sits unchanged until a reload. `/chat/active`
+	 * long-polls the daemon, which answers as soon as a turn starts or settles, and a
+	 * session reload is what turns a settled turn into what the user sees. While a
+	 * local turn streams, its own SSE handler already updates the view.
 	 */
 	const backgroundWatchRef = useRef<{ busy: boolean; generation: number }>({ busy: false, generation: -1 });
 	useEffect(() => {
@@ -644,16 +759,19 @@ export function useChat({
 		}
 		let cancelled = false;
 		let timer: number | undefined;
+		const controller = new AbortController();
 		const tick = () => {
-			void getChatActive()
-				.then((sessions) => {
+			void getChatActive(BACKGROUND_WAIT_SECONDS, controller.signal)
+				.then((turns) => {
 					if (cancelled) return;
-					const active = sessions.length > 0;
+					// A turn in another session is not this tab's business: the daemon runs
+					// sessions in parallel, so only what happens *here* may reload the view.
+					const mine = sessionIdRef.current;
+					const active = mine !== null && turns.some((turn) => sessionIdMatches(turn.session_id, mine));
 					const previous = backgroundWatchRef.current;
 					if (previous.busy && !active && previous.generation === generationRef.current) {
 						// The background turn just settled: reload the transcript it wrote.
-						const id = sessionIdRef.current;
-						if (id) void loadSession(id);
+						if (mine) void loadSession(mine);
 						onSessionsChanged();
 					}
 					backgroundWatchRef.current = {
@@ -662,29 +780,36 @@ export function useChat({
 					};
 				})
 				.catch(() => {
-					/* a poll that fails is not worth a banner */
+					/* a watch that drops is not worth a banner; the next one re-establishes it */
 				})
 				.finally(() => {
-					if (!cancelled) timer = window.setTimeout(tick, 2000);
+					if (!cancelled) timer = window.setTimeout(tick, BACKGROUND_RETRY_MS);
 				});
 		};
-		timer = window.setTimeout(tick, 1500);
+		timer = window.setTimeout(tick, 0);
 		return () => {
 			cancelled = true;
+			controller.abort();
 			if (timer !== undefined) window.clearTimeout(timer);
 		};
 	}, [streaming, loadSession, onSessionsChanged]);
 
+	/**
+	 * Stop this tab's turn, and only this tab's: the daemon matches the request id
+	 * inside the session, so a second tab looking at the same session keeps running.
+	 */
 	const stop = useCallback(async () => {
 		const alias = requestIdRef.current;
+		const owner = sessionIdRef.current ?? "";
 		abortRef.current?.abort();
 		abortRef.current = null;
+		requestIdRef.current = null;
 		setStreaming(false);
 		setPermission(null);
 		setUserInput(null);
 		if (!alias) return;
 		try {
-			await stopChat(alias);
+			await stopChat(owner, alias);
 		} catch {
 			/* the stream is already detached */
 		}
@@ -755,6 +880,9 @@ export function useChat({
 		userInput,
 		plan,
 		approvalMode,
+		stats,
+		statsUnavailable,
+		lastCost,
 		setApprovalMode,
 		setError,
 		setNotice,
