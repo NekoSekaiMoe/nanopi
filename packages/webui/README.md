@@ -43,7 +43,14 @@ The app uses nanopi's existing endpoints and does not change the backend:
 - `POST /chat/permission`, `POST /chat/user-input`
 - `GET /fs/list`
 
-`/live` is intentionally not used: the current daemon returns 501 for it.
+`/live` is not part of this client and no longer exists on the backend: the
+`?sync=1` transport has no caller here, so `/live`, `/live/mcp/trust`,
+`/tunnel/status`, `/fs/search` and `/model-profiles` were deleted rather than
+answered with stubs (#595). `GET /mcp/status` reads the `mcp-lite`
+configuration (it does not connect anything), and reports `available: false`
+when the build excludes that module; `POST /cd` moves the runtime's sessions to
+another directory inside the workspace and answers with the directory it
+actually opened.
 
 ## Browser targets
 

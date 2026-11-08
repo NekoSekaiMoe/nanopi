@@ -628,9 +628,13 @@ export interface McpServerInfo {
 	status: string;
 	tool_count?: number;
 	error?: string;
+	transport?: string;
+	source?: string;
 }
 
 export interface McpStatusInfo {
+	/** False when the build excludes the mcp-lite module; the server list is then meaningless. */
+	available: boolean;
 	servers: McpServerInfo[];
 	trusted?: boolean;
 	blocked?: string[];
