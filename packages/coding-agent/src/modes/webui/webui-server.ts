@@ -29,7 +29,7 @@ import {
 	type ToolResultMessage,
 	type Usage,
 } from "@nanopi/pi-ai";
-import { type AskBrokerAnswer, extraBridge } from "@nanopi/pi-extra";
+import { type AskBrokerAnswer, type AskBrokerQuestion, extraBridge } from "@nanopi/pi-extra";
 import { isBuildComponentEnabled } from "../../build-components.ts";
 import { getAgentDir, getPackageDir } from "../../config.ts";
 import type { AgentSession, AgentSessionEvent, SessionStats } from "../../core/agent-session.ts";
@@ -684,6 +684,29 @@ interface OAuthFlowState {
 /** A finished flow is dropped this long after the browser last read it. */
 const OAUTH_FLOW_RETENTION_MS = 60_000;
 
+/**
+ * The outstanding structured-input request, in the webui's wire shape.
+ *
+ * Only one question is outstanding at a time (the broker serializes them), but
+ * the question itself does not belong to a turn: a background turn or a job
+ * reporting in asks with no request behind it, so the open question is process
+ * state that whoever looks next can answer. `/chat/user-input` therefore only
+ * needs the request id, and the composer card is fed by the turn's SSE when one
+ * is streaming and by `/chat/active` when none is.
+ */
+interface PendingUserInput extends Record<string, unknown> {
+	type: "user_input_request";
+	request_id: number;
+	/** The session whose turn raised it, when a turn raised it. */
+	session_id?: string;
+	header: string;
+	question: string;
+	mode: "single" | "multiple" | "text";
+	options: Array<{ label: string; description?: string }>;
+	questions?: AskBrokerQuestion[];
+	custom?: boolean;
+}
+
 /** The browser's answer to one login prompt, or "" for a blank field. */
 function loginAnswer(value: unknown): string {
 	if (value === undefined || value === null) return "";
@@ -1180,6 +1203,72 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 	}
 	// Browser-driven OAuth login flows (see /extra/oauth/*).
 	const oauthFlows = new Map<string, OAuthFlowState>();
+	// The structured-input request waiting for an answer, if any (see
+	// PendingUserInput). Process-wide, because the ask broker is.
+	let pendingUserInput: PendingUserInput | undefined;
+	// Session whose turn raised `pendingUserInput`, when a turn raised it. Set by
+	// the running turn, cleared when that turn settles.
+	let askSessionId: string | undefined;
+
+	/**
+	 * Claim the questions raised while this session's turn runs.
+	 *
+	 * The broker is process-wide and a question can outlive the turn that started
+	 * it (a background turn, a job reporting in), so the session is attached to the
+	 * question rather than the other way round: the turn that holds the lock is the
+	 * one that answers "which session is this card about". Release restores the
+	 * session that claimed before it, so a stop-and-restart leaves the newer turn's
+	 * claim in place.
+	 */
+	function ownUserInputSession(sessionId: string): () => void {
+		const previous = askSessionId;
+		askSessionId = sessionId;
+		return () => {
+			if (askSessionId === sessionId) askSessionId = previous;
+		};
+	}
+
+	/**
+	 * The browser's view of one broker prompt, in the card's wire shape.
+	 *
+	 * `type` is the SSE event name: the same object rides `/chat/active` (where the
+	 * field is inert) and a running turn's stream, so the two cannot disagree about
+	 * what a question looks like.
+	 */
+	function userInputEvent(requestId: number, questions: AskBrokerQuestion[], sessionId?: string): PendingUserInput {
+		const first = questions[0];
+		return {
+			type: "user_input_request",
+			request_id: requestId,
+			...(sessionId ? { session_id: sessionId } : {}),
+			header: first?.header ?? "",
+			question: first?.question ?? "",
+			mode: first?.mode ?? "text",
+			options: first?.options ?? [],
+			custom: first?.custom ?? true,
+			...(questions.length > 1 ? { questions } : {}),
+		};
+	}
+
+	// Structured input takes one path whether or not a turn is streaming it: the
+	// pending request is process state, `/chat/active` reports it to a tab that is
+	// not attached to the turn that raised it, and the answer is matched by request
+	// id at `/chat/user-input`. Announcing it to running turns is what the turn's
+	// own SSE subscriber does; this listener only keeps the shared state current.
+	//
+	// The listener lives as long as the process does: runWebuiMode serves one port
+	// per process, so there is nothing to tear down.
+	const _unsubscribeAskBroker = extraBridge.available
+		? extraBridge.asks.subscribe((event) => {
+				if (event.type === "prompt") {
+					pendingUserInput = userInputEvent(event.requestId, event.questions, askSessionId);
+				} else if (pendingUserInput?.request_id === event.requestId) {
+					pendingUserInput = undefined;
+				}
+				// The snapshot a `/chat/active` long poll is parked on changed.
+				notifyTurnChange();
+			})
+		: undefined;
 
 	function json(res: ServerResponse, status: number, body: unknown): void {
 		res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
@@ -1499,6 +1588,12 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			}
 		};
 
+		// A turn names the session on the question it surfaces, so the card can be
+		// answered on the session the turn runs on. Whoever prompts last wins: the
+		// turn that no longer holds the lock drops its claim in `detachAll`, and the
+		// next broker prompt re-announces itself.
+		const releaseAskOwner = ownUserInputSession(session.sessionId);
+
 		const eventUnsubscribe = session.subscribe(onEvent);
 		// Surface extra-module permission prompts as SSE permission_request events;
 		// POST /chat/permission answers them (see handleApi).
@@ -1529,22 +1624,13 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			: undefined;
 		// Structured input (ask_user_question) renders in the same composer seat.
 		// The frontend's flat fields mirror questions[0] so a single question needs
-		// no batch protocol; multi-question requests always send `questions`.
+		// no batch protocol; multi-question requests always send `questions`. A
+		// question raised with no turn streaming has no stream to ride and is read
+		// from `/chat/active` instead (see the process-wide subscriber).
 		const unsubscribeAsks = extraBridge.available
 			? extraBridge.asks.subscribe((event) => {
 					if (event.type !== "prompt") return;
-					const first = event.questions[0];
-					emit({
-						type: "user_input_request",
-						request_id: event.requestId,
-						session_id: session.sessionId,
-						header: first?.header ?? "",
-						question: first?.question ?? "",
-						mode: first?.mode ?? "text",
-						options: first?.options ?? [],
-						custom: first?.custom ?? true,
-						...(event.questions.length > 1 ? { questions: event.questions } : {}),
-					});
+					emit(userInputEvent(event.requestId, event.questions, session.sessionId));
 				})
 			: undefined;
 
@@ -1552,6 +1638,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			eventUnsubscribe();
 			unsubscribeBroker?.();
 			unsubscribeAsks?.();
+			releaseAskOwner();
 		};
 		const finish = () => {
 			state.finished = true;
@@ -2298,9 +2385,20 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			// it did not start (a job reporting in, a prompt queued behind the running
 			// one) any other way, and a client that sends no `wait_s` keeps the
 			// one-shot behaviour.
+			//
+			// The snapshot carries the open structured-input request as one `user_input`
+			// entry besides the turns. A turn that started the question already shows it
+			// in its own SSE, but a question raised with no turn streaming (a background
+			// turn, a job reporting in) has no stream to ride, and a tab that reloads
+			// mid-turn has no history of the event: the answer is matched by request id,
+			// so the entry is listed once, not per turn.
+			const snapshot = (): Array<TurnHolder | { user_input: PendingUserInput }> => [
+				...runningTurns.values(),
+				...(pendingUserInput ? [{ user_input: pendingUserInput }] : []),
+			];
 			const waitSeconds = Math.min(Math.max(Number(url.searchParams.get("wait_s") ?? "0"), 0), 30);
 			if (!Number.isFinite(waitSeconds) || waitSeconds === 0) {
-				json(res, 200, [...runningTurns.values()]);
+				json(res, 200, snapshot());
 				return;
 			}
 			await new Promise<void>((resolve) => {
@@ -2324,7 +2422,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				});
 			});
 			if (res.writableEnded) return;
-			json(res, 200, [...runningTurns.values()]);
+			json(res, 200, snapshot());
 			return;
 		}
 		if (path === "/chat/permission" && req.method === "POST") {
@@ -2355,6 +2453,9 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				json(res, 200, { accepted: false, error: "request_id is required" });
 				return;
 			}
+			// The session is advisory: the answer is matched by request id against the
+			// broker's one outstanding question, so a card answered from a tab that
+			// only saw the request through /chat/active still lands.
 			const resolution = Array.isArray(body.responses)
 				? { type: "batch" as const, answers: body.responses as AskBrokerAnswer[] }
 				: {
@@ -2366,6 +2467,8 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 						},
 					};
 			const accepted = extraBridge.asks.answer(requestId, resolution);
+			// The broker's own resolution event clears the shared copy; a refusal here
+			// means the id names nothing outstanding.
 			json(res, 200, accepted ? { accepted: true } : { accepted: false, error: "no matching question is pending" });
 			return;
 		}

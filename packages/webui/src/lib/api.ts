@@ -615,6 +615,36 @@ export interface ActiveTurn {
 }
 
 /**
+ * A structured-input question nobody is streaming.
+ *
+ * The daemon lists it beside the turns on `/chat/active`: a question raised with
+ * no turn streaming (a background turn, a job reporting in) has no SSE response
+ * behind it, so the card is read from here and answered at `/chat/user-input`.
+ */
+export interface PendingUserInput {
+	user_input: UserInputRequestEvent;
+}
+
+/** One entry of `/chat/active`: a running turn, or the open question. */
+export type ChatActiveEntry = ActiveTurn | PendingUserInput;
+
+/** Whether an entry is the open question rather than a turn. */
+function hasPendingUserInput(entry: ChatActiveEntry): entry is PendingUserInput {
+	return "user_input" in entry;
+}
+
+/** Only the running turns of a `/chat/active` answer, without the question entry. */
+export function activeTurns(entries: ChatActiveEntry[]): ActiveTurn[] {
+	return entries.filter((entry): entry is ActiveTurn => !hasPendingUserInput(entry));
+}
+
+/** The open structured-input question in a `/chat/active` answer, if any. */
+export function pendingUserInput(entries: ChatActiveEntry[]): UserInputRequestEvent | undefined {
+	const found = entries.find(hasPendingUserInput);
+	return found === undefined ? undefined : found.user_input;
+}
+
+/**
  * Turns running in the daemon, across every session. Empty when it is idle.
  *
  * With `waitSeconds`, this becomes a long poll: the daemon holds the request
@@ -622,19 +652,20 @@ export interface ActiveTurn {
  * fresh snapshot. A tab that did not start the turn has no stream of its own, so
  * this is how it learns the turn finished without asking every second.
  */
-export async function getChatActive(waitSeconds = 0, signal?: AbortSignal): Promise<ActiveTurn[]> {
+export async function getChatActive(waitSeconds = 0, signal?: AbortSignal): Promise<ChatActiveEntry[]> {
 	const query = waitSeconds > 0 ? `?wait_s=${Math.round(waitSeconds)}` : "";
 	const response = await fetch(`/chat/active${query}`, { headers: authHeaders(), signal });
 	if (!response.ok) throw await failure(response);
 	const body = (await response.json()) as unknown;
 	if (!Array.isArray(body)) return [];
-	return body.filter(
-		(item): item is ActiveTurn =>
-			typeof item === "object" &&
-			item !== null &&
-			typeof (item as ActiveTurn).session_id === "string" &&
-			typeof (item as ActiveTurn).turn_id === "string",
-	) as ActiveTurn[];
+	return body.filter((item): item is ChatActiveEntry => {
+		if (typeof item !== "object" || item === null) return false;
+		if ("user_input" in item) {
+			const request = (item as PendingUserInput).user_input;
+			return typeof request === "object" && request !== null && typeof request.request_id === "number";
+		}
+		return typeof (item as ActiveTurn).session_id === "string" && typeof (item as ActiveTurn).turn_id === "string";
+	});
 }
 
 /**

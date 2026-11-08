@@ -91,3 +91,31 @@ buy much less than it costs.
   reports `ask_user_question` allowed and `edit` blocked; the bridge round-trips
   a question and answer; and the WebUI server's SSE and endpoint paths are
   exercised through the same handlers the frontend uses.
+
+## Follow-up: the question that outlived its turn (issue #609)
+
+The first cut subscribed the ask broker *inside* a running turn: the
+subscription was taken when the turn started and dropped in `detachAll` when it
+settled, so a question was only ever announced on the stream of the turn that
+happened to be running. Two cases fell through. A turn that settles before the
+question (a background turn, a job reporting in) drops its listener first and
+the card never appears. A tab that reloads mid-turn never saw the event and has
+no history of it, so it renders nothing while the tool waits — the turn is a
+silent hang.
+
+The request is process state, so the announcement is too. One listener at
+`runWebuiMode` scope keeps `pendingUserInput`, `/chat/active` lists it as a
+`user_input` entry beside the turns, and the turn's own subscriber forwards the
+same object onto its SSE (both come from `userInputEvent`, so they cannot
+disagree). The answer needs no new route: `/chat/user-input` matches by request
+id, and the entry carries the session only as a hint for the tab.
+
+The entry is listed once, not per turn: the id is what the answer matches on, so
+repeating it on every running turn would only let a client render the same card
+twice. `PendingUserInput` carries `type: "user_input_request"` because the
+identical object is also an SSE frame.
+
+`/chat/active` is not only read by the turn watcher: the webui's background poll
+already long-polls it for turn starts and settles, and a reloaded tab now picks
+the question up from the same answer (`pendingUserInput` / `activeTurns` in
+`packages/webui/src/lib/api.ts`, consumed in `use-chat.ts`).
