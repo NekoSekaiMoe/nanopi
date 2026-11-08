@@ -652,13 +652,42 @@ export function startTerminal(cwd: string): TerminalSession {
 	return session;
 }
 
-/** One browser-driven OAuth login flow. */
+/**
+ * One browser-driven OAuth login flow.
+ *
+ * Every step of a login is either a notification the browser renders or a
+ * prompt it answers. `prompt` holds the prompt the flow is waiting on right
+ * now (absent while it waits on the browser callback or the provider), and
+ * `answer` releases it. `abort` cancels the whole flow: some providers wait on
+ * a local callback server or a device-code poll that no answer can end, and a
+ * flow nobody is looking at any more must not keep a port or a loop alive.
+ */
 interface OAuthFlowState {
 	id: string;
 	provider: string;
+	name: string;
 	status: "pending" | "done" | "error";
 	url: string | undefined;
+	deviceCode?: { userCode: string; verificationUri: string };
+	info: string | undefined;
 	error: string | undefined;
+	prompt?: {
+		type: "text" | "secret" | "manual_code" | "select";
+		message: string;
+		placeholder?: string;
+		options?: { id: string; label: string }[];
+	};
+	answer?: (value: string) => void;
+	abort: () => void;
+}
+
+/** A finished flow is dropped this long after the browser last read it. */
+const OAUTH_FLOW_RETENTION_MS = 60_000;
+
+/** The browser's answer to one login prompt, or "" for a blank field. */
+function loginAnswer(value: unknown): string {
+	if (value === undefined || value === null) return "";
+	return typeof value === "string" ? value : String(value);
 }
 
 /** Locate the built webui assets: source checkout first, then installed dist. */
@@ -1919,6 +1948,25 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			return modelId ? `${provider}/${modelId}` : provider;
 		}
 
+		/**
+		 * Providers whose only documented setup is a browser login (the subscription
+		 * providers: OpenAI/Codex, Anthropic Pro/Max, xAI, Kimi). The settings page
+		 * lists them next to the API-key accounts, because a fresh install has no
+		 * other way to reach them from the browser.
+		 */
+		async function oauthProviderInfos() {
+			const stored = new Set((await services.modelRuntime.listCredentials()).map((entry) => entry.providerId));
+			return services.modelRuntime
+				.getProviders()
+				.filter((provider) => provider.auth.oauth)
+				.map((provider) => ({
+					id: provider.id,
+					name: provider.name ?? provider.id,
+					login_label: provider.auth.oauth?.loginLabel ?? undefined,
+					logged_in: stored.has(provider.id),
+				}));
+		}
+
 		/** The /config payload: model defaults plus the provider-account catalog. */
 		async function configPayload(): Promise<Record<string, unknown>> {
 			const current = session.model;
@@ -1929,6 +1977,7 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				provider_accounts: await listAccounts(providerAccountsPath()),
 				provider_presets: PROVIDER_PRESETS,
 				provider_protocols: PROVIDER_PROTOCOLS,
+				oauth_providers: await oauthProviderInfos(),
 				// The `/models` allowlist the CLI applies. The settings page marks
 				// the rows outside it instead of implying they reach the picker.
 				enabled_models: services.settingsManager.getEnabledModels() ?? [],
@@ -2414,50 +2463,140 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 			json(res, 200, { settings: extraBridge.settings().settings, subsystems });
 			return;
 		}
+		// --- OAuth login (browser-driven) ---
+		// A login is a sequence of notify() events the browser renders and prompt()
+		// calls it answers, so the flow keeps the outstanding prompt on the flow
+		// state and /extra/oauth/prompt releases it. Providers differ in how much
+		// they ask for: xAI and Kimi only report a device code, OpenAI and Anthropic
+		// ask which login method to use and then either finish on the local
+		// callback or wait for a pasted code.
 		if (path === "/extra/oauth/providers" && req.method === "GET") {
-			const providers = services.modelRuntime
-				.getProviders()
-				.filter((provider) => provider.auth.oauth)
-				.map((provider) => ({ id: provider.id, name: provider.name ?? provider.id }));
-			json(res, 200, { providers });
+			json(res, 200, { providers: await oauthProviderInfos() });
 			return;
 		}
 		if (path === "/extra/oauth/login" && req.method === "POST") {
 			const body = await readBody(req);
-			const provider = typeof body.provider === "string" ? body.provider : "";
-			const known = services.modelRuntime.getProviders().find((candidate) => candidate.id === provider);
+			const providerId = typeof body.provider === "string" ? body.provider : "";
+			const known = services.modelRuntime.getProviders().find((candidate) => candidate.id === providerId);
 			if (!known?.auth.oauth) {
-				json(res, 400, { error: `no OAuth flow for provider "${provider}"` });
+				json(res, 400, { error: `no OAuth flow for provider "${providerId}"` });
 				return;
 			}
+			// One login per provider: two clicks would start a second callback server on
+			// the same port, and the first one wins the browser's redirect.
+			for (const pending of oauthFlows.values()) {
+				if (pending.provider === providerId && pending.status === "pending") {
+					json(res, 200, { flow_id: pending.id, reused: true });
+					return;
+				}
+			}
+			const controller = new AbortController();
 			const flow: OAuthFlowState = {
 				id: randomBytes(8).toString("hex"),
-				provider,
+				provider: providerId,
+				name: known.auth.oauth.name,
 				status: "pending",
 				url: undefined,
+				info: undefined,
 				error: undefined,
+				abort: () => controller.abort(new Error("login cancelled")),
 			};
 			oauthFlows.set(flow.id, flow);
+			const settle = (patch: Partial<OAuthFlowState>) => {
+				Object.assign(flow, patch);
+				flow.answer = undefined;
+				flow.prompt = undefined;
+				if (flow.status === "pending") return;
+				const timer = setTimeout(() => oauthFlows.delete(flow.id), OAUTH_FLOW_RETENTION_MS);
+				timer.unref?.();
+			};
 			void services.modelRuntime
-				.login(provider, "oauth", {
-					prompt: async () => {
-						throw new Error("this login step needs interactive input; run `nanopi /login` in the CLI instead");
-					},
+				.login(providerId, "oauth", {
+					signal: controller.signal,
+					prompt: (prompt) =>
+						new Promise<string>((resolve, reject) => {
+							if (prompt.signal?.aborted) {
+								reject(new Error("login prompt cancelled"));
+								return;
+							}
+							flow.prompt = {
+								type: prompt.type,
+								message: prompt.message,
+								...("placeholder" in prompt && prompt.placeholder ? { placeholder: prompt.placeholder } : {}),
+								...("options" in prompt
+									? { options: prompt.options.map((option) => ({ id: option.id, label: option.label })) }
+									: {}),
+							};
+							// A provider that races the prompt against its own callback aborts the
+							// prompt when the browser wins; the flow keeps running.
+							const onPromptAbort = () => reject(new Error("login prompt cancelled"));
+							prompt.signal?.addEventListener("abort", onPromptAbort, { once: true });
+							flow.answer = (value) => {
+								prompt.signal?.removeEventListener("abort", onPromptAbort);
+								flow.answer = undefined;
+								flow.prompt = undefined;
+								resolve(value);
+							};
+						}),
 					notify: (event) => {
-						if (event.type === "auth_url" && !flow.url) flow.url = event.url;
-						if (event.type === "device_code" && !flow.url) {
-							flow.url = `${event.verificationUri} (code: ${event.userCode})`;
+						if (event.type === "auth_url") {
+							flow.url = event.url;
+							if (event.instructions) flow.info = event.instructions;
 						}
+						if (event.type === "device_code") {
+							flow.deviceCode = { userCode: event.userCode, verificationUri: event.verificationUri };
+							flow.url = event.verificationUri;
+						}
+						if (event.type === "info") {
+							flow.info = event.message;
+							if (event.links?.[0]) flow.url = event.links[0].url;
+						}
+						if (event.type === "progress") flow.info = event.message;
 					},
 				})
-				.then(() => {
-					flow.status = "done";
-				})
-				.catch((error: Error) => {
-					flow.status = "error";
-					flow.error = error.message;
+				.then(() => settle({ status: "done", info: undefined }))
+				.catch((error: unknown) => {
+					if (controller.signal.aborted) {
+						settle({ status: "error", error: "login cancelled" });
+						return;
+					}
+					settle({ status: "error", error: error instanceof Error ? error.message : String(error) });
 				});
 			json(res, 200, { flow_id: flow.id });
+			return;
+		}
+		if (path === "/extra/oauth/prompt" && req.method === "POST") {
+			const body = await readBody(req);
+			const flow = oauthFlows.get(typeof body.flow === "string" ? body.flow : "");
+			if (!flow) {
+				json(res, 404, { error: "unknown login flow" });
+				return;
+			}
+			if (body.cancel === true) {
+				flow.abort();
+				json(res, 200, { accepted: true });
+				return;
+			}
+			const answer = flow.answer;
+			if (!answer) {
+				json(res, 200, { accepted: false, error: "the login is not waiting for an answer" });
+				return;
+			}
+			flow.answer = undefined;
+			flow.prompt = undefined;
+			answer(loginAnswer(body.value));
+			json(res, 200, { accepted: true });
+			return;
+		}
+		if (path === "/extra/oauth/cancel" && req.method === "POST") {
+			const body = await readBody(req);
+			const flow = oauthFlows.get(typeof body.flow === "string" ? body.flow : "");
+			if (!flow) {
+				json(res, 404, { error: "unknown login flow" });
+				return;
+			}
+			flow.abort();
+			json(res, 200, { cancelled: true });
 			return;
 		}
 		if (path === "/extra/oauth/status" && req.method === "GET") {
@@ -2467,8 +2606,40 @@ export async function runWebuiMode(runtime: AgentSessionRuntime, options: WebuiM
 				json(res, 404, { error: "unknown login flow" });
 				return;
 			}
-			json(res, 200, { status: flow.status, provider: flow.provider, url: flow.url, error: flow.error });
-			if (flow.status !== "pending") oauthFlows.delete(flowId);
+			// Without a wait the page would poll once a second through a device-code
+			// approval that can take a minute, so the flow parks the poll instead.
+			const waitSeconds = Math.min(Math.max(Number(url.searchParams.get("wait_s") ?? "0"), 0), 25);
+			if (waitSeconds > 0 && flow.status === "pending") {
+				await new Promise<void>((resolve) => setTimeout(resolve, waitSeconds * 1000));
+			}
+			if (res.writableEnded) return;
+			json(res, 200, {
+				status: flow.status,
+				provider: flow.provider,
+				name: flow.name,
+				url: flow.url,
+				device_code: flow.deviceCode,
+				info: flow.info,
+				error: flow.error,
+				prompt: flow.prompt,
+			});
+			return;
+		}
+		if (path === "/extra/oauth/logout" && req.method === "POST") {
+			const body = await readBody(req);
+			const providerId = typeof body.provider === "string" ? body.provider : "";
+			if (!services.modelRuntime.getProviders().some((candidate) => candidate.id === providerId)) {
+				json(res, 404, { error: `unknown provider "${providerId}"` });
+				return;
+			}
+			for (const flow of oauthFlows.values()) {
+				if (flow.provider === providerId) flow.abort();
+			}
+			await services.modelRuntime.logout(providerId);
+			// The provider keeps its request auth until something rebuilds it; the settings
+			// page would otherwise still show the models of the account just removed.
+			await services.modelRuntime.resyncCredential(providerId);
+			json(res, 200, { logged_out: true });
 			return;
 		}
 

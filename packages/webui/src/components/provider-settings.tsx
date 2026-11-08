@@ -1,20 +1,27 @@
 "use client";
 
-import { Check, KeyRound, Pencil, Plus, Trash2, X } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { Check, KeyRound, LogIn, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
 	type ConfigInfo,
 	type DiscoveredModelInfo,
 	type ModelInfo,
+	type OAuthFlowStatus,
+	type OAuthProviderInfo,
 	type ProviderAccountInfo,
 	type ProviderPresetInfo,
 	addAccountModels,
+	answerOAuthPrompt,
+	cancelOAuthLogin,
 	editAccountModel,
 	createAccount,
 	deleteAccount,
 	deleteAccountModel,
 	discoverProviderModels,
 	editAccount,
+	getOAuthStatus,
+	logoutOAuthProvider,
+	startOAuthLogin,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { t } from "@/lib/i18n";
@@ -190,7 +197,16 @@ export function ProviderSettings({
 
 			<h2 className="mt-6 text-[12px] font-medium text-muted-foreground">Providers</h2>
 			<div className="mt-2 space-y-2">
-				{accounts.length === 0 ? (
+				{(config?.oauth_providers ?? []).map((entry) => (
+					<OAuthProviderCard
+						key={entry.id}
+						entry={entry}
+						models={models}
+						busy={busy}
+						onRefresh={onRefresh}
+					/>
+				))}
+				{accounts.length === 0 && (config?.oauth_providers ?? []).length === 0 ? (
 					<div className="rounded-xl border border-dashed border-border px-4 py-10 text-center">
 						<p className="text-[12.5px] text-muted-foreground">{t('还没有 Provider')}</p>
 						<p className="mt-1 text-[11px] text-muted-foreground/70">
@@ -217,6 +233,328 @@ export function ProviderSettings({
 					))
 				)}
 			</div>
+		</div>
+	);
+}
+
+/**
+ * How long one /extra/oauth/status poll parks. The server holds the request
+ * until the flow moves or the wait expires, so this is the page's poll interval.
+ */
+const OAUTH_POLL_SECONDS = 20;
+
+/** Cap on the local poll loop: a login that never settles must not poll forever. */
+const OAUTH_POLL_LIMIT_MS = 15 * 60_000;
+
+/**
+ * One subscription provider, signed in from the browser.
+ *
+ * A login runs on the daemon, not in the page: the browser is only one of the
+ * two things the flow talks to. The provider may open its own callback server
+ * (OpenAI, Anthropic) so the token never passes through the page, and it may
+ * ask a question only the page can answer (which login method, or the pasted
+ * authorization code). `/extra/oauth/status` carries both halves, so the card
+ * renders whichever step the flow is on and posts the answer back.
+ */
+function OAuthProviderCard({
+	entry,
+	models,
+	busy,
+	onRefresh,
+}: {
+	entry: OAuthProviderInfo;
+	models: ModelInfo[];
+	busy: boolean;
+	onRefresh: () => Promise<void>;
+}) {
+	const [flow, setFlow] = useState<string | null>(null);
+	const [status, setStatus] = useState<OAuthFlowStatus | null>(null);
+	const [pending, setPending] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+	const [draft, setDraft] = useState("");
+	const [confirming, setConfirming] = useState(false);
+	// The poll loop reads the flow id through a ref: the state value captured
+	// when the effect ran would keep polling a flow the user already cancelled.
+	const flowRef = useRef<string | null>(null);
+
+	const usable = models.filter((model) => model.provider_type === entry.id && model.available);
+
+	useEffect(() => {
+		flowRef.current = flow;
+	}, [flow]);
+
+	useEffect(() => {
+		if (!flow) return;
+		const startedAt = Date.now();
+		let cancelled = false;
+		let timer: ReturnType<typeof setTimeout> | undefined;
+		const poll = async () => {
+			if (cancelled) return;
+			let next: OAuthFlowStatus;
+			try {
+				next = await getOAuthStatus(flow, OAUTH_POLL_SECONDS);
+			} catch (cause) {
+				// A failed poll is not a failed login: the flow may still be alive on
+				// the daemon, so retry with a backoff until the cap instead of dropping it.
+				if (cancelled) return;
+				setError(cause instanceof Error ? cause.message : String(cause));
+				if (Date.now() - startedAt < OAUTH_POLL_LIMIT_MS) timer = setTimeout(() => void poll(), 2_000);
+				return;
+			}
+			if (cancelled) return;
+			setStatus(next);
+			if (next.status !== "pending") {
+				// A credential was stored (or the flow failed): the provider list and
+				// the model picker both changed underneath the settings page.
+				setFlow(null);
+				await onRefresh().catch(() => undefined);
+				return;
+			}
+			if (Date.now() - startedAt < OAUTH_POLL_LIMIT_MS) timer = setTimeout(() => void poll(), 0);
+		};
+		void poll();
+		return () => {
+			cancelled = true;
+			if (timer) clearTimeout(timer);
+		};
+	}, [flow, onRefresh]);
+
+	async function start() {
+		setPending(true);
+		setError(null);
+		setStatus(null);
+		setDraft("");
+		try {
+			const result = await startOAuthLogin(entry.id);
+			setFlow(result.flow_id);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setPending(false);
+		}
+	}
+
+	async function answer(value: string) {
+		const active = flowRef.current;
+		if (!active) return;
+		setPending(true);
+		setError(null);
+		try {
+			await answerOAuthPrompt(active, value);
+			setDraft("");
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setPending(false);
+		}
+	}
+
+	async function cancel() {
+		const active = flowRef.current;
+		setFlow(null);
+		setStatus(null);
+		setError(null);
+		if (!active) return;
+		await cancelOAuthLogin(active).catch(() => undefined);
+	}
+
+	async function logout() {
+		setPending(true);
+		setError(null);
+		try {
+			await logoutOAuthProvider(entry.id);
+			setConfirming(false);
+			await onRefresh();
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setPending(false);
+		}
+	}
+
+	const running = flow !== null;
+	const prompt = running ? status?.prompt : undefined;
+	const device = running ? status?.device_code : undefined;
+
+	return (
+		<div className="rounded-xl border border-border p-3">
+			<div className="flex items-start gap-3">
+				<span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+					<LogIn className="size-4" strokeWidth={1.75} />
+				</span>
+				<div className="min-w-0 flex-1">
+					<div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+						<span className="text-[13px] font-medium text-foreground">{entry.name}</span>
+						<span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+							OAuth
+						</span>
+						{entry.logged_in ? (
+							<span className="inline-flex items-center gap-0.5 text-[10px] text-success">
+								<Check className="size-3" />
+								{t("已登录")}
+							</span>
+						) : (
+							<span className="text-[10px] text-muted-foreground">{t("未登录")}</span>
+						)}
+					</div>
+					<p className="mt-0.5 text-[10.5px] text-muted-foreground">
+						{t("在浏览器完成登录，token 存在本机。")}
+					</p>
+					{usable.length > 0 ? (
+						<p className="mt-1 truncate font-mono text-[10.5px] text-muted-foreground">
+							{usable.length} {t("个模型")}
+						</p>
+					) : null}
+				</div>
+				<div className="flex shrink-0 items-center gap-1">
+					{confirming ? null : (
+						<button
+							type="button"
+							onClick={() => void start()}
+							disabled={busy || pending || running}
+							className="h-7 max-w-[10rem] truncate rounded-lg bg-foreground px-2.5 text-[11.5px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+						>
+							{entry.login_label ?? t("登录")}
+						</button>
+					)}
+					{entry.logged_in ? (
+						<button
+							type="button"
+							onClick={() => setConfirming(true)}
+							disabled={busy || pending || running}
+							className="grid size-7 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-40"
+							aria-label={t("退出登录")}
+							title={t("退出登录")}
+						>
+							<Trash2 className="size-3.5" />
+						</button>
+					) : null}
+				</div>
+			</div>
+
+			{confirming ? (
+				<div className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-2.5 py-2">
+					<span className="text-[11.5px] text-destructive">
+						{t("退出")} {entry.name} {t("登录？")}
+					</span>
+					<span className="flex shrink-0 items-center gap-1">
+						<button
+							type="button"
+							onClick={() => setConfirming(false)}
+							className="h-7 rounded-md px-2 text-[11.5px] text-muted-foreground hover:bg-overlay-hover hover:text-foreground"
+						>
+							{t("取消")}
+						</button>
+						<button
+							type="button"
+							onClick={() => void logout()}
+							disabled={pending}
+							className="h-7 rounded-md bg-destructive px-2 text-[11.5px] font-medium text-white disabled:opacity-50"
+						>
+							{t("退出登录")}
+						</button>
+					</span>
+				</div>
+			) : null}
+
+			{running ? (
+				<div className="mt-3 space-y-2 rounded-lg border border-border-soft bg-muted/30 p-2.5">
+					{device ? (
+						<div className="space-y-1">
+							<p className="text-[11.5px] text-foreground">{t("打开下面的地址并输入代码：")}</p>
+							<a
+								href={device.verificationUri}
+								target="_blank"
+								rel="noreferrer"
+								className="block truncate font-mono text-[11px] text-brand underline underline-offset-2"
+							>
+								{device.verificationUri}
+							</a>
+							<div className="flex items-center gap-2">
+								<code className="rounded border border-border bg-background px-1.5 py-0.5 font-mono text-[12px] tracking-[0.12em]">
+									{device.userCode}
+								</code>
+								<button
+									type="button"
+									onClick={() => void navigator.clipboard?.writeText(device.userCode)}
+									className="text-[11px] text-muted-foreground hover:text-foreground"
+								>
+									{t("复制")}
+								</button>
+							</div>
+						</div>
+					) : null}
+					{status?.url && !device ? (
+						<a
+							href={status.url}
+							target="_blank"
+							rel="noreferrer"
+							className="inline-flex h-7 items-center rounded-lg border border-border px-2.5 text-[11.5px] text-foreground transition-colors hover:bg-overlay-hover"
+						>
+							{t("打开授权页面")}
+						</a>
+					) : null}
+					{status?.info ? <p className="text-[11px] text-muted-foreground">{status.info}</p> : null}
+					{prompt ? (
+						<div className="space-y-1.5 border-t border-border-soft pt-2">
+							<p className="text-[11.5px] text-foreground">{prompt.message}</p>
+							{prompt.type === "select" ? (
+								<div className="flex flex-wrap gap-1.5">
+									{(prompt.options ?? []).map((option) => (
+										<button
+											key={option.id}
+											type="button"
+											disabled={pending}
+											onClick={() => void answer(option.id)}
+											className="h-7 rounded-lg border border-border px-2.5 text-[11.5px] text-foreground transition-colors hover:bg-overlay-hover disabled:opacity-40"
+										>
+											{option.label}
+										</button>
+									))}
+								</div>
+							) : (
+								<form
+									onSubmit={(event) => {
+										event.preventDefault();
+										void answer(draft);
+									}}
+									className="flex items-center gap-1.5"
+								>
+									<input
+										type={prompt.type === "secret" ? "password" : "text"}
+										value={draft}
+										onChange={(event) => setDraft(event.target.value)}
+										placeholder={prompt.placeholder}
+										autoComplete="off"
+										className="h-8 w-full rounded-lg border border-border bg-background px-2 text-[12px] text-foreground outline-none placeholder:text-muted-foreground focus:border-foreground/30"
+									/>
+									<button
+										type="submit"
+										disabled={pending}
+										className="h-8 shrink-0 rounded-lg bg-foreground px-2.5 text-[11.5px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+									>
+										{t("提交")}
+									</button>
+								</form>
+							)}
+						</div>
+					) : (
+						<p className="text-[11px] text-muted-foreground">{t("等待浏览器完成…")}</p>
+					)}
+					<button
+						type="button"
+						onClick={() => void cancel()}
+						className="text-[11px] text-muted-foreground hover:text-foreground"
+					>
+						{t("取消")}
+					</button>
+				</div>
+			) : null}
+
+			{status?.status === "error" && !running ? (
+				<p className="mt-2 text-[11.5px] text-destructive">{status.error}</p>
+			) : null}
+			{error ? <p className="mt-2 text-[11.5px] text-destructive">{error}</p> : null}
 		</div>
 	);
 }
