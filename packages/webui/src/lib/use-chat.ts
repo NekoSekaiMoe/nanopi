@@ -13,9 +13,11 @@ import {
 	type UserInputRequestEvent,
 	type UserInputResponse,
 	ApiError,
+	activeTurns,
 	createSession,
 	getChatActive,
 	getSession,
+	pendingUserInput,
 	postChatUserInput,
 	respondPermission,
 	setApprovalMode as putApprovalMode,
@@ -750,6 +752,11 @@ export function useChat({
 	 * long-polls the daemon, which answers as soon as a turn starts or settles, and a
 	 * session reload is what turns a settled turn into what the user sees. While a
 	 * local turn streams, its own SSE handler already updates the view.
+	 *
+	 * The same poll carries the structured-input question nobody is streaming (issue
+	 * #609): a question raised by a background turn, or raised before this tab
+	 * reloaded, arrives with no `user_input_request` event to place it, and would
+	 * otherwise hang the turn with no card on screen.
 	 */
 	const backgroundWatchRef = useRef<{ busy: boolean; generation: number }>({ busy: false, generation: -1 });
 	useEffect(() => {
@@ -762,11 +769,12 @@ export function useChat({
 		const controller = new AbortController();
 		const tick = () => {
 			void getChatActive(BACKGROUND_WAIT_SECONDS, controller.signal)
-				.then((turns) => {
+				.then((entries) => {
 					if (cancelled) return;
 					// A turn in another session is not this tab's business: the daemon runs
 					// sessions in parallel, so only what happens *here* may reload the view.
 					const mine = sessionIdRef.current;
+					const turns = activeTurns(entries);
 					const active = mine !== null && turns.some((turn) => sessionIdMatches(turn.session_id, mine));
 					const previous = backgroundWatchRef.current;
 					if (previous.busy && !active && previous.generation === generationRef.current) {
@@ -778,6 +786,14 @@ export function useChat({
 						busy: active,
 						generation: active ? generationRef.current : backgroundWatchRef.current.generation,
 					};
+					const asked = pendingUserInput(entries);
+					const here = asked && (!asked.session_id || mine === null || sessionIdMatches(asked.session_id, mine));
+					setUserInput((current) => {
+						if (!here || !asked) return current?.request_id === undefined ? current : null;
+						// The same request polled twice must not restart the card (it would drop
+						// a half-typed answer); a newer one replaces it.
+						return current?.request_id === asked.request_id ? current : asked;
+					});
 				})
 				.catch(() => {
 					/* a watch that drops is not worth a banner; the next one re-establishes it */

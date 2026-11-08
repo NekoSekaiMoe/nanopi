@@ -16,6 +16,7 @@ import {
 	type ModelInfo,
 	type ProjectState,
 	type SessionMetaWithProject,
+	activeTurns,
 	changeDir,
 	deleteSession,
 	getChatActive,
@@ -483,7 +484,7 @@ export function AppClient() {
 	const [stoppingAll, setStoppingAll] = useState(false);
 	const refreshRunning = useCallback(() => {
 		void getChatActive()
-			.then((turns) => setRunningSessions(turns.map((turn) => turn.session_id)))
+			.then((entries) => setRunningSessions(activeTurns(entries).map((turn) => turn.session_id)))
 			.catch(() => {});
 	}, []);
 	useEffect(() => {
