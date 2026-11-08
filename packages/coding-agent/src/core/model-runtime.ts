@@ -1006,6 +1006,24 @@ export class ModelRuntime implements Models {
 	}
 
 	/**
+	 * Rebuild one provider's request auth and model availability from the credential
+	 * that is stored right now.
+	 *
+	 * `logout` already does this for its own callers; the webui calls this after
+	 * dropping a credential so the settings page stops offering the models of the
+	 * account just removed instead of waiting for the next session.
+	 */
+	async resyncCredential(providerId: string, options: AuthOperationOptions = {}): Promise<void> {
+		const signal = operationSignal(options.signal);
+		try {
+			await this.synchronizeCredentialState(providerId, "logout", undefined, signal);
+		} catch (error) {
+			signal.throwIfAborted();
+			throw error;
+		}
+	}
+
+	/**
 	 * Register a virtual model under `definition.provider`, which may also list physical models or
 	 * several virtual models. Re-registering the same provider and id replaces the virtual model.
 	 * Throws when the id belongs to a physical model of that provider.

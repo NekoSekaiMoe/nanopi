@@ -255,6 +255,17 @@ const EN: Record<string, string> = {
 	"缓存": "cache",
 	"tokens": "tokens",
 	"本轮": "Turn",
+	"已登录": "Signed in",
+	"未登录": "Not signed in",
+	"登录": "Sign in",
+	"退出登录": "Sign out",
+	"退出": "Sign out of",
+	"登录？": " ?",
+	"在浏览器完成登录，token 存在本机。": "Sign in through the browser; the token stays on this machine.",
+	"打开下面的地址并输入代码：": "Open this address in a browser and enter the code:",
+	"打开授权页面": "Open the authorization page",
+	"等待浏览器完成…": "Waiting for the browser…",
+	"个模型": "models",
 	"上下文压缩过，会话累计无法从记录重建":
 		"The context was compacted, so the session total cannot be rebuilt from the transcript",
 };

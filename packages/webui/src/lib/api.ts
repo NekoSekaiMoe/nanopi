@@ -108,6 +108,77 @@ export async function getModels(): Promise<ModelInfo[]> {
 	return body as ModelInfo[];
 }
 
+/** One provider whose only setup is a browser login (a subscription provider). */
+export interface OAuthProviderInfo {
+	id: string;
+	name: string;
+	/** The provider's own wording for its sign-in button, e.g. "Sign in with ChatGPT". */
+	login_label?: string;
+	/** A credential is stored on disk, so the provider already works. */
+	logged_in: boolean;
+}
+
+/** A login step the provider is waiting on the browser to answer. */
+export interface OAuthPromptInfo {
+	type: "text" | "secret" | "manual_code" | "select";
+	message: string;
+	placeholder?: string;
+	options?: { id: string; label: string }[];
+}
+
+export interface OAuthFlowStatus {
+	status: "pending" | "done" | "error";
+	provider: string;
+	name: string;
+	/** The authorization URL, or the device-code verification page. */
+	url?: string;
+	device_code?: { userCode: string; verificationUri: string };
+	/** Instructions or progress text the provider sent along the way. */
+	info?: string;
+	error?: string;
+	prompt?: OAuthPromptInfo;
+}
+
+function postJson<T>(path: string, body: unknown): Promise<T> {
+	return fetch(path, {
+		method: "POST",
+		headers: { "Content-Type": "application/json", ...authHeaders() },
+		body: JSON.stringify(body),
+	}).then((response) => readJson<T>(response));
+}
+
+/** Start (or rejoin) the browser login for one provider. */
+export function startOAuthLogin(provider: string): Promise<{ flow_id: string }> {
+	return postJson<{ flow_id: string }>("/extra/oauth/login", { provider });
+}
+
+/**
+ * Current state of one login flow. `waitSeconds` parks the request until the flow
+ * moves or the wait expires, so the page does not poll a device-code approval
+ * every second.
+ */
+export async function getOAuthStatus(flow: string, waitSeconds = 0): Promise<OAuthFlowStatus> {
+	const response = await fetch(
+		`/extra/oauth/status?flow=${encodeURIComponent(flow)}&wait_s=${waitSeconds}`,
+		{ headers: authHeaders() },
+	);
+	return readJson<OAuthFlowStatus>(response);
+}
+
+/** Answer the prompt the flow is waiting on; `value` is the option id for a select. */
+export async function answerOAuthPrompt(flow: string, value: string): Promise<{ accepted: boolean }> {
+	return postJson<{ accepted: boolean }>("/extra/oauth/prompt", { flow, value });
+}
+
+/** Cancel the flow, including the callback server or device poll behind it. */
+export async function cancelOAuthLogin(flow: string): Promise<{ cancelled: boolean }> {
+	return postJson<{ cancelled: boolean }>("/extra/oauth/cancel", { flow });
+}
+
+export async function logoutOAuthProvider(provider: string): Promise<{ logged_out: boolean }> {
+	return postJson<{ logged_out: boolean }>("/extra/oauth/logout", { provider });
+}
+
 export interface ProjectInfo {
 	hash: string;
 	name: string;
@@ -824,6 +895,8 @@ export interface ConfigInfo {
 	reasoning_effort_levels?: string[];
 	/** Patterns from the CLI's `enabledModels` setting; empty means every model is offered. */
 	enabled_models?: string[];
+	/** Providers set up through a browser login rather than an API key. */
+	oauth_providers?: OAuthProviderInfo[];
 }
 
 export async function getConfig(): Promise<ConfigInfo> {
