@@ -50,7 +50,7 @@
 	},
 	"devDependencies": {
 		"@anthropic-ai/sandbox-runtime": "0.0.81",
-		"@biomejs/biome": "2.6.5",
+		"@biomejs/biome": "2.6.6",
 		"@types/node": "24.19.2",
 		"esbuild": "0.28.2",
 		"husky": "9.1.7",
