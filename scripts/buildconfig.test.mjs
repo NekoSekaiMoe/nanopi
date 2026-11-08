@@ -671,3 +671,18 @@ describe("real flavor grammar sets", () => {
 		strictEqual(bundled.grammarSets.curated.excluded.length, 6);
 	});
 });
+
+describe("real provider sets", () => {
+	const config = loadBuildConfig(join(import.meta.dirname, ".."));
+
+	// Issue #597: `moonshotai-cn` is `moonshotai` behind a China base URL and the
+	// generator emits one catalog, so a set that still named the mirror failed
+	// `NANOPI_BUILD_FLAVOR=full pnpm run generate:models` with "names providers
+	// without a built-in catalog". The catalog is the single record now.
+	it("never names the moonshotai-cn mirror", () => {
+		for (const [name, providerSet] of Object.entries(config.providerSets)) {
+			strictEqual(providerSet.providers.includes("moonshotai-cn"), false, `provider set "${name}" names moonshotai-cn`);
+		}
+		strictEqual(resolveFlavorProviders(config, "full").includes("moonshotai"), true);
+	});
+});
