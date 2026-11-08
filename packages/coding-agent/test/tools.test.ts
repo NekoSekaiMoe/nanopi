@@ -40,10 +40,14 @@ const lsTool = createLsTool(process.cwd());
 
 // fd only applies a `.gitignore` outside a git repo with `--no-require-git` (fd 9.0+); 8.x
 // ignores the file there, so the .gitignore expectations below need that binary.
-const fdBinary = spawnSync("fd", ["--help"], { encoding: "utf8" }).error ? "fdfind" : "fd";
+const fdHelp = spawnSync("fd", ["--help"], { encoding: "utf8" });
+const fdBinary = fdHelp.error ? "fdfind" : "fd";
 const fdSupportsNoRequireGit = `${spawnSync(fdBinary, ["--help"], { encoding: "utf8" }).stdout ?? ""}`.includes(
 	"--no-require-git",
 );
+// The find tool falls back to an in-process walker when fd is absent; the glob-parse
+// error below is produced by fd itself, so it cannot be asserted without that binary.
+const fdAvailable = !spawnSync(fdBinary, ["--version"], { encoding: "utf8" }).error;
 // A root process bypasses file permission bits, so a chmod alone never produces EACCES.
 const canTriggerPermissionErrors = !(typeof process.getuid === "function" && process.getuid() === 0);
 
@@ -1132,7 +1136,7 @@ describe("Coding Agent Tools", () => {
 			expect(output).not.toContain("ignored.txt");
 		});
 
-		it("should surface fd glob parse errors", async () => {
+		it.skipIf(!fdAvailable)("should surface fd glob parse errors", async () => {
 			await expect(
 				findTool.execute("test-call-15", {
 					pattern: "[",
