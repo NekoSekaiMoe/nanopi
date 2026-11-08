@@ -49,39 +49,18 @@ jobs:
       # 带上 shellcheck 是因为 `run:` 块里同样的错只会在运行时炸：把两个参数塞进一个
       # 变量再展开（`GH_REPO_FLAG="-R org/repo"`）平时能跑，仓库名带空格或空值就散架。
       # 打开这一步时它报了 9 条既有问题，已在本步骤落地时一并改掉，没有留 ignore。
-      # pyflakes 关掉：仓库里没有 Python 步骤，装了也只会拖长装依赖的时间。
+      # pyflakes 那一路本来就用不上（仓库里没有 Python 步骤），现在壳检查由脚本自己做，
+      # 也不再需要它。
       #
-      # 两个二进制都来自 GitHub Releases，不经 npm，Renovate 管不到，所以版本与
-      # sha256 一起钉死在这里。升级时成对改：版本号、URL 里的版本号、校验和。
+      # 两个检查器都是 npm 装进来的 wasm（`actionlint`、`shellcheck-wasm`），逻辑在
+      # scripts/lint-workflows.mjs。原来这一步是 `curl` GitHub Releases 下的两个静态
+      # 二进制，#607 里 CDN 连续回 504、重试耗尽后整条必选检查变红——而工作流一个字
+      # 都没错。下载不再发生时，「workflow 写坏了」的失败信号不再和「GitHub 发抖」的
+      # 噪声混在一起。
       #
-      # 放在 checkout 之后、装依赖之前：工作流写坏了应该 10 秒内红，而不是等一轮
-      # 完整的 build。
-      - name: Lint workflows
-        env:
-          ACTIONLINT_VERSION: 1.7.12
-          ACTIONLINT_SHA256: 8aca8db96f1b94770f1b0d72b6dddcb1ebb8123cb3712530b08cc387b349a3d8
-          SHELLCHECK_VERSION: 0.11.0
-          SHELLCHECK_SHA256: b7af85e41cc99489dcc21d66c6d5f3685138f06d34651e6d34b42ec6d54fe6f6
-        run: |
-          set -euo pipefail
-          tools="${RUNNER_TEMP}/workflow-lint"
-          mkdir -p "${tools}"
-          fetch() {
-            curl -fsSL --retry 3 -o "${tools}/$1" "$2"
-            echo "$3  ${tools}/$1" | sha256sum -c -
-          }
-          fetch actionlint.tar.gz \
-            "https://github.com/rhysd/actionlint/releases/download/v${ACTIONLINT_VERSION}/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz" \
-            "${ACTIONLINT_SHA256}"
-          fetch shellcheck.tar.gz \
-            "https://github.com/koalaman/shellcheck/releases/download/v${SHELLCHECK_VERSION}/shellcheck-v${SHELLCHECK_VERSION}.linux.x86_64.tar.gz" \
-            "${SHELLCHECK_SHA256}"
-          tar -xzf "${tools}/actionlint.tar.gz" -C "${tools}" actionlint
-          tar -xzf "${tools}/shellcheck.tar.gz" -C "${tools}"
-          "${tools}/actionlint" \
-            -shellcheck "${tools}/shellcheck-v${SHELLCHECK_VERSION}/shellcheck" \
-            -pyflakes=
-
+      # 必须在 `pnpm install` 之后：脚本 import 的是 node_modules 里的两个包。这是这条
+      # 门禁唯一变慢的地方（原来几百毫秒，现在要先装完依赖），换来的是「装依赖能过、
+      # 这个步骤就能过」，与外部网络无关。
       - name: Setup pnpm
         run: npm install -g pnpm@12.15.0
 
@@ -98,6 +77,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile --ignore-scripts
+
+      # 门禁本体：工作流写坏了应该在这一步红，而不是等一轮完整的 build。
+      - name: Lint workflows
+        run: node scripts/lint-workflows.mjs
 
       - name: Build
         run: pnpm run build
