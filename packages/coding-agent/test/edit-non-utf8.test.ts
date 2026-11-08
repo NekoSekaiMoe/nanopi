@@ -42,9 +42,7 @@ describe("edit tool and non-UTF-8 files", () => {
 		const original = Buffer.from("héllo wörld\n", "utf16le");
 		await writeFile(path, original);
 
-		const message = await editText(dir, "utf16.txt", "wörld", "there");
-
-		expect(message).toContain("not valid UTF-8");
+		await expect(editText(dir, "utf16.txt", "wörld", "there")).rejects.toThrow(/not valid UTF-8/);
 		expect((await readFile(path)).equals(original)).toBe(true);
 	});
 
@@ -55,9 +53,7 @@ describe("edit tool and non-UTF-8 files", () => {
 		const original = Buffer.from([0x63, 0x61, 0x66, 0xe9, 0x0a]);
 		await writeFile(path, original);
 
-		const message = await editText(dir, "legacy.txt", "cafe", "tea");
-
-		expect(message).toContain("not valid UTF-8");
+		await expect(editText(dir, "legacy.txt", "cafe", "tea")).rejects.toThrow(/not valid UTF-8/);
 		expect((await readFile(path)).equals(original)).toBe(true);
 	});
 

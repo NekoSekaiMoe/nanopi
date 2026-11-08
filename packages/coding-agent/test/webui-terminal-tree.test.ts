@@ -20,9 +20,18 @@ function waitFor(predicate: () => boolean, timeoutMs: number): Promise<boolean> 
 function isAlive(pid: number): boolean {
 	try {
 		process.kill(pid, 0);
-		return true;
 	} catch {
 		return false;
+	}
+	// A SIGKILLed child reparented to a PID 1 that never reaps stays as a zombie: kill(pid, 0)
+	// still succeeds, but the process is gone. Containers whose PID 1 is not an init (for
+	// example the NPC runtime) leave these behind, so read the state instead of trusting kill.
+	try {
+		const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+		const fields = stat.slice(stat.lastIndexOf(")") + 2).split(" ");
+		return fields[0] !== "Z";
+	} catch {
+		return true;
 	}
 }
 
