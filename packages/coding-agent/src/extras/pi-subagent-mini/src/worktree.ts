@@ -30,7 +30,7 @@ const CHECK_TIMEOUT_MS = 600_000;
 /** Tail of the check output kept in the report; the failing assertion is at the end. */
 const CHECK_OUTPUT_CHARS = 2000;
 /** Uncommitted-path lines kept from `git status --porcelain`; the rest is noise. */
-const DIRTY_LIST_CHARS = 20;
+const DIRTY_LIST_LINES = 20;
 
 /** Run `git` in `cwd`. Returns trimmed stdout; throws with stderr on a non-zero exit. */
 function git(cwd: string, args: string[]): string {
@@ -53,7 +53,11 @@ function changedFiles(top: string, branch: string): string[] {
 }
 
 /**
- * The repository's own gate, run in the main checkout before the branch lands.
+ * The repository's own gate, run in the job's worktree before its branch lands.
+ *
+ * `top` is the worktree, not the main checkout: the question is whether the child's
+ * code passes, and the main checkout by construction holds only commits that already
+ * merged. Running it in main would pass the gate for every branch, including a broken one.
  * `skipped` is not `passed`: a directory without `package.json` has no gate to run,
  * and inventing one would make isolation unusable outside a JS repository.
  */
@@ -101,19 +105,33 @@ export function mergeWorktree(worktree: Worktree, baseCwd: string): Worktree {
 		return refuse(error instanceof Error ? error.message : String(error));
 	}
 	if (dirty) {
-		const head = dirty.split("\n").slice(0, DIRTY_LIST_CHARS).join("\n");
+		const head = dirty.split("\n").slice(0, DIRTY_LIST_LINES).join("\n");
 		return refuse(`the main checkout has uncommitted changes, so a merge would mix them in:\n${head}`);
 	}
-	const check = runCheck(top);
+	const check = runCheck(worktree.path);
 	if (check.status === "failed") {
-		return refuse(`the repository's check command failed on this tree:\n${check.output}`);
+		return refuse(`the repository's check command failed on the job's worktree:\n${check.output}`);
 	}
 	try {
 		git(top, ["merge", "--no-edit", worktree.branch]);
 	} catch (error) {
-		// A conflict leaves the checkout mid-merge: report it and let the parent abort,
-		// instead of finishing a merge nobody asked for.
-		return refuse(error instanceof Error ? error.message : String(error));
+		// A conflict leaves the checkout in `.git/MERGE_HEAD` with conflict markers in the
+		// files, which every later git command would read as "a merge is in progress".
+		// Abort it here rather than handing the parent a tree it has to repair by hand;
+		// the branch is untouched by `merge --abort`, so the work still exists.
+		let aborted = false;
+		try {
+			git(top, ["merge", "--abort"]);
+			aborted = true;
+		} catch {
+			// Abort is best effort: the merge error is the reason worth reporting, and a
+			// failed abort must not replace it.
+		}
+		const reason = error instanceof Error ? error.message : String(error);
+		const recovery = aborted
+			? "The aborted merge left the main checkout as it was."
+			: "The main checkout may still be mid-merge; run `git merge --abort` there.";
+		return refuse(`${reason}\n${recovery}`);
 	}
 	worktree.merged = true;
 	const gate = check.status === "skipped" ? "check skipped: no package.json" : "check passed";
