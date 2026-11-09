@@ -84,7 +84,7 @@
 		"https-proxy-agent": "9.1.0",
 		"openai": "7.53.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.4.5",
+		"typebox": "1.4.6",
 		"@aws/bedrock-token-generator": "1.1.0"
 	},
 	"keywords": [
