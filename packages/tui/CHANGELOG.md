@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- File completion stops spawning `fd` once the request was aborted: the abort can land while the first listing is awaited, and the recursive walk that follows it started a process the cancellation could no longer reach (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
+
 ## [20261107]
 
 ### Fixed

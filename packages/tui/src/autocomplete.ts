@@ -782,6 +782,11 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			const fdBaseDir = scopedQuery?.baseDir ?? this.basePath;
 			const fdQuery = scopedQuery?.query ?? query;
 			const baseDirEntries = await this.getBaseDirSuggestions(fdBaseDir, fdQuery, options.signal);
+			// The abort can land while the listing above is awaited, and the spawn below
+			// has no way to know it was already cancelled.
+			if (options.signal.aborted) {
+				return [];
+			}
 			const recursiveEntries = await walkDirectoryWithFd(fdBaseDir, this.fdPath, fdQuery, 100, options.signal);
 			const seenPaths = new Set(baseDirEntries.map((entry) => entry.path));
 			const entries = [

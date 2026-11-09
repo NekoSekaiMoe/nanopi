@@ -1,4 +1,5 @@
-import type { AssistantMessage, ImageContent } from "@nanopi/pi-ai";
+import type { AgentMessage } from "@nanopi/pi-agent-core";
+import type { AssistantMessage, ImageContent, ToolResultMessage } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SessionShutdownEvent } from "../src/index.ts";
 import { runPrintMode } from "../src/modes/print-mode.ts";
@@ -13,7 +14,7 @@ type FakeExtensionRunner = {
 type FakeSession = {
 	sessionManager: { getHeader: () => object | undefined };
 	agent: { waitForIdle: () => Promise<void>; subscribe: ReturnType<typeof vi.fn> };
-	state: { messages: AssistantMessage[] };
+	state: { messages: AgentMessage[] };
 	moduleRegistry: FakeExtensionRunner;
 	bindModules: ReturnType<typeof vi.fn>;
 	subscribe: ReturnType<typeof vi.fn>;
@@ -55,13 +56,25 @@ function createAssistantMessage(options?: {
 	};
 }
 
-function createRuntimeHost(assistantMessage: AssistantMessage): FakeRuntimeHost {
+/** A tool result, which is how a turn that an extension cut short ends. */
+function createToolResultMessage(): ToolResultMessage {
+	return {
+		role: "toolResult",
+		toolCallId: "call-1",
+		toolName: "bash",
+		content: [{ type: "text", text: "ok" }],
+		isError: false,
+		timestamp: Date.now(),
+	};
+}
+
+function createRuntimeHost(assistantMessage: AssistantMessage, trailing: AgentMessage[] = []): FakeRuntimeHost {
 	const moduleRegistry: FakeExtensionRunner = {
 		hasHandlers: (eventType: string) => eventType === "session_shutdown",
 		emit: vi.fn(async () => {}),
 	};
 
-	const state = { messages: [assistantMessage] };
+	const state = { messages: [assistantMessage, ...trailing] };
 
 	const session: FakeSession = {
 		sessionManager: { getHeader: () => undefined },
@@ -155,6 +168,35 @@ describe("runPrintMode", () => {
 
 		expect(exitCode).toBe(1);
 		expect(errorSpy).toHaveBeenCalledWith("invalid api key");
+	});
+
+	// nanopi#613: a turn cut short after a tool call ends on a tool result, and the
+	// exit code used to read that tail instead of the failed answer behind it.
+	it("returns non-zero when the failed answer is followed by a tool result", async () => {
+		const runtimeHost = createRuntimeHost(
+			createAssistantMessage({ stopReason: "error", errorMessage: "provider failure" }),
+			[createToolResultMessage()],
+		);
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+		for (const mode of ["text", "json"] as const) {
+			const exitCode = await runPrintMode(runtimeHost as unknown as Parameters<typeof runPrintMode>[0], {
+				mode,
+				messages: ["hello"],
+			});
+			expect(exitCode, mode).toBe(1);
+		}
+		expect(errorSpy).toHaveBeenCalledWith("provider failure");
+	});
+
+	it("prints the answer when a tool result trails it", async () => {
+		const runtimeHost = createRuntimeHost(createAssistantMessage({ text: "done" }), [createToolResultMessage()]);
+
+		const exitCode = await runPrintMode(runtimeHost as unknown as Parameters<typeof runPrintMode>[0], {
+			mode: "text",
+		});
+
+		expect(exitCode).toBe(0);
 	});
 
 	// #10799

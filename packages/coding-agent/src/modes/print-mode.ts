@@ -6,6 +6,7 @@
  * - `nanopi --output json "prompt"` - JSON event stream
  */
 
+import type { AgentMessage } from "@nanopi/pi-agent-core";
 import type { AssistantMessage, ImageContent } from "@nanopi/pi-ai";
 import type { AgentSessionRuntime } from "../core/agent-session-runtime.ts";
 import { flushRawStdout, waitForRawStdoutBackpressure, writeRawStdout } from "../core/output-guard.ts";
@@ -137,24 +138,24 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 		// also on the wire (stopReason/errorMessage), but a caller that only checks
 		// the process status must not read an auth or model failure as success —
 		// that is how a subagent used to report `completed` with an empty report.
+		//
+		// The answer is the last assistant message, not the last message: a turn that
+		// an extension or hook cut short after a tool call ends on a tool result, and
+		// reading only the tail skipped the failed turn behind it.
 		const state = session.state;
-		const lastMessage = state.messages[state.messages.length - 1];
-		if (lastMessage?.role === "assistant") {
-			const assistantMsg = lastMessage as AssistantMessage;
-			if (assistantMsg.stopReason === "error" || assistantMsg.stopReason === "aborted") {
-				console.error(assistantMsg.errorMessage || `Request ${assistantMsg.stopReason}`);
-				exitCode = 1;
-			}
+		const answer = findLastAssistantMessage(state.messages);
+		if (answer !== undefined && (answer.stopReason === "error" || answer.stopReason === "aborted")) {
+			console.error(answer.errorMessage || `Request ${answer.stopReason}`);
+			exitCode = 1;
 		}
 
-		if (mode === "text" && lastMessage?.role === "assistant" && exitCode === 0) {
-			const assistantMsg = lastMessage as AssistantMessage;
-			for (const content of assistantMsg.content) {
+		if (mode === "text" && answer !== undefined && exitCode === 0) {
+			for (const content of answer.content) {
 				if (content.type === "text") {
 					writeRawStdout(`${content.text}\n`);
 				}
 			}
-			if (assistantMsg.stopReason === "length") {
+			if (answer.stopReason === "length") {
 				console.error("Response was truncated: the model reached its output token limit.");
 				exitCode = 1;
 			}
@@ -171,4 +172,13 @@ export async function runPrintMode(runtimeHost: AgentSessionRuntime, options: Pr
 		await disposeRuntime();
 		await flushRawStdout();
 	}
+}
+
+/** The turn's answer: the last assistant message, wherever the turn left the tail. */
+function findLastAssistantMessage(messages: readonly AgentMessage[]): AssistantMessage | undefined {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (message?.role === "assistant") return message;
+	}
+	return undefined;
 }
