@@ -12,6 +12,12 @@
  * of the same kind asks again. `deny` is single-shot too — nothing is remembered
  * about a refusal — while `ai_decide` covers the whole class for the session.
  *
+ * The explanation prompt drops `allow_session` to `allow_once`. The user read an
+ * explanation of *this* call; "allow this session" there would whitelist the
+ * tool for calls they never saw described, and `check()` gates hazardous calls
+ * anyway, so the only thing it could buy is skipping the next ordinary prompt —
+ * exactly the decision nobody made.
+ *
  * A call that carries a hazard (`git reset --hard` in the current checkout) is
  * gated even in a session whose tool was allowed for good, and the hazard is
  * part of its class key: a model verdict on `bash::git` must not quietly cover it.
@@ -126,7 +132,7 @@ export class PermissionGate {
 			// into a pause, not an answer. Nothing ran and the call still waits.
 			if (decision === "explain" || decision === undefined) return undefined;
 			if (this.approvedCalls.delete(info.callId)) return { action: "allow" };
-			return this.settle(info, decision);
+			return this.settle(info, decision, "explanation");
 		} finally {
 			this.explainedCalls.delete(info.callId);
 		}
@@ -136,6 +142,8 @@ export class PermissionGate {
 	private async settle(
 		info: PermissionCallInfo,
 		decision: PermissionDecision | undefined,
+		/** `"explanation"` for the prompt that follows an explanation; see the header. */
+		prompt: "ordinary" | "explanation" = "ordinary",
 	): Promise<PermissionOutcome> {
 		switch (decision) {
 			// `allow_once` is the same outcome as `allow` — run this call, remember
@@ -145,6 +153,9 @@ export class PermissionGate {
 			case "allow":
 				return { action: "allow" };
 			case "allow_session":
+				// After an explanation the answer is about the call in front of the
+				// user, not the tool: remember nothing, run this one.
+				if (prompt === "explanation") return { action: "allow" };
 				this.sessionAllowedTools.add(info.toolName);
 				return { action: "allow" };
 			case "ai_decide": {

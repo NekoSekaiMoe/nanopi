@@ -321,7 +321,7 @@ describe("webui explanation handshake", () => {
 		await expect(second).resolves.toMatchObject({ action: "deny", reason: expect.stringContaining("declined") });
 	});
 
-	test("allow this session after an explanation remembers the tool", async () => {
+	test("allow this session after an explanation only covers that call", async () => {
 		const { broker, gate } = webuiGate();
 		const first = gate.check(info({ callId: "call-1" }));
 		await settle();
@@ -329,7 +329,21 @@ describe("webui explanation handshake", () => {
 		await settle();
 		broker.answer("call-1", "bash", "allow_session");
 		await expect(first).resolves.toEqual({ action: "allow" });
-		await expect(gate.check(info({ callId: "call-9" }))).resolves.toEqual({ action: "allow" });
+		// The answer followed an explanation of *this* call, so the tool is not
+		// whitelisted: the next one asks again rather than running unannounced.
+		const second = gate.check(info({ callId: "call-9" }));
+		await settle();
+		expect(broker.answer("call-9", "bash", "deny")).toBe(true);
+		await expect(second).resolves.toMatchObject({ action: "deny", reason: expect.stringContaining("declined") });
+	});
+
+	test("the ordinary prompt still remembers a session-wide allowance", async () => {
+		const { broker, gate } = webuiGate();
+		const first = gate.check(info({ callId: "call-1" }));
+		await settle();
+		broker.answer("call-1", "bash", "allow_session");
+		await expect(first).resolves.toEqual({ action: "allow" });
+		await expect(gate.check(info({ callId: "call-2" }))).resolves.toEqual({ action: "allow" });
 	});
 
 	test("a settled prompt is not paused again", async () => {

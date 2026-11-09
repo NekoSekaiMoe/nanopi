@@ -1,8 +1,16 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, test } from "vitest";
-import { globalExtraSettingsPath, loadExtraSettings, saveExtraSettings } from "../src/settings-store.ts";
+import {
+	globalExtraSettingsPath,
+	globalGuardValue,
+	loadExtraSettings,
+	projectExtraSettingsPath,
+	projectGuardValue,
+	resolveGuardSwitch,
+	saveExtraSettings,
+} from "../src/settings-store.ts";
 import { normalizeExtraSettings } from "../src/types.ts";
 
 function withTempHome(run: () => void): void {
@@ -86,5 +94,93 @@ describe("extra settings store", () => {
 			subsystems: { todo: false },
 		});
 		expect(normalizeExtraSettings(null)).toEqual({ defaultMode: "standard", subsystems: {} });
+	});
+});
+
+/** A throwaway project directory with its own `.nanopi/extra/settings.json`. */
+function withTempProject(run: (projectDir: string) => void): void {
+	const projectDir = mkdtempSync(join(tmpdir(), "pi-extra-guard-"));
+	try {
+		run(projectDir);
+	} finally {
+		rmSync(projectDir, { recursive: true, force: true });
+	}
+}
+
+describe("guard switches read one layer at a time", () => {
+	test("no key in either file resolves to on, from the default", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				expect(resolveGuardSwitch(projectDir, "gitGuard")).toEqual({ value: true, source: "default" });
+			});
+		});
+	});
+
+	test("a global value is reported with its layer", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				saveExtraSettings({ gitGuard: false });
+				// The project file says nothing, so there is no project value to report.
+				expect(resolveGuardSwitch(projectDir, "gitGuard")).toEqual({ value: false, source: "global" });
+			});
+		});
+	});
+
+	test("a project value overrules the global one and says so", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				saveExtraSettings({ gitGuard: true });
+				mkdirSync(join(projectDir, ".nanopi", "extra"), { recursive: true });
+				writeFileSync(projectExtraSettingsPath(projectDir), JSON.stringify({ gitGuard: false }));
+				expect(resolveGuardSwitch(projectDir, "gitGuard")).toEqual({
+					value: false,
+					source: "project",
+					projectValue: false,
+				});
+				// The merged view every other key uses still sees the override; the
+				// difference is that this one also carries where it came from.
+				expect(loadExtraSettings(projectDir).settings.gitGuard).toBe(false);
+			});
+		});
+	});
+
+	test("each layer is readable on its own, so absent and false stay distinct", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				expect(projectGuardValue(projectDir, "shellGuard")).toBeUndefined();
+				expect(globalGuardValue("shellGuard")).toBeUndefined();
+				saveExtraSettings({ shellGuard: false });
+				expect(globalGuardValue("shellGuard")).toBe(false);
+				expect(projectGuardValue(projectDir, "shellGuard")).toBeUndefined();
+			});
+		});
+	});
+
+	test("writes land in the named layer only", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				saveExtraSettings({ gitGuard: true });
+				saveExtraSettings({ gitGuard: false }, "project", projectDir);
+				expect(globalGuardValue("gitGuard")).toBe(true);
+				expect(projectGuardValue(projectDir, "gitGuard")).toBe(false);
+				expect(readFileSync(globalExtraSettingsPath(), "utf8")).toContain('"gitGuard": true');
+			});
+		});
+	});
+
+	test("a null guard value removes the key from that layer", () => {
+		withTempHome(() => {
+			withTempProject((projectDir) => {
+				mkdirSync(join(projectDir, ".nanopi", "extra"), { recursive: true });
+				writeFileSync(
+					projectExtraSettingsPath(projectDir),
+					JSON.stringify({ gitGuard: false, defaultMode: "plan" }),
+				);
+				saveExtraSettings({ gitGuard: null }, "project", projectDir);
+				expect(projectGuardValue(projectDir, "gitGuard")).toBeUndefined();
+				// The rest of the file is untouched: the repair removes one key.
+				expect(loadExtraSettings(projectDir).settings.defaultMode).toBe("plan");
+			});
+		});
 	});
 });
