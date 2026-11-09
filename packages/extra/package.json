@@ -24,7 +24,7 @@
  },
  "dependencies": {
   "@nanopi/pi-tui": "^20261107.0.0",
-  "typebox": "1.4.5"
+  "typebox": "1.4.6"
  },
  "devDependencies": {
   "@types/node": "24.19.2",
