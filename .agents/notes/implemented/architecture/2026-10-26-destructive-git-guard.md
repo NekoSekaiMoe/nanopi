@@ -22,7 +22,8 @@ issue #200 要定两件事：判定放在哪一层，以及怎么判定才不漏
 
 判定本身是「命令碰到哪个 checkout 的索引与工作树」，不是「命令是不是某个字符串」：
 
-- 全局 flag（`-C`、`--work-tree`）决定 checkout；`-C` 指向别的 checkout 时算**隔离**，不拦。
+- 全局 flag（`-C`、`--work-tree`）决定 checkout：`git -C <dir>` 且 `dir` 确实是**另一个** checkout
+  时才算隔离，不拦；`--work-tree` 不算隔离（它只换工作树，索引仍是本 checkout 的）。
 - `git worktree add <dir>` 与 `git worktree remove <dir>` 判为隔离，这正是子 agent
   `isolated: true` 用的形式，也是这个 guard 想推荐的写法。
 - 其余子命令按 hazards 表判定；`reset --hard`/`--merge`/`--keep`、无 pathspec 的 `reset`、
@@ -44,6 +45,32 @@ plan 模式要保证只读，所以看不懂就拒；guard 要避免误伤，所
 模型看不见 prompt 之外的拒绝原因，而这正是硬拦唯一的优点：下一次调用就能读到规矩。
 
 默认开启，`/gitguard off` 关闭（`ExtraSettings.gitGuard`，项目/全局 settings.json 均可写）。
+
+## 修订：`-C` 的隔离判定（#613）
+
+原实现把「`-C` 指向任何不是本 checkout 的路径」都当隔离，`sameCheckout` 在任一侧解析不出
+checkout 时返回 `false`，于是「不是仓库」被判成「别的 checkout」。实测（#613）：
+
+```
+git -C /does/not/exist reset --hard   => isolated（不弹）
+git -C .git stash                     => isolated（不弹）
+git --work-tree=/other stash          => isolated（不弹），实际 stash 的是本 checkout 的索引
+```
+
+第一条是明显的漏判，第二条与「凡是别的路径就隔离」自相矛盾（`.git` 不换 checkout），
+第三条正好拦反了：`--work-tree` 只改工作树，`git stash` 取的仍是本 checkout 的索引。
+
+现行规则，三条都可测：
+
+- `elsewhere` 要求 `-C` 的解析结果**本身**是一个 checkout，且不是这一个（同 `repoDir` 才是同一个）。
+  解析不出 checkout 的路径（不存在、`.git`、普通目录）一律留在本 checkout 判定。
+- `--work-tree` 不再等于 `elsewhere`。它只在 hazard 原因里追加一句「换的是文件，不是索引」，
+  因为 `stash`/`add -A`/`reset --hard` 都应照旧提示。
+- `worktree add` 的目录是**第一个** positional（`-b <branch> <dir> [<commit-ish>]`），
+  原来按「最后一段不是 `/HEAD`」猜，`git worktree add -b feat feat HEAD` 会把隔离路径报成 `HEAD`。
+
+`--git-dir` 仍未纳入判定：它把索引指到别处，`-C` 与它组合时结果只能靠实际执行才知道，
+按「看不懂就不拦」处理。这条与 `-C` 无关，另案。
 
 ## Alternatives considered
 
@@ -68,8 +95,8 @@ plan 模式要保证只读，所以看不懂就拒；guard 要避免误伤，所
 - 判定按 checkout 粒度，不看分支：`git checkout <branch>` 不拦（git 自己会拒绝覆盖本地改动），
   但 `git checkout .` 拦。任何「切分支就安全」的直觉在这里都不成立——索引与工作树是 per-worktree 的。
 - `cd <某个 worktree> && git stash` 仍会被拦：`cd` 只按字符串解析，若据此推断目录存在并算作隔离，
-  正好是「静默漏判」这条路。要声明隔离请用 `git worktree add` 或 `git -C <dir>`，
-  两者都绑在路径上，也是这个 guard 想引导的写法。
+  正好是「静默漏判」这条路。要声明隔离请用 `git worktree add` 或 `git -C <已有的 worktree>`，
+  两者的隔离都以「解析出的目录确实是另一个 checkout」为准（见上一节修订）。
 - 解析器盖住的 shell 形态就是它声明的那些；新增形态（例如 `eval`、函数、alias）需要显式实现或
   显式放弃，不要用「大概也能过」的方式蒙混。
 - `PermissionCallInfo.hazard` 是 gate 与调用方之间新增的契约；webui 卡片目前只展示 `summary`，

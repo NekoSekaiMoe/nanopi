@@ -235,4 +235,56 @@ describe("git guard: worktrees", () => {
 		if (!verdict.checked) throw new Error("not analyzed");
 		expect(verdict.hit).toBeUndefined();
 	});
+
+	// nanopi#613: `git -C` skipped the prompt whenever the path was not this checkout,
+	// including paths that hold no checkout at all.
+	test("a -C that lands on no checkout is still this checkout's hazard", () => {
+		const { main } = repoWithWorktree();
+		const missing = join(tempDir("gitguard-missing-"), "does-not-exist");
+		for (const command of [
+			`git -C ${missing} stash`,
+			`git -C ${missing} reset --hard`,
+			`git -C ${missing} clean -fd`,
+			// `.git` is not a working tree, so the command still runs here.
+			"git -C .git stash",
+			"git stash",
+		]) {
+			const verdict = analyzeShellCommand(command, main);
+			if (verdict.checked !== true) throw new Error(`${command} was not analyzed`);
+			expect(verdict.hit, command).toBeDefined();
+			expect(verdict.isolated, command).toBeUndefined();
+		}
+	});
+
+	test("a plain directory inside this checkout is not isolation", () => {
+		const { main } = repoWithWorktree();
+		const verdict = analyzeShellCommand("git -C . stash", main);
+		if (verdict.checked !== true) throw new Error("not analyzed");
+		expect(verdict.hit?.subcommand).toBe("stash");
+		const subdir = analyzeShellCommand("git -C sub stash", main);
+		if (subdir.checked !== true) throw new Error("not analyzed");
+		expect(subdir.hit?.subcommand).toBe("stash");
+	});
+
+	test("--work-tree is not isolation: the index stays in this checkout", () => {
+		const { main, linked } = repoWithWorktree();
+		for (const command of [
+			`git --work-tree=${linked} stash`,
+			`git --work-tree=${linked} reset --hard`,
+			`git --work-tree=${linked} add -A`,
+		]) {
+			const verdict = analyzeShellCommand(command, main);
+			if (verdict.checked !== true) throw new Error(`${command} was not analyzed`);
+			expect(verdict.hit, command).toBeDefined();
+			expect(verdict.hit?.reason, command).toContain("--work-tree");
+		}
+	});
+
+	test("worktree add reads the directory, not the trailing commit-ish", () => {
+		const { main } = repoWithWorktree();
+		// `git worktree add -b feat feat HEAD`: the tree is `feat`, `HEAD` is the start point.
+		const verdict = analyzeShellCommand("git worktree add -b feat feat HEAD", main);
+		if (verdict.checked !== true) throw new Error("not analyzed");
+		expect(verdict.isolated?.path).toBe(join(main, "feat"));
+	});
 });

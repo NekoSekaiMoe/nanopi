@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The git guard isolates a command only when `git -C <dir>` actually lands in another checkout: a path holding no checkout at all (`git -C /does/not/exist stash`, `git -C .git stash`) used to count as isolation and skipped the prompt, while `git -C <other worktree>` keeps its exemption. `--work-tree` is no longer read as isolation — it swaps the working tree but leaves the index in this checkout, so `git --work-tree=<other> stash` now reports the hazard it always was (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
+- `git worktree add` reports the directory it creates instead of the commit-ish: the tree is the first positional (`-b <branch> <dir> [<commit-ish>]`), so `git worktree add -b feat feat HEAD` no longer names `HEAD` as the isolated path (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
+
 ## [20261107]
 
 ## [20261031.1.0]

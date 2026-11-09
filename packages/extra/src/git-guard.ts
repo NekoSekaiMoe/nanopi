@@ -91,8 +91,10 @@ export function analyzeGitInvocation(words: readonly string[], cwd: string): Git
 	const args = words.slice(1);
 
 	let checkoutDir = cwd;
-	/** `-C`/`--work-tree` moved the command, so whatever it hits is not this checkout. */
-	let movedCheckout = false;
+	/** `-C` moved the command to another directory, whatever is (or is not) there. */
+	let changedDir = false;
+	/** `--work-tree` replaced the working tree but left the index of this checkout. */
+	let workTree: string | undefined;
 	let index = 0;
 	while (index < args.length) {
 		const word = args[index] ?? "";
@@ -104,7 +106,8 @@ export function analyzeGitInvocation(words: readonly string[], cwd: string): Git
 		index += consumed;
 		if (value === undefined || (flag !== "-C" && flag !== "--work-tree")) continue;
 		checkoutDir = resolve(cwd, value);
-		movedCheckout = true;
+		if (flag === "-C") changedDir = true;
+		else workTree = checkoutDir;
 	}
 
 	const subcommand = args[index];
@@ -114,20 +117,28 @@ export function analyzeGitInvocation(words: readonly string[], cwd: string): Git
 	if (subcommand === "worktree") {
 		// The subcommands an agent uses here are exactly the isolation ones: `add -b
 		// <branch> <dir> [<commit-ish>]` (subagent `isolated: true`) and `remove <dir>`.
-		// The tree is the first positional after any commit-ish-less `add`, and both
-		// forms put it after the branch name, so the first existing path wins.
+		// The tree is the first positional after the branch name: `git worktree add -b
+		// feat feat HEAD` creates `feat` and starts it at `HEAD`, so the first
+		// positional is the directory and anything after it is a commit-ish.
 		const positional = positionalArgs(rest, [], SUBCOMMAND_VALUE_FLAGS.worktree ?? []).filter(
 			(word) => word !== "add" && word !== "remove",
 		);
-		const dir = positional.map((word) => resolve(cwd, word)).find((word) => !word.endsWith("/HEAD"));
+		const dir = positional.length > 0 ? resolve(cwd, positional[0] ?? "") : undefined;
 		// Everything after `worktree add` happens in a tree the caller now owns.
 		return dir === undefined ? { checked: true } : { checked: true, isolated: { path: dir } };
 	}
 
-	// A `-C` that points back at this same checkout (`git -C . stash`) is not isolation;
-	// pointing anywhere else, existing or not, means the command is not ours to judge.
-	const elsewhere = movedCheckout && !sameCheckout(checkoutDir, cwd);
-	const hit = DESTRUCTIVE_SUBCOMMANDS[subcommand]?.(rest, { elsewhere });
+	// Isolation needs a checkout to be isolated, and the command has to actually run
+	// in it: `git -C <dir>` when `dir` is a checkout other than this one. A path that
+	// is no checkout at all (`git -C /does/not/exist`, `git -C .git`) leaves the
+	// command here, and so does `--work-tree`, which swaps the working tree while
+	// the index stays in this checkout.
+	const checkout = changedDir ? checkoutOf(checkoutDir) : undefined;
+	const elsewhere = checkout !== undefined && !sameCheckout(checkout.repoDir, cwd);
+	const hit = DESTRUCTIVE_SUBCOMMANDS[subcommand]?.(rest, {
+		elsewhere,
+		indexShared: workTree !== undefined && sameRepository(workTree, cwd),
+	});
 	if (hit) return { checked: true, hit };
 	if (elsewhere) return { checked: true, isolated: { path: checkoutDir } };
 	return { checked: true };
@@ -183,9 +194,13 @@ function matchesEveryPath(positional: readonly string[]): boolean {
 }
 
 interface HitContext {
-	/** The command runs with `-C`/`--work-tree` in a different checkout. */
+	/** The command runs with `-C` in a checkout other than this one. */
 	elsewhere: boolean;
+	/** `--work-tree` aims the working tree outside this checkout, but the index is still ours. */
+	indexShared: boolean;
 }
+
+const INDEX_SHARED_NOTE = "; `--work-tree` moves the files, not the index this checkout shares";
 
 /**
  * Per-subcommand hazard. A subcommand missing from this table cannot touch the
@@ -198,7 +213,11 @@ const DESTRUCTIVE_SUBCOMMANDS: Record<
 	reset(args, ctx) {
 		if (ctx.elsewhere) return undefined;
 		if (flagArgs(args).some((flag) => flag === "--hard" || flag === "--merge" || flag === "--keep")) {
-			return { subcommand: "reset", reason: "`git reset --hard` discards uncommitted changes in the working tree" };
+			const note = ctx.indexShared ? " (the one `--work-tree` points at)" : "";
+			return {
+				subcommand: "reset",
+				reason: `\`git reset --hard\` discards uncommitted changes in the working tree${note}`,
+			};
 		}
 		// A pathspec reset only reloads those files from HEAD: still per-checkout.
 		const positional = positionalArgs(args, [], SUBCOMMAND_VALUE_FLAGS.reset ?? []);
@@ -211,7 +230,8 @@ const DESTRUCTIVE_SUBCOMMANDS: Record<
 	stash(args, ctx) {
 		const action = positionalArgs(args, [], []).find((word) => word !== "stash");
 		if (action === "list" || action === "show" || action === "branch") return undefined;
-		// Another checkout's stash stack is not the one this session shares.
+		// Another checkout's stash stack is not the one this session shares. `--work-tree`
+		// does not change that: the entries it writes come out of this checkout's index.
 		if (ctx.elsewhere) return undefined;
 		if (action === "drop" || action === "clear") {
 			return {
@@ -219,9 +239,10 @@ const DESTRUCTIVE_SUBCOMMANDS: Record<
 				reason: `\`git stash ${action}\` deletes stash entries nobody else can recover`,
 			};
 		}
+		const note = ctx.indexShared ? INDEX_SHARED_NOTE : "";
 		return {
 			subcommand: "stash",
-			reason: "`git stash` empties the working tree, including changes another session may be writing",
+			reason: `\`git stash\` empties the working tree, including changes another session may be writing${note}`,
 		};
 	},
 	clean(args, ctx) {
@@ -237,9 +258,10 @@ const DESTRUCTIVE_SUBCOMMANDS: Record<
 		if (arguments_.some((arg) => arg === "-u" || arg === "--update")) return undefined;
 		if (!matchesEveryPath(arguments_)) return undefined;
 		const scope = ctx.elsewhere ? "the index of that checkout" : "the index";
+		const note = ctx.elsewhere || !ctx.indexShared ? "" : INDEX_SHARED_NOTE;
 		return {
 			subcommand: "add",
-			reason: `\`git add -A\`/\`git add .\` stages every file in ${scope}, including scratch files another session left untracked`,
+			reason: `\`git add -A\`/\`git add .\` stages every file in ${scope}, including scratch files another session left untracked${note}`,
 		};
 	},
 	commit(args) {
@@ -295,6 +317,13 @@ function sameCheckout(a: string, b: string): boolean {
 	// One repository, same checkout directory. Two worktrees share `commonGitDir`
 	// but differ in `repoDir`, which is exactly the "elsewhere" this guard wants.
 	return left.repoDir === right.repoDir && left.commonGitDir === right.commonGitDir;
+}
+
+/** Whether both paths belong to one repository, whichever worktree each of them is. */
+function sameRepository(a: string, b: string): boolean {
+	const left = checkoutOf(a);
+	const right = checkoutOf(b);
+	return left !== undefined && right !== undefined && left.commonGitDir === right.commonGitDir;
 }
 
 interface CheckoutPaths {
