@@ -257,6 +257,25 @@ function parseSessionEntryLine(line: string): FileEntry | null {
 	}
 }
 
+/**
+ * Replace `file` with the serialized entries in one rename.
+ *
+ * Writing in place (`openSync(file, "w")` then a write loop) truncates the session
+ * before the new content exists, so a crash mid-loop leaves it short. The temporary
+ * file lives next to the target (rename is only atomic within one filesystem) and
+ * carries the pid plus a random suffix so concurrent writers never collide.
+ */
+function writeEntriesAtomically(file: string, entries: readonly unknown[]): void {
+	const temporaryFile = `${file}.${process.pid}-${randomUUID()}.tmp`;
+	try {
+		writeFileSync(temporaryFile, entries.map((entry) => `${JSON.stringify(entry)}\n`).join(""));
+		renameSync(temporaryFile, file);
+	} catch (error) {
+		rmSync(temporaryFile, { force: true });
+		throw error;
+	}
+}
+
 /** Exported for testing */
 function loadEntriesFromFile(filePath: string): FileEntry[] {
 	const resolvedFilePath = normalizePath(filePath);
@@ -776,14 +795,7 @@ export class SessionManager {
 
 	private _rewriteFile(): void {
 		if (!this.persist || !this.sessionFile) return;
-		const fd = openSync(this.sessionFile, "w");
-		try {
-			for (const entry of this.fileEntries) {
-				writeFileSync(fd, `${JSON.stringify(entry)}\n`);
-			}
-		} finally {
-			closeSync(fd);
-		}
+		writeEntriesAtomically(this.sessionFile, this.fileEntries);
 	}
 
 	isPersisted(): boolean {
@@ -969,23 +981,10 @@ export class SessionManager {
 		}
 
 		if (this.persist && this.sessionFile && this.flushed) {
-			const lines = this.fileEntries.map((fileEntry) =>
-				JSON.stringify(fileEntry === kept ? { ...kept, parentId: id } : fileEntry),
-			);
-			const temporaryFile = `${this.sessionFile}.compaction-${process.pid}-${randomUUID()}.tmp`;
-			try {
-				writeFileSync(
-					temporaryFile,
-					lines
-						.concat(JSON.stringify(entry))
-						.map((line) => `${line}\n`)
-						.join(""),
-				);
-				renameSync(temporaryFile, this.sessionFile);
-			} catch (error) {
-				rmSync(temporaryFile, { force: true });
-				throw error;
-			}
+			writeEntriesAtomically(this.sessionFile, [
+				...this.fileEntries.map((fileEntry) => (fileEntry === kept ? { ...kept, parentId: id } : fileEntry)),
+				entry,
+			]);
 		}
 		// Re-parent in place only after the write succeeded; existing references stay valid.
 		kept.parentId = id;
