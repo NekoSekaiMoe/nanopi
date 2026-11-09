@@ -43,6 +43,60 @@ function stubCheck(repo: string, exitCode: number): void {
 	git(repo, ["commit", "-qm", "add check script"]);
 }
 
+/**
+ * A `package.json` the merge gate can actually run in a test.
+ *
+ * The gate now runs in the job's worktree, so this fixture lands there and is committed
+ * by the test's child commit. `node -e exit <code>` instead of `exit <code>`: `pnpm run`
+ * goes through `sh`, and a bare `exit 0` is fine there but the flag variant below is not
+ * portable back to the platform shells. The passing case is chosen with
+ * `stubCheckOnFlag`'s env var so main and the worktree can disagree.
+ */
+function stubCheckAt(dir: string, exitCode: number): void {
+	writeFileSync(
+		join(dir, "package.json"),
+		`${JSON.stringify({ name: "fixture", scripts: { check: `node -e "process.exit(${exitCode})"` } })}\n`,
+	);
+}
+
+/**
+ * A `package.json` that passes only when `STUB_CHECK_OK` is set.
+ *
+ * The gate runs in the job's worktree, and a test usually wants main clean while the
+ * branch alone decides the outcome: a plain `exit 0` in the worktree cannot tell the
+ * two directories apart, and neither can an `exit 1`.
+ */
+function stubCheckOnFlag(worktree: string): void {
+	writeFileSync(
+		join(worktree, "package.json"),
+		`${JSON.stringify({ name: "fixture", scripts: { check: 'test "$STUB_CHECK_OK" = 1' } })}\n`,
+	);
+}
+
+/** The marker a conflicted merge leaves behind, which `git merge --abort` clears. */
+function mergeHead(repo: string): string {
+	const head = join(repo, ".git", "MERGE_HEAD");
+	return existsSync(head) ? readFileSync(head, "utf8").trim() : "";
+}
+
+/**
+ * Put a `pnpm` on `PATH` for the tests that get as far as running the gate.
+ *
+ * `mergeWorktree` spawns `pnpm run check`, and the vitest worker's `PATH` does not
+ * carry the workspace's `node_modules/.bin` the way a shell in the repo does: the
+ * spawn fails with `ENOENT` and the gate reports that as a failed check. The shim is
+ * the workspace's own `pnpm`, so the script under test is still the real entry point.
+ * Returns the restore function.
+ */
+function putPnpmOnPath(): () => void {
+	const previous = process.env.PATH ?? "";
+	const bin = join(import.meta.dirname, "../../../../../node_modules/.bin");
+	process.env.PATH = `${bin}:${previous}`;
+	return () => {
+		process.env.PATH = previous;
+	};
+}
+
 type SubagentTool = ToolDefinition<never, unknown, never>;
 
 /** The subagent tool the module registers, captured as the registry receives it. */
@@ -193,19 +247,64 @@ describe("subagent worktree merge self-check", () => {
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		stubCheck(repo, 0);
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-ok`);
+		// The commit is made in the worktree but the gate runs there too, so the
+		// fixture has to commit the worktree's own file: `git commit` only has the
+		// staged state, and the worktree is a checkout of the same branch.
 		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
 		git(repo, ["worktree", "add", "-b", "subagent/merge-ok", worktree, "HEAD"]);
 		writeFileSync(join(worktree, "shipped.txt"), "child work\n");
-		git(worktree, ["add", "shipped.txt"]);
+		// The check runs in the worktree, which is a checkout of the same branch: the
+		// fixture package.json committed here is the gate the merge will run.
+		stubCheckOnFlag(worktree);
+		git(worktree, ["add", "shipped.txt", "package.json"]);
 		git(worktree, ["commit", "-qm", "child commit"]);
+		const restorePath = putPnpmOnPath();
+		cleanups.push(restorePath);
+		const previousFlag = process.env.STUB_CHECK_OK;
+		process.env.STUB_CHECK_OK = "1";
+		cleanups.push(() => {
+			if (previousFlag === undefined) delete process.env.STUB_CHECK_OK;
+			else process.env.STUB_CHECK_OK = previousFlag;
+		});
 
 		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-ok" }, repo);
 		expect(result.merged).toBe(true);
-		expect(result.report).toContain("merged 1 file (check passed)");
+		expect(result.report).toContain("merged 2 files (check passed)");
 		expect(result.report).toContain("A\tshipped.txt");
 		expect(existsSync(join(repo, "shipped.txt"))).toBe(true);
 		// The ref is dropped by `removeWorktree` after the tree is gone: git refuses to
 		// delete a branch a worktree still has checked out.
+	});
+
+	// #504: the gate used to run in the main checkout, so it reported the state of
+	// commits that had already merged and passed every branch, broken or not.
+	it("runs the check in the job's worktree, not in the main checkout", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		stubCheck(repo, 0);
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-scope`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-scope", worktree, "HEAD"]);
+		stubCheckOnFlag(worktree);
+		git(worktree, ["add", "package.json"]);
+		git(worktree, ["commit", "-qm", "branch check fails"]);
+		const restorePath = putPnpmOnPath();
+		cleanups.push(restorePath);
+
+		const previous = process.env.STUB_CHECK_OK;
+		delete process.env.STUB_CHECK_OK;
+		cleanups.push(() => {
+			if (previous === undefined) delete process.env.STUB_CHECK_OK;
+			else process.env.STUB_CHECK_OK = previous;
+		});
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-scope" }, repo);
+		expect(result.kept).toBe(true);
+		expect(result.report).toContain("check command failed");
+		expect(existsSync(join(repo, "package.json"))).toBe(true);
+		// The main checkout's own `exit 0` gate would have passed the merge: this branch
+		// is refused only because the gate looked at the worktree.
 	});
 
 	it("refuses to merge while the main checkout has uncommitted changes", async () => {
@@ -232,12 +331,12 @@ describe("subagent worktree merge self-check", () => {
 		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
-		stubCheck(repo, 1);
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-fail`);
 		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
 		git(repo, ["worktree", "add", "-b", "subagent/merge-fail", worktree, "HEAD"]);
 		writeFileSync(join(worktree, "broken.txt"), "half done\n");
-		git(worktree, ["add", "broken.txt"]);
+		stubCheckAt(worktree, 1);
+		git(worktree, ["add", "package.json", "broken.txt"]);
 		git(worktree, ["commit", "-qm", "unchecked commit"]);
 
 		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-fail" }, repo);
@@ -245,6 +344,31 @@ describe("subagent worktree merge self-check", () => {
 		expect(result.report).toContain("check command failed");
 		expect(existsSync(join(worktree, "broken.txt"))).toBe(true);
 		expect(existsSync(join(repo, "broken.txt"))).toBe(false);
+	});
+
+	// #504: a conflicted merge used to leave `.git/MERGE_HEAD` behind, and every later
+	// git command in the main checkout then refused to run until the user aborted it.
+	it("aborts a conflicted merge instead of leaving the main checkout mid-merge", async () => {
+		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const repo = createRepo();
+		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
+		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-conflict`);
+		cleanups.push(() => rmSync(worktree, { recursive: true, force: true }));
+		git(repo, ["worktree", "add", "-b", "subagent/merge-conflict", worktree, "HEAD"]);
+		writeFileSync(join(worktree, "README.md"), "# from the branch\n");
+		git(worktree, ["commit", "-qam", "branch rewrites the file"]);
+		writeFileSync(join(repo, "README.md"), "# from main\n");
+		git(repo, ["commit", "-qam", "main rewrites the file"]);
+
+		const result = mergeWorktree({ path: worktree, branch: "subagent/merge-conflict" }, repo);
+		expect(result.kept).toBe(true);
+		expect(result.report).toContain("aborted merge");
+		expect(mergeHead(repo)).toBe("");
+		// Abort restores main exactly, markers and all: the file is its own content again.
+		expect(readFileSync(join(repo, "README.md"), "utf8")).toBe("# from main\n");
+		expect(git(repo, ["status", "--porcelain"])).toBe("");
+		// The branch still holds the child's commit, so nothing was lost.
+		expect(git(repo, ["rev-parse", "subagent/merge-conflict"])).not.toBe(git(repo, ["rev-parse", "HEAD"]));
 	});
 
 	it("treats a directory without package.json as no gate, not as a failure", async () => {
