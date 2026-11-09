@@ -25,6 +25,14 @@ export interface BuildSystemPromptOptions {
 	toolGuidelines?: Record<string, string[]>;
 	/** Additional guideline bullets appended to the default system prompt rules. */
 	promptGuidelines?: string[];
+	/**
+	 * Paragraphs contributed by an active extension, rendered in the `guidelines` section.
+	 *
+	 * A paragraph is prose, not a bullet: it reasons about when a rule applies, which one bullet
+	 * per line cannot carry, and it stays out of `<rules>` so a paragraph rewrite does not read
+	 * as every rule changing. Run modes use it (plan mode's phases and its read-only boundary).
+	 */
+	guidelineSections?: string[];
 	/** Text appended from user configuration before project context, skills, and cwd. */
 	appendSystemPrompt?: string;
 	/** Additional XML-wrapped prompt sections keyed by tag name. */
@@ -43,6 +51,7 @@ export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
 	toolSnippets: Record<string, string>;
 	toolGuidelines: Record<string, string[]>;
 	promptGuidelines: string[];
+	guidelineSections: string[];
 	appendSystemPrompt: string;
 	sections: Record<string, string>;
 	contextFiles: Array<{ path: string; content: string }>;
@@ -69,6 +78,7 @@ export function normalizeBuildSystemPromptOptions(input: BuildSystemPromptOption
 			Object.entries(input.toolGuidelines ?? {}).map(([name, guidelines]) => [name, [...guidelines]]),
 		),
 		promptGuidelines: [...(input.promptGuidelines ?? [])],
+		guidelineSections: [...(input.guidelineSections ?? [])],
 		appendSystemPrompt: input.appendSystemPrompt ?? "",
 		sections: { ...(input.sections ?? {}) },
 		cwd: input.cwd,
@@ -150,6 +160,7 @@ function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromp
 		toolSnippets,
 		toolGuidelines,
 		promptGuidelines,
+		guidelineSections,
 		appendSystemPrompt,
 		sections: customSections,
 		cwd,
@@ -175,6 +186,7 @@ function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromp
 		promptSections.preamble =
 			"You are an expert coding assistant operating inside nanopi, a coding agent harness. You work through the shell tool.";
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
+		appendGuidelineSections(promptSections, guidelineSections);
 		// The sections filled below (addendum, project context, skills, cwd, custom
 		// sections) apply to both preambles, so the shell-only branch only differs in
 		// what it leaves out: the tool list and the docs section.
@@ -185,6 +197,7 @@ function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromp
 			visibleTools.length > 0 ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n") : "(none)";
 		promptSections.tools = `${tools}\n\nMore tools may be registered by the project.`;
 		promptSections.rules = buildRules(declaredTools, toolGuidelines, promptGuidelines);
+		appendGuidelineSections(promptSections, guidelineSections);
 		// A flavor that drops the docs and examples trees has no files to point
 		// at, so the section would be dead weight in every prompt.
 		if (isBuildComponentEnabled("docs")) {
@@ -211,6 +224,21 @@ function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromp
 	}
 
 	return tagSections(promptSections);
+}
+
+/**
+ * Render the mode paragraphs as the `guidelines` section, right after the rules they explain.
+ *
+ * Blank paragraphs are dropped and duplicates collapse, matching how `promptGuidelines` is
+ * treated: an extension can append the same paragraph on every run without growing the prompt.
+ */
+function appendGuidelineSections(promptSections: Record<string, string>, paragraphs: string[]): void {
+	const unique = new Set<string>();
+	for (const paragraph of paragraphs) {
+		const normalized = paragraph.trim();
+		if (normalized) unique.add(normalized);
+	}
+	if (unique.size > 0) promptSections.guidelines = [...unique].join("\n\n");
 }
 
 function tagSections(promptSections: Record<string, string>): SystemPromptSections {

@@ -1,11 +1,17 @@
 /**
  * Shell command structure analysis for plan mode.
  *
- * Plan mode allows only `ls`, `find`, and `pwd` as a single simple command.
- * Anything compound is rejected by parsing, not by substring matching: the
- * tokenizer tracks quoting so operators inside quotes stay literal, while
- * command substitution (`$(`, backticks) is rejected even inside double quotes
- * because the shell executes it there too.
+ * Plan mode may run the read-only commands in `PLAN_COMMANDS`, and `git` in the
+ * forms that only print (`PLAN_GIT_SUBCOMMANDS`). Anything compound is rejected
+ * by parsing, not by substring matching: the tokenizer tracks quoting so
+ * operators inside quotes stay literal, while command substitution (`$( `,
+ * backticks) is rejected even inside double quotes because the shell executes it
+ * there too.
+ *
+ * The list is the read half of `PLAN_ALLOWED_SHELL` in `extension.ts`, which
+ * also offers `compile` separately: a build is the one allowed command that
+ * writes files, so it is a named tool call the model makes on purpose rather
+ * than something it can reach with a plausible-looking shell line.
  */
 
 export interface PlanCommandAnalysis {
@@ -20,7 +26,98 @@ type Token = { kind: "word"; text: string } | { kind: "operator"; text: string }
 /** Characters that end a word and are shell operators when unquoted. */
 const OPERATOR_STARTS = new Set([";", "&", "|", "(", ")", "<", ">"]);
 
-const PLAN_COMMANDS = new Set(["ls", "find", "pwd"]);
+const PLAN_COMMANDS = new Set([
+	"ls",
+	"find",
+	"pwd",
+	"cat",
+	"head",
+	"tail",
+	"wc",
+	"grep",
+	"rg",
+	"tree",
+	"file",
+	"stat",
+	"du",
+	"diff",
+	"echo",
+	"git",
+	"gh",
+]);
+
+/**
+ * `git` subcommands that print instead of writing: the worktree stays as it was.
+ *
+ * `git branch` is absent on purpose — without `-l`/`--list` it creates the
+ * branch named by its argument, and one allowlist entry that sometimes writes
+ * is worse than losing a listing command the model can spell as `git branch -a`
+ * only by accident.
+ */
+const PLAN_GIT_SUBCOMMANDS = new Set([
+	"log",
+	"show",
+	"diff",
+	"status",
+	"blame",
+	"describe",
+	"shortlog",
+	"grep",
+	"ls-files",
+	"ls-tree",
+	"rev-parse",
+	"rev-list",
+	"cat-file",
+	"name-rev",
+	"merge-base",
+	"count-objects",
+	"for-each-ref",
+]);
+
+/** Global `git` options that consume the word after them, so the subcommand is two words later. */
+const GIT_OPTIONS_WITH_VALUE = new Set(["-C", "-c", "--git-dir", "--work-tree", "--namespace", "--exec-path"]);
+
+/** `gh` subcommands that only read this repository's issues, PRs, and runs. */
+const PLAN_GH_COMMANDS = new Set(["pr", "issue", "run", "repo", "release", "search", "api"]);
+
+/**
+ * Verbs of the `gh` subcommands above that read.
+ *
+ * The flag check alone was not enough: `gh pr create` carries no write flag, so
+ * a group name plus flags let every write through (`create`, `comment`, `merge`,
+ * `close`). The verb is the thing that decides, so it is checked by name and a
+ * subcommand with no verb here (`gh repo clone`, which writes a directory) is
+ * refused.
+ */
+const PLAN_GH_READ_VERBS = new Set(["view", "list", "ls", "status", "diff", "checks", "download", "log"]);
+
+/** `gh` groups whose reading verb carries its own name (`gh run view`, `gh api`). */
+const PLAN_GH_GROUPS_WITH_VERB = new Set(["pr", "issue", "run", "repo", "release"]);
+
+/**
+ * `gh` flags that turn a read into a write. `gh api` is a read only with a GET
+ * method, and several subcommands accept `--method`, so the check is on the flag
+ * rather than on the subcommand.
+ */
+const GH_WRITE_FLAGS = new Set([
+	"-X",
+	"--method",
+	"-f",
+	"-F",
+	"--field",
+	"--raw-field",
+	"--input",
+	"--web",
+	"--edit",
+	"--delete",
+	"--add",
+	"--remove",
+	"--set",
+	"-R",
+]);
+
+/** HTTP verbs `gh api` may use; anything but GET writes. */
+const READ_HTTP_METHODS = new Set(["GET", "get"]);
 
 /** find(1) predicates that write or execute; plan mode is read-only. */
 const FIND_WRITE_PREDICATES = new Set([
@@ -179,6 +276,55 @@ class Scanner {
 	}
 }
 
+/**
+ * Whether a `gh` call only reads: a known subcommand, no write flag, and a GET
+ * method when `--method`/`-X` does appear (the flag itself is not a write then).
+ */
+function ghIsReadOnly(words: string[]): { ok: boolean; reason?: string } {
+	const sub = words[1];
+	if (sub === undefined) {
+		return {
+			ok: false,
+			reason: "plan mode allows gh only with a subcommand (pr view, issue view, run view, search, api GET)",
+		};
+	}
+	if (!PLAN_GH_COMMANDS.has(sub)) {
+		return { ok: false, reason: `plan mode allows only the reading gh subcommands; got "gh ${sub}"` };
+	}
+	if (PLAN_GH_GROUPS_WITH_VERB.has(sub)) {
+		const verb = words[2];
+		if (verb === undefined || !PLAN_GH_READ_VERBS.has(verb)) {
+			return {
+				ok: false,
+				reason: `plan mode is read-only; "gh ${sub} ${verb ?? ""}" is not a reading verb (view, list, diff, status, checks, download)`,
+			};
+		}
+	} else if (sub === "search") {
+		// `gh search` needs a target too, and every target reads.
+		if (words[2] === undefined) {
+			return { ok: false, reason: "plan mode allows gh search only with a target (code, repos, issues, prs)" };
+		}
+	}
+	for (let index = 2; index < words.length; index++) {
+		const word = words[index];
+		const equals = word.indexOf("=");
+		const flag = equals > 0 ? word.slice(0, equals) : word;
+		if (!GH_WRITE_FLAGS.has(flag)) continue;
+		if (flag === "-X" || flag === "--method") {
+			const value = equals > 0 ? word.slice(equals + 1) : words[index + 1];
+			if (value === undefined || !READ_HTTP_METHODS.has(value)) {
+				return {
+					ok: false,
+					reason: `plan mode is read-only; gh ${flag} ${value ?? ""} sends a request that can write`,
+				};
+			}
+			continue;
+		}
+		return { ok: false, reason: `plan mode is read-only; gh ${flag} writes` };
+	}
+	return { ok: true };
+}
+
 export class ParseError extends Error {}
 
 function describeOperator(op: string): string {
@@ -226,8 +372,24 @@ export function firstShellWord(input: string): string | undefined {
 }
 
 /**
- * Plan-mode check: the command must be a single simple invocation of ls, find,
- * or pwd. find(1) writing predicates (-delete, -exec, ...) are rejected too.
+ * Position of `git`'s subcommand: global options that consume a value shift it
+ * right, so `git -C lib log` is read as `git log`.
+ */
+function gitSubcommandIndex(words: string[]): number {
+	let index = 1;
+	while (index < words.length) {
+		const word = words[index];
+		if (!word.startsWith("-")) break;
+		if (GIT_OPTIONS_WITH_VALUE.has(word)) index += 2;
+		else index += 1;
+	}
+	return index;
+}
+
+/**
+ * Plan-mode check: one simple invocation of a read-only command. `find`'s and
+ * `git`'s writing forms are rejected, and `git`/`gh` are checked down to the
+ * subcommand because the program name alone says nothing about what they do.
  */
 export function analyzeCommandForPlan(input: string): PlanCommandAnalysis {
 	const result = tokenizeSimpleCommand(input);
@@ -243,7 +405,7 @@ export function analyzeCommandForPlan(input: string): PlanCommandAnalysis {
 		return {
 			allowed: false,
 			firstCommand,
-			reason: `plan mode allows only the read tool and the ls, find, and pwd commands (got "${firstCommand}")`,
+			reason: `plan mode allows only read-only commands (read, grep, find, ls, and the PLAN_ALLOWED_SHELL list); got "${firstCommand}"`,
 		};
 	}
 	if (firstCommand === "find") {
@@ -255,6 +417,21 @@ export function analyzeCommandForPlan(input: string): PlanCommandAnalysis {
 				reason: `plan mode is read-only; find predicate ${predicate} writes or executes`,
 			};
 		}
+	}
+	if (firstCommand === "git") {
+		const index = gitSubcommandIndex(words);
+		const sub = words[index];
+		if (sub === undefined || !PLAN_GIT_SUBCOMMANDS.has(sub)) {
+			return {
+				allowed: false,
+				firstCommand,
+				reason: `plan mode is read-only; "git ${sub ?? ""}" is not one of the reading subcommands (log, show, diff, status, blame, rev-parse, ...)`,
+			};
+		}
+	}
+	if (firstCommand === "gh") {
+		const gh = ghIsReadOnly(words);
+		if (!gh.ok) return { allowed: false, firstCommand, reason: gh.reason };
 	}
 	return { allowed: true, firstCommand };
 }

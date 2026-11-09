@@ -60,10 +60,50 @@ const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
 /** Tools that prompt for permission when not in yolo or plan mode. */
 const GATED_TOOL_NAMES = new Set(["edit", "write", "bash", "powershell"]);
 
-const PLAN_GUIDELINE =
-	"You are in PLAN MODE: exploration and planning only. The read tool, the ask_user_question tool, the read-only LSP tools (lsp_hover, lsp_definition, lsp_query, lsp_diagnostics), and the ls, find, and pwd shell commands are available; every other call is blocked. Investigate, ask about anything ambiguous, then produce a concrete step-by-step plan. Do not attempt modifications.";
-/** Tools plan mode allows besides `read`, in addition to the ls/find/pwd shell commands. */
-const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
+const PLAN_GUIDELINE = `You are in PLAN MODE: exploration and planning only. Investigate, resolve ambiguity, and return a plan another engineer can execute without asking you anything. The repository is read-only here: edits, writes, and every shell command that is not on the read-only list are refused, and the refusal names the boundary.
+
+Work in three phases. Do not skip a phase because the request sounds obvious.
+
+1. Ground in the environment. Read before asking: search the files, entry points, configs, and tests the task touches until the unknowns in the request are facts. A question whose answer is in the repository wastes the user's turn, and a plan written on guessed names is worse than no plan. Ask only what the environment cannot answer, and when you do, offer the concrete candidates you found.
+
+2. Settle intent. State the goal in one line and the success criteria you will be held to. Then finish with the user, before designing: the audience, what is in and out of scope, constraints that disqualify an approach, and the preferences that pick between approaches. If a high-impact choice is still open, ask - do not plan past it.
+
+3. Design the implementation. Bring the plan to decision complete: which files change and how, the interfaces it introduces or changes, the data flow, the edge cases and failure modes that shaped the design, how it will be verified, and the assumptions you had to fill in. Tests are part of the design, not a footnote.
+
+You cannot run the build or the tests here, and the plan may not claim that they pass. Say what verifies the change and what you already know holds; the execution turn runs the checks.
+
+The plan ends as prose in your reply, in the user's language, with the structure below. It is a message, not a file: do not write it to disk.
+
+## <title>
+
+Goal and success criteria in a short paragraph.
+
+## Changes - grouped by subsystem or behaviour; name a file only to disambiguate. No file-by-file inventory.
+
+## Interfaces - public API, types, config, or wire shapes that change, and why. Omit when nothing outside the code changes.
+
+## Tests - what proves it works, and how each item is checked.
+
+## Assumptions - every default you picked, so the user can reject it in one line.
+
+Finish with the plan itself. Do not ask whether to proceed and do not restate this instruction: the user is offered a choice between executing the plan and revising it, so a question about proceeding turns one decision into two.`;
+/**
+ * Tools plan mode allows besides `read`, in addition to the read-only shell commands.
+ *
+ * `enter_plan_mode` is here so a session that starts outside plan mode has the same
+ * way in as the user typing `/plan`. It changes no files; it only makes this phase
+ * reachable from the model side, where a non-mutating request (`write a plan for X`)
+ * otherwise has no answer but "blocked".
+ *
+ * `todo` is here because a plan is a list of steps: the model drafts it with the tool
+ * whose results the user already sees, and the entries stay in the session for
+ * execution. Holding todos is not a claim about the repository.
+ *
+ * Everything else is blocked, including tools that build or run code: a plan that
+ * says "the tests pass" is a claim the plan cannot make, and `pnpm run check` writes
+ * as much as it reads. The plan says what the verification will be; it does not run it.
+ */
+const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question", "enter_plan_mode", "todo"]);
 /**
  * LSP tools that only read. They belong in plan mode: hover/definition/references
  * answer questions that grepping cannot, and blocking them left the model with
@@ -72,6 +112,16 @@ const PLAN_ALLOWED_TOOLS = new Set(["ask_user_question"]);
  * `lsp_edit` is deliberately absent — it rewrites files.
  */
 const PLAN_ALLOWED_LSP_TOOLS = new Set(["lsp_diagnostics", "lsp_hover", "lsp_definition", "lsp_query"]);
+
+/**
+ * Shell tools whose `command` string the plan-mode allowlist vets.
+ *
+ * `powershell` is checked by the same analyzer, so it is refused rather than
+ * allowed through: its syntax does not tokenize the way bash's does, and a
+ * "read-only" verdict on a string the analyzer did not understand would be a
+ * hole. It stays listed so the refusal names the mode, not a missing tool.
+ */
+const PLAN_SHELL_TOOL_NAMES = new Set(["bash", "shell", "powershell", "pwsh"]);
 
 /**
  * Plan-mode verdict for one tool call, or undefined to allow it.
@@ -83,7 +133,7 @@ const PLAN_ALLOWED_LSP_TOOLS = new Set(["lsp_diagnostics", "lsp_hover", "lsp_def
 export function planModeVerdict(toolName: string, input: unknown): string | undefined {
 	if (toolName === "read" || PLAN_ALLOWED_TOOLS.has(toolName) || PLAN_ALLOWED_LSP_TOOLS.has(toolName))
 		return undefined;
-	if (SHELL_TOOL_NAMES.has(toolName)) {
+	if (PLAN_SHELL_TOOL_NAMES.has(toolName)) {
 		const command =
 			typeof (input as Record<string, unknown>)?.command === "string"
 				? ((input as Record<string, unknown>).command as string)
@@ -92,7 +142,7 @@ export function planModeVerdict(toolName: string, input: unknown): string | unde
 		if (analysis.allowed) return undefined;
 		return analysis.reason ?? "command not allowed in plan mode";
 	}
-	return `plan mode allows only the read, ask_user_question, and read-only lsp_ tools and the ls, find, and pwd commands (blocked ${toolName})`;
+	return `plan mode is read-only (blocked ${toolName}). Explore with read, the read-only lsp tools, and the reading shell commands; ask with ask_user_question; keep the draft in todo. Then answer with the plan: the user approves it before anything is modified.`;
 }
 const MINIMAL_GUIDELINE =
 	"You are in MINIMAL MODE: only the shell (bash) tool is available. Accomplish the task through shell commands.";
@@ -409,7 +459,53 @@ const NOTHING_TO_NARROW = "This build ships only the shell tools, so minimal mod
  * other two are switches, and a switch typed while on is a request to turn it
  * off (see `modeCommand`).
  */
-const ALREADY_IN_PLAN = "Already in plan mode (read-only until the plan is approved): the exit prompt follows the plan";
+const ALREADY_IN_PLAN =
+	"Already in plan mode (read-only): type what to change to revise the plan, or answer the exit prompt when it appears";
+
+/**
+ * What the approved plan is sent with.
+ *
+ * The plan is in the transcript, one message above, so the instruction only has
+ * to name it and say what execution means: entries of the draft become todos, and
+ * the plan's own verification steps are how the work is checked.
+ */
+const PLAN_APPROVED_MESSAGE =
+	"Plan approved. Execute the plan above. Track its steps with todo (the draft you made is the starting point), follow it unless you find a reason not to, and say so when you deviate. Verify with the plan's test steps before reporting done.";
+
+/**
+ * How many plan-mode turns may end in a question before the exit prompt appears
+ * anyway. A model that keeps asking is not converging, and the exit prompt is the
+ * only way out of plan mode besides `/minimal`; without a bound, a question-shaped
+ * loop would keep the user in a read-only mode with nothing to approve.
+ */
+const MAX_QUESTION_TURNS = 3;
+
+/**
+ * Whether the turn's last assistant message asked the user something, which
+ * makes the turn unfinished.
+ *
+ * The adapter records the call because the questionnaire returns a result whether
+ * the user answered or cancelled; only the call itself says a question was put.
+ */
+function lastTurnAskedUser(messages: readonly unknown[]): boolean {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index] as { role?: string; content?: unknown } | undefined;
+		if (message?.role !== "assistant") continue;
+		return assistantMessageAskedUser(message.content);
+	}
+	return false;
+}
+
+function assistantMessageAskedUser(content: unknown): boolean {
+	if (!Array.isArray(content)) return false;
+	return content.some(
+		(part) =>
+			typeof part === "object" &&
+			part !== null &&
+			(part as { type?: unknown; name?: unknown }).type === "toolCall" &&
+			(part as { name?: unknown }).name === "ask_user_question",
+	);
+}
 
 export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const engine = modeEngine;
@@ -417,6 +513,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let gate: PermissionGate | undefined;
 	/** /plan runs settle into the exit-confirmation flow. */
 	let planIntroActive = false;
+	/** Plan-mode turns that ended in a question; bounds the exit prompt's wait. */
+	let questionTurns = 0;
 	/** Value plus the layer it came from; rebuilt on every session start, `/gitguard` rewrites it. */
 	let gitGuardState: GuardSwitchState = { value: true, source: "default", session: undefined, read: false };
 	/** Value plus the layer it came from; rebuilt on every session start, `/shellguard` rewrites it. */
@@ -690,13 +788,15 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				ctx.ui.notify(`Switched to ${mode} mode${hint}`, "info");
 				return;
 			}
+			// A second `/plan` with text is a revision, not a restart: it keeps the
+			// exit prompt that is already waiting instead of resetting the counter.
+			if (previous !== "plan") questionTurns = 0;
 			planIntroActive = true;
 			const task = args.trim();
-			nanopi.sendUserMessage(
-				task.length > 0
-					? `${task}\n\n(We are in plan mode: explore read-only and produce a step-by-step plan for this task.)`
-					: "Explore the repository read-only and produce a step-by-step plan for the task at hand. Do not attempt modifications.",
-			);
+			// The rules arrive in the system prompt as the plan-mode paragraph, so the
+			// message carries the task and nothing else: restating the rules here made
+			// the model answer the parenthesis instead of the request.
+			nanopi.sendUserMessage(task.length > 0 ? task : "Draft a plan for the task at hand.");
 		};
 	}
 
@@ -708,6 +808,48 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	nanopi.registerCommand("minimal", {
 		description: "Enter minimal mode (shell tool only); type it again to leave",
 		handler: modeCommand("minimal"),
+	});
+
+	// --- Tool: enter_plan_mode ---
+	//
+	// `/plan` is a user command, so a request that is itself a plan request
+	// ("write a plan for X") had no model-side answer: the agent either started
+	// editing or had to ask the user to type a slash command. This tool is the
+	// same entry, minus the user: it switches the mode and returns, and the caller's
+	// next request carries the plan-mode paragraph.
+	//
+	// `defaultActive: false` is deliberately not available through this slice, so
+	// it is activated like every other extra tool; plan mode's whitelist is what
+	// keeps it from appearing as an option while planning.
+	nanopi.registerTool?.({
+		name: "enter_plan_mode",
+		label: "Enter plan mode",
+		description:
+			"Switch this session to plan mode: read-only exploration and a decision-complete plan handed back to the user for approval. Use it when the user asks for a plan, a design, or an approach instead of an edit.",
+		promptSnippet: "Enter plan mode to explore and return a plan instead of editing",
+		promptGuidelines: [
+			"When the user asks for a plan, a design, or an approach rather than an edit, call enter_plan_mode first and plan there; do not write the file the request was apparently about.",
+		],
+		parameters: { type: "object", properties: {}, additionalProperties: false },
+		async execute() {
+			const previous = engine.mode;
+			engine.setMode("plan", "enter_plan_mode");
+			questionTurns = 0;
+			// No exit prompt: the user asked for a plan in prose, and the request is
+			// already the plan-mode turn. A prompt here would offer to execute a plan
+			// the model has not written yet.
+			planIntroActive = false;
+			applyModeStatus();
+			return {
+				content: [
+					{
+						type: "text",
+						text: `Switched to plan mode${previous === "standard" ? "" : ` (left ${previous} mode)`}. Explore read-only, resolve ambiguity, and answer with the plan; the user approves it before anything is modified.`,
+					},
+				],
+				details: undefined,
+			};
+		},
 	});
 
 	// --- CLI command: /yolo [on|off] ---
@@ -964,6 +1106,11 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 				if (requested) engine.setMode(requested.mode, requested.reason);
 				else engine.setMode(settings.defaultMode, "session default");
 			}
+			// The planning counters belong to the plan run, not to the process: a
+			// resumed session starts its exit prompt fresh rather than inheriting the
+			// prompt budget of the run that was resumed.
+			questionTurns = 0;
+			planIntroActive = false;
 			applyModeToolSet();
 			// Persisted subsystem switches apply to fresh sessions too, not just
 			// when toggled live from the webui settings page.
@@ -1062,18 +1209,35 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		applyModeStatus();
 		if (!planIntroActive || engine.mode !== "plan") return;
 		planIntroActive = false;
+		// A turn that ends in a question is not a finished plan. The user was asked
+		// something the repository could not answer, so the next turn continues the
+		// same planning run and the exit prompt waits for the plan itself. The
+		// counter is the loop breaker: a plan-mode turn that ends in another
+		// question each time would otherwise hold the exit prompt forever.
+		if (questionTurns < MAX_QUESTION_TURNS && lastTurnAskedUser(event.messages ?? [])) {
+			questionTurns += 1;
+			planIntroActive = true;
+			return;
+		}
+		questionTurns = 0;
 		const ctx = sessionCtx;
 		if (!ctx?.hasUI) return;
 		void (async () => {
-			const choice = await ctx.ui.select("Plan ready. Exit plan mode and execute it?", [
+			// Naming the alternative is what makes the second answer usable: a plan
+			// that is close but wrong is the common case, and "keep planning" used to
+			// drop the user back into a mode with no sentence to type.
+			const choice = await ctx.ui.select("Plan ready. Execute it, or keep refining?", [
 				"Exit plan mode and execute",
-				"Stay in plan mode",
+				"Keep planning (type what to change)",
 			]);
 			if (choice === "Exit plan mode and execute") {
 				engine.setMode("standard", "plan approved");
-				nanopi.sendUserMessage("The plan above is approved. Execute it now.");
+				nanopi.sendUserMessage(PLAN_APPROVED_MESSAGE);
 			} else {
-				ctx.ui.notify("Staying in plan mode (read-only exploration).", "info");
+				ctx.ui.notify(
+					"Still in plan mode (read-only). Type what to change and the next turn revises the plan.",
+					"info",
+				);
 			}
 		})();
 	});
@@ -1084,8 +1248,13 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			event.systemPromptOptions.customPrompt = initMd;
 		}
 		const guidelines = event.systemPromptOptions.promptGuidelines ?? [];
-		if (engine.mode === "plan") guidelines.push(PLAN_GUIDELINE);
+		// The mode paragraph is a section of its own rather than one more bullet: a
+		// three-phase instruction set is prose, and a session that leaves plan mode
+		// drops one section instead of rewriting every rule in the prompt.
+		const sections = event.systemPromptOptions.guidelineSections ?? [];
+		if (engine.mode === "plan") sections.push(PLAN_GUIDELINE);
 		else if (engine.mode === "minimal") guidelines.push(MINIMAL_GUIDELINE);
+		event.systemPromptOptions.guidelineSections = sections;
 		const all = nanopi.getAllTools().map((tool) => tool.name);
 		// Both halves have to exist for the guideline to be true: servers registered
 		// (`mcp__*`) and the shell (`mcp`) that reaches them. The shell needs the

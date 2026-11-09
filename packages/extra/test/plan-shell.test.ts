@@ -2,10 +2,17 @@ import { describe, expect, test } from "vitest";
 import { analyzeCommandForPlan, firstShellWord, tokenizeSimpleCommand } from "../src/plan-shell.ts";
 
 describe("analyzeCommandForPlan", () => {
-	test("allows simple ls, find, pwd with arguments", () => {
+	test("allows the reading commands with arguments", () => {
 		expect(analyzeCommandForPlan("ls -la /tmp")).toEqual({ allowed: true, firstCommand: "ls" });
 		expect(analyzeCommandForPlan("pwd")).toEqual({ allowed: true, firstCommand: "pwd" });
 		expect(analyzeCommandForPlan("find . -name '*.ts' -type f")).toEqual({ allowed: true, firstCommand: "find" });
+		expect(analyzeCommandForPlan("cat package.json").allowed).toBe(true);
+		expect(analyzeCommandForPlan("grep -rn foo src").allowed).toBe(true);
+		expect(analyzeCommandForPlan("rg --files").allowed).toBe(true);
+		expect(analyzeCommandForPlan("git status --short").allowed).toBe(true);
+		expect(analyzeCommandForPlan("git -C packages/extra log --oneline -5").allowed).toBe(true);
+		expect(analyzeCommandForPlan("gh pr view 622 --json title").allowed).toBe(true);
+		expect(analyzeCommandForPlan("gh api repos/x/y/pulls/1").allowed).toBe(true);
 	});
 
 	test("allows quoted metacharacters as literals", () => {
@@ -18,14 +25,30 @@ describe("analyzeCommandForPlan", () => {
 		expect(analyzeCommandForPlan("ls -la # list everything").allowed).toBe(true);
 	});
 
-	test("rejects other commands", () => {
+	test("rejects commands outside the reading list", () => {
 		const result = analyzeCommandForPlan("rm -rf /");
 		expect(result.allowed).toBe(false);
-		expect(result.reason).toContain("plan mode allows only");
-		expect(analyzeCommandForPlan("cat file.txt").allowed).toBe(false);
-		expect(analyzeCommandForPlan("echo hi").allowed).toBe(false);
+		expect(result.reason).toContain("read-only commands");
+		expect(analyzeCommandForPlan("sed -i s/a/b/ f").allowed).toBe(false);
+		expect(analyzeCommandForPlan("npm install").allowed).toBe(false);
 		expect(analyzeCommandForPlan("sh -c 'ls'").allowed).toBe(false);
 		expect(analyzeCommandForPlan("/bin/ls").allowed).toBe(false);
+	});
+
+	test("rejects git subcommands that write", () => {
+		expect(analyzeCommandForPlan("git checkout main").allowed).toBe(false);
+		expect(analyzeCommandForPlan("git commit -m x").allowed).toBe(false);
+		// `git branch` without a list flag creates the branch it names.
+		expect(analyzeCommandForPlan("git branch new-name").allowed).toBe(false);
+		expect(analyzeCommandForPlan("git -C . stash").allowed).toBe(false);
+	});
+
+	test("rejects gh calls that write", () => {
+		expect(analyzeCommandForPlan("gh pr create --title x").allowed).toBe(false);
+		expect(analyzeCommandForPlan("gh pr comment 1 --body hi").allowed).toBe(false);
+		expect(analyzeCommandForPlan("gh api -X POST repos/x/y").allowed).toBe(false);
+		// GET through the method flag is still a read.
+		expect(analyzeCommandForPlan("gh api --method GET repos/x/y/pulls").allowed).toBe(true);
 	});
 
 	test("rejects command separators", () => {

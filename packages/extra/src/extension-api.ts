@@ -9,6 +9,7 @@
  * registered in packages/coding-agent/src/extensions/index.ts).
  */
 
+import type { TSchema } from "typebox";
 import type { BadgeThemeSlice } from "./badges.ts";
 
 /** One slash-argument suggestion, in the shape the host autocomplete wants. */
@@ -61,6 +62,26 @@ export interface ExtraToolCallResult {
 	terminate?: boolean;
 }
 
+/**
+ * Minimal shape of a registered tool: what the host needs to declare and run it.
+ * Deliberately structural, so pi-extra keeps no import of the coding-agent.
+ */
+export interface ExtraToolDefinition {
+	name: string;
+	label: string;
+	description: string;
+	promptSnippet?: string;
+	promptGuidelines?: string[];
+	parameters: TSchema;
+	execute(
+		toolCallId: string,
+		params: Record<string, unknown>,
+		signal: AbortSignal | undefined,
+		onUpdate: unknown,
+		ctx: { cwd: string },
+	): Promise<{ content: Array<{ type: "text"; text: string }>; details: undefined }>;
+}
+
 export interface ExtraSessionStartEvent {
 	type: "session_start";
 	reason: "startup" | "reload" | "new" | "resume" | "fork";
@@ -71,6 +92,8 @@ export interface ExtraBeforeAgentStartEvent {
 	systemPromptOptions: {
 		customPrompt?: string;
 		promptGuidelines?: string[];
+		/** Mode paragraphs rendered as the `guidelines` section (see BuildSystemPromptOptions). */
+		guidelineSections?: string[];
 	};
 }
 
@@ -98,6 +121,12 @@ export interface ExtraExtensionAPI {
 			handler: (args: string, ctx: ExtraExtensionContext) => Promise<void>;
 		},
 	): void;
+	/**
+	 * Register a tool the model can call. `enter_plan_mode` is the only one the extra
+	 * registers, and it is optional so a build flavor without tool registration
+	 * still loads the modes.
+	 */
+	registerTool?(tool: ExtraToolDefinition): void;
 	on(event: "project_trust", handler: () => ExtraProjectTrustResult): void;
 	on(
 		event: "session_start",
@@ -108,8 +137,13 @@ export interface ExtraExtensionAPI {
 		handler: (event: { type: "session_shutdown" }, ctx: ExtraExtensionContext) => Promise<void> | void,
 	): void;
 	on(
+		// The settled event carries the turn's messages: that is where a turn that
+		// ended in a question is told from one that finished its work.
 		event: "agent_settled",
-		handler: (event: { type: "agent_settled"; aborted: boolean }, ctx: ExtraExtensionContext) => Promise<void> | void,
+		handler: (
+			event: { type: "agent_settled"; aborted: boolean; messages?: readonly unknown[] },
+			ctx: ExtraExtensionContext,
+		) => Promise<void> | void,
 	): void;
 	on(
 		event: "before_agent_start",

@@ -1479,7 +1479,14 @@ export class AgentSession {
 		this._isEmittingAgentSettled = true;
 		try {
 			const aborted = this._agentRunAbortRequested;
-			await this._moduleRegistry.emit({ type: "agent_settled", aborted });
+			// The transcript rides along because a settled handler that has to judge
+			// what the run did (ended in a question, produced the plan it promised)
+			// otherwise has to keep its own copy of the messages.
+			await this._moduleRegistry.emit({
+				type: "agent_settled",
+				aborted,
+				messages: this.agent.state.messages,
+			});
 			this._emit({ type: "agent_settled", aborted });
 		} finally {
 			this._isEmittingAgentSettled = false;

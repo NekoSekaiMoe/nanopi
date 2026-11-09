@@ -206,6 +206,9 @@ importers:
       '@nanopi/pi-tui':
         specifier: ^20261107.0.0
         version: link:../tui
+      typebox:
+        specifier: 1.4.5
+        version: 1.4.5
     devDependencies:
       '@types/node':
         specifier: 24.19.2

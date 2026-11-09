@@ -1083,6 +1083,12 @@ export interface AgentSettledEvent {
 	type: "agent_settled";
 	/** Whether the run ended because it was aborted, for example with Escape. */
 	aborted: boolean;
+	/**
+	 * The session's messages at settle time, read-only. A handler that has to judge
+	 * the run (did it end in a question? did it write the file it claimed?) reads
+	 * the transcript here instead of keeping its own copy.
+	 */
+	messages?: readonly AgentMessage[];
 }
 
 /** Fired at the end of each turn */
