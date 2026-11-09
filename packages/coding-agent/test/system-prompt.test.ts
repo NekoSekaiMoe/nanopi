@@ -203,6 +203,35 @@ describe("buildSystemPrompt", () => {
 
 			expect(prompt.match(/- Use dynamic_tool for summaries\./g)).toHaveLength(1);
 		});
+
+		// Regression for #622: mode paragraphs need their own section. A run mode is
+		// several phases of prose, and putting it in `<rules>` made leaving the mode
+		// look like every rule in the prompt changing.
+		test("renders guidelineSections as a section, not as rule bullets", () => {
+			const paragraph = "You are in TEST MODE: phase one.\n\nPhase two.";
+			const prompt = buildSystemPrompt({
+				selectedTools: ["read"],
+				guidelineSections: [paragraph],
+				contextFiles: [],
+				skills: [],
+				cwd: process.cwd(),
+			});
+
+			expect(prompt).toContain(`<guidelines>\n${paragraph}\n</guidelines>`);
+			expect(prompt).not.toContain("- You are in TEST MODE");
+		});
+
+		test("drops an empty guidelineSections entry instead of an empty section", () => {
+			const prompt = buildSystemPrompt({
+				selectedTools: ["read"],
+				guidelineSections: ["   "],
+				contextFiles: [],
+				skills: [],
+				cwd: process.cwd(),
+			});
+
+			expect(prompt).not.toContain("<guidelines>");
+		});
 	});
 
 	describe("skills", () => {
