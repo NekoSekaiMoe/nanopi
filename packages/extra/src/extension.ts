@@ -42,7 +42,17 @@ import {
 	type SandboxAvailability,
 	type SandboxConfig,
 } from "./sandbox.ts";
-import { loadExtraSettings, saveExtraSettings } from "./settings-store.ts";
+import {
+	type GuardKey,
+	globalGuardValue,
+	loadExtraSettings,
+	projectExtraSettingsPath,
+	projectGuardValue,
+	resolveGuardSwitch,
+	type SettingsLayer,
+	type SettingsSource,
+	saveExtraSettings,
+} from "./settings-store.ts";
 import { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
 import { type RunMode, SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
@@ -245,14 +255,109 @@ function makeWebuiPrompter(onExplain: (info: PermissionCallInfo) => void): Permi
 	};
 }
 
-/** Destructive git prompting, on unless the user turned it off with `/gitguard off`. */
-function gitGuardEnabled(cwd: string): boolean {
-	return loadExtraSettings(cwd).settings.gitGuard ?? true;
+/**
+ * One guard switch as this session currently has it.
+ *
+ * `source` travels with the value everywhere it is shown: the bare `/gitguard`
+ * output, the session-start notice, and the confirm dialog. A switch that reads
+ * "off" must say which file said so, or the user cannot tell a deliberate
+ * project setting from one that silently overruled their global "on".
+ */
+interface GuardSwitchState {
+	readonly value: boolean;
+	readonly source: SettingsSource;
+	/** Answer given for this session: memory only, nothing written. */
+	readonly session: boolean | undefined;
+	/** False until a session start read the files, which is when the other fields mean anything. */
+	readonly read: boolean;
 }
 
-/** File-inspection refusal, on unless the user turned it off with `/shellguard off`. */
-function shellGuardEnabled(cwd: string): boolean {
-	return loadExtraSettings(cwd).settings.shellGuard ?? true;
+/** The word the confirm dialog and the bare command use for "not saved anywhere yet". */
+const DEFAULT_SOURCE_LABEL = "default (on)";
+
+function sourceLabel(source: SettingsSource): string {
+	return source === "default" ? DEFAULT_SOURCE_LABEL : source;
+}
+
+function describeGuard(state: GuardSwitchState): string {
+	const value = state.session ?? state.value;
+	if (state.session !== undefined) {
+		return `${value ? "on" : "off"} (this session; saved value is ${state.value ? "on" : "off"})`;
+	}
+	return `${value ? "on" : "off"} (${sourceLabel(state.source)})`;
+}
+
+/**
+ * Every guarded switch reads through `resolveGuardSwitch`, so the value and its
+ * source are one thing rather than two lookups that can disagree.
+ */
+function readGuardState(cwd: string, key: GuardKey): GuardSwitchState {
+	const resolved = resolveGuardSwitch(cwd, key);
+	return { value: resolved.value, source: resolved.source, session: undefined, read: true };
+}
+
+/** The three targets `/gitguard off` can name, widest first. */
+const GUARD_SCOPES = ["global", "project", "session"] as const;
+type GuardScope = (typeof GUARD_SCOPES)[number];
+
+function isGuardScope(value: string): value is GuardScope {
+	return (GUARD_SCOPES as readonly string[]).includes(value);
+}
+
+const GUARD_SCOPE_HINTS: Record<GuardScope, string> = {
+	global: "write the global settings file",
+	project: "write .nanopi/extra/settings.json in this directory",
+	session: "this session only, not saved",
+};
+
+/** Answers to the session-start question; each one is a different reach. */
+const GUARD_CONFIRM_ACCEPT = "Keep it off for this session";
+const GUARD_CONFIRM_REPAIR = "Use the global value and fix the project file";
+const GUARD_CONFIRM_DENY = "Block shell and git calls until I change it";
+
+/**
+ * What to do when a project file silently overrules the global guard value.
+ *
+ * The three answers are the whole point of asking instead of just reading: a
+ * session that opens with a guard quietly off, against a global "on", is a
+ * downgrade nobody chose. Nothing here is silent — a session that cannot show a
+ * dialog takes the conservative answer and says so in its log.
+ *
+ * Resolves `undefined` in the common case, where the project file has no say:
+ * it carries no key for this switch, or carries the same answer the global file
+ * gives. A project layer with *no* global value underneath is the user turning
+ * the guard off in a fresh setup, not a downgrade to challenge.
+ */
+async function confirmGuardDowngrade(
+	ctx: ExtraExtensionContext,
+	key: GuardKey,
+	cwd: string,
+): Promise<GuardSwitchState | undefined> {
+	const project = projectGuardValue(cwd, key);
+	if (project === undefined) return undefined;
+	const global = globalGuardValue(key);
+	// `false` in one layer under `true` (or nothing) in the other is the silent
+	// downgrade. Anything else is either agreement or a deliberate global `off`.
+	if (project !== false || global === false) return undefined;
+	const title = key === "gitGuard" ? "Git guard" : "Shell guard";
+	const file = projectExtraSettingsPath(cwd);
+	const message = `${title} is off because ${file} says so, while the global settings do not say off. Keep it off?`;
+	if (!ctx.hasUI) {
+		ctx.ui.notify(`${message} No prompt to answer it, so it stays on.`, "warning");
+		return { value: true, source: "global", session: true, read: true };
+	}
+	const choice = await ctx.ui.select(message, [GUARD_CONFIRM_ACCEPT, GUARD_CONFIRM_REPAIR, GUARD_CONFIRM_DENY]);
+	// `session` is the answer in effect for this session, which is the guard's own
+	// value: accepting means it stays off, denying means it stays on.
+	if (choice === GUARD_CONFIRM_ACCEPT) return { value: false, source: "project", session: false, read: true };
+	if (choice === GUARD_CONFIRM_DENY) {
+		ctx.ui.notify(`${title} off by ${file}: shell and git calls are blocked until it changes.`, "warning");
+		return { value: true, source: "project", session: true, read: true };
+	}
+	// Repaired, or dismissed: the project file is the thing that lied, so the key
+	// comes out of it instead of the session overriding a value that stays behind.
+	saveExtraSettings({ [key]: null }, "project", cwd);
+	return { value: true, source: "global", session: true, read: true };
 }
 
 /**
@@ -312,10 +417,10 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	let gate: PermissionGate | undefined;
 	/** /plan runs settle into the exit-confirmation flow. */
 	let planIntroActive = false;
-	/** Read once per session start; `/gitguard` re-applies it. */
-	let gitGuardOn = true;
-	/** Read once per session start; `/shellguard` re-applies it. */
-	let shellGuardOn = true;
+	/** Value plus the layer it came from; rebuilt on every session start, `/gitguard` rewrites it. */
+	let gitGuardState: GuardSwitchState = { value: true, source: "default", session: undefined, read: false };
+	/** Value plus the layer it came from; rebuilt on every session start, `/shellguard` rewrites it. */
+	let shellGuardState: GuardSwitchState = { value: true, source: "default", session: undefined, read: false };
 	/** Calls the user asked to have explained, waiting for that explanation to land. */
 	const explainedCalls = new Map<string, PermissionCallInfo>();
 	/**
@@ -726,43 +831,123 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		nanopi.setActiveTools([...active]);
 	}
 
-	// --- CLI command: /gitguard [on|off] ---
-	nanopi.registerCommand("gitguard", {
-		description: "Show or configure the destructive git guard (on | off)",
-		handler: async (args, ctx) => {
-			const requested = args.trim().toLowerCase();
-			if (requested === "") {
-				ctx.ui.notify(`Git guard: ${gitGuardOn ? "on" : "off"}`, "info");
-				return;
-			}
-			if (requested !== "on" && requested !== "off") {
-				ctx.ui.notify("Usage: /gitguard [on|off]", "error");
-				return;
-			}
-			saveExtraSettings({ gitGuard: requested === "on" });
-			gitGuardOn = requested === "on";
-			ctx.ui.notify(`Git guard ${requested}`, "info");
-		},
-	});
+	/** The switch a slash command is talking about. */
+	function guardStateOf(key: GuardKey): GuardSwitchState {
+		return key === "gitGuard" ? gitGuardState : shellGuardState;
+	}
 
-	// --- CLI command: /shellguard [on|off] ---
-	nanopi.registerCommand("shellguard", {
-		description: "Show or configure the file-inspection guard (on | off)",
-		handler: async (args, ctx) => {
-			const requested = args.trim().toLowerCase();
-			if (requested === "") {
-				ctx.ui.notify(`Shell guard: ${shellGuardOn ? "on" : "off"}`, "info");
-				return;
-			}
-			if (requested !== "on" && requested !== "off") {
-				ctx.ui.notify("Usage: /shellguard [on|off]", "error");
-				return;
-			}
-			saveExtraSettings({ shellGuard: requested === "on" });
-			shellGuardOn = requested === "on";
-			ctx.ui.notify(`Shell guard ${requested}`, "info");
-		},
-	});
+	/** The session copy, falling back to the files while no session has started. */
+	function guardStateFor(key: GuardKey, cwd: string): GuardSwitchState {
+		return guardStateOf(key).read ? guardStateOf(key) : readGuardState(cwd, key);
+	}
+
+	function setGuardState(key: GuardKey, state: GuardSwitchState): void {
+		if (key === "gitGuard") gitGuardState = state;
+		else shellGuardState = state;
+	}
+
+	function guardOnOf(key: GuardKey): boolean {
+		const state = guardStateOf(key);
+		return state.session ?? state.value;
+	}
+
+	/**
+	 * `/gitguard on|off [global|project|session]`.
+	 *
+	 * A bare call is a snapshot, never a switch: turning a safety guard off has to
+	 * be typed out with its scope. The scope decides which file is written, and
+	 * omitting it writes the layer the switch is already reading, which is the
+	 * layer the bare output just named.
+	 */
+	function guardCommand(key: GuardKey, title: string, description: string): void {
+		const name = key === "gitGuard" ? "gitguard" : "shellguard";
+		const usage = `Usage: /${name} [on|off] [global|project|session]`;
+		nanopi.registerCommand(name, {
+			description,
+			getArgumentCompletions: (prefix) =>
+				["on", "off", "global", "project", "session"]
+					.filter((value) => value.startsWith(prefix))
+					.map((value) => ({
+						value,
+						label: value,
+						description: isGuardScope(value) ? GUARD_SCOPE_HINTS[value] : undefined,
+					})),
+			handler: async (args, ctx) => {
+				const words = args
+					.trim()
+					.toLowerCase()
+					.split(/\s+/)
+					.filter((word) => word !== "");
+				if (words.length === 0) {
+					ctx.ui.notify(`${title}: ${describeGuard(guardStateFor(key, ctx.cwd))}`, "info");
+					return;
+				}
+				const [requested, scope, ...rest] = words;
+				if ((requested !== "on" && requested !== "off") || scope === "" || rest.length > 0) {
+					ctx.ui.notify(usage, "error");
+					return;
+				}
+				if (scope !== undefined && !isGuardScope(scope)) {
+					ctx.ui.notify(usage, "error");
+					return;
+				}
+				changeGuard(key, ctx, requested === "on", scope);
+			},
+		});
+	}
+
+	/**
+	 * Apply one `/xxx on|off [scope]`.
+	 *
+	 * `session` never reaches the disk: memory only, and it outlives an extension
+	 * reload (see `session_start`). `global`/`project` write that file and make it
+	 * the value in effect, which is why the notice below reports the source it
+	 * just wrote.
+	 */
+	function changeGuard(key: GuardKey, ctx: ExtraExtensionContext, on: boolean, scope: GuardScope | undefined): void {
+		const title = key === "gitGuard" ? "Git guard" : "Shell guard";
+		// Read the files again rather than the session copy: the session copy can
+		// already be an answer to a question, and an unsaved answer must not decide
+		// which file an explicit write lands in.
+		const current = readGuardState(ctx.cwd, key);
+		if (scope === "session") {
+			setGuardState(key, { ...current, session: on });
+			ctx.ui.notify(`${title}: ${describeGuard(guardStateOf(key))}`, "info");
+			return;
+		}
+		const layer: SettingsLayer = scope ?? guardLayerOf(current);
+		saveExtraSettings({ [key]: on }, layer, ctx.cwd);
+		const written = readGuardState(ctx.cwd, key);
+		setGuardState(key, written);
+		// The notice reports the value in effect right now. An answer this session
+		// already gave stays in front of it, but the write is not hidden: the
+		// layer it went to is named either way.
+		ctx.ui.notify(`${title}: ${describeGuard(written)}`, "info");
+	}
+
+	/**
+	 * The layer `/xxx off` writes when no scope is typed: the one already in
+	 * effect, so what the bare output just said is what the write replaces.
+	 *
+	 * With nothing saved anywhere, that layer is `global` — the default is not a
+	 * project setting, and inventing one would make a bare `/gitguard off` in a
+	 * fresh directory write a file the user never asked for.
+	 */
+	function guardLayerOf(state: GuardSwitchState): SettingsLayer {
+		return state.source === "project" ? "project" : "global";
+	}
+
+	// --- CLI commands: /gitguard, /shellguard [on|off] [global|project|session] ---
+	guardCommand(
+		"gitGuard",
+		"Git guard",
+		"Show the destructive git guard, or set it: on | off [global|project|session]",
+	);
+	guardCommand(
+		"shellGuard",
+		"Shell guard",
+		"Show the file-inspection guard, or set it: on | off [global|project|session]",
+	);
 
 	// --- Session lifecycle ---
 	nanopi.on("session_start", (event, ctx) => {
@@ -788,8 +973,25 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 		// Rebuilt on every start so a reloaded settings file (and /sandbox) applies.
 		applySandbox(ctx.cwd);
-		gitGuardOn = gitGuardEnabled(ctx.cwd);
-		shellGuardOn = shellGuardEnabled(ctx.cwd);
+		// A reload keeps what this session already answered: the question below is
+		// about the files, and re-asking on every extension reload would turn a
+		// one-time confirmation into a nag. A fresh session re-reads both layers.
+		const previousGit = gitGuardState.session === undefined ? undefined : gitGuardState;
+		const previousShell = shellGuardState.session === undefined ? undefined : shellGuardState;
+		gitGuardState = previousGit ?? readGuardState(ctx.cwd, "gitGuard");
+		shellGuardState = previousShell ?? readGuardState(ctx.cwd, "shellGuard");
+		if (event.reason !== "reload") {
+			// The question is asked here rather than at the point of use: it is about
+			// the files this session starts from, and a guard that opens off without
+			// anyone choosing it is the defect. Both switches are asked together so a
+			// project file carrying both gets one round trip, not two dialogs.
+			void (async () => {
+				for (const key of ["gitGuard", "shellGuard"] as const) {
+					const state = await confirmGuardDowngrade(ctx, key, ctx.cwd);
+					if (state) setGuardState(key, state);
+				}
+			})();
+		}
 		// Fresh permission memory per session.
 		//
 		// A session with no prompt cannot answer one, so the fake prompter below
@@ -920,7 +1122,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 		// The shell guard is a refusal, not a prompt: the model has to see the rule
 		// in the tool result, which is the only thing it reads on the next turn.
-		if (shellGuardOn && SHELL_TOOL_NAMES.has(event.toolName)) {
+		if (guardOnOf("shellGuard") && SHELL_TOOL_NAMES.has(event.toolName)) {
 			const refusal = shellGuardHazard(event, sessionCtx?.cwd ?? process.cwd(), nanopi.getActiveTools());
 			if (refusal !== undefined) return { block: true, reason: refusal };
 		}
@@ -932,7 +1134,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 		const { summary, firstCommand } = summarizeCall(event);
 		const hazard =
-			gitGuardOn && SHELL_TOOL_NAMES.has(event.toolName)
+			guardOnOf("gitGuard") && SHELL_TOOL_NAMES.has(event.toolName)
 				? destructiveGitHazard(event, sessionCtx?.cwd ?? process.cwd())
 				: undefined;
 		const info: PermissionCallInfo = {

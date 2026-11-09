@@ -2,7 +2,17 @@
 
 ## [Unreleased]
 
+### Added
+
+- `/gitguard on|off` and `/shellguard on|off` take a scope: `global`, `project`, or `session`. Omitting it writes the layer already in effect, and a bare command only reports the state with the file it came from (`Git guard: off (project)`) instead of switching anything. `session` is memory only and survives an extension reload. `saveExtraSettings` accepts a target layer, and a `null` guard value removes the key from that layer (issue [#614](https://cnb.cool/shinytale/nanopi/-/issues/614))
+
+### Changed
+
+- A project file that turns a guard off behind a global `on` no longer applies silently: the session asks whether to keep it off, to use the global value and repair the project file, or to block shell and git calls until it changes. A session that cannot show a dialog keeps the guard on and says so in its log (issue [#614](https://cnb.cool/shinytale/nanopi/-/issues/614))
+
 ### Fixed
+
+- `allow this session` on the prompt shown after an explanation now covers only that call, like `allow once`: the user read an explanation of this call, not of every future call of the tool. The ordinary prompt still remembers the tool for the session (issue [#614](https://cnb.cool/shinytale/nanopi/-/issues/614))
 
 - The git guard isolates a command only when `git -C <dir>` actually lands in another checkout: a path holding no checkout at all (`git -C /does/not/exist stash`, `git -C .git stash`) used to count as isolation and skipped the prompt, while `git -C <other worktree>` keeps its exemption. `--work-tree` is no longer read as isolation — it swaps the working tree but leaves the index in this checkout, so `git --work-tree=<other> stash` now reports the hazard it always was (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
 - `git worktree add` reports the directory it creates instead of the commit-ish: the tree is the first positional (`-b <branch> <dir> [<commit-ish>]`), so `git worktree add -b feat feat HEAD` no longer names `HEAD` as the isolated path (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
