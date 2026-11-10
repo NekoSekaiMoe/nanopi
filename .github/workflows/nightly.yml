@@ -104,15 +104,21 @@ jobs:
             NANOPI_BUILD_FLAVOR="${flavor}" node scripts/build-coding-agent-single-file.mjs --out "release-assets/nanopi-${flavor}.js"
           done
 
-      # full 不再内嵌原生 sidecar，安装时下载的就是这份 tgz。它由 full 那一步
-      # 写在 nanopi.js 旁边（bundle 的 sidecar manifest 按同名拼 URL），搬进
-      # release-assets 才能随 artifact 一起发出去——AtomGit 那份镜像靠它。
+      # full 不再内嵌原生 sidecar，安装时下载的就是这份 tgz。它由
+      # build-coding-agent-single-file.mjs 写在 packages/coding-agent/binaries/
+      # 里（bundle 的 sidecar manifest 按同名拼 URL），搬进 release-assets 才能
+      # 随 artifact 一起发出去——AtomGit 那份镜像靠它。
+      #
+      # 路径不能改回 release-assets/：那份 tgz 的名字里是 TUI 的版本号，不带
+      # flavor，所以「紧挨着 --out」意味着三个 bundle 各写一份同名文件，而这里
+      # 的「恰好一个」检查数到的永远是 0。同名的多份也正是 cp 会互相覆盖的地方。
       - name: Collect TUI native prebuilds
         run: |
           set -euo pipefail
           shopt -s nullglob
           sidecars=(packages/coding-agent/binaries/nanopi-sidecars-*.tgz)
           if [[ ${#sidecars[@]} -ne 1 ]]; then
+            ls -l packages/coding-agent/binaries/ release-assets/ || true
             echo "::error::expected exactly one sidecar tarball in packages/coding-agent/binaries, found ${#sidecars[@]}"
             exit 1
           fi
