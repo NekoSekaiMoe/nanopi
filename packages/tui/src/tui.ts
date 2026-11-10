@@ -349,11 +349,11 @@ export class Container implements Component {
 	}
 
 	/**
-	 * The container's own hook for "the inputs moved, the children have to be
-	 * built again". `Container` holds no cache of its own, so the base case is
-	 * to ask each child to repaint itself. A subclass that rebuilds a subtree to
-	 * repaint overrides this, not `invalidate`, which fires as soon as
-	 * `invalidate` lands rather than after the frame in flight.
+	 * Rebuild the children from the current inputs. `Container` holds no cache
+	 * of its own, so the base case is to ask each child to repaint itself. A
+	 * subclass whose rebuild is what re-reads the theme overrides this, not
+	 * `invalidate`, which fires as soon as `invalidate` lands rather than after
+	 * the frame in flight.
 	 */
 	protected repaintChildren(): void {
 		for (const child of this.children) {

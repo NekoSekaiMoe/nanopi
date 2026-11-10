@@ -42,6 +42,15 @@ Status: implemented
 `cachedRun` 与 `cachedLines` 都带上「主题实例 + `defaultTextStyle` 身份」，
 `render` 里发现对不上就丢缓存和 `defaultStylePrefix`。`extendCachedRun` 只在身份相同时保留行。
 
+`Markdown` 侧的入口仍然是 `setTheme(theme)`：`render` 的身份检查只保底，
+不替代「换主题时把新实例递进去」。`#666` 走的是 `setMarkdownTheme` → `setTheme` 那条路，
+两者并存不冲突 —— `setTheme` 提前丢行，`render` 的身份检查兜住没走 `setTheme` 的调用方。
+
+顺带一个反直觉的正确性说明：`AssistantMessageComponent.invalidate()` 会
+`updateContent()` 重建块组件，在本 PR 的延迟 flush 语义下等于「重建 + 重置回放」。
+这是对的 —— 主题重算时 `blockKey` 里的主题身份先把旧块换掉，重建顺带补上
+`render` 在帧内被推迟的那次，主题切换只会多走一遍，不会画错。没有为它加特判。
+
 `Text` 暴露 `protected getText()`，让 `ThemedText` 能在重建后判断字符串是否真的变了。
 
 `ThemedText` 的 `stale` 语义随之收紧：`invalidate()` 与 `setBuild()` 置 stale，`render` 在
@@ -83,6 +92,13 @@ stale 或主题实例变了时重建；重建结果与 `getText()` 相同时也�
   `packages/tui/test/markdown.test.ts` 的「re-renders cached output when the theme instance is
   replaced」与「keeps resumed rows only while the theme and the default text style hold」、
   `packages/coding-agent/test/themed-text.test.ts`（懒构建 / 主题实例变化重建 / `setBuild` 后重建）。
+- 与 `#666`（message bodies 复用同一个 `Markdown`）合并时，冲突集中在三个文件：
+  `Markdown` 的主题身份检查两边各写了一份（`renderedTheme` / `prefixTheme` 对
+  `cachedStyle` / `styledBy`），保留后者的「主题 + `defaultTextStyle`」二元组；
+  `BranchSummaryMessageComponent` / `CompactionSummaryMessageComponent` 同时拿到
+  `setMarkdownTheme` 与 `repaintChildren`，两者都留：前者换主题，后者重建。
+  五个组件里 `AssistantMessageComponent` 仍覆写 `invalidate`，因为它重建的是
+  `Container` 的子树而不是自己，语义上等价于基类转发，没有改动。
 - 未覆盖：`extras/pi-ui/src/thinking.ts` 的展开态 thinking 仍是 `clear() + new Markdown`
   （#628 标为后续），这一轮不动。
 

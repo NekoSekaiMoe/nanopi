@@ -47,9 +47,11 @@ import type {
 	AutocompleteItem,
 	AutocompleteProvider,
 	Component,
+	DefaultTextStyle,
 	EditorComponent,
 	EditorTheme,
 	KeyId,
+	Markdown,
 	MarkdownTheme,
 	OverlayHandle,
 	OverlayOptions,
@@ -1687,6 +1689,15 @@ export interface AssistantMessageRenderContext {
 	 * restyles thinking rows calls this for every text block it keeps.
 	 */
 	renderText(text: string): void;
+	/**
+	 * A `Markdown` for a block the renderer draws itself, keyed by `key`.
+	 *
+	 * The same key returns the same component across passes, so a streamed
+	 * block calls `setText` and keeps its token cache instead of building a
+	 * fresh instance per delta. The component belongs to the message: the next
+	 * pass appends it again, and passes that drop the block drop it too.
+	 */
+	renderMarkdown(key: string, text: string, style?: DefaultTextStyle): Markdown;
 	/** Draw the stop-reason and error rows the default renderer appends. */
 	renderStopReason(message: {
 		stopReason?: string;

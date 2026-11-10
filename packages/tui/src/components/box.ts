@@ -76,6 +76,13 @@ export class Box implements Component {
 		);
 	}
 
+	/**
+	 * Repaint: drop the cache and rebuild the subtree.
+	 *
+	 * A subclass overrides `repaintChildren`, not this. An `invalidate` that
+	 * lands mid-frame waits for the frame to finish; one called from outside a
+	 * render rebuilds right away.
+	 */
 	invalidate(): void {
 		this.invalidateCache();
 		if (this.rendering > 0) {
@@ -86,10 +93,9 @@ export class Box implements Component {
 	}
 
 	/**
-	 * Ask each child to repaint itself. A subclass that rebuilds its subtree to
-	 * repaint — because the rebuild is what re-reads the theme — overrides this,
-	 * not `invalidate`, which fires as soon as `invalidate` lands rather than
-	 * after the frame in flight.
+	 * Rebuild the children from the current inputs. A subclass whose rebuild is
+	 * what re-reads the theme overrides this, not `invalidate`, which fires as
+	 * soon as `invalidate` lands rather than after the frame in flight.
 	 */
 	protected repaintChildren(): void {
 		for (const child of this.children) {

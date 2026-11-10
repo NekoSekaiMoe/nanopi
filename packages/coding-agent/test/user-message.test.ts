@@ -43,6 +43,19 @@ describe("UserMessageComponent", () => {
 		expect(calls).toEqual(["formula", "suffix"]);
 	});
 
+	test("keeps drawing the same text across padding changes", () => {
+		initTheme();
+		const component = new UserMessageComponent("hello");
+		expect(stripAnsi(component.render(40).join("\n"))).toContain("hello");
+
+		component.setOutputPad(0);
+
+		// The body is one long-lived Markdown now; a padding change re-sets it
+		// rather than rebuilding the component, and the text still draws.
+		expect(stripAnsi(component.render(40).join("\n"))).toContain("hello");
+		expect(component.render(40)).toHaveLength(3);
+	});
+
 	test("reapplies Markdown transformers when invalidated", () => {
 		initTheme();
 		let suffix = "before";

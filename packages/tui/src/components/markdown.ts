@@ -362,14 +362,31 @@ export class Markdown implements Component {
 	private theme: MarkdownTheme;
 	private options: MarkdownOptions;
 	private defaultStylePrefix?: string;
-	/** The theme and default text style the default style prefix was derived from. */
+	/**
+	 * The theme and default text style the default style prefix was derived
+	 * from. Both decide the escape sequences the prefix holds, so a prefix from
+	 * another pair is wrong even when neither the text nor the width moved.
+	 */
 	private styledBy?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 
 	// Cache for rendered output
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
-	/** The theme and default text style `cachedLines` was rendered with. */
+	/**
+	 * The theme and default text style `cachedLines` was rendered with.
+	 *
+	 * A cached row holds the ANSI its theme produced, so the theme is part of
+	 * what the caches say: a component that lives across a theme change has to
+	 * drop them, or it keeps drawing the old colors. The identity is the theme
+	 * object, and `render` checks it on every pass — which is why a caller that
+	 * renders with an off-theme object has to install it with `setTheme`.
+	 *
+	 * Only a pass that reached its cache update sets this. A pass that returned
+	 * early (an empty text) leaves it stale, and the next one drops the caches;
+	 * an empty text has no rows worth keeping, and a stream that starts empty
+	 * must not carry an unrelated cached run into the text after it.
+	 */
 	private cachedStyle?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 	/**
 	 * The parsed and half-rendered form of the text: tokens for the settled
@@ -401,6 +418,25 @@ export class Markdown implements Component {
 
 	setText(text: string): void {
 		this.text = text;
+		this.invalidate();
+	}
+
+	/**
+	 * Install the markdown theme to render with.
+	 *
+	 * `render` checks the theme object it cached against and re-renders when
+	 * the identity changed, so a component kept across a theme switch (every
+	 * message component is: the transcript invalidates them, it does not rebuild
+	 * them) picks up the new colors without the caller tracking which parts of
+	 * the output the theme touched.
+	 *
+	 * This only drops the rows. The default style prefix is dropped by `render`
+	 * when it sees the identity moved, so a theme installed here and never
+	 * rendered costs nothing.
+	 */
+	setTheme(theme: MarkdownTheme): void {
+		if (theme === this.theme) return;
+		this.theme = theme;
 		this.invalidate();
 	}
 
