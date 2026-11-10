@@ -4014,6 +4014,33 @@ describe("Editor component", () => {
 			assert.strictEqual(submitted, pasteC + pasteB);
 		});
 
+		it("renumbers a bare paste marker without appending undefined", () => {
+			const editor = new Editor(createTestTUI(), defaultEditorTheme);
+			let submitted = "";
+			editor.onSubmit = (t) => {
+				submitted = t;
+			};
+
+			const pasteA = bigPaste("alpha");
+			const pasteB = bigPaste("beta");
+			editor.handleInput(`\x1b[200~${pasteA}\x1b[201~`); // #1
+			editor.handleInput(`\x1b[200~${pasteB}\x1b[201~`); // #2, text: [#1][#2]
+			// Session restore and extension-set text can drop the "+N lines"/"N chars"
+			// suffix, so the marker being renumbered may be bare.
+			(editor as unknown as { state: { lines: string[] } }).state.lines = [
+				editor.getText().replace(/ \d+ chars\]/g, "]"),
+			];
+			assert.strictEqual(editor.getText(), "[paste #1][paste #2]");
+
+			editor.handleInput("\x01"); // Ctrl+A
+			editor.handleInput("\x1b[C"); // right over [paste #1]
+			editor.handleInput("\x7f"); // delete it, renumber #2 -> #1
+			assert.strictEqual(editor.getText(), "[paste #1]");
+
+			editor.handleInput("\r");
+			assert.strictEqual(submitted, pasteB);
+		});
+
 		it("undo after setText restores paste markers and registry", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			let submitted = "";
