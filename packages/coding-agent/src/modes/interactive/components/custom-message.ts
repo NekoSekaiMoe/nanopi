@@ -54,6 +54,18 @@ export class CustomMessageComponent extends Container {
 	}
 
 	/**
+	 * Install the markdown theme to draw the body with. The body reads the theme
+	 * on every pass it runs, but a pass that changes nothing to draw keeps the
+	 * rows it already rendered, so the theme has to be handed in rather than
+	 * followed through the `theme` proxy.
+	 */
+	setMarkdownTheme(markdownTheme: MarkdownTheme): void {
+		if (this.markdownTheme === markdownTheme) return;
+		this.markdownTheme = markdownTheme;
+		this.rebuild();
+	}
+
+	/**
 	 * Run these transformers over the body this component draws.
 	 *
 	 * The body's `Markdown` gets `applyMarkdownTransformers` as its transform. That method is
@@ -78,8 +90,7 @@ export class CustomMessageComponent extends Container {
 		return transformed;
 	};
 
-	override invalidate(): void {
-		super.invalidate();
+	protected override repaintChildren(): void {
 		this.rebuild();
 	}
 

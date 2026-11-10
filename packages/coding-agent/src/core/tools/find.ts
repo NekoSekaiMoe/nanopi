@@ -30,7 +30,9 @@ const findSchema = Type.Object({
 		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
 	}),
 	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+	limit: Type.Optional(
+		Type.Number({ description: "Maximum number of results (default: 1000, values below 1 mean 1)" }),
+	),
 });
 
 /** fd gained `--no-require-git` in 9.0; 8.x rejects the flag. */
@@ -54,9 +56,10 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 			details: fallback ? { fallback: true } : undefined,
 		};
 	}
-	// Relativize paths against the search root for stable output.
-	const relativized = lines.map((line) => relativizeFindResultPath(line, searchPath));
-	const resultLimitReached = relativized.length >= effectiveLimit;
+	// Callers fetch one result past the limit, so a length above it is proof the walk was cut
+	// rather than a guess from a count that happens to equal the limit.
+	const resultLimitReached = lines.length > effectiveLimit;
+	const relativized = lines.slice(0, effectiveLimit).map((line) => relativizeFindResultPath(line, searchPath));
 	const truncation = truncateHead(relativized.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
 	let resultOutput = truncation.content;
 	const details: FindToolDetails = {};
@@ -95,24 +98,26 @@ const FALLBACK_NOTICE =
 	"fd was not found, so this search used a slower in-process walker with the same ignore rules. Call find normally; install fd to make searches faster";
 
 /**
- * fd's glob contract for the in-process walker. A pattern without a slash is
- * matched against the file name, which is what fd --glob does by default; one
- * with a slash is matched against the path relative to the search root, the
- * same expansion the --full-path branch below performs for fd.
+ * The glob contract shared by fd and the in-process walker. A pattern without a
+ * slash is matched against the file name, which is what fd --glob does by
+ * default; one with a slash is matched against the path relative to the search
+ * root, which fd builds from the absolute candidate path for --full-path and
+ * the walker builds from the visited file.
+ *
+ * A `**` segment matches zero or more path segments in both, so `src`, then
+ * `**`, then `*.ts` also covers the files directly in `src/`. Spelled out here
+ * because the joined pattern would close this comment block.
  */
 function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
 	const normalized = pattern.replaceAll("\\", "/");
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	const anchored =
-		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
-			? normalized
-			: `**/${normalized}`;
-	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
+	const anchorRelative = normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**";
+	return (relativePath) => minimatch(relativePath, anchorRelative ? normalized : `**/${normalized}`, { dot: true });
 }
 
-/** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
+/** Walks `searchPath` for patterns fd would have matched, fetching one result past the limit. */
 async function walkForFdFallback(
 	pattern: string,
 	searchPath: string,
@@ -126,7 +131,7 @@ async function walkForFdFallback(
 		visit: (filePath) => {
 			if (!matcher(relativeToRoot(searchPath, filePath), path.basename(filePath))) return true;
 			matches.push(filePath);
-			return matches.length < effectiveLimit;
+			return matches.length <= effectiveLimit;
 		},
 	});
 	return matches;
@@ -203,7 +208,8 @@ export function createFindToolDefinition(
 				(async () => {
 					try {
 						const searchPath = resolveToCwd(searchDir || ".", ctx?.cwd || cwd);
-						const effectiveLimit = limit ?? DEFAULT_LIMIT;
+						// A limit below 1 would return nothing at all, so it means 1.
+						const effectiveLimit = limit === undefined ? DEFAULT_LIMIT : Math.max(1, Math.floor(limit));
 						const ops = customOps ?? defaultFindOperations;
 
 						// If custom operations provide glob(), use that instead of fd.
@@ -271,7 +277,7 @@ export function createFindToolDefinition(
 							current = parent;
 						}
 						const noRequireGit = !insideGitRepo && supportsNoRequireGit(fdPath);
-						baseArgs.push("--max-results", String(effectiveLimit));
+						baseArgs.push("--max-results", String(effectiveLimit + 1));
 
 						// fd --glob matches against the basename unless --full-path is set; in --full-path
 						// mode it matches against the absolute candidate path, so a path-containing

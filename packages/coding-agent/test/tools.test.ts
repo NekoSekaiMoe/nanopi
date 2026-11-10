@@ -1040,6 +1040,52 @@ describe("Coding Agent Tools", () => {
 			expect(result.details?.trimmedFiles?.some((entry: { shown: number }) => entry.shown === 0)).toBe(true);
 		});
 
+		it("should treat a limit below 1 as 1", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+
+			const result = await findTool.execute("test-call-find-zero-limit", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 0,
+			});
+			const lines = getTextOutput(result)
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => line.endsWith(".txt"));
+
+			expect(lines).toHaveLength(1);
+		});
+
+		it("should not report a limit that returned every hit as reached", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+			writeFileSync(join(testDir, "three.txt"), "");
+
+			// Exactly as many files as the limit: nothing was cut, so no notice. Counting
+			// hits against the limit cannot tell this apart from a cut, which is why the
+			// search fetches one result past it.
+			const exact = await findTool.execute("test-call-find-limit-exact", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 3,
+			});
+			const exactOutput = getTextOutput(exact);
+			expect(exactOutput).not.toContain("results limit reached");
+			expect(exact.details?.resultLimitReached).toBeUndefined();
+
+			// One below: a file was dropped, so the notice and the details field stay.
+			const cut = await findTool.execute("test-call-find-limit-cut", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 2,
+			});
+			const cutOutput = getTextOutput(cut);
+			expect(cutOutput).toContain("2 results limit reached");
+			expect(cut.details?.resultLimitReached).toBe(2);
+			expect(cutOutput.split("\n").filter((line) => line.trim().endsWith(".txt"))).toHaveLength(2);
+		});
+
 		it("should treat flag-like patterns as search text", async () => {
 			const marker = join(testDir, "grep-injection-marker");
 			const payload = join(testDir, "payload.sh");
@@ -1330,6 +1376,28 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(byPath)).not.toContain("a.ts");
 		});
 
+		// Ported from earendil-works/pi#9262: the `**/` prefix both implementations add
+		// to a path pattern let `**` swallow a directory level, so `src/**/*.ts`
+		// missed the files directly in `src/`.
+		it("matches a path pattern at the top of its directory", async () => {
+			mkdirSync(join(testDir, "src", "nested"), { recursive: true });
+			writeFileSync(join(testDir, "src", "top.ts"), "");
+			writeFileSync(join(testDir, "src", "nested", "deep.ts"), "");
+			const tool = createFindToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-find-fallback-top-level",
+				{ pattern: "src/**/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("src/top.ts");
+			expect(output).toContain("src/nested/deep.ts");
+		});
+
 		it("honors .gitignore in the walker", async () => {
 			writeFileSync(join(testDir, ".gitignore"), "ignored.ts\n");
 			writeFileSync(join(testDir, "ignored.ts"), "");
@@ -1360,6 +1428,17 @@ describe("Coding Agent Tools", () => {
 
 			expect(output).toContain(".hidden-file");
 			expect(output).toContain(".hidden-dir/");
+		});
+
+		it("should treat a limit below 1 as 1", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+
+			const result = await lsTool.execute("test-call-ls-zero-limit", { path: testDir, limit: 0 });
+			const output = getTextOutput(result);
+
+			expect(output).not.toContain("(empty directory)");
+			expect(output.split("\n").filter((line) => line.trim().endsWith(".txt"))).toHaveLength(1);
 		});
 	});
 });

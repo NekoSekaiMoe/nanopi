@@ -7,7 +7,7 @@ import { Marked } from "marked";
 import { describe, expect, test } from "vitest";
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
 import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import { getMarkdownTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
@@ -305,6 +305,25 @@ describe("AssistantMessageComponent", () => {
 			} finally {
 				Marked.prototype.lexer = original;
 			}
+		});
+
+		/**
+		 * A block kept across passes holds the rows its markdown theme produced.
+		 * The transcript invalidates a message on a theme switch instead of
+		 * rebuilding it, so a new theme object has to reach the block.
+		 */
+		test("re-renders a kept block when the markdown theme changes", () => {
+			initTheme();
+			const message = createAssistantMessage([{ type: "text", text: "**bold** text" }]);
+			const component = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1);
+			const before = component.render(40);
+
+			const otherTheme = { ...getMarkdownTheme(), bold: (text: string) => `«b»${text}«/b»` };
+			component.setMarkdownTheme(otherTheme);
+			const after = component.render(40);
+
+			expect(before.join("\n")).not.toContain("«b»");
+			expect(after.join("\n")).toContain("«b»bold«/b»");
 		});
 
 		test("rebuilds a streamed block when the transform output changes", () => {

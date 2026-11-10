@@ -1,4 +1,4 @@
-import { Container, Markdown, type MarkdownTheme, MouseRegion, Text } from "@nanopi/pi-tui";
+import { type Component, Container, Markdown, type MarkdownTheme, MouseRegion, Text } from "@nanopi/pi-tui";
 import type { ParsedSkillBlock } from "../../../core/agent-session.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { keyText } from "./keybinding-hints.ts";
@@ -14,6 +14,15 @@ export class SkillInvocationMessageComponent extends Container {
 	private skillBlock: ParsedSkillBlock;
 	private markdownTheme: MarkdownTheme;
 	private outputPad: number;
+	/**
+	 * The expanded body, kept across rebuilds so expanding or collapsing calls
+	 * `setText` instead of allocating a fresh `Markdown`. The collapsed state
+	 * leaves it unfilled: the row is one `Text` and needs no token cache.
+	 */
+	private body: Markdown | undefined;
+	private content: Container | undefined;
+	private region: MouseRegion | undefined;
+	private row: Text | undefined;
 
 	constructor(skillBlock: ParsedSkillBlock, markdownTheme: MarkdownTheme = getMarkdownTheme(), outputPad = 1) {
 		super();
@@ -33,37 +42,55 @@ export class SkillInvocationMessageComponent extends Container {
 		this.updateDisplay();
 	}
 
-	override invalidate(): void {
-		super.invalidate();
+	protected override repaintChildren(): void {
 		this.updateDisplay();
 	}
 
 	private updateDisplay(): void {
-		this.clear();
-
 		const title = theme.fg("toolTitle", theme.bold("read skill"));
 		const name = theme.fg("accent", this.skillBlock.name);
-		const content = new Container();
 
 		if (this.expanded) {
-			content.addChild(new Text(`${title} ${name}`, this.outputPad, 0));
-			const body = `**${this.skillBlock.name}**\n\n${this.skillBlock.content}`;
-			content.addChild(
-				new Markdown(body, 1, 0, this.markdownTheme, {
-					color: (text: string) => theme.fg("toolOutput", text),
-				}),
-			);
+			this.rowText(`${title} ${name}`);
+			const text = `**${this.skillBlock.name}**\n\n${this.skillBlock.content}`;
+			if (this.body) {
+				this.body.setText(text);
+				this.body.setTheme(this.markdownTheme);
+			} else {
+				this.body = new Markdown(text, 1, 0, this.markdownTheme, {
+					color: (value: string) => theme.fg("toolOutput", value),
+				});
+			}
+			this.replaceChildren(this.row as Text, this.body);
 		} else {
+			this.body = undefined;
 			const expandHint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
-			content.addChild(new Text(`${title} ${name}${expandHint}`, this.outputPad, 0));
+			this.rowText(`${title} ${name}${expandHint}`);
+			this.replaceChildren(this.row as Text);
 		}
+	}
 
-		this.addChild(
-			new MouseRegion(content, (event) => {
+	/** Point the single header row at `text`, keeping the instance. */
+	private rowText(text: string): void {
+		if (this.row) {
+			this.row.setText(text);
+			return;
+		}
+		this.row = new Text(text, this.outputPad, 0);
+	}
+
+	/** Own the children of the clickable region, wrapping it once. */
+	private replaceChildren(...children: Component[]): void {
+		if (!this.content) {
+			this.content = new Container();
+			this.region = new MouseRegion(this.content, (event) => {
 				if (event.type !== "click" || event.button !== "left") return undefined;
 				this.setExpanded(!this.expanded);
 				return { handled: true };
-			}),
-		);
+			});
+			this.addChild(this.region);
+		}
+		this.content.clear();
+		for (const child of children) this.content.addChild(child);
 	}
 }

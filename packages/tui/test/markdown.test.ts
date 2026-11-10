@@ -23,6 +23,8 @@ function getCell(terminal: VirtualTerminal, row: number, col: number) {
 	return cell;
 }
 
+const BLUE_OPEN = "\x1b[34m";
+
 function stripAnsi(line: string): string {
 	return line.replace(/\x1b\[[0-9;]*m/g, "");
 }
@@ -63,6 +65,81 @@ describe("Markdown component", () => {
 			markdown.render(60);
 			assert.deepStrictEqual(calls.at(-1), { source: "updated", availableWidth: 56 });
 			assert.strictEqual(calls.length, 4);
+		});
+	});
+
+	describe("Theme", () => {
+		/** A theme whose style functions read the current color, like the system theme reads its instance. */
+		function themeReading(color: () => string): MarkdownTheme {
+			const paint = (text: string) => `${color()}${text}\x1b[39m`;
+			return {
+				heading: paint,
+				link: paint,
+				linkUrl: paint,
+				code: paint,
+				codeBlock: paint,
+				codeBlockBorder: paint,
+				quote: paint,
+				quoteBorder: paint,
+				hr: paint,
+				listBullet: paint,
+				bold: paint,
+				italic: paint,
+				strikethrough: paint,
+				underline: paint,
+			};
+		}
+
+		it("restyles a cached block after the theme instance is replaced", () => {
+			let color = "\x1b[31m";
+			const markdown = new Markdown(
+				"**a**",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.deepStrictEqual(
+				markdown.render(40).map((line) => line.trimEnd()),
+				["\x1b[31ma\x1b[39m"],
+			);
+
+			// The terminal reported its colors: the system theme was regenerated, and
+			// every style function now reads the new instance. No invalidate() here,
+			// because the render is what has to notice.
+			color = "\x1b[32m";
+			// A replaced instance, not a mutated one: the row a theme produced is
+			// whatever the instance at render time says, so the rows from the previous
+			// instance cannot be reused.
+			const replaced = themeReading(() => color);
+			(markdown as unknown as { theme: typeof replaced }).theme = replaced;
+			assert.deepStrictEqual(
+				markdown.render(40).map((line) => line.trimEnd()),
+				["\x1b[32ma\x1b[39m"],
+			);
+		});
+
+		it("renders the same rows as a fresh component after invalidate", () => {
+			let color = "\x1b[31m";
+			const markdown = new Markdown(
+				"```ts\nconst a = 1;\n```\n\ntail",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.ok(markdown.render(40).join("\n").includes("\x1b[31m"));
+
+			// A resize, a theme change or a callback the render scheduled: the rows of
+			// the settled tokens carry the old color and have to go with the rest.
+			color = "\x1b[32m";
+			markdown.invalidate();
+			const fresh = new Markdown(
+				"```ts\nconst a = 1;\n```\n\ntail",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.deepStrictEqual(markdown.render(40), fresh.render(40));
+			assert.ok(markdown.render(40).join("\n").includes("\x1b[32m"));
 		});
 	});
 
@@ -1933,6 +2010,61 @@ bar`,
 				} finally {
 					Marked.prototype.lexer = original;
 				}
+			});
+
+			it("re-renders cached output when the theme instance is replaced", () => {
+				// Regenerating the system theme installs a new theme instance and then
+				// invalidates the tree (#656). A component that kept its rows across
+				// that would keep the old colors: the rows are styled strings.
+				const blue: MarkdownTheme = { ...defaultMarkdownTheme, heading: (text) => chalk.blue(text) };
+				const red: MarkdownTheme = { ...defaultMarkdownTheme, heading: (text) => chalk.red(text) };
+				const markdown = new Markdown("# Title\n\nbody", 0, 0, blue);
+				const before = markdown.render(40).join("\n");
+				// Styling composes: the heading is bold and underlined inside the theme
+				// function's own color, so the check is for the color, not the string.
+				assert.ok(before.includes(BLUE_OPEN), "first theme color is missing");
+
+				const themed = markdown as unknown as { theme: MarkdownTheme };
+				themed.theme = red;
+				markdown.invalidate();
+				const after = markdown.render(40);
+				const afterJoined = after.join("\n");
+				assert.ok(!afterJoined.includes(BLUE_OPEN), "the stale rows survived the theme swap");
+				assert.deepStrictEqual(
+					after,
+					new Markdown("# Title\n\nbody", 0, 0, red).render(40),
+					"a re-render after a theme swap must match a fresh component",
+				);
+			});
+
+			it("keeps resumed rows only while the theme and the default text style hold", () => {
+				const appended = ["# Title", "# Title\n\nbody", "# Title\n\nbody\n\nmore"];
+				const markdown = new Markdown("", 0, 0, defaultMarkdownTheme);
+				markdown.setText(appended[0]!);
+				markdown.render(40);
+
+				const themed = markdown as unknown as {
+					theme: MarkdownTheme;
+					cachedRun?: WeakRef<{ rendered: unknown[] }>;
+				};
+				const blue: MarkdownTheme = { ...defaultMarkdownTheme, heading: (text) => chalk.blue(text) };
+				themed.theme = blue;
+				markdown.setText(appended[1]!);
+				markdown.render(40);
+				assert.deepStrictEqual(
+					markdown.render(40),
+					new Markdown(appended[1]!, 0, 0, blue).render(40),
+					"an append after a theme swap must not reuse the rows of the other theme",
+				);
+
+				// A default text style is the other half of the styling: a new one has
+				// to drop the rows too, because every row carries its color.
+				const styled = new Markdown(appended[0]!, 0, 0, defaultMarkdownTheme, { color: (t) => chalk.green(t) });
+				styled.render(40);
+				assert.deepStrictEqual(
+					styled.render(40),
+					new Markdown(appended[0]!, 0, 0, defaultMarkdownTheme, { color: (t) => chalk.green(t) }).render(40),
+				);
 			});
 
 			it("renders only the tail of an appended text", () => {

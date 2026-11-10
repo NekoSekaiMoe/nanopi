@@ -37,8 +37,18 @@ export class CompactionSummaryMessageComponent extends Box {
 		this.setPaddingX(outputPad);
 	}
 
-	override invalidate(): void {
-		super.invalidate();
+	/**
+	 * Install the markdown theme to draw the summary with. The expanded body is
+	 * a `Markdown` that lives as long as the component does, so a theme switch
+	 * has to reach it instead of relying on the next rebuild.
+	 */
+	setMarkdownTheme(markdownTheme: MarkdownTheme): void {
+		if (this.markdownTheme === markdownTheme) return;
+		this.markdownTheme = markdownTheme;
+		this.updateDisplay();
+	}
+
+	protected repaintChildren(): void {
 		this.updateDisplay();
 	}
 

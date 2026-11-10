@@ -15,6 +15,11 @@ export class UserMessageComponent extends Container {
 	private markdownTheme: MarkdownTheme;
 	private outputPad: number;
 	private markdownTransformers: readonly MarkdownTransformer[];
+	/**
+	 * The body. Kept across rebuilds so a re-layout calls `setText` instead of
+	 * allocating a fresh `Markdown`, whose token cache would start empty again.
+	 */
+	private body: Markdown | undefined;
 
 	constructor(
 		text: string,
@@ -36,26 +41,34 @@ export class UserMessageComponent extends Container {
 	}
 
 	private rebuild(): void {
-		this.clear();
 		// The Markdown pads and colors its own background: a Box around it would keep a second full-width copy of every
 		// line, with identical output.
-		this.addChild(
-			new Markdown(
-				this.text,
-				this.outputPad,
-				1,
-				this.markdownTheme,
-				{
-					color: (content: string) => theme.fg("userMessageText", content),
-					bgColor: (content: string) => theme.bg("userMessageBg", content),
-				},
-				{
-					preserveOrderedListMarkers: true,
-					preserveBackslashEscapes: true,
-					transform: createMarkdownTransform("user", false, this.markdownTransformers),
-				},
-			),
+		if (this.body) {
+			this.body.setText(this.text);
+			this.body.setTheme(this.markdownTheme);
+			return;
+		}
+		this.body = new Markdown(
+			this.text,
+			this.outputPad,
+			1,
+			this.markdownTheme,
+			{
+				color: (content: string) => theme.fg("userMessageText", content),
+				bgColor: (content: string) => theme.bg("userMessageBg", content),
+			},
+			{
+				preserveOrderedListMarkers: true,
+				preserveBackslashEscapes: true,
+				transform: createMarkdownTransform("user", false, this.markdownTransformers),
+			},
 		);
+		this.addChild(this.body);
+	}
+
+	override clear(): void {
+		super.clear();
+		this.body = undefined;
 	}
 
 	override render(width: number): string[] {

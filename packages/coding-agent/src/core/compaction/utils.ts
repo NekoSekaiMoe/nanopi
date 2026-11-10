@@ -97,11 +97,29 @@ const TOOL_RESULT_MAX_CHARS = 2000;
 /**
  * Truncate text to a maximum character length for summarization.
  * Keeps the beginning and appends a truncation marker.
+ *
+ * The cut is a UTF-16 index, so it can land inside a surrogate pair and leave
+ * half a character; the summary is JSON-encoded, and a strict encoder rejects
+ * a lone surrogate outright (#634).
  */
 function truncateForSummary(text: string, maxChars: number): string {
 	if (text.length <= maxChars) return text;
 	const truncatedChars = text.length - maxChars;
-	return `${text.slice(0, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
+	return `${sliceWithoutLoneSurrogate(text, maxChars)}\n\n[... ${truncatedChars} more characters truncated]`;
+}
+
+/**
+ * `text` up to `maxChars`, minus a half surrogate pair at the cut.
+ *
+ * Inlined rather than imported from `@nanopi/pi-ai/utils/sanitize-unicode`: that
+ * import is one more file on the `core/compaction/index.ts` entry graph, which
+ * has an entry-point budget (`scripts/check-entry-graphs.mjs`).
+ */
+function sliceWithoutLoneSurrogate(text: string, maxChars: number): string {
+	const cut = text.charCodeAt(maxChars - 1);
+	const next = text.charCodeAt(maxChars);
+	const splitsPair = cut >= 0xd800 && cut <= 0xdbff && next >= 0xdc00 && next <= 0xdfff;
+	return text.slice(0, splitsPair ? maxChars - 1 : maxChars);
 }
 
 /**
