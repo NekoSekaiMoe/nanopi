@@ -14,8 +14,8 @@ const prefixCount = Math.min(STREAMING_FULL_HIGHLIGHT_PREFIX_LINES, lines.length
 const prefix = highlightLines(lines.slice(0, prefixCount).join("\n"));
 ```
 
-一次带 400 行 heredoc 的 bash 调用，流式期间 400 帧，每帧多高亮 50 行，合计 2 万行。400 帧里
-前缀内容只变过 50 次（新行推进到这里以前，前缀里只是最后一行在变），其余 350 次是纯重复成本。
+一次带 400 行 heredoc 的 bash 调用，流式期间 400 帧，每帧多高亮 50 行，前缀部分合计约 1.5 万行
+（前 49 帧前缀不足 50 行）；同一次流式里新增行的单行高亮另有约 400 行，两者同阶而不是主次关系。
 
 ## Proposal
 
@@ -69,12 +69,14 @@ const prefixCount =
 
 ## Acceptance criteria
 
-不做。若以后 `write` 也加上「参数定稿即复用文本」，这个改动会变得安全，届时按本记录的
-第一条替代方案重新评估：先让 `write` 在 `argsComplete` 且 `exact` 时短路，再考虑前缀重排。
+不做。重新评估的前提是补上 `write` 和 `bash` 共用的「运行中新出现的语法加载完重绘」，
+而不是给 `write` 加一层参数定稿后的文本缓存——那层实测省不到高亮，见
+[2026-11-10-write-call-reuse-and-streaming-prefix-cost](2026-11-10-write-call-reuse-and-streaming-prefix-cost.md)。
 
 ## Risks
 
 - 流式期间的前缀高亮仍是 `50 × 帧数`，长 heredoc 下会有可观测的 CPU 占用。缓解：帧已是节流的，
-  且实测（`test/streaming-highlight.test.ts` 的 400 行用例）通过阈值有 60 倍余量。
+  且 `test/streaming-highlight.test.ts` 的 400 行用例对总高亮行数有上限断言（`< 400 × 60`），
+  按当前实现约有 60 倍余量。
 - 若有人后来只把 `previous.exact` 那次判断加进去、没跑 write 用例，就会出现上面那条不一致的
   画面；本文就是给那次尝试留的记录。
