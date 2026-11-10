@@ -10,7 +10,8 @@ export class Text implements Component {
 	private paddingY: number; // Top/bottom padding
 	private customBgFn?: (text: string) => string;
 
-	// Cache for rendered output
+	// Cache for rendered output. `invalidate()` clears it without clearing `text`, so the next
+	// render re-renders the same string instead of treating the cache as current.
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
@@ -22,18 +23,22 @@ export class Text implements Component {
 		this.customBgFn = customBgFn;
 	}
 
+	/**
+	 * Replace the text and render the replacement on the next frame.
+	 *
+	 * Assigning the same string keeps the wrapped lines: the cache is keyed by text and width, so
+	 * a fresh render would produce exactly those lines. Callers that re-set an unchanged string on
+	 * every frame, such as a streamed tool call rebuilding its text, stop paying for the wrap.
+	 */
 	setText(text: string): void {
+		if (text === this.text) return;
 		this.text = text;
-		this.cachedText = undefined;
-		this.cachedWidth = undefined;
-		this.cachedLines = undefined;
+		this.invalidate();
 	}
 
 	setCustomBgFn(customBgFn?: (text: string) => string): void {
 		this.customBgFn = customBgFn;
-		this.cachedText = undefined;
-		this.cachedWidth = undefined;
-		this.cachedLines = undefined;
+		this.invalidate();
 	}
 
 	setPaddingX(paddingX: number): void {
@@ -41,6 +46,16 @@ export class Text implements Component {
 		this.invalidate();
 	}
 
+	/**
+	 * Render the current text again on the next frame, without changing it.
+	 *
+	 * This is the component-level invalidation of `Component.invalidate()`: it is called for
+	 * reflows whose inputs the component does not observe (a theme change, a terminal resize, a
+	 * host that wants a fresh pass) and for redraws requested from a callback the render itself
+	 * scheduled. The text is left as it is, so a component that owns state the render reads,
+	 * like `ThemedText` rebuilding from `build`, must also mark that state stale in an override;
+	 * `Loader` rebuilds from `invalidate()` for the same reason.
+	 */
 	invalidate(): void {
 		this.cachedText = undefined;
 		this.cachedWidth = undefined;
