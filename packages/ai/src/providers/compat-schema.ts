@@ -232,6 +232,12 @@ export const OpenAICompletionsCompatSchema = Type.Object(
 					"Whether a user message after tool results requires an assistant message in between. Default: auto-detected from URL.",
 			}),
 		),
+		requiresToolsWithToolHistory: Type.Optional(
+			Type.Boolean({
+				description:
+					"Whether the endpoint rejects a conversation that contains tool calls or tool results when the request carries no tools parameter. When true, an empty tools array is sent for such a history; when false it is omitted, which vLLM 0.20+ requires. Default: false.",
+			}),
+		),
 		requiresThinkingAsText: Type.Optional(
 			Type.Boolean({
 				description:

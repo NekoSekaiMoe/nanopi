@@ -15,6 +15,20 @@ export interface ContextUsageEstimate {
 const CHARS_PER_TOKEN = 3.5;
 const ESTIMATED_IMAGE_CHARS = 4800;
 
+/**
+ * Input estimate multiplied out for callers that must not overshoot the window.
+ *
+ * `CHARS_PER_TOKEN` is an average, and code, JSON tool arguments and non-Latin
+ * scripts all tokenize denser than it, so the figure it produces runs under the
+ * provider's count. That is harmless when the estimate is only shown, but a
+ * `max_tokens` clamped from it is sent to the provider, which adds the two up:
+ * OpenRouter rejected requests whose real input was 12% above the estimate with
+ * "maximum context length" and the agent then compacted a conversation that
+ * still had room. The margin covers the underestimate; it does not make the
+ * estimate a tokenizer.
+ */
+const INPUT_HEADROOM = 1.15;
+
 export function calculateContextTokens(usage: Usage): number {
 	return usage.totalTokens || usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 }
@@ -92,6 +106,14 @@ function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage
 	}
 
 	return usageInfo;
+}
+
+/**
+ * The estimate multiplied by {@link INPUT_HEADROOM}, for sizing a request against the
+ * context window. Reporting callers keep the raw figure: 15% is not news.
+ */
+export function estimateContextTokensForRequest(context: TranscriptContext | readonly Message[]): number {
+	return Math.ceil(estimateContextTokens(context).tokens * INPUT_HEADROOM);
 }
 
 export function estimateContextTokens(context: TranscriptContext | readonly Message[]): ContextUsageEstimate {

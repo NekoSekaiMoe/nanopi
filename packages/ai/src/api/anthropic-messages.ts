@@ -61,6 +61,7 @@ import {
 
 import {
 	getJsonSchemaToolParameters,
+	inlineRootDefs,
 	resolveJsonSchemaStrictSampling,
 	type UnsupportedStrictSchemaKeywordCheck,
 } from "./constrained-sampling.ts";
@@ -1647,6 +1648,11 @@ const isAnthropicStrictUnsupportedKeyword: UnsupportedStrictSchemaKeywordCheck =
 	return false;
 };
 
+function inlinedProperties(parameters: Tool["parameters"]): unknown {
+	const inlined = inlineRootDefs(parameters) as { properties?: unknown };
+	return inlined.properties ?? {};
+}
+
 function convertTools(
 	tools: Tool[],
 	isOAuthToken: boolean,
@@ -1667,7 +1673,9 @@ function convertTools(
 		const schema = parameters as { properties?: unknown; required?: string[] };
 		const legacyInputSchema = {
 			type: "object" as const,
-			properties: schema.properties ?? {},
+			// The non-strict schema is rebuilt from these two keys alone, which drops a
+			// root $defs while the $refs inside properties survive. Inline it first.
+			properties: strict === true ? (schema.properties ?? {}) : inlinedProperties(parameters),
 			required: schema.required ?? [],
 		};
 		const inputSchema =

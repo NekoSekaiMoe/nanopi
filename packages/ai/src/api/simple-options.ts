@@ -10,7 +10,7 @@ import type {
 	ThinkingLevel,
 	TranscriptContext,
 } from "../types.ts";
-import { estimateContextTokens } from "../utils/estimate.ts";
+import { estimateContextTokensForRequest } from "../utils/estimate.ts";
 import { isOpenRouterModel } from "../utils/openrouter-cost.ts";
 
 const CONTEXT_SAFETY_TOKENS = 4096;
@@ -18,7 +18,7 @@ const MIN_MAX_TOKENS = 1;
 
 export function clampMaxTokensToContext(model: Model<Api>, context: TranscriptContext, maxTokens: number): number {
 	if (model.contextWindow <= 0) return Math.max(MIN_MAX_TOKENS, maxTokens);
-	const available = model.contextWindow - estimateContextTokens(context).tokens - CONTEXT_SAFETY_TOKENS;
+	const available = model.contextWindow - estimateContextTokensForRequest(context) - CONTEXT_SAFETY_TOKENS;
 	return Math.min(maxTokens, Math.max(MIN_MAX_TOKENS, available));
 }
 
@@ -38,17 +38,31 @@ export function resolveSamplingParams(
  * OpenRouter drops any upstream whose max output is below the request's cap, so
  * sending the catalog figure defeats a configured `provider.order` fallback chain.
  *
- * Only an explicit caller cap goes out. The catalog value still applies when the
- * provider needs one: Anthropic requires max_tokens, and the completions adapter
- * falls back to the catalog figure for the thinking-budget ceiling.
+ * Only an explicit caller cap goes out, unless the catalog figure had to be
+ * clamped to fit the context window. OpenRouter counts input plus max_tokens
+ * against the context length, so omitting the clamped figure turned a request
+ * that fits into an overflow, and the agent then compacted a conversation that
+ * still had room.
+ *
+ * The catalog value still applies when the provider needs one: Anthropic requires
+ * max_tokens, and the completions adapter falls back to the catalog figure for the
+ * thinking-budget ceiling.
  */
 function resolveBaseMaxTokens(
 	model: Model<Api>,
 	context: TranscriptContext,
 	options?: SimpleStreamOptions,
 ): number | undefined {
-	if (options?.maxTokens === undefined && isOpenRouterModel(model)) return undefined;
-	return clampMaxTokensToContext(model, context, options?.maxTokens ?? model.maxTokens);
+	const requested = options?.maxTokens ?? model.maxTokens;
+	const clamped = clampMaxTokensToContext(model, context, requested);
+	if (options?.maxTokens !== undefined) return clamped;
+	if (!isOpenRouterModel(model)) return clamped;
+	// OpenRouter filters upstreams by output cap, so the catalog figure would drop the
+	// backup providers in provider.order (nanopi#580). The capped figure still goes
+	// out once clamping lowered it: OpenRouter counts input plus max_tokens against
+	// the context length, so omitting it turned a request that fits into an overflow
+	// and the agent compacted a conversation that still had room.
+	return clamped >= requested ? undefined : clamped;
 }
 
 export function buildBaseOptions(

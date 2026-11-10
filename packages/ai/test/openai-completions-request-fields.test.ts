@@ -144,6 +144,23 @@ describe("openai-completions OpenRouter output cap", () => {
 		expect(payload?.max_completion_tokens).toBe(1024);
 	});
 
+	it("sends the cap once the catalog figure had to be clamped to the context window", async () => {
+		// OpenRouter counts input plus max_tokens against the context length. Omitting
+		// the clamped cap for "an upstream might have a lower ceiling" turned a request
+		// that fits into an overflow, and the agent compacted a conversation that had
+		// room left.
+		const model = createModel({
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			contextWindow: 8_192,
+			maxTokens: 4_096,
+		});
+		const payload = await captureRequest(model);
+
+		expect(payload?.max_completion_tokens).toBeGreaterThan(0);
+		expect(payload?.max_completion_tokens).toBeLessThan(4_096);
+	});
+
 	it("still sends the catalog cap for non-OpenRouter endpoints", async () => {
 		const payload = await captureRequest(createModel());
 
