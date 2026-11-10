@@ -1144,6 +1144,74 @@ describe("Coding Agent Tools", () => {
 				else process.env.RIPGREP_CONFIG_PATH = previous;
 			}
 		});
+
+		// #634: ripgrep roots --glob at its own cwd, not at `path`, so a glob with a
+		// slash in it resolved against the directory nanopi was started in and a
+		// correct search answered "No matches found".
+		it("should resolve a glob with a slash relative to path, not the start directory", async () => {
+			mkdirSync(join(testDir, "migrations", "main"), { recursive: true });
+			writeFileSync(join(testDir, "migrations", "main", "0001.js"), "needle here\n");
+			mkdirSync(join(testDir, "migrations", "other"), { recursive: true });
+			writeFileSync(join(testDir, "migrations", "other", "0002.js"), "needle here too\n");
+
+			const result = await grepTool.execute("test-call-grep-glob-root", {
+				pattern: "needle",
+				path: join(testDir, "migrations"),
+				glob: "main/*.js",
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("main/0001.js:1: needle here");
+			expect(output).not.toContain("0002.js");
+		});
+
+		// #634: the raw limit reached the notice verbatim, so limit: 1.5 reported
+		// "1.5 matches limit reached".
+		it("should round a fractional limit in the notice", async () => {
+			writeFileSync(join(testDir, "fractional.txt"), "match one\nmatch two\nmatch three\n");
+
+			const result = await grepTool.execute("test-call-grep-fractional-limit", {
+				pattern: "match",
+				path: join(testDir, "fractional.txt"),
+				limit: 1.5,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("1 matches limit reached");
+			expect(output).not.toContain("1.5");
+		});
+
+		// #634: context lines were produced by reading the whole matched file into
+		// memory, so a handful of large logs with context: 2 could exhaust the heap.
+		// ripgrep already sends them as `context` events.
+		it("should not read the matched file just to print context lines", async () => {
+			const testFile = join(testDir, "context-no-read.txt");
+			writeFileSync(testFile, ["before", "match one", "after"].join("\n"));
+			const readPaths: string[] = [];
+			const tool = createGrepToolDefinition(testDir, {
+				operations: {
+					isDirectory: () => false,
+					readFile: (p) => {
+						readPaths.push(p);
+						return readFileSync(p, "utf-8");
+					},
+				},
+			});
+
+			const result = await tool.execute(
+				"test-call-grep-context-no-read",
+				{ pattern: "match", path: testFile, context: 1 },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("context-no-read.txt-1- before");
+			expect(output).toContain("context-no-read.txt:2: match one");
+			expect(output).toContain("context-no-read.txt-3- after");
+			expect(readPaths).toEqual([]);
+		});
 	});
 
 	describe("find tool", () => {
@@ -1343,26 +1411,44 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(byPath)).not.toContain("a.ts");
 		});
 
-		// Ported from earendil-works/pi#9262, where the `**/` prefix both
-		// implementations add to a path pattern let `**` swallow a directory level, so
-		// `src/**/*.ts` missed the files directly in `src/`.
-		it("matches a path pattern at the top of its directory", async () => {
-			mkdirSync(join(testDir, "src", "nested"), { recursive: true });
-			writeFileSync(join(testDir, "src", "top.ts"), "");
-			writeFileSync(join(testDir, "src", "nested", "deep.ts"), "");
+		// fd matches --full-path patterns against the absolute candidate path, so 'src/*.ts'
+		// needs a leading '**/' before it can match the search root's own 'src/'. The walker
+		// has to expand the same way, or a fallback search silently drops those files (#669).
+		// fd is mocked out here: without the mock this passes on fd's path instead and never
+		// exercises the expansion it claims to guard.
+		it("matches a root-level path pattern the way fd's full-path expansion does", async () => {
+			const toolsManager = await import("../src/utils/tools-manager.ts");
+			vi.spyOn(toolsManager, "ensureTool").mockResolvedValue(undefined);
+			mkdirSync(join(testDir, "src", "sub"), { recursive: true });
+			mkdirSync(join(testDir, "deep", "src"), { recursive: true });
+			writeFileSync(join(testDir, "src", "direct.ts"), "");
+			writeFileSync(join(testDir, "src", "sub", "nested.ts"), "");
+			writeFileSync(join(testDir, "deep", "src", "far.ts"), "");
 			const tool = createFindToolDefinition(testDir);
 
-			const result = await tool.execute(
-				"test-call-find-fallback-top-level",
+			const wildcard = await tool.execute(
+				"test-call-find-fallback-root-path-wildcard",
+				{ pattern: "src/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const wildcardOutput = getTextOutput(wildcard);
+			expect(wildcardOutput).toContain("src/direct.ts");
+			expect(wildcardOutput).toContain("deep/src/far.ts");
+
+			// The `**` prefix must not cost the files directly in `src/` either:
+			// `**` matches zero segments too (earendil-works/pi#9262).
+			const globstar = await tool.execute(
+				"test-call-find-fallback-root-path-globstar",
 				{ pattern: "src/**/*.ts" },
 				undefined,
 				undefined,
 				fakeCtx(testDir),
 			);
-			const output = getTextOutput(result);
-
-			expect(output).toContain("src/top.ts");
-			expect(output).toContain("src/nested/deep.ts");
+			const globstarOutput = getTextOutput(globstar);
+			expect(globstarOutput).toContain("src/direct.ts");
+			expect(globstarOutput).toContain("src/sub/nested.ts");
 		});
 
 		it("honors .gitignore in the walker", async () => {

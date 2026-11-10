@@ -94,10 +94,9 @@ const WINDOWS_PATH_SEP = "[/\\]";
  *
  * fd matches `--full-path` globs against the absolute candidate path, so a path
  * pattern needs a leading `**` segment to match anything. That anchored form
- * reaches every depth on the fd releases this repo downloads, but not on every
- * fd release (see `pinnedVersions` in tools-manager), where the files sitting
- * directly in `src/` come back empty. The relative form is the one that finds
- * them there, so both are run and their results merged.
+ * keeps a pattern off a same-named directory deeper in the tree, while the
+ * relative form is the one that reaches files sitting directly in `src/`.
+ * Both are run and their results merged.
  */
 function findFdPatterns(pattern: string, windows: boolean): string[] | undefined {
 	if (!pattern.includes("/")) return undefined;
@@ -106,9 +105,9 @@ function findFdPatterns(pattern: string, windows: boolean): string[] | undefined
 	// fd matches full paths using native separators on Windows.
 	const normalize = (candidate: string) => (windows ? candidate.replaceAll("/", WINDOWS_PATH_SEP) : candidate);
 	const patterns = [normalize(anchored)];
-	// Adds the relative form only for a pattern the anchoring prefixed, matching the
-	// walker's candidate set. Widening `src/**/*.ts` to `pkg/src/**` is what only
-	// the relative form alone would do.
+	// The anchored form already covers every directory depth, so the relative form
+	// only adds matches fd's `**` stops at due to a containing directory in its
+	// ignore list. Merging it unconditionally widens `src/**/*.ts` to `pkg/src/**`.
 	if (anchored.startsWith("**/")) patterns.push(normalize(pattern));
 	return patterns;
 }
@@ -130,7 +129,8 @@ const FALLBACK_NOTICE =
  * slash is matched against the file name, which is what fd --glob does by
  * default; one with a slash is matched against the path relative to the search
  * root, which fd builds from the absolute candidate path for --full-path and
- * the walker builds from the visited file.
+ * the walker builds from the visited file. A root-level 'src/*.ts' therefore
+ * gets a leading globstar, so it still matches the search root's own 'src/'.
  *
  * A `**` segment matches zero or more path segments in both, so `src`, then
  * `**`, then `*.ts` also covers the files directly in `src/`. Spelled out here
@@ -141,15 +141,11 @@ function compileFindGlob(pattern: string): (relativePath: string, name: string) 
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	// Same candidate set the fd branch runs. The relative form alone would drop
-	// the leading `src/` and match `pkg/src/a.ts`; the anchored form is the one
-	// that keeps a path pattern off a same-named directory deeper in the tree.
-	const anchored =
-		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
-			? normalized
-			: `**/${normalized}`;
-	const candidates = anchored === normalized ? [anchored] : [normalized, anchored];
-	return (relativePath) => candidates.some((candidate) => minimatch(relativePath, candidate, { dot: true }));
+	const rooted = normalized.startsWith("/") ? normalized.slice(1) : normalized;
+	// fd matches --full-path patterns against the absolute candidate path, so a root-level path needs the
+	// leading globstar to reach the search root's own directory, exactly as --full-path does.
+	const anchored = rooted.startsWith("**/") || rooted === "**" ? rooted : `**/${rooted}`;
+	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
 }
 
 /** Walks `searchPath` for patterns fd would have matched, fetching one result past the limit. */
