@@ -256,12 +256,12 @@
     },
     "collapseChangelog": {
       "type": "boolean",
-      "description": "Show the condensed changelog after update; use /changelog for the full changelog.",
+      "description": "Show only the new version number after an update instead of the changelog entries.",
       "default": false
     },
     "enableInstallTelemetry": {
       "type": "boolean",
-      "description": "Send an anonymous version and update ping after changelog-detected updates.",
+      "description": "Send provider attribution headers (HTTP-Referer and similar) with requests to OpenRouter and other gateways.",
       "default": true
     },
     "enableAnalytics": {
