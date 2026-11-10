@@ -152,6 +152,7 @@ describe("auth check command", () => {
 			json: false,
 			credentials: false,
 			noRefresh: false,
+			noBrowser: false,
 		});
 		expect(
 			parseAuthCommand(["auth", "check", "--json", "--credentials", "--no-refresh", "--provider", "openai"]),
@@ -161,6 +162,7 @@ describe("auth check command", () => {
 			json: true,
 			credentials: true,
 			noRefresh: true,
+			noBrowser: false,
 		});
 	});
 
