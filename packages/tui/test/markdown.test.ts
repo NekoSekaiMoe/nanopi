@@ -1782,6 +1782,36 @@ bar`,
 			);
 		});
 
+		it("should hide HTML comments", () => {
+			const markdown = new Markdown(
+				"before\n\n<!-- TODO: rewrite the intro -->\n\nafter <!-- trailing note --> done",
+				0,
+				0,
+				defaultMarkdownTheme,
+			);
+
+			const plain = markdown
+				.render(80)
+				.map((line) => stripAnsi(line).trim())
+				.join("\n");
+			assert.ok(plain.includes("before"), plain);
+			assert.ok(plain.includes("after"), plain);
+			assert.ok(!plain.includes("TODO"), plain);
+			assert.ok(!plain.includes("trailing note"), plain);
+		});
+
+		it("should leave an unterminated HTML comment visible", () => {
+			// A streaming comment arrives without its closing marker first. Hiding
+			// what did arrive would blank a line that still has text after it.
+			const markdown = new Markdown("text <!-- still streaming", 0, 0, defaultMarkdownTheme);
+
+			const plain = markdown
+				.render(80)
+				.map((line) => stripAnsi(line).trim())
+				.join("\n");
+			assert.ok(plain.includes("still streaming"), plain);
+		});
+
 		it("should render HTML tags in code blocks correctly", () => {
 			const markdown = new Markdown("```html\n<div>Some HTML</div>\n```", 0, 0, defaultMarkdownTheme);
 
