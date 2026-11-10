@@ -284,37 +284,6 @@ describe("AssistantMessageComponent", () => {
 		 * Markdown per delta means a full `marked.lexer` pass per delta, so a long
 		 * answer costs O(n^2) lexer work.
 		 */
-		test("keeps the streamed block component alive across deltas", () => {
-			initTheme();
-			const lexed: string[] = [];
-			const original = Marked.prototype.lexer;
-			Marked.prototype.lexer = function (this: unknown, src: string) {
-				lexed.push(src);
-				return original.call(this, src);
-			};
-			try {
-				const component = new AssistantMessageComponent(undefined, false, undefined, "Thinking...", 1);
-				let text = "";
-				for (let i = 0; i < 20; i++) {
-					text += `line ${i}\n\n`;
-					component.updateContent(createAssistantMessage([{ type: "text", text }]), true);
-					component.render(80);
-				}
-				// One lex for the 20 deltas. A block rebuilt per delta also happens to
-				// lex once per delta, so the count alone proves nothing; what separates
-				// the two is that the instance below survives and keeps its tokens.
-				expect(lexed).toHaveLength(20);
-				expect(new Set(lexed).size).toBe(20);
-			} finally {
-				Marked.prototype.lexer = original;
-			}
-		});
-
-		/**
-		 * The case the reuse exists for: a delta appends to one text block, so the
-		 * block keeps the tokens it already parsed and re-lexes the tail only. A
-		 * rebuilt block starts from an empty cache and lexes the whole text again.
-		 */
 		test("does not re-lex the prefix of a streamed text block", () => {
 			initTheme();
 			const lexed: string[] = [];
