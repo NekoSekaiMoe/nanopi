@@ -60,6 +60,8 @@
 
 - llama.cpp support: the built-in module (`/llama`, the managed `llama-server` supervisor started through `--internal-llama-supervisor`, Hugging Face search and download, the `llamaCpp` settings keys, and the dynamic catalog that mapped a router's loaded models onto chat and classifier models), its documentation page, and its tests are gone. A llama.cpp router is a compatible endpoint: `models.json` names its `/v1` URL and the model IDs it serves, which needs no code here because the router loads a model on first request. The provider was the one built-in serving a single-digit audience while costing a hand-written merge every time the upstream module changed shape (issue [#584](https://cnb.cool/shinytale/nanopi/-/issues/584))
 - The `llama.cpp`-specific post-login message in interactive mode, which pointed at `/llama`. The generic per-provider message covers a provider with no default model, which is what a `models.json` provider is
+- `/changelog`: the full-changelog command is gone, along with its `handleChangelogCommand` handler and the `/changelog` pointer in both settings descriptions, because a release page does the same job better. What's New at startup still prints the new entries, and `collapseChangelog` still cuts it down to one line — a version number now, not a hint pointing at the removed command. Releases are at https://github.com/NekoSekaiMoe/nanopi/releases
+- `/bug` is no longer offered: the command lost its handler when the bug reporter was removed, so autocomplete listed a command that did nothing when selected. Bug reports go to https://github.com/NekoSekaiMoe/nanopi/issues/new?template=bug.yml
 
 ## [20261031.1.0]
 

@@ -46,7 +46,6 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 |---|---|
 | `/trust` | Save a project trust decision for future nanopi processes |
 | `/hotkeys` | Show active keyboard shortcuts |
-| `/changelog` | Show changelog entries |
 | `/init [instructions]` | Generate an AGENTS.md contributor guide for the repository |
 | `/remember [entry]` | Distill this session into AGENTS.md entries, or write the given entry; every entry is validated, deduped against the file, and confirmed before it is written. `--list` shows what the file holds with each entry's age; `--prune` offers the entries whose paths no longer exist or that nobody has confirmed for six months |
 | `/forget [numbers]` | Delete memory entries by the numbers `/remember --list` prints |

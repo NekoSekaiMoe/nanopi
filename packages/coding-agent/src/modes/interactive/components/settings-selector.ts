@@ -281,7 +281,7 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "collapse-changelog",
 				label: "Collapse changelog",
-				description: "Show condensed changelog after updates",
+				description: "Show only the new version number after an update instead of the changelog entries",
 				currentValue: config.collapseChangelog ? "true" : "false",
 				values: ["true", "false"],
 			},
@@ -295,7 +295,8 @@ export class SettingsSelectorComponent extends Container {
 			{
 				id: "install-telemetry",
 				label: "Install telemetry",
-				description: "Send an anonymous version/update ping after changelog-detected updates",
+				description:
+					"Send provider attribution headers (HTTP-Referer and similar) to OpenRouter and other gateways",
 				currentValue: config.enableInstallTelemetry ? "true" : "false",
 				values: ["true", "false"],
 			},

@@ -157,7 +157,7 @@ Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `collapseChangelog` | boolean | `false` | Show a condensed changelog after an update. |
-| `enableInstallTelemetry` | boolean | `true` | Enable anonymous install/update reporting and selected provider attribution headers. Does not control update checks. |
+| `collapseChangelog` | boolean | `false` | Show only the new version number after an update instead of the changelog entries. |
+| `enableInstallTelemetry` | boolean | `true` | Send provider attribution headers (`HTTP-Referer` and similar) with requests to OpenRouter and other gateways. `NANOPI_TELEMETRY` overrides it. |
 | `enableAnalytics` | boolean | `false` | Opt in to analytics data sharing. |
 | `warnings.anthropicExtraUsage` | boolean | `true` | Warn when Anthropic subscription authentication may use paid extra usage. |
