@@ -42,7 +42,7 @@ function scrollStatusLabel(hiddenAbove: number, hiddenBelow: number): string | u
 
 /** Check if a segment is a paste marker (i.e. was merged by segmentWithMarkers). */
 function isPasteMarker(segment: string): boolean {
-	return segment.length >= 10 && PASTE_MARKER_SINGLE.test(segment);
+	return PASTE_MARKER_SINGLE.test(segment);
 }
 
 /**
@@ -1611,7 +1611,10 @@ export class Editor implements Component, Focusable {
 					line.replace(PASTE_MARKER_REGEX, (fullMatch, idGroup, suffixGroup) => {
 						const x = Number(idGroup);
 						if (x <= targetId) return fullMatch;
-						return `[paste #${x - 1}${suffixGroup}]`;
+						// suffixGroup is undefined for a bare marker, and `${undefined}` would
+						// turn `[paste #3]` into `[paste #2undefined]`, which the paste
+						// resolver then refuses to expand on submit.
+						return `[paste #${x - 1}${suffixGroup ?? ""}]`;
 					}),
 				);
 			}
