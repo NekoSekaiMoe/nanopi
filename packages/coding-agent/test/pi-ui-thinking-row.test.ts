@@ -1,3 +1,4 @@
+import { Markdown } from "@nanopi/pi-tui";
 import { describe, expect, test } from "vitest";
 import type { AssistantMessageRenderContext } from "../src/core/modules/types.ts";
 import { installThinkingDisplay } from "../src/extras/pi-ui/src/thinking.ts";
@@ -28,6 +29,11 @@ function makeContext(theme: Theme): AssistantMessageRenderContext & { children: 
 			children.push(child);
 		},
 		renderText: () => {},
+		renderMarkdown: (_key, text, style) => {
+			const markdown = new Markdown(text, 0, 0, {} as AssistantMessageRenderContext["markdownTheme"], style);
+			children.push(markdown);
+			return markdown;
+		},
 		renderStopReason: () => {},
 		transform: (_type, markdown) => markdown,
 		children,

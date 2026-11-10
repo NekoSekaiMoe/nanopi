@@ -108,6 +108,21 @@ export class AssistantMessageComponent extends Container {
 		}
 	}
 
+	/**
+	 * Install the markdown theme to draw the body with.
+	 *
+	 * A block kept across passes holds the rows its theme produced, so a theme
+	 * switch has to reach it: the `blockKey` includes the theme, which drops a
+	 * block that was built with a different one.
+	 */
+	setMarkdownTheme(markdownTheme: MarkdownTheme): void {
+		if (this.markdownTheme === markdownTheme) return;
+		this.markdownTheme = markdownTheme;
+		if (this.lastMessage) {
+			this.updateContent(this.lastMessage);
+		}
+	}
+
 	setOutputPad(padding: number): void {
 		this.outputPad = padding;
 		if (this.lastMessage) {
@@ -147,6 +162,8 @@ export class AssistantMessageComponent extends Container {
 	override clear(): void {
 		super.clear();
 		this.blockComponents.clear();
+		this.markdownThemeIds.clear();
+		this.nextMarkdownThemeId = 0;
 		this.bodyBlocks = [];
 		this.tailRows = [];
 	}
@@ -187,9 +204,30 @@ export class AssistantMessageComponent extends Container {
 
 	/**
 	 * The component for a content block. `setText`, not a new instance, so the
-	 * block keeps the token cache `Markdown` parses against.
+	 * block keeps the token cache `Markdown` parses against. A block only gets
+	 * here with a component of the current theme: `blockKey` changes with it.
 	 */
 	private markdownComponent(key: string, text: string, style?: DefaultTextStyle): Markdown {
+		const transformType = key.startsWith("thinking:") ? "assistant-thinking" : "assistant";
+		return this.reusedMarkdown(key, text, style, transformType);
+	}
+
+	/**
+	 * A block a message renderer draws itself. Same key, same component: a
+	 * renderer that streams a block calls `setText` on every pass and keeps the
+	 * token cache, exactly as the default body does for text blocks.
+	 */
+	private blockComponent(key: string, text: string, style?: DefaultTextStyle): Markdown {
+		return this.reusedMarkdown(key, text, style, "assistant");
+	}
+
+	/** The one place a block component is created, so the reuse rule lives once. */
+	private reusedMarkdown(
+		key: string,
+		text: string,
+		style: DefaultTextStyle | undefined,
+		messageType: MarkdownTransformContext["messageType"],
+	): Markdown {
 		const composed = this.blockKey(key);
 		const existing = this.blockComponents.get(composed);
 		if (existing) {
@@ -197,11 +235,7 @@ export class AssistantMessageComponent extends Container {
 			return existing as Markdown;
 		}
 		const created = new Markdown(text, this.outputPad, 0, this.markdownTheme, style, {
-			transform: createMarkdownTransform(
-				key.startsWith("thinking:") ? "assistant-thinking" : "assistant",
-				this.isStreaming,
-				this.markdownTransformers,
-			),
+			transform: createMarkdownTransform(messageType, this.isStreaming, this.markdownTransformers),
 		});
 		this.blockComponents.set(composed, created);
 		return created;
@@ -226,9 +260,31 @@ export class AssistantMessageComponent extends Container {
 		this.bodyBlocks.push(block);
 	}
 
-	/** Everything a block component is constructed with, so a change rebuilds it. */
+	/**
+	 * Everything a block component is constructed with, so a change rebuilds it.
+	 *
+	 * The markdown theme is in the key because a block kept across passes is
+	 * rendered with the theme it was built with: `Markdown.setText` reuses the
+	 * rows a previous theme produced, so a block that survives a theme switch
+	 * still has to be rebuilt. Passes that hand over the same theme object — the
+	 * transcript makes a new one per message, so this is every streaming delta —
+	 * keep their components.
+	 */
 	private blockKey(key: string): string {
-		return `${key}|${this.outputPad}|${this.isStreaming}`;
+		return `${key}|${this.outputPad}|${this.isStreaming}|${this.markdownThemeId()}`;
+	}
+
+	/** Identity tokens for the themes this component has been rendered with. */
+	private markdownThemeIds = new Map<MarkdownTheme, number>();
+	private nextMarkdownThemeId = 0;
+
+	/** The token `blockKey` uses for the theme currently installed. */
+	private markdownThemeId(): number {
+		const known = this.markdownThemeIds.get(this.markdownTheme);
+		if (known !== undefined) return known;
+		const id = this.nextMarkdownThemeId++;
+		this.markdownThemeIds.set(this.markdownTheme, id);
+		return id;
 	}
 
 	/** Run the registered markdown transformers for one block kind. */
@@ -329,6 +385,11 @@ export class AssistantMessageComponent extends Container {
 					component: this.markdownComponent(`text:${textOrdinal++}`, text.trim()),
 					spacer: undefined,
 				});
+			},
+			renderMarkdown: (key: string, text: string, style?: DefaultTextStyle) => {
+				const component = this.blockComponent(key, text, style);
+				this.addBlock({ component, spacer: undefined });
+				return component;
 			},
 			renderStopReason: (value: {
 				stopReason?: string;

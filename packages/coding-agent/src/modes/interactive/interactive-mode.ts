@@ -471,6 +471,9 @@ export class InteractiveMode {
 	// Thinking block visibility state
 	private hideThinkingBlock = false;
 	private outputPad = 1;
+	/** `getMarkdownThemeWithSettings()` memo: components compare its identity. */
+	private markdownThemeWithSettings: MarkdownTheme | undefined;
+	private markdownThemeIndent: string | undefined;
 	private readonly mermaidMarkdownTransformer: MarkdownTransformer = createMermaidMarkdownTransformer({
 		getMode: () => this.settingsManager.getMermaidRenderingMode(),
 		theme,
@@ -630,7 +633,13 @@ export class InteractiveMode {
 
 		// Initialize the system theme and keep it in sync with the terminal.
 		this.themeController = new InteractiveThemeController(this.ui, {
-			onChanged: () => this.updateEditorBorderColor(),
+			onChanged: () => {
+				this.updateEditorBorderColor();
+				// A new theme instance invalidates the transcript; the rows already
+				// rendered carry the previous one's ANSI until each component hears
+				// about it, so hand the new theme over before that repaint.
+				this.refreshMessageMarkdownThemes();
+			},
 		});
 	}
 
@@ -1226,11 +1235,41 @@ export class InteractiveMode {
 		return undefined;
 	}
 
+	/**
+	 * The markdown theme for the current settings.
+	 *
+	 * Cached because components compare the object to decide whether the rows
+	 * they rendered are still current: a fresh object per call would make every
+	 * lookup look like a theme change and drop every Markdown cache.
+	 */
 	private getMarkdownThemeWithSettings(): MarkdownTheme {
-		return {
-			...getMarkdownTheme(),
-			codeBlockIndent: this.settingsManager.getCodeBlockIndent(),
-		};
+		const codeBlockIndent = this.settingsManager.getCodeBlockIndent();
+		if (this.markdownThemeWithSettings && this.markdownThemeIndent === codeBlockIndent) {
+			return this.markdownThemeWithSettings;
+		}
+		this.markdownThemeIndent = codeBlockIndent;
+		this.markdownThemeWithSettings = { ...getMarkdownTheme(), codeBlockIndent };
+		return this.markdownThemeWithSettings;
+	}
+
+	/**
+	 * Hand the current markdown theme to every message component in the
+	 * transcript. Called after `refreshSystemTheme()`, which installs a new
+	 * `theme` instance: the components resolve colors through it, but the rows
+	 * they already rendered still carry the old ANSI until their cache drops.
+	 *
+	 * It does not request the repaint itself: every caller is already inside the
+	 * `TUI.invalidate()` / `requestRender()` pair that follows a theme change.
+	 */
+	private refreshMessageMarkdownThemes(): void {
+		const markdownTheme = this.getMarkdownThemeWithSettings();
+		for (const container of [this.chatContainer, this.pendingMessagesContainer]) {
+			for (const child of container.children) {
+				if ("setMarkdownTheme" in child && typeof child.setMarkdownTheme === "function") {
+					child.setMarkdownTheme(markdownTheme);
+				}
+			}
+		}
 	}
 
 	// =========================================================================

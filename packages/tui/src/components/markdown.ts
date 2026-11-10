@@ -366,6 +366,27 @@ export class Markdown implements Component {
 	 * theme preview, and is collected afterwards.
 	 */
 	private cachedRun?: WeakRef<CachedRun>;
+	/**
+	 * The theme object the caches above were rendered with.
+	 *
+	 * A cached row holds the ANSI its theme produced, so the theme is part of
+	 * what the caches say: a component that lives across a theme change has to
+	 * drop them, or it keeps drawing the old colors. The identity is the theme
+	 * object, and `render()` checks it on every pass — which is why a caller
+	 * that renders with an off-theme object has to install it with `setTheme`.
+	 *
+	 * Only a pass that reached its cache update sets this. A pass that returned
+	 * early (an empty text) leaves it stale, and the next one drops the caches;
+	 * an empty text has no rows worth keeping, and a stream that starts empty
+	 * must not carry an unrelated cached run into the text after it.
+	 */
+	private renderedTheme?: MarkdownTheme;
+	/**
+	 * The theme object the module-scoped `defaultStylePrefix` was computed
+	 * against. `getDefaultStylePrefix` memoizes outside the cache fields above,
+	 * so it needs the same theme check.
+	 */
+	private prefixTheme?: MarkdownTheme;
 
 	constructor(
 		text: string,
@@ -388,15 +409,52 @@ export class Markdown implements Component {
 		this.invalidate();
 	}
 
+	/**
+	 * Install the markdown theme to render with.
+	 *
+	 * `render()` checks the theme object it cached against and re-renders when
+	 * the identity changed, so a component kept across a theme switch (every
+	 * message component is: the transcript invalidates them, it does not rebuild
+	 * them) picks up the new colors without the caller tracking which parts of
+	 * the output the theme touched.
+	 */
+	setTheme(theme: MarkdownTheme): void {
+		if (theme === this.theme) return;
+		this.theme = theme;
+		this.invalidate();
+	}
+
 	invalidate(): void {
 		this.cachedText = undefined;
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
 	}
 
+	/**
+	 * Forget everything a previous theme produced. Every row went through
+	 * `renderToken` with the old theme's functions, so none of it is safe to
+	 * keep; `invalidate()` cannot be reused because it leaves the memoized
+	 * style prefix, which the old theme also decided.
+	 */
+	private dropThemeCaches(): void {
+		this.invalidate();
+		this.defaultStylePrefix = undefined;
+		this.prefixTheme = undefined;
+	}
+
+	/**
+	 * Whether the caches still describe what the next pass would produce. The
+	 * theme is part of that answer: a cached row holds the ANSI its theme
+	 * produced, so a component kept across a theme change has to drop them.
+	 */
+	private isCacheCurrent(width: number): boolean {
+		if (this.renderedTheme !== this.theme) this.dropThemeCaches();
+		return this.cachedLines !== undefined && this.cachedText === this.text && this.cachedWidth === width;
+	}
+
 	render(width: number): string[] {
 		// Check cache
-		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+		if (this.isCacheCurrent(width) && this.cachedLines) {
 			return this.cachedLines;
 		}
 
@@ -411,6 +469,7 @@ export class Markdown implements Component {
 			this.cachedText = this.text;
 			this.cachedWidth = width;
 			this.cachedLines = result;
+			this.renderedTheme = this.theme;
 			return result;
 		}
 
@@ -501,6 +560,7 @@ export class Markdown implements Component {
 		this.cachedText = this.text;
 		this.cachedWidth = width;
 		this.cachedLines = result;
+		this.renderedTheme = this.theme;
 
 		return result.length > 0 ? result : [""];
 	}
@@ -545,7 +605,7 @@ export class Markdown implements Component {
 			return "";
 		}
 
-		if (this.defaultStylePrefix !== undefined) {
+		if (this.defaultStylePrefix !== undefined && this.prefixTheme === this.theme) {
 			return this.defaultStylePrefix;
 		}
 
@@ -571,6 +631,7 @@ export class Markdown implements Component {
 
 		const sentinelIndex = styled.indexOf(sentinel);
 		this.defaultStylePrefix = sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
+		this.prefixTheme = this.theme;
 		return this.defaultStylePrefix;
 	}
 
