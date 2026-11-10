@@ -30,6 +30,7 @@ import { formatProviderError, normalizeProviderError } from "../utils/error-body
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { getNanoPiUserAgent } from "../utils/nanopi-user-agent.ts";
+import { sleep } from "../utils/sleep.ts";
 import { getSystemMessageText } from "../utils/text.ts";
 import {
 	getDeclaredTools,
@@ -58,6 +59,9 @@ const DEFAULT_WEBSOCKET_CONNECT_TIMEOUT_MS = 15_000;
 // endpoint (the same endpoint the official Codex client compresses against).
 const REQUEST_COMPRESSION_ZSTD_LEVEL = 3;
 const CODEX_TOOL_CALL_PROVIDERS = new Set(["openai", "openai-codex", "opencode"]);
+
+/** Stands in for a missing caller signal so retry backoff always takes the abort-aware path. */
+const NEVER_ABORTED = new AbortController().signal;
 const WEBSOCKET_MESSAGE_TOO_BIG_CLOSE_CODE = 1009;
 const WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE = "websocket_connection_limit_reached";
 const PREVIOUS_RESPONSE_NOT_FOUND_CODE = "previous_response_not_found";
@@ -297,20 +301,6 @@ function validateRetryDelayMs(delayMs: number, options?: StreamOptions): number 
 		);
 	}
 	return delayMs;
-}
-
-function sleep(ms: number, signal?: AbortSignal): Promise<void> {
-	return new Promise((resolve, reject) => {
-		if (signal?.aborted) {
-			reject(new Error("Request was aborted"));
-			return;
-		}
-		const timeout = setTimeout(resolve, ms);
-		signal?.addEventListener("abort", () => {
-			clearTimeout(timeout);
-			reject(new Error("Request was aborted"));
-		});
-	});
 }
 
 function normalizeTimeoutMs(value: number | undefined): number | undefined {
@@ -593,7 +583,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 								? BASE_DELAY_MS * 2 ** attempt
 								: validateRetryDelayMs(retryAfterDelayMs, options);
 
-						await sleep(delayMs, options?.signal);
+						await sleep(delayMs, options?.signal ?? NEVER_ABORTED);
 						continue;
 					}
 
@@ -618,7 +608,7 @@ export const stream: StreamFunction<"openai-codex-responses", OpenAICodexRespons
 						!lastError.message.includes("usage limit")
 					) {
 						const delayMs = BASE_DELAY_MS * 2 ** attempt;
-						await sleep(delayMs, options?.signal);
+						await sleep(delayMs, options?.signal ?? NEVER_ABORTED);
 						continue;
 					}
 					throw lastError;
