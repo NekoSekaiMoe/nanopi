@@ -1,5 +1,3 @@
-import { formatThrownValue } from "./diagnostics.ts";
-
 // Shared normalization for provider HTTP error objects.
 //
 // Endpoints behind a proxy / gateway may return a non-2xx response whose body
@@ -26,8 +24,6 @@ export interface NormalizedProviderError {
 	message: string;
 	/** True when `message` already contains the body (no separate body to add). */
 	messageCarriesBody: boolean;
-	/** Innermost `cause` message, set only when the error has neither a status nor a body. */
-	cause?: string;
 }
 
 type SdkErrorShape = Error & {
@@ -54,29 +50,7 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
 		body,
 		message: error.message,
 		messageCarriesBody,
-		// Only reachable when the error carries no status and no body: the reason
-		// then lives nowhere else. A body or a status IS the reason, and appending
-		// the chain under it only repeats the message or adds transport noise.
-		...(status === undefined && body === undefined ? { cause: deepestCause(error) } : {}),
 	} satisfies NormalizedProviderError;
-}
-
-/** The innermost `cause` message, which is where `fetch failed` keeps its reason. */
-function deepestCause(error: Error): string | undefined {
-	let detail: string | undefined;
-	let current: unknown = error.cause;
-	// Bounded: a cause cycle would otherwise spin forever.
-	for (let depth = 0; current !== undefined && current !== null && depth < 8; depth++) {
-		const message = formatThrownValue(current).trim();
-		if (message) detail = message;
-		current = current instanceof Error ? current.cause : undefined;
-	}
-	return detail;
-}
-
-function withCauseDetail(text: string, cause: string | undefined): string {
-	if (!cause || text.includes(cause)) return text;
-	return `${text}: ${cause}`;
 }
 
 /**
@@ -155,10 +129,7 @@ function isPlainNonEmptyObject(value: unknown): boolean {
  * - prefix:    `"<prefix> (<status>): <body>"` / `"<prefix> (<status>): <message>"`
  */
 export function formatProviderError(norm: NormalizedProviderError, prefix?: string): string {
-	const text = withCauseDetail(
-		norm.messageCarriesBody || norm.body === undefined ? norm.message : norm.body,
-		norm.cause,
-	);
+	const text = norm.messageCarriesBody || norm.body === undefined ? norm.message : norm.body;
 	const alreadyPrefixed =
 		norm.status !== undefined && new RegExp(`^\\w[\\w -]* \\(${norm.status}\\):`).test(norm.message);
 	if (norm.status === undefined || alreadyPrefixed) return text;
