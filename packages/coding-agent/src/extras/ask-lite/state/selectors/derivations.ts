@@ -68,6 +68,41 @@ export function selectConfirmedIndicator(
 }
 
 /**
+ * Row the option list should focus when the user lands on a tab, so switching back
+ * to an answered question does not move the selection and quietly rewrite the answer.
+ *
+ * - multi-select lands on `Next`: the row that commits the question, and the only row
+ *   whose Enter is not a checkbox toggle (`autoSubmitsInMulti`).
+ * - a `custom` answer lands on the "Type something." row: focusing it restores the typed
+ *   text through `nav`'s `set_input_buffer` effect.
+ * - an `option` answer lands on that option.
+ * - unanswered, or answered with the chat sentinel (which ends the dialog, so the row can
+ *   never be re-entered), lands on 0.
+ */
+export function answeredRowIndex(
+	questions: readonly QuestionData[],
+	answers: ReadonlyMap<number, QuestionAnswer>,
+	items: readonly WrappingSelectItem[],
+	tab: number,
+): number {
+	if (items.length === 0) return 0;
+	const q = questions[tab];
+	const prior = answers.get(tab);
+	if (!q || !prior) return 0;
+	if (q.multiSelect === true) {
+		const nextIndex = items.findIndex((it) => ROW_INTENT_META[it.kind].autoSubmitsInMulti);
+		return nextIndex < 0 ? 0 : nextIndex;
+	}
+	if (prior.kind === "custom") {
+		const otherIndex = items.findIndex((it) => it.kind === "other");
+		return otherIndex < 0 ? 0 : otherIndex;
+	}
+	if (prior.kind !== "option" || typeof prior.answer !== "string") return 0;
+	const index = items.findIndex((it) => it.kind === "option" && it.label === prior.answer);
+	return index < 0 ? 0 : index;
+}
+
+/**
  * Index of the preview pane to display for the current tab. The Submit tab (currentTab ===
  * questions.length) reuses the last question's pane purely for layout — the strategy
  * machinery picks the right body component independently. Defensive against `totalQuestions === 0`.

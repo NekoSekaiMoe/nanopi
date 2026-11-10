@@ -2,7 +2,7 @@ import type { QuestionAnswer, QuestionData, QuestionnaireResult } from "../tool/
 import type { WrappingSelectItem } from "../view/components/wrapping-select.js";
 import type { QuestionnaireAction } from "./key-router.js";
 import { ROW_INTENT_META } from "./row-intent.js";
-import { computeFocusedOptionHasPreview } from "./selectors/derivations.js";
+import { answeredRowIndex, computeFocusedOptionHasPreview } from "./selectors/derivations.js";
 import type { QuestionnaireState } from "./state.js";
 
 /** Session-lifetime constants. No live-component reads — peripheral values live on canonical state. */
@@ -90,10 +90,19 @@ function persistMultiSelectAnswer(state: QuestionnaireState, ctx: ApplyContext):
 
 function switchTabResult(state: QuestionnaireState, nextTab: number, ctx: ApplyContext): ApplyResult {
 	const notesValue = state.notesByTab.get(nextTab) ?? state.answers.get(nextTab)?.notes ?? "";
+	// Focus the row the tab's answer came from instead of the first row: landing on
+	// option 0 means a stray Enter on a revisited question replaces the stored answer
+	// with option 1 (upstream `feea1626`, #281).
+	const optionIndex = answeredRowIndex(
+		ctx.questions,
+		state.answers,
+		ctx.itemsByTab[nextTab] ?? [],
+		nextTab,
+	);
 	const transitioned: QuestionnaireState = {
 		...state,
 		currentTab: nextTab,
-		optionIndex: 0,
+		optionIndex,
 		inputMode: false,
 		notesVisible: false,
 		chatFocused: false,
@@ -107,6 +116,9 @@ function switchTabResult(state: QuestionnaireState, nextTab: number, ctx: ApplyC
 		effects: [
 			{ kind: "set_notes_focused", focused: false },
 			{ kind: "set_notes_value", value: notesValue },
+			// The inline input mirrors the reducer's focus, the way `nav` does: a custom
+			// answer reappears in its row, and a stale buffer never follows the cursor.
+			...inlineInputEffects(finalState, nextTab, ctx, transitioned.answers),
 		],
 	};
 }
@@ -126,19 +138,33 @@ type Handler<K extends QuestionnaireAction["kind"]> = (
 	ctx: ApplyContext,
 ) => ApplyResult;
 
+/**
+ * Inline input mirror for an option-list focus change: focusing the "Type
+ * something." row restores that tab's stored custom text, anything else clears
+ * the buffer so it never follows the cursor.
+ */
+function inlineInputEffects(
+	next: QuestionnaireState,
+	tab: number,
+	ctx: ApplyContext,
+	answers: ReadonlyMap<number, QuestionAnswer>,
+): Effect[] {
+	const item = (ctx.itemsByTab[tab] ?? [])[next.optionIndex];
+	const inputMode = item ? ROW_INTENT_META[item.kind].activatesInputMode : false;
+	if (!inputMode) return [{ kind: "clear_input_buffer" }];
+	const prior = answers.get(tab);
+	if (prior?.kind === "custom" && typeof prior.answer === "string") {
+		return [{ kind: "set_input_buffer", value: prior.answer }];
+	}
+	return [];
+}
+
 const navHandler: Handler<"nav"> = (state, action, ctx) => {
 	const items = ctx.itemsByTab[state.currentTab] ?? [];
 	const item = items[action.nextIndex];
 	const inputMode = item ? ROW_INTENT_META[item.kind].activatesInputMode : false;
 	const next = withFocusedOptionHasPreview({ ...state, optionIndex: action.nextIndex, inputMode }, ctx.questions);
-	if (!inputMode) {
-		return { state: next, effects: [{ kind: "clear_input_buffer" }] };
-	}
-	const prior = state.answers.get(state.currentTab);
-	if (prior?.kind === "custom" && typeof prior.answer === "string") {
-		return { state: next, effects: [{ kind: "set_input_buffer", value: prior.answer }] };
-	}
-	return { state: next, effects: [] };
+	return { state: next, effects: inlineInputEffects(next, state.currentTab, ctx, state.answers) };
 };
 
 const tabSwitchHandler: Handler<"tab_switch"> = (state, action, ctx) => switchTabResult(state, action.nextTab, ctx);
