@@ -48,8 +48,7 @@ export class CompactionSummaryMessageComponent extends Box {
 		this.updateDisplay();
 	}
 
-	override invalidate(): void {
-		super.invalidate();
+	protected repaintChildren(): void {
 		this.updateDisplay();
 	}
 

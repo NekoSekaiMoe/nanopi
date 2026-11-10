@@ -36,6 +36,11 @@ export class Text implements Component {
 		this.invalidate();
 	}
 
+	/** The text last handed to `setText`. */
+	protected getText(): string {
+		return this.text;
+	}
+
 	setCustomBgFn(customBgFn?: (text: string) => string): void {
 		this.customBgFn = customBgFn;
 		this.invalidate();

@@ -67,8 +67,20 @@ export interface Component {
 	wantsKeyRelease?: boolean;
 
 	/**
-	 * Invalidate any cached rendering state.
-	 * Called when theme changes or when component needs to re-render from scratch.
+	 * Redraw what is already there: the inputs moved (a theme change, a resize,
+	 * a callback the last render scheduled), the content did not. A component
+	 * drops its caches and builds again; it must never return lines it cannot
+	 * vouch for.
+	 *
+	 * Containers forward this, not re-render: an invalidated child repaints
+	 * itself on its next `render`. A component that owns a subtree and has to
+	 * rebuild it to repaint — because the rebuild is what re-reads the theme —
+	 * overrides this, calls `super.invalidate()` and rebuilds.
+	 *
+	 * Content that changed is `setText`, not this. No component here has a
+	 * settable text, so this is only the vocabulary; keep the two apart anyway
+	 * and do not turn this into "maybe drop the cache": the caller is the one
+	 * that knows the content stands, and it cannot tell you whether it does.
 	 */
 	invalidate(): void;
 }

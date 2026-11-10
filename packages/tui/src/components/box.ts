@@ -22,6 +22,10 @@ export class Box implements Component {
 	// Cache for rendered output
 	private cache?: RenderCache;
 	private mouseLayout?: { width: number; children: Array<{ component: Component; height: number }> };
+	/** Depth of the `render` calls on the stack; see `invalidate`. */
+	private rendering = 0;
+	/** An `invalidate` that arrived while rendering; replayed after the frame. */
+	private invalidatedWhileRendering = false;
 
 	constructor(paddingX = 1, paddingY = 1, bgFn?: (text: string) => string) {
 		this.paddingX = paddingX;
@@ -72,10 +76,30 @@ export class Box implements Component {
 		);
 	}
 
+	/**
+	 * Repaint: drop the cache and rebuild the subtree.
+	 *
+	 * A subclass overrides `repaintChildren`, not this. An `invalidate` that
+	 * lands mid-frame waits for the frame to finish; one called from outside a
+	 * render rebuilds right away.
+	 */
 	invalidate(): void {
 		this.invalidateCache();
+		if (this.rendering > 0) {
+			this.invalidatedWhileRendering = true;
+			return;
+		}
+		this.repaintChildren();
+	}
+
+	/**
+	 * Rebuild the children from the current inputs. A subclass whose rebuild is
+	 * what re-reads the theme overrides this, not `invalidate`, which fires as
+	 * soon as `invalidate` lands rather than after the frame in flight.
+	 */
+	protected repaintChildren(): void {
 		for (const child of this.children) {
-			child.invalidate?.();
+			child.invalidate();
 		}
 	}
 
@@ -106,6 +130,19 @@ export class Box implements Component {
 	}
 
 	render(width: number): string[] {
+		this.rendering++;
+		try {
+			return this.renderFrame(width);
+		} finally {
+			this.rendering--;
+			if (this.rendering === 0 && this.invalidatedWhileRendering) {
+				this.invalidatedWhileRendering = false;
+				this.repaintChildren();
+			}
+		}
+	}
+
+	private renderFrame(width: number): string[] {
 		if (this.children.length === 0) {
 			return [];
 		}

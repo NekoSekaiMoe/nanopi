@@ -90,8 +90,7 @@ export class CustomMessageComponent extends Container {
 		return transformed;
 	};
 
-	override invalidate(): void {
-		super.invalidate();
+	protected override repaintChildren(): void {
 		this.rebuild();
 	}
 

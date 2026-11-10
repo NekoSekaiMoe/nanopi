@@ -316,6 +316,14 @@ type OverlayFocusRestorePolicy = "clear" | "preserve";
 export class Container implements Component {
 	children: Component[] = [];
 	private mouseLayout?: { width: number; children: Array<{ component: Component; height: number }> };
+	/**
+	 * Depth of the `render` calls on the stack. A container that rebuilds its
+	 * children on `invalidate` would otherwise throw away the children of a
+	 * render in flight, which is the frame it is trying to repaint.
+	 */
+	private rendering = 0;
+	/** An `invalidate` that arrived while rendering; replayed after the frame. */
+	private invalidatedWhileRendering = false;
 
 	addChild(component: Component): void {
 		this.children.push(component);
@@ -333,8 +341,23 @@ export class Container implements Component {
 	}
 
 	invalidate(): void {
+		if (this.rendering > 0) {
+			this.invalidatedWhileRendering = true;
+			return;
+		}
+		this.repaintChildren();
+	}
+
+	/**
+	 * Rebuild the children from the current inputs. `Container` holds no cache
+	 * of its own, so the base case is to ask each child to repaint itself. A
+	 * subclass whose rebuild is what re-reads the theme overrides this, not
+	 * `invalidate`, which fires as soon as `invalidate` lands rather than after
+	 * the frame in flight.
+	 */
+	protected repaintChildren(): void {
 		for (const child of this.children) {
-			child.invalidate?.();
+			child.invalidate();
 		}
 	}
 
@@ -361,17 +384,35 @@ export class Container implements Component {
 	}
 
 	render(width: number): string[] {
-		const lines: string[] = [];
-		const mouseChildren: Array<{ component: Component; height: number }> = [];
-		for (const child of this.children) {
-			const childLines = child.render(width);
-			mouseChildren.push({ component: child, height: childLines.length });
-			for (const line of childLines) {
-				lines.push(line);
+		this.rendering++;
+		try {
+			const lines: string[] = [];
+			const mouseChildren: Array<{ component: Component; height: number }> = [];
+			for (const child of this.children) {
+				const childLines = child.render(width);
+				mouseChildren.push({ component: child, height: childLines.length });
+				for (const line of childLines) {
+					lines.push(line);
+				}
 			}
+			this.mouseLayout = { width, children: mouseChildren };
+			return lines;
+		} finally {
+			this.rendering--;
+			if (this.rendering === 0) this.flushDeferredRepaint();
 		}
-		this.mouseLayout = { width, children: mouseChildren };
-		return lines;
+	}
+
+	/**
+	 * Pick up an `invalidate` that landed while a frame was rendering. The
+	 * children it would replace are the ones that frame just drew, so the
+	 * rebuild waits until the frame is done and the next one draws it.
+	 */
+	private flushDeferredRepaint(): void {
+		if (!this.invalidatedWhileRendering) return;
+		this.invalidatedWhileRendering = false;
+		this.mouseLayout = undefined;
+		this.repaintChildren();
 	}
 }
 
