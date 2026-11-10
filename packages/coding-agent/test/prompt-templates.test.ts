@@ -383,8 +383,7 @@ describe("parseCommandArgs", () => {
 	});
 
 	test("should handle quoted empty string", () => {
-		// Note: Empty quotes are skipped by current implementation
-		expect(parseCommandArgs('"" " "')).toEqual([" "]);
+		expect(parseCommandArgs('"" " "')).toEqual(["", " "]);
 	});
 
 	test("should handle arguments with special characters", () => {
@@ -415,8 +414,26 @@ describe("parseCommandArgs", () => {
 	});
 
 	test("should handle escaped quotes inside quoted strings", () => {
-		// Note: This implementation doesn't handle escaped quotes - backslash is literal
-		expect(parseCommandArgs('"quoted \\"text\\""')).toEqual(["quoted \\text\\"]);
+		expect(parseCommandArgs('"quoted \\"text\\""')).toEqual(['quoted "text"']);
+	});
+
+	// #634: an apostrophe inside a word is not a quote, and an unclosed quote is
+	// literal text. Opening one mid-word swallowed the spaces after it, so
+	// `/ask why doesn't the user's cache work` reached the model without them.
+	test("should keep apostrophes inside words as literal text", () => {
+		expect(parseCommandArgs("why doesn't the user's cache work")).toEqual([
+			"why",
+			"doesn't",
+			"the",
+			"user's",
+			"cache",
+			"work",
+		]);
+	});
+
+	test("should keep an unclosed quote as literal text", () => {
+		expect(parseCommandArgs("ask isn't it")).toEqual(["ask", "isn't", "it"]);
+		expect(parseCommandArgs('ask "unclosed arg')).toEqual(["ask", '"unclosed', "arg"]);
 	});
 
 	test("should handle trailing spaces", () => {
