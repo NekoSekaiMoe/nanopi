@@ -272,7 +272,40 @@ export function truncateLine(
 	if (line.length <= maxChars) {
 		return { text: line, wasTruncated: false };
 	}
-	return { text: `${line.slice(0, maxChars)}... [truncated]`, wasTruncated: true };
+	return { text: `${sliceHead(line, maxChars)}... [truncated]`, wasTruncated: true };
+}
+
+/**
+ * Cuts at a UTF-16 index split astral characters (emoji, CJK extension B) into a
+ * lone surrogate. `JSON.stringify` still emits the half character as an escaped
+ * `\ud83d`, and a strict encoder on the other side (`serde_json`, which rejects
+ * lone surrogates) refuses the whole request once the text lands in a session
+ * file or a tool result.
+ */
+function isHighSurrogate(code: number): boolean {
+	return code >= 0xd800 && code <= 0xdbff;
+}
+
+function isLowSurrogate(code: number): boolean {
+	return code >= 0xdc00 && code <= 0xdfff;
+}
+
+/** Returns at most the first `maxUnits` UTF-16 code units of `text`, without splitting a surrogate pair. */
+export function sliceHead(text: string, maxUnits: number): string {
+	const end = Math.max(0, maxUnits);
+	// A lone high surrogate before the cut would be invalid UTF-16; keep the whole character out instead.
+	return isHighSurrogate(text.charCodeAt(end - 1)) && isLowSurrogate(text.charCodeAt(end))
+		? text.slice(0, end - 1)
+		: text.slice(0, end);
+}
+
+/** Returns at most the last `maxUnits` UTF-16 code units of `text`, without splitting a surrogate pair. */
+export function sliceTail(text: string, maxUnits: number): string {
+	if (maxUnits <= 0) return "";
+	const start = Math.max(0, text.length - maxUnits);
+	return isLowSurrogate(text.charCodeAt(start)) && isHighSurrogate(text.charCodeAt(start - 1))
+		? text.slice(start + 1)
+		: text.slice(start);
 }
 
 export interface MiddleTruncationResult {
