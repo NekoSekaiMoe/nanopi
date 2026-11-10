@@ -25,20 +25,8 @@ export function decodeFileForEdit(buffer: Uint8Array, path: string): string {
 // ignoreBOM keeps a UTF-8 byte order mark in the text, as Buffer.toString("utf-8") does.
 const UTF8_FOR_EDIT = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
-function detectLineEnding(content: string): "\r\n" | "\n" {
-	const crlfIdx = content.indexOf("\r\n");
-	const lfIdx = content.indexOf("\n");
-	if (lfIdx === -1) return "\n";
-	if (crlfIdx === -1) return "\n";
-	return crlfIdx < lfIdx ? "\r\n" : "\n";
-}
-
 function normalizeToLF(text: string): string {
 	return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-}
-
-function restoreLineEndings(text: string, ending: "\r\n" | "\n"): string {
-	return ending === "\r\n" ? text.replace(/\n/g, "\r\n") : text;
 }
 
 /**
@@ -136,6 +124,97 @@ function applyReplacements(content: string, replacements: TextReplacement[], off
 	return result;
 }
 
+/** One line of the original file, with the line ending it actually uses. */
+interface OriginalLine {
+	text: string;
+	ending: string;
+}
+
+/** Lines of `content`, each with its own terminator. A file ending with a terminator has no extra line. */
+function splitOriginalLines(content: string): OriginalLine[] {
+	const lines: OriginalLine[] = [];
+	const matcher = /\r\n|\r|\n/g;
+	let start = 0;
+	for (let match = matcher.exec(content); match !== null; match = matcher.exec(content)) {
+		lines.push({ text: content.slice(start, match.index), ending: match[0] });
+		start = match.index + match[0].length;
+	}
+	if (start < content.length) lines.push({ text: content.slice(start), ending: "" });
+	return lines;
+}
+
+/**
+ * Rewrite only the lines the edits touched, keeping every other line's bytes.
+ *
+ * The matching code works on one canonical newline, which means a file edited through it comes
+ * back with a single line ending for the whole file: one CRLF anywhere used to turn every LF into
+ * CRLF, and a lone CR disappeared entirely. Editing line by line keeps the original terminators,
+ * including files that mix all three.
+ *
+ * New terminators introduced by the replacement text follow the line they attach to: a changed
+ * line keeps the terminator of the line it replaced, and a terminator the replacement adds takes
+ * the file's dominant ending.
+ */
+function applyReplacementsToOriginal(
+	originalContent: string,
+	replacementBaseContent: string,
+	replacements: TextReplacement[],
+): string {
+	const originalLines = splitOriginalLines(originalContent);
+	const lineSpans = getLineSpans(replacementBaseContent);
+	if (lineSpans.length !== originalLines.length) {
+		throw new Error("Cannot map edits to the original content because the line counts differ.");
+	}
+
+	const groups: Array<{ startLine: number; endLine: number; replacements: TextReplacement[] }> = [];
+	for (const replacement of [...replacements].sort((a, b) => a.matchIndex - b.matchIndex)) {
+		const range = getReplacementLineRange(lineSpans, replacement);
+		const current = groups[groups.length - 1];
+		if (current && range.startLine < current.endLine) {
+			current.endLine = Math.max(current.endLine, range.endLine);
+			current.replacements.push(replacement);
+			continue;
+		}
+		groups.push({ ...range, replacements: [replacement] });
+	}
+
+	let originalLineIndex = 0;
+	let result = "";
+	for (const group of groups) {
+		for (let line = originalLineIndex; line < group.startLine; line++) {
+			result += originalLines[line].text + originalLines[line].ending;
+		}
+
+		const groupStartOffset = lineSpans[group.startLine].start;
+		const groupEndOffset = lineSpans[group.endLine - 1].end;
+		const rewritten = applyReplacements(
+			replacementBaseContent.slice(groupStartOffset, groupEndOffset),
+			group.replacements,
+			groupStartOffset,
+		);
+
+		// The group covers a whole number of original lines, which is where each rewritten line
+		// finds the terminator to keep. A replacement that adds or drops lines changes that count,
+		// so terminators come from the original lines the group covered: rewritten line N keeps the
+		// terminator of original line N, and lines the replacement added take the group's last one.
+		const rewrittenLines = splitOriginalLines(rewritten);
+		const originalEndings = originalLines.slice(group.startLine, group.endLine).map((line) => line.ending);
+		const groupEnding = originalEndings[originalEndings.length - 1] ?? "";
+		for (let index = 0; index < rewrittenLines.length; index++) {
+			const isLast = index === rewrittenLines.length - 1;
+			const ending = isLast ? groupEnding : (originalEndings[index] ?? groupEnding);
+			result += rewrittenLines[index].text + ending;
+		}
+		originalLineIndex = group.endLine;
+	}
+
+	for (let line = originalLineIndex; line < originalLines.length; line++) {
+		result += originalLines[line].text + originalLines[line].ending;
+	}
+
+	return result;
+}
+
 /**
  * Apply replacements matched against `baseContent` to `originalContent` while
  * preserving unchanged line blocks from the original.
@@ -213,6 +292,13 @@ interface Edit {
 interface AppliedEditsResult {
 	baseContent: string;
 	newContent: string;
+	/**
+	 * The content the matched offsets index into: `baseContent` for an exact match, the
+	 * fuzzy-normalized view for a fuzzy one. Callers use it to map edits back onto the original.
+	 */
+	replacementBaseContent: string;
+	/** The matched ranges, for callers that rebuild the original text from it. */
+	replacements: MatchedEdit[];
 }
 
 /**
@@ -470,6 +556,8 @@ function applyEditsToNormalizedContent(normalizedContent: string, edits: Edit[],
 	}
 
 	const baseContent = normalizedContent;
+	// The offsets all point into `replacementBaseContent`, which is the fuzzy-normalized view when
+	// a fuzzy match was involved; the caller maps rows through it to rebuild the original text.
 	const newContent = usedFuzzyMatch
 		? applyReplacementsPreservingUnchangedLines(normalizedContent, replacementBaseContent, matchedEdits)
 		: applyReplacements(replacementBaseContent, matchedEdits);
@@ -478,7 +566,7 @@ function applyEditsToNormalizedContent(normalizedContent: string, edits: Edit[],
 		throw getNoChangeError(path, normalizedEdits.length);
 	}
 
-	return { baseContent, newContent };
+	return { baseContent, newContent, replacementBaseContent, replacements: matchedEdits };
 }
 
 /** Generate a standard unified patch. */
@@ -675,15 +763,16 @@ export type { AppliedEditsResult, Edit, EditDiffError, FuzzyMatchResult };
 // Package-internal: `generateDiffString` and `generateUnifiedPatch` are what a renderer and the
 // export path call; `computeEditsDiff` is the preview the edit renderer streams. The line-ending
 // normalisation and the fuzzy matcher are how the edit tool finds a match, and `EditDiffResult` stays
-// public because it is `computeEditsDiff`'s result.
+// public because it is `computeEditsDiff`'s result. Line endings are no longer restored wholesale:
+// `applyReplacementsToOriginal` rewrites only the touched lines, so the helpers that forced one
+// ending onto the whole file are gone.
 export {
 	applyEditsToNormalizedContent,
 	applyReplacementsPreservingUnchangedLines,
+	applyReplacementsToOriginal,
 	computeEditDiff,
 	computeEditsDiff,
-	detectLineEnding,
 	fuzzyFindText,
 	normalizeForFuzzyMatch,
 	normalizeToLF,
-	restoreLineEndings,
 };
