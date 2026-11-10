@@ -1,6 +1,6 @@
 import { Marked, type Token } from "@nanopi/pi-tui";
 import { type MermaidArt, render, type Span } from "grok-mermaid";
-import type { MarkdownTransformer } from "../../../core/modules/types.ts";
+import type { MarkdownTransformContext, MarkdownTransformer } from "../../../core/modules/types.ts";
 import type { MermaidRenderingMode } from "../../../core/settings-manager.ts";
 import type { Theme } from "../theme/theme.ts";
 
@@ -9,6 +9,11 @@ const markdownParser = new Marked();
 interface MermaidTransformerOptions {
 	getMode: () => MermaidRenderingMode;
 	theme?: Theme;
+	/**
+	 * Rows this transformer draws. Omitted means every row that reaches it; the host
+	 * limits it to the two it wants diagrams in.
+	 */
+	messageTypes?: readonly MarkdownTransformContext["messageType"][];
 }
 
 function isMermaid(token: Token): token is Token & { type: "code"; text: string; lang?: string } {
@@ -63,6 +68,7 @@ export function createMermaidMarkdownTransformer(options: MermaidTransformerOpti
 		if (
 			mode === "off" ||
 			context.messageType === "assistant-thinking" ||
+			(options.messageTypes && !options.messageTypes.includes(context.messageType)) ||
 			(context.isStreaming && mode !== "streaming")
 		) {
 			return markdown;
