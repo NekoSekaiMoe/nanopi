@@ -34,7 +34,6 @@ import {
 } from "./terminal-image.ts";
 import {
 	Container,
-	CURSOR_MARKER,
 	compositeTuiLine,
 	dispatchMouseEvent,
 	type OverlayHandle,
@@ -408,8 +407,8 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 			const documentLines = this.resolveFakeCursors(this.render(width)).map((line) =>
 				line.replace(OSC133_ZONE_PREFIX, ""),
 			);
-			this.lastDocument = this.applyLineResets(documentLines.map((line) => line.replaceAll(CURSOR_MARKER, ""))).map(
-				(line) => (isImageLine(line) || visibleWidth(line) <= width ? line : sliceByColumn(line, 0, width, true)),
+			this.lastDocument = this.applyLineResets(documentLines).map((line) =>
+				isImageLine(line) || visibleWidth(line) <= width ? line : sliceByColumn(line, 0, width, true),
 			);
 			let buffer = `${BEGIN_SYNCHRONIZED_OUTPUT}${EXIT_ALT_SCREEN}${DISABLE_AUTOWRAP}`;
 			for (let row = 0; row < this.lastDocument.length; row++) {

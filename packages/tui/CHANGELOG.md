@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Cursor markers no longer reach the terminal: `sliceWithWidth` accumulated every escape before the slice into `pendingAnsi`, so the zero-width APCs (`CURSOR_MARKER`, the fake cursor pair) were re-emitted at the slice start instead of at their own column, and `extractCursorPosition` stripped only the first marker on a line. A highlighted selection slices each row three times, which is how a second marker survived to a write. A marker now stays only where it already sits in the original text order and `extractCursorPosition` removes every occurrence (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - File completion stops spawning `fd` once the request was aborted: the abort can land while the first listing is awaited, and the recursive walk that follows it started a process the cancellation could no longer reach (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
 
 ## [20261107]

@@ -1000,6 +1000,19 @@ describe("TUI fake cursor", () => {
 		tui.stop();
 	});
 
+	// https://github.com/NekoSekaiMoe/nanopi/issues/640
+	it("never writes a cursor marker to the terminal when several are on one line", async () => {
+		const terminal = new LoggingVirtualTerminal(20, 5);
+		const tui: TUI = new TuiMainScreen(terminal, true);
+		const base = new TestComponent();
+		base.lines = [`ab${CURSOR_MARKER}cd${CURSOR_MARKER}ef`];
+		tui.addChild(base);
+		tui.start();
+		await terminal.waitForRender();
+		assert.ok(!terminal.getWrites().includes(CURSOR_MARKER));
+		tui.stop();
+	});
+
 	it("keeps the cursor when an overlay ends directly left of it", async () => {
 		for (const showHardwareCursor of [false, true]) {
 			const terminal = new LoggingVirtualTerminal(20, 5);
