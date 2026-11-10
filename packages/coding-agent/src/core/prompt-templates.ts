@@ -1,8 +1,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { basename, dirname, join, resolve, sep } from "path";
-import { CONFIG_DIR_NAME } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { resolvePath } from "../utils/paths.ts";
+import { projectResourceDirs } from "./agents-dirs.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
@@ -216,7 +216,7 @@ interface LoadPromptTemplatesResult {
 /**
  * Load all prompt templates from:
  * 1. Global: agentDir/prompts/
- * 2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
+ * 2. Project: .agents/prompts in cwd and its ancestors, then .nanopi/prompts
  * 3. Explicit prompt paths
  */
 function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTemplatesResult {
@@ -233,7 +233,7 @@ function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTem
 	};
 
 	const globalPromptsDir = join(resolvedAgentDir, "prompts");
-	const projectPromptsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "prompts");
+	const projectPromptsDirs = projectResourceDirs(resolvedCwd, "prompts");
 
 	const isUnderPath = (target: string, root: string): boolean => {
 		const normalizedRoot = resolve(root);
@@ -252,7 +252,8 @@ function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTem
 				baseDir: globalPromptsDir,
 			});
 		}
-		if (isUnderPath(resolvedPath, projectPromptsDir)) {
+		const projectPromptsDir = projectPromptsDirs.find((dir) => isUnderPath(resolvedPath, dir));
+		if (projectPromptsDir) {
 			return createSyntheticSourceInfo(resolvedPath, {
 				source: "local",
 				scope: "project",
@@ -267,7 +268,9 @@ function loadPromptTemplates(options: LoadPromptTemplatesOptions): LoadPromptTem
 
 	if (includeDefaults) {
 		addResult(loadTemplatesFromDir(globalPromptsDir, getSourceInfo));
-		addResult(loadTemplatesFromDir(projectPromptsDir, getSourceInfo));
+		for (const dir of projectPromptsDirs) {
+			addResult(loadTemplatesFromDir(dir, getSourceInfo));
+		}
 	}
 
 	// 3. Load explicit prompt paths

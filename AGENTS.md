@@ -119,7 +119,7 @@ Prefer updating the note that already owns the decision over creating a new one.
 
 ## Testing nanopi Interactive Mode with tmux
 
-For testing nanopi's interactive mode, load and follow [.nanopi/skills/interactive-testing.md](.nanopi/skills/interactive-testing.md).
+For testing nanopi's interactive mode, load and follow [.agents/skills/interactive-testing.md](.agents/skills/interactive-testing.md).
 
 ## Changelog
 
@@ -140,7 +140,7 @@ Attribution:
 
 ## Releasing
 
-For release preparation, publishing, verification, or recovery, load and follow [.nanopi/skills/release.md](.nanopi/skills/release.md).
+For release preparation, publishing, verification, or recovery, load and follow [.agents/skills/release.md](.agents/skills/release.md).
 
 ## User Override
 

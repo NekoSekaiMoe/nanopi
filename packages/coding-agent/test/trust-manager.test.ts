@@ -56,6 +56,10 @@ describe("ProjectTrustStore", () => {
 			rmSync(join(cwd, ".nanopi"), { recursive: true, force: true });
 			mkdirSync(join(cwd, ".agents", "skills"), { recursive: true });
 			expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+
+			rmSync(join(cwd, ".agents", "skills"), { recursive: true, force: true });
+			mkdirSync(join(cwd, ".agents", "prompts"), { recursive: true });
+			expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
 		} finally {
 			if (originalHome === undefined) {
 				delete process.env.HOME;

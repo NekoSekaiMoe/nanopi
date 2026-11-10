@@ -39,7 +39,7 @@
 #
 # The session runs in a high-entropy checkout directory so the recorded cwd is
 # a unique string. Import the session into a local checkout with the
-# /ir extension command (.nanopi/extensions/import-repro.ts):
+# /ir extension command (.agents/extensions/import-repro.ts):
 #   nanopi "/ir <gist-id | gist-url>"
 
 name: Issue Analysis
