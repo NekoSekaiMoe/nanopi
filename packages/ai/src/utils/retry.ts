@@ -134,6 +134,12 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	// "stream ended without ..." and "Anthropic stream ended before message_stop"
 	// (#4433); Bedrock/Smithy can throw an HTTP/2 no-response error (#3594).
 	"ended without",
+	// A stream that also reports how far it got. Anthropic's SDK wording is
+	// "Request ended prematurely"; the OpenAI Responses stream says the reply was
+	// "cut short after the reply had begun". Neither mentions the transport, so
+	// without these the user had to re-send by hand.
+	"ended prematurely",
+	"cut short",
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
 	"http2 request did not get a response",
