@@ -143,6 +143,61 @@ export function getJsonSchemaToolParameters(tool: Tool, strict: boolean | undefi
 	return (strict === true ? makeStrictJsonSchema(tool.parameters) : tool.parameters) as Tool["parameters"];
 }
 
+/**
+ * The non-strict schema to send for a tool whose strict conversion was refused,
+ * with the root `$defs` / `definitions` block inlined into the `$ref`s that
+ * point at it.
+ *
+ * Anthropic's non-strict `input_schema` is rebuilt from `properties` and
+ * `required` only, so a definitions block at the root is dropped while the
+ * `#/$defs/...` references inside the properties survive. The model then gets
+ * `{"value": {"$ref": "#/$defs/value"}}` with nothing to resolve against and
+ * makes up the shape. Inlining is what the strict conversion would have done
+ * anyway; it is only skipped when a reference cannot be resolved, where the
+ * schema is left exactly as the caller wrote it instead of half-substituted.
+ */
+export function inlineRootDefs(schema: Tool["parameters"]): Tool["parameters"] {
+	if (!isJsonSchemaObject(schema)) return schema;
+	const definitions: Record<string, unknown> = {};
+	let found = false;
+	for (const key of ["$defs", "definitions"]) {
+		const block = schema[key];
+		if (!isJsonSchemaObject(block)) continue;
+		Object.assign(definitions, block);
+		found = true;
+	}
+	if (!found) return schema;
+
+	const resolve = (node: unknown, seen: ReadonlySet<string>): unknown => {
+		if (Array.isArray(node)) return node.map((item) => resolve(item, seen));
+		if (!isJsonSchemaObject(node)) return node;
+		const ref = node.$ref;
+		if (typeof ref === "string") {
+			const name = /^#\/(?:\$defs|definitions)\/(.+)$/.exec(ref)?.[1];
+			const target = name === undefined ? undefined : definitions[name];
+			// A cycle resolves to the reference it started from: the same shape
+			// recursion produces, and still resolvable by the model.
+			if (target === undefined || seen.has(ref)) return node;
+			const nextSeen = new Set(seen);
+			nextSeen.add(ref);
+			const { $ref: _ref, ...siblings } = node;
+			const resolved = resolve(target, nextSeen);
+			// Siblings of a `$ref` stay: they narrow the referenced schema.
+			return isJsonSchemaObject(resolved) ? { ...resolved, ...siblings } : resolved;
+		}
+		const out: Record<string, unknown> = {};
+		for (const [key, value] of Object.entries(node)) {
+			out[key] = resolve(value, seen);
+		}
+		return out;
+	};
+
+	const result = { ...(resolve(schema, new Set()) as Record<string, unknown>) };
+	delete result.$defs;
+	delete result.definitions;
+	return result as Tool["parameters"];
+}
+
 export interface GrammarConstrainedSampling {
 	format: "lark" | "regex";
 	definition: string;

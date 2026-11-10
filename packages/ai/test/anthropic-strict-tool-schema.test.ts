@@ -98,6 +98,32 @@ describe("Anthropic strict tool schemas", () => {
 		});
 	});
 
+	it("inlines a root $defs into the non-strict input schema", async () => {
+		// The non-strict schema keeps properties and required only, so a root $defs
+		// block disappeared while the $refs inside properties survived, and the model
+		// got a reference with nothing to resolve against.
+		const parameters = {
+			type: "object",
+			properties: {
+				value: { $ref: "#/$defs/value" },
+				label: { type: "string" },
+			},
+			required: ["label"],
+			$defs: { value: { anyOf: [{ type: "number" }, { type: "null" }] } },
+		} as Tool["parameters"];
+		const tool = await captureFirstTool(createStrictTool(parameters));
+
+		expect(tool.strict).toBeUndefined();
+		expect(tool.input_schema).toEqual({
+			type: "object",
+			properties: {
+				value: { anyOf: [{ type: "number" }, { type: "null" }] },
+				label: { type: "string" },
+			},
+			required: ["label"],
+		});
+	});
+
 	// https://github.com/NekoSekaiMoe/nanopi/issues/9953
 	it("sends prefer tools non-strict when they use keywords Anthropic strict mode rejects", async () => {
 		const unsupportedParameters: Tool["parameters"][] = [

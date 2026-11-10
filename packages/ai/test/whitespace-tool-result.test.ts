@@ -25,6 +25,7 @@ const completionsCompat: Omit<Required<OpenAICompletionsCompat>, "thinkingTokenB
 	maxTokensField: "max_completion_tokens",
 	requiresToolResultName: false,
 	requiresAssistantAfterToolResult: false,
+	requiresToolsWithToolHistory: false,
 	requiresThinkingAsText: false,
 	requiresReasoningContentOnAssistantMessages: false,
 	thinkingFormat: "openai",

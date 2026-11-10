@@ -964,8 +964,11 @@ function buildParams(
 		if (compat.zaiToolStream) {
 			(params as any).tool_stream = true;
 		}
-	} else if (hasToolHistory(context.messages)) {
-		// Anthropic (via LiteLLM/proxy) requires tools param when conversation has tool_calls/tool_results
+	} else if (hasToolHistory(context.messages) && compat.requiresToolsWithToolHistory) {
+		// Some Anthropic proxies (LiteLLM) reject a tool_calls/tool_results history with
+		// no tools param at all. Only those need the empty array: vLLM 0.20+ answers
+		// `tools: []` with a 400 for every request, and a conversation that ended on a
+		// tool result happens all the time, so sending it unconditionally broke turn two.
 		params.tools = [];
 	}
 
@@ -1772,6 +1775,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		maxTokensField: useMaxTokens ? "max_tokens" : "max_completion_tokens",
 		requiresToolResultName: false,
 		requiresAssistantAfterToolResult: false,
+		requiresToolsWithToolHistory: false,
 		requiresThinkingAsText: false,
 		requiresReasoningContentOnAssistantMessages: isDeepSeek,
 		thinkingFormat: isDeepSeek
@@ -1820,6 +1824,7 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 		requiresToolResultName: model.compat.requiresToolResultName ?? detected.requiresToolResultName,
 		requiresAssistantAfterToolResult:
 			model.compat.requiresAssistantAfterToolResult ?? detected.requiresAssistantAfterToolResult,
+		requiresToolsWithToolHistory: model.compat.requiresToolsWithToolHistory ?? detected.requiresToolsWithToolHistory,
 		requiresThinkingAsText: model.compat.requiresThinkingAsText ?? detected.requiresThinkingAsText,
 		requiresReasoningContentOnAssistantMessages:
 			model.compat.requiresReasoningContentOnAssistantMessages ??

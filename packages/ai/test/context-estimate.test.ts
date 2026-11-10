@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildBaseOptions } from "../src/api/simple-options.ts";
+import { buildBaseOptions, clampMaxTokensToContext } from "../src/api/simple-options.ts";
 import type { AssistantMessage, Model, Usage } from "../src/types.ts";
 import { estimateContextTokens } from "../src/utils/estimate.ts";
 import { normalizeContext } from "../src/utils/transcript.ts";
@@ -54,7 +54,7 @@ describe("context token estimation", () => {
 			trailingTokens: 1_000,
 			lastUsageIndex: 0,
 		});
-		expect(buildBaseOptions(model, context).maxTokens).toBe(2_904);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(2_454);
 	});
 
 	it("ignores stale assistant usage after a newer message is inserted before it", () => {
@@ -73,7 +73,38 @@ describe("context token estimation", () => {
 			trailingTokens: 1_149,
 			lastUsageIndex: null,
 		});
-		expect(buildBaseOptions(model, context).maxTokens).toBe(4_755);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(4_582);
+	});
+
+	it("reserves output room above the raw estimate so a request does not overshoot the window", () => {
+		// The estimate is an average, and OpenRouter adds input and max_tokens up
+		// itself. Clamping against the raw figure produced a request whose real
+		// input was 12% over the estimate, which OpenRouter rejected as an overflow
+		// and the agent then compacted a conversation that still had room.
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "x".repeat(3_500), timestamp: 200 }],
+		});
+
+		expect(estimateContextTokens(context).tokens).toBe(1_000);
+		// 10_000 - ceil(1_000 * 1.15) - 4_096
+		expect(buildBaseOptions(model, context).maxTokens).toBe(4_754);
+	});
+
+	it("sends the clamped max_tokens to OpenRouter instead of omitting it", () => {
+		const openRouterModel = {
+			...model,
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			api: "openai-completions",
+		} as Model<"openai-completions">;
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "x".repeat(28_000), timestamp: 200 }],
+		});
+
+		const unclamped = clampMaxTokensToContext(openRouterModel, context, openRouterModel.maxTokens);
+		expect(unclamped).toBeLessThan(openRouterModel.maxTokens);
+		// The catalog figure goes out only because clamping lowered it.
+		expect(buildBaseOptions(openRouterModel, context).maxTokens).toBe(unclamped);
 	});
 
 	it("uses assistant usage again after a response to the inserted context", () => {

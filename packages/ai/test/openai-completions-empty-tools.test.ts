@@ -140,7 +140,10 @@ describe("openai-completions empty tools handling", () => {
 
 		const params = mockState.lastParams as { max_tokens?: number; max_completion_tokens?: number };
 		expect(params.max_tokens).toBeUndefined();
-		expect(params.max_completion_tokens).toBe(3618);
+		// 10_000 - ceil(8000 / 3.5 * 1.15) - 4_096: the input estimate carries
+		// headroom, because a max_tokens clamped from an under-estimate is a
+		// request the provider rejects as an overflow.
+		expect(params.max_completion_tokens).toBe(3275);
 	});
 
 	it("clamps explicit maxTokens to remaining context", async () => {
@@ -157,7 +160,7 @@ describe("openai-completions empty tools handling", () => {
 
 		const params = mockState.lastParams as { max_tokens?: number; max_completion_tokens?: number };
 		expect(params.max_tokens).toBeUndefined();
-		expect(params.max_completion_tokens).toBe(3618);
+		expect(params.max_completion_tokens).toBe(3275);
 	});
 
 	it("uses conservative OpenAI-compatible fields for Cloudflare AI Gateway /compat models", async () => {
@@ -250,9 +253,13 @@ describe("openai-completions empty tools handling", () => {
 		expect(clientOptions.defaultHeaders?.["x-session-affinity"]).toBe("session-1");
 	});
 
-	it("still emits tools: [] for Anthropic/LiteLLM proxy when conversation has tool history", async () => {
+	it("emits tools: [] for Anthropic/LiteLLM proxy when conversation has tool history", async () => {
 		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
-		const model = { ...baseModel, api: "openai-completions" } as const;
+		const model = {
+			...baseModel,
+			api: "openai-completions",
+			compat: { requiresToolsWithToolHistory: true },
+		} as const;
 
 		await streamSimple(
 			model,
@@ -300,5 +307,51 @@ describe("openai-completions empty tools handling", () => {
 		const params = mockState.lastParams as { tools?: unknown[] };
 		expect(Array.isArray(params.tools)).toBe(true);
 		expect(params.tools).toEqual([]);
+	});
+
+	it("omits tools entirely for an endpoint that rejects an empty tools array", async () => {
+		// vLLM 0.20+ answers `tools: []` with a 400 for every request, and a
+		// conversation that ends on a tool result is the normal second turn.
+		const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
+		const model = { ...baseModel, api: "openai-completions" } as const;
+
+		await streamSimple(
+			model,
+			{
+				messages: [
+					{ role: "user", content: "use the tool", timestamp: Date.now() },
+					{
+						role: "assistant",
+						content: [{ type: "toolCall", id: "t1", name: "noop", arguments: {} }],
+						stopReason: "toolUse",
+						usage: {
+							input: 0,
+							output: 0,
+							cacheRead: 0,
+							cacheWrite: 0,
+							totalTokens: 0,
+							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+						},
+						api: "openai-completions",
+						provider: "openai",
+						model: "gpt-4o-mini",
+						timestamp: Date.now(),
+					},
+					{
+						role: "toolResult",
+						toolCallId: "t1",
+						toolName: "noop",
+						content: [{ type: "text", text: "done" }],
+						isError: false,
+						timestamp: Date.now(),
+					},
+				],
+				tools: [],
+			},
+			{ apiKey: "test" },
+		).result();
+
+		const params = mockState.lastParams as { tools?: unknown[] };
+		expect(params.tools).toBeUndefined();
 	});
 });
