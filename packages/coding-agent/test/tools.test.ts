@@ -1098,6 +1098,74 @@ describe("Coding Agent Tools", () => {
 				else process.env.RIPGREP_CONFIG_PATH = previous;
 			}
 		});
+
+		// #634: ripgrep roots --glob at its own cwd, not at `path`, so a glob with a
+		// slash in it resolved against the directory nanopi was started in and a
+		// correct search answered "No matches found".
+		it("should resolve a glob with a slash relative to path, not the start directory", async () => {
+			mkdirSync(join(testDir, "migrations", "main"), { recursive: true });
+			writeFileSync(join(testDir, "migrations", "main", "0001.js"), "needle here\n");
+			mkdirSync(join(testDir, "migrations", "other"), { recursive: true });
+			writeFileSync(join(testDir, "migrations", "other", "0002.js"), "needle here too\n");
+
+			const result = await grepTool.execute("test-call-grep-glob-root", {
+				pattern: "needle",
+				path: join(testDir, "migrations"),
+				glob: "main/*.js",
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("main/0001.js:1: needle here");
+			expect(output).not.toContain("0002.js");
+		});
+
+		// #634: the raw limit reached the notice verbatim, so limit: 1.5 reported
+		// "1.5 matches limit reached".
+		it("should round a fractional limit in the notice", async () => {
+			writeFileSync(join(testDir, "fractional.txt"), "match one\nmatch two\nmatch three\n");
+
+			const result = await grepTool.execute("test-call-grep-fractional-limit", {
+				pattern: "match",
+				path: join(testDir, "fractional.txt"),
+				limit: 1.5,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("1 matches limit reached");
+			expect(output).not.toContain("1.5");
+		});
+
+		// #634: context lines were produced by reading the whole matched file into
+		// memory, so a handful of large logs with context: 2 could exhaust the heap.
+		// ripgrep already sends them as `context` events.
+		it("should not read the matched file just to print context lines", async () => {
+			const testFile = join(testDir, "context-no-read.txt");
+			writeFileSync(testFile, ["before", "match one", "after"].join("\n"));
+			const readPaths: string[] = [];
+			const tool = createGrepToolDefinition(testDir, {
+				operations: {
+					isDirectory: () => false,
+					readFile: (p) => {
+						readPaths.push(p);
+						return readFileSync(p, "utf-8");
+					},
+				},
+			});
+
+			const result = await tool.execute(
+				"test-call-grep-context-no-read",
+				{ pattern: "match", path: testFile, context: 1 },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("context-no-read.txt-1- before");
+			expect(output).toContain("context-no-read.txt:2: match one");
+			expect(output).toContain("context-no-read.txt-3- after");
+			expect(readPaths).toEqual([]);
+		});
 	});
 
 	describe("find tool", () => {
