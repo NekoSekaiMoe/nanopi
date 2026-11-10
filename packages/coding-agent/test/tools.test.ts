@@ -1057,6 +1057,35 @@ describe("Coding Agent Tools", () => {
 			expect(lines).toHaveLength(1);
 		});
 
+		it("should not report a limit that returned every hit as reached", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+			writeFileSync(join(testDir, "three.txt"), "");
+
+			// Exactly as many files as the limit: nothing was cut, so no notice. Counting
+			// hits against the limit cannot tell this apart from a cut, which is why the
+			// search fetches one result past it.
+			const exact = await findTool.execute("test-call-find-limit-exact", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 3,
+			});
+			const exactOutput = getTextOutput(exact);
+			expect(exactOutput).not.toContain("results limit reached");
+			expect(exact.details?.resultLimitReached).toBeUndefined();
+
+			// One below: a file was dropped, so the notice and the details field stay.
+			const cut = await findTool.execute("test-call-find-limit-cut", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 2,
+			});
+			const cutOutput = getTextOutput(cut);
+			expect(cutOutput).toContain("2 results limit reached");
+			expect(cut.details?.resultLimitReached).toBe(2);
+			expect(cutOutput.split("\n").filter((line) => line.trim().endsWith(".txt"))).toHaveLength(2);
+		});
+
 		it("should treat flag-like patterns as search text", async () => {
 			const marker = join(testDir, "grep-injection-marker");
 			const payload = join(testDir, "payload.sh");
@@ -1301,6 +1330,8 @@ describe("Coding Agent Tools", () => {
 			expect(wildcardOutput).toContain("src/direct.ts");
 			expect(wildcardOutput).toContain("deep/src/far.ts");
 
+			// The `**` prefix must not cost the files directly in `src/` either:
+			// `**` matches zero segments too (earendil-works/pi#9262).
 			const globstar = await tool.execute(
 				"test-call-find-fallback-root-path-globstar",
 				{ pattern: "src/**/*.ts" },
