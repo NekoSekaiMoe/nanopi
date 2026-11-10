@@ -37,8 +37,15 @@ export function formatMissingSessionCwdError(issue: SessionCwdIssue): string {
 	return `Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\nCurrent working directory: ${issue.fallbackCwd}`;
 }
 
+/**
+ * What the user picked when a stored session cwd is gone. `fork` copies the
+ * session into the current directory under a new id, so the next resume does not
+ * ask again; `continue` runs it here without recording the choice.
+ */
+export type MissingSessionCwdChoice = "continue" | "fork" | "cancel";
+
 export function formatMissingSessionCwdPrompt(issue: SessionCwdIssue): string {
-	return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
+	return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue or fork into current cwd\n${issue.fallbackCwd}`;
 }
 
 export class MissingSessionCwdError extends Error {

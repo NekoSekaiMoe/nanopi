@@ -59,6 +59,7 @@ import type { CreateAgentSessionOptions } from "./core/sdk.ts";
 import {
 	formatMissingSessionCwdPrompt,
 	getMissingSessionCwdIssue,
+	type MissingSessionCwdChoice,
 	MissingSessionCwdError,
 	type SessionCwdIssue,
 } from "./core/session-cwd.ts";
@@ -438,6 +439,15 @@ function forkSessionOrExit(sourcePath: string, cwd: string, sessionDir?: string,
 	}
 }
 
+/**
+ * Copy a session whose stored cwd is gone into the current directory as a new
+ * session, so the next resume finds a live cwd and does not ask again. A failed
+ * copy surfaces as the original error rather than a half-written session.
+ */
+function forkIntoCurrentCwd(sourcePath: string, cwd: string, sessionDir: string | undefined): SessionManager {
+	return SessionManager.forkFrom(sourcePath, cwd, sessionDir);
+}
+
 async function createSessionManager(
 	parsed: Args,
 	cwd: string,
@@ -638,11 +648,17 @@ function resolveCliPaths(cwd: string, paths: string[] | undefined): string[] | u
 async function promptForMissingSessionCwd(
 	issue: SessionCwdIssue,
 	settingsManager: SettingsManager,
-): Promise<string | undefined> {
-	return showStartupSelector(settingsManager, formatMissingSessionCwdPrompt(issue), [
-		{ label: "Continue", value: issue.fallbackCwd },
-		{ label: "Cancel", value: undefined },
-	]);
+): Promise<MissingSessionCwdChoice> {
+	const choice = await showStartupSelector<MissingSessionCwdChoice>(
+		settingsManager,
+		formatMissingSessionCwdPrompt(issue),
+		[
+			{ label: "Continue", value: "continue" },
+			{ label: "Fork", value: "fork" },
+			{ label: "Cancel", value: "cancel" },
+		],
+	);
+	return choice ?? "cancel";
 }
 
 interface MainOptions {
@@ -829,11 +845,15 @@ export async function main(args: string[], options?: MainOptions) {
 	const missingSessionCwdIssue = getMissingSessionCwdIssue(sessionManager, cwd);
 	if (missingSessionCwdIssue) {
 		if (appMode === "interactive") {
-			const selectedCwd = await promptForMissingSessionCwd(missingSessionCwdIssue, startupSettingsManager);
-			if (!selectedCwd) {
+			const choice = await promptForMissingSessionCwd(missingSessionCwdIssue, startupSettingsManager);
+			if (choice === "cancel") {
 				process.exit(0);
 			}
-			sessionManager = SessionManager.open(missingSessionCwdIssue.sessionFile!, sessionDir, selectedCwd);
+			const resumePath = missingSessionCwdIssue.sessionFile!;
+			sessionManager =
+				choice === "fork"
+					? forkIntoCurrentCwd(resumePath, cwd, sessionDir)
+					: SessionManager.open(resumePath, sessionDir, cwd);
 		} else {
 			console.error(chalk.red(new MissingSessionCwdError(missingSessionCwdIssue).message));
 			process.exit(1);
