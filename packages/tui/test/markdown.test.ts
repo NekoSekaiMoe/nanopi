@@ -68,6 +68,81 @@ describe("Markdown component", () => {
 		});
 	});
 
+	describe("Theme", () => {
+		/** A theme whose style functions read the current color, like the system theme reads its instance. */
+		function themeReading(color: () => string): MarkdownTheme {
+			const paint = (text: string) => `${color()}${text}\x1b[39m`;
+			return {
+				heading: paint,
+				link: paint,
+				linkUrl: paint,
+				code: paint,
+				codeBlock: paint,
+				codeBlockBorder: paint,
+				quote: paint,
+				quoteBorder: paint,
+				hr: paint,
+				listBullet: paint,
+				bold: paint,
+				italic: paint,
+				strikethrough: paint,
+				underline: paint,
+			};
+		}
+
+		it("restyles a cached block after the theme instance is replaced", () => {
+			let color = "\x1b[31m";
+			const markdown = new Markdown(
+				"**a**",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.deepStrictEqual(
+				markdown.render(40).map((line) => line.trimEnd()),
+				["\x1b[31ma\x1b[39m"],
+			);
+
+			// The terminal reported its colors: the system theme was regenerated, and
+			// every style function now reads the new instance. No invalidate() here,
+			// because the render is what has to notice.
+			color = "\x1b[32m";
+			// A replaced instance, not a mutated one: the row a theme produced is
+			// whatever the instance at render time says, so the rows from the previous
+			// instance cannot be reused.
+			const replaced = themeReading(() => color);
+			(markdown as unknown as { theme: typeof replaced }).theme = replaced;
+			assert.deepStrictEqual(
+				markdown.render(40).map((line) => line.trimEnd()),
+				["\x1b[32ma\x1b[39m"],
+			);
+		});
+
+		it("renders the same rows as a fresh component after invalidate", () => {
+			let color = "\x1b[31m";
+			const markdown = new Markdown(
+				"```ts\nconst a = 1;\n```\n\ntail",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.ok(markdown.render(40).join("\n").includes("\x1b[31m"));
+
+			// A resize, a theme change or a callback the render scheduled: the rows of
+			// the settled tokens carry the old color and have to go with the rest.
+			color = "\x1b[32m";
+			markdown.invalidate();
+			const fresh = new Markdown(
+				"```ts\nconst a = 1;\n```\n\ntail",
+				0,
+				0,
+				themeReading(() => color),
+			);
+			assert.deepStrictEqual(markdown.render(40), fresh.render(40));
+			assert.ok(markdown.render(40).join("\n").includes("\x1b[32m"));
+		});
+	});
+
 	describe("Lists", () => {
 		it("should render simple nested list", () => {
 			const markdown = new Markdown(

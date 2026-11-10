@@ -99,6 +99,16 @@ stale 或主题实例变了时重建；重建结果与 `getText()` 相同时也�
   `setMarkdownTheme` 与 `repaintChildren`，两者都留：前者换主题，后者重建。
   五个组件里 `AssistantMessageComponent` 仍覆写 `invalidate`，因为它重建的是
   `Container` 的子树而不是自己，语义上等价于基类转发，没有改动。
+- 与 `#667`（`Markdown` 的缓存随主题实例一起失效）合并时取并集，两边各补了对方的洞：
+  `#667` 的 `renderedTheme`（`NO_THEME` 哨兵 + `render` 顶部提前 drop）补上了本 PR
+  「只在 `setTheme` 里清行」的缺口 —— 本 PR 的 `cachedStyle` 比对发生在缓存命中判断里，
+  一个直接换 `theme` 字段的调用方要等下一次 pass 才丢行；反过来本 PR 的
+  `defaultTextStyle` 身份补上了 `#667` 只看主题的缺口 —— `setText` 对相同字符串是 no-op，
+  调用方换了 `DefaultTextStyle` 再 `setText` 同一段文本时，`#667` 会命中旧行。
+  落点是 `render` 顶部两次独立判断：主题变了走 `dropCache()`，`defaultTextStyle` 变了
+  额外清 `defaultStylePrefix` / `styledBy`；命中判断保持 `styled &&` 前缀，
+  所以「`defaultTextStyle` 变了、行不能复用到下一个 block」依旧成立。
+  `CachedRun` 同时带 `theme` 与 `defaultTextStyle`，`extendCachedRun` 两者都比。
 - 未覆盖：`extras/pi-ui/src/thinking.ts` 的展开态 thinking 仍是 `clear() + new Markdown`
   （#628 标为后续），这一轮不动。
 
