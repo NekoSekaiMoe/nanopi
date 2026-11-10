@@ -56,9 +56,10 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 			details: fallback ? { fallback: true } : undefined,
 		};
 	}
-	// Relativize paths against the search root for stable output.
-	const relativized = lines.map((line) => relativizeFindResultPath(line, searchPath));
-	const resultLimitReached = relativized.length >= effectiveLimit;
+	// Callers fetch one result past the limit, so a length above it is proof the walk was cut
+	// rather than a guess from a count that happens to equal the limit.
+	const resultLimitReached = lines.length > effectiveLimit;
+	const relativized = lines.slice(0, effectiveLimit).map((line) => relativizeFindResultPath(line, searchPath));
 	const truncation = truncateHead(relativized.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
 	let resultOutput = truncation.content;
 	const details: FindToolDetails = {};
@@ -115,7 +116,7 @@ function compileFindGlob(pattern: string): (relativePath: string, name: string) 
 	return (relativePath) => minimatch(relativePath, anchorRelative ? normalized : `**/${normalized}`, { dot: true });
 }
 
-/** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
+/** Walks `searchPath` for patterns fd would have matched, fetching one result past the limit. */
 async function walkForFdFallback(
 	pattern: string,
 	searchPath: string,
@@ -129,7 +130,7 @@ async function walkForFdFallback(
 		visit: (filePath) => {
 			if (!matcher(relativeToRoot(searchPath, filePath), path.basename(filePath))) return true;
 			matches.push(filePath);
-			return matches.length < effectiveLimit;
+			return matches.length <= effectiveLimit;
 		},
 	});
 	return matches;
@@ -275,7 +276,7 @@ export function createFindToolDefinition(
 							current = parent;
 						}
 						const noRequireGit = !insideGitRepo && supportsNoRequireGit(fdPath);
-						baseArgs.push("--max-results", String(effectiveLimit));
+						baseArgs.push("--max-results", String(effectiveLimit + 1));
 
 						// fd --glob matches against the basename unless --full-path is set; in --full-path
 						// mode it matches against the absolute candidate path, so a path-containing
