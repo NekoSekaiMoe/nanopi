@@ -1270,6 +1270,15 @@ export function sliceByColumn(line: string, startCol: number, length: number, st
 	return sliceWithWidth(line, startCol, length, strict).text;
 }
 
+/**
+ * True for zero-width APC sequences (`ESC _ … BEL`), which mark a position rather than style.
+ * `currentCol` only moves on visible glyphs, so a marker left in the original text order keeps
+ * its place; one carried from before the slice would move to the slice start.
+ */
+function isMarkerSequence(code: string): boolean {
+	return code.startsWith("\x1b_");
+}
+
 /** Like sliceByColumn but also returns the actual visible width of the result. */
 export function sliceWithWidth(
 	line: string,
@@ -1289,10 +1298,16 @@ export function sliceWithWidth(
 		const ansi = extractAnsiCode(line, i);
 		if (ansi) {
 			if (currentCol >= startCol && currentCol < endCol) {
-				// Keep original order: codes from before the range must precede codes at the boundary
+				// Keep original order: codes from before the range must precede codes at the boundary.
+				// The range also keeps a marker sitting inside it: truncation can drop the fake cursor
+				// end that pairs with it, and resolveFakeCursors needs the pair to drop the cursor.
 				result += pendingAnsi + ansi.code;
 				pendingAnsi = "";
-			} else if (currentCol < startCol) pendingAnsi += ansi.code;
+			} else if (currentCol < startCol && !isMarkerSequence(ansi.code)) {
+				// A marker from before the range is position-bound, not a style: carried over it
+				// would be re-emitted at the slice start instead of where it belongs.
+				pendingAnsi += ansi.code;
+			}
 			i += ansi.length;
 			continue;
 		}
