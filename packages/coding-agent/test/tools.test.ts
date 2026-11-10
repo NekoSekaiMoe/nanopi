@@ -1040,6 +1040,23 @@ describe("Coding Agent Tools", () => {
 			expect(result.details?.trimmedFiles?.some((entry: { shown: number }) => entry.shown === 0)).toBe(true);
 		});
 
+		it("should treat a limit below 1 as 1", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+
+			const result = await findTool.execute("test-call-find-zero-limit", {
+				pattern: "*.txt",
+				path: testDir,
+				limit: 0,
+			});
+			const lines = getTextOutput(result)
+				.split("\n")
+				.map((line) => line.trim())
+				.filter((line) => line.endsWith(".txt"));
+
+			expect(lines).toHaveLength(1);
+		});
+
 		it("should treat flag-like patterns as search text", async () => {
 			const marker = join(testDir, "grep-injection-marker");
 			const payload = join(testDir, "payload.sh");
@@ -1292,6 +1309,17 @@ describe("Coding Agent Tools", () => {
 
 			expect(output).toContain(".hidden-file");
 			expect(output).toContain(".hidden-dir/");
+		});
+
+		it("should treat a limit below 1 as 1", async () => {
+			writeFileSync(join(testDir, "one.txt"), "");
+			writeFileSync(join(testDir, "two.txt"), "");
+
+			const result = await lsTool.execute("test-call-ls-zero-limit", { path: testDir, limit: 0 });
+			const output = getTextOutput(result);
+
+			expect(output).not.toContain("(empty directory)");
+			expect(output.split("\n").filter((line) => line.trim().endsWith(".txt"))).toHaveLength(1);
 		});
 	});
 });

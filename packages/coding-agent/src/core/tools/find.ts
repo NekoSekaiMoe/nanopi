@@ -30,7 +30,9 @@ const findSchema = Type.Object({
 		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
 	}),
 	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+	limit: Type.Optional(
+		Type.Number({ description: "Maximum number of results (default: 1000, values below 1 mean 1)" }),
+	),
 });
 
 /** fd gained `--no-require-git` in 9.0; 8.x rejects the flag. */
@@ -203,7 +205,8 @@ export function createFindToolDefinition(
 				(async () => {
 					try {
 						const searchPath = resolveToCwd(searchDir || ".", ctx?.cwd || cwd);
-						const effectiveLimit = limit ?? DEFAULT_LIMIT;
+						// A limit below 1 would return nothing at all, so it means 1.
+						const effectiveLimit = limit === undefined ? DEFAULT_LIMIT : Math.max(1, Math.floor(limit));
 						const ops = customOps ?? defaultFindOperations;
 
 						// If custom operations provide glob(), use that instead of fd.
