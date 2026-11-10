@@ -23,6 +23,8 @@ interface ToolConfig {
 	binaryName: string; // Name of the binary inside the archive
 	systemBinaryNames?: string[]; // Alternative system command names to try before downloading
 	tagPrefix: string; // Prefix for tags (e.g., "v" for v1.0.0, "" for 1.0.0)
+	/** Newest first: versions known to keep the contract this repo tests. Empty means "latest release". */
+	pinnedVersions?: readonly string[];
 	getAssetName: (version: string, plat: string, architecture: string) => string | null;
 }
 
@@ -33,6 +35,11 @@ const TOOLS: Record<string, ToolConfig> = {
 		binaryName: "fd",
 		systemBinaryNames: ["fd", "fdfind"],
 		tagPrefix: "v",
+		// The find tool's path patterns (`src/**/*.ts`) depend on fd's glob semantics,
+		// and releases differ: 10.5.1 answers "no results" for every path pattern.
+		// The download therefore takes the newest release in this list instead of
+		// whatever is latest today; a system fd in PATH is still used as-is.
+		pinnedVersions: ["10.3.0", "10.4.2"],
 		getAssetName: (version, plat, architecture) => {
 			if (plat === "darwin") {
 				const archStr = architecture === "arm64" ? "aarch64" : "x86_64";
@@ -254,6 +261,27 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
 	throw new Error(`Failed to extract ${assetName}: ${failures.join("; ")}`);
 }
 
+/**
+ * The release version to download: the newest pinned version whose asset exists
+ * for this platform, or the latest release when nothing is pinned.
+ *
+ * Resolution walks the pins from newest to oldest and stops at the first asset
+ * the release actually carries, so a pin that predates a platform or
+ * architecture falls back instead of failing the download.
+ */
+async function resolveDownloadVersion(config: ToolConfig): Promise<string> {
+	if (!config.pinnedVersions || config.pinnedVersions.length === 0) {
+		return await getLatestVersion(config.repo);
+	}
+	const plat = platform();
+	const architecture = arch();
+	for (const version of config.pinnedVersions) {
+		if (config.getAssetName(version, plat, architecture)) return version;
+	}
+	// No pin covers this platform: the project may have published a newer asset.
+	return await getLatestVersion(config.repo);
+}
+
 // Download and install a tool
 async function downloadTool(tool: "fd" | "rg"): Promise<string> {
 	const config = TOOLS[tool];
@@ -262,9 +290,7 @@ async function downloadTool(tool: "fd" | "rg"): Promise<string> {
 	const plat = platform();
 	const architecture = arch();
 
-	// fd is pinned on darwin/x64, so skip the version lookup there.
-	const version =
-		tool === "fd" && plat === "darwin" && architecture === "x64" ? "10.3.0" : await getLatestVersion(config.repo);
+	const version = await resolveDownloadVersion(config);
 
 	// Get asset name for this platform
 	const assetName = config.getAssetName(version, plat, architecture);

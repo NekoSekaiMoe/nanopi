@@ -206,12 +206,14 @@ The `install`, `remove`, and `list` package commands are gone: modules are compi
 
 ```sh
 nanopi auth check --provider openai --json
+nanopi auth login --provider openai-codex
 ```
 
 Authentication commands require `--provider <provider>` or `--model <model>`. See [Providers](providers.md) for supported methods.
 
 | Command | Description |
 |---|---|
+| `nanopi auth login` | Run a provider's OAuth sign-in without starting a session, then exit |
 | `nanopi auth check` | Print `ready`, `not_ready`, or `invalid`; exit with status `0`, `1`, or `2`, respectively |
 | `nanopi auth print-api-key` | Print the resolved API key |
 | `nanopi auth print-bearer-token` | Print a resolved OAuth bearer token |
@@ -224,5 +226,8 @@ Authentication commands require `--provider <provider>` or `--model <model>`. Se
 | `--credentials` | `auth check` | Emit the resolved credential when ready |
 | `--no-refresh` | `auth check` | Do not refresh expired OAuth credentials; refresh is the default |
 | `--min-expiry <duration>` | `print-bearer-token` | Require remaining token lifetime using `ms`, `s`, `m`, or `h`, such as `30m` |
+| `--no-browser` | `auth login` | Print the sign-in URL or device code instead of opening a browser |
+
+`auth login` answers the flow's questions on the terminal: an OAuth flow that opens a URL, asks which sign-in method to use, or waits for a pasted code works the same way it does under `/login`. A build whose credentials are not managed by nanopi (no OAuth flows compiled in) has nothing to log in to, so use an API key instead.
 
 Credential-printing commands write secrets to stdout.

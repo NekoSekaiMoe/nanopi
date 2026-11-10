@@ -2,7 +2,7 @@ import type { AuthResult } from "@nanopi/pi-ai";
 import { APP_NAME } from "../config.ts";
 import type { Args } from "./args.ts";
 
-export type AuthCommandKind = "check" | "api_key" | "bearer_token";
+export type AuthCommandKind = "check" | "login" | "api_key" | "bearer_token";
 
 export interface AuthCommand {
 	kind: AuthCommandKind;
@@ -11,18 +11,28 @@ export interface AuthCommand {
 	credentials: boolean;
 	noRefresh: boolean;
 	minExpiryMs?: number;
+	/** `login --no-browser`: skip the browser hand-off and let the flow print its URL or code. */
+	noBrowser: boolean;
 }
 
 export class AuthCommandError extends Error {}
 
 const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
 	check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
+	login: `${APP_NAME} auth login --provider <provider> [--no-browser]`,
 	api_key: `${APP_NAME} auth print-api-key --provider <provider> [--model <model>]`,
 	bearer_token: `${APP_NAME} auth print-bearer-token --provider <provider> [--model <model>] [--min-expiry <duration>]`,
 };
 
+const AUTH_COMMAND_NAMES: Record<AuthCommandKind, string> = {
+	check: "auth check",
+	login: "auth login",
+	api_key: "auth print-api-key",
+	bearer_token: "auth print-bearer-token",
+};
+
 export function getAuthCommandName(kind: AuthCommandKind): string {
-	return kind === "check" ? "auth check" : kind === "api_key" ? "auth print-api-key" : "auth print-bearer-token";
+	return AUTH_COMMAND_NAMES[kind];
 }
 
 export function getAuthCommandUsage(kind: AuthCommandKind): string {
@@ -38,11 +48,13 @@ export function isAuthCommandHelp(args: string[]): boolean {
 
 export function printAuthCommandHelp(): void {
 	console.log(`Usage:
+  nanopi auth login --provider <provider> [--no-browser]
   nanopi auth print-api-key [--provider <provider>] [--model <model>]
   nanopi auth print-bearer-token [--provider <provider>] [--model <model>] [--min-expiry <duration>]
   nanopi auth check [--provider <provider>] [--model <model>] [--json] [--credentials] [--no-refresh]
 
-Auth commands require at least one of --provider or --model. Checks refresh expired OAuth credentials by default; --no-refresh prevents this. --credentials emits the credential, or includes it in JSON output.`);
+Auth commands require at least one of --provider or --model. Checks refresh expired OAuth credentials by default; --no-refresh prevents this. --credentials emits the credential, or includes it in JSON output.
+Login runs a provider's sign-in flow without starting a session; --no-browser prints the URL or device code instead of opening a browser.`);
 }
 
 export function parseAuthCommand(args: string[]): AuthCommand | undefined {
@@ -51,14 +63,16 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 	const kind =
 		args[1] === "check"
 			? "check"
-			: args[1] === "print-api-key"
-				? "api_key"
-				: args[1] === "print-bearer-token"
-					? "bearer_token"
-					: undefined;
+			: args[1] === "login"
+				? "login"
+				: args[1] === "print-api-key"
+					? "api_key"
+					: args[1] === "print-bearer-token"
+						? "bearer_token"
+						: undefined;
 	if (!kind) {
 		throw new AuthCommandError(
-			`Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
+			`Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth login", "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
 		);
 	}
 
@@ -66,6 +80,7 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 	let json = false;
 	let credentials = false;
 	let noRefresh = false;
+	let noBrowser = false;
 	let minExpiryMs: number | undefined;
 	for (let index = 2; index < args.length; index++) {
 		const arg = args[index];
@@ -80,6 +95,11 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 			minExpiryMs = amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
 			continue;
 		}
+		if (arg === "--no-browser") {
+			if (kind !== "login") throw new AuthCommandError("--no-browser is only supported by auth login");
+			noBrowser = true;
+			continue;
+		}
 		if (arg === "--json" || arg === "--credentials" || arg === "--no-refresh") {
 			if (kind !== "check") throw new AuthCommandError(`${arg} is only supported by auth check`);
 			if (arg === "--json") json = true;
@@ -91,8 +111,8 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
 	}
 
 	return minExpiryMs === undefined
-		? { kind, args: commandArgs, json, credentials, noRefresh }
-		: { kind, args: commandArgs, json, credentials, noRefresh, minExpiryMs };
+		? { kind, args: commandArgs, json, credentials, noRefresh, noBrowser }
+		: { kind, args: commandArgs, json, credentials, noRefresh, noBrowser, minExpiryMs };
 }
 
 export function validateAuthCommandArgs(args: Args, kind: AuthCommandKind): { provider?: string; model?: string } {
@@ -104,6 +124,16 @@ export function validateAuthCommandArgs(args: Args, kind: AuthCommandKind): { pr
 	}
 	if (args.apiKey !== undefined || args.messages.length > 0 || args.fileArgs.length > 0) {
 		throw new AuthCommandError("Auth commands only accept --provider and --model");
+	}
+	if (kind === "login") {
+		// Sign-in writes one credential for one provider; a model can only narrow a provider, not pick one.
+		if (!provider) {
+			throw new AuthCommandError("Login requires --provider <provider>");
+		}
+		if (model) {
+			throw new AuthCommandError("Login only accepts --provider; models are not part of signing in");
+		}
+		return { provider };
 	}
 	if (kind === "check") {
 		if (!provider && !model) {

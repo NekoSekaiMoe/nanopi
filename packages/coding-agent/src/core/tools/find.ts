@@ -82,6 +82,33 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 	};
 }
 
+/** The character class fd needs for a path separator on Windows. */
+const WINDOWS_PATH_SEP = "[/\\]";
+
+/**
+ * The globs to hand fd for one request, or undefined when the pattern has no
+ * separator and fd should match file names as usual.
+ *
+ * fd matches `--full-path` globs against the absolute candidate path, so a path
+ * pattern needs a leading `**` segment to match anything. That anchored form
+ * keeps a pattern off a same-named directory deeper in the tree, while the
+ * relative form is the one that reaches files sitting directly in `src/`.
+ * Both are run and their results merged.
+ */
+function findFdPatterns(pattern: string, windows: boolean): string[] | undefined {
+	if (!pattern.includes("/")) return undefined;
+	const anchored =
+		pattern.startsWith("/") || pattern.startsWith("**/") || pattern === "**" ? pattern : `**/${pattern}`;
+	// fd matches full paths using native separators on Windows.
+	const normalize = (candidate: string) => (windows ? candidate.replaceAll("/", WINDOWS_PATH_SEP) : candidate);
+	const patterns = [normalize(anchored)];
+	// The anchored form already covers every directory depth, so the relative form
+	// only adds matches fd's `**` stops at due to a containing directory in its
+	// ignore list. Merging it unconditionally widens `src/**/*.ts` to `pkg/src/**`.
+	if (anchored.startsWith("**/")) patterns.push(normalize(pattern));
+	return patterns;
+}
+
 export const findToolSystemPromptContribution = {
 	snippet: "Find files by name",
 	guidelines: [],
@@ -105,11 +132,15 @@ function compileFindGlob(pattern: string): (relativePath: string, name: string) 
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
+	// Same anchoring as the fd branch: `src/**/*.ts` matches anywhere in the
+	// relative path, and the anchored form is the one that keeps it off
+	// `pkg/src/a.ts`.
 	const anchored =
 		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
 			? normalized
 			: `**/${normalized}`;
-	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
+	const candidates = anchored === normalized ? [anchored] : [normalized, anchored];
+	return (relativePath) => candidates.some((candidate) => minimatch(relativePath, candidate, { dot: true }));
 }
 
 /** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
@@ -273,20 +304,8 @@ export function createFindToolDefinition(
 						const noRequireGit = !insideGitRepo && supportsNoRequireGit(fdPath);
 						baseArgs.push("--max-results", String(effectiveLimit));
 
-						// fd --glob matches against the basename unless --full-path is set; in --full-path
-						// mode it matches against the absolute candidate path, so a path-containing
-						// pattern like 'src/**/*.spec.ts' needs a leading '**/' to match anything.
-						let effectivePattern = pattern;
-						if (pattern.includes("/")) {
-							baseArgs.push("--full-path");
-							if (!pattern.startsWith("/") && !pattern.startsWith("**/") && pattern !== "**") {
-								effectivePattern = `**/${pattern}`;
-							}
-							// fd matches full paths using native separators on Windows.
-							if (process.platform === "win32")
-								effectivePattern = effectivePattern.replaceAll("/", String.raw`[/\\]`);
-						}
-						baseArgs.push("--", effectivePattern, searchPath);
+						const patterns = findFdPatterns(pattern, process.platform === "win32");
+						if (patterns) baseArgs.push("--full-path");
 
 						const runFd = (args: string[]): Promise<{ code: number | null; stderr: string; lines: string[] }> =>
 							new Promise((resolveFd, rejectFd) => {
@@ -315,38 +334,44 @@ export function createFindToolDefinition(
 								});
 							});
 
-						const withNoRequireGit = noRequireGit
-							? [baseArgs[0], "--no-require-git", ...baseArgs.slice(1)]
-							: undefined;
-						let result = await runFd(withNoRequireGit ?? baseArgs);
-						if (signal?.aborted) {
-							settle(() => reject(new Error("Operation aborted")));
-							return;
-						}
-						// `--no-require-git` exists from fd 9.0. A binary that still rejects it falls back
-						// to fd's default behaviour, which only honours .gitignore inside a git repo:
-						// hierarchical rules still work there, so retrying is better than failing.
-						if (withNoRequireGit && result.code !== 0 && isUnknownFdOptionError(result.stderr)) {
-							result = await runFd(baseArgs);
+						const withNoRequireGit = (args: string[]) =>
+							noRequireGit ? [args[0], "--no-require-git", ...args.slice(1)] : args;
+						const paths: string[] = [];
+						const seen = new Set<string>();
+						// One run per pattern; fd matches a single glob per invocation.
+						for (const fdPattern of patterns ?? [pattern]) {
+							const callArgs = [...baseArgs, "--", fdPattern, searchPath];
+							let result = await runFd(withNoRequireGit(callArgs));
 							if (signal?.aborted) {
 								settle(() => reject(new Error("Operation aborted")));
 								return;
 							}
+							// `--no-require-git` exists from fd 9.0. A binary that still rejects it falls back
+							// to fd's default behaviour, which only honours .gitignore inside a git repo:
+							// hierarchical rules still work there, so retrying is better than failing.
+							if (noRequireGit && result.code !== 0 && isUnknownFdOptionError(result.stderr)) {
+								result = await runFd(callArgs);
+								if (signal?.aborted) {
+									settle(() => reject(new Error("Operation aborted")));
+									return;
+								}
+							}
+							const { code, stderr, lines } = result;
+							const output = lines.join("\n");
+							if (code !== 0 && !output) {
+								settle(() => reject(new Error(stderr.trim() || `fd exited with code ${code}`)));
+								return;
+							}
+							for (const rawLine of lines) {
+								const line = rawLine.replace(/\r$/, "").trim();
+								if (!line || seen.has(line)) continue;
+								seen.add(line);
+								paths.push(line);
+							}
+							if (paths.length >= effectiveLimit) break;
 						}
-						const { code, stderr, lines } = result;
-						const output = lines.join("\n");
-						if (code !== 0 && !output) {
-							settle(() => reject(new Error(stderr.trim() || `fd exited with code ${code}`)));
-							return;
-						}
-
-						const paths: string[] = [];
-						for (const rawLine of lines) {
-							const line = rawLine.replace(/\r$/, "").trim();
-							if (!line) continue;
-							paths.push(line);
-						}
-						settle(() => resolve(formatFindResult(paths, searchPath, effectiveLimit)));
+						paths.sort();
+						settle(() => resolve(formatFindResult(paths.slice(0, effectiveLimit), searchPath, effectiveLimit)));
 					} catch (e) {
 						if (signal?.aborted) {
 							settle(() => reject(new Error("Operation aborted")));
