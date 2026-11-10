@@ -68,7 +68,7 @@ import type {
 } from "@nanopi/pi-coding-agent";
 
 import { completeSimple } from "@nanopi/pi-ai/compat";
-import { Spacer, Markdown, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { Spacer, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import type { Component, TUI } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
 import { DOT_DONE, DOT_RUNNING } from "./tools.ts";
@@ -500,12 +500,12 @@ function renderCodexThinking(
       const hasVisibleContentAfter = content.slice(i + 1).some(isVisibleBlock);
       if (thinkingExpanded) {
         // Expanded: Pi's full italic thinking markdown, transforms included.
+        // Through the host's block reuse, so a streamed run keeps its token
+        // cache instead of re-lexing the whole reasoning per delta.
         addChild(
-          new Markdown(run.joined, context.outputPad, 0, context.markdownTheme, {
+          context.renderMarkdown(`thinking:${runIndex}`, run.joined, {
             color: (text: string) => theme.fg("thinkingText", text),
             italic: true,
-          }, {
-            transform: (markdown: string) => context.transform("assistant-thinking", markdown),
           }),
         );
       } else if (streaming && !run.closed) {

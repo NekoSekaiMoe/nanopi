@@ -387,8 +387,21 @@ export class Markdown implements Component {
 	 * a new instance once the terminal reports its colors, so an instance that
 	 * replaced this one makes every row stale even though the text and the width
 	 * did not move.
+	 *
+	 * Only a pass that reached its cache update sets this. A pass that returned
+	 * early (an empty text) leaves it stale, and the next one drops the caches;
+	 * an empty text has no rows worth keeping, and a stream that starts empty
+	 * must not carry an unrelated cached run into the text after it. `setTheme`
+	 * and `invalidate()` drop the caches explicitly, so the stale slot only costs
+	 * the empty text one extra pass.
 	 */
 	private renderedTheme: MarkdownTheme = NO_THEME;
+	/**
+	 * The theme object the module-scoped `defaultStylePrefix` was computed
+	 * against. `getDefaultStylePrefix` memoizes outside the cache fields above,
+	 * so it needs the same theme check.
+	 */
+	private prefixTheme?: MarkdownTheme;
 
 	constructor(
 		text: string,
@@ -410,6 +423,21 @@ export class Markdown implements Component {
 		if (text === this.text) return;
 		this.text = text;
 		this.dropCache();
+	}
+
+	/**
+	 * Install the markdown theme to render with.
+	 *
+	 * `render()` checks the theme object it cached against and re-renders when
+	 * the identity changed, so a component kept across a theme switch (every
+	 * message component is: the transcript invalidates them, it does not rebuild
+	 * them) picks up the new colors without the caller tracking which parts of
+	 * the output the theme touched.
+	 */
+	setTheme(theme: MarkdownTheme): void {
+		if (theme === this.theme) return;
+		this.theme = theme;
+		this.invalidate();
 	}
 
 	/**
@@ -597,7 +625,7 @@ export class Markdown implements Component {
 			return "";
 		}
 
-		if (this.defaultStylePrefix !== undefined) {
+		if (this.defaultStylePrefix !== undefined && this.prefixTheme === this.theme) {
 			return this.defaultStylePrefix;
 		}
 
@@ -623,6 +651,7 @@ export class Markdown implements Component {
 
 		const sentinelIndex = styled.indexOf(sentinel);
 		this.defaultStylePrefix = sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
+		this.prefixTheme = this.theme;
 		return this.defaultStylePrefix;
 	}
 
