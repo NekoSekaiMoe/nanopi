@@ -6,13 +6,12 @@ import { splitBom } from "../../utils/text.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import {
 	applyEditsToNormalizedContent,
+	applyReplacementsToOriginal,
 	decodeFileForEdit,
-	detectLineEnding,
 	type Edit,
 	generateDiffString,
 	generateUnifiedPatch,
 	normalizeToLF,
-	restoreLineEndings,
 } from "./edit-diff.ts";
 import { withFileMutationQueue } from "./file-mutation-queue.ts";
 import { resolveToCwd } from "./path-utils.ts";
@@ -193,12 +192,17 @@ export function createEditToolDefinition(
 
 				// Strip BOM before matching. The model will not include an invisible BOM in oldText.
 				const { bom, text: content } = splitBom(rawContent);
-				const originalEnding = detectLineEnding(content);
 				const normalizedContent = normalizeToLF(content);
-				const { baseContent, newContent } = applyEditsToNormalizedContent(normalizedContent, edits, path);
+				const { baseContent, newContent, replacementBaseContent, replacements } = applyEditsToNormalizedContent(
+					normalizedContent,
+					edits,
+					path,
+				);
 				throwIfAborted();
 
-				const finalContent = bom + restoreLineEndings(newContent, originalEnding);
+				// Write through the original text so lines the edits did not touch keep their own
+				// line endings, instead of the whole file being rewritten to the first one seen.
+				const finalContent = bom + applyReplacementsToOriginal(content, replacementBaseContent, replacements);
 				await ops.writeFile(absolutePath, finalContent);
 				throwIfAborted();
 				// The model now knows exactly what this file contains, so a later
