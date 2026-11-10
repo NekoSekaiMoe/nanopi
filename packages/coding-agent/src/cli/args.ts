@@ -296,7 +296,7 @@ ${chalk.bold("Usage:")}
   ${APP_NAME} [options] [--] [@files...] [messages...]
 
 ${chalk.bold("Commands:")}
-  ${APP_NAME} auth <command>            Print credentials or check provider readiness
+  ${APP_NAME} auth <command>            Log in, print credentials, or check provider readiness
   ${APP_NAME} webui [-p <port>]        Start the browser UI on a loopback port (default ${5335})
   ${APP_NAME} <command> --help          Show help for auth/webui
 
@@ -348,6 +348,9 @@ ${chalk.bold("Options:")}
 Modules can register additional flags (e.g., --yolo from the run-mode module).${moduleFlagsText}
 
 ${chalk.bold("Examples:")}
+  # Sign in to a provider without starting a session
+  ${APP_NAME} auth login --provider openai-codex
+
   # Print a provider API key for an external client
   ${APP_NAME} auth print-api-key --provider openai
 

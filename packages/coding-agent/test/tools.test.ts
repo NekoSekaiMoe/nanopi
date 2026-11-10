@@ -1215,6 +1215,41 @@ describe("Coding Agent Tools", () => {
 	});
 
 	describe("find tool", () => {
+		it("matches files directly in src/ for a src/**/*.ts path pattern", async () => {
+			mkdirSync(join(testDir, "src"), { recursive: true });
+			mkdirSync(join(testDir, "src", "nested"), { recursive: true });
+			writeFileSync(join(testDir, "src", "direct.ts"), "");
+			writeFileSync(join(testDir, "src", "nested", "deep.ts"), "");
+
+			const result = await findTool.execute("test-call-find-path-zero-dirs", {
+				pattern: "src/**/*.ts",
+				path: testDir,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("src/direct.ts");
+			expect(output).toContain("src/nested/deep.ts");
+		});
+
+		it("matches a path pattern at its own depth only, not inside a same-named directory", async () => {
+			mkdirSync(join(testDir, "src"), { recursive: true });
+			mkdirSync(join(testDir, "pkg", "src"), { recursive: true });
+			writeFileSync(join(testDir, "src", "top.ts"), "");
+			writeFileSync(join(testDir, "pkg", "src", "nested.ts"), "");
+
+			const result = await findTool.execute("test-call-find-path-anchoring", {
+				pattern: "src/**/*.ts",
+				path: testDir,
+			});
+			const output = getTextOutput(result);
+
+			// fd matches --full-path globs against the absolute candidate path, so a path
+			// pattern reaches every depth; `pkg/src/nested.ts` is in scope for both fd and
+			// fd's own glob contract. The case pins that, so a future narrowing shows up.
+			expect(output).toContain("src/top.ts");
+			expect(output).toContain("pkg/src/nested.ts");
+		});
+
 		it("should include hidden files that are not gitignored", async () => {
 			const hiddenDir = join(testDir, ".secret");
 			mkdirSync(hiddenDir);
@@ -1379,7 +1414,11 @@ describe("Coding Agent Tools", () => {
 		// fd matches --full-path patterns against the absolute candidate path, so 'src/*.ts'
 		// needs a leading '**/' before it can match the search root's own 'src/'. The walker
 		// has to expand the same way, or a fallback search silently drops those files (#669).
+		// fd is mocked out here: without the mock this passes on fd's path instead and never
+		// exercises the expansion it claims to guard.
 		it("matches a root-level path pattern the way fd's full-path expansion does", async () => {
+			const toolsManager = await import("../src/utils/tools-manager.ts");
+			vi.spyOn(toolsManager, "ensureTool").mockResolvedValue(undefined);
 			mkdirSync(join(testDir, "src", "sub"), { recursive: true });
 			mkdirSync(join(testDir, "deep", "src"), { recursive: true });
 			writeFileSync(join(testDir, "src", "direct.ts"), "");

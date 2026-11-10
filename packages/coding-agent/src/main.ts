@@ -28,6 +28,7 @@ import {
 	printAuthCommandHelp,
 	validateAuthCommandArgs,
 } from "./cli/auth-command.ts";
+import { runAuthLogin } from "./cli/auth-login.ts";
 import { resolveCredentialForPrint } from "./cli/credential-print.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
@@ -208,6 +209,8 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 
 	try {
 		const parsed = parseArgs(command.args);
+		// `--no-browser` is consumed by parseAuthCommand; parseArgs only sees a flag it does not know.
+		parsed.unknownFlags.delete("no-browser");
 		if (parsed.unknownFlags.size > 0) {
 			const option = parsed.unknownFlags.keys().next().value;
 			console.error(chalk.red(`Unknown option --${option} for "${getAuthCommandName(command.kind)}".`));
@@ -217,6 +220,22 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 		}
 		if (parsed.diagnostics.length > 0) {
 			throw new AuthCommandError(parsed.diagnostics.map((diagnostic) => diagnostic.message).join("\n"));
+		}
+		if (command.kind === "login") {
+			// Sign-in waits for a human: no timeout, and the credential store is the one
+			// the TUI writes, so the session started afterwards already sees the login.
+			const signal = new AbortController().signal;
+			const modelRuntime = await ModelRuntime.create({
+				credentials: AuthStorage.create(),
+				allowModelNetwork: false,
+			});
+			const { name } = await runAuthLogin(parsed, modelRuntime, {
+				signal,
+				openBrowser: !command.noBrowser,
+				getDeviceId: () => SettingsManager.create(process.cwd(), getAgentDir()).getOrCreateDeviceId(),
+			});
+			console.error(chalk.green(`Logged in to ${name}.`));
+			return true;
 		}
 		if (command.kind !== "check") {
 			const signal = AbortSignal.timeout(15_000);

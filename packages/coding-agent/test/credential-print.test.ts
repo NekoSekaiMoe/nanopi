@@ -102,6 +102,7 @@ describe("credential print commands", () => {
 			json: false,
 			credentials: false,
 			noRefresh: false,
+			noBrowser: false,
 		});
 		expect(parseAuthCommand(["auth", "print-bearer-token"])).toMatchObject({ kind: "bearer_token" });
 		expect(parseAuthCommand(["auth", "print-bearer-token", "--min-expiry", "30m"])).toEqual({
@@ -110,6 +111,7 @@ describe("credential print commands", () => {
 			json: false,
 			credentials: false,
 			noRefresh: false,
+			noBrowser: false,
 			minExpiryMs: 30 * 60_000,
 		});
 		expect(() => parseAuthCommand(["auth", "--continue", "eyJ2ZXJzaW9uIjoxfQ"])).toThrow(
