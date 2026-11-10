@@ -30,9 +30,7 @@ const findSchema = Type.Object({
 		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
 	}),
 	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
-	limit: Type.Optional(
-		Type.Number({ description: "Maximum number of results (default: 1000, values below 1 mean 1)" }),
-	),
+	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
 });
 
 /** fd gained `--no-require-git` in 9.0; 8.x rejects the flag. */

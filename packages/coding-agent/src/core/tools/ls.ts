@@ -10,9 +10,7 @@ import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } fr
 
 const lsSchema = Type.Object({
 	path: Type.Optional(Type.String({ description: "Directory to list (default: current directory)" })),
-	limit: Type.Optional(
-		Type.Number({ description: "Maximum number of entries to return (default: 500, values below 1 mean 1)" }),
-	),
+	limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)" })),
 });
 
 export const lsToolSystemPromptContribution = {
