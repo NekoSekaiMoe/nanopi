@@ -10,7 +10,9 @@ import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } fr
 
 const lsSchema = Type.Object({
 	path: Type.Optional(Type.String({ description: "Directory to list (default: current directory)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of entries to return (default: 500)" })),
+	limit: Type.Optional(
+		Type.Number({ description: "Maximum number of entries to return (default: 500, values below 1 mean 1)" }),
+	),
 });
 
 export const lsToolSystemPromptContribution = {
@@ -81,7 +83,8 @@ export function createLsToolDefinition(
 				(async () => {
 					try {
 						const dirPath = resolveToCwd(path || ".", ctx?.cwd || cwd);
-						const effectiveLimit = limit ?? DEFAULT_LIMIT;
+						// A limit below 1 would list nothing at all, so it means 1.
+						const effectiveLimit = limit === undefined ? DEFAULT_LIMIT : Math.max(1, Math.floor(limit));
 
 						// Check if path exists.
 						if (!(await ops.exists(dirPath))) {
