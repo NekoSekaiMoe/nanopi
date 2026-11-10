@@ -12,6 +12,7 @@
 
 ### Fixed
 
+- `pi-fake-opencode` declares the tool a mapped official call comes back as, so a free-tier tool call reaches the nanopi tool it was redirected to instead of naming a tool the shaped request never declared (issue [#687](https://cnb.cool/shinytale/nanopi/-/issues/687))
 - `allow this session` on the prompt shown after an explanation now covers only that call, like `allow once`: the user read an explanation of this call, not of every future call of the tool. The ordinary prompt still remembers the tool for the session (issue [#614](https://cnb.cool/shinytale/nanopi/-/issues/614))
 
 - The git guard isolates a command only when `git -C <dir>` actually lands in another checkout: a path holding no checkout at all (`git -C /does/not/exist stash`, `git -C .git stash`) used to count as isolation and skipped the prompt, while `git -C <other worktree>` keeps its exemption. `--work-tree` is no longer read as isolation — it swaps the working tree but leaves the index in this checkout, so `git --work-tree=<other> stash` now reports the hazard it always was (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))

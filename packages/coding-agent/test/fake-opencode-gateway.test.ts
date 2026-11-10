@@ -186,10 +186,10 @@ describe("pi-fake-opencode body shaping", () => {
 		const names = body.tools.map((tool) => tool.function.name);
 		expect(names).toContain(wireToolName("read"));
 		expect(names).toContain(wireToolName("bash"));
-		// The client's own names travel only as opaque wire names; `read` and `patch`
-		// below are the official entries.
+		// The client's own names travel only as opaque wire names; `read` is the
+		// official entry.
 		expect(names.filter((name) => name === "read")).toHaveLength(1);
-		expect(names.slice(-13)).toEqual([
+		expect(names.filter((name) => !name.startsWith("clint_")).slice(0, 13)).toEqual([
 			"edit",
 			"execute",
 			"glob",
@@ -204,6 +204,31 @@ describe("pi-fake-opencode body shaping", () => {
 			"write",
 			"patch",
 		]);
+	});
+
+	// The upstream redirects an official call to the client tool it resolved,
+	// and that name has to be declared or the next turn references a tool the
+	// request no longer carries. opencode2api maps `shell` to `Bash`, `read` to
+	// `Read`, and so on.
+	it("declares the official call's target under its wire name", () => {
+		const body = completionsBody();
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		const names = body.tools.map((tool) => tool.function.name);
+		// `read` and `bash` are declared tools, so their official counterparts
+		// carry a second entry under the client name the upstream returns.
+		expect(names.filter((name) => name === wireToolName("read"))).toHaveLength(2);
+		expect(names.filter((name) => name === wireToolName("bash"))).toHaveLength(2);
+		// An official tool no declared tool serves keeps its single entry.
+		expect(names.filter((name) => name === wireToolName("edit"))).toHaveLength(0);
+		expect(names.filter((name) => name === "edit")).toHaveLength(1);
+	});
+
+	it("appends the official set in the CLI's order, aliases included", () => {
+		const body = completionsBody();
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		// Two client tools, then the thirteen official names with each aliased
+		// name's second declaration right after it.
+		expect(body.tools).toHaveLength(2 + 13 + 2);
 	});
 
 	it("uses the CLI's field names", () => {
@@ -236,6 +261,43 @@ describe("pi-fake-opencode body shaping", () => {
 		expect(names).toContain("bash");
 		expect(names).not.toContain("shell");
 		expect((body.messages[0].content as string).includes("bash")).toBe(true);
+	});
+
+	// The CLI prompt names the official tools, so the model calls them even when
+	// the client never declared anything equivalent. A call the upstream cannot
+	// redirect names a tool the request does not carry.
+	it("drops a history call the shaped request cannot act on", () => {
+		const body = completionsBody({
+			messages: [
+				{ role: "system", content: "nanopi system prompt" },
+				{ role: "user", content: "hello" },
+				{
+					role: "assistant",
+					content: null,
+					tool_calls: [{ id: "c1", type: "function", function: { name: "shell", arguments: "{}" } }],
+				},
+				{ role: "tool", tool_call_id: "c1", content: "done" },
+				{
+					role: "assistant",
+					content: null,
+					tool_calls: [{ id: "c2", type: "function", function: { name: "execute", arguments: "{}" } }],
+				},
+				{ role: "tool", tool_call_id: "c2", content: "done" },
+			],
+		});
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		const assistant = body.messages.filter((message) => message.role === "assistant") as Array<Record<string, any>>;
+		// `shell` maps onto the declared `bash`, `execute` onto nothing.
+		expect(assistant).toHaveLength(1);
+		expect(assistant[0].tool_calls[0].function.name).toBe(wireToolName("bash"));
+		expect(body.messages.filter((message) => message.role === "tool")).toHaveLength(1);
+		expect(body.tool_choice).toBeUndefined();
+	});
+
+	it("rewrites a pinned tool_choice onto the declared wire name", () => {
+		const body = completionsBody({ tool_choice: { type: "function", function: { name: "read" } } });
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		expect(body.tool_choice).toEqual({ type: "function", function: { name: wireToolName("read") } });
 	});
 
 	it("shapes an Anthropic body: system, tools and tool references", () => {
