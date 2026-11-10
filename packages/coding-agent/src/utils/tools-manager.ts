@@ -35,10 +35,11 @@ const TOOLS: Record<string, ToolConfig> = {
 		binaryName: "fd",
 		systemBinaryNames: ["fd", "fdfind"],
 		tagPrefix: "v",
-		// The find tool's path patterns (`src/**/*.ts`) depend on fd's glob semantics,
-		// and releases differ: 10.5.1 answers "no results" for every path pattern.
-		// The download therefore takes the newest release in this list instead of
-		// whatever is latest today; a system fd in PATH is still used as-is.
+		// The find tool's path patterns (`src/**/*.ts`) depend on fd's glob semantics
+		// and releases differ (10.5.1 answers "no results" for every path pattern), so
+		// the download takes the newest release in this list instead of whatever is
+		// latest today. 10.3.0 already kept darwin/x64 on a fixed version; a system
+		// fd in PATH is still used as-is.
 		pinnedVersions: ["10.3.0", "10.4.2"],
 		getAssetName: (version, plat, architecture) => {
 			if (plat === "darwin") {

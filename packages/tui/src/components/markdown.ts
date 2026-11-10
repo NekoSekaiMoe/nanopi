@@ -208,14 +208,16 @@ interface LexedSource {
 
 /**
  * What one render pass leaves for the next one: the lexer pass, the rows every
- * token but the open last one rendered to, and the width and theme they were
- * rendered at. The rows of the open last token depend on the token after it,
- * which an append can change, so they are never kept.
+ * token but the open last one rendered to, and the style inputs they were
+ * rendered with: the width, the theme instance, and the default text style.
+ * The rows of the open last token depend on the token after it, which an append
+ * can change, so they are never kept.
  */
 interface CachedRun {
 	source: string;
 	width: number;
 	theme: MarkdownTheme;
+	defaultTextStyle: DefaultTextStyle | undefined;
 	clean: LexedSource;
 	rendered: string[][];
 }
@@ -241,20 +243,24 @@ function coveredLength(tokens: readonly Token[]): number {
  * When the previous tokens cover a clean prefix, the last block is re-lexed from
  * its own start and the tail follows it, and the rows of the settled tokens are
  * reused as they are. Returns `undefined` when the cached pass does not cover a
- * prefix of the new source, or was rendered at another width or with another
- * theme: the rows carry styled text, so neither survives.
+ * prefix of the new source, or was rendered at another width, with another theme,
+ * or under another default text style: the rows carry styled text, so none of
+ * the three survives.
  */
 function extendCachedRun(
 	previous: CachedRun | undefined,
 	source: string,
 	width: number,
 	theme: MarkdownTheme,
+	defaultTextStyle: DefaultTextStyle | undefined,
 ): CachedRun | undefined {
 	const clean = extendLexedSource(previous?.clean, source);
 	if (!clean || !previous) return undefined;
-	const rendered =
-		previous.width === width && previous.theme === theme ? previous.rendered.slice(0, clean.tokens.length - 1) : [];
-	return { source, width, theme, clean, rendered };
+	// Rows are styled strings, so a theme or a default text style that moved
+	// makes every one of them wrong: drop them all and start over.
+	const styled = previous.theme === theme && previous.defaultTextStyle === defaultTextStyle;
+	const rendered = styled && previous.width === width ? previous.rendered.slice(0, clean.tokens.length - 1) : [];
+	return { source, width, theme, defaultTextStyle, clean, rendered };
 }
 
 function extendLexedSource(previous: LexedSource | undefined, source: string): LexedSource | undefined {
@@ -365,11 +371,34 @@ export class Markdown implements Component {
 	private theme: MarkdownTheme;
 	private options: MarkdownOptions;
 	private defaultStylePrefix?: string;
+	/**
+	 * The theme and default text style the default style prefix was derived
+	 * from. Both decide the escape sequences the prefix holds, so a prefix from
+	 * another pair is wrong even when neither the text nor the width moved.
+	 * `getDefaultStylePrefix` memoizes outside `cachedStyle`, so it needs the
+	 * same check.
+	 */
+	private styledBy?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 
 	// Cache for rendered output
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
+	/**
+	 * The theme and default text style `cachedLines` was rendered with.
+	 *
+	 * A cached row holds the ANSI its theme produced, so the theme is part of
+	 * what the caches say: a component that lives across a theme change has to
+	 * drop them, or it keeps drawing the old colors. The identity is the theme
+	 * object, and `render` checks it on every pass — which is why a caller that
+	 * renders with an off-theme object has to install it with `setTheme`.
+	 *
+	 * Only a pass that reached its cache update sets this. A pass that returned
+	 * early (an empty text) leaves it stale, and the next one drops the caches;
+	 * an empty text has no rows worth keeping, and a stream that starts empty
+	 * must not carry an unrelated cached run into the text after it.
+	 */
+	private cachedStyle?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 	/**
 	 * The parsed and half-rendered form of the text: tokens for the settled
 	 * prefix and the open tail, plus the rows every token but the last one
@@ -396,12 +425,6 @@ export class Markdown implements Component {
 	 * the empty text one extra pass.
 	 */
 	private renderedTheme: MarkdownTheme = NO_THEME;
-	/**
-	 * The theme object the module-scoped `defaultStylePrefix` was computed
-	 * against. `getDefaultStylePrefix` memoizes outside the cache fields above,
-	 * so it needs the same theme check.
-	 */
-	private prefixTheme?: MarkdownTheme;
 
 	constructor(
 		text: string,
@@ -428,11 +451,15 @@ export class Markdown implements Component {
 	/**
 	 * Install the markdown theme to render with.
 	 *
-	 * `render()` checks the theme object it cached against and re-renders when
+	 * `render` checks the theme object it cached against and re-renders when
 	 * the identity changed, so a component kept across a theme switch (every
 	 * message component is: the transcript invalidates them, it does not rebuild
 	 * them) picks up the new colors without the caller tracking which parts of
 	 * the output the theme touched.
+	 *
+	 * This only drops the rows. The default style prefix is dropped by `render`
+	 * when it sees the identity moved, so a theme installed here and never
+	 * rendered costs nothing.
 	 */
 	setTheme(theme: MarkdownTheme): void {
 		if (theme === this.theme) return;
@@ -452,28 +479,38 @@ export class Markdown implements Component {
 	}
 
 	/**
-	 * Drop what a new pass recomputes anyway. The pass under way keeps looking for
-	 * a theme: both entries are dropped whenever either one changes, so clearing
-	 * one of them alone would take the other's resume path with it.
+	 * Drop what a new pass recomputes anyway. `cachedStyle` goes too: the pass
+	 * under way keeps looking for a theme and a default text style, and a slot
+	 * left behind by another pair would claim a hit on rows nobody rendered.
 	 */
 	private dropCache(): void {
 		this.cachedText = undefined;
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
+		this.cachedStyle = undefined;
 	}
 
 	render(width: number): string[] {
-		// A theme whose instance was replaced restyles every row: the style functions
-		// read the instance when they are called, so the text and the width staying
-		// put says nothing about the rows. `renderedTheme` is written only by a
-		// finished pass, so a hit leaves it describing the rows it returns.
+		// Two things restyle every row without touching the text or the width: a
+		// theme whose instance was replaced, and a new default text style. The style
+		// functions read the instance when they are called, so a finished pass
+		// records both and a hit leaves them describing the rows it returns.
 		const currentTheme = this.theme;
+		const currentDefaultTextStyle = this.defaultTextStyle;
 		if (this.renderedTheme !== currentTheme) {
 			this.dropCache();
 		}
+		const styled =
+			this.cachedStyle?.theme === currentTheme && this.cachedStyle.defaultTextStyle === currentDefaultTextStyle;
+		if (!styled) {
+			this.dropCache();
+			// The prefix memoizes outside `cachedStyle`, and the theme decided it too.
+			this.defaultStylePrefix = undefined;
+			this.styledBy = undefined;
+		}
 
 		// Check cache
-		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+		if (styled && this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
 			return this.cachedLines;
 		}
 
@@ -488,6 +525,7 @@ export class Markdown implements Component {
 			this.cachedText = this.text;
 			this.cachedWidth = width;
 			this.cachedLines = result;
+			this.cachedStyle = { theme: currentTheme, defaultTextStyle: currentDefaultTextStyle };
 			this.renderedTheme = currentTheme;
 			return result;
 		}
@@ -499,10 +537,11 @@ export class Markdown implements Component {
 		// restructure. Both steps resume from the previous pass, because both are
 		// proportional to the text and a streamed delta only grows the tail.
 		const cached = this.cachedRun?.deref();
-		const run = extendCachedRun(cached, normalizedText, contentWidth, currentTheme) ?? {
+		const run = extendCachedRun(cached, normalizedText, contentWidth, currentTheme, currentDefaultTextStyle) ?? {
 			source: normalizedText,
 			width: contentWidth,
 			theme: currentTheme,
+			defaultTextStyle: currentDefaultTextStyle,
 			clean: {
 				source: normalizedText,
 				tokens: markdownParser.lexer(normalizedText),
@@ -580,6 +619,7 @@ export class Markdown implements Component {
 		this.cachedText = this.text;
 		this.cachedWidth = width;
 		this.cachedLines = result;
+		this.cachedStyle = { theme: currentTheme, defaultTextStyle: currentDefaultTextStyle };
 		this.renderedTheme = currentTheme;
 
 		return result.length > 0 ? result : [""];
@@ -625,7 +665,11 @@ export class Markdown implements Component {
 			return "";
 		}
 
-		if (this.defaultStylePrefix !== undefined && this.prefixTheme === this.theme) {
+		if (
+			this.defaultStylePrefix !== undefined &&
+			this.styledBy?.theme === this.theme &&
+			this.styledBy.defaultTextStyle === this.defaultTextStyle
+		) {
 			return this.defaultStylePrefix;
 		}
 
@@ -651,7 +695,7 @@ export class Markdown implements Component {
 
 		const sentinelIndex = styled.indexOf(sentinel);
 		this.defaultStylePrefix = sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
-		this.prefixTheme = this.theme;
+		this.styledBy = { theme: this.theme, defaultTextStyle: this.defaultTextStyle };
 		return this.defaultStylePrefix;
 	}
 

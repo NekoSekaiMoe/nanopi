@@ -30,7 +30,9 @@ const findSchema = Type.Object({
 		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
 	}),
 	path: Type.Optional(Type.String({ description: "Directory to search in (default: current directory)" })),
-	limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
+	limit: Type.Optional(
+		Type.Number({ description: "Maximum number of results (default: 1000, values below 1 mean 1)" }),
+	),
 });
 
 /** fd gained `--no-require-git` in 9.0; 8.x rejects the flag. */
@@ -54,9 +56,10 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 			details: fallback ? { fallback: true } : undefined,
 		};
 	}
-	// Relativize paths against the search root for stable output.
-	const relativized = lines.map((line) => relativizeFindResultPath(line, searchPath));
-	const resultLimitReached = relativized.length >= effectiveLimit;
+	// Callers fetch one result past the limit, so a length above it is proof the walk was cut
+	// rather than a guess from a count that happens to equal the limit.
+	const resultLimitReached = lines.length > effectiveLimit;
+	const relativized = lines.slice(0, effectiveLimit).map((line) => relativizeFindResultPath(line, searchPath));
 	const truncation = truncateHead(relativized.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
 	let resultOutput = truncation.content;
 	const details: FindToolDetails = {};
@@ -91,9 +94,10 @@ const WINDOWS_PATH_SEP = "[/\\]";
  *
  * fd matches `--full-path` globs against the absolute candidate path, so a path
  * pattern needs a leading `**` segment to match anything. That anchored form
- * keeps a pattern off a same-named directory deeper in the tree, while the
- * relative form is the one that reaches files sitting directly in `src/`.
- * Both are run and their results merged.
+ * reaches every depth on the fd releases this repo downloads, but not on every
+ * fd release (see `pinnedVersions` in tools-manager), where the files sitting
+ * directly in `src/` come back empty. The relative form is the one that finds
+ * them there, so both are run and their results merged.
  */
 function findFdPatterns(pattern: string, windows: boolean): string[] | undefined {
 	if (!pattern.includes("/")) return undefined;
@@ -102,9 +106,9 @@ function findFdPatterns(pattern: string, windows: boolean): string[] | undefined
 	// fd matches full paths using native separators on Windows.
 	const normalize = (candidate: string) => (windows ? candidate.replaceAll("/", WINDOWS_PATH_SEP) : candidate);
 	const patterns = [normalize(anchored)];
-	// The anchored form already covers every directory depth, so the relative form
-	// only adds matches fd's `**` stops at due to a containing directory in its
-	// ignore list. Merging it unconditionally widens `src/**/*.ts` to `pkg/src/**`.
+	// Adds the relative form only for a pattern the anchoring prefixed, matching the
+	// walker's candidate set. Widening `src/**/*.ts` to `pkg/src/**` is what only
+	// the relative form alone would do.
 	if (anchored.startsWith("**/")) patterns.push(normalize(pattern));
 	return patterns;
 }
@@ -122,19 +126,24 @@ const FALLBACK_NOTICE =
 	"fd was not found, so this search used a slower in-process walker with the same ignore rules. Call find normally; install fd to make searches faster";
 
 /**
- * fd's glob contract for the in-process walker. A pattern without a slash is
- * matched against the file name, which is what fd --glob does by default; one
- * with a slash is matched against the path relative to the search root, the
- * same expansion the --full-path branch below performs for fd.
+ * The glob contract shared by fd and the in-process walker. A pattern without a
+ * slash is matched against the file name, which is what fd --glob does by
+ * default; one with a slash is matched against the path relative to the search
+ * root, which fd builds from the absolute candidate path for --full-path and
+ * the walker builds from the visited file.
+ *
+ * A `**` segment matches zero or more path segments in both, so `src`, then
+ * `**`, then `*.ts` also covers the files directly in `src/`. Spelled out here
+ * because the joined pattern would close this comment block.
  */
 function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
 	const normalized = pattern.replaceAll("\\", "/");
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	// Same anchoring as the fd branch: `src/**/*.ts` matches anywhere in the
-	// relative path, and the anchored form is the one that keeps it off
-	// `pkg/src/a.ts`.
+	// Same candidate set the fd branch runs. The relative form alone would drop
+	// the leading `src/` and match `pkg/src/a.ts`; the anchored form is the one
+	// that keeps a path pattern off a same-named directory deeper in the tree.
 	const anchored =
 		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
 			? normalized
@@ -143,7 +152,7 @@ function compileFindGlob(pattern: string): (relativePath: string, name: string) 
 	return (relativePath) => candidates.some((candidate) => minimatch(relativePath, candidate, { dot: true }));
 }
 
-/** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
+/** Walks `searchPath` for patterns fd would have matched, fetching one result past the limit. */
 async function walkForFdFallback(
 	pattern: string,
 	searchPath: string,
@@ -157,7 +166,7 @@ async function walkForFdFallback(
 		visit: (filePath) => {
 			if (!matcher(relativeToRoot(searchPath, filePath), path.basename(filePath))) return true;
 			matches.push(filePath);
-			return matches.length < effectiveLimit;
+			return matches.length <= effectiveLimit;
 		},
 	});
 	return matches;
@@ -234,7 +243,8 @@ export function createFindToolDefinition(
 				(async () => {
 					try {
 						const searchPath = resolveToCwd(searchDir || ".", ctx?.cwd || cwd);
-						const effectiveLimit = limit ?? DEFAULT_LIMIT;
+						// A limit below 1 would return nothing at all, so it means 1.
+						const effectiveLimit = limit === undefined ? DEFAULT_LIMIT : Math.max(1, Math.floor(limit));
 						const ops = customOps ?? defaultFindOperations;
 
 						// If custom operations provide glob(), use that instead of fd.
@@ -302,7 +312,7 @@ export function createFindToolDefinition(
 							current = parent;
 						}
 						const noRequireGit = !insideGitRepo && supportsNoRequireGit(fdPath);
-						baseArgs.push("--max-results", String(effectiveLimit));
+						baseArgs.push("--max-results", String(effectiveLimit + 1));
 
 						const patterns = findFdPatterns(pattern, process.platform === "win32");
 						if (patterns) baseArgs.push("--full-path");
@@ -368,10 +378,12 @@ export function createFindToolDefinition(
 								seen.add(line);
 								paths.push(line);
 							}
-							if (paths.length >= effectiveLimit) break;
+							// Stop one past the limit: `formatFindResult` cuts the tail and reports
+							// the limit only when there really was a file past it.
+							if (paths.length > effectiveLimit) break;
 						}
 						paths.sort();
-						settle(() => resolve(formatFindResult(paths.slice(0, effectiveLimit), searchPath, effectiveLimit)));
+						settle(() => resolve(formatFindResult(paths, searchPath, effectiveLimit)));
 					} catch (e) {
 						if (signal?.aborted) {
 							settle(() => reject(new Error("Operation aborted")));
