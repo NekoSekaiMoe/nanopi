@@ -239,6 +239,38 @@ describe("formatProviderError", () => {
 		expect(formatProviderError(norm)).toBe("502: socket hang up");
 	});
 
+	it("keeps the transport reason that only the cause chain carries", () => {
+		// undici reports a refused connection as a bare "fetch failed" and puts the
+		// real reason one level down, so the display string said nothing at all.
+		const error = new TypeError("fetch failed", {
+			cause: new Error("connect ECONNREFUSED 127.0.0.1:8080"),
+		});
+
+		expect(formatProviderError(normalizeProviderError(error))).toBe(
+			"fetch failed: connect ECONNREFUSED 127.0.0.1:8080",
+		);
+	});
+
+	it("does not add the cause when a status or body already explains the failure", () => {
+		const error = Object.assign(new Error("403 status code (no body)"), {
+			status: 403,
+			error: { error: "blocked by gateway WAF" },
+			cause: new Error("connect ECONNREFUSED 127.0.0.1:8080"),
+		});
+
+		expect(formatProviderError(normalizeProviderError(error))).toBe('403: {"error":"blocked by gateway WAF"}');
+	});
+
+	it("does not repeat a cause the message already carries", () => {
+		const error = new TypeError("fetch failed: connect ECONNREFUSED 127.0.0.1:8080", {
+			cause: new Error("connect ECONNREFUSED 127.0.0.1:8080"),
+		});
+
+		expect(formatProviderError(normalizeProviderError(error))).toBe(
+			"fetch failed: connect ECONNREFUSED 127.0.0.1:8080",
+		);
+	});
+
 	it("returns the bare message for a non-Error value", () => {
 		const norm = normalizeProviderError({ reason: "boom" });
 

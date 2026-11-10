@@ -48,6 +48,17 @@ describe("provider retry classification", () => {
 		).toBe(true);
 	});
 
+	it("matches a stream that was cut short after the reply had begun", () => {
+		// The wording says nothing about the transport, and it used to fall through
+		// to "not retryable", so the user had to re-send by hand.
+		for (const errorMessage of [
+			"OpenAI Responses stream was cut short after the reply had begun",
+			"Request ended prematurely",
+		]) {
+			expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(true);
+		}
+	});
+
 	it("matches upstream request buffer exhaustion wording", () => {
 		expect(
 			isRetryableAssistantError(

@@ -393,7 +393,9 @@ function formatBedrockError(error: unknown): string {
 	const core =
 		!norm.messageCarriesBody && norm.status !== undefined && norm.body !== undefined
 			? `${norm.status}: ${norm.body}`
-			: norm.message;
+			: norm.cause && !norm.message.includes(norm.cause)
+				? `${norm.message}: ${norm.cause}`
+				: norm.message;
 	const dataRetentionHint = /data retention mode/i.test(core)
 		? ` See ${BEDROCK_DATA_RETENTION_DOCS_URL} for supported data retention modes.`
 		: "";

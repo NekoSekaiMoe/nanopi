@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Connection failures keep the reason that only the cause chain carries: undici reports a refused connection as a bare `fetch failed` and puts `connect ECONNREFUSED 127.0.0.1:8080` one level down, so the surfaced message said nothing at all. The innermost cause is appended when the error has neither a status nor a body; a status or a body is already the reason (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
+- A stream cut short mid-reply is retried instead of ending the turn: `cut short after the reply had begun` and Anthropic's `Request ended prematurely` matched no retryable pattern, so a dropped stream left the user to re-send by hand (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
 - Codex SSE retry backoff no longer leaks an abort listener per attempt: the local `sleep()` in `openai-codex-responses.ts` registered an anonymous `abort` handler that the timer never detached, so three 429s left three listeners on the caller's signal. The retry loop now uses the shared `utils/sleep.ts` implementation, which detaches on resolve (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - The Moonshot AI preset in the webui provider settings now defaults to `https://api.moonshot.ai/v1`, the endpoint the built-in `moonshotai` catalog uses. It defaulted to the China host (`https://api.moonshot.cn/v1`), so a Chinese key and a global key were told to use different hosts for the same catalog; the China endpoint stays a `models.json` `baseUrl` override (issue [#597](https://cnb.cool/shinytale/nanopi/-/issues/597))
 
