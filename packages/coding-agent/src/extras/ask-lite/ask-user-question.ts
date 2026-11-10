@@ -14,6 +14,7 @@ import {
 	type QuestionParams,
 	QuestionParamsSchema,
 } from "./tool/types.js";
+import { normalizeQuestionParams } from "./tool/normalize-params.js";
 import { validateQuestionnaire } from "./tool/validate-questionnaire.js";
 import type { WrappingSelectItem } from "./view/components/wrapping-select.js";
 
@@ -130,7 +131,7 @@ export function registerAskUserQuestionTool(pi: ModuleToolsSurface): void {
 		parameters: QuestionParamsSchema,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const typed = params as unknown as QuestionParams;
+			const typed = normalizeQuestionParams(params as unknown as QuestionParams);
 
 			const validation = validateQuestionnaire(typed);
 			if (!validation.ok) {
