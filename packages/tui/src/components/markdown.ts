@@ -196,6 +196,19 @@ interface LexedSource {
 }
 
 /**
+ * What one render pass leaves for the next one: the lexer pass, the rows every
+ * token but the open last one rendered to, and the width they were rendered at.
+ * The rows of the open last token depend on the token after it, which an append
+ * can change, so they are never kept.
+ */
+interface CachedRun {
+	source: string;
+	width: number;
+	clean: LexedSource;
+	rendered: string[][];
+}
+
+/**
  * The length of the longest prefix the top-level tokens reproduce from their
  * own `raw` slices. A `list` or `blockquote` may leave the blank lines between
  * its items to a sibling `space` token, so the slices are not always contiguous;
@@ -210,14 +223,21 @@ function coveredLength(tokens: readonly Token[]): number {
 }
 
 /**
- * Extend a previous lexer pass over text that only appended to its source.
+ * Extend a previous render pass over text that only appended to its source.
  *
- * `marked.lexer` has no resume offset, but a streamed answer grows by appending
- * and an append can only change the tail. When the previous tokens cover a
- * clean prefix, the last block is re-lexed from its own start and the tail
- * follows it; everything before that is settled. Returns `undefined` when the
- * cached pass does not cover a prefix of the new source.
+ * A streamed answer grows by appending, and an append can only change the tail.
+ * When the previous tokens cover a clean prefix, the last block is re-lexed from
+ * its own start and the tail follows it, and the rows of the settled tokens are
+ * reused as they are. Returns `undefined` when the cached pass does not cover a
+ * prefix of the new source, or was rendered at another width.
  */
+function extendCachedRun(previous: CachedRun | undefined, source: string, width: number): CachedRun | undefined {
+	const clean = extendLexedSource(previous?.clean, source);
+	if (!clean || !previous) return undefined;
+	const rendered = previous.width === width ? previous.rendered.slice(0, clean.tokens.length - 1) : [];
+	return { source, width, clean, rendered };
+}
+
 function extendLexedSource(previous: LexedSource | undefined, source: string): LexedSource | undefined {
 	if (!previous || previous.endsAt === 0 || previous.endsAt >= source.length) return undefined;
 	const prefix = source.slice(0, previous.endsAt);
@@ -324,12 +344,17 @@ export class Markdown implements Component {
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
-	// Parsed tokens depend only on the source, so they survive theme and width invalidation. Held weakly: a token tree is
-	// about ten times the size of its source, and every message of a long transcript keeps a Markdown component. The
-	// tokens survive a burst of re-renders, such as a theme preview, and are collected afterwards. The entry keeps the
-	// untrimmed tree as well: `trimPartialClosingFences` rewrites tokens in place, and an append that resumed from a
-	// trimmed tree would carry the trim into the longer text.
-	private cachedTokens?: WeakRef<{ source: string; tokens: Token[]; clean: LexedSource }>;
+	/**
+	 * The parsed and half-rendered form of the text: tokens for the settled
+	 * prefix and the open tail, plus the rows every token but the last one
+	 * rendered to. A streamed answer appends to the end of the text, so an append
+	 * only changes the tail: everything before it keeps its tokens and its rows.
+	 * Held weakly, for the same reason the tokens are: a token tree is about ten
+	 * times the size of its source, and every message of a long transcript keeps
+	 * a Markdown component. The entry survives a burst of re-renders, such as a
+	 * theme preview, and is collected afterwards.
+	 */
+	private cachedRun?: WeakRef<CachedRun>;
 
 	constructor(
 		text: string,
@@ -381,31 +406,36 @@ export class Markdown implements Component {
 		// Replace tabs with 3 spaces for consistent rendering
 		const normalizedText = text.replace(/\t/g, "   ");
 
-		// Parse markdown to HTML-like tokens
-		const cached = this.cachedTokens?.deref();
-		let tokens = cached?.source === normalizedText ? cached.tokens : undefined;
-		if (!tokens) {
-			const clean = extendLexedSource(cached?.clean, normalizedText) ?? {
+		// Parse markdown to HTML-like tokens and render the ones an append cannot
+		// restructure. Both steps resume from the previous pass, because both are
+		// proportional to the text and a streamed delta only grows the tail.
+		const cached = this.cachedRun?.deref();
+		const run = extendCachedRun(cached, normalizedText, contentWidth) ?? {
+			source: normalizedText,
+			width: contentWidth,
+			clean: {
 				source: normalizedText,
 				tokens: markdownParser.lexer(normalizedText),
 				endsAt: 0,
-			};
-			clean.endsAt = coveredLength(clean.tokens);
-			tokens = clean.tokens;
-			this.cachedTokens = new WeakRef({ source: normalizedText, tokens, clean });
-			trimPartialClosingFences(tokens);
-		}
+			},
+			rendered: [] as string[][],
+		};
+		run.clean.endsAt = coveredLength(run.clean.tokens);
+		const tokens = run.clean.tokens.slice();
+		trimPartialClosingFences(tokens);
+		this.cachedRun = new WeakRef(run);
 
 		// Convert tokens to styled terminal output
 		const renderedLines: string[] = [];
-
 		for (let i = 0; i < tokens.length; i++) {
-			const token = tokens[i];
-			const nextToken = tokens[i + 1];
-			const tokenLines = this.renderToken(token, contentWidth, nextToken?.type);
-			for (const tokenLine of tokenLines) {
-				renderedLines.push(tokenLine);
+			if (i < run.rendered.length) {
+				renderedLines.push(...run.rendered[i]);
+				continue;
 			}
+			const nextToken = tokens[i + 1];
+			const tokenLines = this.renderToken(tokens[i], contentWidth, nextToken?.type);
+			if (i < tokens.length - 1) run.rendered.push(tokenLines);
+			renderedLines.push(...tokenLines);
 		}
 
 		// Wrap lines (NO padding, NO background yet)

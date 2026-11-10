@@ -2,7 +2,7 @@ import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Chalk } from "chalk";
-import { Marked } from "marked";
+import { Marked, type Token } from "marked";
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import type { Component, TUI } from "../src/tui.ts";
@@ -1902,6 +1902,45 @@ bar`,
 					);
 				} finally {
 					Marked.prototype.lexer = original;
+				}
+			});
+
+			it("renders only the tail of an appended text", () => {
+				const rendered: string[] = [];
+				// The renderer of one token is not part of the public surface, and the
+				// rows a settled token renders to are exactly what the cache keeps.
+				const prototype = Markdown.prototype as unknown as {
+					renderToken(this: Markdown, token: Token, width: number, nextTokenType?: string): string[];
+				};
+				const original = prototype.renderToken;
+				prototype.renderToken = function (this: Markdown, token: Token, width: number, nextTokenType?: string) {
+					rendered.push(token.type);
+					return original.call(this, token, width, nextTokenType);
+				};
+				try {
+					const markdown = new Markdown("", 0, 0, defaultMarkdownTheme);
+					const lines: number[] = [];
+					let text = "";
+					for (let i = 0; i < 50; i++) {
+						text += `paragraph ${i} with a few words in it\n\n`;
+						markdown.setText(text);
+						lines.push(markdown.render(80).length);
+					}
+					// Re-lexing the tail is only half the pass: every settled token used
+					// to render again on every delta, which is quadratic in the number
+					// of blocks.
+					const paragraphs = text.split("\n\n").length - 1;
+					assert.ok(
+						rendered.length < paragraphs * 3,
+						`rendered ${rendered.length} tokens over ${paragraphs} paragraphs`,
+					);
+					// Rows only ever grow: a resumed pass that dropped a settled block
+					// would show up here as a shrinking render.
+					for (let i = 1; i < lines.length; i++) {
+						assert.ok(lines[i] >= lines[i - 1], `render ${i} shrank from ${lines[i - 1]} to ${lines[i]} rows`);
+					}
+				} finally {
+					prototype.renderToken = original;
 				}
 			});
 		});
