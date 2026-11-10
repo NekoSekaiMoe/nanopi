@@ -43,6 +43,7 @@ const ENV_KEYS = [
 	"ITERM_SESSION_ID",
 	"WT_SESSION",
 	"CMUX_WORKSPACE_ID",
+	"ALACRITTY_WINDOW_ID",
 	"WARP_SESSION_ID",
 	"WARP_TERMINAL_SESSION_UUID",
 	"NANOPI_HYPERLINKS",
@@ -348,6 +349,35 @@ describe("detectCapabilities", () => {
 		});
 		withEnv({ TERM_PROGRAM: "rex", NANOPI_HYPERLINKS: "0" }, () => {
 			assert.strictEqual(detectCapabilities().hyperlinks, false);
+		});
+	});
+
+	// #10163
+	it("enables hyperlinks for Alacritty without TERM_PROGRAM", () => {
+		withEnv({ TERM: "alacritty" }, () => {
+			const caps = detectCapabilities();
+			assert.strictEqual(caps.hyperlinks, true);
+			assert.strictEqual(caps.images, null);
+		});
+		withEnv({ TERM: "alacritty-direct", TERM_PROGRAM: "" }, () => {
+			const caps = detectCapabilities();
+			assert.strictEqual(caps.hyperlinks, true);
+			assert.strictEqual(caps.trueColor, true);
+		});
+	});
+
+	it("enables hyperlinks for Alacritty identified by its window id", () => {
+		withEnv({ TERM: "xterm-256color", ALACRITTY_WINDOW_ID: "0" }, () => {
+			const caps = detectCapabilities();
+			assert.strictEqual(caps.hyperlinks, true);
+			assert.strictEqual(caps.images, null);
+		});
+	});
+
+	it("keeps Alacritty hyperlinks off under tmux when the client does not forward them", () => {
+		withEnv({ TERM: "alacritty", TMUX: "/tmp/tmux-1000/default,1234,0" }, () => {
+			assert.strictEqual(detectCapabilities(() => false).hyperlinks, false);
+			assert.strictEqual(detectCapabilities(() => true).hyperlinks, true);
 		});
 	});
 

@@ -123,7 +123,14 @@ function detectCapabilitiesFromEnvironment(tmuxForwardsHyperlink: () => boolean)
 		return { images: null, trueColor: true, hyperlinks: true };
 	}
 
-	if (termProgram === "alacritty" || termProgram === "vscode" || termProgram === "zed") {
+	// Alacritty never sets TERM_PROGRAM, so it is identified by TERM or the window id it exports.
+	if (
+		termProgram === "alacritty" ||
+		term.startsWith("alacritty") ||
+		process.env.ALACRITTY_WINDOW_ID ||
+		termProgram === "vscode" ||
+		termProgram === "zed"
+	) {
 		return { images: null, trueColor: true, hyperlinks: true };
 	}
 
