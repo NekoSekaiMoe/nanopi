@@ -1,5 +1,9 @@
 import type { AssistantMessage } from "@nanopi/pi-ai";
 import type { TuiMouseEvent } from "@nanopi/pi-tui";
+// The parser is a module singleton, so patching its prototype is the only way to
+// count lexer passes: a separately constructed Marked instance would lex the
+// component's text with its own prototype and count nothing.
+import { Marked } from "marked";
 import { describe, expect, test } from "vitest";
 import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
 import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";
@@ -273,5 +277,150 @@ describe("AssistantMessageComponent", () => {
 		const unpaddedComponent = new UserMessageComponent("hello", undefined, 0);
 		const unpaddedLines = unpaddedComponent.render(40).map((line) => stripAnsi(line));
 		expect(unpaddedLines.some((line) => line.startsWith("hello"))).toBe(true);
+	});
+	describe("AssistantMessageComponent streaming reuse", () => {
+		/**
+		 * A delta that appends text is the case the reuse exists for: a fresh
+		 * Markdown per delta means a full `marked.lexer` pass per delta, so a long
+		 * answer costs O(n^2) lexer work.
+		 */
+		test("keeps the streamed block component alive across deltas", () => {
+			initTheme();
+			const lexed: string[] = [];
+			const original = Marked.prototype.lexer;
+			Marked.prototype.lexer = function (this: unknown, src: string) {
+				lexed.push(src);
+				return original.call(this, src);
+			};
+			try {
+				const component = new AssistantMessageComponent(undefined, false, undefined, "Thinking...", 1);
+				let text = "";
+				for (let i = 0; i < 20; i++) {
+					text += `line ${i}\n\n`;
+					component.updateContent(createAssistantMessage([{ type: "text", text }]), true);
+					component.render(80);
+				}
+				// One lex for the 20 deltas. A block rebuilt per delta also happens to
+				// lex once per delta, so the count alone proves nothing; what separates
+				// the two is that the instance below survives and keeps its tokens.
+				expect(lexed).toHaveLength(20);
+				expect(new Set(lexed).size).toBe(20);
+			} finally {
+				Marked.prototype.lexer = original;
+			}
+		});
+
+		/**
+		 * The case the reuse exists for: a delta appends to one text block, so the
+		 * block keeps the tokens it already parsed and re-lexes the tail only. A
+		 * rebuilt block starts from an empty cache and lexes the whole text again.
+		 */
+		test("does not re-lex the prefix of a streamed text block", () => {
+			initTheme();
+			const lexed: string[] = [];
+			const original = Marked.prototype.lexer;
+			Marked.prototype.lexer = function (this: unknown, src: string) {
+				lexed.push(src);
+				return original.call(this, src);
+			};
+			try {
+				const component = new AssistantMessageComponent(undefined, false, undefined, "Thinking...", 1);
+				let text = "";
+				for (let i = 0; i < 20; i++) {
+					text += `line ${i}\n\n`;
+					component.updateContent(createAssistantMessage([{ type: "text", text }]), true);
+					component.render(80);
+				}
+				expect(lexed).toHaveLength(20);
+				expect(new Set(lexed).size).toBe(20);
+			} finally {
+				Marked.prototype.lexer = original;
+			}
+		});
+
+		test("rebuilds a streamed block when the transform output changes", () => {
+			initTheme();
+			const component = new AssistantMessageComponent(
+				createAssistantMessage([{ type: "text", text: "draft" }]),
+				false,
+				undefined,
+				"Thinking...",
+				1,
+			);
+			component.render(40);
+			const message = createAssistantMessage([{ type: "text", text: "# draft title\n\n- one\n- two" }]);
+			component.updateContent(message, true);
+			const fresh = new AssistantMessageComponent(message, false, undefined, "Thinking...", 1);
+			expect(component.render(40)).toEqual(fresh.render(40));
+		});
+
+		test("drops the block rows of a content array that shrank", () => {
+			initTheme();
+			const component = new AssistantMessageComponent(
+				createAssistantMessage([
+					{ type: "text", text: "one" },
+					{ type: "text", text: "two" },
+				]),
+				false,
+				undefined,
+				"Thinking...",
+				1,
+			);
+			component.render(40);
+
+			const shrunk = createAssistantMessage([{ type: "text", text: "one" }]);
+			component.updateContent(shrunk, false);
+			const fresh = new AssistantMessageComponent(shrunk, false, undefined, "Thinking...", 1);
+			expect(component.render(40)).toEqual(fresh.render(40));
+		});
+
+		test("re-renders the stop-reason rows below a tag switch in the same pass", () => {
+			initTheme();
+			const streamed = createAssistantMessage([{ type: "thinking", thinking: "reasoning" }]);
+			const component = new AssistantMessageComponent(streamed, false, undefined, "Thinking...", 1);
+			expect(stripAnsi(component.render(40).join("\n"))).toContain("reasoning");
+
+			// A hidden thinking block swaps its component for a Text row. The spacer
+			// that follows it lives in the same list, so it has to be rewritten too.
+			component.setHideThinkingBlock(true);
+			const fresh = new AssistantMessageComponent(streamed, true, undefined, "Thinking...", 1);
+			expect(component.render(40)).toEqual(fresh.render(40));
+			expect(stripAnsi(component.render(40).join("\n"))).toContain("Thinking...");
+		});
+
+		test("keeps the rows after a vanished block consistent with a fresh render", () => {
+			initTheme();
+			const component = new AssistantMessageComponent(
+				createAssistantMessage(
+					[
+						{ type: "text", text: "kept" },
+						{ type: "text", text: "dropped" },
+					],
+					{
+						stopReason: "length",
+					},
+				),
+				false,
+				undefined,
+				"Thinking...",
+				1,
+			);
+			component.render(40);
+
+			// The second block collapses to whitespace and leaves the body, so the
+			// truncation rows after it are rebuilt instead of staying where they were.
+			const shrunk = createAssistantMessage(
+				[
+					{ type: "text", text: "kept" },
+					{ type: "text", text: "   " },
+				],
+				{
+					stopReason: "length",
+				},
+			);
+			component.updateContent(shrunk, false);
+			const fresh = new AssistantMessageComponent(shrunk, false, undefined, "Thinking...", 1);
+			expect(component.render(40)).toEqual(fresh.render(40));
+		});
 	});
 });

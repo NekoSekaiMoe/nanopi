@@ -1,5 +1,14 @@
 import type { AssistantMessage } from "@nanopi/pi-ai";
-import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@nanopi/pi-tui";
+import {
+	type Component,
+	Container,
+	type DefaultTextStyle,
+	Markdown,
+	type MarkdownTheme,
+	MouseRegion,
+	Spacer,
+	Text,
+} from "@nanopi/pi-tui";
 import type {
 	AssistantMessageRenderer,
 	MarkdownTransformContext,
@@ -11,6 +20,13 @@ import { createMarkdownTransform } from "./markdown-transform.ts";
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
+
+/** One content block of the body: the component that draws it, plus the blank line after it. */
+interface BodyBlock {
+	component: Component;
+	/** `undefined` when the body puts no spacer after this block. */
+	spacer: Component | undefined;
+}
 
 /**
  * Component that renders a complete assistant message
@@ -28,6 +44,22 @@ export class AssistantMessageComponent extends Container {
 	private thinkingVisibilityOverrides = new Map<number, boolean>();
 	/** First renderer that claims a message owns that message's body. */
 	private renderers: readonly AssistantMessageRenderer[] = [];
+	/**
+	 * One component per content index, kept across `updateContent` calls so a
+	 * streamed delta calls `setText` instead of allocating a fresh Markdown. A
+	 * fresh instance starts with an empty token cache, so rebuilding the body per
+	 * delta re-lexed the whole message text every time.
+	 */
+	private blockComponents = new Map<string, Markdown | Text>();
+	/**
+	 * The blocks of the current body, in order. The rows after them (the leading
+	 * and trailing stop-reason rows) are rebuilt whenever a block disappears:
+	 * `Container.handleMouse` dispatches through a layout grown at render time
+	 * and only descends into the first `children.length` rows, so a block cannot
+	 * be spliced out of the middle without shifting every row behind it.
+	 */
+	private bodyBlocks: BodyBlock[] = [];
+	private tailRows: Component[] = [];
 
 	constructor(
 		message?: AssistantMessage,
@@ -112,68 +144,91 @@ export class AssistantMessageComponent extends Container {
 		return lines;
 	}
 
+	override clear(): void {
+		super.clear();
+		this.blockComponents.clear();
+		this.bodyBlocks = [];
+		this.tailRows = [];
+	}
+
 	updateContent(message: AssistantMessage, isStreaming = this.isStreaming): void {
 		this.lastMessage = message;
 		this.isStreaming = isStreaming;
 
-		// Clear content container
+		// A block keeps its component through `blockComponent`; everything the
+		// pass rebuilds is re-appended below.
 		this.contentContainer.clear();
-
-		if (this.renderers.length > 0 && this.renderWithModules(message, isStreaming)) {
-			return;
+		this.bodyBlocks = [];
+		this.tailRows = [];
+		let leadingRows: Component[] = [];
+		if (this.renderers.length > 0) {
+			const drawn = this.renderWithModules(message, isStreaming);
+			if (drawn) {
+				leadingRows = drawn.leading;
+			} else {
+				this.contentContainer.clear();
+				this.bodyBlocks = [];
+				this.tailRows = [];
+				leadingRows = this.renderDefault(message, isStreaming);
+			}
+		} else {
+			leadingRows = this.renderDefault(message, isStreaming);
 		}
 
-		this.renderDefault(message, isStreaming);
+		// Blocks first, then the rows around them: the block components are the
+		// long-lived ones, and their order is what `thinkingRunIndex` mirrors.
+		for (const row of leadingRows) this.contentContainer.addChild(row);
+		for (const block of this.bodyBlocks) {
+			this.contentContainer.addChild(block.component);
+			if (block.spacer) this.contentContainer.addChild(block.spacer);
+		}
+		for (const row of this.tailRows) this.contentContainer.addChild(row);
 	}
 
 	/**
-	 * Offer the message to the registered renderers. A renderer that returns true
-	 * has drawn the body; the container is cleared back to the pre-render state
-	 * when none of them claims it, so the default renderer sees a clean slate.
+	 * The component for a content block. `setText`, not a new instance, so the
+	 * block keeps the token cache `Markdown` parses against.
 	 */
-	private renderWithModules(message: AssistantMessage, isStreaming: boolean): boolean {
-		let claimed = false;
-		const previousTheme = this.markdownTheme;
-		const context = {
-			isStreaming,
-			outputPad: this.outputPad,
-			markdownTheme: this.markdownTheme,
-			// The module-facing getter, not the static `theme` export: the system
-			// theme instance is replaced when the terminal reports its colors.
-			theme,
-			transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) =>
-				this.applyTransforms(messageType, markdown),
-			addChild: (component: Parameters<Container["addChild"]>[0]) => {
-				this.contentContainer.addChild(component);
-			},
-			renderText: (text: string) => {
-				this.contentContainer.addChild(
-					new Markdown(text.trim(), this.outputPad, 0, this.markdownTheme, undefined, {
-						transform: createMarkdownTransform("assistant", isStreaming, this.markdownTransformers),
-					}),
-				);
-			},
-			renderStopReason: (value: {
-				stopReason?: string;
-				errorMessage?: string;
-				content: readonly { type: string }[];
-			}) => {
-				this.renderStopReason(value, isStreaming);
-			},
-		};
-		for (const renderer of this.renderers) {
-			try {
-				if (renderer(message, context)) {
-					claimed = true;
-					break;
-				}
-			} catch {
-				// A renderer that trips over a message shape leaves it to the default.
-			}
+	private markdownComponent(key: string, text: string, style?: DefaultTextStyle): Markdown {
+		const composed = this.blockKey(key);
+		const existing = this.blockComponents.get(composed);
+		if (existing) {
+			existing.setText(text);
+			return existing as Markdown;
 		}
-		this.markdownTheme = previousTheme;
-		if (!claimed) this.contentContainer.clear();
-		return claimed;
+		const created = new Markdown(text, this.outputPad, 0, this.markdownTheme, style, {
+			transform: createMarkdownTransform(
+				key.startsWith("thinking:") ? "assistant-thinking" : "assistant",
+				this.isStreaming,
+				this.markdownTransformers,
+			),
+		});
+		this.blockComponents.set(composed, created);
+		return created;
+	}
+
+	/** A collapsed thinking row. It has no text of its own, so it is rebuilt per pass. */
+	private hiddenThinkingRow(key: string): Text {
+		const label = theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel));
+		const composed = this.blockKey(key);
+		const existing = this.blockComponents.get(composed);
+		if (existing instanceof Text) {
+			existing.setText(label);
+			return existing;
+		}
+		const created = new Text(label, this.outputPad, 0);
+		this.blockComponents.set(composed, created);
+		return created;
+	}
+
+	/** Append a content block and the blank line the body puts after it. */
+	private addBlock(block: BodyBlock): void {
+		this.bodyBlocks.push(block);
+	}
+
+	/** Everything a block component is constructed with, so a change rebuilds it. */
+	private blockKey(key: string): string {
+		return `${key}|${this.outputPad}|${this.isStreaming}`;
 	}
 
 	/** Run the registered markdown transformers for one block kind. */
@@ -181,13 +236,14 @@ export class AssistantMessageComponent extends Container {
 		return createMarkdownTransform(messageType, this.isStreaming, this.markdownTransformers)(markdown, 0);
 	}
 
-	private renderDefault(message: AssistantMessage, isStreaming: boolean): void {
+	/** The body rows the default renderer puts before the first block. */
+	private renderDefault(message: AssistantMessage, isStreaming: boolean): Component[] {
+		const leading: Component[] = [];
 		const hasVisibleContent = message.content.some(
 			(c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
 		);
-
 		if (hasVisibleContent) {
-			this.contentContainer.addChild(new Spacer(1));
+			leading.push(new Spacer(1));
 		}
 
 		// Render content in order
@@ -197,11 +253,7 @@ export class AssistantMessageComponent extends Container {
 			if (content.type === "text" && content.text.trim()) {
 				// Assistant text messages with no background - trim the text
 				// Set paddingY=0 to avoid extra spacing before tool executions
-				this.contentContainer.addChild(
-					new Markdown(content.text.trim(), this.outputPad, 0, this.markdownTheme, undefined, {
-						transform: createMarkdownTransform("assistant", this.isStreaming, this.markdownTransformers),
-					}),
-				);
+				this.addBlock({ component: this.markdownComponent(`text:${i}`, content.text.trim()), spacer: undefined });
 			} else if (content.type === "thinking") {
 				const thinkingBlocks: string[] = [];
 				for (; i < message.content.length; i++) {
@@ -229,39 +281,76 @@ export class AssistantMessageComponent extends Container {
 				const runIndex = thinkingRunIndex++;
 				const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
 				const thinkingComponent = hidden
-					? new Text(theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel)), this.outputPad, 0)
-					: new Markdown(
-							thinkingBlocks.join("\n\n"),
-							this.outputPad,
-							0,
-							this.markdownTheme,
-							{
-								color: (text: string) => theme.fg("thinkingText", text),
-								italic: true,
-							},
-							{
-								transform: createMarkdownTransform(
-									"assistant-thinking",
-									this.isStreaming,
-									this.markdownTransformers,
-								),
-							},
-						);
-				this.contentContainer.addChild(
-					new MouseRegion(thinkingComponent, (event) => {
+					? this.hiddenThinkingRow(`thinking:${runIndex}`)
+					: this.markdownComponent(`thinking:${runIndex}`, thinkingBlocks.join("\n\n"), {
+							color: (text: string) => theme.fg("thinkingText", text),
+							italic: true,
+						});
+				this.addBlock({
+					component: new MouseRegion(thinkingComponent, (event) => {
 						if (event.type !== "click" || event.button !== "left") return undefined;
 						this.thinkingVisibilityOverrides.set(runIndex, !hidden);
 						if (this.lastMessage) this.updateContent(this.lastMessage);
 						return { handled: true };
 					}),
-				);
-				if (hasVisibleContentAfter) {
-					this.contentContainer.addChild(new Spacer(1));
-				}
+					spacer: hasVisibleContentAfter ? new Spacer(1) : undefined,
+				});
 			}
 		}
 
 		this.renderStopReason(message, isStreaming);
+		return leading;
+	}
+
+	/**
+	 * Offer the message to the registered renderers. A renderer that returns
+	 * `undefined` left the message to the default body. A renderer cannot name a
+	 * content index, so the blocks it draws directly are rebuilt on every pass;
+	 * only `renderText` maps back onto a content block.
+	 */
+	private renderWithModules(message: AssistantMessage, isStreaming: boolean): { leading: Component[] } | undefined {
+		const previousTheme = this.markdownTheme;
+		const leading: Component[] = [];
+		let textOrdinal = 0;
+		const context = {
+			isStreaming,
+			outputPad: this.outputPad,
+			markdownTheme: this.markdownTheme,
+			// The module-facing getter, not the static `theme` export: the system
+			// theme instance is replaced when the terminal reports its colors.
+			theme,
+			transform: (messageType: MarkdownTransformContext["messageType"], markdown: string) =>
+				this.applyTransforms(messageType, markdown),
+			addChild: (component: Component) => {
+				this.tailRows.push(component);
+			},
+			renderText: (text: string) => {
+				this.addBlock({
+					component: this.markdownComponent(`text:${textOrdinal++}`, text.trim()),
+					spacer: undefined,
+				});
+			},
+			renderStopReason: (value: {
+				stopReason?: string;
+				errorMessage?: string;
+				content: readonly { type: string }[];
+			}) => {
+				this.renderStopReason(value, isStreaming);
+			},
+		};
+		let claimed = false;
+		for (const renderer of this.renderers) {
+			try {
+				if (renderer(message, context)) {
+					claimed = true;
+					break;
+				}
+			} catch {
+				// A renderer that trips over a message shape leaves it to the default.
+			}
+		}
+		this.markdownTheme = previousTheme;
+		return claimed ? { leading } : undefined;
 	}
 
 	/**
@@ -278,8 +367,8 @@ export class AssistantMessageComponent extends Container {
 		const hasToolCalls = message.content.some((c) => c.type === "toolCall");
 		this.hasToolCalls = hasToolCalls;
 		if (message.stopReason === "length") {
-			this.contentContainer.addChild(new Spacer(1));
-			this.contentContainer.addChild(
+			this.tailRows.push(new Spacer(1));
+			this.tailRows.push(
 				new Text(theme.fg("error", "Response was truncated before completion."), this.outputPad, 0),
 			);
 		} else if (!hasToolCalls) {
@@ -288,12 +377,12 @@ export class AssistantMessageComponent extends Container {
 					message.errorMessage && message.errorMessage !== "Request was aborted"
 						? message.errorMessage
 						: "Operation aborted";
-				this.contentContainer.addChild(new Spacer(1));
-				this.contentContainer.addChild(new Text(theme.fg("error", abortMessage), this.outputPad, 0));
+				this.tailRows.push(new Spacer(1));
+				this.tailRows.push(new Text(theme.fg("error", abortMessage), this.outputPad, 0));
 			} else if (message.stopReason === "error") {
 				const errorMsg = message.errorMessage || "Unknown error";
-				this.contentContainer.addChild(new Spacer(1));
-				this.contentContainer.addChild(new Text(theme.fg("error", `Error: ${errorMsg}`), this.outputPad, 0));
+				this.tailRows.push(new Spacer(1));
+				this.tailRows.push(new Text(theme.fg("error", `Error: ${errorMsg}`), this.outputPad, 0));
 			}
 		}
 	}
