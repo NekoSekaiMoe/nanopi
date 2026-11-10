@@ -99,6 +99,17 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
 	return { type: "latex", raw, text };
 }
 
+const HTML_COMMENT_REGEX = /<!--[\s\S]*?-->/g;
+
+/**
+ * Drop HTML comments from a raw `html` token. An unterminated `<!--` keeps its
+ * text: a streamed comment loses its tail first, and hiding the half that did
+ * arrive would blank a line that has real content after the marker.
+ */
+function stripHtmlComments(raw: string): string {
+	return raw.replace(HTML_COMMENT_REGEX, "");
+}
+
 const TABLE_DELIMITER_ROW_REGEX = /^ {0,3}\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?[ \t]*$/;
 
 // A GFM table starts with a header row followed by a delimiter row such as "|---|---|" or "| --- |".
@@ -735,12 +746,16 @@ export class Markdown implements Component {
 				}
 				break;
 
-			case "html":
-				// Render HTML as plain text (escaped for terminal)
+			case "html": {
+				// Render HTML as plain text (escaped for terminal). Comments are not text:
+				// `<!-- ... -->` is a note to the source reader, and a changelog or extension
+				// notice that hides install instructions in one should not show them.
 				if ("raw" in token && typeof token.raw === "string") {
-					lines.push(this.applyDefaultStyle(token.raw.trim()));
+					const visible = stripHtmlComments(token.raw).trim();
+					if (visible) lines.push(this.applyDefaultStyle(visible));
 				}
 				break;
+			}
 
 			case "space":
 				// Space tokens represent blank lines in markdown
@@ -844,12 +859,14 @@ export class Markdown implements Component {
 					break;
 				}
 
-				case "html":
-					// Render inline HTML as plain text
+				case "html": {
+					// Render inline HTML as plain text; comments render as nothing.
 					if ("raw" in token && typeof token.raw === "string") {
-						result += applyTextWithNewlines(token.raw);
+						const visible = stripHtmlComments(token.raw);
+						if (visible) result += applyTextWithNewlines(visible);
 					}
 					break;
+				}
 
 				default:
 					// Handle any other inline token types as plain text
