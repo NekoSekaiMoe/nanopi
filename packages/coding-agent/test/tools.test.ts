@@ -1279,6 +1279,28 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(byPath)).not.toContain("a.ts");
 		});
 
+		// Ported from earendil-works/pi#9262: the `**/` prefix both implementations add
+		// to a path pattern let `**` swallow a directory level, so `src/**/*.ts`
+		// missed the files directly in `src/`.
+		it("matches a path pattern at the top of its directory", async () => {
+			mkdirSync(join(testDir, "src", "nested"), { recursive: true });
+			writeFileSync(join(testDir, "src", "top.ts"), "");
+			writeFileSync(join(testDir, "src", "nested", "deep.ts"), "");
+			const tool = createFindToolDefinition(testDir);
+
+			const result = await tool.execute(
+				"test-call-find-fallback-top-level",
+				{ pattern: "src/**/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const output = getTextOutput(result);
+
+			expect(output).toContain("src/top.ts");
+			expect(output).toContain("src/nested/deep.ts");
+		});
+
 		it("honors .gitignore in the walker", async () => {
 			writeFileSync(join(testDir, ".gitignore"), "ignored.ts\n");
 			writeFileSync(join(testDir, "ignored.ts"), "");
