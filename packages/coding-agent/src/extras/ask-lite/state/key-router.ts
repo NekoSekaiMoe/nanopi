@@ -80,12 +80,17 @@ function buildSingleSelectAnswer(state: QuestionnaireState, runtime: Questionnai
 	}
 
 	if (state.inputMode) {
+		// A blank draft is not an answer: reporting `kind: "custom", answer: null`
+		// reached the model as `(no input)`, read as "answered but empty". Returning
+		// null routes Enter to the `if (!answer) return { kind: "ignore" }` branches,
+		// so Enter on an untouched "Type something." row is a no-op.
 		const label = runtime.inputBuffer;
+		if (label.length === 0) return null;
 		return {
 			questionIndex: state.currentTab,
 			question: q.question,
 			kind: "custom",
-			answer: label.length > 0 ? label : null,
+			answer: label,
 		};
 	}
 	if (!item) return null;
