@@ -102,7 +102,8 @@ const FALLBACK_NOTICE =
  * slash is matched against the file name, which is what fd --glob does by
  * default; one with a slash is matched against the path relative to the search
  * root, which fd builds from the absolute candidate path for --full-path and
- * the walker builds from the visited file.
+ * the walker builds from the visited file. A root-level 'src/*.ts' therefore
+ * gets a leading globstar, so it still matches the search root's own 'src/'.
  *
  * A `**` segment matches zero or more path segments in both, so `src`, then
  * `**`, then `*.ts` also covers the files directly in `src/`. Spelled out here
@@ -113,8 +114,11 @@ function compileFindGlob(pattern: string): (relativePath: string, name: string) 
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	const anchorRelative = normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**";
-	return (relativePath) => minimatch(relativePath, anchorRelative ? normalized : `**/${normalized}`, { dot: true });
+	const rooted = normalized.startsWith("/") ? normalized.slice(1) : normalized;
+	// fd matches --full-path patterns against the absolute candidate path, so a root-level path needs the
+	// leading globstar to reach the search root's own directory, exactly as --full-path does.
+	const anchored = rooted.startsWith("**/") || rooted === "**" ? rooted : `**/${rooted}`;
+	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
 }
 
 /** Walks `searchPath` for patterns fd would have matched, fetching one result past the limit. */
