@@ -65,7 +65,10 @@ state it rebuilds during invalidation must say so itself: `ThemedText` sets
   invalidation is called from a width-keyed preview cache
   (`ask-lite/.../markdown-content-cache.ts`), which re-renders after an explicit
   `invalidate()`; changing its meaning needs that caller audited too. Not part
-  of this change.
+  of this change. `Markdown` later gained the same "identical string keeps the
+  rows" rule on its own `setText`, together with a theme-instance key for the
+  cache; see `../bug-fix/2026-11-10-markdown-cache-holds-theme-instance.md`.
+  Its `invalidate()` still drops the cache outright.
 
 ## Consequences
 
