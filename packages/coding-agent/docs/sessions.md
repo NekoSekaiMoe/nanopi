@@ -17,6 +17,8 @@ Use `/name` or `--name` to assign a recognizable session name. Run `/session` to
 
 The session picker lets you search, rename, and delete sessions. It can also show paths, change sorting, and limit results to named sessions. See [Keybindings](keybindings.md#sessions) for its shortcuts.
 
+When a session's stored working directory no longer exists (the project folder was renamed or deleted), interactive mode asks what to do: `Continue` runs the session in the current directory without recording the choice, `Fork` copies it into the current directory as a new session with a new ID so the next resume does not ask again, and `Cancel` leaves the session alone. The question appears at startup (`--session`, `--resume`), in `/resume`, in `/import`, and when an extension calls `ctx.switchSession()`.
+
 ## Choose how to branch
 
 nanopi stores entries as a tree, so returning to an earlier point does not erase the branch you leave.

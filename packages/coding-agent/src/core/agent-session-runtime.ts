@@ -1,4 +1,4 @@
-import { constants, copyFileSync, existsSync, mkdirSync } from "node:fs";
+import { constants, copyFileSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { basename, join, parse, resolve } from "node:path";
 import { resolvePath } from "../utils/paths.ts";
 import type { AgentSession } from "./agent-session.ts";
@@ -62,6 +62,25 @@ function extractUserMessageText(content: string | Array<{ type: string; text?: s
 		.filter((part): part is { type: "text"; text: string } => part.type === "text" && typeof part.text === "string")
 		.map((part) => part.text)
 		.join("");
+}
+
+/**
+ * Open a session file at its stored cwd, or copy it into `cwdOverride` under a
+ * new session id when the caller asked to fork. Forking drops the stored cwd, so
+ * the next resume finds a live directory instead of asking the same question
+ * again.
+ */
+function openSessionFor(
+	sessionPath: string,
+	options?: { sessionDir?: string; cwdOverride?: string; forkToCwd?: boolean },
+): SessionManager {
+	const cwdOverride = options?.cwdOverride;
+	if (cwdOverride === undefined) {
+		return SessionManager.open(sessionPath, options?.sessionDir);
+	}
+	return options?.forkToCwd
+		? SessionManager.forkFrom(sessionPath, cwdOverride, options?.sessionDir)
+		: SessionManager.open(sessionPath, options?.sessionDir, cwdOverride);
 }
 
 /**
@@ -210,12 +229,13 @@ export class AgentSessionRuntime {
 		sessionPath: string,
 		options?: {
 			cwdOverride?: string;
+			forkToCwd?: boolean;
 			withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
 			projectTrustContextFactory?: (cwd: string) => ProjectTrustContext;
 		},
 	): Promise<{ cancelled: boolean }> {
 		const previousSessionFile = this.session.sessionFile;
-		const sessionManager = SessionManager.open(sessionPath, undefined, options?.cwdOverride);
+		const sessionManager = openSessionFor(sessionPath, options);
 		assertSessionCwdExists(sessionManager, this.cwd);
 		await this.teardownCurrent("resume", sessionManager.getSessionFile());
 		this.apply(
@@ -355,11 +375,21 @@ export class AgentSessionRuntime {
 	/**
 	 * Import a session JSONL file and switch runtime state to the imported session.
 	 *
+	 * The import copy is removed again when the session cannot be opened, so a
+	 * cancelled import leaves the session directory as it was.
+	 *
 	 * @returns `{ cancelled: true }` when cancelled by `session_before_switch`, otherwise `{ cancelled: false }`.
 	 * @throws {SessionImportFileNotFoundError} When the input path does not exist.
 	 * @throws {MissingSessionCwdError} When the imported session cwd cannot be resolved and no override is provided.
 	 */
-	async importFromJsonl(inputPath: string, cwdOverride?: string): Promise<{ cancelled: boolean }> {
+	async importFromJsonl(
+		inputPath: string,
+		options?: {
+			cwdOverride?: string;
+			forkToCwd?: boolean;
+			withSession?: (ctx: ReplacedSessionContext) => Promise<void>;
+		},
+	): Promise<{ cancelled: boolean }> {
 		const resolvedPath = resolvePath(inputPath);
 		if (!existsSync(resolvedPath)) {
 			throw new SessionImportFileNotFoundError(resolvedPath);
@@ -384,8 +414,18 @@ export class AgentSessionRuntime {
 			copyFileSync(resolvedPath, destinationPath, constants.COPYFILE_EXCL);
 		}
 
-		const sessionManager = SessionManager.open(destinationPath, sessionDir, cwdOverride);
-		assertSessionCwdExists(sessionManager, this.cwd);
+		let sessionManager: SessionManager;
+		try {
+			sessionManager = openSessionFor(destinationPath, { ...options, sessionDir });
+			// The import copy is ours to undo: leaving it behind turns every later
+			// retry into an extra `s-1.jsonl` next to the session it failed to open.
+			assertSessionCwdExists(sessionManager, this.cwd);
+		} catch (error) {
+			if (!sourceAlreadyStored) {
+				rmSync(destinationPath, { force: true });
+			}
+			throw error;
+		}
 		await this.teardownCurrent("resume", sessionManager.getSessionFile());
 		this.apply(
 			await this.createRuntime({
@@ -395,7 +435,7 @@ export class AgentSessionRuntime {
 				sessionStartEvent: { type: "session_start", reason: "resume", previousSessionFile },
 			}),
 		);
-		await this.finishSessionReplacement();
+		await this.finishSessionReplacement(options?.withSession);
 		return { cancelled: false };
 	}
 

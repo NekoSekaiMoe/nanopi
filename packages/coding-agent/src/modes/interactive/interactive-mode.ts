@@ -110,7 +110,11 @@ import type {
 } from "../../core/modules/index.ts";
 import { formatDisplayPath, getDisplaySourceInfo, getShortPath } from "../../core/resource-listing.ts";
 import type { ResourceDiagnostic } from "../../core/resource-loader.ts";
-import { formatMissingSessionCwdPrompt, MissingSessionCwdError } from "../../core/session-cwd.ts";
+import {
+	formatMissingSessionCwdPrompt,
+	type MissingSessionCwdChoice,
+	MissingSessionCwdError,
+} from "../../core/session-cwd.ts";
 import {
 	formatNotIncludedMessage,
 	isExportFormatEnabled,
@@ -2245,12 +2249,14 @@ export class InteractiveMode {
 		return result === "Yes";
 	}
 
-	private async promptForMissingSessionCwd(error: MissingSessionCwdError): Promise<string | undefined> {
-		const confirmed = await this.showExtensionConfirm(
-			"Session cwd not found",
-			formatMissingSessionCwdPrompt(error.issue),
+	private async promptForMissingSessionCwd(error: MissingSessionCwdError): Promise<MissingSessionCwdChoice> {
+		const choice = await this.showExtensionSelector(
+			`Session cwd not found\n${formatMissingSessionCwdPrompt(error.issue)}`,
+			["Continue", "Fork", "Cancel"],
 		);
-		return confirmed ? error.issue.fallbackCwd : undefined;
+		if (choice === "Continue") return "continue";
+		if (choice === "Fork") return "fork";
+		return "cancel";
 	}
 
 	/**
@@ -5294,20 +5300,21 @@ export class InteractiveMode {
 			return result;
 		} catch (error: unknown) {
 			if (error instanceof MissingSessionCwdError) {
-				const selectedCwd = await this.promptForMissingSessionCwd(error);
-				if (!selectedCwd) {
+				const choice = await this.promptForMissingSessionCwd(error);
+				if (choice === "cancel") {
 					this.showStatus("Resume cancelled");
 					return { cancelled: true };
 				}
 				const result = await this.runtimeHost.switchSession(sessionPath, {
-					cwdOverride: selectedCwd,
+					cwdOverride: error.issue.fallbackCwd,
+					forkToCwd: choice === "fork",
 					withSession: options?.withSession,
 					projectTrustContextFactory: (cwd) => this.createProjectTrustContext(cwd),
 				});
 				if (result.cancelled) {
 					return result;
 				}
-				this.showStatus("Resumed session in current cwd");
+				this.showStatus(choice === "fork" ? "Forked session into current cwd" : "Resumed session in current cwd");
 				return result;
 			}
 			return this.handleFatalRuntimeError("Failed to resume session", error);
@@ -6036,17 +6043,20 @@ export class InteractiveMode {
 			this.showStatus(`Session imported from: ${inputPath}`);
 		} catch (error: unknown) {
 			if (error instanceof MissingSessionCwdError) {
-				const selectedCwd = await this.promptForMissingSessionCwd(error);
-				if (!selectedCwd) {
+				const choice = await this.promptForMissingSessionCwd(error);
+				if (choice === "cancel") {
 					this.showStatus("Import cancelled");
 					return;
 				}
-				const result = await this.runtimeHost.importFromJsonl(inputPath, selectedCwd);
+				const result = await this.runtimeHost.importFromJsonl(inputPath, {
+					cwdOverride: error.issue.fallbackCwd,
+					forkToCwd: choice === "fork",
+				});
 				if (result.cancelled) {
 					this.showStatus("Import cancelled");
 					return;
 				}
-				this.showStatus(`Session imported from: ${inputPath}`);
+				this.showStatus(`Session ${choice === "fork" ? "forked" : "imported"} from: ${inputPath}`);
 				return;
 			}
 			if (error instanceof SessionImportFileNotFoundError) {

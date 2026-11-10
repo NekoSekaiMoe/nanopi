@@ -244,6 +244,70 @@ describe("AgentSessionRuntime characterization", () => {
 		expect(readFileSync(runtime.session.sessionFile!, "utf8")).toContain('"id":"imported"');
 	});
 
+	// Regression test for https://github.com/earendil-works/pi/issues/11060: forking a
+	// session whose stored cwd is gone must land in the current cwd under a new id.
+	it("forks a session with a missing cwd into the override directory", async () => {
+		const { runtime, tempDir } = await createRuntimeForTest(() => {});
+		await runtime.session.prompt("hello");
+		const sourceFile = runtime.session.sessionFile!;
+		const sourceId = runtime.session.sessionId;
+		const missingCwd = join(tempDir, "moved-away");
+		const sourceDir = join(tempDir, "source");
+		mkdirSync(sourceDir, { recursive: true });
+		const sourcePath = join(sourceDir, "missing-cwd.jsonl");
+		writeFileSync(
+			sourcePath,
+			`${JSON.stringify({
+				type: "session",
+				version: 3,
+				id: "missing-cwd-session",
+				timestamp: new Date().toISOString(),
+				cwd: missingCwd,
+			})}\n`,
+		);
+		expect(existsSync(sourceFile)).toBe(true);
+
+		const result = await runtime.switchSession(sourcePath, { cwdOverride: tempDir, forkToCwd: true });
+
+		expect(result).toEqual({ cancelled: false });
+		expect(runtime.session.sessionManager.getCwd()).toBe(realpathSync(tempDir));
+		expect(runtime.session.sessionFile).not.toBe(sourcePath);
+		expect(runtime.session.sessionFile).not.toBe(sourceFile);
+		expect(runtime.session.sessionId).not.toBe(sourceId);
+		const forkedHeader = JSON.parse(readFileSync(runtime.session.sessionFile!, "utf8").split("\n")[0]!);
+		expect(forkedHeader.cwd).toBe(realpathSync(tempDir));
+		expect(forkedHeader.parentSession).toBe(realpathSync(sourcePath));
+	});
+
+	// Regression test for https://github.com/earendil-works/pi/issues/11060: a failed
+	// /import must not leave the copy behind next to the session it could not open.
+	it("removes the import copy when the imported cwd is missing", async () => {
+		const { runtime, tempDir } = await createRuntimeForTest(() => {});
+		const sessionDir = runtime.session.sessionManager.getSessionDir();
+		const importDir = join(tempDir, "import");
+		const filename = "missing-cwd.jsonl";
+		const importPath = join(importDir, filename);
+		mkdirSync(importDir, { recursive: true });
+		writeFileSync(
+			importPath,
+			`${JSON.stringify({
+				type: "session",
+				version: 3,
+				id: "missing-cwd-import",
+				timestamp: new Date().toISOString(),
+				cwd: join(tempDir, "moved-away"),
+			})}\n`,
+		);
+
+		await expect(runtime.importFromJsonl(importPath)).rejects.toThrow(/Stored session working directory/);
+		expect(existsSync(join(sessionDir, filename))).toBe(false);
+
+		const result = await runtime.importFromJsonl(importPath, { cwdOverride: tempDir, forkToCwd: true });
+		expect(result).toEqual({ cancelled: false });
+		expect(runtime.session.sessionManager.getCwd()).toBe(realpathSync(tempDir));
+		expect(runtime.session.sessionId).not.toBe("missing-cwd-import");
+	});
+
 	it("emits session_before_fork and session_start and honors cancellation", async () => {
 		const events: RecordedSessionEvent[] = [];
 		let cancelNextFork = false;

@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Anthropic OAuth requests report the current Claude Code version (`2.1.322`, previously `2.1.280`) in the `claude-cli` user agent, so a subscription request no longer looks like an outdated client
 - A tool schema whose properties point into a root `$defs` keeps its definitions when the tool is sent non-strict: Anthropic's non-strict `input_schema` is rebuilt from `properties` and `required` alone, so the definitions block was dropped while `#/$defs/...` references inside the properties survived and the model invented the shape. The block is now inlined into the references first (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
 - `tools: []` is only sent to endpoints that need it: the empty array went out whenever the conversation contained a tool call or result, which is the normal second turn, and vLLM 0.20+ answers it with a 400. The LiteLLM requirement is now `compat.requiresToolsWithToolHistory`, off by default (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
 - A `max_tokens` clamped from the input estimate no longer overshoots the context window: the estimate is an average, so code, JSON arguments and non-Latin text run denser, and OpenRouter, which adds input and `max_tokens` up itself, rejected requests whose real input was ~12% above it as an overflow. Clamping now reserves 15% headroom, and the clamped cap is sent instead of omitted so the request fits for the reason it was clamped (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))

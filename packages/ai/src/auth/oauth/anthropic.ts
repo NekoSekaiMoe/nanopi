@@ -20,7 +20,7 @@ const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://api.anthropic.com/v1/oauth/token";
 const OAUTH_BETA_HEADER = "oauth-2025-04-20";
 /** Claude Code's User-Agent, versioned like the identity headers on inference. */
-const CLAUDE_CLI_USER_AGENT = "claude-cli/2.1.280";
+const CLAUDE_CLI_USER_AGENT = "claude-cli/2.1.322";
 const CALLBACK_HOST = getProviderEnvValue("NANOPI_OAUTH_CALLBACK_HOST") || "127.0.0.1";
 // Preferred so the port can be forwarded into containers or over SSH. Anthropic accepts any loopback port,
 // so login falls back to a free port when this one cannot be bound (#10571).
