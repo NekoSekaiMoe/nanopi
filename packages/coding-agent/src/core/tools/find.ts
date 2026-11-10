@@ -97,21 +97,22 @@ const FALLBACK_NOTICE =
 	"fd was not found, so this search used a slower in-process walker with the same ignore rules. Call find normally; install fd to make searches faster";
 
 /**
- * fd's glob contract for the in-process walker. A pattern without a slash is
- * matched against the file name, which is what fd --glob does by default; one
- * with a slash is matched against the path relative to the search root, the
- * same expansion the --full-path branch below performs for fd.
+ * The glob contract shared by fd and the in-process walker. A pattern without a
+ * slash is matched against the file name, which is what fd --glob does by
+ * default; one with a slash is matched against the path relative to the search
+ * root, which fd builds from the absolute candidate path for --full-path and
+ * the walker builds from the visited file.
+ *
+ * A `**` segment matches zero or more path segments in both, so a pattern like
+ * `src/**/*.ts` also covers the files directly in `src/`.
  */
 function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
 	const normalized = pattern.replaceAll("\\", "/");
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	const anchored =
-		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
-			? normalized
-			: `**/${normalized}`;
-	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
+	const anchorRelative = normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**";
+	return (relativePath) => minimatch(relativePath, anchorRelative ? normalized : `**/${normalized}`, { dot: true });
 }
 
 /** Walks `searchPath` for patterns fd would have matched, stopping at the result limit. */
