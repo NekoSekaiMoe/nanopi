@@ -1,4 +1,5 @@
 import type { Api, Model, ProviderHeaders } from "@nanopi/pi-ai";
+import { OPENCODE_CLIENT_HEADER, OPENCODE_SESSION_HEADER } from "@nanopi/pi-ai/providers/opencode-headers";
 import type { SettingsManager } from "./settings-manager.ts";
 import { isInstallTelemetryEnabled } from "./telemetry.ts";
 
@@ -7,6 +8,7 @@ const NVIDIA_NIM_HOST = "integrate.api.nvidia.com";
 const CLOUDFLARE_API_HOST = "api.cloudflare.com";
 const CLOUDFLARE_AI_GATEWAY_HOST = "gateway.ai.cloudflare.com";
 const OPENCODE_HOST = "opencode.ai";
+const OPENCODE_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
 function matchesHost(baseUrl: string, expectedHost: string): boolean {
 	try {
@@ -31,6 +33,14 @@ function isCloudflareModel(model: Model<Api>): boolean {
 		matchesHost(model.baseUrl, CLOUDFLARE_API_HOST) ||
 		matchesHost(model.baseUrl, CLOUDFLARE_AI_GATEWAY_HOST)
 	);
+}
+
+/**
+ * Whether the model is served by OpenCode's gateway: a built-in OpenCode provider, or any other
+ * provider pointed at the host, such as a models.json entry or a proxy.
+ */
+export function isOpenCodeModel(model: Model<Api>): boolean {
+	return OPENCODE_PROVIDERS.has(model.provider) || matchesHost(model.baseUrl, OPENCODE_HOST);
 }
 
 function getDefaultAttributionHeaders(
@@ -64,28 +74,38 @@ function getDefaultAttributionHeaders(
 	return undefined;
 }
 
+/** OpenCode's routing identity: which conversation a request belongs to, and who is asking. */
 function getSessionHeaders(model: Model<Api>, sessionId: string | undefined): Record<string, string> | undefined {
-	if (!sessionId) return undefined;
-	if (
-		model.provider !== "opencode" &&
-		model.provider !== "opencode-go" &&
-		!matchesHost(model.baseUrl, OPENCODE_HOST)
-	) {
-		return undefined;
-	}
-	return { "x-opencode-session": sessionId, "x-opencode-client": "nanopi" };
+	if (!isOpenCodeModel(model)) return undefined;
+	return {
+		...(sessionId ? { [OPENCODE_SESSION_HEADER]: sessionId } : {}),
+		[OPENCODE_CLIENT_HEADER]: "nanopi",
+	};
+}
+
+/**
+ * Headers every request to `model` in `sessionId` carries: attribution defaults first, then
+ * OpenCode's identity. Headers the caller supplies are merged on top, per request.
+ */
+export function getProviderAttributionHeaders(
+	model: Model<Api>,
+	settingsManager: SettingsManager,
+	sessionId: string | undefined,
+): ProviderHeaders | undefined {
+	const merged: ProviderHeaders = {
+		...getDefaultAttributionHeaders(model, settingsManager),
+		...getSessionHeaders(model, sessionId),
+	};
+	return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 export function mergeProviderAttributionHeaders(
-	model: Model<Api>,
+	model: Model<Api> | undefined,
 	settingsManager: SettingsManager,
 	sessionId: string | undefined,
 	...headerSources: Array<ProviderHeaders | undefined>
 ): ProviderHeaders | undefined {
-	const merged: ProviderHeaders = {
-		...getSessionHeaders(model, sessionId),
-		...getDefaultAttributionHeaders(model, settingsManager),
-	};
+	const merged: ProviderHeaders = model ? { ...getProviderAttributionHeaders(model, settingsManager, sessionId) } : {};
 
 	for (const headers of headerSources) {
 		if (headers) {

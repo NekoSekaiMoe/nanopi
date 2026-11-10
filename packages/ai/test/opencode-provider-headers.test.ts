@@ -55,13 +55,22 @@ describe("OpenCode provider headers", () => {
 
 			streams[method](model, context, { sessionId: "conversation-1", cacheRetention: "none" });
 
-			expect(captured?.headers).toEqual({ "x-opencode-session": "conversation-1" });
+			expect(captured?.headers).toEqual({
+				"x-opencode-session": "conversation-1",
+				"x-opencode-client": "nanopi",
+			});
 		},
 	);
 
 	it.each([
-		{ headers: { "X-OpenCode-Session": "caller-value" }, expected: { "X-OpenCode-Session": "caller-value" } },
-		{ headers: { "X-OpenCode-Session": null }, expected: { "X-OpenCode-Session": null } },
+		{
+			headers: { "X-OpenCode-Session": "caller-value" },
+			expected: { "X-OpenCode-Session": "caller-value", "x-opencode-client": "nanopi" },
+		},
+		{
+			headers: { "X-OpenCode-Session": null },
+			expected: { "X-OpenCode-Session": null, "x-opencode-client": "nanopi" },
+		},
 	] as const)("preserves a case-insensitive caller override", ({ headers, expected }) => {
 		let captured: StreamOptions | undefined;
 		const streams = withOpenCodeSessionHeader(
@@ -75,6 +84,19 @@ describe("OpenCode provider headers", () => {
 		expect(captured?.headers).toEqual(expected);
 	});
 
+	it("keeps a caller override for the client header", () => {
+		let captured: StreamOptions | undefined;
+		const streams = withOpenCodeSessionHeader(
+			recordingStreams((options) => {
+				captured = options;
+			}),
+		);
+
+		streams.streamSimple(model, context, { sessionId: "conversation-1", headers: { "X-OpenCode-Client": "cli" } });
+
+		expect(captured?.headers).toEqual({ "X-OpenCode-Client": "cli", "x-opencode-session": "conversation-1" });
+	});
+
 	it("does not fabricate a session header when sessionId is absent", () => {
 		let captured: StreamOptions | undefined;
 		const streams = withOpenCodeSessionHeader(
@@ -85,6 +107,6 @@ describe("OpenCode provider headers", () => {
 
 		streams.streamSimple(model, context, { headers: { "x-custom": "value" } });
 
-		expect(captured?.headers).toEqual({ "x-custom": "value" });
+		expect(captured?.headers).toEqual({ "x-custom": "value", "x-opencode-client": "nanopi" });
 	});
 });

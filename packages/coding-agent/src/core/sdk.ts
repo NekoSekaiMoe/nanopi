@@ -201,9 +201,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 
 	const authPath = options.agentDir ? join(agentDir, "auth.json") : undefined;
 	const modelsPath = options.agentDir ? join(agentDir, "models.json") : undefined;
-	const modelRuntime = options.modelRuntime ?? (await ModelRuntime.create({ authPath, modelsPath }));
-
 	const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+	// Attribution headers are read per request, so the runtime needs the same settings the
+	// session uses; the user-scope file would not carry a project's telemetry setting.
+	const modelRuntime = options.modelRuntime ?? (await ModelRuntime.create({ authPath, modelsPath }));
+	modelRuntime.useSettingsManager(settingsManager);
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
 	if (!resourceLoader) {
