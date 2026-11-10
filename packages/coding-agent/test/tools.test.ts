@@ -1279,6 +1279,40 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(byPath)).not.toContain("a.ts");
 		});
 
+		// fd matches --full-path patterns against the absolute candidate path, so 'src/*.ts'
+		// needs a leading '**/' before it can match the search root's own 'src/'. The walker
+		// has to expand the same way, or a fallback search silently drops those files (#669).
+		it("matches a root-level path pattern the way fd's full-path expansion does", async () => {
+			mkdirSync(join(testDir, "src", "sub"), { recursive: true });
+			mkdirSync(join(testDir, "deep", "src"), { recursive: true });
+			writeFileSync(join(testDir, "src", "direct.ts"), "");
+			writeFileSync(join(testDir, "src", "sub", "nested.ts"), "");
+			writeFileSync(join(testDir, "deep", "src", "far.ts"), "");
+			const tool = createFindToolDefinition(testDir);
+
+			const wildcard = await tool.execute(
+				"test-call-find-fallback-root-path-wildcard",
+				{ pattern: "src/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const wildcardOutput = getTextOutput(wildcard);
+			expect(wildcardOutput).toContain("src/direct.ts");
+			expect(wildcardOutput).toContain("deep/src/far.ts");
+
+			const globstar = await tool.execute(
+				"test-call-find-fallback-root-path-globstar",
+				{ pattern: "src/**/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const globstarOutput = getTextOutput(globstar);
+			expect(globstarOutput).toContain("src/direct.ts");
+			expect(globstarOutput).toContain("src/sub/nested.ts");
+		});
+
 		it("honors .gitignore in the walker", async () => {
 			writeFileSync(join(testDir, ".gitignore"), "ignored.ts\n");
 			writeFileSync(join(testDir, "ignored.ts"), "");

@@ -98,19 +98,19 @@ const FALLBACK_NOTICE =
 
 /**
  * fd's glob contract for the in-process walker. A pattern without a slash is
- * matched against the file name, which is what fd --glob does by default; one
- * with a slash is matched against the path relative to the search root, the
- * same expansion the --full-path branch below performs for fd.
+ * matched against the file name, which is what fd --glob does by default. One
+ * with a slash is matched against the absolute candidate path, the same
+ * expansion the --full-path branch below performs for fd: a root-level
+ * 'src/*.ts' gets a leading globstar and still matches the search root's own
+ * 'src/', exactly as it does under fd.
  */
 function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
 	const normalized = pattern.replaceAll("\\", "/");
 	if (!normalized.includes("/")) {
 		return (_relativePath, name) => minimatch(name, normalized, { dot: true });
 	}
-	const anchored =
-		normalized.startsWith("/") || normalized.startsWith("**/") || normalized === "**"
-			? normalized
-			: `**/${normalized}`;
+	const rooted = normalized.startsWith("/") ? normalized.slice(1) : normalized;
+	const anchored = rooted.startsWith("**/") || rooted === "**" ? rooted : `**/${rooted}`;
 	return (relativePath) => minimatch(relativePath, anchored, { dot: true });
 }
 
