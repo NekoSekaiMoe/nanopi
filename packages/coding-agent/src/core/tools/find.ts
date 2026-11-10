@@ -104,8 +104,9 @@ const FALLBACK_NOTICE =
  * root, which fd builds from the absolute candidate path for --full-path and
  * the walker builds from the visited file.
  *
- * A `**` segment matches zero or more path segments in both, so a pattern like
- * `src/**/*.ts` also covers the files directly in `src/`.
+ * A `**` segment matches zero or more path segments in both, so `src`, then
+ * `**`, then `*.ts` also covers the files directly in `src/`. Spelled out here
+ * because the joined pattern would close this comment block.
  */
 function compileFindGlob(pattern: string): (relativePath: string, name: string) => boolean {
 	const normalized = pattern.replaceAll("\\", "/");
