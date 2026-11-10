@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Full-screen Kitty images survive a write to a row they cover on every Kitty terminal, not just WezTerm: `imageCellsNeedRedraw` and `drawKittyImagesLast` were gated on `isWezTerm`, so a Kitty or Ghostty frame that repainted a covered row erased the image cells and left the anchor line pointing at a placement that was no longer there. The xterm.js image addon erases intersecting cells the same way WezTerm does, which is the case the gate was hiding (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - Alacritty is detected as an OSC 8 hyperlink terminal: it never sets `TERM_PROGRAM`, so the capability probe fell through to `hyperlinks: false` and Markdown links rendered as `label (url)`. The Alacritty branch now also matches `TERM` starting with `alacritty` and `ALACRITTY_WINDOW_ID`; the tmux and screen branches still run first, so multiplexed sessions are unchanged (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - File completion stops spawning `fd` once the request was aborted: the abort can land while the first listing is awaited, and the recursive walk that follows it started a process the cancellation could no longer reach (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
 
