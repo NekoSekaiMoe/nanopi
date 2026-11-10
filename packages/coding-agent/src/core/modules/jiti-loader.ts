@@ -19,6 +19,7 @@ import { isBuildComponentEnabled } from "../../build-components.ts";
 import { APP_NAME, CONFIG_DIR_NAME, isBundledNode } from "../../config.ts";
 import { isSingleNodeFileRuntime } from "../../standalone/assets.ts";
 import { resolvePath } from "../../utils/paths.ts";
+import { SHARED_CONFIG_DIR_NAME } from "../agents-dirs.ts";
 import type { ModuleFactory, SessionModule } from "./types.ts";
 
 /** Environment variable naming module files or directories, `path.delimiter`-separated. */
@@ -233,20 +234,26 @@ export interface ScanDiskModulesOptions {
 /**
  * Discover module files.
  *
- * Three sources, in load order: `$NANOPI_EXTENSIONS`, the agent directory's
- * `extensions/`, then the project's `.nanopi/extensions/`. The project
- * directory holds code the project wrote, so it is scanned only when the
- * project is trusted — the gate settings.json and project skills already sit
- * behind.
+ * Sources, in load order: `$NANOPI_EXTENSIONS`, the agent directory's
+ * `extensions/`, then the project's `.agents/extensions/` and
+ * `.nanopi/extensions/`. The project directories hold code the project wrote,
+ * so they are scanned only when the project is trusted — the gate
+ * settings.json and project skills already sit behind. `.agents/` comes first
+ * so a module that lives beside the project's skills and prompts loads before
+ * the legacy copy in `.nanopi/`.
  */
 export function scanDiskModules(options: ScanDiskModulesOptions): DiskModuleScan {
 	const explicit = (process.env[ENV_MODULES] ?? "")
 		.split(delimiter)
 		.map((entry) => entry.trim())
 		.filter((entry) => entry.length > 0);
-	const projectDir = join(options.cwd, CONFIG_DIR_NAME, "extensions");
 	const directories = [join(options.agentDir, "extensions")];
-	if (options.projectTrusted) directories.push(projectDir);
+	if (options.projectTrusted) {
+		directories.push(
+			join(options.cwd, SHARED_CONFIG_DIR_NAME, "extensions"),
+			join(options.cwd, CONFIG_DIR_NAME, "extensions"),
+		);
+	}
 
 	const files: string[] = [];
 	const missing: string[] = [];

@@ -1,9 +1,10 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import ignore from "ignore";
 import { basename, dirname, join, relative, resolve, sep } from "path";
-import { CONFIG_DIR_NAME, getAgentDir } from "../config.ts";
+import { getAgentDir } from "../config.ts";
 import { parseFrontmatter } from "../utils/frontmatter.ts";
 import { canonicalizePath, resolvePath } from "../utils/paths.ts";
+import { projectResourceDirs } from "./agents-dirs.ts";
 import type { ResourceDiagnostic } from "./diagnostics.ts";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.ts";
 
@@ -458,13 +459,18 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 		}
 	}
 
-	if (includeDefaults) {
-		addSkills(loadSkillsFromDirInternal(join(resolvedAgentDir, "skills"), "user", true));
-		addSkills(loadSkillsFromDirInternal(resolve(resolvedCwd, CONFIG_DIR_NAME, "skills"), "project", true));
-	}
-
+	// `cwd` names the project only when it is also one of the paths to load (as
+	// the session passes it); a bare target directory is a temporary path, and
+	// reading the project directories from it would leak whatever sits above it.
 	const userSkillsDir = join(resolvedAgentDir, "skills");
-	const projectSkillsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "skills");
+	const projectSkillsDirs = skillPaths.includes(resolvedCwd) ? projectResourceDirs(resolvedCwd, "skills") : [];
+
+	if (includeDefaults) {
+		addSkills(loadSkillsFromDirInternal(userSkillsDir, "user", true));
+		for (const dir of projectSkillsDirs) {
+			addSkills(loadSkillsFromDirInternal(dir, "project", true));
+		}
+	}
 
 	const isUnderPath = (target: string, root: string): boolean => {
 		const normalizedRoot = resolve(root);
@@ -478,7 +484,7 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 	const getSource = (resolvedPath: string): "user" | "project" | "path" => {
 		if (!includeDefaults) {
 			if (isUnderPath(resolvedPath, userSkillsDir)) return "user";
-			if (isUnderPath(resolvedPath, projectSkillsDir)) return "project";
+			if (projectSkillsDirs.some((dir) => isUnderPath(resolvedPath, dir))) return "project";
 		}
 		return "path";
 	};

@@ -1,16 +1,18 @@
 /**
- * Local resource discovery: skills and prompt templates from the
- * settings arrays and the conventional directories (~/.nanopi and .nanopi
- * scopes, plus ~/.agents/skills). Extracted from the removed package manager;
+ * Local resource discovery: skills and prompt templates from the settings
+ * arrays and the conventional directories. The user scope is `~/.nanopi` plus
+ * `~/.agents/skills`; the project scope is `.agents/` (in cwd and its
+ * ancestors) plus `.nanopi/`. Extracted from the removed package manager;
  * extension/package sources are gone - only local paths are discovered.
  */
 
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { basename, dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
 import { normalizePath } from "../utils/paths.ts";
+import { projectResourceDirs } from "./agents-dirs.ts";
 import type { SourceScope } from "./source-info.ts";
 
 export interface PathMetadata {
@@ -119,7 +121,9 @@ function collectSkillEntries(
 		}
 
 		for (const entry of dirEntries) {
-			if (entry.name.startsWith(".")) continue;
+			// A nanopi resource directory never holds dot entries, while an
+			// `.agents/skills` directory may lead to one (`skills/.system/...`).
+			if (mode === "nanopi" && entry.name.startsWith(".")) continue;
 			if (entry.name === "node_modules") continue;
 
 			const fullPath = join(dir, entry.name);
@@ -157,41 +161,6 @@ function collectSkillEntries(
 	}
 
 	return entries;
-}
-
-function findGitRepoRoot(startDir: string): string | null {
-	let dir = resolve(startDir);
-	while (true) {
-		if (existsSync(join(dir, ".git"))) {
-			return dir;
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {
-			return null;
-		}
-		dir = parent;
-	}
-}
-
-function collectAncestorAgentsSkillDirs(startDir: string): string[] {
-	const skillDirs: string[] = [];
-	const resolvedStartDir = resolve(startDir);
-	const gitRepoRoot = findGitRepoRoot(resolvedStartDir);
-
-	let dir = resolvedStartDir;
-	while (true) {
-		skillDirs.push(join(dir, ".agents", "skills"));
-		if (gitRepoRoot && dir === gitRepoRoot) {
-			break;
-		}
-		const parent = dirname(dir);
-		if (parent === dir) {
-			break;
-		}
-		dir = parent;
-	}
-
-	return skillDirs;
 }
 
 function collectAutoPromptEntries(dir: string): string[] {
@@ -330,6 +299,9 @@ export function resolveLocalResources(options: {
 	const skills = new Map<string, ResolvedResource>();
 	const prompts = new Map<string, ResolvedResource>();
 
+	// A path found twice keeps the highest-precedence directory's metadata, so
+	// `.agents/skills` wins over an `.nanopi/skills` entry reaching the same file
+	// (a checkout that still has one symlinked into the other).
 	const add = (
 		target: Map<string, ResolvedResource>,
 		paths: string[],
@@ -338,40 +310,41 @@ export function resolveLocalResources(options: {
 		baseDir: string,
 	) => {
 		for (const path of paths) {
-			const existing = target.get(path);
-			if (existing) {
-				existing.enabled = isEnabledByOverrides(path, overrides, baseDir);
-				continue;
+			if (!target.has(path)) {
+				target.set(path, { path, metadata, enabled: isEnabledByOverrides(path, overrides, baseDir) });
 			}
-			target.set(path, { path, metadata, enabled: isEnabledByOverrides(path, overrides, baseDir) });
 		}
 	};
 
 	if (projectTrusted) {
-		add(
-			skills,
-			collectSkillEntries(join(projectBaseDir, "skills"), "nanopi"),
-			projectMetadata,
-			options.projectSettings.skills ?? [],
-			projectBaseDir,
-		);
-		for (const agentsSkillsDir of collectAncestorAgentsSkillDirs(cwd)) {
-			const agentsBaseDir = dirname(agentsSkillsDir);
+		// Every directory supplies its own metadata base, so no project-wide base
+		// is used here. `.nanopi/skills` reads as a nanopi skill directory (a
+		// flat set of `.md` files is valid there); every other entry is an
+		// `.agents/skills`, read with the agents convention, where only nested
+		// `SKILL.md` files count. The two collapse into one directory only when
+		// cwd sits inside its own `.agents` tree (`$HOME`), and that one is kept
+		// last.
+		const skillDirs = projectResourceDirs(cwd, "skills");
+		for (const [index, dir] of skillDirs.entries()) {
+			const resourceDir = dirname(dir);
 			add(
 				skills,
-				collectSkillEntries(agentsSkillsDir, "agents"),
-				{ ...projectMetadata, baseDir: agentsBaseDir },
+				collectSkillEntries(dir, index === skillDirs.length - 1 ? "nanopi" : "agents"),
+				{ ...projectMetadata, baseDir: resourceDir },
 				options.projectSettings.skills ?? [],
-				agentsBaseDir,
+				resourceDir,
 			);
 		}
-		add(
-			prompts,
-			collectAutoPromptEntries(join(projectBaseDir, "prompts")),
-			projectMetadata,
-			options.projectSettings.prompts ?? [],
-			projectBaseDir,
-		);
+		for (const dir of projectResourceDirs(cwd, "prompts")) {
+			const resourceDir = dirname(dir);
+			add(
+				prompts,
+				collectAutoPromptEntries(dir),
+				{ ...projectMetadata, baseDir: resourceDir },
+				options.projectSettings.prompts ?? [],
+				resourceDir,
+			);
+		}
 	}
 
 	add(
