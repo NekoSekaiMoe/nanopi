@@ -71,9 +71,10 @@ export default function (pi: ModuleEventsSurface & ModuleCommandsSurface) {
       return;
     }
 
-    const repoRoot = await getRepoRoot(ctx.cwd);
     const sessionId = ctx.sessionManager.getSessionId();
-    if (!repoRoot) return;
+    // getRepoRoot only fails outside a work tree, which isGitRepo already ruled
+    // out; `?? ctx.cwd` narrows null without changing the control flow below.
+    const repoRoot = (await getRepoRoot(ctx.cwd)) ?? ctx.cwd;
     state.repoRoot = repoRoot;
     state.sessionId = sessionId;
 
