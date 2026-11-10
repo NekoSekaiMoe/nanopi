@@ -6,6 +6,7 @@ import { type Static, Type } from "typebox";
 import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
+import { readLinePage } from "./line-reader.ts";
 import { resolveReadPathAsync } from "./path-utils.ts";
 import { recordRead } from "./read-snapshot.ts";
 import { readRenderers } from "./renderers/read.ts";
@@ -180,31 +181,27 @@ export function createReadToolDefinition(
 									];
 								}
 							} else {
-								// Read text content.
-								const buffer = await ops.readFile(absolutePath);
 								// Snapshot the state this text came from, so a later edit can say
 								// whether the model is working from an outdated view of the file.
 								recordRead(absolutePath, { mtimeMs: stats.mtimeMs, size: stats.size });
-								const textContent = buffer.toString("utf-8");
-								const allLines = textContent.split("\n");
-								const totalFileLines = allLines.length;
-								// Apply offset if specified. Convert from 1-indexed input to 0-indexed array access.
+								// Stream the file: only the page that will be shown is held in memory,
+								// so offset/limit on a huge log no longer reads the whole log first.
+								// Apply offset if specified. Convert from 1-indexed input to 0-based.
 								const startLine = offset ? Math.max(0, offset - 1) : 0;
 								const startLineDisplay = startLine + 1;
+								const page = await readLinePage(absolutePath, { startLine, signal });
+								const totalFileLines = page.totalLines;
 								// Check if offset is out of bounds.
-								if (startLine >= allLines.length) {
-									throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
+								if (startLine >= totalFileLines) {
+									throw new Error(`Offset ${offset} is beyond end of file (${totalFileLines} lines total)`);
 								}
-								let selectedContent: string;
-								let userLimitedLines: number | undefined;
-								// If limit is specified by the user, honor it first. Otherwise truncateHead decides.
-								if (limit !== undefined) {
-									const endLine = Math.min(startLine + limit, allLines.length);
-									selectedContent = allLines.slice(startLine, endLine).join("\n");
-									userLimitedLines = endLine - startLine;
-								} else {
-									selectedContent = allLines.slice(startLine).join("\n");
-								}
+								// A user `limit` narrows the page before the byte limits apply.
+								const pageLines = page.content.split("\n");
+								const userLimitedLines = limit !== undefined ? Math.min(limit, pageLines.length) : undefined;
+								const selectedContent =
+									userLimitedLines !== undefined
+										? pageLines.slice(0, userLimitedLines).join("\n")
+										: page.content;
 								// Apply truncation, respecting both line and byte limits.
 								const truncation = truncateHead(selectedContent);
 								let outputText: string;
@@ -214,7 +211,7 @@ export function createReadToolDefinition(
 									// which line it is and let the model decide (grep for a pattern
 									// inside it, or edit around it) instead of handing out a shell
 									// one-liner for what the read tool should have done.
-									const firstLineSize = formatSize(Buffer.byteLength(allLines[startLine], "utf-8"));
+									const firstLineSize = formatSize(Buffer.byteLength(pageLines[0] ?? "", "utf-8"));
 									outputText = `[Line ${startLineDisplay} is ${firstLineSize}, exceeds the ${formatSize(DEFAULT_MAX_BYTES)} read limit, so it cannot be shown in full. Search for a pattern inside it with the grep tool, or edit around it with offset=${startLineDisplay}.]`;
 									details = { truncation };
 								} else if (truncation.truncated) {
@@ -228,9 +225,9 @@ export function createReadToolDefinition(
 										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
 									}
 									details = { truncation };
-								} else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
+								} else if (userLimitedLines !== undefined && startLine + userLimitedLines < totalFileLines) {
 									// User-specified limit stopped early, but the file still has more content.
-									const remaining = allLines.length - (startLine + userLimitedLines);
+									const remaining = totalFileLines - (startLine + userLimitedLines);
 									const nextOffset = startLine + userLimitedLines + 1;
 									outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
 								} else {
