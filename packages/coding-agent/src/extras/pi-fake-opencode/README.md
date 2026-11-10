@@ -51,7 +51,7 @@ The project id is not cosmetic: the free tier ledges quota per project and egres
 Each shape does three things:
 
 1. Puts the official CLI prompt (with its `<env>` block and skill listing) at the head of the system slot, then a separator telling the model to follow the operator's instructions, then nanopi's real system prompt verbatim.
-2. Renames nanopi's tools to opaque wire names (`clint_<digest>`, opencode2api's `ClientToolWireName`) and appends the official tool set in the CLI's order. nanopi's own tool names and schemas never reach the gateway. History and `tool_choice` references are renamed with them, so the request stays self-consistent.
+2. Renames nanopi's tools to opaque wire names (`clint_<digest>`, opencode2api's `ClientToolWireName`) and appends the official tool set in the CLI's order. nanopi's own tool names and schemas never reach the gateway. An official tool one of nanopi's tools can serve is also declared a second time, under that tool's wire name — see below. History and `tool_choice` references are renamed with them, and a history entry naming a tool the request can no longer act on is dropped with its result, so the request stays self-consistent.
 3. Forces `stream: true`; a chat body also gets `stream_options.include_usage` and `max_completion_tokens` (from `max_tokens` when the caller capped it).
 
 The lane picks the assets: a base URL at or below a bare `/zen` path is the 1.x generation (`bash`, the bare User-Agent), everything else the 2.x CLI (`shell`) — including Zen's per-family routes (`/inference/openai/v1`, `/inference/anthropic`, `/inference/google/v1beta`) and `/zen/go`. opencode2api splits the same way (`models.IsV1Upstream`).
@@ -65,10 +65,18 @@ A request is spoofed when **any** of these holds:
 - the provider id is listed in `PI_FAKE_OPENCODE_PROVIDERS`, or
 - `PI_FAKE_OPENCODE_ALL` is set truthy.
 
+### Why some tools appear twice
+
+The injected prompt names the official tools, so the model asks for `shell` or `read`, but the upstream never returns an official name: it redirects the call to the client tool it resolved it to (`shell` → `Bash`, `read` → `Read`, …) and only recognizes another client's vocabulary. nanopi's tool ids happen to match the official names, so that redirect lands on `bash` / `read`, and the returned call names a tool that would otherwise not be declared.
+
+That is what `OFFICIAL_TOOL_CLIENTS` in `payload.ts` describes, mirroring opencode2api's `OfficialToolCandidates`: for every official tool whose counterpart nanopi declared, the official definition is also emitted under that tool's wire name. The model fills in the official schema and the upstream shrinks it to the client tool's own at call time.
+
+A history entry (`tool_calls`, `tool_use`, `function_call`) naming an official tool with no such counterpart is dropped together with its result, and a `tool_choice` pinning it goes too. Without that, the ghost name survives in the history and later turns imitate it.
+
 ## Consequences
 
-- **The model drives the session through the official tools.** The gate compares the whole tool list, so the definitions the model sees are OpenCode's, not nanopi's. A free model can call tools (unlike the 2026-10 version of this module, which had to strip them), but it works at the fidelity of the official schemas: `shell` instead of nanopi's `bash`, and so on.
-- **The rename is one-way.** `shapeForGateway` returns the wire-to-client table, but the module API has no response hook, so a tool call arriving as `clint_<digest>` is not mapped back to the client name. opencode2api does restore them (`ToolRenames`), which is why its clients work unchanged; here the model simply sees the wire name.
+- **The model drives the session through the official tools, and the call lands on whichever nanopi tool the upstream redirected it to.** The definitions the model sees are OpenCode's, so a call arrives carrying arguments shaped for the official schema. nanopi's tool receives them, which is why `shell` reaches `bash` at all — but a schema mismatch is possible wherever the two differ.
+- **The rename is one-way.** `shapeForGateway` returns the wire-to-client table, but the module API has no response hook, so a call the upstream could not redirect keeps the name the upstream sent. opencode2api restores names on the response side (`ToolRenames`); the module API has no such hook, so the declaration up front (`OFFICIAL_TOOL_CLIENTS`) is what makes the mapped case work.
 - The prompt is the official CLI prompt plus nanopi's own after a separator. Small free models may weight the CLI's "answer in fewer than 4 lines" style more heavily than a clean prompt would.
 - Free-tier usage is still subject to Zen's rate limits and terms. This module only fixes client identification, not entitlement.
 
