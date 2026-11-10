@@ -1376,26 +1376,40 @@ describe("Coding Agent Tools", () => {
 			expect(getTextOutput(byPath)).not.toContain("a.ts");
 		});
 
-		// Ported from earendil-works/pi#9262: the `**/` prefix both implementations add
-		// to a path pattern let `**` swallow a directory level, so `src/**/*.ts`
-		// missed the files directly in `src/`.
-		it("matches a path pattern at the top of its directory", async () => {
-			mkdirSync(join(testDir, "src", "nested"), { recursive: true });
-			writeFileSync(join(testDir, "src", "top.ts"), "");
-			writeFileSync(join(testDir, "src", "nested", "deep.ts"), "");
+		// fd matches --full-path patterns against the absolute candidate path, so 'src/*.ts'
+		// needs a leading '**/' before it can match the search root's own 'src/'. The walker
+		// has to expand the same way, or a fallback search silently drops those files (#669).
+		it("matches a root-level path pattern the way fd's full-path expansion does", async () => {
+			mkdirSync(join(testDir, "src", "sub"), { recursive: true });
+			mkdirSync(join(testDir, "deep", "src"), { recursive: true });
+			writeFileSync(join(testDir, "src", "direct.ts"), "");
+			writeFileSync(join(testDir, "src", "sub", "nested.ts"), "");
+			writeFileSync(join(testDir, "deep", "src", "far.ts"), "");
 			const tool = createFindToolDefinition(testDir);
 
-			const result = await tool.execute(
-				"test-call-find-fallback-top-level",
+			const wildcard = await tool.execute(
+				"test-call-find-fallback-root-path-wildcard",
+				{ pattern: "src/*.ts" },
+				undefined,
+				undefined,
+				fakeCtx(testDir),
+			);
+			const wildcardOutput = getTextOutput(wildcard);
+			expect(wildcardOutput).toContain("src/direct.ts");
+			expect(wildcardOutput).toContain("deep/src/far.ts");
+
+			// The `**` prefix must not cost the files directly in `src/` either:
+			// `**` matches zero segments too (earendil-works/pi#9262).
+			const globstar = await tool.execute(
+				"test-call-find-fallback-root-path-globstar",
 				{ pattern: "src/**/*.ts" },
 				undefined,
 				undefined,
 				fakeCtx(testDir),
 			);
-			const output = getTextOutput(result);
-
-			expect(output).toContain("src/top.ts");
-			expect(output).toContain("src/nested/deep.ts");
+			const globstarOutput = getTextOutput(globstar);
+			expect(globstarOutput).toContain("src/direct.ts");
+			expect(globstarOutput).toContain("src/sub/nested.ts");
 		});
 
 		it("honors .gitignore in the walker", async () => {
