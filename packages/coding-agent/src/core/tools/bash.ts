@@ -25,6 +25,29 @@ const MAX_TIMEOUT_MS = 2_147_483_647;
 const STRUCTURED_OUTPUT_MAX_BYTES = 1024 * 1024;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
+/**
+ * The local shell backend's own timeout report: the deadline fired, and either the shell was killed
+ * or it had already exited on its own. The exit code travels with the error so the failure text can
+ * say "the command failed, and it also ran past N seconds" instead of only "it was slow".
+ *
+ * Extensions implement `BashOperations.exec` themselves and are free to keep throwing the plain
+ * `timeout:N` message; every reader accepts both.
+ */
+export class ShellTimeoutError extends Error {
+	readonly exitCode: number | null;
+
+	constructor(timeoutSeconds: number, exitCode: number | null) {
+		super(`timeout:${timeoutSeconds}`);
+		this.name = "ShellTimeoutError";
+		this.exitCode = exitCode;
+	}
+}
+
+/** The timed-out shell's exit code, when a backend reported one. */
+function timedOutExitCode(err: unknown): number | null {
+	return err instanceof ShellTimeoutError ? err.exitCode : null;
+}
+
 function resolveTimeoutMs(timeout: number | undefined): number | undefined {
 	if (timeout === undefined) return undefined;
 	if (!Number.isFinite(timeout) || timeout <= 0) {
@@ -170,13 +193,17 @@ export function createLocalShellOperations(shellName: string, resolveShellConfig
 				if (signal?.aborted) {
 					throw new Error("aborted");
 				}
-				if (timedOut) {
-					throw new Error(`timeout:${timeout}`);
-				}
 				// A signal-killed shell has no exit code. Use the standard shell convention so
 				// callers do not mistake the termination for a successful command.
 				const signalCode = child.signalCode;
-				return { exitCode: exitCode ?? (signalCode ? 128 + (osConstants.signals[signalCode] ?? 0) : 1) };
+				const resolvedExitCode = exitCode ?? (signalCode ? 128 + (osConstants.signals[signalCode] ?? 0) : 1);
+				if (timedOut) {
+					// The exit code matters here: the deadline can fire after the shell already finished,
+					// because a descendant of the command keeps the pipe open. Reporting the code keeps
+					// "it failed" from reading as "it was slow".
+					throw new ShellTimeoutError(timeout ?? (timeoutMs ?? 0) / 1000, resolvedExitCode);
+				}
+				return { exitCode: resolvedExitCode };
 			} finally {
 				if (child.pid) untrackDetachedChildPid(child.pid);
 				if (timeoutHandle) clearTimeout(timeoutHandle);
@@ -476,7 +503,12 @@ export function createShellToolDefinition(
 					}
 					if (err instanceof Error && err.message.startsWith("timeout:")) {
 						const timeoutSecs = err.message.split(":")[1];
-						const { text } = formatFailure(snapshot, `Command timed out after ${timeoutSecs} seconds`);
+						const exitCode = timedOutExitCode(err);
+						const status =
+							exitCode === null
+								? `Command timed out after ${timeoutSecs} seconds`
+								: `Command timed out after ${timeoutSecs} seconds and exited with code ${exitCode}`;
+						const { text } = formatFailure(snapshot, status);
 						throw new Error(text);
 					}
 					throw err;
