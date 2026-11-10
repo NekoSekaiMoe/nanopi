@@ -77,6 +77,8 @@ class ShellCallRenderComponent extends Text {
 	repaintingFor: Promise<void>[] | undefined;
 	/** The last loads this component already repainted for, so one load repaints once. */
 	repaintedFor: Promise<void>[] | undefined;
+	/** `argsComplete` of the render whose text is cached in `rendered`. */
+	complete = false;
 
 	constructor() {
 		super("", 0, 0);
@@ -107,14 +109,17 @@ function formatShellCall(
 
 	const currentTheme = getThemeInstance();
 	// renderCall also runs for every throttled output update with unchanged arguments. Reuse the text
-	// unless the theme changed or the final arguments still need a full highlight.
+	// until the theme, the command, the expanded state, or the completeness of the args changes, or
+	// the cached text is not exact yet: once the args are final, the first complete highlight is the
+	// last one, and the updates that follow it must not highlight the command again.
 	if (
 		component.rendered !== undefined &&
 		component.theme === currentTheme &&
 		component.command === command &&
 		component.expanded === options.expanded &&
 		component.timeout === timeout &&
-		(!options.argsComplete || component.embedded.every((entry) => entry.exact))
+		component.complete === options.argsComplete &&
+		(component.complete || !options.argsComplete || component.embedded.every((entry) => entry.exact))
 	) {
 		return component.rendered;
 	}
@@ -147,6 +152,7 @@ function formatShellCall(
 	component.command = command;
 	component.expanded = options.expanded;
 	component.timeout = timeout;
+	component.complete = options.argsComplete;
 	component.embedded = embedded;
 	component.rendered = lines.join("\n") + timeoutSuffix;
 	return component.rendered;

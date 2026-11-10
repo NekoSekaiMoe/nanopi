@@ -82,6 +82,52 @@ describe("streaming call highlighting", () => {
 		expect(highlightedLines.count).toBe(0);
 	});
 
+	/**
+	 * A build that drops embedded-code detection renders a shell command as one block
+	 * (`createShellRenderers` only highlights when it is on). That block is what exposed the shell call
+	 * cache bug, so the regression test below injects the define the flavor injects.
+	 */
+	function withoutEmbeddedCode<T>(run: () => T): T {
+		// No `resetModules` here: it also drops the modules imported above, and the shell renderers would
+		// read the define again after it is gone.
+		vi.stubGlobal("NANOPI_BUILD_COMPONENTS", { "embedded-code": false });
+		try {
+			return run();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	}
+
+	// Regression test for the shell call cache: the text of a render with unchanged args is reused
+	// until the theme, the command, the expanded state, the timeout, or the completeness of the args
+	// changes. The check used to read `argsComplete` instead of comparing it, so a render that cached
+	// the throttle-time approximation (a plain command block) kept answering every later output
+	// update, and the command was highlighted again once per update.
+	test("reuses the shell call text after the args settle and highlights it once", async () => {
+		const command = [
+			"cat > src/lib.rs <<'EOF'",
+			...Array.from({ length: 300 }, (_, i) => `fn f${i}() -> u32 { ${i} }`),
+			"EOF",
+		].join("\n");
+
+		await withoutEmbeddedCode(async () => {
+			const { createBashToolDefinition: createDefinition } = await import("../src/core/tools/bash.ts");
+			const definition = createDefinition(process.cwd(), { exposeSessionEnvironment: false });
+			const component = createToolComponent("bash", { command }, definition);
+			component.setExpanded(true);
+			component.setArgsComplete();
+			component.markExecutionStarted();
+			component.render(200);
+
+			highlightedLines.count = 0;
+			for (let i = 0; i < 10; i++) {
+				component.updateResult({ content: [{ type: "text", text: `line ${i}` }], isError: false }, true);
+				component.render(200);
+			}
+			expect(highlightedLines.count).toBe(0);
+		});
+	});
+
 	test("highlights streamed write content incrementally and fully once complete", () => {
 		const definition = createWriteToolDefinition(process.cwd());
 		const contentLines = Array.from({ length: 400 }, (_, i) => `const s${i} = \`multi`);

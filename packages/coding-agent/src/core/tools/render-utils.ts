@@ -62,11 +62,11 @@ export interface StreamingHighlight {
 /**
  * Highlight source text that arrives in growing chunks, such as streamed tool arguments.
  *
- * Renderers run on every argument delta, so highlighting the full text each time costs O(n^2) while
- * a long body streams in. When the new source extends the previous one, only the changed last line
- * and new lines are highlighted, one line at a time. The first lines, which collapsed previews show,
- * are re-highlighted with full context. Once `complete` is set, the text is highlighted in full once
- * and then reused until the source, language, or theme changes.
+ * Renderers run on every throttled frame, so highlighting the full text each time costs O(n^2)
+ * while a long body streams in. When the new source extends the previous one, only the changed last
+ * line and new lines are highlighted, one line at a time. The first lines, which collapsed previews
+ * show, are re-highlighted with full context. Once `complete` is set, the text is highlighted in
+ * full once and then reused until the source, language, or theme changes.
  */
 export function updateStreamingHighlight(
 	previous: StreamingHighlight | undefined,
