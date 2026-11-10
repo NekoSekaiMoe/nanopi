@@ -105,9 +105,8 @@ function findFdPatterns(pattern: string, windows: boolean): string[] | undefined
 	// fd matches full paths using native separators on Windows.
 	const normalize = (candidate: string) => (windows ? candidate.replaceAll("/", WINDOWS_PATH_SEP) : candidate);
 	const patterns = [normalize(anchored)];
-	// The anchored form already covers every directory depth, so the relative form
-	// only adds matches fd's `**` stops at due to a containing directory in its
-	// ignore list. Merging it unconditionally widens `src/**/*.ts` to `pkg/src/**`.
+	// Both forms run while the limit allows. The relative form alone would widen
+	// `src/**/*.ts` to `pkg/src/**`, which is why the anchored form goes first.
 	if (anchored.startsWith("**/")) patterns.push(normalize(pattern));
 	return patterns;
 }
