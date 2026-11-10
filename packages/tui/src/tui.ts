@@ -1456,6 +1456,12 @@ export abstract class TuiBase extends Container implements TUI {
 		return result;
 	}
 
+	/**
+	 * Append the segment reset to every text line.
+	 * Cursor markers are already gone by now: `extractCursorPosition` strips every occurrence,
+	 * and it runs before `resolveFakeCursors`, which only needs the marker still sitting next to
+	 * a fake cursor to know which cursor the hardware one replaces.
+	 */
 	protected applyLineResets(lines: string[]): string[] {
 		const reset = SEGMENT_RESET;
 		for (let i = 0; i < lines.length; i++) {
@@ -1496,8 +1502,9 @@ export abstract class TuiBase extends Container implements TUI {
 				const beforeMarker = line.slice(0, markerIndex);
 				const col = visibleWidth(beforeMarker);
 
-				// Strip marker from the line
-				lines[row] = line.slice(0, markerIndex) + line.slice(markerIndex + CURSOR_MARKER.length);
+				// Strip every marker on the line, not just the first: a sliced or composited
+				// line can carry more than one, and a leftover is written to the terminal.
+				lines[row] = line.replaceAll(CURSOR_MARKER, "");
 
 				return { row, col };
 			}
