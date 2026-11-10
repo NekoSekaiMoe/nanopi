@@ -149,6 +149,16 @@ export class CustomEditor extends Editor {
 			return;
 		}
 
+		// Selection page keys move an open autocomplete menu before app actions run. This lets a user
+		// who rebinds `app.clipboard.pasteImage` to pageup/pagedown still page a menu that is open.
+		if (
+			this.isShowingAutocomplete() &&
+			(this.keybindings.matches(data, "tui.select.pageUp") || this.keybindings.matches(data, "tui.select.pageDown"))
+		) {
+			super.handleInput(data);
+			return;
+		}
+
 		// Check for clipboard paste keybinding
 		if (this.keybindings.matches(data, "app.clipboard.pasteImage")) {
 			this.onPasteImage?.();
