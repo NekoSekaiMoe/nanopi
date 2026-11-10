@@ -65,6 +65,8 @@ const codingAgentDistDir = join(codingAgentDir, "dist");
 const aiDistDir = join(repoRoot, "packages", "ai", "dist");
 const webuiDistDir = join(repoRoot, "packages", "webui", "dist");
 const tuiNativeDir = join(repoRoot, "packages", "tui", "native");
+// AtomGit repository that mirrors the release assets (scripts/publish-atomgit.mjs).
+const ATOMGIT_ASSETS_SLUG = "nanopi/releases-assets";
 const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 
 // Build flavors (buildconfig.json) drop peripheral components from the
@@ -261,6 +263,32 @@ function collectSidecarFiles() {
 }
 
 /**
+ * GitHub release asset URL of the TUI sidecar tarball. The tarball also lives in
+ * the AtomGit assets repository (see atomgitSidecarTarballUrls); both flows
+ * publish it under a tag because the URLs are baked into the bundle.
+ */
+export function githubSidecarTarballUrl(repository, version, name) {
+	return `https://github.com/${repository}/releases/download/v${version}/${name}`;
+}
+
+/**
+ * AtomGit mirror of the same tarball, tried after GitHub by the runtime.
+ *
+ * AtomGit serves raw files per tag, not per release. A release and a nightly
+ * both publish the tarball under their own tag there, and the version in the
+ * name is the same for both (it is the TUI package version), so either tag
+ * serves the same bytes. `v<version>` is the exact tag; `nightly` is only the
+ * fallback for builds whose version has not been released yet (an unreleased
+ * version 404s on GitHub too).
+ */
+export function atomgitSidecarTarballUrls(version, name, slug = ATOMGIT_ASSETS_SLUG) {
+	return [
+		`https://atomgit.com/${slug}/raw/main/v${version}/${name}`,
+		`https://atomgit.com/${slug}/raw/main/nightly/${name}`,
+	];
+}
+
+/**
  * Builtin sidecar payload: file contents for flavors enabling `sidecar/*`.
  * Packed as gzip+base64 like the package assets; the runtime installs the
  * platform-matching entries into the agent bin directory with the same
@@ -301,15 +329,8 @@ function buildSidecarManifest(collected) {
 	const repositoryUrl = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).repository.url;
 	const repository = repositoryUrl.replace(/^git\+https:\/\/github\.com\//, "").replace(/\.git$/, "");
 	const sidecarTarballUrls = (version, name) => [
-		`https://github.com/${repository}/releases/download/v${version}/${name}`,
-		// AtomGit serves raw files per tag, not per release. A release and a
-		// nightly both publish the tarball under their own tag there, and the
-		// version in the name is the same for both (it is the TUI package
-		// version), so either tag serves the same bytes. `v<version>` is the
-		// exact tag; `nightly` is only the fallback for builds whose version has
-		// not been released yet (an unreleased version 404s on GitHub too).
-		`https://atomgit.com/nanopi/releases-assets/raw/main/v${version}/${name}`,
-		`https://atomgit.com/nanopi/releases-assets/raw/main/nightly/${name}`,
+		githubSidecarTarballUrl(repository, version, name),
+		...atomgitSidecarTarballUrls(version, name),
 	];
 
 	const { photon, photonVersion, tuiFiles, tuiVersion } = collected;
@@ -529,9 +550,17 @@ console.log(
 
 // Emit the TUI sidecar tarball referenced by the manifest as a release asset.
 // Layout inside the tarball equals the agent bin directory layout.
+//
+// It lands beside the bundle in the agent bin directory, not next to whatever
+// --out names: there is one tarball per build (its name carries the TUI
+// version, not the flavor), every flavor emits the same bytes, and the
+// publishing workflows look for it in packages/coding-agent/binaries/. Writing
+// it next to --out put one copy inside release-assets/ per flavor instead, and
+// the nightly job's "exactly one tarball" check then counted zero.
 const tuiSource = sidecarManifest.sources.find((source) => source.packageName === "@nanopi/pi-tui");
-const sidecarArchivePath = join(dirname(outputFilePath), `nanopi-sidecars-${tuiSource.version}.tgz`);
-const sidecarStaging = join(dirname(outputFilePath), `.sidecar-staging-${process.pid}`);
+mkdirSync(dirname(defaultOutput), { recursive: true });
+const sidecarArchivePath = join(dirname(defaultOutput), `nanopi-sidecars-${tuiSource.version}.tgz`);
+const sidecarStaging = join(dirname(sidecarArchivePath), `.sidecar-staging-${process.pid}`);
 rmSync(sidecarStaging, { recursive: true, force: true });
 try {
 	for (const file of tuiSource.files) {

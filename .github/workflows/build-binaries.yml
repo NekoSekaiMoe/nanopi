@@ -90,6 +90,10 @@ jobs:
           build_root="$(mktemp -d)"
           trap 'rm -rf "${build_root}"' EXIT
           tar -xzf "release-assets/nanopi-${VERSION}-source.tar.gz" -C "${build_root}"
+          # The TUI sidecar tarball the single-file build emits always lands in
+          # packages/coding-agent/binaries/, whatever --out says: there is one
+          # per build, its name carries the TUI version rather than the flavor,
+          # and both publish workflows read it from there.
           node "${build_root}/nanopi-${VERSION}/scripts/build-single-file.mjs" \
             --offline-model-data \
             --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
