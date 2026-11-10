@@ -33,8 +33,7 @@ export class SkillInvocationMessageComponent extends Container {
 		this.updateDisplay();
 	}
 
-	override invalidate(): void {
-		super.invalidate();
+	protected override repaintChildren(): void {
 		this.updateDisplay();
 	}
 

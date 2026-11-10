@@ -208,7 +208,8 @@ interface LexedSource {
 
 /**
  * What one render pass leaves for the next one: the lexer pass, the rows every
- * token but the open last one rendered to, and the width they were rendered at.
+ * token but the open last one rendered to, and the style inputs they were
+ * rendered with: the width, the theme instance, and the default text style.
  * The rows of the open last token depend on the token after it, which an append
  * can change, so they are never kept.
  */
@@ -217,6 +218,8 @@ interface CachedRun {
 	width: number;
 	clean: LexedSource;
 	rendered: string[][];
+	theme: MarkdownTheme;
+	defaultTextStyle: DefaultTextStyle | undefined;
 }
 
 /**
@@ -242,11 +245,20 @@ function coveredLength(tokens: readonly Token[]): number {
  * reused as they are. Returns `undefined` when the cached pass does not cover a
  * prefix of the new source, or was rendered at another width.
  */
-function extendCachedRun(previous: CachedRun | undefined, source: string, width: number): CachedRun | undefined {
+function extendCachedRun(
+	previous: CachedRun | undefined,
+	source: string,
+	width: number,
+	theme: MarkdownTheme,
+	defaultTextStyle: DefaultTextStyle | undefined,
+): CachedRun | undefined {
 	const clean = extendLexedSource(previous?.clean, source);
 	if (!clean || !previous) return undefined;
-	const rendered = previous.width === width ? previous.rendered.slice(0, clean.tokens.length - 1) : [];
-	return { source, width, clean, rendered };
+	// Rows are styled strings, so a theme or a default text style that moved
+	// makes every one of them wrong: drop them all and start over.
+	const styled = previous.theme === theme && previous.defaultTextStyle === defaultTextStyle;
+	const rendered = styled && previous.width === width ? previous.rendered.slice(0, clean.tokens.length - 1) : [];
+	return { source, width, theme, defaultTextStyle, clean, rendered };
 }
 
 function extendLexedSource(previous: LexedSource | undefined, source: string): LexedSource | undefined {
@@ -350,11 +362,15 @@ export class Markdown implements Component {
 	private theme: MarkdownTheme;
 	private options: MarkdownOptions;
 	private defaultStylePrefix?: string;
+	/** The theme and default text style the default style prefix was derived from. */
+	private styledBy?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 
 	// Cache for rendered output
 	private cachedText?: string;
 	private cachedWidth?: number;
 	private cachedLines?: string[];
+	/** The theme and default text style `cachedLines` was rendered with. */
+	private cachedStyle?: { theme: MarkdownTheme; defaultTextStyle: DefaultTextStyle | undefined };
 	/**
 	 * The parsed and half-rendered form of the text: tokens for the settled
 	 * prefix and the open tail, plus the rows every token but the last one
@@ -392,11 +408,24 @@ export class Markdown implements Component {
 		this.cachedText = undefined;
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
+		this.cachedStyle = undefined;
 	}
 
 	render(width: number): string[] {
+		// Regenerating the system theme installs a new theme instance, and a new
+		// default text style swaps the styling outright. Both bake colors into the
+		// rows, so rows and style prefix from another one are stale.
+		const styled =
+			this.cachedStyle?.theme === this.theme && this.cachedStyle.defaultTextStyle === this.defaultTextStyle;
+		if (!styled) {
+			this.cachedLines = undefined;
+			this.cachedStyle = undefined;
+			this.defaultStylePrefix = undefined;
+			this.styledBy = undefined;
+		}
+
 		// Check cache
-		if (this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
+		if (styled && this.cachedLines && this.cachedText === this.text && this.cachedWidth === width) {
 			return this.cachedLines;
 		}
 
@@ -411,6 +440,7 @@ export class Markdown implements Component {
 			this.cachedText = this.text;
 			this.cachedWidth = width;
 			this.cachedLines = result;
+			this.cachedStyle = { theme: this.theme, defaultTextStyle: this.defaultTextStyle };
 			return result;
 		}
 
@@ -421,9 +451,11 @@ export class Markdown implements Component {
 		// restructure. Both steps resume from the previous pass, because both are
 		// proportional to the text and a streamed delta only grows the tail.
 		const cached = this.cachedRun?.deref();
-		const run = extendCachedRun(cached, normalizedText, contentWidth) ?? {
+		const run = extendCachedRun(cached, normalizedText, contentWidth, this.theme, this.defaultTextStyle) ?? {
 			source: normalizedText,
 			width: contentWidth,
+			theme: this.theme,
+			defaultTextStyle: this.defaultTextStyle,
 			clean: {
 				source: normalizedText,
 				tokens: markdownParser.lexer(normalizedText),
@@ -501,6 +533,7 @@ export class Markdown implements Component {
 		this.cachedText = this.text;
 		this.cachedWidth = width;
 		this.cachedLines = result;
+		this.cachedStyle = { theme: this.theme, defaultTextStyle: this.defaultTextStyle };
 
 		return result.length > 0 ? result : [""];
 	}
@@ -545,7 +578,11 @@ export class Markdown implements Component {
 			return "";
 		}
 
-		if (this.defaultStylePrefix !== undefined) {
+		if (
+			this.defaultStylePrefix !== undefined &&
+			this.styledBy?.theme === this.theme &&
+			this.styledBy.defaultTextStyle === this.defaultTextStyle
+		) {
 			return this.defaultStylePrefix;
 		}
 
@@ -571,6 +608,7 @@ export class Markdown implements Component {
 
 		const sentinelIndex = styled.indexOf(sentinel);
 		this.defaultStylePrefix = sentinelIndex >= 0 ? styled.slice(0, sentinelIndex) : "";
+		this.styledBy = { theme: this.theme, defaultTextStyle: this.defaultTextStyle };
 		return this.defaultStylePrefix;
 	}
 

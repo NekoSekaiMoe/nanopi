@@ -39,8 +39,7 @@ export class CustomEntryComponent extends Container {
 		this.rebuild();
 	}
 
-	override invalidate(): void {
-		super.invalidate();
+	protected override repaintChildren(): void {
 		this.rebuild();
 	}
 
