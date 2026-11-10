@@ -30,6 +30,7 @@ import {
 	type ImageModel,
 	type ImagesContext,
 	type ImagesOptions,
+	isModelType,
 	type LoginOptions,
 	lazyStream,
 	type Message,
@@ -75,6 +76,7 @@ import { type CopilotAutoState, copilotAutoVirtualModel } from "./copilot-auto.t
 import { withLiveCatalog, withProviderCatalog } from "./live-catalog-provider.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
+import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
 import {
 	type AuthStatus,
 	type CompatibilityRequestConfig,
@@ -88,6 +90,7 @@ import {
 } from "./provider-composer.ts";
 import { withPersonalizedCatalog, withRemoteCatalog } from "./remote-catalog-provider.ts";
 import { RuntimeCredentials } from "./runtime-credentials.ts";
+import { SettingsManager } from "./settings-manager.ts";
 import {
 	createVirtualModel,
 	findLatestResponse,
@@ -126,6 +129,8 @@ const AVAILABILITY_PASS_TIMEOUT_MS = 10_000;
 interface CreateModelRuntimeOptions {
 	/** Credential storage. Defaults to the file at authPath. */
 	credentials?: CredentialStore;
+	/** Settings every request is attributed from. Defaults to the user-scope file settings. */
+	settingsManager?: SettingsManager;
 	authPath?: string;
 	modelsPath?: string | null;
 	modelsStore?: ModelsStore;
@@ -212,6 +217,8 @@ export class ModelRuntime implements Models {
 	private waitingAvailabilityPass: WaitingAvailabilityPass | undefined;
 	private availabilityError: string | undefined;
 	private readonly credentialOperations = new Map<string, Promise<unknown>>();
+	/** Settings attribution is read from; a session rebinds it to the manager it runs with. */
+	private settingsManager: SettingsManager;
 
 	private constructor(
 		credentials: RuntimeCredentials,
@@ -220,11 +227,13 @@ export class ModelRuntime implements Models {
 		modelsStore: ModelsStore,
 		providers: readonly Provider[],
 		modelNetworkEnabled: boolean,
+		settingsManager: SettingsManager,
 	) {
 		this.credentials = credentials;
 		this.config = config;
 		this.modelsPath = modelsPath;
 		this.modelNetworkEnabled = modelNetworkEnabled;
+		this.settingsManager = settingsManager;
 		this.defaultBuiltins = new Map(providers.map((provider) => [provider.id, provider]));
 		for (const [providerId, provider] of this.defaultBuiltins) this.builtins.set(providerId, provider);
 		this.models = createModels({ credentials, modelsStore });
@@ -289,6 +298,7 @@ export class ModelRuntime implements Models {
 			modelsStore,
 			providers,
 			process.env.NANOPI_OFFLINE === undefined,
+			options.settingsManager ?? SettingsManager.create(getAgentDir()),
 		);
 		runtime.rebuildProviders();
 		const refreshFromNetwork = runtime.modelNetworkEnabled && options.allowModelNetwork === true;
@@ -578,6 +588,14 @@ export class ModelRuntime implements Models {
 		);
 	}
 
+	/**
+	 * Point attribution at the settings of the session using this runtime. An injected runtime is
+	 * built before its session, and the session's file could belong to another project.
+	 */
+	useSettingsManager(settingsManager: SettingsManager): void {
+		this.settingsManager = settingsManager;
+	}
+
 	isUsingOAuth(providerId: string): boolean {
 		return this.snapshot.auth.get(providerId)?.type === "oauth";
 	}
@@ -725,8 +743,18 @@ export class ModelRuntime implements Models {
 
 		const { transformHeaders, ...rawProviderOptions } = options ?? {};
 		const providerOptions = rawProviderOptions as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
-		let headers = mergeHeaders(resolution.auth.headers, providerOptions.headers);
-		if (transformHeaders) headers = await transformHeaders(headers ?? {});
+		// Attribution goes under the caller's headers, not into them: the `transformHeaders` hook
+		// may rebuild the whole set, and an OpenAI-family adapter assigns these over its own.
+		let headers = mergeProviderAttributionHeaders(
+			// Attribution applies to chat requests; image and classifier requests carry their own.
+			isModelType(model, "chat") ? model : undefined,
+			this.settingsManager,
+			(options as { sessionId?: string } | undefined)?.sessionId,
+			mergeHeaders(resolution.auth.headers, providerOptions.headers),
+		);
+		// The hook mutates the header set in place and may return nothing, in which case the
+		// set keeps what it was given. Reading the argument back covers both styles.
+		if (transformHeaders) headers = (await transformHeaders(headers ?? {})) ?? headers;
 		const env =
 			resolution.env || providerOptions.env
 				? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
