@@ -1115,6 +1115,52 @@ describe("TuiAltScreen", () => {
 		}
 	});
 
+	it("redraws Kitty images after writes to covered rows on terminals other than WezTerm", async () => {
+		// The xterm.js image addon erases intersecting cells the way WezTerm does, so the gate
+		// cannot be keyed on WezTerm alone. https://github.com/NekoSekaiMoe/nanopi/issues/640
+		const weztermPane = process.env.WEZTERM_PANE;
+		const termProgram = process.env.TERM_PROGRAM;
+		delete process.env.WEZTERM_PANE;
+		delete process.env.TERM_PROGRAM;
+		let tui: TuiAltScreen | undefined;
+		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		try {
+			const terminal = new RecordingTerminal(20, 4);
+			const imageId = 4622;
+			const imageLine = encodeKitty("AAAA", { columns: 2, rows: 3, imageId, moveCursor: false });
+			registerKittyImageMetadata({ imageId, columns: 2, rows: 3, widthPx: 100, heightPx: 100 });
+			let coveredLine = "";
+			tui = new TuiAltScreen(terminal);
+			tui.setLayoutRoot({
+				render: () => [imageLine, coveredLine, "", "after"],
+				invalidate: () => {},
+			});
+			tui.start();
+			await terminal.waitForRender();
+			const eventCount = terminal.events.length;
+
+			coveredLine = "changed";
+			tui.requestRender();
+			await terminal.waitForRender();
+			const redrawWrites = terminal.events
+				.slice(eventCount)
+				.filter((event): event is { type: "write"; data: string } => event.type === "write")
+				.map((event) => event.data)
+				.join("");
+			const placementIndex = redrawWrites.indexOf("\x1b_Ga=p,q=2");
+			assert.ok(redrawWrites.includes("\x1b_Ga=d,d=a,q=2\x1b\\"));
+			assert.ok(placementIndex > redrawWrites.indexOf("changed"));
+			assert.ok(!redrawWrites.includes("\x1b_Ga=T"));
+		} finally {
+			tui?.stop();
+			resetCapabilitiesCache();
+			if (weztermPane === undefined) delete process.env.WEZTERM_PANE;
+			else process.env.WEZTERM_PANE = weztermPane;
+			if (termProgram === undefined) delete process.env.TERM_PROGRAM;
+			else process.env.TERM_PROGRAM = termProgram;
+		}
+	});
+
 	it("reuses moved Kitty images without dropping HStack siblings", async () => {
 		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
 		try {

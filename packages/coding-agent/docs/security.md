@@ -39,14 +39,14 @@ nanopi requires a project-trust decision when it finds any of these resources fr
 - `.nanopi/settings.json`
 - `.nanopi/skills` or `.nanopi/prompts`
 - `.nanopi/SYSTEM.md` or `.nanopi/APPEND_SYSTEM.md`
-- project `.agents/skills` in the current directory or an ancestor directory
+- `.agents/skills` or `.agents/prompts` in the current directory or an ancestor directory (the user's own `~/.agents` is not a project resource)
 
 A bare `.nanopi` directory does not require project trust.
 
 Granting project trust allows nanopi to load:
 
 - project settings
-- skills, prompt templates, and system-prompt files under `.nanopi`
+- skills and prompt templates under `.agents`, and system-prompt files under `.nanopi`
 
 Declining project trust skips those protected resources, except for the initial `sessionDir` lookup described above.
 

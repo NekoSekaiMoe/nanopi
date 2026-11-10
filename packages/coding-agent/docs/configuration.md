@@ -29,8 +29,10 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `.nanopi/SYSTEM.md` | Replaces the system prompt for the project. |
 | `.nanopi/APPEND_SYSTEM.md` | Adds project-specific instructions to the system prompt. |
 | `.nanopi/PRESET_PROMPTS.md` | Default [preset prompt](#preset-prompts) for the project. |
-| `.nanopi/skills/` | Project skills and supporting files. |
-| `.nanopi/prompts/` | Project prompt templates exposed as slash commands. |
+| `.agents/skills/` | Project skills and supporting files, in the current directory or an ancestor. |
+| `.agents/prompts/` | Project prompt templates exposed as slash commands, same search. |
+| `.nanopi/skills/` | Project skills written before `.agents/` existed. Read after `.agents/skills/`. |
+| `.nanopi/prompts/` | Project prompt templates written before `.agents/` existed. Read after `.agents/prompts/`. |
 
 For `SYSTEM.md`, `APPEND_SYSTEM.md`, and `PRESET_PROMPTS.md`, the trusted project file takes precedence over the corresponding agent-directory file. Files with the same name are not combined.
 
@@ -54,7 +56,7 @@ A module that ships with the CLI itself is compiled in. A project that wants its
 2. Import it from `packages/coding-agent/src/modules/index.ts` and add it to `BUILTIN_MODULES`.
 3. Add a `module/<name>` component and a `moduleBundles` entry to the root `buildconfig.json`; `validateFlavorModules()` fails the build without them.
 
-A module outside `packages/coding-agent/src/` cannot be compiled into the CLI: `tsconfig.build.json` sets `rootDir: "src"`, so tsc rejects any file above it. Importing one type-checks and runs from source, but the build stops at `TS6059`. That is why this repository's own `import-repro`, `prompt-url-widget`, and `redraws` live in `.nanopi/extensions/` and load from disk: set `$NANOPI_EXTENSIONS=.nanopi/extensions` and a development build picks them up without recompiling.
+A module outside `packages/coding-agent/src/` cannot be compiled into the CLI: `tsconfig.build.json` sets `rootDir: "src"`, so tsc rejects any file above it. Importing one type-checks and runs from source, but the build stops at `TS6059`. That is why this repository's own `import-repro`, `prompt-url-widget`, and `redraws` live in `.agents/extensions/` and load from disk: set `$NANOPI_EXTENSIONS=.agents/extensions` and a development build picks them up without recompiling.
 
 See [Modules](modules.md) for what a module can register, and [SDK modules](sdk.md#modules) for the embedding-app route.
 

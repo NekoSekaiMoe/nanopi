@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **Project skills and prompts move to `.agents`**: `.agents/skills/` and `.agents/prompts/` are now the project scope, searched in the working directory and every ancestor, so a nested checkout finds the resources at the repository root. `.nanopi/skills/` and `.nanopi/prompts/` are still read, after `.agents/`, so an existing project keeps loading with no migration step; the first path to define a name wins and the other is reported as a collision. Project `.agents/prompts` now requires a project-trust decision the same way `.agents/skills` already did, and the user's own `~/.agents/` is still never treated as a project resource. `.agents/extensions/` joins `.nanopi/extensions/` as a trusted project module directory (issue [#641](https://cnb.cool/shinytale/nanopi/-/issues/641))
+
 ### Fixed
 
 - The removed line of a single-line hunk keeps its indentation: `renderIntraLineDiff` ran `Diff.diffWords`, which ignores whitespace while matching and then re-attaches it to the first run, so `-83   await commitRecordingChunk({` rendered as `-83 await commitRecordingChunk({` while the `+` line was aligned. It now diffs with `diffWordsWithSpace`, so a pair that only differs in indentation keeps both indentations and neither is inverse-highlighted (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
