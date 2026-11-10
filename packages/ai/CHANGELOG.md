@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Codex SSE retry backoff no longer leaks an abort listener per attempt: the local `sleep()` in `openai-codex-responses.ts` registered an anonymous `abort` handler that the timer never detached, so three 429s left three listeners on the caller's signal. The retry loop now uses the shared `utils/sleep.ts` implementation, which detaches on resolve (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - The Moonshot AI preset in the webui provider settings now defaults to `https://api.moonshot.ai/v1`, the endpoint the built-in `moonshotai` catalog uses. It defaulted to the China host (`https://api.moonshot.cn/v1`), so a Chinese key and a global key were told to use different hosts for the same catalog; the China endpoint stays a `models.json` `baseUrl` override (issue [#597](https://cnb.cool/shinytale/nanopi/-/issues/597))
 
 ## [20261107]

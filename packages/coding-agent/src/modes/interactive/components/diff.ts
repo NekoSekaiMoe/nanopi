@@ -19,43 +19,30 @@ function replaceTabs(text: string): string {
 }
 
 /**
+ * Inverse video for a changed run. Whitespace-only runs are left unstyled: highlighting
+ * blank cells adds noise and, before the whitespace fix, invited dropping them entirely.
+ */
+function inverseOf(value: string): string {
+	return value.trim() === "" ? value : theme.inverse(value);
+}
+
+/**
  * Compute word-level diff and render with inverse on changed parts.
- * Uses diffWords which groups whitespace with adjacent words for cleaner highlighting.
- * Strips leading whitespace from inverse to avoid highlighting indentation.
+ * Uses diffWordsWithSpace, not diffWords: diffWords ignores whitespace when matching and
+ * then re-attaches it to whichever run comes first, so a `-`/`+` pair that only differs in
+ * indentation used to lose the removed line's leading spaces and stop lining up.
  */
 function renderIntraLineDiff(oldContent: string, newContent: string): { removedLine: string; addedLine: string } {
-	const wordDiff = Diff.diffWords(oldContent, newContent);
+	const wordDiff = Diff.diffWordsWithSpace(oldContent, newContent);
 
 	let removedLine = "";
 	let addedLine = "";
-	let isFirstRemoved = true;
-	let isFirstAdded = true;
 
 	for (const part of wordDiff) {
 		if (part.removed) {
-			let value = part.value;
-			// Strip leading whitespace from the first removed part
-			if (isFirstRemoved) {
-				const leadingWs = value.match(/^(\s*)/)?.[1] || "";
-				value = value.slice(leadingWs.length);
-				removedLine += leadingWs;
-				isFirstRemoved = false;
-			}
-			if (value) {
-				removedLine += theme.inverse(value);
-			}
+			removedLine += inverseOf(part.value);
 		} else if (part.added) {
-			let value = part.value;
-			// Strip leading whitespace from the first added part
-			if (isFirstAdded) {
-				const leadingWs = value.match(/^(\s*)/)?.[1] || "";
-				value = value.slice(leadingWs.length);
-				addedLine += leadingWs;
-				isFirstAdded = false;
-			}
-			if (value) {
-				addedLine += theme.inverse(value);
-			}
+			addedLine += inverseOf(part.value);
 		} else {
 			removedLine += part.value;
 			addedLine += part.value;

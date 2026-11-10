@@ -29,6 +29,30 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+/**
+ * Wrap one signal's abort listeners so the caller can check how many are still attached.
+ * Instrumenting the instance (not the prototype) keeps the count free of unrelated
+ * listeners the library attaches elsewhere, which fake timers and spies also disturb.
+ */
+function countAbortListeners(signal: AbortSignal): () => number {
+	let attached = 0;
+	const add = signal.addEventListener.bind(signal);
+	const remove = signal.removeEventListener.bind(signal);
+	Object.defineProperty(signal, "addEventListener", {
+		value: (type: string, listener: never, options?: never) => {
+			if (type === "abort") attached++;
+			return add(type, listener, options);
+		},
+	});
+	Object.defineProperty(signal, "removeEventListener", {
+		value: (type: string, listener: never, options?: never) => {
+			if (type === "abort") attached--;
+			return remove(type, listener, options);
+		},
+	});
+	return () => attached;
+}
+
 function mockToken(accountId = "acc_test"): string {
 	const payload = Buffer.from(
 		JSON.stringify({ "https://api.openai.com/auth": { chatgpt_account_id: accountId } }),
@@ -3009,5 +3033,76 @@ describe("openai-codex streaming", () => {
 		const result = await resultPromise;
 		expect(result.content.find((content) => content.type === "text")?.text).toBe("Hello");
 		expect(codexRequests).toBe(4);
+	});
+
+	it("does not accumulate abort listeners while backing off between retries", async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date("2026-05-13T00:00:00Z"));
+		const token = mockToken();
+		const encoder = new TextEncoder();
+		const sse = buildSSEPayload({ status: "completed" });
+		let codexRequests = 0;
+
+		const fetchMock = vi.fn(async (input: string | URL) => {
+			const url = typeof input === "string" ? input : input.toString();
+			if (url !== "https://chatgpt.com/backend-api/codex/responses") {
+				throw new Error(`Unexpected URL: ${url}`);
+			}
+
+			codexRequests++;
+			if (codexRequests <= 3) {
+				return new Response(JSON.stringify({ error: { code: "rate_limit_exceeded", message: "rate limited" } }), {
+					status: 429,
+					headers: { "content-type": "application/json" },
+				});
+			}
+
+			return new Response(
+				new ReadableStream<Uint8Array>({
+					start(controller) {
+						controller.enqueue(encoder.encode(sse));
+						controller.close();
+					},
+				}),
+				{ status: 200, headers: { "content-type": "text/event-stream" } },
+			);
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const model: Model<"openai-codex-responses"> = {
+			id: "gpt-5.1-codex",
+			name: "GPT-5.1 Codex",
+			api: "openai-codex-responses",
+			provider: "openai-codex",
+			baseUrl: "https://chatgpt.com/backend-api",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 400000,
+			maxTokens: 128000,
+		};
+		const context = normalizeContext({
+			systemPrompt: "You are a helpful assistant.",
+			messages: [{ role: "user", content: "Say hello", timestamp: Date.now() }],
+		});
+
+		const signal = new AbortController().signal;
+		const detach = countAbortListeners(signal);
+		const resultPromise = streamOpenAICodexResponses(model, context, {
+			apiKey: token,
+			transport: "sse",
+			maxRetries: 3,
+			signal,
+		}).result();
+		await vi.advanceTimersByTimeAsync(0);
+		await vi.advanceTimersToNextTimerAsync();
+		await vi.advanceTimersToNextTimerAsync();
+		await vi.advanceTimersToNextTimerAsync();
+		await resultPromise;
+
+		expect(codexRequests).toBe(4);
+		// Backoff must not leave an abort listener per attempt behind. Three retries used to
+		// leave three listeners on the caller's signal.
+		expect(detach()).toBe(0);
 	});
 });
