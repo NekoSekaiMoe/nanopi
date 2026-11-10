@@ -2,6 +2,7 @@ import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 import type { Terminal as XtermTerminalType } from "@xterm/headless";
 import { Chalk } from "chalk";
+import { Marked } from "marked";
 import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
 import type { Component, TUI } from "../src/tui.ts";
@@ -1836,6 +1837,73 @@ bar`,
 			const complete = new Markdown("```ts\nconst x = 1;\n```", 0, 0, defaultMarkdownTheme);
 
 			assert.strictEqual(partial.render(80).length, complete.render(80).length);
+		});
+
+		describe("Streaming", () => {
+			const samples = [
+				"line one\n\nline two",
+				"# Title\n\nbody",
+				"- a\n- b",
+				"1. a\n2. b",
+				"> quote\n> more",
+				"```ts\nconst a = 1;\n```",
+				"| a | b |\n| --- | --- |\n| 1 | 2 |",
+				"- a\n  - b\n  - c",
+				"- a\n\n- b",
+				"One\n===",
+				"text\n\n---",
+				"a **bold** word",
+				"<div>\nhi\n</div>",
+				"- [ ] a\n- [x] b",
+			];
+
+			it("renders every append like a fresh component over the same prefix", () => {
+				for (const sample of samples) {
+					const streamed = new Markdown("", 0, 0, defaultMarkdownTheme);
+					for (let end = 1; end <= sample.length; end++) {
+						const prefix = sample.slice(0, end);
+						streamed.setText(prefix);
+						// A fresh component has no cached tokens, so it always lexes the
+						// whole prefix: comparing the two is comparing the resume path
+						// against the parser.
+						const fresh = new Markdown(prefix, 0, 0, defaultMarkdownTheme);
+						assert.deepStrictEqual(
+							streamed.render(80).map((line) => stripAnsi(line).trimEnd()),
+							fresh.render(80).map((line) => stripAnsi(line).trimEnd()),
+							`${JSON.stringify(prefix)} (${sample})`,
+						);
+					}
+				}
+			});
+
+			it("lexes only the tail of an appended text", () => {
+				const lexed: string[] = [];
+				const original = Marked.prototype.lexer;
+				// The parser is a module singleton: patching the prototype is what counts
+				// the component's own passes.
+				Marked.prototype.lexer = function (this: unknown, source: string) {
+					lexed.push(source);
+					return original.call(this, source);
+				};
+				try {
+					const markdown = new Markdown("", 0, 0, defaultMarkdownTheme);
+					let text = "";
+					for (let i = 0; i < 50; i++) {
+						text += `paragraph ${i} with a few words in it\n\n`;
+						markdown.setText(text);
+						markdown.render(80);
+					}
+					// Without the resume path every pass lexes the whole prefix again,
+					// which is quadratic in the number of deltas.
+					const lexedCharacters = lexed.reduce((total, source) => total + source.length, 0);
+					assert.ok(
+						lexedCharacters < text.length * 2,
+						`lexed ${lexedCharacters} characters over ${lexed.length} passes for a ${text.length} character text`,
+					);
+				} finally {
+					Marked.prototype.lexer = original;
+				}
+			});
 		});
 	});
 });

@@ -187,6 +187,62 @@ function trimPartialClosingFences(tokens: readonly Token[]): void {
 	token.text = token.text.slice(0, -lastLine.length).replace(/\n$/, "");
 }
 
+/** A lexer pass over a source that no post-processing has touched yet. */
+interface LexedSource {
+	source: string;
+	tokens: Token[];
+	/** Length of the prefix the token tree reproduces; see `coveredLength`. */
+	endsAt: number;
+}
+
+/**
+ * The length of the longest prefix the top-level tokens reproduce from their
+ * own `raw` slices. A `list` or `blockquote` may leave the blank lines between
+ * its items to a sibling `space` token, so the slices are not always contiguous;
+ * only a total that lands exactly on a prefix is a safe place to resume from.
+ */
+function coveredLength(tokens: readonly Token[]): number {
+	let end = 0;
+	for (const token of tokens) {
+		if (token.raw !== undefined) end += token.raw.length;
+	}
+	return end;
+}
+
+/**
+ * Extend a previous lexer pass over text that only appended to its source.
+ *
+ * `marked.lexer` has no resume offset, but a streamed answer grows by appending
+ * and an append can only change the tail. When the previous tokens cover a
+ * clean prefix, the last block is re-lexed from its own start and the tail
+ * follows it; everything before that is settled. Returns `undefined` when the
+ * cached pass does not cover a prefix of the new source.
+ */
+function extendLexedSource(previous: LexedSource | undefined, source: string): LexedSource | undefined {
+	if (!previous || previous.endsAt === 0 || previous.endsAt >= source.length) return undefined;
+	const prefix = source.slice(0, previous.endsAt);
+	if (previous.source.slice(0, previous.endsAt) !== prefix) return undefined;
+
+	const keep = settledCount(previous.tokens);
+	const resumeAt = keep.reduce((end, token) => end + (token.raw?.length ?? 0), 0);
+	const tokens = [...keep, ...markdownParser.lexer(source.slice(resumeAt))];
+	return { source, tokens, endsAt: coveredLength(tokens) };
+}
+
+/**
+ * The prefix of settled tokens: everything before the block an append can still
+ * restructure. The last token is always re-lexed, and the boundary steps back
+ * while the token in front of it is a `space` or a block that takes the next
+ * line into its own body: appending `"\n  -"` turns `list + space` into one
+ * `list`, and `"- a"` alone into a `list` whose `raw` grew.
+ */
+function settledCount(tokens: readonly Token[]): Token[] {
+	const open = (token: Token) => token.type === "space" || token.type === "list" || token.type === "blockquote";
+	let end = Math.max(0, tokens.length - 1);
+	while (end > 0 && open(tokens[end - 1])) end--;
+	return tokens.slice(0, end);
+}
+
 const markdownParser = new Marked();
 markdownParser.setOptions({
 	tokenizer: new StrictStrikethroughTokenizer(),
@@ -270,8 +326,10 @@ export class Markdown implements Component {
 	private cachedLines?: string[];
 	// Parsed tokens depend only on the source, so they survive theme and width invalidation. Held weakly: a token tree is
 	// about ten times the size of its source, and every message of a long transcript keeps a Markdown component. The
-	// tokens survive a burst of re-renders, such as a theme preview, and are collected afterwards.
-	private cachedTokens?: WeakRef<{ source: string; tokens: Token[] }>;
+	// tokens survive a burst of re-renders, such as a theme preview, and are collected afterwards. The entry keeps the
+	// untrimmed tree as well: `trimPartialClosingFences` rewrites tokens in place, and an append that resumed from a
+	// trimmed tree would carry the trim into the longer text.
+	private cachedTokens?: WeakRef<{ source: string; tokens: Token[]; clean: LexedSource }>;
 
 	constructor(
 		text: string,
@@ -327,9 +385,15 @@ export class Markdown implements Component {
 		const cached = this.cachedTokens?.deref();
 		let tokens = cached?.source === normalizedText ? cached.tokens : undefined;
 		if (!tokens) {
-			tokens = markdownParser.lexer(normalizedText);
+			const clean = extendLexedSource(cached?.clean, normalizedText) ?? {
+				source: normalizedText,
+				tokens: markdownParser.lexer(normalizedText),
+				endsAt: 0,
+			};
+			clean.endsAt = coveredLength(clean.tokens);
+			tokens = clean.tokens;
+			this.cachedTokens = new WeakRef({ source: normalizedText, tokens, clean });
 			trimPartialClosingFences(tokens);
-			this.cachedTokens = new WeakRef({ source: normalizedText, tokens });
 		}
 
 		// Convert tokens to styled terminal output
