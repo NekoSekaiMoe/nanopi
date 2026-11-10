@@ -2,7 +2,7 @@ import type { TextContent } from "@nanopi/pi-ai";
 import type { Component } from "@nanopi/pi-tui";
 import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@nanopi/pi-tui";
 import type { CustomMessage } from "../../../core/messages.ts";
-import type { MessageRenderer } from "../../../core/modules/types.ts";
+import type { MarkdownTransformer, MessageRenderer } from "../../../core/modules/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 
 /**
@@ -15,6 +15,7 @@ export class CustomMessageComponent extends Container {
 	private box: Box;
 	private customComponent?: Component;
 	private markdownTheme: MarkdownTheme;
+	private markdownTransformers: readonly MarkdownTransformer[] = [];
 	private _expanded = false;
 	private outputPad: number;
 
@@ -51,6 +52,31 @@ export class CustomMessageComponent extends Container {
 			this.rebuild();
 		}
 	}
+
+	/**
+	 * Run these transformers over the body this component draws.
+	 *
+	 * The body's `Markdown` gets `applyMarkdownTransformers` as its transform. That method is
+	 * written here rather than imported so this file stays usable from `./modules`, which
+	 * reaches it through the message codecs and does not budget the interactive components.
+	 */
+	setMarkdownTransformers(transformers: readonly MarkdownTransformer[]): void {
+		this.markdownTransformers = transformers;
+		this.rebuild();
+	}
+
+	private applyMarkdownTransformers = (markdown: string, availableWidth: number): string => {
+		let transformed = markdown;
+		for (const transformer of this.markdownTransformers) {
+			try {
+				const result = transformer(transformed, { messageType: "custom", isStreaming: false, availableWidth });
+				if (typeof result === "string") transformed = result;
+			} catch {
+				// Keep the current Markdown and continue with the next transformer.
+			}
+		}
+		return transformed;
+	};
 
 	override invalidate(): void {
 		super.invalidate();
@@ -106,9 +132,18 @@ export class CustomMessageComponent extends Container {
 		}
 
 		this.box.addChild(
-			new Markdown(text, 0, 0, this.markdownTheme, {
-				color: (text: string) => theme.fg("customMessageText", text),
-			}),
+			new Markdown(
+				text,
+				0,
+				0,
+				this.markdownTheme,
+				{
+					color: (text: string) => theme.fg("customMessageText", text),
+				},
+				{
+					transform: this.applyMarkdownTransformers,
+				},
+			),
 		);
 	}
 }

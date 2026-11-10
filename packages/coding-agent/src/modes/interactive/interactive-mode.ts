@@ -152,6 +152,7 @@ import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
 import { FooterComponent, formatCwdForFooter, formatTokens } from "./components/footer.ts";
 import { formatKeyText, keyDisplayText, keyText } from "./components/keybinding-hints.ts";
 import { LoginDialogComponent } from "./components/login-dialog.ts";
+import { createMarkdownTransform } from "./components/markdown-transform.ts";
 import { createMermaidMarkdownTransformer } from "./components/mermaid.ts";
 import { ModelSelectorComponent } from "./components/model-selector.ts";
 import {
@@ -473,6 +474,10 @@ export class InteractiveMode {
 	private readonly mermaidMarkdownTransformer: MarkdownTransformer = createMermaidMarkdownTransformer({
 		getMode: () => this.settingsManager.getMermaidRenderingMode(),
 		theme,
+		// The Mermaid transformer is the host's own, not a module's, so it reads the
+		// setting directly. It only draws diagram blocks in chat prose: a summary or the
+		// what's-new block was written for a log reader, and is left as its author wrote it.
+		messageTypes: ["user", "assistant"],
 	});
 
 	// Skill commands: command name -> skill file path
@@ -825,7 +830,9 @@ export class InteractiveMode {
 			this.chatContainer.addChild(new ThemedText(() => theme.bold(theme.fg("accent", "What's New")), 1, 0));
 			this.chatContainer.addChild(new Spacer(1));
 			this.chatContainer.addChild(
-				new Markdown(this.changelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings()),
+				new Markdown(this.changelogMarkdown.trim(), 1, 0, this.getMarkdownThemeWithSettings(), undefined, {
+					transform: createMarkdownTransform("changelog", false, this.getMarkdownTransformers()),
+				}),
 			);
 			this.chatContainer.addChild(new Spacer(1));
 		}
@@ -3355,6 +3362,7 @@ export class InteractiveMode {
 						this.getMarkdownThemeWithSettings(),
 						this.outputPad,
 					);
+					component.setMarkdownTransformers(this.getMarkdownTransformers());
 					component.setExpanded(this.toolOutputExpanded);
 					this.chatContainer.addChild(component);
 				}

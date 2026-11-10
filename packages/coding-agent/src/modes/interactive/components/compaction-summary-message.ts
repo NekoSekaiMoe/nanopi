@@ -1,7 +1,9 @@
 import { Box, Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@nanopi/pi-tui";
 import type { CompactionSummaryMessage } from "../../../core/messages.ts";
+import type { MarkdownTransformer } from "../../../core/modules/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { keyText } from "./keybinding-hints.ts";
+import { createMarkdownTransform } from "./markdown-transform.ts";
 
 /**
  * Component that renders a compaction message with collapsed/expanded state.
@@ -11,11 +13,18 @@ export class CompactionSummaryMessageComponent extends Box {
 	private expanded = false;
 	private message: CompactionSummaryMessage;
 	private markdownTheme: MarkdownTheme;
+	private markdownTransformers: readonly MarkdownTransformer[];
 
-	constructor(message: CompactionSummaryMessage, markdownTheme: MarkdownTheme = getMarkdownTheme(), outputPad = 1) {
+	constructor(
+		message: CompactionSummaryMessage,
+		markdownTheme: MarkdownTheme = getMarkdownTheme(),
+		outputPad = 1,
+		markdownTransformers: readonly MarkdownTransformer[] = [],
+	) {
 		super(outputPad, 1, (t) => theme.bg("customMessageBg", t));
 		this.message = message;
 		this.markdownTheme = markdownTheme;
+		this.markdownTransformers = markdownTransformers;
 		this.updateDisplay();
 	}
 
@@ -45,9 +54,18 @@ export class CompactionSummaryMessageComponent extends Box {
 		if (this.expanded) {
 			const header = `**Compacted from ${tokenStr} tokens**\n\n`;
 			content.addChild(
-				new Markdown(header + this.message.summary, 0, 0, this.markdownTheme, {
-					color: (text: string) => theme.fg("customMessageText", text),
-				}),
+				new Markdown(
+					header + this.message.summary,
+					0,
+					0,
+					this.markdownTheme,
+					{
+						color: (text: string) => theme.fg("customMessageText", text),
+					},
+					{
+						transform: createMarkdownTransform("summary", false, this.markdownTransformers),
+					},
+				),
 			);
 		} else {
 			content.addChild(

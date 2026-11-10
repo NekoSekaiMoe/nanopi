@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `registerMarkdownTransformer` now reaches the rows it was documented for: a `custom` message body, a compaction or branch summary, and the startup what's-new block, each tagged with its own `messageType` (`custom`, `summary`, `changelog`). Filtering stays in the callback, so no new registration parameter was added; the Mermaid transformer the host registers first is limited to `user`/`assistant` so it leaves custom and summary rows alone ([#650](https://cnb.cool/shinytale/nanopi/-/issues/650))
+
 ### Changed
 
 - **Project skills and prompts move to `.agents`**: `.agents/skills/` and `.agents/prompts/` are now the project scope, searched in the working directory and every ancestor, so a nested checkout finds the resources at the repository root. `.nanopi/skills/` and `.nanopi/prompts/` are still read, after `.agents/`, so an existing project keeps loading with no migration step; the first path to define a name wins and the other is reported as a collision. Project `.agents/prompts` now requires a project-trust decision the same way `.agents/skills` already did, and the user's own `~/.agents/` is still never treated as a project resource. `.agents/extensions/` joins `.nanopi/extensions/` as a trusted project module directory (issue [#641](https://cnb.cool/shinytale/nanopi/-/issues/641))

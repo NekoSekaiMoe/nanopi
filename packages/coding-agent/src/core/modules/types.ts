@@ -1556,12 +1556,38 @@ export interface MessageRunRenderOptions extends MessageRenderOptions {
 	availableWidth?: number;
 }
 
+/** What one render pass hands a Markdown transformer. */
 export interface MarkdownTransformContext {
-	messageType: "user" | "assistant" | "assistant-thinking";
+	/**
+	 * Which transcript row is being drawn. A transformer that only wants some rows
+	 * returns `markdown` unchanged for the rest: the context is a filter, so no
+	 * separate registration parameter selects types.
+	 *
+	 * `custom`, `summary`, and `changelog` cover the rows that are not a user or
+	 * assistant message: a custom message's Markdown body, a compaction or branch
+	 * summary, and the startup what's-new block.
+	 */
+	messageType: "user" | "assistant" | "assistant-thinking" | "custom" | "summary" | "changelog";
+	/** True while the row is still being written to by a streaming turn. */
 	isStreaming: boolean;
+	/** Width the transcript has for this row, in terminal columns. */
 	availableWidth: number;
 }
 
+/**
+ * Rewrites one row's Markdown before it is parsed for display.
+ *
+ * Contract, because a transformer sees rows it does not own:
+ * - Pure and synchronous: depends only on the two arguments (no reads of settings,
+ *   session state, or the filesystem at call time) and never throws. A transformer
+ *   that throws leaves that row's Markdown untransformed and the next one still runs.
+ * - Returning a non-string also leaves the Markdown alone.
+ * - Transformers run in registration order and each sees the previous one's output.
+ *   A module's transformers come from the module load order; the host's own (Mermaid)
+ *   run first. Mermaid turns a diagram block into a run of inline code spans, so a
+ *   later transformer parses that, not the fence it remembers.
+ * - A module gets one slot: registering twice replaces the first transformer.
+ */
 export type MarkdownTransformer = (markdown: string, context: MarkdownTransformContext) => string;
 
 export interface EntryRenderOptions {
@@ -1894,25 +1920,6 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 	// Message Rendering
 	// =========================================================================
 
-	/** Register a custom renderer for CustomMessageEntry. */
-	registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
-
-	/** Register a transformer for user and assistant Markdown before nanopi renders it in the interactive transcript. */
-	registerMarkdownTransformer(transformer: MarkdownTransformer): void;
-
-	/** Register a custom renderer for CustomEntry. Custom entries do not participate in LLM context. */
-	registerEntryRenderer<T = unknown>(customType: string, renderer: EntryRenderer<T>): void;
-
-	/** Choose how tool calls are drawn. Resolvers run in extension load order. */
-	registerToolRenderer(resolver: ToolRendererResolver): void;
-}
-
-/** Renderers: how a module's messages, entries, and tool calls are drawn. */
-export interface ModuleRenderingSurface extends ModuleEvents {
-	// =========================================================================
-	// Message Rendering
-	// =========================================================================
-
 	/**
 	 * Register a message type: how a message with this `role` reaches the LLM, how many
 	 * tokens it costs, and how the transcript draws it.
@@ -1934,7 +1941,15 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 	/** Register a custom renderer for CustomMessageEntry. */
 	registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
 
-	/** Register a transformer for user and assistant Markdown before nanopi renders it in the interactive transcript. */
+	/**
+	 * Rewrite Markdown before the interactive transcript parses it: user messages,
+	 * assistant text and thinking, custom message bodies, compaction and branch
+	 * summaries, and the startup what's-new block.
+	 *
+	 * The transformer gets `context.messageType` and returns the Markdown unchanged
+	 * for rows it does not own; that is the filtering mechanism, there is no list of
+	 * types to declare. See `MarkdownTransformer` for the purity and ordering rules.
+	 */
 	registerMarkdownTransformer(transformer: MarkdownTransformer): void;
 
 	/** Register a custom renderer for CustomEntry. Custom entries do not participate in LLM context. */

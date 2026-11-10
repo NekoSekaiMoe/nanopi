@@ -11,13 +11,13 @@
   "separateMajorMinor": false,
   "separateMultipleMajor": false,
   "separateMinorPatch": false,
-  "rangeStrategy": "pin",
+  "pinDigest": true,
   "lockFileMaintenance": {
-    "enabled": false
+    "enabled": true
   },
   "packageRules": [
     {
-      "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了交给 GitHub 原生 auto-merge 合进 main。platformAutomerge: true 是关键：Renovate 自合并（false）走 checkAutoMerge，只在没有新 commit 的那一轮才检查 branch status、再由 mergePr 过 ruleset，GitHub #3~#17 实测从未生效、全是人工合并；而 GitHub 原生 auto-merge 直接评估 ruleset 点名的 check-run（实测 ruleset context=build-check-test、#17 head 的 build-check-test=success），不依赖 Renovate 轮询时序。见 .agents/notes/implemented/bug-fix/2026-11-05-renovate-platform-automerge.md。 冷却期必须与 pnpm 的对齐：pnpm-workspace.yaml 的 minimumReleaseAge 只管装，Renovate 不读它，于是它照样提议刚发布几分钟的版本，接着 Artifact 步骤里 pnpm 的 lockfile 校验拒绝写入，表现成 PR 上一条 Artifact update problem、CI 里一条 ERR_PNPM_OUTDATED_LOCKFILE（NekoSekaiMoe/nanopi#23、shinytale/nanopi#568）。这里写 \"1 day\"（= 1440 分钟，与 pnpm 同值），buffer 再从后面垫 30 分钟，覆盖「主包发布几分钟后同版本 CLI 子包才发布」——biome 2.6.6 的 cli-linux-x64 比主包晚 3 分钟。两个值由 scripts/check-renovate-release-age.mjs 在 CI 里对齐，改一边不改另一边会红。见 .agents/notes/implemented/process/2026-11-07-renovate-must-wait-as-long-as-pnpm.md。",
+      "description": "npm 依赖：一个组、一个分支、一个 PR，CI 绿了交给 GitHub 原生 auto-merge 合进 main。platformAutomerge: true 是关键：Renovate 自合并（false）走 checkAutoMerge，只在没有新 commit 的那一轮才检查 branch status、再由 mergePr 过 ruleset，GitHub #3~#17 实测从未生效、全是人工合并；而 GitHub 原生 auto-merge 直接评估 ruleset 点名的 check-run（实测 ruleset context=build-check-test、#17 head 的 build-check-test=success），不依赖 Renovate 轮询时序。见 .agents/notes/implemented/bug-fix/2026-11-05-renovate-platform-automerge.md。 冷却期必须与 pnpm 的对齐：pnpm-workspace.yaml 的 minimumReleaseAge 只管装，Renovate 不读它，于是它照样提议刚发布几分钟的版本，接着 Artifact 步骤里 pnpm 的 lockfile 校验拒绝写入，表现成 PR 上一条 Artifact update problem、CI 里一条 ERR_PNPM_OUTDATED_LOCKFILE（NekoSekaiMoe/nanopi#23、shinytale/nanopi#568）。这里写 \"1 day\"（= 1440 分钟，与 pnpm 同值），buffer 再从后面垫 30 分钟，覆盖「主包发布几分钟后同版本 CLI 子包才发布」——biome 2.6.6 的 cli-linux-x64 比主包晚 3 分钟。两个值由 scripts/check-renovate-release-age.mjs 在 CI 里对齐，改一边不改另一边会红。见 .agents/notes/implemented/process/2026-11-07-renovate-must-wait-as-long-as-pnpm.md。 版本写法：npm 组的 rangeStrategy 是 replace 而不是全局从前的 pin。「钉住」在这台仓库靠 package.json 里写精确版本（scripts/check-pinned-deps.mjs 拦范围写法）+ 这里显式声明 replace 来维持，**不靠** Renovate 的 pin：pin 的语义是 reinstall，它只决定 PR 里写哪种 pin 写法（范围当前写法 / 精确 / 宽松），新值仍然会越过 minor，所以它挡不住漂移，却会被读成「依赖不许动」。防止漂移靠两条限制：`config:recommended` 的 major automerge 关闭 + 本组 minimumReleaseAge 1 day。见 .agents/notes/implemented/process/2026-11-10-pinned-but-not-frozen.md。",
       "matchManagers": [
         "npm"
       ],
@@ -27,7 +27,8 @@
       "automergeType": "pr",
       "platformAutomerge": true,
       "minimumReleaseAge": "1 day",
-      "minimumReleaseAgeBuffer": "30 minutes"
+      "minimumReleaseAgeBuffer": "30 minutes",
+      "rangeStrategy": "replace"
     },
     {
       "description": "Node 底图只升 patch：跨 minor 会换掉运行时，得人工确认 Node 版本后再动。这条必须排在上面 npm 组之前，否则被分组的规则吞掉。",

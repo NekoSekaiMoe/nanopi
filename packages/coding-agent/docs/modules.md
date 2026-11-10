@@ -98,7 +98,7 @@ The narrow doors exist because the root barrel is a promise: every name in it is
 - `registerProvider(name, config)` / `unregisterProvider(name)` - a provider, its models, or a streaming override.
 - `registerVirtualModel(...)` / `unregisterVirtualModel(...)` - a virtual model that routes to a physical one per request.
 - `registerBashOperations(id, operations)` + `setActiveBashOperations(id)` - route shell commands through a sandbox.
-- Renderers: `registerMessageRenderer`, `registerEntryRenderer`, `registerToolRenderer`, `registerMarkdownTransformer`.
+- Renderers: `registerMessageRenderer`, `registerEntryRenderer`, `registerToolRenderer`, and `registerMarkdownTransformer` (see below).
 - Transcript rows the module does not own: `registerToolRowRenderer` (restyle, flatten, or hide the row of a tool another module registered), `registerShellRenderer` (`!` command rows), `registerAssistantMessageRenderer` (the body of an assistant message, e.g. its thinking rows).
 - Chrome: `registerWorkingIndicator` (the streaming working line), `registerSettingsItem` / `unregisterSettingsItem` (rows in the settings list, and retiring a core row a module supersedes).
 
@@ -128,6 +128,45 @@ The same shape covers the other rows a reskin needs: `registerShellRenderer`
 for `!` commands, `registerAssistantMessageRenderer` for an assistant message's
 body (return `false` to leave the message to the default renderer), and
 `registerWorkingIndicator` for the streaming working line.
+
+## Rewrite Markdown before it is drawn
+
+`registerMarkdownTransformer` hands you a row's Markdown before the transcript
+parses it. It covers the rows whose text is Markdown:
+
+| `context.messageType` | Row |
+|---|---|
+| `user` | a user message |
+| `assistant` | an assistant message's text |
+| `assistant-thinking` | an assistant message's thinking blocks |
+| `custom` | the body of a `custom` message drawn with the default frame |
+| `summary` | a compaction or branch summary |
+| `changelog` | the startup what's-new block |
+
+Filtering is the callback's job: return `markdown` unchanged for the rows you do
+not own. There is no list of types to declare, so the signature cannot drift from
+what the transcript actually offers.
+
+```typescript
+nanopi.registerMarkdownTransformer((markdown, context) => {
+	// Custom messages are the only rows this module colors in.
+	if (context.messageType !== "custom") return markdown;
+	return markdown.replaceAll("TODO", "**TODO**");
+});
+```
+
+Rules the host relies on:
+
+- Pure and synchronous. Depend only on the two arguments; do not read settings,
+  session state, or the filesystem at call time. The same Markdown and width must
+  produce the same result, because the transcript caches by both.
+- Never throw. A throwing transformer leaves that row untransformed and the next
+  transformer still runs; returning a non-string does the same.
+- Transformers run in order, each seeing the previous output. The host's own
+  Mermaid transformer runs first and only over `user` and `assistant`, so a diagram
+  it replaced reaches you as inline code spans, not as a fence.
+- One transformer per module: registering twice replaces the first. Unloading the
+  module restores the row's original Markdown.
 
 ## React to session events
 
