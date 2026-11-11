@@ -86,8 +86,16 @@ function sectionLines(theme: Theme, section: StatusSection, contentWidth: number
 	return lines;
 }
 
+export type StatusDialogHandle = {
+	/** Redraw with rows built from newer data. Rows that only got longer stay inside the width. */
+	refresh: (rows: StatusRow[]) => void;
+};
+
 /** Interactive /status dialog: static rows + resource sections, Esc closes, ↑/↓/PgUp/PgDn scroll on overflow. */
-export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, data: StatusDialogData): Promise<void> {
+export async function showStatusDialog(
+	ctx: Pick<ModuleCommandContext, "ui">,
+	data: StatusDialogData,
+): Promise<StatusDialogHandle> {
 	let scrollOffset = 0;
 	// Rows the last render could show. Key handling runs before the next render, so
 	// keyboard paging needs the size the body already had. `render()` derives it from
@@ -98,8 +106,15 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 	// Body rows from the last render, so key handling clamps against the real length.
 	let totalRows = 0;
 
+	let requestRender: () => void = () => {};
+	const refresh = (rows: StatusRow[]) => {
+		data.rows = rows;
+		requestRender();
+	};
+
 	await ctx.ui.custom(
 		(tui, theme, _keybindings, done) => {
+			requestRender = () => tui.requestRender();
 			return {
 				invalidate() {},
 				handleInput(input: string) {
@@ -172,4 +187,5 @@ export async function showStatusDialog(ctx: Pick<ModuleCommandContext, "ui">, da
 		},
 		{ overlay: true, overlayOptions: OVERLAY_OPTIONS },
 	);
+	return { refresh };
 }
