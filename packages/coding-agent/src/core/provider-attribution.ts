@@ -1,7 +1,7 @@
 import type { Api, Model, ProviderHeaders } from "@nanopi/pi-ai";
 import { OPENCODE_CLIENT_HEADER, OPENCODE_SESSION_HEADER } from "@nanopi/pi-ai/providers/opencode-headers";
 import type { SettingsManager } from "./settings-manager.ts";
-import { isInstallTelemetryEnabled } from "./telemetry.ts";
+import { isProviderAttributionEnabled } from "./telemetry.ts";
 
 const OPENROUTER_HOST = "openrouter.ai";
 const NVIDIA_NIM_HOST = "integrate.api.nvidia.com";
@@ -43,14 +43,7 @@ export function isOpenCodeModel(model: Model<Api>): boolean {
 	return OPENCODE_PROVIDERS.has(model.provider) || matchesHost(model.baseUrl, OPENCODE_HOST);
 }
 
-function getDefaultAttributionHeaders(
-	model: Model<Api>,
-	settingsManager: SettingsManager,
-): Record<string, string> | undefined {
-	if (!isInstallTelemetryEnabled(settingsManager)) {
-		return undefined;
-	}
-
+function getDefaultAttributionHeaders(model: Model<Api>): Record<string, string> | undefined {
 	if (isOpenRouterModel(model)) {
 		return {
 			"HTTP-Referer": "https://github.com/NekoSekaiMoe/nanopi",
@@ -86,14 +79,19 @@ function getSessionHeaders(model: Model<Api>, sessionId: string | undefined): Re
 /**
  * Headers every request to `model` in `sessionId` carries: attribution defaults first, then
  * OpenCode's identity. Headers the caller supplies are merged on top, per request.
+ *
+ * Both halves answer the same question, so both take the same gate: an installation that opted out
+ * of install telemetry sends neither, and a model server sees no attribution and no routing
+ * identity rather than half of each.
  */
 export function getProviderAttributionHeaders(
 	model: Model<Api>,
 	settingsManager: SettingsManager,
 	sessionId: string | undefined,
 ): ProviderHeaders | undefined {
+	if (!isProviderAttributionEnabled(settingsManager)) return undefined;
 	const merged: ProviderHeaders = {
-		...getDefaultAttributionHeaders(model, settingsManager),
+		...getDefaultAttributionHeaders(model),
 		...getSessionHeaders(model, sessionId),
 	};
 	return Object.keys(merged).length > 0 ? merged : undefined;

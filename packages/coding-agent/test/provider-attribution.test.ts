@@ -134,6 +134,15 @@ describe("provider attribution headers", () => {
 		}
 	});
 
+	it("sends no identity headers once install telemetry is off", async () => {
+		const model = createModel("opencode", "https://opencode.ai/inference/openai/v1");
+		process.env.NANOPI_TELEMETRY = "0";
+
+		const headers = await captureWireHeaders(model, 1);
+
+		expect(headers[0]).toEqual({ "User-Agent": "nanopi/1.0" });
+	});
+
 	it("adds nothing for a provider that has no attribution", async () => {
 		const model = createModel("local-proxy", "https://proxy.example/v1");
 
