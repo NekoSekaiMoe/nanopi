@@ -200,9 +200,12 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	 */
 	maxRetries?: number;
 	/**
-	 * Store tokens the provider appended to `message.authorizationUpdate` on the
-	 * final message of a response. Called at most once per response, before the
-	 * stream ends. Providers that never rotate credentials never call it.
+	 * Store tokens the provider renewed while serving the response, the ones it
+	 * also reports on `message.authorizationUpdate`. Called at most once per
+	 * response, when the rotation happens rather than at the end: a rotation the
+	 * upstream already retired cannot be recovered from a failed turn, so the
+	 * caller has to be able to persist it before the rest of the turn runs.
+	 * Providers that never rotate credentials never call it.
 	 */
 	onAuthorizationUpdate?: (update: AuthorizationUpdate) => void | Promise<void>;
 	/**

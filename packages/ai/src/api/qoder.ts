@@ -17,9 +17,14 @@
  * An expired login is reported inside the stream (`403` / `105 Login expired`),
  * which no retry fixes. When the credential carries an account refresh token,
  * the turn renews the pair through the job-token endpoint once and reports the
- * new tokens on `message.authorizationUpdate`, so the caller can store them; a
- * renewed device token that lands after the refresh hook already needs it would
- * otherwise be thrown away and every turn would renew again.
+ * new tokens on `message.authorizationUpdate`, so the caller can store them.
+ *
+ * The renewal is persisted as soon as it succeeds, not when the turn ends: the
+ * exchange retires the old refresh token, so a turn that dies right after
+ * renewing (a `RESOURCE_LIMIT`, an abort) would otherwise drop the only valid
+ * pair and leave the account readable but unable to authenticate. Persistence
+ * also cannot wait, because the provider fills `authorizationUpdate` before the
+ * response (and with it `message.authorizationUpdate`) exists.
  */
 
 import type { QoderListedModel } from "../qoder/catalog.ts";
@@ -345,7 +350,11 @@ const stream: StreamFunction<QoderApi, StreamOptions> = (
 				token = next.token;
 				// The renewal continues the credential this turn started from, so storing it
 				// cannot overwrite a login that replaced that credential mid-turn.
-				output.authorizationUpdate = { token: next.token, refreshToken: next.refreshToken, continues: true };
+				const update = { token: next.token, refreshToken: next.refreshToken, continues: true };
+				output.authorizationUpdate = update;
+				// The old refresh token is already dead upstream: store the pair before
+				// anything else in this turn can fail, or the account loses its login.
+				await options?.onAuthorizationUpdate?.(update);
 				return true;
 			};
 
@@ -396,7 +405,6 @@ const stream: StreamFunction<QoderApi, StreamOptions> = (
 			}
 			if (upstreamError) throw new Error(upstreamError);
 			if (options?.signal?.aborted) throw new Error("Request was aborted");
-			if (output.authorizationUpdate) await options?.onAuthorizationUpdate?.(output.authorizationUpdate);
 			finishBlocks(state, stream);
 			const hasToolCall = state.blocks.some((block) => block.type === "toolCall");
 			output.stopReason = hasToolCall ? "toolUse" : "stop";

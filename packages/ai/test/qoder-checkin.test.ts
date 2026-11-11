@@ -44,7 +44,7 @@ describe("Qoder daily check-in", () => {
 			});
 		});
 
-		const result = await checkinQoder("dt-token", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
 
 		expect(result).toMatchObject({ status: "claimed", amount: 100 });
 		expect(calls.map((call) => `${call.method} ${call.url}`)).toEqual([
@@ -60,7 +60,7 @@ describe("Qoder daily check-in", () => {
 			return jsonResponse({ status: "CLAIMED", replayed: true, benefit: { amount: 100 } });
 		});
 
-		const result = await checkinQoder("dt-token", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
 
 		expect(result.status).toBe("already_claimed");
 		expect(result.amount).toBe(100);
@@ -73,7 +73,7 @@ describe("Qoder daily check-in", () => {
 			return jsonResponse({ campaigns: [campaign({ claimStatus: "CLAIMED" })] });
 		});
 
-		const result = await checkinQoder("dt-token", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
 
 		expect(result.status).toBe("already_claimed");
 		expect(methods).toEqual(["GET"]);
@@ -84,26 +84,110 @@ describe("Qoder daily check-in", () => {
 			jsonResponse({ campaigns: [{ campaignId: "other", actionType: "READ_DOCS", claimStatus: "CLAIMABLE" }] }),
 		);
 
-		const result = await checkinQoder("dt-token", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
 
 		expect(result.status).toBe("no_campaign");
+		expect(result.message).toContain("1 campaign(s)");
+	});
+
+	it("says the server listed nothing when the campaign list is empty", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ campaigns: [] }));
+
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
+
+		expect(result.status).toBe("no_campaign");
+		expect(result.message).toContain("listed no campaign");
+	});
+
+	it("sends a stored device identity with the claim", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+			if (url.endsWith("/sash/api/v1/me/campaigns")) return jsonResponse({ campaigns: [campaign()] });
+			return jsonResponse({ status: "CLAIMED", benefit: { amount: 100 } });
+		});
+
+		await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ device: { machineToken: "mt-1", machineType: "mac" } },
+			neverAbortedSignal,
+		);
+
+		for (const entry of headers) {
+			expect(entry).toMatchObject({ "cosy-machinetoken": "mt-1", "cosy-machinetype": "mac" });
+		}
+	});
+
+	it("sends no device identity when none is known", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			return jsonResponse({ campaigns: [] });
+		});
+
+		await checkinQoder("dt-token", endpoints, { device: {} }, neverAbortedSignal);
+
+		expect(headers[0]).not.toHaveProperty("cosy-machinetoken");
+	});
+
+	it("names the window when a claim covers a window the machine already finished", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ campaigns: [campaign({ claimStatus: "CLAIMED" })] }));
+
+		const result = await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ previousWindowDate: "2026-01-01" },
+			neverAbortedSignal,
+		);
+
+		expect(result.windowDate).toBe("2026-01-01");
+		expect(result.message).toContain("window 2026-01-01");
+	});
+
+	it("keeps the plain message for a window the machine did not claim yet", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ campaigns: [campaign({ claimStatus: "CLAIMED" })] }));
+
+		const result = await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ previousWindowDate: "2025-12-31" },
+			neverAbortedSignal,
+		);
+
+		expect(result.windowDate).toBe("2026-01-01");
+		expect(result.message).toBe("already claimed today");
 	});
 
 	it("surfaces the server message when the lookup fails", async () => {
 		vi.stubGlobal("fetch", async () => jsonResponse({ message: "TOKEN_EXPIRE" }, 401));
 
-		const result = await checkinQoder("dt-token", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
 
 		expect(result.status).toBe("error");
 		expect(result.message).toContain("401");
 		expect(result.message).toContain("TOKEN_EXPIRE");
 	});
 
+	it("keeps device headers off the CN site", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			return jsonResponse({ campaigns: [] });
+		});
+
+		const cn = qoderEndpoints("cn");
+		await checkinQoder("dt-token", cn, {}, neverAbortedSignal);
+
+		expect(headers[0]).not.toHaveProperty("cosy-machinetoken");
+	});
+
 	it("does not call the API without a token", async () => {
 		const fetchMock = vi.fn();
 		vi.stubGlobal("fetch", fetchMock);
 
-		const result = await checkinQoder("  ", endpoints, neverAbortedSignal);
+		const result = await checkinQoder("  ", endpoints, {}, neverAbortedSignal);
 
 		expect(result.status).toBe("error");
 		expect(fetchMock).not.toHaveBeenCalled();
