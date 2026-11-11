@@ -1,7 +1,9 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { getPackageDir } from "../src/config.ts";
 import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { createAgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
 import { createAgentSessionFromServices, createAgentSessionServices } from "../src/core/agent-session-services.ts";
@@ -24,6 +26,8 @@ let base = "";
 let token = "";
 let previousAgentDir: string | undefined;
 let previousOffline: string | undefined;
+/** The SPA fallback needs built assets; without them an unmatched GET 404s as text. */
+const distExists = existsSync(join(getPackageDir(), "..", "webui", "dist", "index.html"));
 
 async function writeAgentConfig(): Promise<void> {
 	const models = {
@@ -185,8 +189,14 @@ describe("webui stubbed AtomCode endpoints", () => {
 			const { status, body } = await api(path);
 			// `/fs/search` retains the `/fs` prefix, so it reaches the API router and
 			// 404s as JSON. The other two never matched an API route, so a GET falls
-			// through to the SPA shell; the stub is gone either way, and only a verb
+			// through to the SPA shell when the assets are built and 404s as plain
+			// text when they are not; the stub is gone either way, and only a verb
 			// the router rejects can prove it.
+			if (typeof body === "string" && !distExists) {
+				expect(status, path).toBe(404);
+				expect(body, path).toContain("webui assets are not built");
+				continue;
+			}
 			if (body.error === undefined) {
 				expect(status, path).toBe(200);
 				expect(body.toLowerCase(), path).toContain("<!doctype html");

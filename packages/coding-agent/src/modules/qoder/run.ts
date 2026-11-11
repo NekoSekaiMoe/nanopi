@@ -27,7 +27,7 @@ export interface QoderCheckinSummary {
 	provider: string;
 	/** Account name recorded at login, when the credential carries one. */
 	account?: string;
-	/** `none` is a provider this build does not register; it is not reported. */
+	/** `none` is a provider with nothing to do (not logged in, no device token); it is not reported. */
 	status: "claimed" | "already_claimed" | "no_campaign" | "error" | "unconfigured" | "none";
 	amount: number;
 	/** Campaign window the result belongs to (`YYYY-MM-DD`), when the server reported one. */
@@ -92,10 +92,6 @@ export async function runQoderCheckin(
 
 	const summaries: QoderCheckinSummary[] = [];
 	for (const provider of QODER_PROVIDER_IDS) {
-		if (!modelRegistry.hasProvider(provider)) {
-			summaries.push({ provider, status: "none", amount: 0, message: "provider not in this build" });
-			continue;
-		}
 		if (!loggedIn.has(provider)) {
 			summaries.push({ provider, status: "none", amount: 0, message: "not logged in" });
 			continue;

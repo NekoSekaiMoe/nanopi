@@ -1431,6 +1431,21 @@ describe("ModelRegistry", () => {
 			expect(registry.getRegisteredProviderConfig("anthropic")).toBeUndefined();
 		});
 
+		test("a full reload keeps a provider the process removed out", async () => {
+			const registry = await createModelRegistry(authStorage, modelsJsonPath);
+			expect(registry.hasProvider("anthropic")).toBe(true);
+
+			registry.unregisterProvider("anthropic");
+			expect(registry.hasProvider("anthropic")).toBe(false);
+
+			// A reload rebuilds from the catalog. Which providers the build carries is a
+			// build-time fact, so a removed one must not come back: that is what made the
+			// Qoder check-in report "provider not in this build" for a build that has it.
+			await registry.refresh();
+
+			expect(registry.hasProvider("anthropic")).toBe(false);
+		});
+
 		test("streamSimple overlays do not mutate the global compat API registry", async () => {
 			const registry = await createModelRegistry(authStorage, modelsJsonPath);
 
