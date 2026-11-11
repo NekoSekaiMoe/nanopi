@@ -708,6 +708,16 @@ export class ModelRuntime implements Models {
 		return this.credentials.list(options);
 	}
 
+	/**
+	 * The stored credential as-is, without resolving or refreshing it. `getAuth`
+	 * rotates an expired OAuth token, which retires the stored refresh token; a
+	 * path that only reads an account fact (the Qoder check-in) must not pay
+	 * that, and must still work while the token is due for renewal.
+	 */
+	readCredential(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
+		return this.credentials.read(providerId, options);
+	}
+
 	getProviderAuthStatus(providerId: string): AuthStatus {
 		if (this.credentials.hasRuntimeApiKey(providerId)) return { configured: true, source: "runtime" };
 		if (this.snapshot.storedProviders.has(providerId)) return { configured: true, source: "stored" };

@@ -15,6 +15,7 @@
 import {
 	asNumber,
 	asString,
+	type QoderDeviceIdentity,
 	type QoderJson,
 	qoderCheckinHeaders,
 	qoderErrorDetail,
@@ -33,6 +34,22 @@ export interface QoderCheckinResult {
 	windowDate?: string;
 	/** Human-readable outcome, including the server's error text on failure. */
 	message: string;
+}
+
+/** What one account's check-in is signed with. */
+export interface QoderCheckinOptions {
+	/**
+	 * Stored device identity. The global site withholds the campaign from a
+	 * request that carries none, which is indistinguishable from "no campaign
+	 * today" unless the answer says how many entries came back.
+	 */
+	device?: QoderDeviceIdentity;
+	/**
+	 * Window the caller finished (`YYYY-MM-DD`). A daily window rolls over at
+	 * 10:00, so a session that starts before it claims the previous day's
+	 * window; reporting that lets the caller say so instead of nothing.
+	 */
+	previousWindowDate?: string;
 }
 
 interface QoderCampaign {
@@ -69,21 +86,36 @@ function parseCampaigns(body: QoderJson | null): QoderCampaign[] {
 	return campaigns;
 }
 
-/** Wall-clock date of a campaign window; daily windows roll over at 10:00. */
+/** Wall-clock date of a campaign window; daily windows roll over at 10:00 Beijing time. */
 function windowDate(campaign: QoderCampaign | undefined): string | undefined {
 	return campaign?.startAt ? new Date(campaign.startAt * 1000).toISOString().slice(0, 10) : undefined;
+}
+
+/**
+ * This call claimed (or found claimed) a window the caller already finished.
+ * That is what a startup check before 10:00 looks like: the daily window has
+ * not rolled over yet, so the claim covers yesterday and today is still open.
+ */
+function previousWindowNote(result: QoderCheckinResult, options: QoderCheckinOptions): QoderCheckinResult {
+	const previous = options.previousWindowDate;
+	if (!previous || result.windowDate !== previous) return result;
+	return {
+		...result,
+		message: `${result.message} (window ${result.windowDate}, which this machine already claimed; a new window opens at 10:00)`,
+	};
 }
 
 async function claimCampaign(
 	campaign: QoderCampaign,
 	deviceToken: string,
 	endpoints: QoderEndpoints,
+	options: QoderCheckinOptions,
 	signal: AbortSignal,
 ): Promise<QoderCheckinResult> {
 	const host = endpoints.openApiHost;
 	const response = await fetch(`https://${host}/sash/api/v1/me/campaigns/${campaign.campaignId}/claim`, {
 		method: "POST",
-		headers: { ...qoderCheckinHeaders(deviceToken), origin: `https://${host}` },
+		headers: { ...qoderCheckinHeaders(deviceToken, options.device), origin: `https://${host}` },
 		signal: qoderRequestSignal(signal),
 	});
 	const body = await readQoderJson(response);
@@ -118,6 +150,7 @@ async function claimCampaign(
 export async function checkinQoder(
 	deviceToken: string,
 	endpoints: QoderEndpoints,
+	options: QoderCheckinOptions,
 	signal: AbortSignal,
 ): Promise<QoderCheckinResult> {
 	const token = deviceToken.trim();
@@ -126,7 +159,7 @@ export async function checkinQoder(
 	const host = endpoints.openApiHost;
 	const response = await fetch(`https://${host}/sash/api/v1/me/campaigns`, {
 		method: "GET",
-		headers: qoderCheckinHeaders(token),
+		headers: qoderCheckinHeaders(token, options.device),
 		signal: qoderRequestSignal(signal),
 	});
 	const body = await readQoderJson(response);
@@ -138,18 +171,28 @@ export async function checkinQoder(
 		};
 	}
 
-	const claimable = parseCampaigns(body).filter((campaign) => campaign.actionType === CAMPAIGN_ACTION);
+	const campaigns = parseCampaigns(body);
+	const claimable = campaigns.filter((campaign) => campaign.actionType === CAMPAIGN_ACTION);
 	const target = claimable.find((campaign) => campaign.claimStatus === "CLAIMABLE");
-	if (target) return claimCampaign(target, token, endpoints, signal);
+	if (target) return previousWindowNote(await claimCampaign(target, token, endpoints, options, signal), options);
 
 	const claimed = claimable.find((campaign) => campaign.claimStatus === "CLAIMED");
 	if (claimed) {
-		return {
-			status: "already_claimed",
-			amount: claimed.benefit?.amount ?? 0,
-			windowDate: windowDate(claimed),
-			message: "already claimed today",
-		};
+		return previousWindowNote(
+			{
+				status: "already_claimed",
+				amount: claimed.benefit?.amount ?? 0,
+				windowDate: windowDate(claimed),
+				message: "already claimed today",
+			},
+			options,
+		);
 	}
-	return { status: "no_campaign", amount: 0, message: "no claimable campaign" };
+	// The raw count separates "no campaign is running" from "campaigns exist but
+	// none was issued to this request": the global site withholds the entry from
+	// a device identity it does not recognize, and an empty list is the only
+	// thing a caller can act on.
+	const count =
+		campaigns.length === 0 ? "the server listed no campaign" : `${campaigns.length} campaign(s), none claimable`;
+	return { status: "no_campaign", amount: 0, message: `no claimable campaign (${count})` };
 }

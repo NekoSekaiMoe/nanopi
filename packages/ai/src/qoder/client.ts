@@ -58,13 +58,32 @@ export function resolveQoderRegion(explicit?: QoderRegion): QoderRegion {
 	return explicit ?? parseRegion(getProviderEnvValue("QODER_REGION")) ?? "global";
 }
 
-/** Headers a desktop Qoder client sends for check-in calls on the global site. */
-export function qoderCheckinHeaders(deviceToken: string): Record<string, string> {
+/**
+ * Device identity a check-in request may carry. The global site hands out its
+ * campaign only to a request that looks like a real installation: a missing
+ * `cosy-machinetoken` / `cosy-machinetype` reads as `no_campaign` for an account
+ * that has never claimed in the official client. Both values are captured from
+ * an official client (a self-invented fingerprint is worse than none) and
+ * travel on the credential, or on `QODER_MACHINE_TOKEN` / `QODER_MACHINE_TYPE`.
+ */
+export interface QoderDeviceIdentity {
+	machineToken?: string;
+	machineType?: string;
+}
+
+/**
+ * Headers a desktop Qoder client sends for check-in calls. Device headers are
+ * only added when the caller has a real identity to send: the CN site rejects
+ * an invented fingerprint, so a CN call never carries one.
+ */
+export function qoderCheckinHeaders(deviceToken: string, device?: QoderDeviceIdentity): Record<string, string> {
 	return {
 		authorization: `Bearer ${deviceToken}`,
 		accept: "application/json",
 		"accept-language": "zh-CN",
 		"user-agent": "Qoder",
 		"cosy-clienttype": "10",
+		...(device?.machineToken ? { "cosy-machinetoken": device.machineToken } : {}),
+		...(device?.machineType ? { "cosy-machinetype": device.machineType } : {}),
 	};
 }
