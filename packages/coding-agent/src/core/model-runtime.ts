@@ -1036,6 +1036,11 @@ export class ModelRuntime implements Models {
 	}
 
 	unregisterProvider(providerId: string): void {
+		// A built-in provider leaves the catalog for this process. Recomposing it from
+		// `builtins` alone was not enough: `refresh()` rebuilds every registered provider,
+		// and the build's own selection decided which of those survive. That is how a
+		// logged-out Qoder provider came back able to answer `hasProvider`.
+		this.builtins.delete(providerId);
 		this.extensionProviders.delete(providerId);
 		this.nativeExtensionProviders.delete(providerId);
 		this.recomposeProvider(providerId);
