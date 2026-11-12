@@ -77,17 +77,24 @@ describe("mcp-lite tool registration", () => {
 			[
 				'process.stdin.setEncoding("utf8");',
 				"let buffer = '';",
+				// Every frame in the chunk, not just the first: `notifications/initialized`
+				// and `tools/list` are separate writes, and the pipe delivers them as one
+				// chunk whenever the client gets both out before this process reads. The
+				// client frames correctly either way (it loops over its buffer); reading
+				// one frame per chunk here dropped `tools/list`, so the client waited out
+				// its 120s request timeout and no tool was ever registered.
 				'process.stdin.on("data", (chunk) => {',
 				"  buffer += chunk;",
-				'  const newline = buffer.indexOf("\\n");',
-				"  if (newline < 0) return;",
-				"  const message = JSON.parse(buffer.slice(0, newline));",
-				"  buffer = buffer.slice(newline + 1);",
-				"  if (message.id === undefined) return;",
-				'  const result = message.method === "tools/list"',
-				'    ? { tools: [{ name: "echo", description: "echo back", inputSchema: { type: "object" } }] }',
-				"    : {};",
-				'  process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");',
+				"  let newline;",
+				'  while ((newline = buffer.indexOf("\\n")) >= 0) {',
+				"    const message = JSON.parse(buffer.slice(0, newline));",
+				"    buffer = buffer.slice(newline + 1);",
+				"    if (message.id === undefined) continue;",
+				'    const result = message.method === "tools/list"',
+				'      ? { tools: [{ name: "echo", description: "echo back", inputSchema: { type: "object" } }] }',
+				"      : {};",
+				'    process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: message.id, result }) + "\\n");',
+				"  }",
 				"});",
 			].join("\n"),
 		);
