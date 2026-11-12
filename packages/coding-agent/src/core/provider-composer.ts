@@ -34,6 +34,7 @@ import {
 	getConfigValueEnvVarNames,
 	isCommandConfigValue,
 	isConfigValueConfigured,
+	isConfigValueSelfContained,
 	resolveConfigValueOrThrow,
 	resolveHeadersOrThrow,
 } from "./resolve-config-value.ts";
@@ -511,9 +512,10 @@ function composeApiKeyAuth(
 				return resolved ? { type: "api_key", source: resolved.source } : undefined;
 			}
 			if (rawKey !== undefined) {
-				if (isCommandConfigValue(rawKey)) return { type: "api_key", source: "configured API key" };
-				const envNames = getConfigValueEnvVarNames(rawKey);
-				for (const name of envNames) {
+				// A literal key or a command is usable as written. Only an env template can
+				// still fail here, and there the missing variable names the reason.
+				if (isConfigValueSelfContained(rawKey)) return { type: "api_key", source: "configured API key" };
+				for (const name of getConfigValueEnvVarNames(rawKey)) {
 					if ((await input.ctx.env(name)) === undefined) return undefined;
 				}
 				return { type: "api_key", source: "configured API key" };

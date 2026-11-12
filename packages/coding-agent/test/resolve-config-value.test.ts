@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	clearConfigValueCache,
+	isConfigValueConfigured,
+	isConfigValueSelfContained,
 	resolveConfigValue,
 	resolveConfigValueUncached,
 } from "../src/core/resolve-config-value.ts";
@@ -37,6 +39,18 @@ describe("resolveConfigValue", () => {
 			delete process.env.TEST_CONFIG_LEFT;
 			delete process.env.TEST_CONFIG_RIGHT;
 		}
+	});
+
+	// #697: a models.json `apiKey` written as the literal "ollama" (the documented local
+	// server setup) resolved to undefined and made the provider look unauthenticated.
+	test("treats a literal value as the value, with no environment dependency", () => {
+		expect(resolveConfigValue("ollama")).toBe("ollama");
+		expect(resolveConfigValue("dummy-key", {})).toBe("dummy-key");
+		expect(isConfigValueSelfContained("ollama")).toBe(true);
+		expect(isConfigValueSelfContained("!echo key")).toBe(true);
+		expect(isConfigValueSelfContained("$MISSING_CONFIG_KEY_12345")).toBe(false);
+		expect(isConfigValueSelfContained("$MISSING_CONFIG_KEY_12345-suffix")).toBe(false);
+		expect(isConfigValueConfigured("ollama")).toBe(true);
 	});
 
 	test("uses credential-scoped environment before process.env", () => {
