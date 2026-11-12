@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	clearConfigValueCache,
+	isConfigValueConfigured,
+	isConfigValueSelfContained,
 	resolveConfigValue,
 	resolveConfigValueOrThrow,
 	resolveConfigValueUncached,
@@ -41,9 +43,9 @@ describe("resolveConfigValue", () => {
 	});
 
 	test("treats a value with no dollar sign as a literal instead of an environment reference", () => {
-		// An endpoint that ignores its key (`ollama`, `llama.cpp`) documents a literal like `local`, and a
-		// key may be any string. Reading such a value as an unset variable dropped the key, and reading a
-		// set one sent the variable's value. Environment references are written `$NAME` or `${NAME}`.
+		// An endpoint that ignores its key (`ollama`) documents a literal like `local`, and a key may be
+		// any string. Reading such a value as an unset variable dropped the key, and reading a set one
+		// sent the variable's value. Environment references are written `$NAME` or `${NAME}`.
 		const literal = "TEST_CONFIG_UNSET_LOOKALIKE";
 		process.env.TEST_CONFIG_SET_LOOKALIKE = "from-env";
 		try {
@@ -57,6 +59,16 @@ describe("resolveConfigValue", () => {
 		}
 		expect(resolveConfigValueOrThrow(literal, "an API key")).toBe(literal);
 		expect(resolveConfigValue("local")).toBe("local");
+	});
+
+	// #697: a models.json `apiKey` written as the literal "ollama" (the documented local
+	// server setup) was reported as unauthenticated even though resolution returned the key.
+	test("reports a literal or command value as self-contained and an env template as not", () => {
+		expect(isConfigValueSelfContained("ollama")).toBe(true);
+		expect(isConfigValueSelfContained("!echo key")).toBe(true);
+		expect(isConfigValueSelfContained("$MISSING_CONFIG_KEY_12345")).toBe(false);
+		expect(isConfigValueSelfContained("$MISSING_CONFIG_KEY_12345-suffix")).toBe(false);
+		expect(isConfigValueConfigured("ollama")).toBe(true);
 	});
 
 	test("uses credential-scoped environment before process.env", () => {
