@@ -89,6 +89,11 @@ function resolveEnvConfigValue(name: string, env?: Record<string, string>): stri
 	return env?.[name] || process.env[name] || undefined;
 }
 
+/** A value with no `$` reference and no leading `!` is a literal, not a template. */
+function isLiteralTemplate(parts: TemplatePart[]): boolean {
+	return parts.every((part) => part.type === "literal");
+}
+
 function getTemplateEnvVarNames(parts: TemplatePart[]): string[] {
 	const names: string[] = [];
 	for (const part of parts) {
@@ -128,6 +133,16 @@ export function getMissingConfigValueEnvVarNames(config: string, env?: Record<st
 	return getConfigValueEnvVarNames(config).filter((name) => resolveEnvConfigValue(name, env) === undefined);
 }
 
+/**
+ * Whether a config value stands on its own. A command needs to run and an env
+ * template needs every variable it names; a literal is already the value. Reported
+ * separately because it has no environment source to be labelled with.
+ */
+export function isConfigValueSelfContained(config: string): boolean {
+	const reference = parseConfigValueReference(config);
+	return reference.type === "command" || isLiteralTemplate(reference.parts);
+}
+
 export function isCommandConfigValue(config: string): boolean {
 	return parseConfigValueReference(config).type === "command";
 }
@@ -141,7 +156,9 @@ export function isConfigValueConfigured(config: string, env?: Record<string, str
  * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
  * - Interpolates "$ENV_VAR" or "${ENV_VAR}" references with the named environment variable
  * - In non-command values, "$$" escapes a literal "$" and "$!" escapes a literal "!"
- * - Otherwise, including a value that holds no "$" at all, treats the value as a literal
+ * - Otherwise treats the value as a literal: a models.json `apiKey` of "ollama" is the
+ *   key, not an env lookup that resolved to nothing, and a value with no "$" at all never
+ *   reaches the environment
  */
 export function resolveConfigValue(config: string, env?: Record<string, string>): string | undefined {
 	const reference = parseConfigValueReference(config);

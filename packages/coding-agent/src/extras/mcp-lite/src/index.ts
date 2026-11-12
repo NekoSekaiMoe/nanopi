@@ -21,7 +21,14 @@
  */
 
 import { Type } from "typebox";
-import type { ModuleApi, ModuleToolContext, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface } from "@nanopi/pi-coding-agent";
+import type {
+	ModuleApi,
+	ModuleCommandsSurface,
+	ModuleEventsSurface,
+	ModuleSessionSurface,
+	ModuleToolContext,
+	ModuleToolsSurface,
+} from "@nanopi/pi-coding-agent";
 import { McpClient, type McpToolDefinition } from "./client.ts";
 import { loadMcpConfig, type McpConfig } from "./config.ts";
 import { commandAvailable } from "./executables.ts";
@@ -32,6 +39,12 @@ const WRAPPER_TOOL = "mcp";
 const DEFAULT_DELEGATE_TIMEOUT_SEC = 120;
 /** The report is already summarized by the child; cap what the main transcript carries. */
 const MAX_REPORT_CHARS = 8000;
+
+/** The active tool set, as the session surface exposes it. */
+interface ActiveToolSet {
+	getActiveTools(): string[];
+	setActiveTools(toolNames: string[]): void;
+}
 
 function sanitizeSegment(segment: string): string {
 	const cleaned = segment.replace(/[^a-zA-Z0-9_-]/g, "_");
@@ -122,11 +135,12 @@ function serverListing(states: Map<string, ServerState>, config: McpConfig | und
 
 export default function mcpLiteExtension(pi: ModuleEventsSurface &
 	ModuleToolsSurface &
-	ModuleCommandsSurface): void {
+	ModuleCommandsSurface &
+	ModuleSessionSurface): void {
 	const states = new Map<string, ServerState>();
 	let loaded: McpConfig | undefined;
 
-	const connectServer = async (name: string, state: ServerState): Promise<void> => {
+	const connectServer = async (name: string, state: ServerState, session: ActiveToolSet): Promise<void> => {
 		try {
 			await state.client.connect();
 			const tools = await state.client.listTools();
@@ -135,6 +149,7 @@ export default function mcpLiteExtension(pi: ModuleEventsSurface &
 			for (const tool of tools) {
 				registerMcpTool(pi, state.client, name, tool);
 			}
+			revealToCurrentModel(session);
 		} catch (error) {
 			state.status = "failed";
 			state.error = error instanceof Error ? error.message : String(error);
@@ -142,8 +157,32 @@ export default function mcpLiteExtension(pi: ModuleEventsSurface &
 		}
 	};
 
+	/**
+	 * A tool registered after `session_start` is visible to a *later* model, not the
+	 * one already active: `registerTool` refreshes the registry, which only activates
+	 * entries that are new to it, and these were already registered objects. Naming
+	 * the tools the model can now reach re-runs the registry once the servers have
+	 * answered.
+	 *
+	 * Only `mcp__*` is added. Re-sending the whole active list would retire every
+	 * tool active before this module ran: `session_start` has not replayed the
+	 * transcript's tool set yet, and a resume would lose the tools of its own turn.
+	 */
+	const revealToCurrentModel = (session: ActiveToolSet): void => {
+		const revealable = [...states.values()].flatMap((state) =>
+			state.status === "connected" ? state.tools.map((tool) => mcpToolName(state.client.serverName, tool.name)) : [],
+		);
+		if (revealable.length === 0) return;
+		session.setActiveTools([...new Set([...session.getActiveTools(), ...revealable])]);
+	};
+
 	pi.on("session_start", (event, ctx) => {
 		if (event.reason === "reload") return;
+		const { getActiveTools, setActiveTools } = pi;
+		const session: ActiveToolSet = {
+			getActiveTools: () => getActiveTools.call(pi),
+			setActiveTools: (toolNames) => setActiveTools.call(pi, toolNames),
+		};
 		void (async () => {
 			loaded = loadMcpConfig(ctx.cwd, { agentDir: ctx.getAgentDir() });
 			for (const [name, serverConfig] of loaded.servers) {
@@ -156,7 +195,7 @@ export default function mcpLiteExtension(pi: ModuleEventsSurface &
 					source: loaded.origins.get(name),
 				};
 				states.set(name, state);
-				await connectServer(name, state);
+				await connectServer(name, state, session);
 			}
 		})();
 	});
