@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Text after an inline image stays on its own Markdown row: a rendered line holding an image skipped wrapping, and wrapping is what split on hard breaks, so an entry holding an image plus `\n` reached the renderer as one line and its text was drawn over the image's first row. The line is now split on hard breaks first, and only the segments that hold an image skip wrapping
 - HTML comments in Markdown render as nothing: the `html` token branch printed `token.raw`, so `<!-- ... -->` reached the transcript, including the notes a changelog or extension notice keeps out of the rendered text (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
 - Deleting a paste marker no longer corrupts the markers that get renumbered: the callback reads the length suffix as an optional group, so a bare `[paste #3]` renumbered to `[paste #2undefined]` and the editor then refused to expand it on submit. The suffix is now defaulted to the empty string (issue [#634](https://cnb.cool/shinytale/nanopi/-/issues/634))
 - Full-screen Kitty images survive a write to a row they cover on every Kitty terminal, not just WezTerm: `imageCellsNeedRedraw` and `drawKittyImagesLast` were gated on `isWezTerm`, so a Kitty or Ghostty frame that repainted a covered row erased the image cells and left the anchor line pointing at a placement that was no longer there. The xterm.js image addon erases intersecting cells the same way WezTerm does, which is the case the gate was hiding (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))

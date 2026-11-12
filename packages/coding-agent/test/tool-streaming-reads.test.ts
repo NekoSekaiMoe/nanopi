@@ -170,5 +170,19 @@ describe("streaming tool reads", () => {
 			expect(page.content).toBe("3\n4");
 			expect(page.totalLines).toBe(5);
 		});
+
+		it("rejects an aborted read with AbortError instead of crashing the process", async () => {
+			// The stream no longer takes the signal, so an abort that lands before the iterator
+			// attaches cannot destroy the stream behind its back; the read loop notices the signal.
+			const testFile = join(testDir, "aborted.txt");
+			writeFileSync(testFile, "line\n".repeat(100_000));
+
+			const controller = new AbortController();
+			controller.abort();
+
+			await expect(readLinePage(testFile, { startLine: 0, signal: controller.signal })).rejects.toMatchObject({
+				name: "AbortError",
+			});
+		});
 	});
 });

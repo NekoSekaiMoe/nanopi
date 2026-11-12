@@ -96,9 +96,14 @@ export async function readLinePage(absolutePath: string, options: LinePageOption
 		}
 	};
 
-	const stream = createReadStream(absolutePath, { encoding, signal });
+	// The stream does not take the signal: a signal aborted before the iterator attaches leaves the
+	// stream destroyed inside its constructor, and the `'error'` that follows has no listener yet, so
+	// the process dies on an uncaught `AbortError`. The loop checks the signal instead and owns
+	// ending the stream. A file handle closes on `close` either way, including after an early return.
+	const stream = createReadStream(absolutePath, { encoding });
 	try {
 		for await (const chunk of stream) {
+			signal?.throwIfAborted();
 			consume(chunk as string);
 		}
 	} finally {
