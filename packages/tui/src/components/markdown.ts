@@ -567,14 +567,19 @@ export class Markdown implements Component {
 			renderedLines.push(...tokenLines);
 		}
 
-		// Wrap lines (NO padding, NO background yet)
+		// Wrap lines (NO padding, NO background yet). A rendered line can carry hard newlines when
+		// one of its parts is skipped below, so the image check has to run per segment: an entry
+		// holding an image plus a hard newline would otherwise reach the renderer as one line and
+		// draw its text over the image.
 		const wrappedLines: string[] = [];
 		for (const line of renderedLines) {
-			if (isImageLine(line)) {
-				wrappedLines.push(line);
-			} else {
-				for (const wrappedLine of wrapTextWithAnsi(line, contentWidth)) {
-					wrappedLines.push(wrappedLine);
+			for (const segment of line.split("\n")) {
+				if (isImageLine(segment)) {
+					wrappedLines.push(segment);
+				} else {
+					for (const wrappedLine of wrapTextWithAnsi(segment, contentWidth)) {
+						wrappedLines.push(wrappedLine);
+					}
 				}
 			}
 		}

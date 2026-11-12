@@ -463,47 +463,58 @@ async function buildSessionInfo(
 		let name: string | undefined;
 		let lastActivityTime: number | undefined;
 
-		const rl = createInterface({
-			input: createReadStream(filePath, { encoding: "utf8", signal }),
-			crlfDelay: Infinity,
-		});
+		// The stream does not take the signal: `readline` closes its input when the loop ends, and a
+		// file that is not a session header ends it early. A later abort then destroys a stream that
+		// already emitted `'error'` with nobody listening, which takes the process down with an
+		// uncaught `AbortError`. The loop checks the signal instead and owns ending the stream.
+		const stream = createReadStream(filePath, { encoding: "utf8" });
+		const rl = createInterface({ input: stream, crlfDelay: Infinity });
 
-		for await (const line of rl) {
-			const entry = parseSessionEntryLine(line);
-			if (!entry) continue;
+		try {
+			for await (const line of rl) {
+				signal?.throwIfAborted();
+				const entry = parseSessionEntryLine(line);
+				if (!entry) continue;
 
-			if (!header) {
-				if (entry.type !== "session") return null;
-				header = entry;
-				continue;
+				if (!header) {
+					if (entry.type !== "session") return null;
+					header = entry;
+					continue;
+				}
+
+				// Extract session name (use latest, including explicit clears)
+				if (entry.type === "session_info") {
+					name = entry.name?.trim() || undefined;
+				}
+
+				if (entry.type !== "message") continue;
+				messageCount++;
+
+				const activityTime = getMessageActivityTime(entry);
+				if (typeof activityTime === "number") {
+					lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
+				}
+
+				const message = entry.message;
+				if (!isMessageWithContent(message)) continue;
+				if (message.role !== "user" && message.role !== "assistant") continue;
+
+				const textContent = extractTextContent(message);
+				if (!textContent) continue;
+
+				allMessages.push(textContent);
+				if (!firstMessage && message.role === "user") {
+					firstMessage = textContent;
+				}
 			}
-
-			// Extract session name (use latest, including explicit clears)
-			if (entry.type === "session_info") {
-				name = entry.name?.trim() || undefined;
-			}
-
-			if (entry.type !== "message") continue;
-			messageCount++;
-
-			const activityTime = getMessageActivityTime(entry);
-			if (typeof activityTime === "number") {
-				lastActivityTime = Math.max(lastActivityTime ?? 0, activityTime);
-			}
-
-			const message = entry.message;
-			if (!isMessageWithContent(message)) continue;
-			if (message.role !== "user" && message.role !== "assistant") continue;
-
-			const textContent = extractTextContent(message);
-			if (!textContent) continue;
-
-			allMessages.push(textContent);
-			if (!firstMessage && message.role === "user") {
-				firstMessage = textContent;
-			}
+		} finally {
+			rl.close();
+			stream.destroy();
 		}
 
+		// A signal aborted while the file was being read ends the listing the same way one aborted
+		// before the read does. The stream no longer carries the signal, so nothing else would.
+		signal?.throwIfAborted();
 		if (!header) return null;
 
 		const cwd = typeof header.cwd === "string" ? header.cwd : "";

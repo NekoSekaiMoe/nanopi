@@ -858,6 +858,18 @@ describe("Markdown component", () => {
 			assert.ok(plainLines.some((line) => line.includes("Col1")));
 			assert.ok(plainLines.some((line) => line.includes("│")));
 		});
+
+		it("keeps a hard break after an inline image as its own row", () => {
+			// A rendered line holding an image skips wrapping, and wrapping is what splits on `\n`
+			// elsewhere. Without splitting first, the image and the text after the hard break leave
+			// the renderer as one entry and the text draws over the image's first row.
+			const kittyImage = "\x1b_Ga=T,f=100,t=f,d=QUJD\x1b\\";
+			const markdown = new Markdown(`line one ${kittyImage}  \nline two`, 0, 0, defaultMarkdownTheme);
+
+			const plainLines = markdown.render(40).map((line) => line.replace(/\x1b\[[0-9;]*m/g, "").trimEnd());
+
+			assert.deepStrictEqual(plainLines, [`line one ${kittyImage}`, "line two"]);
+		});
 	});
 
 	describe("LaTeX math", () => {
