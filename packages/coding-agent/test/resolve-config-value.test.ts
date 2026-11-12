@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
 	clearConfigValueCache,
 	resolveConfigValue,
+	resolveConfigValueOrThrow,
 	resolveConfigValueUncached,
 } from "../src/core/resolve-config-value.ts";
 import * as shellModule from "../src/utils/shell.ts";
@@ -37,6 +38,25 @@ describe("resolveConfigValue", () => {
 			delete process.env.TEST_CONFIG_LEFT;
 			delete process.env.TEST_CONFIG_RIGHT;
 		}
+	});
+
+	test("treats a value with no dollar sign as a literal instead of an environment reference", () => {
+		// An endpoint that ignores its key (`ollama`, `llama.cpp`) documents a literal like `local`, and a
+		// key may be any string. Reading such a value as an unset variable dropped the key, and reading a
+		// set one sent the variable's value. Environment references are written `$NAME` or `${NAME}`.
+		const literal = "TEST_CONFIG_UNSET_LOOKALIKE";
+		process.env.TEST_CONFIG_SET_LOOKALIKE = "from-env";
+		try {
+			expect(resolveConfigValue(literal)).toBe(literal);
+			expect(resolveConfigValueUncached(literal)).toBe(literal);
+			expect(resolveConfigValue("TEST_CONFIG_SET_LOOKALIKE")).toBe("TEST_CONFIG_SET_LOOKALIKE");
+			// The explicit form still reads the variable.
+			expect(resolveConfigValue("$TEST_CONFIG_SET_LOOKALIKE")).toBe("from-env");
+		} finally {
+			delete process.env.TEST_CONFIG_SET_LOOKALIKE;
+		}
+		expect(resolveConfigValueOrThrow(literal, "an API key")).toBe(literal);
+		expect(resolveConfigValue("local")).toBe("local");
 	});
 
 	test("uses credential-scoped environment before process.env", () => {

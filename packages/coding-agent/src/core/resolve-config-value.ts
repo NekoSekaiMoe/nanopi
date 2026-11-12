@@ -99,6 +99,7 @@ function getTemplateEnvVarNames(parts: TemplatePart[]): string[] {
 }
 
 function resolveTemplate(parts: TemplatePart[], env?: Record<string, string>): string | undefined {
+	if (parts.every((part) => part.type === "literal")) return parts.map((part) => part.value).join("");
 	let resolved = "";
 	for (const part of parts) {
 		if (part.type === "literal") {
@@ -140,7 +141,7 @@ export function isConfigValueConfigured(config: string, env?: Record<string, str
  * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
  * - Interpolates "$ENV_VAR" or "${ENV_VAR}" references with the named environment variable
  * - In non-command values, "$$" escapes a literal "$" and "$!" escapes a literal "!"
- * - Otherwise treats the value as a literal
+ * - Otherwise, including a value that holds no "$" at all, treats the value as a literal
  */
 export function resolveConfigValue(config: string, env?: Record<string, string>): string | undefined {
 	const reference = parseConfigValueReference(config);
