@@ -36,6 +36,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 		onComplete: (success: boolean, message?: string) => void,
 		providerNameOverride?: string,
 		titleOverride?: string,
+		notice?: readonly string[],
 	) {
 		super();
 		this.tui = tui;
@@ -49,6 +50,11 @@ export class LoginDialogComponent extends Container implements Focusable {
 
 		// Title
 		this.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
+
+		if (notice?.length) {
+			this.addChild(new Spacer(1));
+			for (const line of notice) this.addChild(new Text(theme.fg("warning", line), 1, 0));
+		}
 
 		// Dynamic content area
 		this.contentContainer = new Container();

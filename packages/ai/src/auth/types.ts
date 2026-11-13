@@ -240,6 +240,14 @@ export interface OAuthAuth {
 	/** Selector label for the OAuth login option, e.g. "Sign in with SuperGrok or X Premium". */
 	loginLabel?: string;
 
+	/**
+	 * What the user has to know before the flow runs, in the login dialog and in
+	 * `auth login`. For caveats that belong to the account rather than to a step
+	 * of the flow: an invented value cannot be validated by the flow, so the
+	 * place to say so is the form the user is about to fill in.
+	 */
+	notice?: readonly string[];
+
 	login(interaction: ProviderAuthInteraction, options?: LoginOptions): Promise<OAuthCredential>;
 
 	/**

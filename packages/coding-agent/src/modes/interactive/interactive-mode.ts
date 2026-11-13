@@ -5852,7 +5852,17 @@ export class InteractiveMode {
 
 	private async showLoginDialog(providerId: string, providerName: string, onBack?: () => void): Promise<void> {
 		const previousModel = this.session.model;
-		const dialog = new LoginDialogComponent(this.ui, providerId, (_success, _message) => {}, providerName);
+		// What the provider wants said before its flow asks anything: caveats on the
+		// account (a check-in that needs a captured identity), not on a login step.
+		const notice = this.session.modelRuntime.getProvider(providerId)?.auth.oauth?.notice;
+		const dialog = new LoginDialogComponent(
+			this.ui,
+			providerId,
+			(_success, _message) => {},
+			providerName,
+			undefined,
+			notice,
+		);
 		this.editorContainer.clear();
 		this.editorContainer.addChild(dialog);
 		this.ui.setFocus(dialog);

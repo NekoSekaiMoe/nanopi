@@ -54,6 +54,19 @@ function liveModels(
 	};
 }
 
+/**
+ * What a Qoder sign-in does not do for the account: the daily check-in pays only
+ * a request that looks like an official installation, and the one header that
+ * cannot be derived is the machine token. The dialog is the one place the user
+ * reads before filling in an env the flow itself cannot validate.
+ */
+const CHECKIN_NOTICE: readonly string[] = [
+	"Signing in does not configure the daily check-in: without a captured device identity the global site withholds the campaign that pays it.",
+	"Capture `cosy-machinetoken`, `cosy-machinetype` and `cosy-version` from the desktop client (proxy it, open the usage panel, read the request to /sash/api/v1/me/campaigns) and store them as QODER_MACHINE_TOKEN, QODER_MACHINE_TYPE and QODER_CLIENT_VERSION on this credential.",
+	"An invented value is worse than none: the CN site rejects a forged fingerprint and the global site stops issuing the campaign. The status line of /qoder-checkin says which fields the request actually carried.",
+	"Without one in the credential the check-in falls back to the same variables in the environment, so a single capture on this machine is shared by every account signed in here.",
+];
+
 function qoder(provider: "qoder" | "qoder-cn"): Provider<QoderApi> {
 	const region: QoderRegion = provider === "qoder-cn" ? "cn" : "global";
 	const label = provider === "qoder-cn" ? "Qoder CN" : "Qoder";
@@ -69,6 +82,8 @@ function qoder(provider: "qoder" | "qoder-cn"): Provider<QoderApi> {
 				name: label,
 				isSubscription: true,
 				loginLabel: provider === "qoder-cn" ? "Sign in with Qoder (qoder.com.cn)" : "Sign in with Qoder",
+				// The CN site hands the daily campaign to the account without a fingerprint; the caveat is the global one.
+				notice: provider === "qoder-cn" ? undefined : CHECKIN_NOTICE,
 				load: provider === "qoder-cn" ? loadQoderCnOAuth : loadQoderOAuth,
 			}),
 		},
