@@ -4,8 +4,10 @@
 
 ### Changed
 
+- A Qoder check-in counts every campaign the server listed, including an entry without a `campaignId`, which `parseCampaigns` used to drop: the count is the evidence that separates "nothing was issued" from "the site withheld the entry", so undercounting it made the diagnosis worse. Such an entry stays unclaimable (issue [#710](https://cnb.cool/shinytale/nanopi/-/issues/710))
 - A Qoder check-in reports what it looked for, not just the count: `checkinQoder` now returns whether the request carried a captured device identity, which of its fields, and the campaigns the server listed as `ACTION/STATUS` (plus a trimmed raw body). A `no_campaign` answer otherwise reads as "nothing was issued" and "the site did not recognize this installation" at once, and the diagnosis needs both the identity and the list
 - The Qoder check-in device identity covers a full official-client capture: `QoderDeviceIdentity` gained `machineId`, `machineCode`, `version`, `clientType`, `hostname` and `machineOs`, and `qoderCheckinHeaders` sends the whole set (`cosy-version`, `cosy-machineid`, `cosy-machinecode`, `cosy-machinehostname`, `cosy-machineos`) whenever a `machineToken` is present. A capture the desktop client recorded carries those headers; sending only the token left the request looking unlike the client it claims to be
+- The Qoder check-in reports the client id that belongs to its identity: `cosy-clienttype` / `cosy-version` now always travel, `10` for a `1.x` capture (the agent build that issues the daily entry) and `5` for anything older, and the no-capture default is `5` + `0.4.4` — the pair the signed calls already present (`qoderDeviceHeaders`). Hardcoding `10` for both left one account looking like two different clients depending on the endpoint it talked to, and paired a `0.4.x` version with a client id that never carries that version (issue [#710](https://cnb.cool/shinytale/nanopi/-/issues/710))
 
 ### Fixed
 
