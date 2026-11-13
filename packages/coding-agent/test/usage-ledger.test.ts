@@ -53,7 +53,7 @@ function writeSession(root: string, project: string, name: string, entries: unkn
 		timestamp: new Date().toISOString(),
 		cwd: "/repo",
 	};
-	writeFileSync(file, [header, ...entries].map((entry) => JSON.stringify(entry)).join("\n") + "\n");
+	writeFileSync(file, `${[header, ...entries].map((entry) => JSON.stringify(entry)).join("\n")}\n`);
 	return file;
 }
 
