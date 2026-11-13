@@ -16,6 +16,7 @@ import { isBuildComponentEnabled } from "../build-components.ts";
 import type { SessionModule } from "../core/modules/types.ts";
 import askLite from "../extras/ask-lite/index.ts";
 import mcpLite from "../extras/mcp-lite/src/index.ts";
+import piBtw from "../extras/pi-btw/src/index.ts";
 import piFakeCodex from "../extras/pi-fake-codex/src/index.ts";
 import piFakeOpencode from "../extras/pi-fake-opencode/src/index.ts";
 import piLspMini from "../extras/pi-lsp-mini/src/index.ts";
@@ -44,6 +45,7 @@ const BUILTIN_MODULES: SessionModule[] = [
 	// Bundled extras (formerly dist/extras packages, now compiled in).
 	{ name: "ask-lite", factory: askLite },
 	{ name: "mcp-lite", factory: mcpLite, hidden: true },
+	{ name: "pi-btw", factory: piBtw },
 	{ name: "pi-fake-codex", factory: piFakeCodex },
 	{ name: "pi-fake-opencode", factory: piFakeOpencode, hidden: true },
 	{ name: "pi-lsp-mini", factory: piLspMini },

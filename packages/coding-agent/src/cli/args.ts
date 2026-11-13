@@ -297,8 +297,9 @@ ${chalk.bold("Usage:")}
 
 ${chalk.bold("Commands:")}
   ${APP_NAME} auth <command>            Log in, print credentials, or check provider readiness
+  ${APP_NAME} mcp <command>             Add, remove, or list MCP servers
   ${APP_NAME} webui [-p <port>]        Start the browser UI on a loopback port (default ${5335})
-  ${APP_NAME} <command> --help          Show help for auth/webui
+  ${APP_NAME} <command> --help          Show help for auth/mcp/webui
 
 ${chalk.bold("Options:")}
   --provider <name>              Provider to search for --model (requires --model)

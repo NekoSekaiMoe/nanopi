@@ -89,7 +89,7 @@ const SUBAGENT_DESCRIPTION = `${DESCRIPTION_PREAMBLE}\n\n${DESCRIPTION_RESULT}\n
  * `pi-fake-opencode`, whose OpenCode Zen header spoofing children need for
  * `opencode` models) is inherited from the parent build.
  */
-const CHILD_MODULE_SKIP = new Set(["pi-ui", "pi-rewind", "ask-lite", "todo-lite"]);
+const CHILD_MODULE_SKIP = new Set(["pi-ui", "pi-rewind", "ask-lite", "todo-lite", "pi-btw"]);
 
 /** One attempt's ending, kept after a retry replaces the job's `status`. */
 export interface AttemptOutcome {

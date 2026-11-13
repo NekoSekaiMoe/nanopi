@@ -85,6 +85,9 @@
 		"module/mcp-lite": {
 			"description": "MCP client, subagent-only mcp__* tools"
 		},
+		"module/pi-btw": {
+			"description": "`/btw` side questions: answered outside the session context"
+		},
 		"module/pi-fake-codex": {
 			"description": "Codex-compatible provider fingerprint"
 		},
@@ -182,6 +185,9 @@
 		"mcp-lite": {
 			"source": "packages/coding-agent/src/extras/mcp-lite/src/index.ts"
 		},
+		"pi-btw": {
+			"source": "packages/coding-agent/src/extras/pi-btw/src/index.ts"
+		},
 		"pi-fake-codex": {
 			"source": "packages/coding-agent/src/extras/pi-fake-codex/src/index.ts"
 		},
@@ -235,6 +241,7 @@
 				"module/*": true,
 				"module/ask-lite": false,
 				"module/mcp-lite": false,
+				"module/pi-btw": false,
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
 				"module/pi-lsp-mini": false,
@@ -261,6 +268,7 @@
 				"module/*": true,
 				"module/ask-lite": false,
 				"module/mcp-lite": false,
+				"module/pi-btw": false,
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
 				"module/pi-lsp-mini": false,
