@@ -21,6 +21,19 @@ autoInstallPeers: true
 
 overrides:
   protobufjs: 7.6.6
+  # aws-sdk 的跨包版本线必须自己钉住。它整族包互相声明 "^3.x"，而 ^ 在 3.x 上
+  # 跨 minor，pnpm 于是能合法地装出两条线：一条是直接依赖要的新线，一条是上游
+  # 精确锁定（@aws-sdk/credential-provider-sso、client-bedrock-runtime 对
+  # token-providers 写的是精确版本）拖着的旧线。两条线各带一份 @smithy/core，
+  # 而 @smithy/core 是 aws-sdk 的公共底座，单份约 200 KB，单文件产物里两份都进。
+  # 8.8 → 9.2 MiB 就是这么来的：一次依赖小版本升级把大部分包推到
+  # @smithy/core@3.40.0，只有 token-providers 的旧快照还钉着 3.39.0。
+  # 这里钉住跨版本线的那两家：token-providers（3.1162/3.1166/3.1167）→ 3.1167.0，
+  # smithy/core（3.39.0/3.40.0）→ 3.40.0。@aws-sdk/core 3.980/3.981 之类的分叉
+  # 是上游自己没对齐，钉哪一边都要赌，不动。理由与判据见
+  # .agents/notes/implemented/process/2026-11-13-aws-sdk-version-line.md。
+  '@aws-sdk/token-providers': 3.1167.0
+  '@smithy/core': 3.40.0
 
 # 36 小时冷却期，挡住刚发布的供应链投毒版本。
 # 单位是分钟，不是天：pnpm 的惯例是分钟（默认 1440 = 1 天），写 2 只等于 2 分钟，
@@ -39,14 +52,7 @@ minimumReleaseAge: 1440
 minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeIgnoreMissingTime: true
 minimumReleaseAgeExclude:
-  - '@anthropic-ai/sdk@1.6.0'
-  - '@aws-sdk/client-bedrock-runtime@3.1163.0'
-  - '@aws-sdk/token-providers@3.1163.0'
-  - '@google/genai@3.0.0'
   - '@isaacs/nonrecursive-glob-match@1.1.0'
-  - 'lucide-react@1.69.0'
-  - 'minimatch@11.0.5'
-  - 'openai@7.52.0'
   - 'undici@8.12.4'
 
 allowBuilds:
