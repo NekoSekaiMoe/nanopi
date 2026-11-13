@@ -53,14 +53,29 @@ function aesCbcEncrypt(plain: Buffer, key: Buffer): Buffer {
 	return Buffer.concat([cipher.update(plain), cipher.final()]);
 }
 
+/** 32 hex digits shaped as UUIDv4: version digit `4`, variant hex digit `a`. */
+function uuidShape(hex: string): string {
+	const chars = hex.toLowerCase().split("");
+	chars[12] = "4";
+	chars[16] = "a";
+	return [chars.slice(0, 8), chars.slice(8, 12), chars.slice(12, 16), chars.slice(16, 20), chars.slice(20)]
+		.map((part) => part.join(""))
+		.join("-");
+}
+
 /**
  * Stable device identity for an account. Derived rather than captured: the
  * upstream ties a device to an account, and a value that changed per run would
  * look like a new machine on every request.
+ *
+ * `machineId` keeps the 8-4-4-4-12 shape an official client reports. A bare
+ * 32-hex id still signs a request, but anything that compares device ids
+ * structurally (the job-token exchange included) reads it as a different kind
+ * of client.
  */
 export function qoderFingerprint(seed: string): QoderFingerprint {
 	return {
-		machineId: md5Hex(`machine:${seed}`),
+		machineId: uuidShape(md5Hex(`machine:${seed}`)),
 		machineToken: createHash("sha512").update(`machinetoken:${seed}`).digest("base64url").slice(0, 43),
 		machineType: md5Hex(`machinetype:${seed}`).slice(0, 18),
 	};
