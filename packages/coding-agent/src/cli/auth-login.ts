@@ -105,6 +105,9 @@ export async function runAuthLogin(
 		);
 	}
 
+	// A provider's notice is about the account, not about a step, so it prints before the flow starts asking.
+	for (const line of oauth.notice ?? []) console.log(chalk.yellow(line));
+
 	const openUrl = options.openBrowser ?? true;
 	const interaction: ProviderAuthInteraction = {
 		signal: options.signal,
