@@ -1,0 +1,16 @@
+{
+	"name": "pi-btw",
+	"version": "0.1.0",
+	"description": "nanopi `/btw`: ask a side question about the session without adding it to the conversation.",
+	"type": "module",
+	"pi": {
+		"extensions": [
+			"./src/index.ts"
+		]
+	},
+	"peerDependencies": {
+		"@nanopi/pi-coding-agent": "*",
+		"@nanopi/pi-tui": "*"
+	},
+	"license": "MIT"
+}

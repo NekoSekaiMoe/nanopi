@@ -33,6 +33,13 @@ import { resolveCredentialForPrint } from "./cli/credential-print.ts";
 import { processFileArguments } from "./cli/file-processor.ts";
 import { buildInitialMessage } from "./cli/initial-message.ts";
 import { listModels } from "./cli/list-models.ts";
+import {
+	isMcpCommandHelp,
+	McpCommandError,
+	parseMcpCommand,
+	printMcpCommandHelp,
+	runMcpCommand,
+} from "./cli/mcp-command.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import { selectSession } from "./cli/session-picker.ts";
 import { shouldRunFirstTimeSetup, showFirstTimeSetup, showStartupSelector } from "./cli/startup-ui.ts";
@@ -288,6 +295,38 @@ async function runAuthCommand(args: string[]): Promise<boolean> {
 				: "Failed to resolve credential";
 		console.error(chalk.red(`Error: ${message}`));
 		process.exitCode = command.kind === "check" ? 2 : 1;
+	}
+	return true;
+}
+
+/**
+ * `nanopi mcp …` runs before any session exists: it edits the config files
+ * mcp-lite reads and exits, so a container can add a server without a model,
+ * a credential, or a TTY.
+ */
+function runMcpCommandLine(args: string[]): boolean {
+	if (isMcpCommandHelp(args)) {
+		printMcpCommandHelp();
+		return true;
+	}
+	let command: ReturnType<typeof parseMcpCommand>;
+	try {
+		command = parseMcpCommand(args);
+	} catch (error) {
+		const message = error instanceof McpCommandError ? error.message : "Failed to parse mcp command";
+		console.error(chalk.red(`Error: ${message}`));
+		process.exitCode = 1;
+		return true;
+	}
+	if (!command) return false;
+	try {
+		process.exitCode = runMcpCommand(command, { cwd: process.cwd() });
+	} catch (error) {
+		// `McpConfigError` is the write layer refusing (bad JSON, name clash): the
+		// message already names the file and the flag that resolves it.
+		const message = error instanceof Error ? error.message : String(error);
+		console.error(chalk.red(`Error: ${message}`));
+		process.exitCode = 1;
 	}
 	return true;
 }
@@ -705,6 +744,9 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (await runAuthCommand(args)) {
+		return;
+	}
+	if (runMcpCommandLine(args)) {
 		return;
 	}
 

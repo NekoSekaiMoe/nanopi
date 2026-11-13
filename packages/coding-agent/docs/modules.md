@@ -292,6 +292,6 @@ Skills, prompt templates, and context files are still local files that nanopi di
 
 ## Learn from the built-ins
 
-Everything shipped with nanopi is a module: run modes and permissions (`packages/extra`), `/compact`, `/context`, `/status`, `/init`, codex-style compaction, and the extras under `packages/coding-agent/src/extras/` (`ask-lite`, `todo-lite`, `websearch`, `pi-rewind`, `pi-subagent-mini`, `pi-ui`, and the rest). This repository's own `.agents/extensions/` modules (`import-repro`, `prompt-url-widget`, `redraws`) are smaller, readable examples of the same shape; point `$NANOPI_EXTENSIONS` at that directory to load them into a development build.
+Everything shipped with nanopi is a module: run modes and permissions (`packages/extra`), `/compact`, `/context`, `/status`, `/init`, codex-style compaction, and the extras under `packages/coding-agent/src/extras/` (`ask-lite`, `todo-lite`, `websearch`, `pi-rewind`, `pi-subagent-mini`, `pi-ui`, `pi-btw`, and the rest). This repository's own `.agents/extensions/` modules (`import-repro`, `prompt-url-widget`, `redraws`) are smaller, readable examples of the same shape; point `$NANOPI_EXTENSIONS` at that directory to load them into a development build.
 
 A full runnable SDK example is [06-modules.ts](../examples/sdk/06-modules.ts).

@@ -40,7 +40,7 @@ export interface McpConfig {
 	discoveryFiles: string[];
 }
 
-function parseServerEntry(name: string, value: unknown): McpServerConfig | undefined {
+export function parseServerEntry(name: string, value: unknown): McpServerConfig | undefined {
 	if (!value || typeof value !== "object") return undefined;
 	const record = value as Record<string, unknown>;
 	const transport = record.transport;
@@ -69,7 +69,7 @@ function parseServerEntry(name: string, value: unknown): McpServerConfig | undef
 }
 
 /** Parse a config file, tolerating the UTF-8 BOM that Windows PowerShell writes. */
-function readJsonConfig(file: string): unknown {
+export function readJsonConfig(file: string): unknown {
 	const text = readFileSync(file, "utf8");
 	return JSON.parse(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
 }

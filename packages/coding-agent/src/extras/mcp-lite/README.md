@@ -61,6 +61,12 @@ main agent <------------- the tool's output, verbatim
 that failed to parse. Servers connect eagerly at session start; failed servers
 stay visible with their error.
 
+The same files are written by `nanopi mcp add` / `nanopi mcp remove`, which is
+the reason the module owns a writer at all: the server shape depends on the
+transport, so hand-editing `mcp.json` is the one thing a user should not have to
+do. `--project` targets `.nanopi/mcp.json`, everything else keys and servers in
+the file are preserved, and a malformed file is reported rather than replaced.
+
 ## Discovery
 
 A machine that already configured MCP for another client should not need the

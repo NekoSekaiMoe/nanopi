@@ -8,6 +8,7 @@ This page documents nanopi's built-in command-line commands and options. Run `na
 nanopi [options] [--] [@files...] [messages...]
 nanopi list
 nanopi auth <check|print-api-key|print-bearer-token> [options]
+nanopi mcp <add|remove|list> [options]
 ```
 
 <a id="modes"></a>
@@ -231,3 +232,33 @@ Authentication commands require `--provider <provider>` or `--model <model>`. Se
 `auth login` answers the flow's questions on the terminal: an OAuth flow that opens a URL, asks which sign-in method to use, or waits for a pasted code works the same way it does under `/login`. A build whose credentials are not managed by nanopi (no OAuth flows compiled in) has nothing to log in to, so use an API key instead.
 
 Credential-printing commands write secrets to stdout.
+
+## MCP commands
+
+```sh
+nanopi mcp list
+nanopi mcp add fs -- npx -y @modelcontextprotocol/server-filesystem .
+nanopi mcp add remote --url https://mcp.example.com/mcp --header "authorization=Bearer $TOKEN"
+nanopi mcp remove fs
+```
+
+`nanopi mcp add` writes one server and exits: no session, no model, no connection attempt. Everything after `--` is the server command's own argv, so flags belonging to the server are never parsed as nanopi's.
+
+| Command | Description |
+|---|---|
+| `nanopi mcp list` | List every server this project can reach, with the file each came from |
+| `nanopi mcp add <name>` | Write one server; `--command` for stdio or `--url` for http |
+| `nanopi mcp remove <name>` | Remove a server from nanopi's own config files |
+
+| Option | Applies to | Description |
+|---|---|---|
+| `--command <command>` | `add` | stdio server executable; its arguments follow, after `--` |
+| `--url <url>` | `add` | http server endpoint |
+| `--env KEY=VALUE` | `add` | Environment for a stdio server (repeatable) |
+| `--header NAME=VALUE` | `add` | Request header for an http server (repeatable) |
+| `--cwd <dir>` | `add` | Working directory for a stdio server |
+| `--project` | `add`, `remove` | Use the checkout's `.nanopi/mcp.json` instead of the user's `~/.nanopi/mcp.json` |
+| `--global` | `remove` | Restrict the removal to the user's file |
+| `--force` | `add` | Replace an existing server of the same name |
+
+Servers written by these commands are read like any other: `/mcp` lists them with their source, and servers configured for another client (Cursor, Claude Desktop, …) are still discovered. Those discovered files are read-only for nanopi, so `mcp remove` says which file a name it cannot delete came from.
