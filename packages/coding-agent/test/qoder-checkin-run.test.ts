@@ -92,6 +92,54 @@ describe("Qoder check-in run", () => {
 		expect(summaries.find((summary) => summary.provider === "qoder")?.status).toBe("no_campaign");
 	});
 
+	test("reads the captured identity per account, credential before environment", async () => {
+		const storage = AuthStorage.inMemory({
+			qoder: qoderCredential({
+				env: { QODER_REGION: "global", QODER_DEVICE_TOKEN: "dt-stored", QODER_MACHINE_TOKEN: "mt-account" },
+			}),
+			"qoder-cn": qoderCredential({
+				env: { QODER_REGION: "cn", QODER_DEVICE_TOKEN: "dt-cn", QODER_MACHINE_TOKEN: "mt-cn" },
+			}),
+		});
+		const registry = await createInMemoryModelRegistry(storage);
+		const headers: { host: string; init?: RequestInit }[] = [];
+		vi.stubEnv("QODER_MACHINE_TOKEN", "mt-env");
+		vi.stubGlobal("fetch", async (input: string | URL | Request, init?: RequestInit) => {
+			const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+			headers.push({ host: new URL(url).host, init });
+			return jsonResponse({ campaigns: [] });
+		});
+
+		await runQoderCheckin(registry, neverAbortedSignal);
+		vi.unstubAllEnvs();
+
+		const global = headers.find((entry) => entry.host === "openapi.qoder.sh");
+		const cn = headers.find((entry) => entry.host === "openapi.qoder.com.cn");
+		// The account's own capture wins; the process env is the fallback, not an override.
+		expect(global?.init?.headers).toMatchObject({ "cosy-machinetoken": "mt-account" });
+		expect(cn?.init?.headers).not.toHaveProperty("cosy-machinetoken");
+	});
+
+	test("reports a missing identity on a global account with nothing captured", async () => {
+		const storage = AuthStorage.inMemory({
+			qoder: qoderCredential({ env: { QODER_REGION: "global", QODER_DEVICE_TOKEN: "dt-stored" } }),
+		});
+		const registry = await createInMemoryModelRegistry(storage);
+		vi.stubGlobal("fetch", async () =>
+			jsonResponse({
+				campaigns: [{ campaignId: "c-1", actionType: "SOTA_PACKAGE", claimStatus: "CLAIMABLE" }],
+			}),
+		);
+
+		const summaries = await runQoderCheckin(registry, neverAbortedSignal);
+
+		expect(summaries.find((summary) => summary.provider === "qoder")).toMatchObject({
+			status: "no_campaign",
+			fingerprint: false,
+			campaigns: ["SOTA_PACKAGE/CLAIMABLE"],
+		});
+	});
+
 	test("reports the window a startup check before the rollover claims", async () => {
 		const storage = AuthStorage.inMemory({ qoder: qoderCredential() });
 		const registry = await createInMemoryModelRegistry(storage);

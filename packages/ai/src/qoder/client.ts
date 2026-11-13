@@ -62,13 +62,24 @@ export function resolveQoderRegion(explicit?: QoderRegion): QoderRegion {
  * Device identity a check-in request may carry. The global site hands out its
  * campaign only to a request that looks like a real installation: a missing
  * `cosy-machinetoken` / `cosy-machinetype` reads as `no_campaign` for an account
- * that has never claimed in the official client. Both values are captured from
- * an official client (a self-invented fingerprint is worse than none) and
- * travel on the credential, or on `QODER_MACHINE_TOKEN` / `QODER_MACHINE_TYPE`.
+ * that has never claimed in the official client. Every value here is captured
+ * from an official client (a self-invented fingerprint is worse than none) and
+ * travels on the credential, or on `QODER_MACHINE_*` env vars.
+ *
+ * The captures differ in how much they recorded, so the optional fields stay
+ * optional: a request only claims the headers the capture actually holds.
  */
 export interface QoderDeviceIdentity {
 	machineToken?: string;
 	machineType?: string;
+	machineId?: string;
+	machineCode?: string;
+	/** Client version the capture came from; the desktop client reports `0.4.x`. */
+	version?: string;
+	/** Desktop client id; the default `10` is what the campaign flow sends without a capture. */
+	clientType?: string;
+	hostname?: string;
+	machineOs?: string;
 }
 
 /**
@@ -77,13 +88,20 @@ export interface QoderDeviceIdentity {
  * an invented fingerprint, so a CN call never carries one.
  */
 export function qoderCheckinHeaders(deviceToken: string, device?: QoderDeviceIdentity): Record<string, string> {
-	return {
+	const headers: Record<string, string> = {
 		authorization: `Bearer ${deviceToken}`,
 		accept: "application/json",
 		"accept-language": "zh-CN",
 		"user-agent": "Qoder",
-		"cosy-clienttype": "10",
-		...(device?.machineToken ? { "cosy-machinetoken": device.machineToken } : {}),
-		...(device?.machineType ? { "cosy-machinetype": device.machineType } : {}),
+		"cosy-clienttype": device?.machineToken ? (device.clientType ?? "10") : "10",
 	};
+	if (!device?.machineToken) return headers;
+	headers["cosy-version"] = device.version ?? "0.4.4";
+	headers["cosy-machinetoken"] = device.machineToken;
+	if (device.machineType) headers["cosy-machinetype"] = device.machineType;
+	if (device.machineId) headers["cosy-machineid"] = device.machineId;
+	if (device.machineCode) headers["cosy-machinecode"] = device.machineCode;
+	headers["cosy-machinehostname"] = device.hostname ?? "localhost";
+	headers["cosy-machineos"] = device.machineOs ?? "aarch64_darwin";
+	return headers;
 }

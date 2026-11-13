@@ -33,6 +33,12 @@ export interface QoderCheckinSummary {
 	/** Campaign window the result belongs to (`YYYY-MM-DD`), when the server reported one. */
 	windowDate?: string;
 	message: string;
+	/** Whether the request carried a captured device identity; a missing one is why the global site withholds. */
+	fingerprint: boolean;
+	/** Campaigns the server listed as `ACTION/STATUS`, when it listed any. */
+	campaigns?: string[];
+	/** Identity fields the request carried, when it carried some. */
+	fingerprintFields?: string[];
 }
 
 /** Windows a machine already finished; the daily one rolls over at 10:00 Beijing time. */
@@ -54,17 +60,37 @@ function credentialToken(credential: Credential | undefined): string | undefined
 }
 
 /**
+ * Captured device identity, read per account: the credential's own values first
+ * (one capture per account, which is what the site compares requests against),
+ * then the process environment for a single-account setup. The credential wins
+ * because two logins on one machine must not present the same device.
+ */
+function capturedIdentity(env: Record<string, string> | undefined): QoderDeviceIdentity {
+	const read = (name: string) => env?.[name] ?? process.env[name];
+	const device: QoderDeviceIdentity = {
+		machineToken: read("QODER_MACHINE_TOKEN"),
+		machineType: read("QODER_MACHINE_TYPE"),
+		machineId: read("QODER_MACHINE_ID"),
+		machineCode: read("QODER_MACHINE_CODE"),
+		version: read("QODER_CLIENT_VERSION"),
+		clientType: read("QODER_CLIENT_TYPE"),
+		hostname: read("QODER_MACHINE_HOSTNAME"),
+		machineOs: read("QODER_MACHINE_OS"),
+	};
+	return Object.fromEntries(Object.entries(device).filter(([, value]) => value)) as QoderDeviceIdentity;
+}
+
+/**
  * Device identity to send. Only the global site withholds its campaign from a
  * request that carries none, and only a captured identity helps (an invented
  * one is what the CN site rejects), so a CN account never sends one.
  */
 function deviceIdentity(region: QoderRegion, env: Record<string, string> | undefined) {
 	if (region === "cn") return undefined;
-	const machineToken = env?.QODER_MACHINE_TOKEN ?? process.env.QODER_MACHINE_TOKEN;
-	const machineType = env?.QODER_MACHINE_TYPE ?? process.env.QODER_MACHINE_TYPE;
-	if (!machineToken && !machineType) return undefined;
-	const device: QoderDeviceIdentity = { machineToken, machineType };
-	return device;
+	const device = capturedIdentity(env);
+	// A token without its type is half a capture: still worth sending, the site
+	// decides, but the caller reports which fields actually travelled.
+	return device.machineToken || device.machineType ? device : undefined;
 }
 
 function checkinOptions(provider: string, region: QoderRegion, env: Record<string, string> | undefined) {
@@ -93,7 +119,7 @@ export async function runQoderCheckin(
 	const summaries: QoderCheckinSummary[] = [];
 	for (const provider of QODER_PROVIDER_IDS) {
 		if (!loggedIn.has(provider)) {
-			summaries.push({ provider, status: "none", amount: 0, message: "not logged in" });
+			summaries.push({ provider, status: "none", amount: 0, message: "not logged in", fingerprint: false });
 			continue;
 		}
 		const stored = await modelRegistry.readCredential(provider, { signal });
@@ -105,6 +131,7 @@ export async function runQoderCheckin(
 				status: "unconfigured",
 				amount: 0,
 				message: "credential has no device token",
+				fingerprint: false,
 			});
 			continue;
 		}
@@ -125,6 +152,9 @@ export async function runQoderCheckin(
 				amount: result.amount,
 				windowDate: result.windowDate,
 				message: result.message,
+				fingerprint: result.fingerprint,
+				fingerprintFields: result.fingerprintFields,
+				campaigns: result.campaigns,
 			});
 		} catch (error) {
 			summaries.push({
@@ -133,6 +163,7 @@ export async function runQoderCheckin(
 				status: "error",
 				amount: 0,
 				message: error instanceof Error ? error.message : String(error),
+				fingerprint: false,
 			});
 		}
 	}
