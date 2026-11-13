@@ -22,14 +22,21 @@ bundle 本身不上任何 registry。国内用户下载要过 GitHub Releases，
 主分支 README」：
 
 ```
-README.md                       # 当前指向哪个 tag，下载与校验命令
-assets/<tag>/nanopi.js
-assets/<tag>/nanopi-base.js
-assets/<tag>/nanopi-minimal.js
-assets/<tag>/SHA256SUMS
-assets/<tag>/RELEASE_NOTES.md   # 正式版是 release-notes.mjs 的产物
-assets/<tag>/nanopi-<version>-source.tar.gz   # 只有正式版
+README.md                       # 当前指向哪个目录，下载与校验命令
+v20261114.0.0/nanopi.js
+v20261114.0.0/nanopi-base.js
+v20261114.0.0/nanopi-minimal.js
+v20261114.0.0/SHA256SUMS
+v20261114.0.0/RELEASE_NOTES.md                # 正式版是 release-notes.mjs 的产物
+v20261114.0.0/nanopi-20261114-source.tar.gz   # 只有正式版
+nightly/…                                     # nightly 的同一组文件
 ```
+
+目录名不是 tag，是 bundle 里烘焙的那一段 URL：正式版写的是
+`v<package version>`（`v20261114.0.0`，跟着 lockstep 的 `.0.0`），nightly 写的是
+`nightly`（见 `atomgitSidecarTarballUrls`）。发布目录必须与它逐字相同，否则 bundle
+第一次下载 sidecar 就 404。早先发布把文件平铺在 `assets/` 下，两份 URL 都与它对
+不上；脚本现在见到 `assets/` 会清掉。
 
 资产名与 GitHub Release 逐字相同，换源不改文件名，`install.js --sku` 才有意义。
 `SHA256SUMS` 由脚本按要发的文件现算，格式就是 `sha256sum -c` 认的那一种。
@@ -37,8 +44,8 @@ assets/<tag>/nanopi-<version>-source.tar.gz   # 只有正式版
 `scripts/publish-atomgit.mjs` 是唯一的写入方：它在一个临时 checkout 里组装目录、
 写 README 与 SHA256SUMS、提交、`tag -f`、推送。两条约束写死在脚本里：
 
-- **只推 tag，不推 main（正式版）**。补发历史版本时主分支不能退回去：README 说
-  「当前是哪个 tag」，主分支只跟着最新一次发布走。
+- **主分支快进到最新一次发布，tag 跟着指过去**。README 说「当前是哪个版本」，
+  主分支只跟着最新一次发布走；补发历史版本时它以一次新提交盖在上面，不回退。
 - **tag 可以 force 移动**。nightly 当天重跑、正式版手动补发都落在同一个 tag 名上，
   这个 tag 是「这个版本现在长什么样」，不是历史记录；历史在提交里。
 - **临时 checkout 从远端 main 起步**。脚本先 `ls-remote` 看远端有没有 main，有就

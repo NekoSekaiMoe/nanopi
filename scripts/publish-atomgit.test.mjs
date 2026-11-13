@@ -79,15 +79,15 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/heads/main"]).split("\n");
 	assert.deepEqual(files, [
 		"README.md",
-		"assets/RELEASE_NOTES.md",
-		"assets/SHA256SUMS",
-		"assets/nanopi-base.js",
-		"assets/nanopi-minimal.js",
-		"assets/nanopi.js",
+		"nightly/RELEASE_NOTES.md",
+		"nightly/SHA256SUMS",
+		"nightly/nanopi-base.js",
+		"nightly/nanopi-minimal.js",
+		"nightly/nanopi.js",
 	]);
 
 	// SHA256SUMS 是 install.js 的校验入口，格式错了安装会直接失败。
-	const sums = git(fixturePaths.remote, ["show", "refs/heads/main:assets/SHA256SUMS"]).split("\n").filter(Boolean);
+	const sums = git(fixturePaths.remote, ["show", "refs/heads/main:nightly/SHA256SUMS"]).split("\n").filter(Boolean);
 	assert.equal(sums.length, 3);
 	for (const line of sums) {
 		const [hash, name] = line.split(/\s+/);
@@ -96,7 +96,7 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 
 	const readme = git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]);
 	assert.match(readme, new RegExp(`Current: \\*\\*nightly\\*\\* built from ${COMMIT}`));
-	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:assets/RELEASE_NOTES.md"]), new RegExp(`Nightly build of ${COMMIT}`));
+	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:nightly/RELEASE_NOTES.md"]), new RegExp(`Nightly build of ${COMMIT}`));
 	assert.match(readme, /nanopi\/releases-assets\/raw\/main\/nightly\/nanopi\.js/);
 
 	// 同一天重跑：新提交叠在上面，tag 挪过去，主分支不出现 force。
@@ -130,12 +130,27 @@ test("a release tag carries the source archive and keeps the official notes", as
 	assert.equal(result.status, 0, result.stderr);
 
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/tags/v20261031.1.0"]).split("\n");
-	assert.ok(files.includes("assets/nanopi-20261031.1.0-source.tar.gz"));
+	assert.ok(files.includes("v20261031.1.0/nanopi-20261031.1.0-source.tar.gz"));
 	assert.equal(
-		git(fixturePaths.remote, ["show", "refs/tags/v20261031.1.0:assets/RELEASE_NOTES.md"]),
+		git(fixturePaths.remote, ["show", "refs/tags/v20261031.1.0:v20261031.1.0/RELEASE_NOTES.md"]),
 		"### Changed\n\n- something",
 	);
 	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]), /Current: \*\*v20261031\.1\.0\*\*/);
+});
+
+// The bundle bakes its own download URL at build time and a date release tag
+// carries no patch part: v20261114 must land in v20261114.0.0/, the directory
+// the shipped bundle asks for, or the mirror answers 404 forever.
+test("a date tag lands in the directory the bundle asks for", async (t) => {
+	const fixturePaths = await fixture(t);
+	writeFileSync(join(fixturePaths.input, "nanopi-20261114-source.tar.gz"), "source\n");
+
+	const result = publish(fixturePaths, ["--tag", "v20261114", "--token-env", "ATOMGIT_KEY", "--push"]);
+	assert.equal(result.status, 0, result.stderr);
+
+	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/heads/main"]);
+	assert.match(files, /^v20261114\.0\.0\/nanopi\.js$/m);
+	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]), /raw\/main\/v20261114\.0\.0\/nanopi\.js/);
 });
 
 test("a missing flavor is an error, not a silently smaller release", async (t) => {
@@ -182,7 +197,7 @@ test("without --push nothing is uploaded", async (t) => {
 	const result = publish(fixturePaths, ["--tag", "nightly"]);
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /pass --push to upload/);
-	assert.equal(existsSync(join(fixturePaths.work, "assets", "nanopi.js")), true);
+	assert.equal(existsSync(join(fixturePaths.work, "nightly", "nanopi.js")), true);
 	assert.equal(spawnSync("git", ["for-each-ref", "--count=1"], { cwd: fixturePaths.remote, encoding: "utf8", env: gitEnv }).stdout.trim(), "");
 });
 
@@ -195,10 +210,10 @@ test("the TUI prebuild tarball is published beside the bundles", async (t) => {
 	assert.equal(result.status, 0, result.stderr);
 
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/heads/main"]).split("\n");
-	assert.ok(files.includes(`assets/${SIDECARS}`), files.join(", "));
+	assert.ok(files.includes(`nightly/${SIDECARS}`), files.join(", "));
 
 	// 校验和文件是 install.js 与 sidecar 下载共用的入口，tgz 必须在里面。
-	const sums = git(fixturePaths.remote, ["show", "refs/heads/main:assets/SHA256SUMS"]).split("\n").filter(Boolean);
+	const sums = git(fixturePaths.remote, ["show", "refs/heads/main:nightly/SHA256SUMS"]).split("\n").filter(Boolean);
 	const line = sums.find((entry) => entry.endsWith(`  ${SIDECARS}`));
 	assert.ok(line, "sidecars tarball is not listed in SHA256SUMS");
 	assert.equal(
@@ -210,7 +225,7 @@ test("the TUI prebuild tarball is published beside the bundles", async (t) => {
 	const readme = git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]);
 	assert.match(readme, new RegExp(`raw/main/nightly/${SIDECARS.replaceAll(".", "\\.")}`));
 	assert.match(
-		git(fixturePaths.remote, ["show", "refs/heads/main:assets/RELEASE_NOTES.md"]),
+		git(fixturePaths.remote, ["show", "refs/heads/main:nightly/RELEASE_NOTES.md"]),
 		new RegExp(`raw/main/nightly/${SIDECARS.replaceAll(".", "\\.")}`),
 	);
 });
@@ -223,6 +238,6 @@ test("a release payload without the tarball still publishes the bundles", async 
 	const result = publish(fixturePaths, ["--tag", "v20261031.1.0", "--token-env", "ATOMGIT_KEY", "--push"]);
 	assert.equal(result.status, 0, result.stderr);
 	const tagged = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/tags/v20261031.1.0"]).split("\n");
-	assert.ok(tagged.includes("assets/nanopi.js"), tagged.join(", "));
+	assert.ok(tagged.includes("v20261031.1.0/nanopi.js"), tagged.join(", "));
 	assert.equal(tagged.filter((name) => name.includes("sidecars")).length, 0);
 });

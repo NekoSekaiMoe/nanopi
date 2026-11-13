@@ -66,13 +66,23 @@ if (values.help || !values.tag || !values.commit || !values.input || !values.wor
 	process.exit(values.help ? 0 : 2);
 }
 
-const ASSETS = join(values.work, "assets");
 const TAG = values.tag;
 const remote = values.remote;
 const slug = values["repo-slug"];
+// Directory in the assets repository. The bundle bakes its own download URL at
+// build time: a release asks for `v<package version>` (the lockstep
+// `v20261114.0.0`, not the tag `v20261114`) and the nightly asks for
+// `nightly`, so the directory has to repeat that string exactly.
+function assetDir(tag) {
+	if (tag === "nightly") return "nightly";
+	const parts = tag.replace(/^v/, "").split(".");
+	return `v${[...parts, "0", "0"].slice(0, 3).join(".")}`;
+}
+const ASSET_DIR = assetDir(TAG);
+const ASSETS = join(values.work, ASSET_DIR);
 // Raw file base in the assets repository. The bundle names the sidecar tarball
 // after the package version, so it has to build the same URL by name.
-const rawBase = `https://atomgit.com/${slug}/raw/main/${TAG}`;
+const rawBase = `https://atomgit.com/${slug}/raw/main/${ASSET_DIR}`;
 
 function run(command, args, options = {}) {
 	return execFileSync(command, args, { encoding: "utf8", stdio: options.capture ? "pipe" : "inherit", ...options });
@@ -116,10 +126,13 @@ function assetsOf(input, tag) {
 	return { bundles, source, sidecars };
 }
 
-// 只发最新一份：发行仓库的主分支只服务「最新 nightly / 最新正式版」这条读取
-// 路径，历史版本留在 Assets/AssetsHistory/<tag> 里备查，不进主分支。
+// 一次发布一个目录：目录名就是 bundle 里烘焙的那一段 URL，重发同一个版本只覆盖
+// 这个目录。更早的版本目录不动，历史留在提交里。
 function clearAssets() {
 	if (existsSync(ASSETS)) rmSync(ASSETS, { recursive: true, force: true });
+	// 头几次发布写的是扁平的 assets/，与 bundle 里的 URL 对不上；见到就清掉。
+	const legacy = join(values.work, "assets");
+	if (existsSync(legacy)) rmSync(legacy, { recursive: true, force: true });
 	mkdirSync(ASSETS, { recursive: true });
 }
 
@@ -265,8 +278,12 @@ function remoteHasMain() {
 	try {
 		run("git", ["-C", values.work, "ls-remote", "--quiet", "--exit-code", "--heads", "origin", "main"], { capture: true });
 		return true;
-	} catch {
-		return false;
+	} catch (error) {
+		// `--exit-code` uses 2 for "no refs matched". Any other failure is a
+		// transport problem, and treating it as "empty repository" is how a flaky
+		// network turns a fast-forward into a rejected root commit.
+		if (error.status === 2) return false;
+		throw error;
 	}
 }
 
