@@ -1,5 +1,7 @@
 # Changelog
 
+## [Unreleased]
+
 ## [20261114]
 
 ### Changed
