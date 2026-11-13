@@ -5,7 +5,7 @@ import {
 	type OAuthCredential,
 	type ProviderStreams,
 } from "@nanopi/pi-ai";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { parseArgs } from "../src/cli/args.ts";
 import { AuthCommandError, parseAuthCommand } from "../src/cli/auth-command.ts";
 import { runAuthLogin } from "../src/cli/auth-login.ts";
@@ -38,6 +38,7 @@ function subscriptionProvider(options: { prompts: string[] }) {
 			oauth: {
 				name: "Faux Subscription",
 				loginLabel: "Sign in with Faux",
+				notice: ["Signing in does not configure the daily check-in."],
 				async login(interaction) {
 					interaction.notify({ type: "auth_url", url: "https://example.invalid/authorize" });
 					options.prompts.push(
@@ -105,6 +106,25 @@ describe("auth login command", () => {
 
 		expect(result).toEqual({ provider: PROVIDER, name: "Faux Subscription" });
 		await expect(credentials.read(PROVIDER)).resolves.toMatchObject({ type: "oauth", access: "access-token" });
+	});
+
+	test("prints the provider notice before the flow asks anything", async () => {
+		const runtime = await createRuntime(AuthStorage.inMemory());
+		const written: string[] = [];
+		const log = vi.spyOn(console, "log").mockImplementation((...args: unknown[]) => {
+			written.push(args.map(String).join(" "));
+		});
+		try {
+			await runAuthLogin(parseArgs(["--provider", PROVIDER]), runtime, {
+				signal: new AbortController().signal,
+				openBrowser: false,
+				prompt: async () => "code",
+			});
+		} finally {
+			log.mockRestore();
+		}
+
+		expect(written[0]).toContain("Signing in does not configure the daily check-in.");
 	});
 
 	test("requires a provider", async () => {
