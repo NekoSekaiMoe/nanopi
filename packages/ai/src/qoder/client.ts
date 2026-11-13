@@ -76,16 +76,34 @@ export interface QoderDeviceIdentity {
 	machineCode?: string;
 	/** Client version the capture came from; the desktop client reports `0.4.x`. */
 	version?: string;
-	/** Desktop client id; the default `10` is what the campaign flow sends without a capture. */
+	/**
+	 * Desktop client id. Absent, the request reports the id of the protocol the
+	 * captured version belongs to: `10` (the agent build that issues the daily
+	 * entry) for a `1.x` capture, `5` (the IDE build) for everything older.
+	 */
 	clientType?: string;
 	hostname?: string;
 	machineOs?: string;
 }
 
 /**
+ * Client id that goes with a captured client version. The capture is one
+ * client talking to one protocol: a `1.x` version reported alongside the IDE's
+ * `5` describes a client that does not exist, and the site reads the pair as
+ * one more reason to withhold the campaign.
+ */
+export function qoderClientTypeFor(version: string | undefined): string {
+	return version?.startsWith("1.") ? "10" : "5";
+}
+
+/**
  * Headers a desktop Qoder client sends for check-in calls. Device headers are
  * only added when the caller has a real identity to send: the CN site rejects
  * an invented fingerprint, so a CN call never carries one.
+ *
+ * Without a capture the request describes the IDE client this provider already
+ * presents on its signed calls (`qoderDeviceHeaders`): the same account must
+ * not look like two different clients depending on which endpoint it talks to.
  */
 export function qoderCheckinHeaders(deviceToken: string, device?: QoderDeviceIdentity): Record<string, string> {
 	const headers: Record<string, string> = {
@@ -93,10 +111,10 @@ export function qoderCheckinHeaders(deviceToken: string, device?: QoderDeviceIde
 		accept: "application/json",
 		"accept-language": "zh-CN",
 		"user-agent": "Qoder",
-		"cosy-clienttype": device?.machineToken ? (device.clientType ?? "10") : "10",
+		"cosy-clienttype": device?.clientType ?? qoderClientTypeFor(device?.version),
+		"cosy-version": device?.version ?? "0.4.4",
 	};
 	if (!device?.machineToken) return headers;
-	headers["cosy-version"] = device.version ?? "0.4.4";
 	headers["cosy-machinetoken"] = device.machineToken;
 	if (device.machineType) headers["cosy-machinetype"] = device.machineType;
 	if (device.machineId) headers["cosy-machineid"] = device.machineId;

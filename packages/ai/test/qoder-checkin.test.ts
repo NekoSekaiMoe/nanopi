@@ -202,6 +202,58 @@ describe("Qoder daily check-in", () => {
 		expect(headers[0]).not.toHaveProperty("cosy-machinetoken");
 	});
 
+	it("reports the IDE client when no capture says otherwise", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			return jsonResponse({ campaigns: [] });
+		});
+
+		await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
+
+		// Same pair the signed calls present (qoderDeviceHeaders), so one account
+		// does not look like two clients depending on the endpoint it talks to.
+		expect(headers[0]).toMatchObject({ "cosy-clienttype": "5", "cosy-version": "0.4.4" });
+	});
+
+	it("reports the client id that belongs to the captured version", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			return jsonResponse({ campaigns: [] });
+		});
+
+		await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ device: { machineToken: "mt-1", version: "1.1.69" } },
+			neverAbortedSignal,
+		);
+		await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ device: { machineToken: "mt-1", version: "0.4.8" } },
+			neverAbortedSignal,
+		);
+
+		expect(headers[0]).toMatchObject({ "cosy-clienttype": "10", "cosy-version": "1.1.69" });
+		expect(headers[1]).toMatchObject({ "cosy-clienttype": "5", "cosy-version": "0.4.8" });
+	});
+
+	it("counts a listed campaign that carries no id", async () => {
+		vi.stubGlobal("fetch", async () =>
+			jsonResponse({ campaigns: [{ actionType: "CLAIM_BENEFIT", claimStatus: "CLAIMABLE" }] }),
+		);
+
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
+
+		// The count is the evidence a user acts on, so an entry without an id is
+		// still listed rather than dropped from it.
+		expect(result.status).toBe("no_campaign");
+		expect(result.message).toContain("1 campaign(s)");
+		expect(result.campaigns).toEqual(["CLAIM_BENEFIT/CLAIMABLE"]);
+	});
+
 	it("names the window when a claim covers a window the machine already finished", async () => {
 		vi.stubGlobal("fetch", async () => jsonResponse({ campaigns: [campaign({ claimStatus: "CLAIMED" })] }));
 

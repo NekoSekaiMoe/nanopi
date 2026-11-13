@@ -61,6 +61,7 @@ export interface QoderCheckinOptions {
 }
 
 interface QoderCampaign {
+	/** Empty when the entry carries no id, which is also why it can never be claimed. */
 	campaignId: string;
 	campaignKey?: string;
 	actionType?: string;
@@ -102,6 +103,12 @@ function rawBody(body: QoderJson | null): string | undefined {
 	return text.length > RAW_LIMIT ? `${text.slice(0, RAW_LIMIT)}...` : text;
 }
 
+/**
+ * Every entry the server listed, including one without an id: the count in the
+ * no-campaign line is what separates "nothing was issued" from "the site
+ * withheld the entry", so dropping a malformed entry would undercount the one
+ * number a user acts on. An entry with no id stays unclaimable.
+ */
 function parseCampaigns(body: QoderJson | null): QoderCampaign[] {
 	const raw = body?.campaigns;
 	if (!Array.isArray(raw)) return [];
@@ -109,11 +116,9 @@ function parseCampaigns(body: QoderJson | null): QoderCampaign[] {
 	for (const entry of raw) {
 		if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
 		const record = entry as QoderJson;
-		const campaignId = asString(record.campaignId);
-		if (!campaignId) continue;
 		const benefit = record.benefit && typeof record.benefit === "object" ? (record.benefit as QoderJson) : undefined;
 		campaigns.push({
-			campaignId,
+			campaignId: asString(record.campaignId) ?? "",
 			campaignKey: asString(record.campaignKey),
 			actionType: asString(record.actionType),
 			claimStatus: asString(record.claimStatus),
@@ -232,7 +237,9 @@ export async function checkinQoder(
 
 	const campaigns = parseCampaigns(body);
 	const base = { ...diagnostics(options), campaigns: campaignSummary(campaigns) };
-	const claimable = campaigns.filter((campaign) => campaign.actionType === CAMPAIGN_ACTION);
+	const claimable = campaigns.filter(
+		(campaign) => campaign.actionType === CAMPAIGN_ACTION && campaign.campaignId.length > 0,
+	);
 	const target = claimable.find((campaign) => campaign.claimStatus === "CLAIMABLE");
 	if (target) return previousWindowNote(await claimCampaign(target, token, endpoints, options, signal), options);
 
