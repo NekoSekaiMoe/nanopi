@@ -27,7 +27,15 @@ Two independent defects, both in the same value:
    #536) had no test. Nothing checked that a bundle knows where its own
    tarball is, so the one channel the mirror exists for was unverified.
 
-A third question was open when the issue was filed: whether AtomGit's
+A third defect came from the fix itself and surfaced on the next release
+(2026-11-14): the tarball was placed next to `defaultOutput`, which is derived
+from the script's own `repoRoot`. The release job builds from an extracted
+source archive, so `repoRoot` is a `mktemp -d` tree: the tarball landed there
+and the step's `trap` deleted it. `Prepare GitHub release payload` then failed
+on a bare `test -f nanopi-sidecars-<version>.tgz` with no output, which is why
+the release run pointed at a missing file rather than at the build.
+
+A fourth question was open when the issue was filed: whether AtomGit's
 `/raw/main/<tag>/<file>` still serves bytes rather than an HTML page. Probed
 from a mainland China IP on 2026-11-10 (`curl -sSL
 https://atomgit.com/nanopi/releases-assets/raw/main/nightly/nanopi.js`,
@@ -42,11 +50,17 @@ unauthenticated `curl`, and this repo cannot fix that.
 
 The tarball has exactly one home in the build tree, independent of `--out`:
 
-- `build-coding-agent-single-file.mjs` writes it to
-  `packages/coding-agent/binaries/` (the agent bin directory, `defaultOutput`'s
-  parent) and stages it there. The name carries the TUI version, not the
-  flavor, so there is one tarball per build and every flavor emits the same
-  bytes; a flavor must never decide where it lands.
+- `build-coding-agent-single-file.mjs` writes it to the agent bin directory
+  and stages it there. The destination is `--sidecars-out <dir>`, defaulting to
+  `defaultOutput`'s parent (`packages/coding-agent/binaries/` of the checkout
+  the script lives in). The name carries the TUI version, not the flavor, so
+  there is one tarball per build and every flavor emits the same bytes; a
+  flavor must never decide where it lands.
+- A caller that builds from an extracted archive must pass `--sidecars-out`:
+  `build-binaries.yml` points it at `${GITHUB_WORKSPACE}/packages/coding-agent/binaries`
+  for the full build (through `build-single-file.mjs`, which forwards the flag)
+  and for the `base`/`minimal` loop. A default-only contract cannot express
+  "the workspace, not the tree the script was copied into".
 - The URL builders are named exports
   (`githubSidecarTarballUrl`, `atomgitSidecarTarballUrls`) over a
   `ATOMGIT_ASSETS_SLUG` constant, so the manifest contract is greppable and
@@ -87,8 +101,9 @@ The tarball has exactly one home in the build tree, independent of `--out`:
 - The mirror being unreachable is recorded, not fixed. Anyone re-reporting
   "the bundle cannot download its sidecar" should check the AtomGit landing
   page before touching this code; the tests and the bundle are not the cause.
-- Verification: `scripts/build-coding-agent-single-file.test.mjs` (URL list and
-  tarball location), the existing `scripts/publish-atomgit.test.mjs` (it still
+- Verification: `scripts/build-coding-agent-single-file.test.mjs` (URL list,
+  tarball location, and that the release workflow passes `--sidecars-out` twice),
+  the existing `scripts/publish-atomgit.test.mjs` (it still
   publishes a tarball handed to it), and a local `full`/`base`/`minimal` build
   reproducing the nightly layout: one tarball in
   `packages/coding-agent/binaries/`, three bundles elsewhere, tarball contains

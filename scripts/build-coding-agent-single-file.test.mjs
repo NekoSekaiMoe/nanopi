@@ -27,6 +27,17 @@ test("the TUI sidecar is reachable from GitHub and from both AtomGit tags", () =
 // before it could publish anything.
 test("the sidecar tarball lands in the agent bin directory, not next to --out", () => {
 	const source = readFileSync(script, "utf8");
-	assert.match(source, /const sidecarArchivePath = join\(dirname\(defaultOutput\), `nanopi-sidecars-\$\{tuiSource\.version\}\.tgz`\);/);
+	assert.match(source, /const sidecarArchivePath = join\(sidecarsDir, `nanopi-sidecars-\$\{tuiSource\.version\}\.tgz`\);/);
+	assert.match(source, /--sidecars-out/);
 	assert.doesNotMatch(source, /const sidecarArchivePath = join\(dirname\(outputFilePath\)/);
+});
+
+// The release job builds from an extracted source archive, so the script's
+// repoRoot is a temporary tree. Without --sidecars-out the tarball went there
+// and was deleted with the tree, and "Prepare GitHub release payload" failed on
+// its silent test -f.
+test("the release workflow points the sidecar tarball at the workspace", () => {
+	const workflow = readFileSync(fileURLToPath(new URL("../.github/workflows/build-binaries.yml", import.meta.url)), "utf8");
+	const flags = workflow.match(/--sidecars-out "\$\{GITHUB_WORKSPACE\}\/packages\/coding-agent\/binaries"/g) ?? [];
+	assert.equal(flags.length, 2, "the full build and the flavor loop both have to pass --sidecars-out");
 });

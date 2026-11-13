@@ -98,6 +98,13 @@ const isComponentEnabled = (name) => components[name] !== false;
 const outArgs = process.argv.slice(2);
 const outIndex = outArgs.indexOf("--out");
 const outputFilePath = outIndex !== -1 && outArgs[outIndex + 1] ? resolve(outArgs[outIndex + 1]) : defaultOutput;
+// Where the TUI sidecar tarball goes. Defaults to this checkout's agent bin
+// directory; a caller that builds from an extracted source archive has to pass
+// --sidecars-out, because repoRoot is then the temporary tree and the tarball
+// would be written into it (see the release workflow).
+const sidecarsOutIndex = outArgs.indexOf("--sidecars-out");
+const sidecarsDir =
+	sidecarsOutIndex !== -1 && outArgs[sidecarsOutIndex + 1] ? resolve(outArgs[sidecarsOutIndex + 1]) : dirname(defaultOutput);
 
 const requireFromCodingAgent = createRequire(join(codingAgentDir, "package.json"));
 
@@ -551,15 +558,15 @@ console.log(
 // Emit the TUI sidecar tarball referenced by the manifest as a release asset.
 // Layout inside the tarball equals the agent bin directory layout.
 //
-// It lands beside the bundle in the agent bin directory, not next to whatever
+// It lands in the agent bin directory (--sidecars-out), not next to whatever
 // --out names: there is one tarball per build (its name carries the TUI
 // version, not the flavor), every flavor emits the same bytes, and the
 // publishing workflows look for it in packages/coding-agent/binaries/. Writing
 // it next to --out put one copy inside release-assets/ per flavor instead, and
 // the nightly job's "exactly one tarball" check then counted zero.
 const tuiSource = sidecarManifest.sources.find((source) => source.packageName === "@nanopi/pi-tui");
-mkdirSync(dirname(defaultOutput), { recursive: true });
-const sidecarArchivePath = join(dirname(defaultOutput), `nanopi-sidecars-${tuiSource.version}.tgz`);
+mkdirSync(sidecarsDir, { recursive: true });
+const sidecarArchivePath = join(sidecarsDir, `nanopi-sidecars-${tuiSource.version}.tgz`);
 const sidecarStaging = join(dirname(sidecarArchivePath), `.sidecar-staging-${process.pid}`);
 rmSync(sidecarStaging, { recursive: true, force: true });
 try {

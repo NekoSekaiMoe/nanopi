@@ -94,9 +94,12 @@ jobs:
           # packages/coding-agent/binaries/, whatever --out says: there is one
           # per build, its name carries the TUI version rather than the flavor,
           # and both publish workflows read it from there.
+          # repoRoot inside the extracted archive is the temporary tree, so the
+          # sidecar tarball has to be pointed at the workspace explicitly.
           node "${build_root}/nanopi-${VERSION}/scripts/build-single-file.mjs" \
             --offline-model-data \
-            --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
+            --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries" \
+            --sidecars-out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
           # Smaller flavor bundles from the same built tree; only the bundle
           # step is flavor-aware, so no second install/build is needed. `base`
           # drops the bundled extras and peripherals, `minimal` additionally
@@ -104,7 +107,8 @@ jobs:
           for flavor in base minimal; do
             NANOPI_BUILD_FLAVOR="${flavor}" \
               node "${build_root}/nanopi-${VERSION}/scripts/build-coding-agent-single-file.mjs" \
-              --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries/nanopi-${flavor}.js"
+              --out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries/nanopi-${flavor}.js" \
+              --sidecars-out "${GITHUB_WORKSPACE}/packages/coding-agent/binaries"
           done
 
       - name: Prepare GitHub release payload
