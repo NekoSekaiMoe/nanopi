@@ -41,6 +41,10 @@ assets/<tag>/nanopi-<version>-source.tar.gz   # 只有正式版
   「当前是哪个 tag」，主分支只跟着最新一次发布走。
 - **tag 可以 force 移动**。nightly 当天重跑、正式版手动补发都落在同一个 tag 名上，
   这个 tag 是「这个版本现在长什么样」，不是历史记录；历史在提交里。
+- **临时 checkout 从远端 main 起步**。脚本先 `ls-remote` 看远端有没有 main，有就
+  `fetch` + `reset --hard FETCH_HEAD`，没有才把这次提交当成第一个。早先用空
+  `git init` 起步，本地是根提交、与远端毫无关系，所以**除了仓库的第一次发布，之后
+  每次推送都被拒绝成 non-fast-forward**：GitHub Release 正常，AtomGit 却停在上一版。
 
 **发布在 GitHub Actions 里跑，不在 CNB 上。** 产物本来就在 GitHub 那边产：
 nightly 的 bundle 由 `nightly.yml` 的 `build` job 构建，正式版的三个口味由

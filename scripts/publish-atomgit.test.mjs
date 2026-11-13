@@ -28,12 +28,24 @@ function git(cwd, args) {
 	return result.stdout.trim();
 }
 
-async function fixture(t, { source = false, sidecars = false } = {}) {
+async function fixture(t, { source = false, sidecars = false, seed = false } = {}) {
 	const root = await mkdtemp(join(tmpdir(), "nanopi-atomgit-test-"));
 	t.after(() => rmSync(root, { force: true, recursive: true }));
 
 	const remote = join(root, "assets.git");
 	git(root, ["init", "-q", "--bare", remote]);
+	if (seed) {
+		// The assets repository already holds a previous publish: the case a
+		// release meets on its second day of life, not a virgin bare repo.
+		const seedDir = join(root, "seed");
+		mkdirSync(seedDir);
+		git(seedDir, ["init", "-q", "--initial-branch=main"]);
+		writeFileSync(join(seedDir, "README.md"), "previous publish\n");
+		git(seedDir, ["add", "-A"]);
+		git(seedDir, ["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "seed"]);
+		git(seedDir, ["push", "-q", "file://" + remote, "HEAD:refs/heads/main"]);
+		rmSync(seedDir, { force: true, recursive: true });
+	}
 
 	const input = join(root, "input");
 	mkdirSync(input);
@@ -94,6 +106,19 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 	assert.equal(git(fixturePaths.remote, ["rev-list", "--count", "refs/heads/main"]), "2");
 	const tagged = git(fixturePaths.remote, ["rev-parse", "refs/tags/nightly^{commit}"]);
 	assert.equal(tagged, git(fixturePaths.remote, ["rev-parse", "refs/heads/main"]));
+});
+
+// The checkout used to start with `git init`, which makes a root commit: every
+// publish after the repository's first one was rejected as a non-fast-forward,
+// so the mirror stayed on the previous release while the workflow failed.
+test("publishing over an existing assets repository is a fast-forward", async (t) => {
+	const fixturePaths = await fixture(t, { source: true, seed: true });
+	const before = git(fixturePaths.remote, ["rev-parse", "refs/heads/main"]);
+
+	const result = publish(fixturePaths, ["--tag", "v20261031.1.0", "--token-env", "ATOMGIT_KEY", "--push"]);
+	assert.equal(result.status, 0, result.stderr);
+	assert.equal(git(fixturePaths.remote, ["rev-parse", "refs/heads/main^"]), before, "the new commit must sit on the published main");
+	assert.equal(git(fixturePaths.remote, ["rev-list", "--count", "refs/heads/main"]), "2");
 });
 
 test("a release tag carries the source archive and keeps the official notes", async (t) => {

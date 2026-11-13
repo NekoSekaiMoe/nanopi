@@ -261,12 +261,34 @@ function publish() {
 	process.stdout.write(`Published ${TAG} to ${slug}\n`);
 }
 
-function main() {
+function remoteHasMain() {
+	try {
+		run("git", ["-C", values.work, "ls-remote", "--quiet", "--exit-code", "--heads", "origin", "main"], { capture: true });
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+function prepareCheckout() {
 	mkdirSync(values.work, { recursive: true });
 	if (!existsSync(join(values.work, ".git"))) {
 		run("git", ["init", "-q", "--initial-branch=main", values.work]);
 		git(["remote", "add", "origin", remote]);
 	}
+	// The published tree always replaces the previous one, so the checkout only
+	// has to start from the remote tip: fetch main and move onto it. A fresh
+	// assets repository has no main yet and the commit below is its first one.
+	// `git clone` is not used because the remote's HEAD may name a branch it
+	// does not have, which leaves the clone on an unborn branch and the push
+	// then leaves from a root commit the remote rejects.
+	if (!remoteHasMain()) return;
+	git(["fetch", "--quiet", "origin", "main"]);
+	git(["reset", "--quiet", "--hard", "FETCH_HEAD"]);
+}
+
+function main() {
+	prepareCheckout();
 	const layout = assetsOf(values.input, TAG);
 	clearAssets();
 	writeAssets(values.input, layout);
