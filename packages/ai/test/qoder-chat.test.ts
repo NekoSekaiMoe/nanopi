@@ -255,11 +255,36 @@ describe("Qoder job token exchange", () => {
 
 		// Standard base64 of that body, rotated by the trailing third and remapped onto
 		// Qoder's alphabet: the characters of plain base64 never survive as-is.
-		const standard = Buffer.from('{"payload":"x","encodeVersion":"1"}').toString("base64").replace(/=+$/, "");
+		const standard = Buffer.from('{"payload":"x","encodeVersion":"1"}').toString("base64");
 		// Every character comes from Qoder's alphabet, so none of the standard one survives as-is.
 		expect(encoded.length).toBe(standard.length);
 		expect(encoded).not.toBe(standard);
 		expect(encoded).not.toMatch(/^[A-Za-z0-9+/]+$/);
+	});
+
+	it("rotates a padded body the way the client does, padding included", () => {
+		// The exchange body is 185 bytes, so its base64 is padded. Padding is part of
+		// the rotation: stripping it first shifts every character of a padded body,
+		// which the endpoint answers with 401.
+		const plain = new Uint8Array(Buffer.alloc(185, 7));
+		const encoded = encodeQoderBody(plain);
+
+		const standard = Buffer.from(plain).toString("base64");
+		const third = Math.floor(standard.length / 3);
+		const rotated =
+			standard.slice(standard.length - third) +
+			standard.slice(third, standard.length - third) +
+			standard.slice(0, third);
+		const alphabet = "_doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!";
+		const expected = [...rotated]
+			.map((char) => {
+				const index = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/".indexOf(char);
+				return index === -1 ? "$" : alphabet[index];
+			})
+			.join("");
+
+		expect(encoded).toBe(expected);
+		expect(encoded).toContain("$");
 	});
 
 	it("asks for a rotation when it redeems a refresh token", async () => {
@@ -280,6 +305,13 @@ describe("Qoder job token exchange", () => {
 		expect(renewed).toEqual({ token: "dt-new", refreshToken: "drt-new" });
 		expect(headers?.get("signature")).toMatch(/^[0-9a-f]{32}$/);
 		expect(headers?.get("appcode")).toBe("cosy");
+		// A request without the device headers is refused with 401, so the exchange
+		// presents the same derived identity the signed calls do.
+		expect(headers?.get("cosy-machineid")).toMatch(
+			/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-a[0-9a-f]{3}-[0-9a-f]{12}$/,
+		);
+		expect(headers?.get("cosy-machinetoken")).toHaveLength(43);
+		expect(headers?.get("cosy-machinetype")).toHaveLength(18);
 		// The encoded payload carries needRefresh, so upstream rotates the pair.
 		expect(body.length).toBeGreaterThan(0);
 		expect(body).not.toContain("drt-old");

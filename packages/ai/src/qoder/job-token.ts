@@ -13,10 +13,18 @@
  * `/Encode=1`'s alphabet. Sending the refresh token under `needRefresh` gets
  * a new device token *and* a new refresh token, which is why the caller has to
  * store both: the old refresh token dies with the exchange.
+ *
+ * The exchange answers 401 to a request that carries no device headers, so the
+ * three `cosy-machine*` headers are part of the contract even though the token
+ * is what is being redeemed. They are derived from the credential rather than
+ * the account id: the exchange is the step that precedes a known uid, and a
+ * per-run value would look like a new machine every time. The device id keeps
+ * the 8-4-4-4-12 shape an official client reports.
  */
 
 import { createHash } from "node:crypto";
 import { asString, type QoderJson, qoderErrorDetail, qoderRequestSignal, readQoderJson } from "./client.ts";
+import { type QoderFingerprint, qoderFingerprint } from "./cosy.ts";
 
 /** The signing secret the `/algo` client hardcodes; the endpoint authenticates the client, not the account. */
 const CLIENT_SECRET = "d2FyLCB3YXIgbmV2ZXIgY2hhbmdlcw==";
@@ -27,14 +35,22 @@ const COSY_VERSION = "1.0.10";
 /** Qoder's own base64 variant, byte-swapped and remapped for `/Encode=1` bodies. */
 const CUSTOM_ALPHABET = "_doRTgHZBKcGVjlvpC,@aFSx#DPuNJme&i*MzLOEn)sUrthbf%Y^w.(kIQyXqWA!";
 const STANDARD_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+/** Padding in the custom alphabet, so the encoded string keeps the base64 length. */
+const CUSTOM_PAD = "$";
 
 /**
  * Encode a request body for the endpoints that ask `Encode=1`: standard base64
- * with its padding dropped, its characters remapped onto Qoder's alphabet, and
- * the thirds of the result rotated (last, middle, first).
+ * with its thirds rotated (last, middle, first) and its characters remapped onto
+ * Qoder's alphabet, padding included.
+ *
+ * The order matters. A padded base64 string ends in characters that are part of
+ * the rotation, so stripping the padding first rotates a different string and
+ * every padded body comes out shifted. The real exchange body is 185 bytes, whose
+ * base64 is padded, so dropping the `=` here produced a body the endpoint read as
+ * a malformed payload and refused with 401.
  */
 export function encodeQoderBody(plain: Uint8Array): string {
-	const standard = Buffer.from(plain).toString("base64").replace(/=+$/, "");
+	const standard = Buffer.from(plain).toString("base64");
 	const third = Math.floor(standard.length / 3);
 	const rotated =
 		standard.slice(standard.length - third) +
@@ -43,7 +59,7 @@ export function encodeQoderBody(plain: Uint8Array): string {
 	let encoded = "";
 	for (const char of rotated) {
 		const index = STANDARD_ALPHABET.indexOf(char);
-		encoded += index === -1 ? char : CUSTOM_ALPHABET[index];
+		encoded += index === -1 ? (char === "=" ? CUSTOM_PAD : char) : CUSTOM_ALPHABET[index];
 	}
 	return encoded;
 }
@@ -100,9 +116,12 @@ export interface QoderRenewedToken {
 export async function renewQoderToken(values: {
 	credential: string;
 	jobTokenUrl: string;
+	/** Device identity the exchange presents; derived from the credential when absent. */
+	fingerprint?: QoderFingerprint;
 	signal: AbortSignal;
 }): Promise<QoderRenewedToken> {
 	const date = httpDate();
+	const fingerprint = values.fingerprint ?? qoderFingerprint(`cred:${values.credential}`);
 	const response = await fetch(values.jobTokenUrl, {
 		method: "POST",
 		headers: {
@@ -116,6 +135,9 @@ export async function renewQoderToken(values: {
 			"login-version": "v2",
 			"cosy-clienttype": LOGIN_CLIENT_TYPE,
 			"cosy-version": COSY_VERSION,
+			"cosy-machineid": fingerprint.machineId,
+			"cosy-machinetoken": fingerprint.machineToken,
+			"cosy-machinetype": fingerprint.machineType,
 		},
 		body: exchangeBody(values.credential),
 		signal: qoderRequestSignal(values.signal),
