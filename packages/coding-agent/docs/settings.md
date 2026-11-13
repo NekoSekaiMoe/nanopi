@@ -146,7 +146,6 @@ Resource paths in user settings resolve from the agent directory. Paths in proje
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `extensions` | `string[]` | `[]` | Extension files or directories. |
 | `skills` | `string[]` | `[]` | Skill files or directories. |
 | `prompts` | `string[]` | `[]` | Prompt-template files or directories. |
 | `enableSkillCommands` | boolean | `true` | Register skills as `/skill:name` commands. |
