@@ -5,6 +5,8 @@
 ### Changed
 
 - `Markdown` reuses the rows of the blocks an append cannot restructure: the previous pass kept only its tokens, so every streamed delta rendered every settled block again, which is quadratic in the block count on top of the lexer work (issue [#631](https://cnb.cool/shinytale/nanopi/-/issues/631))
+- `invalidate()` means "draw the same content again": containers forward it and rebuild their subtree through the new `repaintChildren()`, so a mid-frame rebuild no longer clears the children being rendered. One call used to do both jobs, which left every caller to know which one it wanted ([#624](https://cnb.cool/shinytale/nanopi/-/issues/624))
+- `Text.setText` returns early when the string did not change, so the wrap is trusted exactly when the text and width it was built for still hold. Callers that re-set an identical string every frame (the write tool's card) paid for the wrap, and everyone else had to carry their own `text !== previous` guard
 
 ### Fixed
 
@@ -15,6 +17,10 @@
 - Alacritty is detected as an OSC 8 hyperlink terminal: it never sets `TERM_PROGRAM`, so the capability probe fell through to `hyperlinks: false` and Markdown links rendered as `label (url)`. The Alacritty branch now also matches `TERM` starting with `alacritty` and `ALACRITTY_WINDOW_ID`; the tmux and screen branches still run first, so multiplexed sessions are unchanged (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - Cursor markers no longer reach the terminal: `sliceWithWidth` accumulated every escape before the slice into `pendingAnsi`, so the zero-width APCs (`CURSOR_MARKER`, the fake cursor pair) were re-emitted at the slice start instead of at their own column, and `extractCursorPosition` stripped only the first marker on a line. A highlighted selection slices each row three times, which is how a second marker survived to a write. A marker now stays only where it already sits in the original text order and `extractCursorPosition` removes every occurrence (issue [#640](https://cnb.cool/shinytale/nanopi/-/issues/640))
 - File completion stops spawning `fd` once the request was aborted: the abort can land while the first listing is awaited, and the recursive walk that follows it started a process the cancellation could no longer reach (issue [#613](https://cnb.cool/shinytale/nanopi/-/issues/613))
+- Rows keep their colors after the terminal reports its palette: the Markdown render cache was keyed on `(text, width)` while the rows carry the escapes of the theme instance the style functions read at call time, and `invalidate()` left the settled rows in `cachedRun`, so a resumed pass pushed old-theme rows into the new frame. The cache is keyed on the theme instance next to the width, and message components hand over a new theme through `setMarkdownTheme()` before the repaint ([#624](https://cnb.cool/shinytale/nanopi/-/issues/624), [#656](https://cnb.cool/shinytale/nanopi/-/issues/656))
+- A terminal color reply is no longer delivered as typed input once nothing is waiting for it: the reply window only guarded replies while a query was outstanding and was never closed early, so after a timeout it stayed open and swallowed a reply the terminal sent again. The window is now derived from the pending queue, its only writer ([#592](https://cnb.cool/shinytale/nanopi/-/issues/592))
+- `stripAnsi` no longer treats a CSI private-parameter marker as the final byte, so `ESC[=5h` no longer leaks `5h` into the text
+- Shift+Enter is ESC+CR on some Terminal.app versions and was parsed as Alt+Enter; the two are now told apart
 
 ## [20261107]
 

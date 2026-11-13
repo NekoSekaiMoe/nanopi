@@ -9,6 +9,7 @@
 ### Changed
 
 - A project file that turns a guard off behind a global `on` no longer applies silently: the session asks whether to keep it off, to use the global value and repair the project file, or to block shell and git calls until it changes. A session that cannot show a dialog keeps the guard on and says so in its log (issue [#614](https://cnb.cool/shinytale/nanopi/-/issues/614))
+- Plan mode renders its rules as their own <guidelines> section instead of one bullet among the shared rules, so leaving the mode looks like what it is: a section going away. The read-only shell allowlist widens to what planning needs (`cat`, `wc`, `rg`, `git`, `gh`, …), with `git` and `gh` checked by subcommand because `git branch new-name` and `gh pr create` write without a write flag. The guideline forbids claiming the build or tests pass — the plan says what verifies the change — and a turn that ended in `ask_user_question` keeps planning instead of asking for approval of a plan the user has not answered for ([#622](https://cnb.cool/shinytale/nanopi/-/issues/622))
 
 ### Fixed
 
