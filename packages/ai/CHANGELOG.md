@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Changed
+
+- A Qoder check-in reports what it looked for, not just the count: `checkinQoder` now returns whether the request carried a captured device identity, which of its fields, and the campaigns the server listed as `ACTION/STATUS` (plus a trimmed raw body). A `no_campaign` answer otherwise reads as "nothing was issued" and "the site did not recognize this installation" at once, and the diagnosis needs both the identity and the list
+- The Qoder check-in device identity covers a full official-client capture: `QoderDeviceIdentity` gained `machineId`, `machineCode`, `version`, `clientType`, `hostname` and `machineOs`, and `qoderCheckinHeaders` sends the whole set (`cosy-version`, `cosy-machineid`, `cosy-machinecode`, `cosy-machinehostname`, `cosy-machineos`) whenever a `machineToken` is present. A capture the desktop client recorded carries those headers; sending only the token left the request looking unlike the client it claims to be
+
 ### Fixed
 
 - A Qoder turn persists a renewed device token as soon as the exchange succeeds instead of at the end of the turn: the job-token endpoint retires the old refresh token, so a turn that renewed and then failed (`RESOURCE_LIMIT`, an abort) dropped the only valid pair and left the account signed out until a new `/login`. The renewal now calls `onAuthorizationUpdate` on the spot; `message.authorizationUpdate` is still reported on success. `checkinQoder` takes a `QoderCheckinOptions` (`device` identity, `previousWindowDate`) and includes the campaign count when nothing is claimable (issue [#687](https://cnb.cool/shinytale/nanopi/-/issues/687))

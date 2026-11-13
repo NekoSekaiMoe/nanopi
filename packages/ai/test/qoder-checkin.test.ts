@@ -120,6 +120,76 @@ describe("Qoder daily check-in", () => {
 		}
 	});
 
+	it("sends every captured identity field the credential holds", async () => {
+		const headers: (HeadersInit | undefined)[] = [];
+		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {
+			headers.push(init?.headers);
+			return jsonResponse({ campaigns: [] });
+		});
+
+		await checkinQoder(
+			"dt-token",
+			endpoints,
+			{
+				device: {
+					machineToken: "mt-1",
+					machineType: "5",
+					machineId: "mi-1",
+					machineCode: "mc-1",
+					version: "0.4.8",
+					clientType: "10",
+					hostname: "box",
+					machineOs: "aarch64_darwin",
+				},
+			},
+			neverAbortedSignal,
+		);
+
+		expect(headers[0]).toMatchObject({
+			"cosy-version": "0.4.8",
+			"cosy-machineid": "mi-1",
+			"cosy-machinetoken": "mt-1",
+			"cosy-machinetype": "5",
+			"cosy-machinecode": "mc-1",
+			"cosy-machinehostname": "box",
+			"cosy-machineos": "aarch64_darwin",
+		});
+	});
+
+	it("reports the identity it carried and the campaigns the server listed", async () => {
+		vi.stubGlobal("fetch", async () =>
+			jsonResponse({
+				campaigns: [
+					{ campaignId: "c-1", actionType: "CLAIM_BENEFIT", claimStatus: "PENDING" },
+					{ campaignId: "c-2", actionType: "SOTA_PACKAGE", claimStatus: "CLAIMABLE" },
+				],
+			}),
+		);
+
+		const result = await checkinQoder(
+			"dt-token",
+			endpoints,
+			{ device: { machineToken: "mt-1" } },
+			neverAbortedSignal,
+		);
+
+		expect(result.status).toBe("no_campaign");
+		expect(result.fingerprint).toBe(true);
+		expect(result.fingerprintFields).toEqual(["machinetoken"]);
+		expect(result.campaigns).toEqual(["CLAIM_BENEFIT/PENDING", "SOTA_PACKAGE/CLAIMABLE"]);
+		expect(result.raw).toContain("CLAIM_BENEFIT");
+	});
+
+	it("reports a missing identity when the campaign list is empty", async () => {
+		vi.stubGlobal("fetch", async () => jsonResponse({ campaigns: [] }));
+
+		const result = await checkinQoder("dt-token", endpoints, {}, neverAbortedSignal);
+
+		expect(result.fingerprint).toBe(false);
+		expect(result.fingerprintFields).toBeUndefined();
+		expect(result.campaigns).toEqual([]);
+	});
+
 	it("sends no device identity when none is known", async () => {
 		const headers: (HeadersInit | undefined)[] = [];
 		vi.stubGlobal("fetch", async (_input: string | URL | Request, init?: RequestInit) => {

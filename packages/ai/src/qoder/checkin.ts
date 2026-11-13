@@ -34,6 +34,14 @@ export interface QoderCheckinResult {
 	windowDate?: string;
 	/** Human-readable outcome, including the server's error text on failure. */
 	message: string;
+	/** Whether the request carried a captured device identity. A missing one explains an empty list. */
+	fingerprint: boolean;
+	/** Name of the identity field the request carried, for a capture that is only half complete. */
+	fingerprintFields?: string[];
+	/** Campaigns the server listed, as `ACTION/STATUS`, in server order. */
+	campaigns: string[];
+	/** Trimmed campaign list response, for a run that found nothing claimable. */
+	raw?: string;
 }
 
 /** What one account's check-in is signed with. */
@@ -63,6 +71,36 @@ interface QoderCampaign {
 }
 
 const CAMPAIGN_ACTION = "CLAIM_BENEFIT";
+/** How much of the campaign list response a diagnostic line keeps. */
+const RAW_LIMIT = 400;
+
+/** Identity fields a request actually carried, in header order. */
+function fingerprintFields(device: QoderDeviceIdentity | undefined): string[] {
+	if (!device) return [];
+	const fields: string[] = [];
+	if (device.machineToken) fields.push("machinetoken");
+	if (device.machineType) fields.push("machinetype");
+	if (device.machineId) fields.push("machineid");
+	if (device.machineCode) fields.push("machinecode");
+	return fields;
+}
+
+/** What a run found, for the caller to log: a `no_campaign` answer reads as "missing identity" or "nothing issued". */
+function diagnostics(options: QoderCheckinOptions) {
+	const fields = fingerprintFields(options.device);
+	return { fingerprint: fields.length > 0, fingerprintFields: fields.length > 0 ? fields : undefined };
+}
+
+/** `ACTION/STATUS` per listed campaign: the pair says what the server issued instead of the daily entry. */
+function campaignSummary(campaigns: readonly QoderCampaign[]): string[] {
+	return campaigns.map((campaign) => `${campaign.actionType ?? "?"}/${campaign.claimStatus ?? "?"}`);
+}
+
+function rawBody(body: QoderJson | null): string | undefined {
+	if (!body) return undefined;
+	const text = JSON.stringify(body);
+	return text.length > RAW_LIMIT ? `${text.slice(0, RAW_LIMIT)}...` : text;
+}
 
 function parseCampaigns(body: QoderJson | null): QoderCampaign[] {
 	const raw = body?.campaigns;
@@ -119,28 +157,45 @@ async function claimCampaign(
 		signal: qoderRequestSignal(signal),
 	});
 	const body = await readQoderJson(response);
+	const base = { ...diagnostics(options), campaigns: [`${campaign.actionType}/${campaign.claimStatus}`] };
 	if (!response.ok) {
 		return {
+			...base,
 			status: "error",
 			amount: 0,
 			windowDate: windowDate(campaign),
 			message: `claim failed (HTTP ${response.status})${qoderErrorDetail(body)}`,
+			raw: rawBody(body),
 		};
 	}
 	if (asString(body?.status) !== "CLAIMED") {
 		return {
+			...base,
 			status: "error",
 			amount: 0,
 			windowDate: windowDate(campaign),
 			message: `unexpected claim status${qoderErrorDetail(body)}`,
+			raw: rawBody(body),
 		};
 	}
 	const benefit = body?.benefit && typeof body.benefit === "object" ? (body.benefit as QoderJson) : undefined;
 	const amount = asNumber(benefit?.amount) ?? campaign.benefit?.amount ?? 0;
 	if (body?.replayed === true) {
-		return { status: "already_claimed", amount, windowDate: windowDate(campaign), message: "already claimed today" };
+		return {
+			...base,
+			status: "already_claimed",
+			amount,
+			windowDate: windowDate(campaign),
+			message: "already claimed today",
+		};
 	}
-	return { status: "claimed", amount, windowDate: windowDate(campaign), message: `claimed +${amount} credits` };
+	return {
+		...base,
+		status: "claimed",
+		amount,
+		windowDate: windowDate(campaign),
+		message: `claimed +${amount} credits`,
+	};
 }
 
 /**
@@ -154,7 +209,8 @@ export async function checkinQoder(
 	signal: AbortSignal,
 ): Promise<QoderCheckinResult> {
 	const token = deviceToken.trim();
-	if (!token) return { status: "error", amount: 0, message: "no device token" };
+	if (!token)
+		return { status: "error", amount: 0, message: "no device token", campaigns: [], ...diagnostics(options) };
 
 	const host = endpoints.openApiHost;
 	const response = await fetch(`https://${host}/sash/api/v1/me/campaigns`, {
@@ -165,13 +221,17 @@ export async function checkinQoder(
 	const body = await readQoderJson(response);
 	if (!response.ok) {
 		return {
+			...diagnostics(options),
 			status: "error",
 			amount: 0,
 			message: `campaign lookup failed (HTTP ${response.status})${qoderErrorDetail(body)}`,
+			campaigns: [],
+			raw: rawBody(body),
 		};
 	}
 
 	const campaigns = parseCampaigns(body);
+	const base = { ...diagnostics(options), campaigns: campaignSummary(campaigns) };
 	const claimable = campaigns.filter((campaign) => campaign.actionType === CAMPAIGN_ACTION);
 	const target = claimable.find((campaign) => campaign.claimStatus === "CLAIMABLE");
 	if (target) return previousWindowNote(await claimCampaign(target, token, endpoints, options, signal), options);
@@ -180,6 +240,7 @@ export async function checkinQoder(
 	if (claimed) {
 		return previousWindowNote(
 			{
+				...base,
 				status: "already_claimed",
 				amount: claimed.benefit?.amount ?? 0,
 				windowDate: windowDate(claimed),
@@ -191,8 +252,15 @@ export async function checkinQoder(
 	// The raw count separates "no campaign is running" from "campaigns exist but
 	// none was issued to this request": the global site withholds the entry from
 	// a device identity it does not recognize, and an empty list is the only
-	// thing a caller can act on.
+	// thing a caller can act on. Which identity fields the request carried, and
+	// what the server listed instead, are what tells the two apart afterwards.
 	const count =
 		campaigns.length === 0 ? "the server listed no campaign" : `${campaigns.length} campaign(s), none claimable`;
-	return { status: "no_campaign", amount: 0, message: `no claimable campaign (${count})` };
+	return {
+		...base,
+		status: "no_campaign",
+		amount: 0,
+		message: `no claimable campaign (${count})`,
+		raw: rawBody(body),
+	};
 }

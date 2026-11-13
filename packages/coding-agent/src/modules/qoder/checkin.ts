@@ -31,6 +31,20 @@ async function checkinOnce(modelRegistry: ModelRegistry): Promise<QoderCheckinSu
 	return inFlight;
 }
 
+/**
+ * What a `no_campaign` answer needs to be actionable: whether the request
+ * carried a captured identity, and which campaigns the server listed instead.
+ * Without it the message cannot tell "nothing was issued" from "the site did not
+ * recognize this installation", and both read as a claim that did not happen.
+ */
+function noCampaignDetail(summary: QoderCheckinSummary): string {
+	const identity = summary.fingerprint
+		? `device identity: ${summary.fingerprintFields?.join(", ") ?? "sent"}`
+		: "no device identity";
+	const listed = summary.campaigns?.length ? summary.campaigns.join(", ") : "nothing";
+	return `${summary.message}; ${identity}; listed: ${listed}`;
+}
+
 export function collectCheckinMessage(summaries: readonly QoderCheckinSummary[]): string | undefined {
 	const withResult = summaries.filter((summary) => summary.status !== "none");
 	if (withResult.length === 0) return undefined;
@@ -39,6 +53,7 @@ export function collectCheckinMessage(summaries: readonly QoderCheckinSummary[])
 			const name = summary.account ? `${summary.provider} (${summary.account})` : summary.provider;
 			if (summary.status === "unconfigured") return `${name}: missing OAuth login, run /login ${summary.provider}`;
 			if (summary.status === "error") return `${name}: check-in failed, ${summary.message}`;
+			if (summary.status === "no_campaign") return `${name}: ${noCampaignDetail(summary)}`;
 			return `${name}: ${summary.message}`;
 		})
 		.join(" · ");
