@@ -36,10 +36,11 @@ changing the delivery model.
 
 The app uses nanopi's existing endpoints and does not change the backend:
 
-- `GET /project`, `GET /models`
-- `GET /projects/:hash/sessions`, `GET /sessions/resolve/:short`
-- `GET /projects/:hash/sessions/:id`
-- `POST /chat` (SSE), `POST /chat/stop`
+- `GET /project`, `GET /projects`, `GET /models`
+- `GET /sessions`, `POST /sessions`, `GET /sessions/search`, `GET /sessions/resolve/:short`
+- `GET /projects/:hash/sessions`, `GET /projects/:hash/sessions/:id`
+- `PATCH /projects/:hash/sessions/:id/rename`, `DELETE /projects/:hash/sessions/:id`
+- `POST /chat` (SSE), `POST /chat/stop`, `POST /chat/stop-all`
 - `POST /chat/permission`, `POST /chat/user-input`
 - `GET /fs/list`
 
