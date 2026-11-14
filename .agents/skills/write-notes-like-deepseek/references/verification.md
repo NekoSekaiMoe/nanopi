@@ -25,7 +25,7 @@
 ## 接入建议
 
 - 轻量（个人/无 git）：前两个脚本即可，归档封印在第一次归档后自然生效。
-- 完整（团队）：`npm run verify-notes` 三线串进 CI，失败即红（本 Skill 的 `templates/verify-notes.yml` 可作模板，复制到宿主根目录 `.github/workflows/` 并核对脚本路径后启用）。
+- 完整（团队）：三条串进 CI，失败即红。本仓库的入口是 `scripts/verify-agent-notes.mjs`（`pnpm run verify:agent-notes`），GitHub 的 `checks.yml` 与 CNB 的 `.cnb.yml` 都只调它，命令不写两遍。基线 ref 两边各自传：GH 是 `pull_request.base.sha || github.event.before`，CNB 是 `CNB_PULL_REQUEST_TARGET_SHA`；不传时归档只做哈希自校验。
 
 三个校验脚本方法上来自 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness)，按通用中文单语宿主裁过：无双语三件套、无 DSH 迁仓豁免。锚点体检是可选软报告，不是 DSH 门禁。
 

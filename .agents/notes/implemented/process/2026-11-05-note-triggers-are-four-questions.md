@@ -31,8 +31,9 @@ codec 注册表」，这些恰恰是跨文件契约，按六领域该写。反�
 
 **提醒做成不失败的门**：`scripts/check-agent-notes.mjs` 在 diff 够大（`packages/*/src`
 ≥ 80 行，`packages/{agent,coding-agent}/src` ≥ 40 行）或新增了回归测试、且 diff 里一行
-`.agents/notes/` 都没碰时，打印提示，退出码恒为 0。挂在 `.husky/pre-commit` 与 CNB 的
-`pull_request.target` 流水线上（`--base origin/main`）。
+`.agents/notes/` 都没碰时，打印提示，退出码恒为 0。它现在由门禁入口
+`scripts/verify-agent-notes.mjs` 带着跑（#728）：结构校验红的时候提醒照样发出，
+但不参与结论。见 [笔记校验接进 CI](2026-11-14-note-verification-gates-ci.md)。
 
 ## Why a reminder and not a gate
 
@@ -65,5 +66,6 @@ codec 注册表」，这些恰恰是跨文件契约，按六领域该写。反�
   两者都需要观测，而不是再加一层规则。
 - 阈值（80 / 40）没有依据，是「先低到能看见噪声」的估计值。改数字请连 note 一起改。
 - `check:agent-notes` 不进 `pnpm run check`：那套命令的约定是「出错就红」，
-  一个恒返回 0 的步骤放进去只会让人以为它检查了什么。
+  一个恒返回 0 的步骤放进去只会让人以为它检查了什么。它跟着门禁入口
+  `verify:agent-notes` 跑，但结论不进口径。
 - 推送侧的 `check-commit-trailers` 是同类先例：CI 只报告不拦截，因为拦截了也修不了。

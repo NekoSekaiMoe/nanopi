@@ -97,15 +97,31 @@ main:
             apt-get update && apt-get install nodejs -y
             node scripts/check-merge-result-cnb.mjs
 
-        # 笔记提醒，不是门禁：脚本退出码恒为 0，这一步永远不会红。它只回答
-        # 「diff 够大又一行笔记没碰，要不要回去过一遍四问」，判定仍归 SKILL §4。
-        # 和 check-merge-result 放在同一条流水线里，是因为两者都要 origin/main
-        # 当基线，而这条流水线的 runner 已经装过了 node。
-        - name: remind-agent-notes
+        # 笔记门禁（#728）：tree / format / archived 三条校验脚本会红，四问那条
+        # 提醒仍然恒 0。入口是 scripts/verify-agent-notes.mjs，与 GitHub 侧
+        # `.github/workflows/checks.yml` 调的是同一个文件，命令不写两遍。
+        #
+        # 跑在上一阶段的合并结果上（任务间共享 CNB_BUILD_WORKSPACE），所以冲突残留、
+        # 合并后变成死链的笔记链接都会被抓到，不只是源分支自洽。
+        #
+        # 基线用 CNB_PULL_REQUEST_TARGET_SHA（目标分支最新提交）：归档 manifest 的
+        # append-only 要拿「改动前」比，用 HEAD 等于没查。这跟 check-merge-result 取
+        # 合并基线是同一件事，只是那边要自己 fetch 源分支。
+        #
+        # 镜像单独指 node:24：默认构建镜像的 node 要 apt 装，装到的是 Debian 的
+        # nodejs 包，没有类型剥离（process.features.typescript === false），而三条
+        # 校验脚本是 .ts。走 ts-import.mjs 就得先 pnpm install 装 esbuild——为三条
+        # 读文件的检查装整个工作区不值得。node:24 自带 git（verify-archived 要用
+        # git show 读基线 manifest）。
+        - name: verify-agent-notes
+          image: node:24
           script: |
             set -euo pipefail
-            apt-get update && apt-get install nodejs -y
-            node scripts/check-agent-notes.mjs --base origin/main
+            # 任务换了容器，工作区文件的所有者可能与当前用户不一致，git 会以
+            # "dubious ownership" 拒绝执行——而 verify-archived 读不到 git 时会
+            # 静默跳过 append-only，正好跳过这道门禁唯一的增量部分。
+            git config --global --add safe.directory "${CNB_BUILD_WORKSPACE:-/workspace}"
+            node scripts/verify-agent-notes.mjs --base "$CNB_PULL_REQUEST_TARGET_SHA"
 
 # 兜底：没被上面的 main 规则接住的事件（新分支的 push、手动触发）也要有钩子。
 # `$` 的匹配是在 glob 之后，两类规则不会互相顶掉。
