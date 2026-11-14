@@ -31,7 +31,7 @@ the flavor names one entry from the top-level `providerSets` map
 set ships every provider.
 
 **The generator is what narrows the build.** `pnpm run build` exports
-`NANOPI_BUILD_FLAVOR`; `scripts/generate-models.ts` reads the flavor through
+`NANOPI_BUILD_FLAVOR`; `packages/ai/scripts/generate-models.ts` reads the flavor through
 `scripts/buildconfig.mjs` and writes only the shards of that flavor's set. The
 aggregator (`src/models.generated.ts`), the per-provider shard files and
 `src/providers/data/<provider>.json` all agree on that set, so

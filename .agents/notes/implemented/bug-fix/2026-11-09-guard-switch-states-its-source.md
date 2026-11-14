@@ -32,7 +32,7 @@ Status: implemented
   省略档位写「当前生效层」；`session` 只在内存，且**活过 reload**。
 - **A3**：`explain` 之后那条 prompt 上的 `allow_session` 按 `allow_once` 处理。
 
-## 被否掉的路
+## Alternatives considered
 
 - **只做写侧三档**：修了写没修读，项目文件里那行照样静默生效，只是换了个入口。
   四档确认点本来就是同一条因果链，拆开做等于留三个同款坑。
@@ -46,7 +46,7 @@ Status: implemented
   reload 也走这条，会话内的答案会被静默丢掉。改成「已答复过就保留」，
   否则一次扩展 reload 就变成一次重复盘问。
 
-## 代价
+## Consequences
 
 每个 session 起点多读两个 JSON（无确认时不弹窗，只多两次 `readFileSync`）。
 确认弹窗只在项目层真的顶着全局值时出现，devcontainer 那类把 guard 关掉的项目

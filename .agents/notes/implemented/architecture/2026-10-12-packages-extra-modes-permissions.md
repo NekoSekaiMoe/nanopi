@@ -77,7 +77,7 @@ first use per language.
 
 ## Alternatives considered
 
-- **Vendored extra under `packages/coding-agent/extras/`** (the bundled-extras
+- **Vendored extra under `packages/coding-agent/src/extras/`** (the bundled-extras
   pattern): rejected by the todo's own decision table — the module is
   first-party functionality, versioned and published with the CLI, not a
   peripheral package. MCP is the exception that stays vendored because

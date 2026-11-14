@@ -97,3 +97,26 @@ never-persist.
   would loop forever at the user's expense.
 - Treat the mismatch as an error. Rejected: a substituted answer is usually
   usable, and failing the turn costs the user the work.
+
+## Consequences
+
+The substitution costs one extra round trip and nothing else: the mismatched
+answer is rewound off the active branch, so the parent turn never reads it,
+and the session file keeps it as a sibling the user can still scroll back to.
+A silent check has no UI surface to explain itself, so the only evidence of a
+substitution is the `reinjected` flag on the recorded observation.
+
+Cost: every response now pays one header read and a string comparison per
+request, and `AgentSession` grows four pieces of state (`leafId` bookkeeping,
+the per-turn re-issue claim, the recorded observation, and the `onResponse`
+wrapper that must survive session reloads). A relay that substitutes on every
+request also pays one wasted request per turn, because the second mismatch
+deliberately stops.
+
+Verification: `packages/coding-agent/test/model-identity.test.ts` pins the
+header list and the `modelsMatch` cases (path-prefix, `:variant` suffix,
+`-YYYY-MM-DD` suffix, and that `gpt-5` vs `gpt-5-mini` is a mismatch);
+`packages/coding-agent/test/model-identity-reissue.test.ts` drives a faux
+provider through `createAgentSession` and asserts exactly one re-issue per
+turn, that the substituted answer is not on the branch the parent sees, and
+that a second mismatch ends the turn instead of looping.
