@@ -114,7 +114,7 @@ describe("bash_bg completion delivery", () => {
 
 	it("retries the hand-off when delivery throws", async () => {
 		let attempts = 0;
-		let failure: string | undefined;
+		const archives: Array<{ status?: string; delivered?: string }> = [];
 		const harness = await createBashBgHarness((pi) => ({
 			...pi,
 			deliverMessage: async (message, options) => {
@@ -123,12 +123,8 @@ describe("bash_bg completion delivery", () => {
 				return pi.deliverMessage(message, options);
 			},
 			appendEntry: (customType, data) => {
-				// The archive record is the only trace: the settled job is written
-				// without a `delivered` field when the hand-off threw.
 				pi.appendEntry(customType, data);
-				if (customType !== "bash-bg-job") return;
-				const entry = data as { status?: string; delivered?: string };
-				if (entry.status === "completed" && entry.delivered === undefined) failure ??= "undelivered";
+				if (customType === "bash-bg-job") archives.push(data as { status?: string; delivered?: string });
 			},
 		}));
 		try {
@@ -141,9 +137,18 @@ describe("bash_bg completion delivery", () => {
 			]);
 
 			await harness.session.prompt("start it");
-			await until(() => failure !== undefined);
-			expect(failure).toBe("undelivered");
+			// Wait for the hand-off attempt itself, not for the settled archive
+			// record: `markDone` writes that record before the report goes out, so
+			// waiting on it read the job as "undelivered" while `deliverMessage` had
+			// not been called yet.
+			await until(() => attempts > 0);
+
 			expect(attempts).toBe(1);
+			// The archive is the only trace of the failure: the settled job is written
+			// without a `delivered` field when the hand-off threw.
+			const settled = archives.filter((entry) => entry.status === "completed").at(-1);
+			expect(settled).toBeDefined();
+			expect(settled?.delivered).toBeUndefined();
 			// The failed hand-off left the job retryable instead of marked as sent.
 			expect(customTexts(harness, "bash-bg-complete")).toHaveLength(0);
 		} finally {
