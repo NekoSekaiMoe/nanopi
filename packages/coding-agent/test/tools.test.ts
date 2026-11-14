@@ -1029,6 +1029,9 @@ describe("Coding Agent Tools", () => {
 			]);
 		});
 
+		// #747: the child used to be killed the moment the limit filled, before the match
+		// proving the walk was cut short had left the pipe. That assertion then passed or
+		// failed on scheduling luck, so it is also the regression test for the race.
 		it("should mention individual files when the global match limit stops the walk", async () => {
 			for (let i = 0; i < 5; i++) {
 				writeFileSync(join(testDir, `f${i}.txt`), "match\n");
