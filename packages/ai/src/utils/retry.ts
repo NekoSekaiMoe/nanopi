@@ -142,6 +142,13 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"cut short",
 	"stream ended before message_stop",
 	"stream ended before a terminal response event",
+	// node-fetch's generic transport wording, which surfaces from the Vertex ADC
+	// token fetch with an empty reason (`reason:` and nothing after it).
+	"request to \\S+ failed, reason:",
+	"upstream.?request.?failed",
+	"upstream_stream_read_error",
+	"stream was interrupted",
+	"http/?2 stream failed",
 	"http2 request did not get a response",
 	// Node ERR_HTTP2_STREAM_CANCEL: the HTTP/2 session died before the request was
 	// sent, e.g. after the Bedrock SDK's 5-minute session timeout (#10379).

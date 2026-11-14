@@ -1,14 +1,37 @@
 import * as Diff from "diff";
 import { theme } from "../theme/theme.ts";
 
+/** Line separators beyond `\n` that a terminal would break the render on; such a line is not parseable. */
+const UNSAFE_LINE_CHARS = /[\r\u2028\u2029]/;
+
 /**
  * Parse diff line to extract prefix, line number, and content.
  * Format: "+123 content" or "-123 content" or " 123 content" or "     ..."
+ *
+ * Scanned by hand rather than matched with `^([+-\s])(\s*\d*)\s(.*)$`: that
+ * regex has two ways to split a whitespace run, so a line with a long blank
+ * prefix backtracks once per split point (a 100k-space prefix froze the
+ * renderer for seconds).
  */
 function parseDiffLine(line: string): { prefix: string; lineNum: string; content: string } | null {
-	const match = line.match(/^([+-\s])(\s*\d*)\s(.*)$/);
-	if (!match) return null;
-	return { prefix: match[1], lineNum: match[2], content: match[3] };
+	if (line.length === 0 || UNSAFE_LINE_CHARS.test(line)) return null;
+	const prefix = line[0];
+	if (prefix !== "+" && prefix !== "-" && prefix !== " " && prefix !== "\t") return null;
+
+	let cursor = 1;
+	while (cursor < line.length && isBlank(line[cursor])) cursor++;
+	const digitsStart = cursor;
+	while (cursor < line.length && line[cursor] >= "0" && line[cursor] <= "9") cursor++;
+	const lineNum = line.slice(digitsStart, cursor);
+
+	// The single terminator space is the renderer's own column separator, so a
+	// line that has no digits must still carry it before its content.
+	if (cursor >= line.length || line[cursor] !== " ") return null;
+	return { prefix, lineNum, content: line.slice(cursor + 1) };
+}
+
+function isBlank(char: string): boolean {
+	return char === " " || char === "\t";
 }
 
 /**

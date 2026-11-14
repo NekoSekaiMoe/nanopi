@@ -36,7 +36,7 @@ import type {
 	ToolCall,
 	ToolResultMessage,
 } from "../types.ts";
-import { isSelfHostedEndpoint } from "../utils/endpoint.ts";
+import { isSelfHostedEndpoint, matchesHostname } from "../utils/endpoint.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { shortHash } from "../utils/hash.ts";
@@ -931,7 +931,7 @@ function buildParams(
 		messages,
 		stream: true,
 		prompt_cache_key:
-			(model.baseUrl.includes("api.openai.com") && cacheRetention !== "none") ||
+			(matchesHostname(model.baseUrl, "api.openai.com") && cacheRetention !== "none") ||
 			(cacheRetention === "long" && compat.supportsLongCacheRetention)
 				? clampOpenAIPromptCacheKey(options?.sessionId)
 				: undefined,
@@ -1712,17 +1712,18 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const isZai =
 		provider === "zai" ||
 		provider === "zai-coding-cn" ||
-		baseUrl.includes("api.z.ai") ||
-		baseUrl.includes("open.bigmodel.cn");
+		matchesHostname(baseUrl, "z.ai") ||
+		matchesHostname(baseUrl, "bigmodel.cn");
 	const isTogether =
-		provider === "together" || baseUrl.includes("api.together.ai") || baseUrl.includes("api.together.xyz");
-	const isMoonshot = provider === "moonshotai" || baseUrl.includes("api.moonshot.");
-	const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
-	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
-	const isCloudflareAiGateway = provider === "cloudflare-ai-gateway" || baseUrl.includes("gateway.ai.cloudflare.com");
-	const isNvidia = provider === "nvidia" || baseUrl.includes("integrate.api.nvidia.com");
-	const isCerebras = provider === "cerebras" || baseUrl.includes("cerebras.ai");
-	const isDeepSeek = provider === "deepseek" || baseUrl.toLowerCase().includes("deepseek.com");
+		provider === "together" || matchesHostname(baseUrl, "together.ai") || matchesHostname(baseUrl, "together.xyz");
+	const isMoonshot = provider === "moonshotai" || matchesHostname(baseUrl, "moonshot.cn");
+	const isOpenRouter = provider === "openrouter" || matchesHostname(baseUrl, "openrouter.ai");
+	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || matchesHostname(baseUrl, "cloudflare.com");
+	const isCloudflareAiGateway =
+		provider === "cloudflare-ai-gateway" || matchesHostname(baseUrl, "gateway.ai.cloudflare.com");
+	const isNvidia = provider === "nvidia" || matchesHostname(baseUrl, "integrate.api.nvidia.com");
+	const isCerebras = provider === "cerebras" || matchesHostname(baseUrl, "cerebras.ai");
+	const isDeepSeek = provider === "deepseek" || matchesHostname(baseUrl, "deepseek.com");
 
 	const isSelfHosted = isSelfHostedEndpoint(baseUrl);
 
@@ -1730,20 +1731,20 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		isNvidia ||
 		isCerebras ||
 		provider === "xai" ||
-		baseUrl.includes("api.x.ai") ||
+		matchesHostname(baseUrl, "x.ai") ||
 		isTogether ||
-		baseUrl.includes("chutes.ai") ||
+		matchesHostname(baseUrl, "chutes.ai") ||
 		isDeepSeek ||
 		isZai ||
 		isMoonshot ||
 		provider === "opencode" ||
-		baseUrl.includes("opencode.ai") ||
+		matchesHostname(baseUrl, "opencode.ai") ||
 		isCloudflareWorkersAI ||
 		isCloudflareAiGateway ||
 		isSelfHosted;
 
 	const useMaxTokens =
-		baseUrl.includes("chutes.ai") ||
+		matchesHostname(baseUrl, "chutes.ai") ||
 		isDeepSeek ||
 		isMoonshot ||
 		isCloudflareAiGateway ||
@@ -1752,7 +1753,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		isZai ||
 		isSelfHosted;
 
-	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
+	const isGrok = provider === "xai" || matchesHostname(baseUrl, "x.ai");
 	const isOpenRouterDeveloperRoleModel =
 		isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
 	const cacheControlFormat = provider === "openrouter" && model.id.startsWith("anthropic/") ? "anthropic" : undefined;

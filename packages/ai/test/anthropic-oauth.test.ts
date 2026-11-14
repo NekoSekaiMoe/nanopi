@@ -216,6 +216,39 @@ describe("Anthropic OAuth", { concurrent: false }, () => {
 		expect(manualSignal?.aborted).toBe(true);
 	});
 
+	it("forces the account picker in both login flows", { concurrent: false }, async () => {
+		// Without prompt=login the consent screen completes silently from an existing
+		// claude.ai session and signs into whichever account is active in that browser.
+		const urls: string[] = [];
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async (): Promise<Response> =>
+					jsonResponse({ access_token: "access", refresh_token: "refresh", expires_in: 3600 }),
+			),
+		);
+
+		for (const method of ["browser", "copy_code"]) {
+			await anthropicOAuth.login({
+				signal: neverAbortedSignal,
+				notify: (event) => {
+					if (event.type === "auth_url") urls.push(event.url);
+				},
+				prompt: async (prompt) => {
+					if (prompt.type === "select") return method;
+					if (prompt.type !== "manual_code") throw new Error(`Unexpected prompt: ${prompt.type}`);
+					const params = new URL(urls[urls.length - 1]).searchParams;
+					return `${params.get("redirect_uri")}?code=manual-code&state=${params.get("state")}`;
+				},
+			});
+		}
+
+		expect(urls).toHaveLength(2);
+		for (const url of urls) {
+			expect(new URL(url).searchParams.get("prompt")).toBe("login");
+		}
+	});
+
 	it("round-trips a state of its own instead of the PKCE verifier", async () => {
 		let authUrl = "";
 		let exchangedState: string | undefined;

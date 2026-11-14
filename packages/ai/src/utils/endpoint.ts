@@ -11,6 +11,33 @@ function isPrivateIpv4(hostname: string): boolean {
 }
 
 /**
+ * The lowercase hostname of a baseUrl, or undefined when it does not parse.
+ *
+ * Provider detection used `baseUrl.includes("<host>")`, which also matches a
+ * substring of an unrelated host (`api.openai.com.evil.tld`) or of the path
+ * (`proxy/?to=api.openai.com`), so an attacker-controlled endpoint inherited
+ * another provider's request shape and attribution headers.
+ */
+export function hostnameOf(baseUrl: string): string | undefined {
+	try {
+		return new URL(baseUrl).hostname.toLowerCase();
+	} catch {
+		return undefined;
+	}
+}
+
+/**
+ * Whether a baseUrl is served by `domain`, which it must either equal or sit
+ * below as a subdomain. A bare suffix test would accept `evilopenrouter.ai`.
+ */
+export function matchesHostname(baseUrl: string, domain: string): boolean {
+	const hostname = hostnameOf(baseUrl);
+	if (hostname === undefined) return false;
+	const expected = domain.toLowerCase();
+	return hostname === expected || hostname.endsWith(`.${expected}`);
+}
+
+/**
  * Whether a baseUrl points at a machine the operator runs themselves: a loopback
  * or private-network host (vLLM, SGLang, Ollama, LM Studio). Those servers speak
  * OpenAI-compatible HTTP without OpenAI's own request fields, so assuming the
@@ -18,11 +45,9 @@ function isPrivateIpv4(hostname: string): boolean {
  * `max_completion_tokens`, which several reject with HTTP 400.
  */
 export function isSelfHostedEndpoint(baseUrl: string): boolean {
-	let hostname: string;
-	try {
-		hostname = new URL(baseUrl).hostname.toLowerCase();
-	} catch {
-		return false;
-	}
-	return LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".local") || isPrivateIpv4(hostname);
+	const hostname = hostnameOf(baseUrl);
+	return (
+		hostname !== undefined &&
+		(LOOPBACK_HOSTNAMES.has(hostname) || hostname.endsWith(".local") || isPrivateIpv4(hostname))
+	);
 }

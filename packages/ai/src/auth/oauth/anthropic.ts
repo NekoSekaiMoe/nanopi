@@ -190,6 +190,9 @@ async function loginAnthropic(interaction: ProviderAuthInteraction): Promise<OAu
 			code_challenge: challenge,
 			code_challenge_method: "S256",
 			state,
+			// Without it the browser completes the consent screen silently from an
+			// existing claude.ai session and logs into whichever account is active there.
+			prompt: "login",
 		});
 		interaction.notify({
 			type: "auth_url",
@@ -231,6 +234,8 @@ async function loginAnthropicCopyCode(interaction: ProviderAuthInteraction): Pro
 		code_challenge: challenge,
 		code_challenge_method: "S256",
 		state,
+		// See loginAnthropic: force the account picker instead of reusing the session.
+		prompt: "login",
 	});
 	interaction.notify({
 		type: "auth_url",
