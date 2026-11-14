@@ -108,7 +108,14 @@ jobs:
             --description-file "$desc" \
             --commit "${{ github.event.pull_request.head.sha }}"
 
+      # 笔记门禁（#728）在 `pnpm run check` 的末段（`verify:agent-notes`），
+      # 与本地 pre-commit 走同一条命令。基线只能从这里给：归档 manifest 的
+      # append-only 要拿「变更前的 commit」比，PR 用 base.sha、push 用 event.before。
+      # 新分支的 before 是全 0，那不是 commit；入口脚本解析不到就丢掉它，并在
+      # CI 上留一行 warning，而不是让 git show 安静地退化成「只校验磁盘哈希」。
       - name: Check
+        env:
+          AGENT_NOTE_ARCHIVE_BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: pnpm run check
 
       - name: Test

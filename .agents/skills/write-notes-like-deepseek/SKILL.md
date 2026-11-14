@@ -102,7 +102,7 @@ Status: <状态>
 > 备选方案必填：只记录真实考虑过的对手方案，先写它最强的理由再否定。没有过的选项不要编。「不做 / 复用现状」仅当当时真的权衡过才写。脚本只检查有没有 `## Alternatives considered`。
 > `implemented` 的 `## Decision` 用现在时；门禁只拒提案标题（`## Proposal` / `## Plan` / `## Migration plan` / `## Acceptance criteria` 及其中文别名）。展开见 `references/note-format.md`。
 
-模板见 `templates/`。
+笔记骨架模板见 `.agents/notes/` 里同类的既有笔记；本仓库没有装 Skill 的 `templates/` 目录（安装时只取了 `SKILL.md`、`references/`、`scripts/`）。
 
 ## 3. 动手前检索历史决策（去中心化 4 法）
 
@@ -189,7 +189,7 @@ npx tsx .agents/skills/write-notes-like-deepseek/scripts/build-board.ts --init b
 
 安装到 `.claude/skills/` 或全局目录时，用实际 Skill 路径替换上述前缀。看板打包参数为 `--bundle <notes目录> <输出.html> "名字"`；参数与免疫规则见 `references/verification.md`。
 
-团队可将本 Skill 的 `templates/verify-notes.yml` 复制到宿主仓库 `.github/workflows/verify-notes.yml`，调整为实际安装路径，并将项目级 Skill 文件一起提交；模板在 Skill 目录内不会执行。可在 `CONTRIBUTING.md` / PR 模板加一句「重要改动必带一篇笔记」。
+本仓库已经把三条校验接进 CI，命令只写在 `scripts/verify-agent-notes.mjs` 里一处：GitHub 侧是 `.github/workflows/checks.yml` 的 `Verify agent notes` 步骤，CNB 侧是 `.cnb.yml` 的 `pull_request.target` 流水线同名 stage，两边只传各自的基线 ref。改脚本路径或顺序改那一个文件就够，不要往流水线里抄命令。
 
 ### 提醒不是门禁
 
