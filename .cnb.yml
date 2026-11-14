@@ -115,8 +115,11 @@ main:
         # git show 读基线 manifest）。
         - name: verify-agent-notes
           image: node:24
+          # `set -o pipefail` 在这条 Stage 里会当场退出：node:24 的 /bin/sh 是 dash，
+          # dash 没有 pipefail，脚本以 `Illegal option -o pipefail` 结束，门禁从未真正
+          # 跑过。这里没有管道，`set -eu` 就是全部需要的语义。
           script: |
-            set -euo pipefail
+            set -eu
             # 任务换了容器，工作区文件的所有者可能与当前用户不一致，git 会以
             # "dubious ownership" 拒绝执行——而 verify-archived 读不到 git 时会
             # 静默跳过 append-only，正好跳过这道门禁唯一的增量部分。
