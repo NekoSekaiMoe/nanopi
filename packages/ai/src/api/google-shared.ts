@@ -33,8 +33,9 @@ type GoogleApiType = "google-generative-ai" | "google-vertex";
  * Thinking level for Gemini 3 models.
  * Mirrors Google's ThinkingLevel enum values.
  */
-export type GoogleApiThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH";
-export type ResolvedGoogleThinkingLevel = Exclude<ThinkingLevel, "xhigh" | "max">;
+export type GoogleApiThinkingLevel = "THINKING_LEVEL_UNSPECIFIED" | "MINIMAL" | "LOW" | "MEDIUM" | "HIGH" | "XHIGH";
+/** Levels Google's discrete control accepts. `max` has no Google value and is clamped away before it gets here. */
+export type ResolvedGoogleThinkingLevel = Exclude<ThinkingLevel, "max">;
 
 const GOOGLE_SDK_THINKING_LEVEL_MAP: Record<GoogleApiThinkingLevel, GoogleSdkThinkingLevel> = {
 	THINKING_LEVEL_UNSPECIFIED: GoogleSdkThinkingLevel.THINKING_LEVEL_UNSPECIFIED,
@@ -42,6 +43,7 @@ const GOOGLE_SDK_THINKING_LEVEL_MAP: Record<GoogleApiThinkingLevel, GoogleSdkThi
 	LOW: GoogleSdkThinkingLevel.LOW,
 	MEDIUM: GoogleSdkThinkingLevel.MEDIUM,
 	HIGH: GoogleSdkThinkingLevel.HIGH,
+	XHIGH: GoogleSdkThinkingLevel.XHIGH,
 };
 
 /** Resolve a supported nanopi level or model-specific Google mapping to a standard Google level. */
@@ -56,6 +58,7 @@ export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
 		case "low":
 		case "medium":
 		case "high":
+		case "xhigh":
 			return resolvedLevel;
 		default:
 			throw new Error(
@@ -70,16 +73,47 @@ export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
  * model's `thinkingLevelMap`; this only selects the Google wire format.
  */
 export function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>): boolean {
+	// `thinkingLevel` arrived with Gemini 3; the 2.5 tier only has `thinkingBudget`,
+	// so a level named there would be ignored by the request it was put in. A major
+	// version is a closed set (2.x is frozen), unlike a codename.
+	if (isBudgetOnlyGemini(model.id)) return false;
+
+	// The map is the same thing the level control reads, so a model that names a
+	// level there accepts the level control. Matching on the id instead meant every
+	// new family (gemini-4-argon/carbon/hydrogen) silently fell back to
+	// `thinkingBudget` while still advertising levels the UI would send.
+	if (declaresGoogleThinkingLevels(model)) return true;
+
+	// Data-free models predating the map, matched by id: Gemini Pro/Flash with or
+	// without a minor version (gemini-3-flash-preview, gemini-3.1-pro-preview), the
+	// `-latest` aliases, and both hosted Gemma 4 naming forms (gemma-4-*, gemma4-*).
 	const id = model.id.toLowerCase();
 	return (
-		// Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
-		// gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
 		/gemini-3(?:\.\d+)?-(?:pro|flash)/.test(id) ||
 		id === "gemini-flash-latest" ||
 		id === "gemini-flash-lite-latest" ||
-		// Match both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
 		/gemma-?4/.test(id)
 	);
+}
+
+/** Gemini 2.x and older only have the token budget control. */
+function isBudgetOnlyGemini(modelId: string): boolean {
+	const major = getGeminiMajorVersion(modelId);
+	return major !== undefined && major < 3;
+}
+
+/**
+ * Google's own level names. A map value outside this set (`max` on the Claude
+ * models Cloud Code Assist serves) is not something the level control can send,
+ * so such a model stays on the budget path.
+ */
+const GOOGLE_LEVEL_VALUES = new Set(["minimal", "low", "medium", "high", "xhigh"]);
+
+/** Whether the model's `thinkingLevelMap` names at least one level the control accepts. */
+function declaresGoogleThinkingLevels<T extends GoogleApiType>(model: Model<T>): boolean {
+	const map = model.thinkingLevelMap;
+	if (!map) return false;
+	return Object.values(map).some((value) => typeof value === "string" && GOOGLE_LEVEL_VALUES.has(value.toLowerCase()));
 }
 
 export function toGoogleThinkingLevel(level: ResolvedGoogleThinkingLevel): GoogleApiThinkingLevel {
@@ -92,6 +126,8 @@ export function toGoogleThinkingLevel(level: ResolvedGoogleThinkingLevel): Googl
 			return "MEDIUM";
 		case "high":
 			return "HIGH";
+		case "xhigh":
+			return "XHIGH";
 	}
 }
 

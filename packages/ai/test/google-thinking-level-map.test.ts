@@ -195,6 +195,56 @@ describe("Google thinking level maps", () => {
 		expect(payload).toMatchObject({ config: { thinkingConfig: { includeThoughts: true, thinkingLevel: "HIGH" } } });
 	});
 
+	// Issue #731: `gemini-4-*` declares levels but the id never matched the level regex,
+	// so hydrogen's `xhigh` reached `resolveGoogleThinkingLevel` and threw, while
+	// argon/carbon had their low/medium/high silently dropped for `thinkingBudget: -1`.
+	it.each(googleAdapters)("sends the declared xhigh level for gemini-4-hydrogen on $name", async ({ capture }) => {
+		const payload = await capture(
+			"gemini-4-hydrogen",
+			{
+				off: null,
+				minimal: null,
+				low: "low",
+				medium: "medium",
+				high: "high",
+				xhigh: "xhigh",
+				max: null,
+			},
+			"xhigh",
+		);
+
+		expect(payload.config?.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "XHIGH" });
+	});
+
+	it.each(googleAdapters)("clamps max to xhigh for gemini-4-hydrogen on $name", async ({ capture }) => {
+		const payload = await capture(
+			"gemini-4-hydrogen",
+			{ off: null, minimal: null, low: "low", medium: "medium", high: "high", xhigh: "xhigh", max: null },
+			"max",
+		);
+
+		expect(payload.config?.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: "XHIGH" });
+	});
+
+	it.each(googleAdapters)("sends declared levels for gemini-4-argon on $name", async ({ capture }) => {
+		const thinkingLevelMap = {
+			off: null,
+			minimal: null,
+			low: "low",
+			medium: "medium",
+			high: "high",
+			xhigh: null,
+			max: null,
+		} as const;
+		const levels = ["low", "medium", "high"] as const;
+		const expected = ["LOW", "MEDIUM", "HIGH"] as const;
+
+		for (const [index, level] of levels.entries()) {
+			const payload = await capture("gemini-4-argon", thinkingLevelMap, level);
+			expect(payload.config?.thinkingConfig).toEqual({ includeThoughts: true, thinkingLevel: expected[index] });
+		}
+	});
+
 	it("uses mapped Google Vertex levels for token budgets", async () => {
 		const payload = await captureVertexPayload(vertexModel("gemini-2.5-flash", { max: "high" }), "max", {
 			high: 4321,
