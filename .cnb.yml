@@ -17,18 +17,23 @@
 # 每个 job 的 endStages 都用这一段（锚点在 YAML 里必须先定义后引用）。
 # allowFailure：钩子自己出错不能把构建状态改成失败，更不能盖掉原来的失败信息。
 #
-# 镜像里没有 node（默认构建镜像是 alpine，见 check-merge-result 那一段的注释），
-# 也没有 cnb：脚本要用 cnb 读构建状态、写 Issue，所以先装。
+# 脚本要用 cnb 读构建状态、写 Issue，所以先装 cnb；node 由 node:24 镜像自带
+# （见本段 image 处的注释）。
 # CNB_TOKEN 在 endStages 里默认只有构建详情只读，写 Issue 要显式加 scope。
 x-notify-failure: &notify-failure
   - name: report-failure
     allowFailure: true
+    # 镜像自带 node，不再 apt 装：默认构建镜像里没有 node，而 apt 装的又是
+    # Debian 的 nodejs（trixie 是 20.19.2，低于本仓库的 >=24），且每次都要赌
+    # 一次镜像源。cnb-knt-1k7c8jnjn 就是这么红的：Debian 源对
+    # node-cjs-module-lexer 返回 404，node 没装成，脚本以 127 结束。
+    image: node:24
     env:
       CNB_TOKEN_SCOPE: repo-issue:rw,repo-notes:rw,repo-cnb-history:r
     script: |
-      set -uo pipefail
-      apt-get update && apt-get install nodejs -y
-      corepack enable npm && npm install -g pnpm @cnbcool/cnb-cli
+      # node:24 的 /bin/sh 是 dash，没有 pipefail；这里也没有管道。
+      set -eu
+      npm install -g @cnbcool/cnb-cli
       node scripts/report-failed-check.mjs
 
 # nightly 的 bundle 发 AtomGit 只在 GitHub Actions 里跑（.github/workflows/nightly.yml），
@@ -43,6 +48,13 @@ main:
       runner:
         tags: cnb:arch:amd64
         cpus: 2
+      # 默认构建镜像里没有 node，此前靠每个 stage 各自 apt 装一次：装到的是 Debian
+      # 的 nodejs 20（低于本仓库的 >=24），还要赌镜像源，装不上就是
+      # `sh: node: command not found`（127）。整条流水线直接指 node:24，stage 里
+      # 只管跑脚本；顺带省掉每次三次 apt-get update 的时间。
+      # node:24 的 /bin/sh 是 dash，脚本里不要写 pipefail。
+      docker:
+        image: node:24
       imports:
         - https://cnb.cool/shinytale/keys/-/blob/main/env.yml
       endStages: *notify-failure
@@ -51,8 +63,8 @@ main:
         # Change-Id 只能在 CI 里检查，补不了；这里只报告不拦截。
         - name: check-commit-trailers
           script: |
-            set -euo pipefail
-            apt-get update && apt-get install nodejs -y && corepack enable npm && npm install -g pnpm
+            set -eu
+            # 整个流水线跑在 node:24 里（见下面的 docker.image），脚本只读 git。
             node scripts/check-commit-trailers.mjs "$CNB_BEFORE_SHA" "$CNB_COMMIT"
 
         # main 与 tag 各跑一次镜像。判定在 scripts/mirror-main.mjs 与
@@ -64,7 +76,7 @@ main:
         # 远端 URL 不带 token，token 也不经过这里的 shell 与 ~/.git-credentials。
         - name: mirror main and tags
           script: |
-            set -euo pipefail
+            set -eu
             remote=https://github.com/NekoSekaiMoe/nanopi.git
             node scripts/mirror.mjs main --remote "$remote" --token-user x-access-token --token-env GH_KEY
             node scripts/mirror.mjs tags --remote "$remote" --token-user x-access-token --token-env GH_KEY
@@ -86,15 +98,16 @@ main:
       runner:
         tags: cnb:arch:amd64
         cpus: 2
+      # 同上：默认构建镜像没有 node，这里只装得起 Debian 的 node 20，还要赌镜像源。
+      docker:
+        image: node:24
       endStages: *notify-failure
       stages:
         - name: check-merge-result
           # fetch PR 分支、合并、比对都在 scripts/check-merge-result-cnb.mjs 里。
           # 退出码：0 通过，1 这次合并会丢 main 上已有的文件，2 base 缺失。
           script: |
-            set -euo pipefail
-            # 默认构建镜像里没有 node（cnb-4u8-1k5s1gkfc 报 sh: node: command not found）。
-            apt-get update && apt-get install nodejs -y
+            set -eu
             node scripts/check-merge-result-cnb.mjs
 
         # 笔记门禁（#728）：tree / format / archived 三条校验脚本会红，四问那条
@@ -108,13 +121,11 @@ main:
         # append-only 要拿「改动前」比，用 HEAD 等于没查。这跟 check-merge-result 取
         # 合并基线是同一件事，只是那边要自己 fetch 源分支。
         #
-        # 镜像单独指 node:24：默认构建镜像的 node 要 apt 装，装到的是 Debian 的
-        # nodejs 包，没有类型剥离（process.features.typescript === false），而三条
-        # 校验脚本是 .ts。走 ts-import.mjs 就得先 pnpm install 装 esbuild——为三条
-        # 读文件的检查装整个工作区不值得。node:24 自带 git（verify-archived 要用
-        # git show 读基线 manifest）。
+        # 三条校验脚本是 .ts，需要会剥类型的 node（process.features.typescript）：
+        # Debian 的 nodejs 包没有这个能力，走 ts-import.mjs 又得先装 esbuild。
+        # 流水线已经整体是 node:24，这一条不再单独指镜像；node:24 自带 git
+        # （verify-archived 要用 git show 读基线 manifest）。
         - name: verify-agent-notes
-          image: node:24
           # `set -o pipefail` 在这条 Stage 里会当场退出：node:24 的 /bin/sh 是 dash，
           # dash 没有 pipefail，脚本以 `Illegal option -o pipefail` 结束，门禁从未真正
           # 跑过。这里没有管道，`set -eu` 就是全部需要的语义。
