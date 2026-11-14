@@ -122,8 +122,15 @@ jobs:
             echo "::error::expected exactly one sidecar tarball in packages/coding-agent/binaries, found ${#sidecars[@]}"
             exit 1
           fi
-          mv "${sidecars[0]}" release-assets/
-          tar -tzf "release-assets/$(basename "${sidecars[0]}")" | grep -q '\.node$' || {
+          tarball="release-assets/$(basename "${sidecars[0]}")"
+          mv "${sidecars[0]}" "${tarball}"
+          # 不能写成 `tar -tzf "$tarball" | grep -q ...`：grep -q 命中第一行就退出，
+          # tar 还在往管道里写，拿到 SIGPIPE/EPIPE 以非 0 结束，pipefail 把整条管道
+          # 判成失败，于是包里明明有 .node 也走进 error 分支（#742）。清单只有几百
+          # 字节、远小于管道缓冲，才让这个竞态看起来像「有时正常」。
+          # 先把清单整个读进变量，再让 grep 从 herestring 读。
+          entries="$(tar -tzf "${tarball}")"
+          grep -q '\.node$' <<< "${entries}" || {
             echo "::error::sidecar tarball carries no prebuilt .node file"
             exit 1
           }
