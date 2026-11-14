@@ -43,7 +43,20 @@ function writeBody(body) {
 }
 
 const repo = process.env.CNB_REPO_NAMESPACE ?? process.env.CNB_REPO_SLUG ?? "";
-const sn = process.env.CNB_PIPELINE_ID ?? process.env.CNB_BUILD_ID ?? "";
+
+// 读构建状态和取日志用的都是「构建号」（cnb-68q-1k7c6nhcs），而 endStages 里能拿到的
+// 是「流水线号」（cnb-68q-1k7c6nhcs-001）：CNB_BUILD_ID 在这里没有值，CNB_PIPELINE_ID
+// 多一个 -001 后缀。`cnb build get-build-logs --sn` 与 `cnb pulls get-ci-logs --sn` 都
+// 只认构建号，传流水线号返回空列表——钩子于是把每一次失败都读成「没有状态」，
+// 静默退出 0，一个 Issue 都没开过（#735）。
+//
+// 序号是纯数字，构建号的末段是字母数字混合，所以「末段全数字」正好判出这条后缀。
+function buildSequenceNumber() {
+	const pipelineId = process.env.CNB_PIPELINE_ID ?? "";
+	return process.env.CNB_BUILD_ID || pipelineId.replace(/-\d+$/, "");
+}
+
+const sn = buildSequenceNumber();
 
 function buildStatus() {
 	if (!sn) return "";

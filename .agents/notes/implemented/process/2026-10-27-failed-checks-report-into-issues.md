@@ -28,8 +28,13 @@ cnb-b8j-1k5tkk317 #313  error [15.9s]   merged
 每条 pipeline 的 `endStages` 挂一段 `report-failure`（`.cnb.yml` 的
 `x-notify-failure` 锚点），跑 `scripts/report-failed-check.mjs`：
 
-- **判不判**由脚本读构建状态决定：`cnb build get-build-logs --sn $CNB_PIPELINE_ID`
+- **判不判**由脚本读构建状态决定：`cnb build get-build-logs --sn <构建号>`
   返回 `error` 才继续。`endStages` 不继承 stages 的结论，所以「全挂上」是安全的。
+  这里要的是**构建号**（`cnb-68q-1k7c6nhcs`），不是**流水线号**
+  （`cnb-68q-1k7c6nhcs-001`）：`endStages` 里 `CNB_BUILD_ID` 无值，只有
+  `CNB_PIPELINE_ID`，直接拿来查会返回空列表，钩子把每次失败都读成「没有状态」而
+  静默退出 0——从上线到 #735 一个 Issue 都没开过。脚本现在按「末段全数字」剥掉
+  序号，两种变量都落到构建号上。
 - **报给谁**：一条普通 Issue，标题 `CI 红：<分支>`，正文第一行 `@CodeBuddy`。
   Issue 是唯一能拉起 NPC 的载体——`issue.comment@npc` 在默认分支最新提交上跑，
   而这个仓库的 `issue.comment@npc` 会先 `pnpm install` + `pnpm prepare` 装 hooks，
@@ -66,8 +71,7 @@ cnb-b8j-1k5tkk317 #313  error [15.9s]   merged
 
 ## Verification
 
-`scripts/report-failed-check.test.mjs` 用假 `cnb` 钉住四件事：绿的构建不出 Issue、
-失败的构建开一条带 `@CodeBuddy` 的 Issue、同一提交不重报、新提交追加到既有 Issue。
-`node --test scripts/report-failed-check.test.mjs` 6 passed；`pnpm run check` 除
-`packages/coding-agent/src/utils/sidecars.ts:205` 的既有类型错误（#317 在修，干净
-checkout 同样复现）外全绿。
+`scripts/report-failed-check.test.mjs` 用假 `cnb` 钉住五件事：绿的构建不出 Issue、
+失败的构建开一条带 `@CodeBuddy` 的 Issue、同一提交不重报、新提交追加到既有 Issue、
+流水线号被剥成构建号再查。
+`node --test scripts/report-failed-check.test.mjs` 7 passed；`pnpm run check` 全绿。

@@ -56,7 +56,7 @@ async function fixture(t, name, responses) {
 				...process.env,
 				PATH: `${bin}:${process.env.PATH}`,
 				CNB_REPO_NAMESPACE: "shinytale/nanopi",
-				CNB_PIPELINE_ID: "cnb-test-1",
+				CNB_BUILD_ID: "cnb-test-1",
 				CNB_COMMIT: "1111111111111111111111111111111111111111",
 				CNB_EVENT: "pull_request.target",
 				CNB_PULL_REQUEST_BRANCH: "fix/1-something",
@@ -146,6 +146,23 @@ test("an unreadable build is left alone", async (t) => {
 	const result = run();
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(calls().some((call) => call[1] === "create-issue"), false);
+});
+
+// endStages 里没有 CNB_BUILD_ID，只有带 `-001` 后缀的 CNB_PIPELINE_ID。把流水线号
+// 直接当构建号去查，接口返回空列表，于是每一次失败都被读成「读不到状态」——钩子
+// 静默退出 0，一个 Issue 都没开过（#735）。
+test("a pipeline id is reduced to its build number", async (t) => {
+	const { run, calls } = await fixture(t, "pipeline-id", {
+		"get-build-logs": failedBuild,
+		"list-issues": { data: [] },
+		"create-issue": { data: { number: "42" } },
+	});
+	const result = run({ CNB_BUILD_ID: "", CNB_PIPELINE_ID: "cnb-test-1-001" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /opened issue #42/);
+
+	const query = calls().find((call) => call[1] === "get-build-logs");
+	assert.equal(query[query.indexOf("--sn") + 1], "cnb-test-1");
 });
 
 // 没有源分支的事件（手动触发之类）也不报：标题里没有分支就定位不了。
