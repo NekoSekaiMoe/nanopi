@@ -56,7 +56,9 @@ async function fixture(t, name, responses) {
 				...process.env,
 				PATH: `${bin}:${process.env.PATH}`,
 				CNB_REPO_NAMESPACE: "shinytale/nanopi",
-				CNB_PIPELINE_ID: "cnb-test-1",
+				CNB_BUILD_ID: "cnb-test-1",
+				// endStages 里平台给的结论。默认「红了」，个别用例自己改。
+				CNB_PIPELINE_STATUS: "error",
 				CNB_COMMIT: "1111111111111111111111111111111111111111",
 				CNB_EVENT: "pull_request.target",
 				CNB_PULL_REQUEST_BRANCH: "fix/1-something",
@@ -79,14 +81,35 @@ async function fixture(t, name, responses) {
 
 const failedBuild = { data: { data: [{ status: "error" }] } };
 const okBuild = { data: { data: [{ status: "success" }] } };
+// 钩子自己跑在 endStages 里，这时构建整体状态还是 pending。
+const runningBuild = { data: { data: [{ status: "pending" }] } };
 
 // 绿色构建不该碰 Issue：否则每条流水线都会在仓库里留一条噪音。
 test("a successful build reports nothing", async (t) => {
 	const { run, calls } = await fixture(t, "green", { "get-build-logs": okBuild });
-	const result = run();
+	const result = run({ CNB_PIPELINE_STATUS: "success" });
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /succeeded/);
 	assert.equal(calls().some((call) => call[1] === "create-issue" || call[1] === "post-issue-comment"), false);
+});
+
+// #737：绿构建在 endStages 里读到的整体状态是 pending。按「不是 success 就报」判，
+// 每一条绿构建都会被报成失败——#736 和 #735 就是这么被报的。
+test("a pending build is not a failure", async (t) => {
+	const { run, calls } = await fixture(t, "pending", { "get-build-logs": runningBuild });
+	const result = run({ CNB_PIPELINE_STATUS: "" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /is pending; not a failure/);
+	assert.equal(calls().some((call) => call[1] === "create-issue"), false);
+});
+
+// 手动取消的构建也没人要修。
+test("a cancelled build reports nothing", async (t) => {
+	const { run, calls } = await fixture(t, "cancel", { "get-build-logs": failedBuild });
+	const result = run({ CNB_PIPELINE_STATUS: "cancel" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /is cancel; not a failure/);
+	assert.equal(calls().some((call) => call[1] === "create-issue"), false);
 });
 
 // 失败且还没有人报过：开一条带 @CodeBuddy 的 Issue。
@@ -141,11 +164,29 @@ test("a new failing commit appends to the existing issue", async (t) => {
 });
 
 // 读不到构建状态（令牌不够、API 抖动）时不动手：报错工具没有资格替构建下结论。
+// 平台变量缺席只有在流水线外手工跑时才会发生，此时才退回 API。
 test("an unreadable build is left alone", async (t) => {
 	const { run, calls } = await fixture(t, "unreadable", { "get-build-logs": { data: null } });
-	const result = run();
+	const result = run({ CNB_PIPELINE_STATUS: "" });
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(calls().some((call) => call[1] === "create-issue"), false);
+});
+
+// endStages 里没有 CNB_BUILD_ID，只有带 `-001` 后缀的 CNB_PIPELINE_ID。把流水线号
+// 直接当构建号去查，接口返回空列表（#735）。取日志和 Issue 里的链接都要用构建号。
+test("a pipeline id is reduced to its build number", async (t) => {
+	const { run, calls } = await fixture(t, "pipeline-id", {
+		"get-build-logs": failedBuild,
+		"list-issues": { data: [{ number: "42", title: "CI 红：fix/1-something" }] },
+		"list-issue-comments": { data: [] },
+		"post-issue-comment": { data: {} },
+	});
+	const result = run({ CNB_BUILD_ID: "", CNB_PIPELINE_ID: "cnb-test-1-001" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /appended/);
+
+	const query = calls().find((call) => call[1] === "get-ci-logs");
+	assert.equal(query[query.indexOf("--sn") + 1], "cnb-test-1");
 });
 
 // 没有源分支的事件（手动触发之类）也不报：标题里没有分支就定位不了。
