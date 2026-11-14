@@ -284,25 +284,36 @@ function officialTools(api: GatewayApi, lane: GatewayLane, renames: Renames): un
 	const entries: unknown[] = [];
 	for (const name of names) {
 		const definition = definitions[name];
-		entries.push(renderOfficialTool(api, name, definition));
+		entries.push(renderOfficialTool(api, name, definition, lane === "v2"));
 		const target = renames.aliased.get(name);
 		const wire = target ? renames.toWire.get(target) : undefined;
-		if (wire) entries.push(renderOfficialTool(api, wire, definition));
+		if (wire) entries.push(renderOfficialTool(api, wire, definition, lane === "v2"));
 	}
 	return entries;
 }
 
-/** One official tool rendered in a protocol's tool shape. */
+/**
+ * One official tool rendered in a protocol's tool shape.
+ *
+ * `strict: false` is the 2.x CLI's own mark on every chat tool; the 1.x capture
+ * carries no `strict` field at all, so the v1 lane must not add one.
+ */
 function renderOfficialTool(
 	api: GatewayApi,
 	name: string,
 	definition: { description: string; parameters: Record<string, unknown> },
+	strict: boolean,
 ): unknown {
 	switch (api) {
 		case "openai-completions":
 			return {
 				type: "function",
-				function: { name, description: definition.description, parameters: definition.parameters, strict: false },
+				function: {
+					name,
+					description: definition.description,
+					parameters: definition.parameters,
+					...(strict ? { strict: false } : {}),
+				},
 			};
 		case "openai-responses":
 			return { type: "function", name, description: definition.description, parameters: definition.parameters };
