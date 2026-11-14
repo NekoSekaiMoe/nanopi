@@ -68,6 +68,10 @@ vi.mock("@google/genai", () => {
 			LANGUAGE: "LANGUAGE",
 			MALFORMED_FUNCTION_CALL: "MALFORMED_FUNCTION_CALL",
 			MALFORMED_RESPONSE: "MALFORMED_RESPONSE",
+			MISSING_THOUGHT_SIGNATURE: "MISSING_THOUGHT_SIGNATURE",
+			ESCALATION: "ESCALATION",
+			PUP_LIMITED_DISABLED: "PUP_LIMITED_DISABLED",
+			MODEL_ARMOR: "MODEL_ARMOR",
 			UNEXPECTED_TOOL_CALL: "UNEXPECTED_TOOL_CALL",
 			NO_IMAGE: "NO_IMAGE",
 		},
@@ -192,18 +196,31 @@ describe("Google raw stop reasons", () => {
 		expect(message.content.some((block) => block.type === "toolCall")).toBe(true);
 	});
 
-	// @google/genai 3.0.0 added MALFORMED_RESPONSE to FinishReason; mapStopReason's exhaustive
-	// check is what broke the build when the SDK bumped, so the new value needs its own case.
-	it.each(adapters)("maps MALFORMED_RESPONSE to error for $name", async ({ createStream }) => {
-		googleGenAiMock.finishReason = "MALFORMED_RESPONSE";
-		googleGenAiMock.includeFunctionCall = false;
+	// Each SDK bump that adds a FinishReason value breaks mapStopReason's exhaustive check,
+	// so every new value needs its own case and its own row here. 3.0.0 added
+	// MALFORMED_RESPONSE; 3.3.0 added MISSING_THOUGHT_SIGNATURE, ESCALATION,
+	// PUP_LIMITED_DISABLED and MODEL_ARMOR.
+	const newFinishReasons = [
+		"MALFORMED_RESPONSE",
+		"MISSING_THOUGHT_SIGNATURE",
+		"ESCALATION",
+		"PUP_LIMITED_DISABLED",
+		"MODEL_ARMOR",
+	];
 
-		const message = await createStream().result();
+	it.each(adapters.flatMap((adapter) => newFinishReasons.map((reason) => ({ ...adapter, reason }))))(
+		"maps $reason to error for $name",
+		async ({ createStream, reason }) => {
+			googleGenAiMock.finishReason = reason;
+			googleGenAiMock.includeFunctionCall = false;
 
-		expect(message.stopReason).toBe("error");
-		expect(message.rawStopReason).toBe("MALFORMED_RESPONSE");
-		expect(message.errorMessage).toBe("Provider stopped with: MALFORMED_RESPONSE");
-	});
+			const message = await createStream().result();
+
+			expect(message.stopReason).toBe("error");
+			expect(message.rawStopReason).toBe(reason);
+			expect(message.errorMessage).toBe(`Provider stopped with: ${reason}`);
+		},
+	);
 });
 
 describe("Google provider stream events", () => {
