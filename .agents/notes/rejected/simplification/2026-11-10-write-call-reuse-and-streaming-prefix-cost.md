@@ -1,8 +1,6 @@
 # Agent Note: write 的调用文本不做定稿后复用，流式高亮的开销也不在前缀重排
 
-Status: rejected — 400 行 write 内容逐帧实测：`argsComplete` 之后新增的高亮行是 0，
-`rendered` 缓存只会把 `formatWriteCall` 换成一次 O(n) 的字符串比较；流式期间那 19624 行
-里前缀重排也只是一部分，且它换来的错误画面比省下的 CPU 更贵。不做。见 shinytale/nanopi#652。
+Status: rejected — `write` 定稿后新增的高亮行是 0，那层缓存只把拼字符串换成 O(n) 比较，且它换来的错误画面比省下的 CPU 更贵。见 shinytale/nanopi#652。
 
 ## Problem
 
@@ -12,6 +10,19 @@ Status: rejected — 400 行 write 内容逐帧实测：`argsComplete` 之后新
 「前缀重排只在首次 exact 时做」的前置条件（[旧记录](2026-11-08-streaming-highlight-once-exact.md)）。
 
 这个理由站不住，得先把结论钉住，否则那层缓存会被照着 issue 的描述实现一遍。
+
+## Proposal
+
+（被否决的原方案，保留以便对照。）
+
+`WriteCallRenderComponent` 加 `rendered` / `renderedTheme` / `renderedExpanded` / `renderedPath` /
+`renderedComplete` 五个字段，缓存键取「路径 + 展开态 + 主题 + 完整性 + `cache.exact`」，命中就返回
+缓存字符串、不调 `formatWriteCall`；只在 `argsComplete` 且 `cache.exact` 为真时短路，命中时不调
+`setText`。落地之后再按旧记录做「前缀重排只在首次 exact 时做」，即
+```ts
+const prefixCount =
+    previous.exact ? Math.min(1, lines.length) : Math.min(STREAMING_FULL_HIGHLIGHT_PREFIX_LINES, lines.length);
+```
 
 ## 为什么这层缓存是亏的
 

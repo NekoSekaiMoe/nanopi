@@ -14,15 +14,20 @@ register them automatically at runtime, and land extracted copies in
 
 ## Decision
 
-Extras are vendored under `packages/coding-agent/extras/<name>/` (upstream
+Extras live under `packages/coding-agent/src/extras/<name>/` (upstream
 snapshots; `devDependencies`/`scripts`/`tsconfig.json`/`*.bak` stripped
 because the repo never builds them and the upstream tsconfig `extends` paths
-do not exist here). One `extra/<name>` component per package in
-`buildconfig.json`; `scripts/extras.mjs` cross-validates directories against
-components (both directions fail the build on drift) and copy-assets plus
-the single-file build copy enabled extras into `dist/extras/<name>`.
+do not exist here). At the time they were optional vendored packages: one
+`extra/<name>` component per package in `buildconfig.json`,
+`scripts/extras.mjs` cross-validating directories against components (both
+directions failed the build on drift), and copy-assets plus the single-file
+build copying enabled extras into `dist/extras/<name>`. The plugin system is
+gone as of 2026-10-13 and every extra is now a compiled-in `moduleBundles`
+entry; see the last fact update.
 
-Registration reuses the user-package machinery instead of inlining code:
+Registration at the time reused the user-package machinery instead of
+inlining code (all of the following went away with the plugin system in
+`2026-10-13`, kept here as the record of what that machinery did):
 `PackageManager.resolve()` appends `getBundledExtraPackageSources(...)` after
 project and global settings, so user configuration wins collisions by
 package identity (path) and by npm name (an extra the user already takes as
@@ -95,6 +100,12 @@ fixed rather than patching the packages:
   upstream `HEAD`; the remaining deltas are the module-API renames plus
   upstream bug fixes, and pi-simplify now keeps its upstream test suite. See
   [vendored extra tests and HEAD sync](../process/2026-10-28-vendored-extra-tests-and-head-sync.md).
+- Fact update 2026-11-14: the extras no longer ship as optional vendored
+  packages. The plugin system they loaded through is gone and every extra is
+  now a compiled-in module bundle under the same `src/extras/<name>/` paths,
+  so `scripts/extras.mjs`, the `extra/<name>` flavor components,
+  `dist/extras/` and `NANOPI_BUNDLED_EXTRAS` no longer exist. See
+  [remove the plugin system](../architecture/2026-10-13-remove-plugin-system-programmatic-modules.md).
 
 Related: [build flavors via buildconfig.json](../process/2026-10-11-build-flavors-buildconfig.md)
 (the component system this builds on),

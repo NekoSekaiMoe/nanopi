@@ -1,8 +1,6 @@
 # Agent Note: SKU 预算钉值不改成动态
 
-Status: rejected — 动态钉（跨平台取最大、对 `HEAD~` 计算、跟 `estimateTextTokens`
-一起浮动）都会把「涨了要付账」这条唯一的机制换成一条自动跟着涨的线，而它要防的
-`+1` 本来就已经不红。见 shinytale/nanopi#680。
+Status: rejected — 动态钉会把「涨了要付账」这条唯一的机制换成一条自动跟着涨的线，而它要防的 `+1` 本来就已经不红。见 shinytale/nanopi#680。
 
 ## Problem
 
@@ -10,6 +8,12 @@ Status: rejected — 动态钉（跨平台取最大、对 `HEAD~` 计算、跟 `
 是 58768f055 当天在源码树上的读数，写死成字面量。shinytale/nanopi#680 里问了能不能改成动态的：
 钉住的数字会漂（#681 就是 `find`/`ls` 的 `limit` 描述各加一句让 base 从 1540 变 1554），
 每次都要人肉改常量。
+
+## Proposal
+
+（被否决的原方案，保留以便对照。）把 `PINNED = { minimal: 405, base: 1540 }` 换成运行时算出来的
+基线：`baseline = measure(SKU).total`、或与 `HEAD~` 的读数比较、或按 `estimateTextTokens` 与
+宿主平台浮动。这样工具声明涨价时不必人肉改常量，测试也不会因为 1540 变 1554 而红。
 
 ## 为什么动态钉留不住这条语义
 

@@ -27,7 +27,7 @@ Status: implemented
 - compaction 那里原本自己拼一遍 `lines.concat(...)`，改成把"被重挂的 kept 条目 +
   新 compaction 条目"组成数组交给同一个函数，不再写第二份序列化。
 
-## 被否掉的路
+## Alternatives considered
 
 - **只改 `_rewriteFile()`，把 compaction 留在原地**：那样就是两份 tmp + rename，
   下次改命名或清理规则要改两处。抽函数只多一行调用，成本低于留两份。
@@ -37,7 +37,7 @@ Status: implemented
 - **`fsync` 之后才 rename**：能再挡住掉电丢数据，但每次重写多两次 fsync 系统调用，
   而 session 文件不是数据库。崩溃后拿到旧的完整文件已经够用。
 
-## 代价
+## Consequences
 
 重写多一次 `write` + 一次 `rename` + 目录项更新。`_rewriteFile()` 只在初始化、
 版本迁移、branch 时跑，不在每次 append 的路径上，这个开销看不见。

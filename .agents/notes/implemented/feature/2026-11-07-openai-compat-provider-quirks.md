@@ -32,7 +32,7 @@ OpenAI 官方语义，而 OpenAI 官方语义里那几个字段恰好是别人�
 命中即并入 `isNonStandard` 与 `useMaxTokens`，于是 `supportsStore: false`、
 `maxTokensField: "max_tokens"`、`supportsReasoningEffort: false`（同时排除 Cerebras，
 它也不认这个字段）。运行时 `detectCompat` 和生成器
-`scripts/generate-models.ts` 的 `detectOpenAICompletionsCompat` 都调同一个 helper —— 这两份
+`packages/ai/scripts/generate-models.ts` 的 `detectOpenAICompletionsCompat` 都调同一个 helper —— 这两份
 是手工同步的拷贝（#580 第五节也点了这个漂移），至少判定逻辑不再分叉。
 
 **OpenRouter 只发调用方显式要求的输出上限。** `buildBaseOptions` 里新增

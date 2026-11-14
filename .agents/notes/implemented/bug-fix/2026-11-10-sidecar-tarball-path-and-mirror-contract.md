@@ -110,8 +110,8 @@ The tarball has exactly one home in the build tree, independent of `--out`:
   six `.node` files. The GitHub-side run is only exercised by the next
   scheduled nightly.
 
-Related: [TUI sidecar tarball is mirrored to AtomGit](2026-11-06-tui-sidecar-mirror-and-prebuilds.md)
+Related: [TUI sidecar tarball is mirrored to AtomGit](../process/2026-11-06-tui-sidecar-mirror-and-prebuilds.md)
 (the change that introduced both the tarball-as-asset and the URL list),
-[bundle 发到 AtomGit 的发行仓库](2026-11-05-atomgit-release-assets-mirror.md)
-(why the mirror exists), [`full` stops embedding the native sidecars](2026-11-06-sidecars-download-in-full.md)
+[bundle 发到 AtomGit 的发行仓库](../process/2026-11-05-atomgit-release-assets-mirror.md)
+(why the mirror exists), [`full` stops embedding the native sidecars](../process/2026-11-06-sidecars-download-in-full.md)
 (why the download is load-bearing).

@@ -1,8 +1,6 @@
 # Agent Note: 流式高亮的前缀重排只在第一次 exact 时做
 
-Status: rejected — 按「第一次进入 exact 时做一次前缀、之后只画新增行」实现后，带未闭合
-模板字符串的 write 内容会停在与全量高亮不同的画面上，而 `write` 没有 `complete`
-短路的缓存。收益小、有已知错误画面，故不做。
+Status: rejected — 按「首次进入 exact 时做一次前缀」实现后，跨行 token 的 write 内容会停在近似画面上，收益小、有已知错误画面。
 
 ## Problem
 
