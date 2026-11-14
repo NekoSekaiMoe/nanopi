@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, type Stats, unwatchFile, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -77,10 +77,38 @@ function createReftableWorktree(tempDir: string): WorktreeFixture {
 	return { worktreeDir, reftableDir };
 }
 
+// Native watchers are polling/OS driven and deliver late events while other tests load the
+// machine. Detach them so this fixture's events are the only source of refreshes.
+function stopNativeWatchEvents(provider: FooterDataProvider): void {
+	const internals = provider as unknown as {
+		headWatcher: FSWatcher | null;
+		headWatchFilePath: string | null;
+		headWatchFileListener: ((current: Stats, previous: Stats) => void) | null;
+		reftableWatcher: FSWatcher | null;
+		reftableTablesListWatcher: FSWatcher | null;
+		reftableTablesListPath: string | null;
+	};
+	internals.headWatcher?.close();
+	internals.headWatcher = null;
+	if (internals.headWatchFilePath && internals.headWatchFileListener) {
+		unwatchFile(internals.headWatchFilePath, internals.headWatchFileListener);
+	}
+	internals.headWatchFilePath = null;
+	internals.headWatchFileListener = null;
+	internals.reftableWatcher?.close();
+	internals.reftableWatcher = null;
+	internals.reftableTablesListWatcher?.close();
+	internals.reftableTablesListWatcher = null;
+	if (internals.reftableTablesListPath) {
+		unwatchFile(internals.reftableTablesListPath);
+		internals.reftableTablesListPath = null;
+	}
+}
+
 function emitReftableChange(provider: FooterDataProvider): void {
-	const { reftableWatcher } = provider as unknown as { reftableWatcher: FSWatcher | null };
-	expect(reftableWatcher).not.toBeNull();
-	reftableWatcher?.emit("change", "change", "tables.list");
+	const { reftableWatcher: watcher } = provider as unknown as { reftableWatcher: FSWatcher | null };
+	if (!watcher) return;
+	watcher.emit("change", "change", "tables.list");
 }
 
 async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
@@ -236,8 +264,10 @@ describe("FooterDataProvider reftable branch detection", () => {
 			provider.onBranchChange(onBranchChange);
 
 			writeFileSync(join(reftableDir, "tables.list"), "1\n");
-			// Real fs watcher events can arrive late under full-suite load.
-			await waitFor(() => vi.mocked(execFile).mock.calls.length === 1, 10_000);
+			// The real fs event must arrive before the native watchers are detached: they are the
+			// only thing that observes the write, and late polling events are what made this flaky.
+			await waitFor(() => vi.mocked(execFile).mock.calls.length >= 1, 10_000);
+			stopNativeWatchEvents(provider);
 			await waitFor(() => provider.getGitBranch() === "foo", 10_000);
 
 			expect(vi.mocked(execFile)).toHaveBeenCalledTimes(1);
