@@ -24,7 +24,7 @@
 	},
 	"dependencies": {
 		"@nanopi/pi-ai": "^20261114.0.0",
-		"typebox": "1.4.6"
+		"typebox": "1.4.7"
 	},
 	"keywords": [
 		"ai",

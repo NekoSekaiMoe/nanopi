@@ -17,7 +17,7 @@
 	},
 	"peerDependencies": {
 		"@nanopi/pi-coding-agent": "*",
-		"typebox": "1.4.6"
+		"typebox": "1.4.7"
 	},
 	"license": "MIT",
 	"author": "NekoSekaiMoe",
