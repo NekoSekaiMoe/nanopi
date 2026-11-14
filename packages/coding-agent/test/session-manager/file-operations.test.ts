@@ -14,7 +14,12 @@ import {
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { findMostRecentSession, loadEntriesFromFile, SessionManager } from "../../src/core/session-manager.ts";
+import {
+	findMostRecentSession,
+	loadEntriesFromFile,
+	type SessionDiscoveryError,
+	SessionManager,
+} from "../../src/core/session-manager.ts";
 import { assistantMsg, readSessionFileRoles, userMsg } from "../utilities.ts";
 
 const HEADER_SCAN_LIMIT_BYTES = 1024 * 1024;
@@ -338,6 +343,40 @@ describe("SessionManager custom flat session directory", () => {
 		expect(continuedA.getSessionFile()).toBe(sessionA);
 	});
 
+	it("reports a session file that cannot be read instead of dropping it silently", async () => {
+		// A corrupt file used to vanish from the list with no explanation, which reads as
+		// "the session is gone". The listing keeps the readable sessions and names the failure.
+		const valid = createPersistedSession(projectA, "valid");
+		const broken = join(tempDir, "broken.jsonl");
+		writeFileSync(broken, "{broken\n");
+		let errors: readonly SessionDiscoveryError[] = [];
+		const progress = (
+			_loaded: number,
+			_total: number,
+			_sessions?: readonly unknown[],
+			failures?: readonly SessionDiscoveryError[],
+		) => {
+			if (failures) errors = failures;
+		};
+
+		for (const list of [
+			() => SessionManager.list(projectA, tempDir, progress),
+			() => SessionManager.listAll(tempDir, progress),
+		]) {
+			errors = [];
+			expect((await list()).map((session) => session.path)).toEqual([valid]);
+			expect(errors).toEqual([{ path: broken, message: `Session file has no valid header: ${broken}` }]);
+		}
+	});
+
+	it("rejects a listing of a session directory that cannot be read", async () => {
+		// An unreadable directory is a failure to report, not an empty history.
+		const notADirectory = join(tempDir, "not-a-directory");
+		writeFileSync(notADirectory, "file");
+
+		await expect(SessionManager.listAll(notADirectory)).rejects.toMatchObject({ code: "ENOTDIR" });
+	});
+
 	it("rejects a cancelled session listing", async () => {
 		createPersistedSession(projectA, "from A");
 		createPersistedSession(projectB, "from B");
@@ -470,5 +509,33 @@ describe("SessionManager session file creation", () => {
 		session.appendMessage(assistantMsg("first answer"));
 
 		expect(readSessionFileRoles(session.getSessionFile()!)).toEqual(["session", "user", "custom", "assistant"]);
+	});
+
+	it("keeps entries and the leaf unchanged when an append cannot be written", () => {
+		// A write that fails (deleted directory, full disk) must not leave the entry in memory with
+		// the leaf advanced: the model would keep building on a message the file never received.
+		const session = SessionManager.create(tempDir, tempDir);
+		const leaf = session.appendMessage(userMsg("saved"));
+		const entries = session.getEntries();
+		const sessionFile = session.getSessionFile()!;
+		// Replacing the file with a directory makes the append fail on every platform.
+		rmSync(sessionFile);
+		mkdirSync(sessionFile);
+
+		expect(() => session.appendMessage(userMsg("unsaved"))).toThrow();
+		expect(() => session.appendCustomEntry("preset-state")).toThrow();
+		expect(session.getEntries()).toEqual(entries);
+		expect(session.getLeafId()).toBe(leaf);
+	});
+
+	it("does not grow a caller's entry array when the session appends", () => {
+		const source = SessionManager.inMemory(tempDir);
+		const entries = [source.getHeader()!];
+		const loaded = SessionManager.inMemory(tempDir, undefined, entries);
+
+		loaded.appendMessage(userMsg("new message"));
+
+		expect(entries).toHaveLength(1);
+		expect(loaded.getEntries()).toHaveLength(1);
 	});
 });
