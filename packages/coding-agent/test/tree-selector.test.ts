@@ -286,6 +286,46 @@ describe("TreeSelectorComponent", () => {
 		});
 	});
 
+	describe("empty state", () => {
+		test("names the search that matched nothing instead of a bare empty list", () => {
+			const entries = [userMessage("user-1", null, "hello"), assistantMessage("asst-1", "user-1", "hi")];
+			const tree = buildTree(entries);
+			const selector = new TreeSelectorComponent(
+				tree,
+				"asst-1",
+				24,
+				() => {},
+				() => {},
+			);
+			const list = selector.getTreeList();
+
+			selector.handleInput("zzz");
+			const rendered = list.render(200).map(stripVTControlCharacters).join("\n");
+
+			expect(rendered).toContain('No entries match "zzz"');
+			expect(rendered).not.toContain("No entries found");
+		});
+
+		test("keeps the generic empty message when there is no search", () => {
+			const entries = [userMessage("user-1", null, "hello"), assistantMessage("asst-1", "user-1", "hi")];
+			const tree = buildTree(entries);
+			const selector = new TreeSelectorComponent(
+				tree,
+				"asst-1",
+				24,
+				() => {},
+				() => {},
+			);
+			const list = selector.getTreeList();
+
+			// Labeled-only filter, with no query typed: nothing is labeled, so the list is empty.
+			selector.handleInput("\x0c"); // Ctrl+L
+			const rendered = list.render(200).map(stripVTControlCharacters).join("\n");
+
+			expect(rendered).toContain("No entries found");
+		});
+	});
+
 	describe("help", () => {
 		test("renders semantic help rows without truncating narrow terminal controls", () => {
 			const entries = [userMessage("user-1", null, "hello"), assistantMessage("asst-1", "user-1", "hi")];

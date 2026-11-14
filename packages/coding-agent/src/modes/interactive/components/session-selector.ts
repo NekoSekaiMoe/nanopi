@@ -14,9 +14,10 @@ import {
 	truncateToWidth,
 	visibleWidth,
 	windowStart,
+	wrapTextWithAnsi,
 } from "@nanopi/pi-tui";
 import { KeybindingsManager } from "../../../core/keybindings.ts";
-import type { SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
+import type { SessionDiscoveryError, SessionInfo, SessionListProgress } from "../../../core/session-manager.ts";
 import { canonicalizePath as _canonicalizePath } from "../../../utils/paths.ts";
 import { theme } from "../theme/theme.ts";
 import { DynamicBorder } from "./dynamic-border.ts";
@@ -55,6 +56,11 @@ function canonicalizePath(path: string | undefined): string | undefined {
 	return _canonicalizePath(path);
 }
 
+/** One line per unreadable session file: path, then the reason it failed. */
+function formatLoadErrors(errors: readonly SessionDiscoveryError[]): string {
+	return errors.map((error) => `${error.path}: ${error.message}`).join("\n");
+}
+
 class SessionSelectorHeader implements Component {
 	private scope: SessionScope;
 	private sortMode: SortMode;
@@ -67,6 +73,11 @@ class SessionSelectorHeader implements Component {
 	private statusMessage: { type: "info" | "error"; message: string } | null = null;
 	private statusTimeout: ReturnType<typeof setTimeout> | null = null;
 	private showRenameHint = false;
+	private loadErrorCount = 0;
+
+	setLoadErrorCount(count: number): void {
+		this.loadErrorCount = count;
+	}
 
 	constructor(scope: SessionScope, sortMode: SortMode, nameFilter: NameFilter, requestRender: () => void) {
 		this.scope = scope;
@@ -164,6 +175,14 @@ class SessionSelectorHeader implements Component {
 		} else if (this.statusMessage) {
 			const color = this.statusMessage.type === "error" ? "error" : "accent";
 			hintLine1 = theme.fg(color, truncateToWidth(this.statusMessage.message, width, "…"));
+			hintLine2 = "";
+		} else if (this.loadErrorCount > 0) {
+			// A corrupt session file used to disappear from the list without a trace. Say how many
+			// were skipped so "my session is gone" has an answer on screen.
+			hintLine1 = theme.fg(
+				"error",
+				truncateToWidth(`${this.loadErrorCount} session file(s) could not be read`, width, "…"),
+			);
 			hintLine2 = "";
 		} else {
 			const pathState = this.showPath ? "(on)" : "(off)";
@@ -311,6 +330,11 @@ class SessionList implements Component, Focusable {
 	public onRenameSession?: (sessionPath: string) => void;
 	public onError?: (message: string) => void;
 	private maxVisible: number = 10; // Max sessions visible (one line each)
+	private loadErrors: readonly SessionDiscoveryError[] = [];
+
+	setLoadErrors(errors: readonly SessionDiscoveryError[]): void {
+		this.loadErrors = errors;
+	}
 
 	// Focusable implementation - propagate to searchInput for IME cursor positioning
 	private _focused = false;
@@ -445,6 +469,11 @@ class SessionList implements Component, Focusable {
 				emptyMessage = "  No sessions in current folder. Press Tab to view all.";
 			}
 			lines.push(theme.fg("muted", truncateToWidth(emptyMessage, width, "…")));
+			if (this.loadErrors.length > 0) {
+				lines.push(
+					...wrapTextWithAnsi(theme.fg("error", formatLoadErrors(this.loadErrors)), Math.max(10, width - 2)),
+				);
+			}
 			return lines;
 		}
 
@@ -955,11 +984,13 @@ export class SessionSelectorComponent extends Container implements Focusable {
 		}
 		this.header.setScope(scope);
 		this.header.setLoading(true);
+		if (scope === this.scope) this.setLoadErrors(scope, []);
 		this.requestRender();
 
 		const isActive = () => (scope === "current" ? this.currentLoad : this.allLoad) === controller;
-		const onProgress: SessionListProgress = (loaded, total, partialSessions) => {
+		const onProgress: SessionListProgress = (loaded, total, partialSessions, errors) => {
 			if (!isActive()) return;
+			if (errors) this.setLoadErrors(scope, errors);
 			if (partialSessions) {
 				const sessions = [...partialSessions];
 				if (scope === "current") {
@@ -1003,12 +1034,20 @@ export class SessionSelectorComponent extends Container implements Focusable {
 			}
 			if (scope !== this.scope) return;
 
+			// The directory itself failed to list; report it as an error rather than an empty list.
 			const message = err instanceof Error ? err.message : String(err);
 			this.header.setLoading(false);
-			this.header.setStatusMessage({ type: "error", message: `Failed to load sessions: ${message}` }, 4000);
+			this.setLoadErrors(scope, [{ path: "Session directory", message }]);
 			this.sessionList.setSessions([], showCwd);
 			this.requestRender();
 		}
+	}
+
+	/** Errors belong to the scope that was loading, so a stale load cannot overwrite the visible one. */
+	private setLoadErrors(scope: SessionScope, errors: readonly SessionDiscoveryError[]): void {
+		if (scope !== this.scope) return;
+		this.header.setLoadErrorCount(errors.length);
+		this.sessionList.setLoadErrors(errors);
 	}
 
 	private toggleSortMode(): void {

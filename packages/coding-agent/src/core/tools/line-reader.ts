@@ -46,8 +46,11 @@ export interface LinePage {
 	content: string;
 	/** Lines in `content`, counted the way `"a\nb".split("\n")` counts them. */
 	lineCount: number;
-	/** Total lines in the file, counting the ones after the page. */
-	totalLines: number;
+	/**
+	 * Total lines in the file, counting the ones after the page. Undefined when the page filled a
+	 * `lineLimit` before the file ended: the read stopped there, so the count is unknown.
+	 */
+	totalLines: number | undefined;
 	/** Decoding used for the text, after BOM detection. */
 	encoding: FileTextEncoding;
 }
@@ -83,12 +86,17 @@ export async function readLinePage(absolutePath: string, options: LinePageOption
 	// every line the tool prints holds a plain `\n`.
 	const dropTrailingCarriageReturn = (line: string): string => (line.endsWith("\r") ? line.slice(0, -1) : line);
 
+	/** Newlines seen past the page, which keeps the file's trailing newline visible to it. */
+	let newlinesBeyondPage = 0;
+
 	const consume = (chunk: string): void => {
 		partial += chunk;
 		let newline = partial.indexOf("\n");
 		while (newline !== -1) {
 			if (lineCount >= startLine && lineCount < stopAt) {
 				kept.push(dropTrailingCarriageReturn(partial.slice(0, newline)));
+			} else if (lineCount >= stopAt) {
+				newlinesBeyondPage++;
 			}
 			lineCount++;
 			partial = partial.slice(newline + 1);
@@ -101,20 +109,35 @@ export async function readLinePage(absolutePath: string, options: LinePageOption
 	// the process dies on an uncaught `AbortError`. The loop checks the signal instead and owns
 	// ending the stream. A file handle closes on `close` either way, including after an early return.
 	const stream = createReadStream(absolutePath, { encoding });
+	let complete = false;
 	try {
 		for await (const chunk of stream) {
 			signal?.throwIfAborted();
 			consume(chunk as string);
+			// A page that already filled its `lineLimit` does not need the rest of the file. Stopping
+			// here is what keeps `limit` cheap on a huge file; the line count stays undefined because
+			// the remaining lines were never counted. The last chunk is read whole, so anything it
+			// carried past the page is the file's own tail.
+			if (lineCount >= stopAt) {
+				complete = true;
+				break;
+			}
 		}
 	} finally {
 		stream.destroy();
 	}
-	// Text after the last newline is still a line, unless it is the empty string after a
-	// trailing newline, which belongs to the newline itself.
-	if (partial.length > 0) {
-		if (lineCount >= startLine && lineCount < stopAt) kept.push(dropTrailingCarriageReturn(partial));
-		lineCount++;
-		endsWithNewline = false;
+	if (complete) {
+		// The chunk that ended the page may also have carried the file's end, and the page keeps the
+		// trailing newline only when it reaches that end: without it the page would end here anyway.
+		endsWithNewline = partial.length === 0 && newlinesBeyondPage === 1;
+	} else {
+		// Text after the last newline is still a line, unless it is the empty string after a
+		// trailing newline, which belongs to the newline itself.
+		if (partial.length > 0) {
+			if (lineCount >= startLine && lineCount < stopAt) kept.push(dropTrailingCarriageReturn(partial));
+			lineCount++;
+			endsWithNewline = false;
+		}
 	}
 
 	// A BOM survives as U+FEFF once decoded; it is metadata, not part of line 1.
@@ -122,5 +145,5 @@ export async function readLinePage(absolutePath: string, options: LinePageOption
 	// The page reproduces the file's own text, trailing newline included, whenever it reaches
 	// the end of the file: dropping it would show the model content the file does not have.
 	if (endsWithNewline && kept.length > 0) content += "\n";
-	return { content, lineCount: kept.length, totalLines: lineCount, encoding };
+	return { content, lineCount: kept.length, totalLines: complete ? undefined : lineCount, encoding };
 }

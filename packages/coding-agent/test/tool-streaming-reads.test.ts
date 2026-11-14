@@ -58,8 +58,11 @@ describe("streaming tool reads", () => {
 
 			expect(output).toContain("line 199990 ");
 			expect(output).toContain("line 199994 ");
-			expect(output).toContain("[6 more lines in file. Use offset=199995 to continue.]");
+			// A `limit` read stops at the page, so the rest of the file is never counted: the
+			// continuation notice points at the next line without claiming a total.
+			expect(output).toContain("[Stopped after 5 line(s) at the requested limit. Use offset=199995 to continue.]");
 			expect(output).not.toContain("line 199989 ");
+			expect(output).not.toContain("line 199995 ");
 		});
 
 		it("keeps the byte limit and its continuation hint on a file with fewer lines", async () => {
@@ -161,13 +164,24 @@ describe("streaming tool reads", () => {
 			expect(page.totalLines).toBe(3);
 		});
 
-		it("reports every line after the page in totalLines", async () => {
+		it("stops at the requested page, leaving the line count unknown", async () => {
 			const testFile = join(testDir, "count.txt");
 			writeFileSync(testFile, "1\n2\n3\n4\n5");
 
 			const page = await readLinePage(testFile, { startLine: 2, lineLimit: 2 });
 
 			expect(page.content).toBe("3\n4");
+			// The read stopped after the page filled, so nothing counted lines 5 and beyond.
+			expect(page.totalLines).toBeUndefined();
+		});
+
+		it("keeps the line count when the page reaches the end of the file", async () => {
+			const testFile = join(testDir, "count-end.txt");
+			writeFileSync(testFile, "1\n2\n3\n4\n5");
+
+			const page = await readLinePage(testFile, { startLine: 2, lineLimit: 10 });
+
+			expect(page.content).toBe("3\n4\n5");
 			expect(page.totalLines).toBe(5);
 		});
 

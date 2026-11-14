@@ -189,21 +189,19 @@ export function createReadToolDefinition(
 								// Apply offset if specified. Convert from 1-indexed input to 0-based.
 								const startLine = offset ? Math.max(0, offset - 1) : 0;
 								const startLineDisplay = startLine + 1;
-								const page = await readLinePage(absolutePath, { startLine, signal });
+								// The reader stops once the page is full, so a `limit` read does not touch
+								// the rest of the file. That leaves the file's line count unknowable here
+								// (`totalFileLines === undefined`), and every notice below has to read
+								// without it rather than claim a total it never counted.
+								const page = await readLinePage(absolutePath, { startLine, lineLimit: limit, signal });
 								const totalFileLines = page.totalLines;
 								// Check if offset is out of bounds.
-								if (startLine >= totalFileLines) {
+								if (totalFileLines !== undefined && startLine >= totalFileLines) {
 									throw new Error(`Offset ${offset} is beyond end of file (${totalFileLines} lines total)`);
 								}
-								// A user `limit` narrows the page before the byte limits apply.
 								const pageLines = page.content.split("\n");
-								const userLimitedLines = limit !== undefined ? Math.min(limit, pageLines.length) : undefined;
-								const selectedContent =
-									userLimitedLines !== undefined
-										? pageLines.slice(0, userLimitedLines).join("\n")
-										: page.content;
 								// Apply truncation, respecting both line and byte limits.
-								const truncation = truncateHead(selectedContent);
+								const truncation = truncateHead(page.content);
 								let outputText: string;
 								if (truncation.firstLineExceedsLimit) {
 									// First line alone exceeds the byte limit, and truncateHead never
@@ -218,18 +216,20 @@ export function createReadToolDefinition(
 									// Truncation occurred. Build an actionable continuation notice.
 									const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
 									const nextOffset = endLineDisplay + 1;
+									const shown = `Showing lines ${startLineDisplay}-${endLineDisplay}`;
 									outputText = truncation.content;
 									if (truncation.truncatedBy === "lines") {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}. Use offset=${nextOffset} to continue.]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`}. Use offset=${nextOffset} to continue.]`;
 									} else {
-										outputText += `\n\n[Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
 									}
 									details = { truncation };
-								} else if (userLimitedLines !== undefined && startLine + userLimitedLines < totalFileLines) {
-									// User-specified limit stopped early, but the file still has more content.
-									const remaining = totalFileLines - (startLine + userLimitedLines);
-									const nextOffset = startLine + userLimitedLines + 1;
-									outputText = `${truncation.content}\n\n[${remaining} more lines in file. Use offset=${nextOffset} to continue.]`;
+								} else if (totalFileLines === undefined) {
+									// The read stopped at the requested limit instead of reaching the end of
+									// the file, so there is more to read. `totalFileLines` is undefined
+									// exactly in that case.
+									const nextOffset = startLine + page.lineCount + 1;
+									outputText = `${truncation.content}\n\n[Stopped after ${page.lineCount} line(s) at the requested limit. Use offset=${nextOffset} to continue.]`;
 								} else {
 									// No truncation and no remaining user-limited content.
 									outputText = truncation.content;

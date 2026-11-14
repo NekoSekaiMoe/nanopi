@@ -179,7 +179,8 @@ describe("Coding Agent Tools", () => {
 			expect(output).toContain("Line 1");
 			expect(output).toContain("Line 10");
 			expect(output).not.toContain("Line 11");
-			expect(output).toContain("[90 more lines in file. Use offset=11 to continue.]");
+			// A `limit` read stops at the page, so the remaining lines are never counted.
+			expect(output).toContain("[Stopped after 10 line(s) at the requested limit. Use offset=11 to continue.]");
 		});
 
 		it("should handle offset + limit together", async () => {
@@ -198,7 +199,7 @@ describe("Coding Agent Tools", () => {
 			expect(output).toContain("Line 41");
 			expect(output).toContain("Line 60");
 			expect(output).not.toContain("Line 61");
-			expect(output).toContain("[40 more lines in file. Use offset=61 to continue.]");
+			expect(output).toContain("[Stopped after 20 line(s) at the requested limit. Use offset=61 to continue.]");
 		});
 
 		it("should show error when offset is beyond file length", async () => {
