@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Google's discrete thinking control is chosen from the model's `thinkingLevelMap` instead of an id pattern, so `gemini-4-*` reaches it: `gemini-4-hydrogen` no longer throws `Unsupported Google thinking level mapping` when `xhigh` (or `max`, clamped to it) is selected, and `gemini-4-argon` / `gemini-4-carbon` send their declared `low`/`medium`/`high` instead of a silent `thinkingBudget: -1`. `xhigh` maps to the SDK's `XHIGH`, which `@google/genai` 3.3.0 added; `max` still clamps to `xhigh` because Google has no such value (issue [#731](https://cnb.cool/shinytale/nanopi/-/issues/731))
+
 ## [20261114]
 
 ### Changed

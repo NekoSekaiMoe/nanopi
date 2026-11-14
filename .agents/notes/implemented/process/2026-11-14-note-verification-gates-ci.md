@@ -112,3 +112,8 @@ CNB 侧还要在仓库设置里把 main 设成保护分支才拦得住合并。�
 - Skill 文档里那句「`templates/verify-notes.yml` 可作模板」本仓库做不到：安装只取了
   `SKILL.md` + `references/` + `scripts/`，没有 `templates/`。改成指向本仓库实际的
   两个调用点，不再指一个不存在的文件。
+- CNB 侧那条 Stage 的脚本用 `set -eu`，不用 `set -euo pipefail`：`node:24` 镜像里
+  `/bin/sh` 是 dash，dash 没有 `pipefail`，`set -o pipefail` 会让脚本在第一步就以
+  `Illegal option -o pipefail` 退出——门禁看起来接了，实际上从未跑过一次，而红的
+  理由又跟笔记无关，最容易被当成「流水线坏了」。那条脚本里没有管道，`set -eu`
+  就是它需要的全部语义。

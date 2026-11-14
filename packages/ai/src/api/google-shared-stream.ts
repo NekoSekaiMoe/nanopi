@@ -473,12 +473,17 @@ function getGoogleBudget<TApi extends GoogleApiType>(
 		return customBudgets[level]!;
 	}
 
+	// `xhigh` only reaches this table through a hand-written `models.json` entry:
+	// no built-in budget model declares it, and without a map the clamp drops it to
+	// `high` first. The tables repeat `high` so such a model asks for the largest
+	// budget its family documents instead of falling through to AUTO.
 	if (model.id.includes("2.5-pro")) {
 		const budgets: Record<ResolvedGoogleThinkingLevel, number> = {
 			minimal: 128,
 			low: 2048,
 			medium: 8192,
 			high: 32768,
+			xhigh: 32768,
 		};
 		return budgets[level];
 	}
@@ -489,6 +494,7 @@ function getGoogleBudget<TApi extends GoogleApiType>(
 			low: 2048,
 			medium: 8192,
 			high: 24576,
+			xhigh: 24576,
 		};
 		return budgets[level];
 	}
