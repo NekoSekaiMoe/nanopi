@@ -7,6 +7,7 @@
  */
 
 import type { WriteStream } from "node:fs";
+import { finished } from "node:stream/promises";
 import { splitIncompleteAnsiSuffix, stripAnsi } from "../utils/ansi.ts";
 import { createOutputFileStream } from "../utils/output-files.ts";
 import { sanitizeBinaryOutput } from "../utils/shell.ts";
@@ -57,6 +58,7 @@ export async function executeBashWithOperations(
 
 	let tempFilePath: string | undefined;
 	let tempFileStream: WriteStream | undefined;
+	let tempFileCompletion: Promise<void> | undefined;
 	let totalBytes = 0;
 
 	const ensureTempFile = () => {
@@ -64,6 +66,10 @@ export async function executeBashWithOperations(
 			return;
 		}
 		({ path: tempFilePath, stream: tempFileStream } = createOutputFileStream("nanopi-bash", ".log"));
+		// Watching from the start keeps a mid-write failure from becoming an unhandled error event;
+		// the completion is awaited at the end so the caller sees it.
+		tempFileCompletion = finished(tempFileStream);
+		void tempFileCompletion.catch(() => undefined);
 		for (const chunk of outputChunks) {
 			tempFileStream.write(chunk);
 		}
@@ -118,29 +124,36 @@ export async function executeBashWithOperations(
 
 	let exitCode: number | null = null;
 	try {
-		({ exitCode } = await operations.exec(command, cwd, { onData, signal: options?.signal }));
-	} catch (err) {
-		// An aborted command still returns the output it produced so far
-		if (!options?.signal?.aborted) {
-			tempFileStream?.end();
-			throw err;
+		try {
+			({ exitCode } = await operations.exec(command, cwd, { onData, signal: options?.signal }));
+		} catch (err) {
+			// An aborted command still returns the output it produced so far
+			if (!options?.signal?.aborted) {
+				throw err;
+			}
+		}
+
+		flushOutput();
+		const fullOutput = outputChunks.join("");
+		const truncationResult = truncateTail(fullOutput);
+		if (truncationResult.truncated) {
+			ensureTempFile();
+		}
+		const cancelled = options?.signal?.aborted ?? false;
+
+		return {
+			output: truncationResult.truncated ? truncationResult.content : fullOutput,
+			exitCode: cancelled ? undefined : (exitCode ?? undefined),
+			cancelled,
+			truncated: truncationResult.truncated,
+			fullOutputPath: tempFilePath,
+		};
+	} finally {
+		// Close the temp file after the last flushed write, and on every exit path: a failure
+		// surfaces here instead of landing on a stream nobody awaits.
+		if (tempFileStream) {
+			tempFileStream.end();
+			await tempFileCompletion;
 		}
 	}
-
-	flushOutput();
-	const fullOutput = outputChunks.join("");
-	const truncationResult = truncateTail(fullOutput);
-	if (truncationResult.truncated) {
-		ensureTempFile();
-	}
-	tempFileStream?.end();
-	const cancelled = options?.signal?.aborted ?? false;
-
-	return {
-		output: truncationResult.truncated ? truncationResult.content : fullOutput,
-		exitCode: cancelled ? undefined : (exitCode ?? undefined),
-		cancelled,
-		truncated: truncationResult.truncated,
-		fullOutputPath: tempFilePath,
-	};
 }

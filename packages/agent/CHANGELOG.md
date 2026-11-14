@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- An aborted run ends at the turn boundary even when `finishTurn` returns `continue`: the tool batch had already stopped, so the extra request replayed a transcript with unanswered tool calls instead of returning control to the user
+
 ## [20261114]
 
 ## [20261107]

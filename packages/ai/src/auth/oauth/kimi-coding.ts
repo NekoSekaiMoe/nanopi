@@ -130,7 +130,10 @@ function parseTokenResponse(json: Record<string, unknown> | null, operation: str
 		!Number.isFinite(expiresIn) ||
 		expiresIn <= 0
 	) {
-		throw new Error(`Kimi Code token ${operation} response missing fields: ${JSON.stringify(json)}`);
+		// Naming the fields, not echoing the body: the body carries the tokens this call failed to parse.
+		throw new Error(
+			`Kimi Code token ${operation} response has missing or invalid fields: access_token, refresh_token, expires_in`,
+		);
 	}
 	return {
 		access: accessToken,

@@ -509,31 +509,57 @@ export class RpcClient {
 	 * Collect events until agent becomes idle.
 	 */
 	collectEvents(timeout = 60000): Promise<JsonAgentSessionEvent[]> {
-		return new Promise((resolve, reject) => {
-			const events: JsonAgentSessionEvent[] = [];
+		return this.createEventCollector(timeout).promise;
+	}
+
+	/**
+	 * A collector is a subscription plus the promise that settles it, so a caller that learns
+	 * no run will ever start can finish it instead of waiting for the timeout.
+	 */
+	private createEventCollector(timeout: number): {
+		promise: Promise<JsonAgentSessionEvent[]>;
+		finish: () => void;
+	} {
+		const events: JsonAgentSessionEvent[] = [];
+		let finish!: () => void;
+		let unsubscribe!: () => void;
+		const promise = new Promise<JsonAgentSessionEvent[]>((resolve, reject) => {
 			const timer = setTimeout(() => {
 				unsubscribe();
 				reject(new Error(`Timeout collecting events. Stderr: ${this.stderr}`));
 			}, timeout);
-
-			const unsubscribe = this.onEvent((event) => {
+			finish = () => {
+				clearTimeout(timer);
+				unsubscribe();
+				resolve(events);
+			};
+			unsubscribe = this.onEvent((event) => {
 				events.push(event);
-				if (event.type === "agent_settled") {
-					clearTimeout(timer);
-					unsubscribe();
-					resolve(events);
-				}
+				if (event.type === "agent_settled") finish();
 			});
 		});
+		return { promise, finish };
 	}
 
 	/**
 	 * Send prompt and wait for completion, returning all events.
+	 *
+	 * A prompt the session handled itself starts no run, so no `agent_settled` follows and the
+	 * wait would run into the timeout; such a prompt finishes the collector with what it saw.
 	 */
 	async promptAndWait(message: string, images?: ImageContent[], timeout = 60000): Promise<JsonAgentSessionEvent[]> {
-		const eventsPromise = this.collectEvents(timeout);
-		await this.prompt(message, images);
-		return eventsPromise;
+		const collector = this.createEventCollector(timeout);
+		try {
+			const [, events] = await Promise.all([
+				this.prompt(message, images).then((disposition) => {
+					if (disposition === "handled") collector.finish();
+				}),
+				collector.promise,
+			]);
+			return events;
+		} finally {
+			collector.finish();
+		}
 	}
 
 	// =========================================================================

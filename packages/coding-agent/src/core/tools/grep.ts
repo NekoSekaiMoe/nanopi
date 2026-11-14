@@ -205,22 +205,34 @@ export function createGrepToolDefinition(
 					return;
 				}
 				let settled = false;
+				// Set once the ripgrep child exists; an abort before that has no process to kill.
+				let stopChild: (() => void) | undefined;
+				const onAbort = () => {
+					stopChild?.();
+					settle(() => reject(new Error("Operation aborted")));
+				};
 				const settle = (fn: () => void) => {
 					if (!settled) {
 						settled = true;
+						signal?.removeEventListener("abort", onAbort);
 						fn();
 					}
 				};
+				// Registered before the first await: aborting during tool lookup or a stat must not
+				// leave the search running until ripgrep happens to exit.
+				signal?.addEventListener("abort", onAbort, { once: true });
 
 				(async () => {
 					try {
 						const rgPath = await ensureTool("rg");
+						if (settled) return;
 
 						const searchPath = resolveToCwd(searchDir || ".", ctx?.cwd || cwd);
 						const ops = customOps ?? defaultGrepOperations;
 						let isDirectory: boolean;
 						try {
 							isDirectory = await ops.isDirectory(searchPath);
+							if (settled) return;
 						} catch {
 							settle(() => reject(new Error(`Path not found: ${searchPath}`)));
 							return;
@@ -296,7 +308,6 @@ export function createGrepToolDefinition(
 						let trailingContextEnd = 0;
 						let trailingFile: string | undefined;
 						let linesTruncated = false;
-						let aborted = false;
 						let killedDueToLimit = false;
 						let stoppedEarly = false;
 						// No ripgrep means the in-process walker runs instead, and that is the only
@@ -344,19 +355,14 @@ export function createGrepToolDefinition(
 
 						const cleanup = () => {
 							rl?.close();
-							signal?.removeEventListener("abort", onAbort);
 						};
-						const stopChild = (dueToLimit = false) => {
+						const killChild = (dueToLimit = false) => {
 							if (child && !child.killed) {
 								killedDueToLimit = dueToLimit;
 								child.kill();
 							}
 						};
-						const onAbort = () => {
-							aborted = true;
-							stopChild();
-						};
-						signal?.addEventListener("abort", onAbort, { once: true });
+						stopChild = killChild;
 
 						const formatBlock = async (filePath: string, lineNumber: number): Promise<string[]> => {
 							const relativePath = formatPath(filePath);
@@ -526,10 +532,6 @@ export function createGrepToolDefinition(
 
 						/** Formats the collected matches and resolves. The search is over by now. */
 						const finish = async (errorText?: string): Promise<void> => {
-							if (aborted) {
-								settle(() => reject(new Error("Operation aborted")));
-								return;
-							}
 							if (errorText !== undefined) {
 								settle(() => reject(new Error(errorText)));
 								return;
@@ -569,7 +571,10 @@ export function createGrepToolDefinition(
 							// can be async. ripgrep already printed its own lines as the stream arrived,
 							// so only the walker's matches are left to format here.
 							if (rgPath === undefined) {
-								for (const match of matches) await formatBlock(match.filePath, match.lineNumber);
+								for (const match of matches) {
+									if (settled) return;
+									await formatBlock(match.filePath, match.lineNumber);
+								}
 							}
 
 							const rawOutput = printedLines.length > 0 ? printedLines.join("\n") : outputLines.join("\n");
@@ -748,7 +753,7 @@ export function createGrepToolDefinition(
 										isMatch: true,
 									});
 									flushBlock();
-									stopChild(true);
+									killChild(true);
 									return;
 								}
 								if (pendingMatch !== undefined) {
@@ -785,7 +790,7 @@ export function createGrepToolDefinition(
 							}
 							if (isMatch && filePath !== trailingFile) {
 								stoppedEarly = true;
-								stopChild(true);
+								killChild(true);
 							}
 						});
 						child.on("error", (error) => {
@@ -794,6 +799,9 @@ export function createGrepToolDefinition(
 						});
 						child.on("close", async (code) => {
 							cleanup();
+							// Abort already rejected; a killed child exits non-zero and must not be
+							// reported as a ripgrep failure.
+							if (settled) return;
 							if (!killedDueToLimit && code !== 0 && code !== 1) {
 								await finish(stderr.trim() || `ripgrep exited with code ${code}`);
 								return;

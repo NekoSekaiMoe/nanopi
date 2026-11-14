@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- A bash or tool-output temp file is closed once, on every exit path, and its write completion is awaited: a failed write used to surface as an unhandled `error` event (or not at all) while the caller got a truncated log path back
+- The grep tool aborts during tool lookup and path probing, not only once ripgrep is running: an interrupt that landed before the child existed left the search to finish on its own, and a child killed by the abort was no longer reported as a ripgrep exit failure
+- Project trust stops its ancestor walk at the user's home directory: a stray `.agents/skills` above it (`/home`, `/`) is user territory, and treating it as project context put every checkout underneath behind a trust prompt
+- `RpcClient.promptAndWait` returns as soon as a prompt the session handled itself reports `handled`, instead of waiting out the event timeout for an `agent_settled` that will never arrive
 - `pi-fake-opencode` replays each lane's own identity instead of one shape for both: the 2.x lanes (`/inference`, `/zen/go`) send the conversation affinity in `x-opencode-session`, `x-session-affinity` and `X-Session-Id` with the client's own session in `x-opencode-session-id`, and stop sending `x-opencode-request`, which the v2 gate answers with 403 `FreeTierError`; a forked session keeps its child id while affinity stays on the parent. The 1.x `/zen` lane gains the AI SDK's `Accept: */*` and a provider-utils version that depends on the wire protocol (`4.0.23` chat, `4.0.40` responses, `4.0.46` anthropic) instead of a fixed one. The 1.x prompt and tool set are now their own captures rather than the 2.x pair with names substituted: eleven tools (`bash`, `task`, `todowrite` where the 2.x CLI has `shell`, `subagent`, `question`), a different description and schema behind every shared name, no `strict` field on any of them (issue [#725](https://cnb.cool/shinytale/nanopi/-/issues/725))
 
 ## [20261114]
