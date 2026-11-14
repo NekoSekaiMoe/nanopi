@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, type Stats, unwatchFile, writeFileSync } from "fs";
+import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, unwatchFile, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -82,26 +82,15 @@ function createReftableWorktree(tempDir: string): WorktreeFixture {
 function stopNativeWatchEvents(provider: FooterDataProvider): void {
 	const internals = provider as unknown as {
 		headWatcher: FSWatcher | null;
-		headWatchFilePath: string | null;
-		headWatchFileListener: ((current: Stats, previous: Stats) => void) | null;
 		reftableWatcher: FSWatcher | null;
 		reftableTablesListWatcher: FSWatcher | null;
 		reftableTablesListPath: string | null;
 	};
 	internals.headWatcher?.close();
-	internals.headWatcher = null;
-	if (internals.headWatchFilePath && internals.headWatchFileListener) {
-		unwatchFile(internals.headWatchFilePath, internals.headWatchFileListener);
-	}
-	internals.headWatchFilePath = null;
-	internals.headWatchFileListener = null;
 	internals.reftableWatcher?.close();
-	internals.reftableWatcher = null;
 	internals.reftableTablesListWatcher?.close();
-	internals.reftableTablesListWatcher = null;
 	if (internals.reftableTablesListPath) {
 		unwatchFile(internals.reftableTablesListPath);
-		internals.reftableTablesListPath = null;
 	}
 }
 
@@ -208,6 +197,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		process.chdir(worktreeDir);
 
 		const provider = new FooterDataProvider(worktreeDir);
+		stopNativeWatchEvents(provider);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
 			vi.mocked(spawnSync).mockClear();
@@ -233,6 +223,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		process.chdir(worktreeDir);
 
 		const provider = new FooterDataProvider(worktreeDir);
+		stopNativeWatchEvents(provider);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
 			vi.mocked(execFile).mockClear();
@@ -264,8 +255,8 @@ describe("FooterDataProvider reftable branch detection", () => {
 			provider.onBranchChange(onBranchChange);
 
 			writeFileSync(join(reftableDir, "tables.list"), "1\n");
-			// The real fs event must arrive before the native watchers are detached: they are the
-			// only thing that observes the write, and late polling events are what made this flaky.
+			// The first refresh must come from the real fs event: the native watchers are the
+			// only thing observing the write, and they are detached as soon as it lands.
 			await waitFor(() => vi.mocked(execFile).mock.calls.length >= 1, 10_000);
 			stopNativeWatchEvents(provider);
 			await waitFor(() => provider.getGitBranch() === "foo", 10_000);
