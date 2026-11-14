@@ -1,5 +1,5 @@
 import { execFile, spawnSync } from "child_process";
-import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "fs";
+import { existsSync, type FSWatcher, mkdirSync, mkdtempSync, rmSync, unwatchFile, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -81,6 +81,26 @@ function emitReftableChange(provider: FooterDataProvider): void {
 	const { reftableWatcher } = provider as unknown as { reftableWatcher: FSWatcher | null };
 	expect(reftableWatcher).not.toBeNull();
 	reftableWatcher?.emit("change", "change", "tables.list");
+}
+
+/**
+ * Fake-clock tests emit their own watcher events. Closing the native watchers and
+ * dropping the tables.list poller keeps delayed real fixture events from scheduling
+ * extra refreshes under parallel load.
+ */
+function stopNativeWatchEvents(provider: FooterDataProvider): void {
+	const watchers = provider as unknown as {
+		headWatcher: FSWatcher | null;
+		reftableWatcher: FSWatcher | null;
+		reftableTablesListWatcher: FSWatcher | null;
+		reftableTablesListPath: string | null;
+	};
+	watchers.headWatcher?.close();
+	watchers.reftableWatcher?.close();
+	watchers.reftableTablesListWatcher?.close();
+	if (watchers.reftableTablesListPath) {
+		unwatchFile(watchers.reftableTablesListPath);
+	}
 }
 
 async function waitFor(condition: () => boolean, timeoutMs = 3000): Promise<void> {
@@ -180,6 +200,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		process.chdir(worktreeDir);
 
 		const provider = new FooterDataProvider(worktreeDir);
+		stopNativeWatchEvents(provider);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
 			vi.mocked(spawnSync).mockClear();
@@ -205,6 +226,7 @@ describe("FooterDataProvider reftable branch detection", () => {
 		process.chdir(worktreeDir);
 
 		const provider = new FooterDataProvider(worktreeDir);
+		stopNativeWatchEvents(provider);
 		try {
 			expect(provider.getGitBranch()).toBe("main");
 			vi.mocked(execFile).mockClear();
