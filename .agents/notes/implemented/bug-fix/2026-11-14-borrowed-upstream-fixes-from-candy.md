@@ -73,4 +73,8 @@ pick**，只能按主题从 diff 里挑「改的是同一段代码、缺陷在 n
   冒泡给调用方；grep 在探测阶段就能被中断且不再误报退出码；`$HOME` 之上的资源不算
   项目上下文；`promptAndWait` 对 `handled` 立即返回。
 - 每一处都钉了回归测试；上游后续再改这几段时，diff 形状基本可以对着再对一遍。
+- agent loop 那条顺带改掉了两处 coding-agent 既有测试的预期，它们把「abort 之后还会
+  再发一次请求」当成了正常行为：`agent-session-runtime.test.ts` 的 outgoing 会话不再多
+  一条尾部 assistant，`agent-session-concurrent.test.ts` 的 steering 用例改成第二轮请求
+  正常结束来投递消息，而不是靠 abort 触发的那次多余请求。
 - 后续若要继续吃这个 fork 的收益，仍然要按主题挑，不要指望按 commit 同步。
