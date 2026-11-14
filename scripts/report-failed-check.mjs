@@ -44,11 +44,10 @@ function writeBody(body) {
 
 const repo = process.env.CNB_REPO_NAMESPACE ?? process.env.CNB_REPO_SLUG ?? "";
 
-// 读构建状态和取日志用的都是「构建号」（cnb-68q-1k7c6nhcs），而 endStages 里能拿到的
-// 是「流水线号」（cnb-68q-1k7c6nhcs-001）：CNB_BUILD_ID 在这里没有值，CNB_PIPELINE_ID
+// 读构建日志用的都是「构建号」（cnb-68q-1k7c6nhcs），而 endStages 里能拿到的是
+// 「流水线号」（cnb-68q-1k7c6nhcs-001）：CNB_BUILD_ID 在这里没有值，CNB_PIPELINE_ID
 // 多一个 -001 后缀。`cnb build get-build-logs --sn` 与 `cnb pulls get-ci-logs --sn` 都
-// 只认构建号，传流水线号返回空列表——钩子于是把每一次失败都读成「没有状态」，
-// 静默退出 0，一个 Issue 都没开过（#735）。
+// 只认构建号，传流水线号返回空列表（#735）。
 //
 // 序号是纯数字，构建号的末段是字母数字混合，所以「末段全数字」正好判出这条后缀。
 function buildSequenceNumber() {
@@ -58,7 +57,18 @@ function buildSequenceNumber() {
 
 const sn = buildSequenceNumber();
 
+// 「这次该不该报」只认 CNB_PIPELINE_STATUS。endStages 跑的时候这条构建自己还没结束，
+// `cnb build get-build-logs` 读到的整体状态仍是 pending——按「不是 success 就报」去判，
+// 每一条绿构建都会被报成失败（#737：#736 与 #735 的两次构建都是 success，钩子各开了
+// 一条 Issue）。平台文档里 CNB_PIPELINE_STATUS 正是为 endStages 准备的，值为
+// success / error / cancel。
+//
+// 变量缺席（在流水线外手工跑）才退回 API，而且只认终态 error：pending 不是结论，
+// 拿它当失败就是 #737。
 function buildStatus() {
+	const fromPlatform = process.env.CNB_PIPELINE_STATUS ?? "";
+	if (fromPlatform) return fromPlatform;
+	console.log("CNB_PIPELINE_STATUS is not set; falling back to the build history");
 	if (!sn) return "";
 	try {
 		const rows = api("build", "get-build-logs", ["--repo", repo, "--sn", sn]).data ?? [];
@@ -95,6 +105,11 @@ if (!status) {
 }
 if (status === "success") {
 	console.log(`build ${sn} succeeded; nothing to report`);
+	process.exit(0);
+}
+// cancel 与 pending 都不是「红了」：取消的构建没人要修，还没结束的构建还没有结论。
+if (status !== "error") {
+	console.log(`build ${sn} is ${status}; not a failure, nothing to report`);
 	process.exit(0);
 }
 
