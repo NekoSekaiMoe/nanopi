@@ -465,6 +465,15 @@ export function mapStopReason(reason: FinishReason): StopReason {
 		case FinishReason.CONTINUATION:
 		// Added in @google/genai 3.0.0: generation stopped because the response was malformed.
 		case FinishReason.MALFORMED_RESPONSE:
+		// Added in @google/genai 3.3.0: a replay dropped a required thought signature.
+		case FinishReason.MISSING_THOUGHT_SIGNATURE:
+		// Added in @google/genai 3.3.0: the request was dropped by an escalation rule.
+		case FinishReason.ESCALATION:
+		// Added in @google/genai 3.3.0: the account is limited or disabled under Google's
+		// Prohibited Use Policy.
+		case FinishReason.PUP_LIMITED_DISABLED:
+		// Added in @google/genai 3.3.0: Model Armor blocked the response.
+		case FinishReason.MODEL_ARMOR:
 			return "error";
 		default: {
 			const _exhaustive: never = reason;

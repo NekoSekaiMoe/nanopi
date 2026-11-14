@@ -75,8 +75,8 @@ importers:
         specifier: 1.1.0
         version: 1.1.0
       '@google/genai':
-        specifier: 3.2.0
-        version: 3.2.0
+        specifier: 3.3.0
+        version: 3.3.0
       '@smithy/node-http-handler':
         specifier: 4.14.2
         version: 4.14.2
@@ -701,8 +701,8 @@ packages:
   '@fontsource-variable/inter@5.3.0':
     resolution: {integrity: sha512-OupL48va4JNofb97w6NYeF9S7W/kHNKM0Er8Dem5nqi4jeOLrVJDoE8tZEpnMJmtkvNbB1EIPPwHcdkF6b1oUA==}
 
-  '@google/genai@3.2.0':
-    resolution: {integrity: sha512-AyT5kezsBpxRr8ljz7RmfhrxfjTse0aIDv7DGoNmk6lyta0A13AEOiGpw7VFcrYSmXq8HtkbWYBAeqqdALv6gw==}
+  '@google/genai@3.3.0':
+    resolution: {integrity: sha512-XLjXedj0X8UrULZz1GnlTMSQxBDFdr+NCKZkOBaSVVYqmK30C6FCnKW31Ppn0ItO9DpNspCHFui257kPNpumKQ==}
     engines: {node: '>=22.0.0'}
     peerDependencies:
       '@modelcontextprotocol/sdk': ^1.25.2
@@ -3196,7 +3196,7 @@ snapshots:
 
   '@fontsource-variable/inter@5.3.0': {}
 
-  '@google/genai@3.2.0':
+  '@google/genai@3.3.0':
     dependencies:
       google-auth-library: 10.9.1
       p-retry: 4.6.2
