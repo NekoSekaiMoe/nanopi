@@ -744,8 +744,12 @@ export function createGrepToolDefinition(
 									trailingContextEnd = lineNumber + contextValue;
 								});
 								if (!accepted) {
-									// The limit cut this match: its leading context was already collected, and
-									// printing both stops the run without losing what led up to it.
+									// The limit was just filled here: its leading context was already
+									// collected, so print both. The child is left running on purpose --
+									// nothing yet proves more results were cut off, and the event that does
+									// is still in the pipe. Killing at this point raced that event away, so
+									// "Search stopped early" showed up only when the scheduler delivered it
+									// first (#747).
 									blockRows.push({
 										filePath,
 										lineNumber,
@@ -753,7 +757,6 @@ export function createGrepToolDefinition(
 										isMatch: true,
 									});
 									flushBlock();
-									killChild(true);
 									return;
 								}
 								if (pendingMatch !== undefined) {
@@ -775,9 +778,8 @@ export function createGrepToolDefinition(
 								pendingMatch = { filePath, lineNumber, lineText };
 								return;
 							}
-							// Only the last allowed match keeps its trailing context; a match inside that
-							// window is shown as a context line, and one outside proves the limit cut
-							// results off, so the walk stops instead of scanning every remaining file.
+							// Only the last allowed match keeps its trailing context; a line inside that
+							// window is shown as context.
 							if (filePath === trailingFile && lineNumber <= trailingContextEnd) {
 								if (!isMatch)
 									blockRows.push({
@@ -788,10 +790,13 @@ export function createGrepToolDefinition(
 									});
 								return;
 							}
-							if (isMatch && filePath !== trailingFile) {
-								stoppedEarly = true;
-								killChild(true);
-							}
+							// Past that window the result belongs to a match the limit cut off, so it is
+							// not printed. Only a match proves files later in the walk went unsearched:
+							// ripgrep sends a match's leading context before the match itself, so a
+							// context line here may still be followed by the match that explains it.
+							if (!isMatch) return;
+							stoppedEarly = true;
+							killChild(true);
 						});
 						child.on("error", (error) => {
 							cleanup();
