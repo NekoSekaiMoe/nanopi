@@ -42,5 +42,5 @@ schema 描述同步写清边界（`values below 1 mean 1`），模型在参数�
 - 行为变化只在 `limit < 1` 或非整数上；默认路径和正常上限完全不变。
 - 输出里的 notice 用的是钳制后的值（`1 entries limit reached`），模型据此放大
   `limit` 时拿到的是真实生效的数字。
-- 回归测试在 `test/tools.test.ts`（`limit below 1` 两条，find 和 ls 各一），
+- 回归测试在 `packages/coding-agent/test/tools.test.ts`（`limit below 1` 两条，find 和 ls 各一），
   把修复回退后两条都失败。

@@ -73,7 +73,7 @@ tree-sitter 摘要一起否在
   没读它：notice 已经在文本里，TUI 再标一次是重复。
 - `docs/environment-variables.md` 和 `docs/containerization.md` 不再暗示镜像
   必须带 ripgrep 才能用只读工具。
-- 回归测试在 `test/tools.test.ts`（`grep tool without ripgrep` /
+- 回归测试在 `packages/coding-agent/test/tools.test.ts`（`grep tool without ripgrep` /
   `find tool without fd`，靠 spy `ensureTool` 强制走降级路径，因为 CI 镜像
-  预装了真实二进制）和 `test/fallback-walker.test.ts`（嵌套规则、negation、
+  预装了真实二进制）和 `packages/coding-agent/test/fallback-walker.test.ts`（嵌套规则、negation、
   符号链接、提前停止）。

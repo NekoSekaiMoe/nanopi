@@ -61,7 +61,7 @@ Status: implemented
   是两件独立的事，停在任一处都不会漏。
 - Cost: 一个 30fps 的 `setInterval` 在回合期间常驻。它只调 `requestRender`，
   不重排内容；`render` 每帧本当要跑一次。
-- Testing: `test/status-indicator.test.ts` 加了两条——一条断言嵌在边框里的行来自
+- Testing: `packages/coding-agent/test/status-indicator.test.ts` 加了两条——一条断言嵌在边框里的行来自
   行渲染器（且 `dtMs` 不是硬编码 0），一条断言帧循环在 install 后按帧请求渲染、
   `dispose` 后停止。原 `embeds the working indicator when the editor opts in`
   仍然通过，说明没有行渲染器时行为不变。

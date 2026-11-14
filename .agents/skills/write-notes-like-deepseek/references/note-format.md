@@ -60,6 +60,19 @@ Status: <状态>
 
 头块标题兼容全角冒号（`# Agent Note：标题`，中文输入法常打出全角）；新笔记建议半角。
 
+## 引用测试文件（全文路径，命令示例例外）
+
+笔记里的测试路径一律带包前缀：`packages/<pkg>/test/foo.test.ts`。
+
+理由是可解析性，不是整齐。`.agents/notes/` 从仓库根读，裸 `test/foo.test.ts` 全靠「6 个包里恰好没有第二个同名文件」才落得下包——`packages/agent` 今天没有 `tools.test.ts`，明天加一个，所有 `test/tools.test.ts` 就都变成悬空事实。带前缀的代价只是变长，笔记不是 diff，长没关系。
+
+两个例外：
+
+- **命令示例可以裸写。** 行内带 `pnpm` / `npx` / `node` / `vitest` 之类调用，或带 `cd packages/<pkg>` / `--filter <pkg>`，归属由命令本身给出，照抄能跑比路径完整更重要。代码块里的内容一律不查。
+- **已删除的测试照写全路径并标注。** 形式为 `packages/<pkg>/test/foo.test.ts`（已删除，随 `<commit>`）。这类引用是「当时有、现在没有」的证据，既不改成有效路径骗人，也不删掉。
+
+脚本只查散文里的裸路径：找不到唯一归属时给 `packages/<pkg>/test/…`，找不到就提示 `packages/<pkg>/` 待补。`verify-agent-note-tree` 同时只校验笔记间相对 Markdown 链接，所以「已删除」的测试路径不会被当死链误报——这是有意的。
+
 ## 自由节与文风
 
 - 自由节（package 拓扑、wire 契约、schema 等）放在 `Decision` 与 `Alternatives` 之间。

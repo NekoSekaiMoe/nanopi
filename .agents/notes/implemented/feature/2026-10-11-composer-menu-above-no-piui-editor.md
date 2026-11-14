@@ -49,4 +49,4 @@ Supersedes
   the below menu; they must pass `autocompleteDirection: "above"` themselves.
   `renderedAutocompleteHeight` bookkeeping is shared by render and
   hit-testing, so geometry changes must update both (covered by
-  `test/editor.test.ts`).
+  `packages/tui/test/editor.test.ts`).

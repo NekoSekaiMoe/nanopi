@@ -44,6 +44,6 @@ Status: implemented
 
 ## 验证
 
-`test/session-manager/atomic-rewrite.test.ts` 断言重写后 inode 变了 —— 原地截断会
+`packages/coding-agent/test/session-manager/atomic-rewrite.test.ts` 断言重写后 inode 变了 —— 原地截断会
 保留 inode，rename 才换。这条测试对旧实现是红的（实测 `expected 51564092455 not to
 be 51564092455`），对新的绿。临时文件残留也一并断言（目录里只有 `session.jsonl`）。

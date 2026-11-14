@@ -85,7 +85,7 @@ does not own.
 
 ## Testing
 
-`test/resource-discovery.test.ts` builds a repository with both directories and
+`packages/coding-agent/test/resource-discovery.test.ts` builds a repository with both directories and
 asserts the nested checkout sees the `.agents` skill, that a `cwd`-level load
 reads `.nanopi` as well, and that `.agents/prompts` wins the ordering.
-`test/trust-manager.test.ts` covers `.agents/prompts` requiring trust on its own.
+`packages/coding-agent/test/trust-manager.test.ts` covers `.agents/prompts` requiring trust on its own.

@@ -97,7 +97,7 @@ validates with.
   it is a package the module resolves itself.
 - `dist/bundle/` grows by nothing (jiti was already shipped as a dependency) and
   shrinks by no longer containing a second copy of jiti plus Babel.
-- `test/disk-modules-bundled-build.test.ts` pins the gate against the exact
+- `packages/coding-agent/test/disk-modules-bundled-build.test.ts` pins the gate against the exact
   define combination the npm bundle injects (`NANOPI_BUNDLED_NODE: true`), the
   single-file combination, and a source checkout. Verified end to end by packing
   the package and loading a `.ts` module from `~/.nanopi/agent/extensions/`

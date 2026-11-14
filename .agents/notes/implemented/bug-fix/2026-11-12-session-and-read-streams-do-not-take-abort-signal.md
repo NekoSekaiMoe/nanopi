@@ -52,7 +52,7 @@ Status: implemented
 `createReadStream` 内部的即时中断。对一个本地文本文件的读来说这点延迟不可见。
 
 回归测试：`packages/coding-agent/test/session-manager/listing-abort.test.ts`（非 session
-文件读完首行后 abort，进程不受影响）和 `test/tool-streaming-reads.test.ts` 里
+文件读完首行后 abort，进程不受影响）和 `packages/coding-agent/test/tool-streaming-reads.test.ts` 里
 「rejects an aborted read with AbortError instead of crashing the process」。
 两条都先对着未修的代码跑过：前者在未修时会让测试进程带 `UNCAUGHT AbortError` 退出，
 后者在未修时同样触发未捕获的 `AbortError`。

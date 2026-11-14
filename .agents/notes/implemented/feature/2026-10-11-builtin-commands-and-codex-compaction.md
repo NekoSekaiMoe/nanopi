@@ -59,8 +59,8 @@ components, dropping bundled extras to nine.
   auth; otherwise (including the faux-provider test suite) the default
   compaction runs — existing compaction tests pass unchanged because the
   faux provider fails the auth lookup.
-- New first-party tests: `test/codex-compaction.test.ts` (retention plan,
-  boundary handling, summary framing) and `test/builtin-commands.test.ts`
+- New first-party tests: `packages/coding-agent/test/codex-compaction.test.ts` (retention plan,
+  boundary handling, summary framing) and `packages/coding-agent/test/builtin-commands.test.ts`
   (token formatting, part capping, used-token reconciliation, breakdown
   collection).
 - The ported code is now maintained in-tree; upstream pi-extra-cmd /

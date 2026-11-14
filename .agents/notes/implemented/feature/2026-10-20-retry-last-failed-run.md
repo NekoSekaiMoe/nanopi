@@ -82,6 +82,6 @@ spend tokens without consent.
   errors reach the user as a normal command error rather than a silent no-op.
 - Attempt accounting for a replay relies on `_retryAttempt` being restored before the run starts.
   `_startRun` does not reset it, so the value survives into the first `_prepareRetry` call.
-- Coverage: `test/suite/agent-session-retry-session.test.ts` records a completed run, a run whose
+- Coverage: `packages/coding-agent/test/suite/agent-session-retry-session.test.ts` records a completed run, a run whose
   auto-retry gave up, a failure without auto-retry, a replay, a replay that keeps charging
   attempts, and a recovery from a session file reopened after a restart.

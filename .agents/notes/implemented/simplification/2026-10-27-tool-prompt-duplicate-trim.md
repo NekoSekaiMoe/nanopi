@@ -72,7 +72,7 @@ Issue #347 的测量：默认全量模块下每个请求要付 18195 字符的�
 
 代价：`subagent` 的 brief 契约从 description 挪到 `task` 参数，读 prompt 的人
 在 description 里看不到它了。测试改成把整个声明（description + 序列化的
-parameters）拼起来断言四个段落名，`test/suite/regressions/subagent-brief-shape.test.ts`
+parameters）拼起来断言四个段落名，`packages/coding-agent/test/suite/regressions/subagent-brief-shape.test.ts`
 里写了原因。
 
 ## Alternatives considered

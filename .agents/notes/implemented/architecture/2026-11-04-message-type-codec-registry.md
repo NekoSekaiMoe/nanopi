@@ -101,8 +101,8 @@ function called from the SDK, compaction, and the harness — has no way to find
 
 ## Testing
 
-`test/message-type-registry.test.ts` covers projection of a registered kind, dropping an
+`packages/coding-agent/test/message-type-registry.test.ts` covers projection of a registered kind, dropping an
 unregistered one, per-kind sizing, built-in kinds surviving registration, and narrowing one
-`custom` type without touching the others. `test/compaction.test.ts` and
-`test/session-context-edit.test.ts` pass the session table explicitly, which is the evidence that
+`custom` type without touching the others. `packages/coding-agent/test/compaction.test.ts` and
+`packages/coding-agent/test/session-context-edit.test.ts` pass the session table explicitly, which is the evidence that
 `custom` sizing now comes from the codec rather than from the estimator.

@@ -79,6 +79,6 @@ Anthropic 不受影响：它 `max_tokens` 必填，`buildParams` 本来就有 `?
   `cerebras.json` 多出 `supportsUsageInStreaming: false` 与 `supportsReasoningEffort: false`。
   这些文件是 gitignore 的构建产物，`packages/coding-agent/schemas/models.schema.json`
   则要跟着 `npm run generate:schemas` 重新生成并提交。
-- 覆盖：`test/openai-completions-request-fields.test.ts` 跑 7 种私网/loopback 地址断言三个
+- 覆盖：`packages/ai/test/openai-completions-request-fields.test.ts` 跑 7 种私网/loopback 地址断言三个
   字段都不发、公开地址仍发、OpenRouter 无显式上限时不发字段但有上限时照发、思考预算
-  仍在模型上限内；`test/xai-responses.test.ts` 断言两个 adapter 都只发 `x-grok-conv-id`。
+  仍在模型上限内；`packages/ai/test/xai-responses.test.ts` 断言两个 adapter 都只发 `x-grok-conv-id`。

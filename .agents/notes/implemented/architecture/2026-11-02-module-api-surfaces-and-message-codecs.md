@@ -195,12 +195,12 @@ than kept beside the registry:
 
 ## Testing
 
-- `test/message-codec.test.ts` (issue #453) covers: an unknown role converting
+- `packages/coding-agent/test/message-codec.test.ts` (issue #453) covers: an unknown role converting
   through its codec, `include()` dropping a message, a codec-less role passing
   through, estimates and cut points reading the codec, replacement on
   re-registration, and override + `unregisterMessageCodec` restoring the
   pass-through.
-- `test/module-surface-types.test.ts` pins the negative space with
+- `packages/coding-agent/test/module-surface-types.test.ts` pins the negative space with
   `@ts-expect-error`: `ModuleCommandsSurface` has no `registerProvider` or
   `registerTool`, a surface intersection has no `registerCommand`, and a single
   surface is not a `ModuleApi`.

@@ -53,7 +53,7 @@ write 在这一层已经短路，缺的那层省下的只是拼字符串。
 
 ## 为什么流式期间的开销也不全在「前缀重排」
 
-实测（400 行、逐帧 `updateArgs` 的 write 内容，`test/streaming-highlight.test.ts` 同款的
+实测（400 行、逐帧 `updateArgs` 的 write 内容，`packages/coding-agent/test/streaming-highlight.test.ts` 同款的
 `highlightedLines` 计数器，临时脚本跑完即删）：
 
 - 流式 400 帧累计高亮 19624 行；

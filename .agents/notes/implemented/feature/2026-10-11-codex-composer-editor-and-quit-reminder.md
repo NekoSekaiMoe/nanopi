@@ -63,4 +63,4 @@ no hint, so the exit path was undiscoverable; Codex has a
 - Testing: composer prefix/indent/padding/scroll rows are covered in
   `packages/tui/test/editor.test.ts`; the quit reminder lifecycle (reminder
   text, expiry, second-press quit) in
-  `test/interactive-tui.test.ts`.
+  `packages/coding-agent/test/interactive-tui.test.ts`.

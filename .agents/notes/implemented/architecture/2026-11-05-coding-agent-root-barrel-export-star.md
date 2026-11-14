@@ -6,7 +6,7 @@ Status: implemented
 
 Issue #506 asked to make `packages/coding-agent/src/index.ts` use `export *`. By the time PR #508
 landed, `core/compaction/index.ts` had already been restored to `export *` and pinned with a test
-(`test/compaction-barrel-exports.test.ts`): a hand-written whitelist there had silently dropped
+(`packages/coding-agent/test/compaction-barrel-exports.test.ts`): a hand-written whitelist there had silently dropped
 `getSummarizationFailure` because only two files import it, and both import the source. The lesson —
 a wildcard follows its source files by construction — is what motivates the #506 request.
 
@@ -58,7 +58,7 @@ eye and were wrong in both directions; re-run before quoting a number.
    `core/tools/index.ts`, `export *` dropping the name silently, eleven tool factories therefore
    re-exported by name) and kept that named block "just in case". Deleting the block changes
    nothing: `tsc` stays clean, the measured surface is identical, and
-   `test/root-barrel-exports.test.ts` now asserts there is no named block at all.
+   `packages/coding-agent/test/root-barrel-exports.test.ts` now asserts there is no named block at all.
 
    The general rule this settles: a *different body under the same name* is TS2308 at the barrel and
    fails the typecheck (that is why `CompactionSettings` / `MessageRunRenderOptions` had to be

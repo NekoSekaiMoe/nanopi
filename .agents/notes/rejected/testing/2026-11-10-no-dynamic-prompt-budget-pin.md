@@ -46,7 +46,7 @@ prompt 或 schema」这件事本身，值不值得付账由看 diff 的人判断
 ## Decision
 
 钉值保持字面量，涨价靠改常量时在提交里说明。#681 已经这么走过一遍：改的是描述
-（`find`/`ls` 回到不含 `values below 1 mean 1` 的写法），常量没动，`test/tools.test.ts`
+（`find`/`ls` 回到不含 `values below 1 mean 1` 的写法），常量没动，`packages/coding-agent/test/tools.test.ts`
 里那两条 `limit below 1` 的回归测试继续守着行为。
 
 涨了要不要付账仍由人定。想让那条语义留在模型视野里，就把 `PINNED.base` 改成 1554 并在

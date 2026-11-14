@@ -6,6 +6,7 @@
 
 1. **`verify-agent-note-tree`**（`scripts/agent-note-tree.ts` + `scripts/verify-agent-note-tree.ts`）
    - 校验 lifecycle 封闭集 `proposed/implemented/rejected` + `archived`、class 封闭集 6 个、路径深度 `{lifecycle}/{class}/file.md`、文件名 `yyyy-mm-dd-topic.md`、禁止 `INDEX.md`、活跃笔记内部相对 Markdown 链接有效性。
+   - 测试路径归属：散文里出现裸 `test/foo.test.ts` 且前面没有 `packages/<pkg>/` 时报错，并给出 `packages/<pkg>/test/foo.test.ts` 建议（`packages/*/test` 下唯一命中才给包名，否则提示补 `<pkg>`）。带命令上下文（`pnpm`/`npx`/`vitest`/`cd packages/<pkg>`）的行和代码块不查，见 `note-format.md` 的两个例外。
 
 2. **`verify-agent-note-format`**（`scripts/verify-agent-note-format.ts`）
    - 头部：第 1 行 `# Agent Note:` 标题（半角/全角冒号都收，中文输入法常打出全角）、第 2/4 行空行、第 3 行 `Status:` 与 lifecycle 一致且全篇唯一。

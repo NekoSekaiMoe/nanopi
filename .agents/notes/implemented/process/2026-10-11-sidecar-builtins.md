@@ -54,5 +54,5 @@ removed](./2026-11-06-sidecars-download-in-full.md).
   [the sidecars-download-in-full note](./2026-11-06-sidecars-download-in-full.md).
 - Cost: `nanopi.js` grows ~0.9 MiB packed; the manifest/github URL code stays
   as dead weight for `full` but live fallback for `minimal`.
-- `test/standalone.test.ts` covers builtin install/skip/repair/platform-filter/
+- `packages/coding-agent/test/standalone.test.ts` covers builtin install/skip/repair/platform-filter/
   checksum-mismatch; the real full+minimal builds were smoke-built.

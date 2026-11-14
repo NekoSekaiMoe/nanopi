@@ -156,6 +156,7 @@ Status: <状态>
 - `## Consequences` 同时写**代价和收益**，不是只写"放弃了什么"。
 - 自由节（package 拓扑、wire 契约、schema 等）放在 `Decision` 与 `Alternatives` 之间，保持可检索的机制名与 `must / may / never` 时序强调。
 - 跨 Note 引用用相对 Markdown 链接 `[topic](../../implemented/architecture/2026-…-….md)`，不要裸数字，以便机械可校验。
+- 引用测试文件一律写全路径 `packages/<pkg>/test/foo.test.ts`：笔记从仓库根读，裸 `test/foo.test.ts` 只是当下 6 个包里没撞名才解析得通。两个例外——命令示例在包根跑（`cd packages/<pkg>` 或 `--filter <pkg>`）可以裸写；已经删掉的测试写成 `packages/<pkg>/test/foo.test.ts`（已删除，随 `<commit>`），不要假装它还在，也不要删掉这段证据。
 - 宿主若已有此惯例，可在核心入口留一行 `// Note: ... 见 .agents/notes/...`；不是门禁。决定被取代时，这些注释是要同步的代码清单。
 - 文风与去推导痕迹见 `references/prose-checklist.md`；简化机会见 `references/simplification-checklist.md`。
 - 写完后过一遍 `references/quality-gate.md` 的语义自检，只向用户报**缺口和写得好的地方**（≤5 行），缺口给具体修法。结构靠脚本，意思靠人点头。

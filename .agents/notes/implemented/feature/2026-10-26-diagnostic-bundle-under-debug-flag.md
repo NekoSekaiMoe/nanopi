@@ -82,5 +82,5 @@ startup and once at exit. No prompt, no command, no upload.
 - `fails open`: a broken filesystem path returns `undefined` and the session proceeds.
   The tradeoff is that "no bundle" and "bundle failed" look the same until the user
   checks the directory.
-- Testing: `test/diagnostic-bundle.test.ts` covers redaction, metadata shape, failed-turn
+- Testing: `packages/coding-agent/test/diagnostic-bundle.test.ts` covers redaction, metadata shape, failed-turn
   filtering, the loose-files layout, phase labelling, and the debug log tail.

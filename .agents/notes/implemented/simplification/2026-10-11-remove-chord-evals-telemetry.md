@@ -23,7 +23,7 @@ All three packages are deleted from the workspace. Removal is complete, not stub
 - `scripts/check-entry-graphs.mjs`: chord/telemetry removed from `WORKSPACE`.
 - `scripts/check-pinned-deps.mjs`: `internalPackageNames` set removed; `isInternalWorkspaceDependency` now checks only the `@nanopi/pi-` prefix.
 - `scripts/profile-coding-agent-node.mjs`, `packages/coding-agent/package.json` (`build:binary`): telemetry build steps removed.
-- pi-ai: `@nanopi/pi-telemetry` dependency, the `telemetryContext` field on `ProviderRequestOptions`, its pass-through in `api/simple-options.ts`, and `test/telemetry-options.test.ts` (which only asserted that pass-through) are gone. This is a public API breaking change, recorded in the ai changelog.
+- pi-ai: `@nanopi/pi-telemetry` dependency, the `telemetryContext` field on `ProviderRequestOptions`, its pass-through in `api/simple-options.ts`, and `packages/ai/test/telemetry-options.test.ts` (deleted in 92babce71; it only asserted that pass-through) are gone. This is a public API breaking change, recorded in the ai changelog.
 - README package table rows removed; `pnpm-lock.yaml` refreshed (node_modules shrank by 31 packages).
 
 `packages/coding-agent/npm-shrinkwrap.json` also pinned `@nanopi/pi-telemetry@0.84.2` from the registry; it was a stale 0.84.2-era artifact with no generator script and was deleted in the same change after explicit user confirmation.

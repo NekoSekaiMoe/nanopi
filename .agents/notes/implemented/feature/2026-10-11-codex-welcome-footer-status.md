@@ -65,7 +65,7 @@ established the builtin-commands home this command extends.
 - Cost: footer no longer shows cwd/branch/cost/model/extension statuses;
   anyone relying on those must use `/status` (context/model) or the transcript.
   `FooterComponent` tests were rewritten for the single line; `welcome-box`
-  and `collectStatusRows` have new coverage in `test/status-command.test.ts`.
+  and `collectStatusRows` have new coverage in `packages/coding-agent/test/status-command.test.ts`.
 - `BUILTIN_SLASH_COMMANDS` gains `status`; extensions using that name now
   conflict (builtin wins in autocomplete, same as other builtins). The
   built-in command itself is `source: "builtin"` and is excluded from the

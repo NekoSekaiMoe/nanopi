@@ -65,7 +65,7 @@ which this note extends.
 - Cost: the Ctrl+O expanded (scope-grouped, full-path) listing form is gone —
   only the compact form survives. Paths remain available through
   `/config`-style inspection or the resource-loader diagnostics.
-- Tests: the compact-label suite moved to `test/resource-listing.test.ts`
+- Tests: the compact-label suite moved to `packages/coding-agent/test/resource-listing.test.ts`
   against the pure functions; `showLoadedResources` tests now cover
   diagnostics-only rendering; `collectStatusSections` has coverage in
-  `test/status-command.test.ts`.
+  `packages/coding-agent/test/status-command.test.ts`.

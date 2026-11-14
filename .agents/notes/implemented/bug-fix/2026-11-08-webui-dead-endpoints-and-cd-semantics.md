@@ -107,7 +107,7 @@ definitions、`SessionManager` 都还是旧的，表面上换了目录，实际�
 - 代价：`webui-server.ts` 通过 `as unknown as` 形状访问运行时的 `teardownCurrent` /
   `createRuntime` / `apply` / `finishSessionReplacement`。这四个是运行时的私有实现，
   上游改签名时 webui 会在运行时先看到，而不是编译期。回归测试
-  （`test/webui-cd-and-mcp-status.test.ts`）就是为此存在的。
+  （`packages/coding-agent/test/webui-cd-and-mcp-status.test.ts`）就是为此存在的。
 - 收益：剔掉 `module/mcp-lite` 的构建在设置页明确显示"不含 MCP"，而不是让用户
   以为自己没配。
 - 代价：`/mcp/status` 报的是配置不是连接，`status: "configured"` 这个值是新加的

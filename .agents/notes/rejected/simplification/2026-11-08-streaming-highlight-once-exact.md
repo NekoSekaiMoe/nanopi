@@ -45,7 +45,7 @@ const prefixCount =
   `previous.exact === false`，于是走全量分支重排一次。
 
 全量分支的结果与增量分支**不同**：增量按行高亮，全量按整体高亮。对于跨行 token
-（未闭合的模板字符串、块注释、heredoc 字符串），两边渲染出的行不一样。`test/streaming-highlight.test.ts`
+（未闭合的模板字符串、块注释、heredoc 字符串），两边渲染出的行不一样。`packages/coding-agent/test/streaming-highlight.test.ts`
 的 write 用例正是拿这一点做断言：
 
 > `// The unterminated template literal spans lines, so only a full highlight matches a fresh render.`
@@ -74,7 +74,7 @@ const prefixCount =
 ## Risks
 
 - 流式期间的前缀高亮仍是 `50 × 帧数`，长 heredoc 下会有可观测的 CPU 占用。缓解：帧已是节流的，
-  且 `test/streaming-highlight.test.ts` 的 400 行用例对总高亮行数有上限断言（`< 400 × 60`），
+  且 `packages/coding-agent/test/streaming-highlight.test.ts` 的 400 行用例对总高亮行数有上限断言（`< 400 × 60`），
   按当前实现约有 60 倍余量。
 - 若有人后来只把 `previous.exact` 那次判断加进去、没跑 write 用例，就会出现上面那条不一致的
   画面；本文就是给那次尝试留的记录。
