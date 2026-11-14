@@ -4165,13 +4165,19 @@ async function generateModels() {
 	}
 
 	// Azure Foundry deploys these with larger context windows than OpenAI's own short-tier defaults.
-	// See models-sold-directly-by-azure docs.
+	// See models-sold-directly-by-azure docs. models.dev lists the same long-context tiers for the
+	// Azure entries as for the OpenAI ones, so the clone keeps them: a wider window without the tier
+	// bills 272k..1.05M input at the short-context rate.
 	const AZURE_CONTEXT_WINDOW_OVERRIDES: Record<string, number> = {
 		"gpt-5.4": 1050000,
 		"gpt-5.5": 1050000,
 		"gpt-5.6-luna": 1050000,
 		"gpt-5.6-sol": 1050000,
 		"gpt-5.6-terra": 1050000,
+		"gpt-6-astra": 1050000,
+		"gpt-6-sol": 1050000,
+		"gpt-6-luna": 1050000,
+		"gpt-6.1-sol": 1050000,
 	};
 	const azureOpenAiModels: Model<Api>[] = allModels
 		.filter((model) => model.provider === "openai" && model.api === "openai-responses")
@@ -4180,12 +4186,6 @@ async function generateModels() {
 			api: "azure-openai-responses",
 			provider: "azure",
 			baseUrl: "",
-			cost: {
-				input: model.cost.input,
-				output: model.cost.output,
-				cacheRead: model.cost.cacheRead,
-				cacheWrite: model.cost.cacheWrite,
-			},
 			contextWindow: AZURE_CONTEXT_WINDOW_OVERRIDES[model.id] ?? model.contextWindow,
 		}));
 	allModels.push(...azureOpenAiModels);
