@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `pi-fake-opencode` replays each lane's own identity instead of one shape for both: the 2.x lanes (`/inference`, `/zen/go`) send the conversation affinity in `x-opencode-session`, `x-session-affinity` and `X-Session-Id` with the client's own session in `x-opencode-session-id`, and stop sending `x-opencode-request`, which the v2 gate answers with 403 `FreeTierError`; a forked session keeps its child id while affinity stays on the parent. The 1.x `/zen` lane gains the AI SDK's `Accept: */*` and a provider-utils version that depends on the wire protocol (`4.0.23` chat, `4.0.40` responses, `4.0.46` anthropic) instead of a fixed one. The 1.x prompt and tool set are now their own captures rather than the 2.x pair with names substituted: eleven tools (`bash`, `task`, `todowrite` where the 2.x CLI has `shell`, `subagent`, `question`), a different description and schema behind every shared name, no `strict` field on any of them (issue [#725](https://cnb.cool/shinytale/nanopi/-/issues/725))
+
 ## [20261114]
 
 ### Added

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	buildIdentityHeaders,
 	buildProjectId,
 	buildRequestId,
 	buildSessionId,
@@ -89,6 +90,62 @@ describe("pi-fake-opencode headers", () => {
 		expect(buildUserAgent("v1")).toMatch(
 			/^opencode\/\d+\.\d+\.\d+ ai-sdk\/provider-utils\/[\d.]+ runtime\/bun\/[\d.]+$/,
 		);
+	});
+
+	// OpenCode 1.19.3 routes each protocol through a different AI SDK package,
+	// and each bundles its own provider-utils version.
+	it("reports the protocol's provider-utils version on the v1 lane", () => {
+		const chat = buildUserAgent("v1", "openai-completions");
+		expect(chat).toContain("ai-sdk/provider-utils/4.0.23");
+		expect(buildUserAgent("v1", "openai-responses")).toContain("ai-sdk/provider-utils/4.0.40");
+		expect(buildUserAgent("v1", "anthropic-messages")).toContain("ai-sdk/provider-utils/4.0.46");
+		// A protocol with no 1.x counterpart reports the chat package.
+		expect(buildUserAgent("v1", "google-generative-ai")).toBe(chat);
+	});
+
+	// The v2 gate answers x-opencode-request with 403 FreeTierError, and expects
+	// the affinity in three headers besides the client's own session id.
+	it("sends the 2.x session headers without a request id", () => {
+		const headers = buildIdentityHeaders({ lane: "v2", sessionId: "session-a", cwd: "/workspace" });
+		const session = buildSessionId("session-a");
+		expect(headers["x-opencode-session"]).toBe(session);
+		expect(headers["x-opencode-session-id"]).toBe(session);
+		expect(headers["x-session-affinity"]).toBe(session);
+		expect(headers["X-Session-Id"]).toBe(session);
+		expect(headers["x-opencode-request"]).toBeNull();
+		expect(headers.Accept).toBeUndefined();
+	});
+
+	it("keeps a subagent's child session id while affinity stays on the parent", () => {
+		const headers = buildIdentityHeaders({
+			lane: "v2",
+			sessionId: "child",
+			parentSessionId: "parent",
+			cwd: "/workspace",
+		});
+		const child = buildSessionId("child");
+		const parent = buildSessionId("parent");
+		expect(headers["x-opencode-session-id"]).toBe(child);
+		expect(headers["x-opencode-session"]).toBe(parent);
+		expect(headers["x-session-affinity"]).toBe(parent);
+		expect(headers["x-opencode-parent-session-id"]).toBe(parent);
+		expect(headers["x-parent-session-id"]).toBe(parent);
+	});
+
+	it("sends one session id and a request id on the 1.x lane", () => {
+		const headers = buildIdentityHeaders({
+			lane: "v1",
+			sessionId: "session-a",
+			cwd: "/workspace",
+			api: "openai-completions",
+			turn: "1:abc",
+		});
+		const session = buildSessionId("session-a");
+		expect(headers["x-opencode-session"]).toBe(session);
+		expect(headers["x-opencode-session-id"]).toBe(session);
+		expect(headers["x-opencode-request"]).toMatch(/^msg_[0-9a-f]{12}[0-9A-Za-z]{14}$/);
+		expect(headers.Accept).toBe("*/*");
+		expect(headers["x-session-affinity"]).toBeUndefined();
 	});
 
 	it("mints a descending session id, stable per session", () => {
@@ -254,13 +311,35 @@ describe("pi-fake-opencode body shaping", () => {
 		expect(body.messages[0].content).toBe(first);
 	});
 
-	it("sends the 1.x tool names on the v1 lane", () => {
+	// The 1.x client declares its own tool set, not the 2.x one with renamed
+	// entries: eleven tools, `task`/`todowrite` where the 2.x CLI has
+	// `subagent`/`question`, and no `strict` field on any of them.
+	it("sends the 1.x tool set on the v1 lane", () => {
 		const body = completionsBody();
 		shapeForGateway(body, "openai-completions", V1_CONTEXT);
-		const names = body.tools.map((tool) => tool.function.name);
-		expect(names).toContain("bash");
-		expect(names).not.toContain("shell");
-		expect((body.messages[0].content as string).includes("bash")).toBe(true);
+		const official = body.tools.filter((tool) => !tool.function.name.startsWith("clint_"));
+		expect(official.map((tool) => tool.function.name)).toEqual([
+			"bash",
+			"edit",
+			"glob",
+			"grep",
+			"read",
+			"skill",
+			"task",
+			"todowrite",
+			"webfetch",
+			"websearch",
+			"write",
+		]);
+		expect(official.every((tool) => tool.function.strict === undefined)).toBe(true);
+		expect((body.messages[0].content as string).includes("Bash")).toBe(true);
+	});
+
+	it("marks the 2.x official tools strict:false, as that client does", () => {
+		const body = completionsBody();
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		const official = body.tools.filter((tool) => !tool.function.name.startsWith("clint_"));
+		expect(official.every((tool) => tool.function.strict === false)).toBe(true);
 	});
 
 	// The CLI prompt names the official tools, so the model calls them even when

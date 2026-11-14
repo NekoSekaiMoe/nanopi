@@ -22,24 +22,32 @@ import { createHash, randomBytes } from "node:crypto";
  * black-box experiments are recorded in README and in
  * .agents/notes/implemented/bug-fix/2026-10-15-pi-fake-opencode-zen-fingerprint-1-19.md.
  *
- *   1. User-Agent must be the official composite form:
- *        opencode/{version} ai-sdk/provider-utils/{n} runtime/bun/{n}
- *      e.g. "opencode/2.1.1 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14".
- *      The 2-segment `opencode/{version}` and 4-segment
- *      `opencode/{channel}/{version}/{client}` forms are both rejected.
- *   2. `x-opencode-session` / `x-opencode-session-id` must carry a
- *      well-formed DESCENDING opencode identifier and `x-opencode-request`
- *      an ASCENDING one (`ses_`/`msg_` + 12 lowercase hex of the low 48
- *      bits of (ms*0x1000 + counter), optionally NOT-ed, + 14 base62
- *      chars — opencode `packages/schema/src/identifier.ts`).
+ *   1. The lane's User-Agent: `opencode/latest/{v}/cli` on the 2.x lanes, and
+ *      the 1.x composite `opencode/{v} ai-sdk/provider-utils/{n} runtime/bun/{n}`
+ *      — whose provider-utils segment depends on the wire protocol — on `/zen`.
+ *   2. The lane's session headers. The 2.x lanes send the conversation
+ *      affinity as `x-opencode-session` / `x-session-affinity` / `X-Session-Id`
+ *      and the client's own session as `x-opencode-session-id`, and must NOT
+ *      send `x-opencode-request` (the gate answers it with 403
+ *      FreeTierError). The 1.x lane sends one session id in both session
+ *      headers plus the user message id as `x-opencode-request`.
  *   3. The body must look like an official agent request: the CLI system
- *      prompt at the head of the system message, the official tool set in
- *      the tool list, `stream: true` and `max_completion_tokens`. Enforced in
+ *      prompt at the head of the system slot, the official tool set in the
+ *      tool list, `stream: true` and `max_completion_tokens`. Enforced in
  *      payload.ts.
  *
+ * Session ids must be well-formed opencode identifiers: `ses_`/`msg_` + 12
+ * lowercase hex of the low 48 bits of (ms*0x1000 + counter), optionally
+ * NOT-ed, + 14 base62 chars (opencode `packages/schema/src/identifier.ts`).
+ * Session ids are DESCENDING, message ids ASCENDING; the gate validates both
+ * directions.
+ *
  * None of this is transport-dependent: the same request passes from curl,
- * Node/undici, and Bun once the three signals are right.
+ * Node/undici, and Bun once the signals are right.
  */
+
+/** Zen's two request-shape generations, as opencode2api's lanes. */
+export type GatewayLane = "v1" | "v2";
 
 /**
  * OpenCode client version to impersonate.
@@ -53,11 +61,30 @@ import { createHash, randomBytes } from "node:crypto";
  */
 export const DEFAULT_OPENCODE_VERSION = "2.1.1";
 
-/** `ai-sdk/provider-utils` version embedded in the official User-Agent. */
-export const DEFAULT_PROVIDER_UTILS_VERSION = "4.0.23";
+/**
+ * `ai-sdk/provider-utils` versions embedded in the 1.x User-Agent, one per
+ * wire protocol: OpenCode 1.19.3 routes each protocol through a different AI
+ * SDK package, and each bundles its own provider-utils.
+ */
+export const V1_PROVIDER_UTILS_VERSIONS = {
+	"openai-completions": "4.0.23",
+	"openai-responses": "4.0.40",
+	"anthropic-messages": "4.0.46",
+} as const;
 
-/** Bun runtime version embedded in the official User-Agent. */
+/** The provider-utils version the 1.x client reports for a protocol. */
+export function v1ProviderUtilsVersion(api: string | undefined): string {
+	if (api === "openai-responses") return V1_PROVIDER_UTILS_VERSIONS["openai-responses"];
+	if (api === "anthropic-messages") return V1_PROVIDER_UTILS_VERSIONS["anthropic-messages"];
+	// Google has no 1.x counterpart; the client reports its chat package.
+	return V1_PROVIDER_UTILS_VERSIONS["openai-completions"];
+}
+
+/** Bun runtime version embedded in the 1.x User-Agent. */
 export const DEFAULT_BUN_VERSION = "1.3.14";
+
+/** The 1.x client version, the version segment of its User-Agent. */
+export const V1_OPENCODE_VERSION = "1.19.3";
 
 /**
  * pi provider ids that target OpenCode infrastructure.
@@ -69,9 +96,6 @@ export const OPENCODE_PROVIDER_IDS = new Set(["opencode", "opencode-go"]);
 
 /** Base-URL substring that marks a custom provider as pointing at Zen. */
 export const OPENCODE_BASEURL_MARKER = "opencode.ai";
-
-/** The User-Agent the 1.x client sends: a bare `opencode/<version>`. */
-export const V1_OPENCODE_VERSION = "1.19.3";
 
 /** The User-Agent the 2.x CLI sends on both v2 lanes: `opencode/<channel>/<version>/<client>`. */
 export function buildV2UserAgent(): string {
@@ -89,7 +113,7 @@ export function buildV2UserAgent(): string {
  * instead. Anything else — a `/zen/go` base, a proxy, a custom host — gets the
  * 2.x shape the captures cover.
  */
-export function laneForBaseUrl(baseUrl: string | undefined): "v1" | "v2" {
+export function laneForBaseUrl(baseUrl: string | undefined): GatewayLane {
 	const path = pathOf(baseUrl);
 	// `/zen/go` is its own 2.x lane, not a sub-path of the 1.x gate.
 	if (path === "/zen/go" || path?.startsWith("/zen/go/")) return "v2";
@@ -113,28 +137,28 @@ const IDENTIFIER_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqr
 
 /** Env vars read as truthy when set to 1/true/yes/on (case-insensitive). */
 function envFlag(name: string): boolean {
-  const value = process.env[name]?.trim().toLowerCase();
-  return value === "1" || value === "true" || value === "yes" || value === "on";
+	const value = process.env[name]?.trim().toLowerCase();
+	return value === "1" || value === "true" || value === "yes" || value === "on";
 }
 
 /** Parse a comma-separated env var into a trimmed, lower-cased set. */
 function envList(name: string): Set<string> {
-  const raw = process.env[name];
-  if (!raw) return new Set();
-  return new Set(
-    raw
-      .split(",")
-      .map((item) => item.trim().toLowerCase())
-      .filter((item) => item !== ""),
-  );
+	const raw = process.env[name];
+	if (!raw) return new Set();
+	return new Set(
+		raw
+			.split(",")
+			.map((item) => item.trim().toLowerCase())
+			.filter((item) => item !== ""),
+	);
 }
 
 /** Random bytes as base62-ish characters, mirroring opencode's identifier tail. */
 function randomChars(count: number): string {
-  const bytes = randomBytes(count);
-  let out = "";
-  for (const byte of bytes) out += IDENTIFIER_CHARS[byte % IDENTIFIER_CHARS.length];
-  return out;
+	const bytes = randomBytes(count);
+	let out = "";
+	for (const byte of bytes) out += IDENTIFIER_CHARS[byte % IDENTIFIER_CHARS.length];
+	return out;
 }
 
 let lastTimestamp = 0;
@@ -151,20 +175,20 @@ let counter = 0;
  * rejected with `FreeTierError` even when every other signal is correct.
  */
 function identifierBody(descending: boolean): string {
-  const timestamp = Date.now();
-  if (timestamp !== lastTimestamp) {
-    lastTimestamp = timestamp;
-    counter = 0;
-  }
-  counter++;
-  const current = BigInt(timestamp) * 0x1000n + BigInt(counter);
-  const value = descending ? ~current : current;
-  const time = Array.from({ length: 6 }, (_, index) =>
-    Number((value >> BigInt(40 - 8 * index)) & 0xffn)
-      .toString(16)
-      .padStart(2, "0"),
-  ).join("");
-  return time + randomChars(26 - 12);
+	const timestamp = Date.now();
+	if (timestamp !== lastTimestamp) {
+		lastTimestamp = timestamp;
+		counter = 0;
+	}
+	counter++;
+	const current = BigInt(timestamp) * 0x1000n + BigInt(counter);
+	const value = descending ? ~current : current;
+	const time = Array.from({ length: 6 }, (_, index) =>
+		Number((value >> BigInt(40 - 8 * index)) & 0xffn)
+			.toString(16)
+			.padStart(2, "0"),
+	).join("");
+	return time + randomChars(26 - 12);
 }
 
 /**
@@ -174,16 +198,17 @@ function identifierBody(descending: boolean): string {
  *
  *   v2 — `opencode/latest/2.1.1/cli`, the composite form the 2.x CLI sends on
  *        `/inference` and `/zen/go`.
- *   v1 — `opencode/1.19.3 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.14`, the
+ *   v1 — `opencode/1.19.3 ai-sdk/provider-utils/<n> runtime/bun/1.3.14`, the
  *        1.x model-request form on `/zen`: the client version, then the AI SDK
- *        segments its provider package appends.
+ *        segments its provider package appends. `<n>` depends on the wire
+ *        protocol (chat 4.0.23, responses 4.0.40, anthropic 4.0.46).
  *
  * Priority:
  *   1. `PI_FAKE_OPENCODE_UA`      — full string override
  *   2. `PI_FAKE_OPENCODE_VERSION` — opencode version segment override
  *   3. Defaults above
  */
-export function buildUserAgent(lane: "v1" | "v2" = "v2"): string {
+export function buildUserAgent(lane: GatewayLane = "v2", api?: string): string {
 	const full = process.env.PI_FAKE_OPENCODE_UA?.trim();
 	if (full) return full;
 
@@ -192,7 +217,7 @@ export function buildUserAgent(lane: "v1" | "v2" = "v2"): string {
 	const version = process.env.PI_FAKE_OPENCODE_VERSION?.trim() || V1_OPENCODE_VERSION;
 	return [
 		`opencode/${version}`,
-		`ai-sdk/provider-utils/${DEFAULT_PROVIDER_UTILS_VERSION}`,
+		`ai-sdk/provider-utils/${v1ProviderUtilsVersion(api)}`,
 		`runtime/bun/${DEFAULT_BUN_VERSION}`,
 	].join(" ");
 }
@@ -208,12 +233,12 @@ const sessionIds = new Map<string, string>();
  * client would.
  */
 export function buildSessionId(piSessionId: string): string {
-  const existing = sessionIds.get(piSessionId);
-  if (existing) return existing;
+	const existing = sessionIds.get(piSessionId);
+	if (existing) return existing;
 
-  const generated = `ses_${identifierBody(true)}`;
-  sessionIds.set(piSessionId, generated);
-  return generated;
+	const generated = `ses_${identifierBody(true)}`;
+	sessionIds.set(piSessionId, generated);
+	return generated;
 }
 
 /**
@@ -225,16 +250,19 @@ export function buildSessionId(piSessionId: string): string {
  * gateway keeps an id per turn rather than per HTTP call. `turn` fingerprints
  * the turn (its position among the user turns plus its content); the id is
  * cached per session and turn.
+ *
+ * Only the 1.x lane sends it: the 2.x gate rejects the header with 403
+ * FreeTierError.
  */
 export function buildRequestId(session: string, turn: string): string {
-  const key = `${session}\u0000${turn}`;
-  const cached = requestIds.get(key);
-  if (cached) return cached;
+	const key = `${session}\u0000${turn}`;
+	const cached = requestIds.get(key);
+	if (cached) return cached;
 
-  const generated = `msg_${identifierBody(false)}`;
-  if (requestIds.size > REQUEST_ID_LIMIT) requestIds.clear();
-  requestIds.set(key, generated);
-  return generated;
+	const generated = `msg_${identifierBody(false)}`;
+	if (requestIds.size > REQUEST_ID_LIMIT) requestIds.clear();
+	requestIds.set(key, generated);
+	return generated;
 }
 
 /** One `msg_` id per user turn, bounded so a long session cannot grow it forever. */
@@ -246,7 +274,7 @@ const REQUEST_ID_LIMIT = 512;
  * to "cli" (overridable via OpenCode's own `OPENCODE_CLIENT` env var).
  */
 export function buildClient(): string {
-  return process.env.OPENCODE_CLIENT?.trim() || "cli";
+	return process.env.OPENCODE_CLIENT?.trim() || "cli";
 }
 
 /**
@@ -258,31 +286,95 @@ export function buildClient(): string {
  * client that sends it. Cached per directory.
  */
 export function buildProjectId(cwd: string): string {
-  const cached = projectIds.get(cwd);
-  if (cached) return cached;
+	const cached = projectIds.get(cwd);
+	if (cached) return cached;
 
-  const resolved = resolveProjectId(cwd);
-  projectIds.set(cwd, resolved);
-  return resolved;
+	const resolved = resolveProjectId(cwd);
+	projectIds.set(cwd, resolved);
+	return resolved;
 }
 
 const projectIds = new Map<string, string>();
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
 
 function resolveProjectId(cwd: string): string {
-  try {
-    const commit = execFileSync("git", ["-C", cwd, "rev-list", "--max-parents=0", "HEAD"], {
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-      timeout: 2000,
-    })
-      .trim()
-      .split("\n")[0];
-    if (commit && GIT_COMMIT_PATTERN.test(commit)) return commit;
-  } catch {
-    // Not a repository, no commits, or no git on PATH: fall through.
-  }
-  return randomBytes(20).toString("hex");
+	try {
+		const commit = execFileSync("git", ["-C", cwd, "rev-list", "--max-parents=0", "HEAD"], {
+			encoding: "utf8",
+			stdio: ["ignore", "pipe", "ignore"],
+			timeout: 2000,
+		})
+			.trim()
+			.split("\n")[0];
+		if (commit && GIT_COMMIT_PATTERN.test(commit)) return commit;
+	} catch {
+		// Not a repository, no commits, or no git on PATH: fall through.
+	}
+	return randomBytes(20).toString("hex");
+}
+
+/** Everything one request's identity headers need, already resolved to pi's vocabulary. */
+export interface IdentityContext {
+	lane: GatewayLane;
+	/** The pi session the request belongs to. */
+	sessionId: string;
+	/** The pi session this one was forked from, when there is one. */
+	parentSessionId?: string;
+	/** Working directory, for the project id. */
+	cwd: string;
+	/** The wire protocol, which picks the 1.x provider-utils version. */
+	api?: string;
+	/** Fingerprint of the user turn, for the 1.x request id. */
+	turn?: string;
+}
+
+/**
+ * Build the full identity header set for one request.
+ *
+ * The two lanes want different things from the same session, and the
+ * difference is load-bearing on both sides:
+ *
+ * - v2 (`/inference`, `/zen/go`) sends the conversation affinity under
+ *   `x-opencode-session`, `x-session-affinity` and `X-Session-Id`, and the
+ *   client's own session under `x-opencode-session-id`. A subagent therefore
+ *   keeps its child id while affinity stays on the parent. `x-opencode-request`
+ *   has to be absent: the v2 gate answers it with 403 FreeTierError.
+ * - v1 (`/zen`) sends one session id in both session headers, the user message
+ *   id as `x-opencode-request`, and the AI SDK's own Accept header.
+ *
+ * Both send the parent headers when the session was forked, and both carry the
+ * project id.
+ */
+export function buildIdentityHeaders(context: IdentityContext): Record<string, string | null> {
+	const child = buildSessionId(context.sessionId);
+	const parent = context.parentSessionId ? buildSessionId(context.parentSessionId) : undefined;
+	const headers: Record<string, string | null> = {
+		"User-Agent": buildUserAgent(context.lane, context.api),
+		"x-opencode-client": buildClient(),
+		"x-opencode-project": buildProjectId(context.cwd),
+	};
+
+	if (context.lane === "v2") {
+		const affinity = parent ?? child;
+		headers["x-opencode-session"] = affinity;
+		headers["x-opencode-session-id"] = child;
+		headers["x-session-affinity"] = affinity;
+		headers["X-Session-Id"] = affinity;
+		// Present it explicitly as gone: a stale value would 403 the request.
+		headers["x-opencode-request"] = null;
+	} else {
+		headers["Accept"] = "*/*";
+		headers["x-opencode-session"] = child;
+		headers["x-opencode-session-id"] = child;
+		headers["x-opencode-request"] = buildRequestId(child, context.turn ?? "");
+	}
+
+	if (parent) {
+		headers["x-opencode-parent-session-id"] = parent;
+		headers["x-parent-session-id"] = parent;
+	}
+
+	return headers;
 }
 
 /**
@@ -301,23 +393,20 @@ function resolveProjectId(cwd: string): string {
  * Untouched requests keep pi's own identity, so unrelated providers are never
  * affected.
  */
-export function shouldSpoof(
-  provider: string | undefined,
-  baseUrl: string | undefined,
-): boolean {
-  if (envFlag("PI_FAKE_OPENCODE_ALL")) return true;
+export function shouldSpoof(provider: string | undefined, baseUrl: string | undefined): boolean {
+	if (envFlag("PI_FAKE_OPENCODE_ALL")) return true;
 
-  if (provider) {
-    const id = provider.toLowerCase();
-    if (OPENCODE_PROVIDER_IDS.has(id)) return true;
-    if (envList("PI_FAKE_OPENCODE_PROVIDERS").has(id)) return true;
-  }
+	if (provider) {
+		const id = provider.toLowerCase();
+		if (OPENCODE_PROVIDER_IDS.has(id)) return true;
+		if (envList("PI_FAKE_OPENCODE_PROVIDERS").has(id)) return true;
+	}
 
-  if (baseUrl && baseUrl.toLowerCase().includes(OPENCODE_BASEURL_MARKER)) {
-    return true;
-  }
+	if (baseUrl && baseUrl.toLowerCase().includes(OPENCODE_BASEURL_MARKER)) {
+		return true;
+	}
 
-  return false;
+	return false;
 }
 
 /**
@@ -327,18 +416,18 @@ export function shouldSpoof(
  * to the running turn rather than starting a new one.
  */
 export function userTurnFingerprint(payload: unknown): string {
-  if (typeof payload !== "object" || payload === null) return "";
-  const messages = (payload as { messages?: unknown }).messages;
-  if (!Array.isArray(messages)) return "";
-  let count = 0;
-  let last = "";
-  for (const message of messages) {
-    if (typeof message !== "object" || message === null) continue;
-    const shape = message as { role?: unknown; content?: unknown };
-    if (shape.role !== "user") continue;
-    count++;
-    last = JSON.stringify(shape.content ?? "");
-  }
-  if (count === 0) return "";
-  return `${count}:${createHash("sha256").update(last).digest("hex").slice(0, 16)}`;
+	if (typeof payload !== "object" || payload === null) return "";
+	const messages = (payload as { messages?: unknown }).messages;
+	if (!Array.isArray(messages)) return "";
+	let count = 0;
+	let last = "";
+	for (const message of messages) {
+		if (typeof message !== "object" || message === null) continue;
+		const shape = message as { role?: unknown; content?: unknown };
+		if (shape.role !== "user") continue;
+		count++;
+		last = JSON.stringify(shape.content ?? "");
+	}
+	if (count === 0) return "";
+	return `${count}:${createHash("sha256").update(last).digest("hex").slice(0, 16)}`;
 }

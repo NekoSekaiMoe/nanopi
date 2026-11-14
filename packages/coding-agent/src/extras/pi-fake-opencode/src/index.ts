@@ -12,23 +12,23 @@
  * The gate checks three things and all must hold (re-checked against
  * opencode2api's captures of a live client; experiment log in README):
  *
- *   1. The User-Agent and x-opencode-* identity headers of the lane the base
- *      URL belongs to (see headers.ts).
- *   2. Well-formed opencode ids: DESCENDING `ses_` session ids and ASCENDING
- *      `msg_` request ids (see headers.ts).
- *   3. An agent-shaped body: the official CLI system prompt at the head of the
- *      system slot, the official tool definitions in the tool list, the
- *      CLI's streaming fields (see payload.ts, one shape per wire protocol).
+ *   1. The lane's User-Agent and x-opencode-* identity headers (see headers.ts).
+ *   2. Well-formed opencode ids: DESCENDING `ses_` session ids and, on the 1.x
+ *      lane only, ASCENDING `msg_` request ids (see headers.ts).
+ *   3. An agent-shaped body: the lane's official CLI system prompt at the head
+ *      of the system slot, its official tool definitions in the tool list, and
+ *      the CLI's streaming fields (see payload.ts, one shape per wire protocol).
  *
- * Identity headers set here (mirroring the official CLI's request path):
+ * Identity headers set here (mirroring each lane's own request path):
  *
- *   User-Agent:            opencode/latest/2.1.1/cli   (v2)
- *                          opencode/1.19.3 ai-sdk/… runtime/bun/…  (v1)
- *   x-opencode-session-id: ses_…  (stable per session, descending id)
- *   x-opencode-session:    same value
- *   x-opencode-request:    msg_…  (one per user turn, ascending id)
- *   x-opencode-client:     cli (honors $OPENCODE_CLIENT)
- *   x-opencode-project:    40-hex git commit id
+ *   User-Agent:             opencode/latest/2.1.1/cli            (v2)
+ *                           opencode/1.19.3 ai-sdk/… runtime/bun/…  (v1, per api)
+ *   x-opencode-session:     conversation affinity, parent when forked
+ *   x-opencode-session-id:  the client's own session (the child's)
+ *   x-session-affinity / X-Session-Id:  the affinity again      (v2)
+ *   x-opencode-request:     msg_…  (one per user turn)          (v1 only)
+ *   x-opencode-client:      cli (honors $OPENCODE_CLIENT)
+ *   x-opencode-project:     40-hex git commit id
  *
  * Authorization, the endpoint, and every other header stay exactly as nanopi /
  * pi-ai configured them — including pi's own auth, so `OPENCODE_API_KEY` works
@@ -43,11 +43,7 @@
 
 import type { ModuleApi, ModuleEventsSurface } from "@nanopi/pi-coding-agent";
 import {
-	buildClient,
-	buildProjectId,
-	buildRequestId,
-	buildSessionId,
-	buildUserAgent,
+	buildIdentityHeaders,
 	laneForBaseUrl,
 	shouldSpoof,
 	userTurnFingerprint,
@@ -65,38 +61,41 @@ const SHAPED_APIS = new Set<string>([
  * The last body shaped for a spoofed request, keyed by session.
  *
  * Headers are assembled before the body (pi-ai builds the request after the
- * header transform runs), so the user-turn fingerprint the `x-opencode-request`
- * id needs is only available from the previous request of the same session.
- * An empty fingerprint reuses the session's latest id.
+ * header transform runs), so the user-turn fingerprint the 1.x
+ * `x-opencode-request` id needs is only available from the previous request of
+ * the same session. An empty fingerprint reuses the session's latest id.
  */
 const lastBodies = new Map<string, unknown>();
 
 export default function (pi: ModuleEventsSurface): void {
 	// Identity headers: fired after request headers are assembled and before the
-	// HTTP call. Handlers mutate `headers` in place.
+	// HTTP call. Handlers mutate `headers` in place; a null value deletes the
+	// header.
 	pi.on("before_provider_headers", (event, ctx) => {
-		if (!shouldSpoof(ctx.model?.provider, ctx.model?.baseUrl)) return;
+		const model = ctx.model;
+		if (!shouldSpoof(model?.provider, model?.baseUrl)) return;
 
+		const sessionId = ctx.sessionManager.getSessionId();
 		// Overwrite nanopi's identity with the official client's; leave every other
 		// header (Authorization, content-type, …) alone.
-		const lane = laneForBaseUrl(ctx.model?.baseUrl);
-		const session = buildSessionId(ctx.sessionManager.getSessionId());
-		event.headers["User-Agent"] = buildUserAgent(lane);
-		event.headers["x-opencode-session-id"] = session;
-		event.headers["x-opencode-session"] = session;
-		event.headers["x-opencode-request"] = buildRequestId(
-			session,
-			userTurnFingerprint(lastBodies.get(ctx.sessionManager.getSessionId())),
-		);
-		event.headers["x-opencode-client"] = buildClient();
-		event.headers["x-opencode-project"] = buildProjectId(ctx.cwd);
+		const identity = buildIdentityHeaders({
+			lane: laneForBaseUrl(model?.baseUrl),
+			sessionId,
+			parentSessionId: ctx.sessionManager.getHeader()?.parentSession,
+			cwd: ctx.cwd,
+			api: model?.api,
+			turn: userTurnFingerprint(lastBodies.get(sessionId)),
+		});
+		for (const [name, value] of Object.entries(identity)) {
+			event.headers[name] = value;
+		}
 	});
 
 	// Body shaping: the gate only accepts an official-looking agent request, in
 	// the shape of the protocol the model is wired to.
 	pi.on("before_provider_request", (event, ctx) => {
-		if (!shouldSpoof(ctx.model?.provider, ctx.model?.baseUrl)) return;
 		const model = ctx.model;
+		if (!shouldSpoof(model?.provider, model?.baseUrl)) return;
 		if (!model?.api || !SHAPED_APIS.has(model.api)) return;
 
 		lastBodies.set(ctx.sessionManager.getSessionId(), event.payload);
