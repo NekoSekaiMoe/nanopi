@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `generate_image` is a gated tool: one call is a paid provider request the model can issue on its own, so a non-yolo session asks before the money is spent ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
+
 ## [20261114]
 
 ### Added

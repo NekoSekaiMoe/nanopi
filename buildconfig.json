@@ -94,6 +94,9 @@
 		"module/pi-fake-opencode": {
 			"description": "opencode-compatible provider fingerprint"
 		},
+		"module/pi-image": {
+			"description": "Image generation tool (generate_image) backed by the session's image model"
+		},
 		"module/pi-lsp-mini": {
 			"description": "LSP tools"
 		},
@@ -194,6 +197,9 @@
 		"pi-fake-opencode": {
 			"source": "packages/coding-agent/src/extras/pi-fake-opencode/src/index.ts"
 		},
+		"pi-image": {
+			"source": "packages/coding-agent/src/extras/pi-image/src/index.ts"
+		},
 		"pi-lsp-mini": {
 			"source": "packages/coding-agent/src/extras/pi-lsp-mini/src/index.ts"
 		},
@@ -244,6 +250,7 @@
 				"module/pi-btw": false,
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
+				"module/pi-image": false,
 				"module/pi-lsp-mini": false,
 				"module/pi-memory": false,
 				"module/pi-rewind": false,
@@ -271,6 +278,7 @@
 				"module/pi-btw": false,
 				"module/pi-fake-codex": false,
 				"module/pi-fake-opencode": false,
+				"module/pi-image": false,
 				"module/pi-lsp-mini": false,
 				"module/pi-memory": false,
 				"module/pi-rewind": false,

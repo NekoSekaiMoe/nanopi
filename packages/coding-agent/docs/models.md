@@ -198,6 +198,8 @@ if (result.stopReason !== "stop") throw new Error(result.errorMessage ?? "image 
 
 `input` can also contain `{ type: "image", data, mimeType }` blocks to edit or use as references. Generated images are not saved to disk.
 
+The `generate_image` tool (`pi-image` module) is the built-in caller: it picks an image model for the session's own provider when there is one, returns the image as a tool result, and writes it to the path the model asked for. Its guideline lets the model draw on its own when the task's output includes an image file (an og:image, a placeholder, a test fixture) or when the user asks for one, and `generate_image` is in `GATED_TOOL_NAMES` (`packages/extra`), so a non-yolo session asks before the money is spent.
+
 ## Add a custom provider
 
 Use a module when the provider needs custom streaming, model discovery, or authentication behavior. See [Custom Providers](custom-provider.md) for the registration workflow and [Modules](modules.md) for the module itself.
