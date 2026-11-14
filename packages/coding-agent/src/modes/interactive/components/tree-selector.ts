@@ -672,7 +672,14 @@ class TreeList implements Component {
 		const lines: string[] = [];
 
 		if (this.filteredNodes.length === 0) {
-			lines.push(truncateToWidth(theme.fg("muted", "  No entries found"), width));
+			// A search that matched nothing and a filter that hides everything are different
+			// problems: name the query so it is obvious what to clear, and offer the key that does.
+			if (this.searchQuery) {
+				lines.push(truncateToWidth(theme.fg("muted", `  No entries match "${this.searchQuery}"`), width));
+				lines.push(truncateToWidth(keyHint("tui.select.cancel", "clear search"), width));
+			} else {
+				lines.push(truncateToWidth(theme.fg("muted", "  No entries found"), width));
+			}
 			lines.push(truncateToWidth(theme.fg("muted", `  (0/0)${this.getStatusLabels()}`), width));
 			return lines;
 		}

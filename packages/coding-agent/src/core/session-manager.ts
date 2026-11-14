@@ -449,10 +449,16 @@ function getMessageActivityTime(entry: SessionMessageEntry): number | undefined 
 	return Number.isNaN(t) ? undefined : t;
 }
 
+/** Whether `entry` is part of the conversation, which is what makes a session file worth creating. */
+function isConversationEntry(entry: FileEntry): boolean {
+	return entry.type === "message" && (entry.message.role === "user" || entry.message.role === "assistant");
+}
+
 async function buildSessionInfo(
 	filePath: string,
 	signal?: AbortSignal,
 	fileStats?: Stats,
+	onError?: (error: SessionDiscoveryError) => void,
 ): Promise<SessionInfo | null> {
 	try {
 		const stats = fileStats ?? (await stat(filePath));
@@ -477,7 +483,7 @@ async function buildSessionInfo(
 				if (!entry) continue;
 
 				if (!header) {
-					if (entry.type !== "session") return null;
+					if (entry.type !== "session") throw new Error(`Session file has no valid header: ${filePath}`);
 					header = entry;
 					continue;
 				}
@@ -515,7 +521,7 @@ async function buildSessionInfo(
 		// A signal aborted while the file was being read ends the listing the same way one aborted
 		// before the read does. The stream no longer carries the signal, so nothing else would.
 		signal?.throwIfAborted();
-		if (!header) return null;
+		if (!header) throw new Error(`Session file has no valid header: ${filePath}`);
 
 		const cwd = typeof header.cwd === "string" ? header.cwd : "";
 		const parentSessionPath = header.parentSession;
@@ -539,10 +545,17 @@ async function buildSessionInfo(
 			firstMessage: firstMessage || "(no messages)",
 			allMessagesText: allMessages.join(" "),
 		};
-	} catch {
+	} catch (error) {
 		signal?.throwIfAborted();
+		onError?.({ path: filePath, message: error instanceof Error ? error.message : String(error) });
 		return null;
 	}
+}
+
+/** A session file or directory the listing could not read. */
+export interface SessionDiscoveryError {
+	path: string;
+	message: string;
 }
 
 export type SessionListProgress = (
@@ -550,6 +563,8 @@ export type SessionListProgress = (
 	total: number,
 	/** Sessions loaded so far, sorted by activity. Present on periodic updates. */
 	partialSessions?: readonly SessionInfo[],
+	/** Files or directories that could not be read during this load. */
+	errors?: readonly SessionDiscoveryError[],
 ) => void;
 
 const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
@@ -589,12 +604,13 @@ function buildSessionInfosWithConcurrency(
 	files: SessionFileCandidate[],
 	onLoaded: (info: SessionInfo | null, index: number) => void,
 	signal?: AbortSignal,
+	onError?: (error: SessionDiscoveryError) => void,
 ): Promise<(SessionInfo | null)[]> {
 	return mapWithConcurrency(
 		files,
 		MAX_CONCURRENT_SESSION_INFO_LOADS,
 		async (file, index) => {
-			const info = await buildSessionInfo(file.path, signal, file.stats);
+			const info = await buildSessionInfo(file.path, signal, file.stats, onError);
 			onLoaded(info, index);
 			return info;
 		},
@@ -618,6 +634,7 @@ async function listSessionsFromDir(
 			.map((file) => ({ path: join(dir, file) }));
 		const total = files.length;
 		const partialSessions: SessionInfo[] = [];
+		const errors: SessionDiscoveryError[] = [];
 		let loaded = 0;
 		const results = await buildSessionInfosWithConcurrency(
 			files,
@@ -626,14 +643,19 @@ async function listSessionsFromDir(
 				if (info) partialSessions.push(info);
 				const publishPartial =
 					loaded === 1 || loaded % CURRENT_SESSION_LIST_PUBLISH_INTERVAL === 0 || loaded === files.length;
-				onProgress?.(loaded, total, publishPartial ? sortSessionInfos([...partialSessions]) : undefined);
+				onProgress?.(loaded, total, publishPartial ? sortSessionInfos([...partialSessions]) : undefined, [
+					...errors,
+				]);
 			},
 			signal,
+			(error) => errors.push(error),
 		);
 		return results.filter((info): info is SessionInfo => info !== null);
-	} catch {
+	} catch (error) {
+		// A directory that cannot be listed is a real failure, not an empty session list: reporting
+		// it as "no sessions" hid permission and path mistakes behind an empty screen.
 		signal?.throwIfAborted();
-		return [];
+		throw error;
 	}
 }
 
@@ -753,7 +775,9 @@ export class SessionManager {
 		const header = entries.find((e) => e.type === "session") as SessionHeader | undefined;
 
 		if (header) {
-			this.fileEntries = entries;
+			// Copy: the caller keeps its array (loaded entries are often fixtures or preloaded
+			// records), and appends must not grow the caller's list behind its back.
+			this.fileEntries = entries.slice();
 			this.sessionId = header.id;
 
 			if (migrateToCurrentVersion(this.fileEntries)) {
@@ -840,19 +864,18 @@ export class SessionManager {
 	 * first assistant reply) keeps the prompt on disk if the first turn never completes (#10000).
 	 */
 	private _hasConversation(): boolean {
-		return this.fileEntries.some(
-			(e) => e.type === "message" && (e.message.role === "user" || e.message.role === "assistant"),
-		);
+		return this.fileEntries.some(isConversationEntry);
 	}
 
 	_persist(entry: SessionEntry): void {
 		if (!this.persist || !this.sessionFile) return;
 
 		if (!this.flushed) {
-			if (!this._hasConversation()) return;
+			// The caller commits the entry after this returns, so `entry` is not in `fileEntries` yet.
+			if (!(this._hasConversation() || isConversationEntry(entry))) return;
 			const fd = openSync(this.sessionFile, "wx");
 			try {
-				for (const e of this.fileEntries) {
+				for (const e of [...this.fileEntries, entry]) {
 					writeFileSync(fd, `${JSON.stringify(e)}\n`);
 				}
 			} finally {
@@ -864,11 +887,20 @@ export class SessionManager {
 		}
 	}
 
+	/**
+	 * Commit `entry` and move the leaf to it.
+	 *
+	 * The write happens first: a failed append (a session directory deleted underneath a running
+	 * agent, a full disk) used to leave the entry in memory with its leaf already advanced, so the
+	 * conversation kept growing past a record that never reached disk and the file on reopen was
+	 * missing messages the model had been told about. Throwing before the in-memory commit keeps
+	 * memory and file in the same state.
+	 */
 	private _appendEntry(entry: SessionEntry): void {
+		this._persist(entry);
 		this.fileEntries.push(entry);
 		this.byId.set(entry.id, entry);
 		this.leafId = entry.id;
-		this._persist(entry);
 	}
 
 	/** Append a message as child of current leaf, then advance leaf. Returns entry id.
@@ -996,13 +1028,18 @@ export class SessionManager {
 				...this.fileEntries.map((fileEntry) => (fileEntry === kept ? { ...kept, parentId: id } : fileEntry)),
 				entry,
 			]);
+		} else {
+			// Nothing was written above, so the entry still has to reach disk (or the session is not
+			// persisted at all). Doing it first keeps a failed write from leaving memory ahead of the
+			// file, the same rule `_appendEntry` follows.
+			this.fileEntries.push(entry);
+			this._persist(entry);
 		}
 		// Re-parent in place only after the write succeeded; existing references stay valid.
 		kept.parentId = id;
 		this.latestCompactionTime = time;
-		this.fileEntries.push(entry);
+		if (this.fileEntries.at(-1) !== entry) this.fileEntries.push(entry);
 		this.byId.set(entry.id, entry);
-		if (!this.flushed) this._persist(entry);
 		return entry.id;
 	}
 
@@ -1623,7 +1660,8 @@ export class SessionManager {
 		const resolvedCwd = resolvePath(cwd);
 		const includeSession = (session: SessionInfo) => !filterCwd || sessionCwdMatches(session.cwd, resolvedCwd);
 		const progress: SessionListProgress | undefined = onProgress
-			? (loaded, total, partialSessions) => onProgress(loaded, total, partialSessions?.filter(includeSession))
+			? (loaded, total, partialSessions, errors) =>
+					onProgress(loaded, total, partialSessions?.filter(includeSession), errors)
 			: undefined;
 		const sessions = (await listSessionsFromDir(dir, progress, signal)).filter(includeSession);
 		return sortSessionInfos(sessions);
@@ -1662,6 +1700,7 @@ export class SessionManager {
 		}
 
 		const sessionsDir = getSessionsDir();
+		const errors: SessionDiscoveryError[] = [];
 
 		try {
 			if (!existsSync(sessionsDir)) return [];
@@ -1676,7 +1715,9 @@ export class SessionManager {
 				async (dir) => {
 					try {
 						return (await readdir(dir)).filter((file) => file.endsWith(".jsonl")).map((file) => join(dir, file));
-					} catch {
+					} catch (error) {
+						abortSignal?.throwIfAborted();
+						errors.push({ path: dir, message: error instanceof Error ? error.message : String(error) });
 						return [];
 					}
 				},
@@ -1714,15 +1755,21 @@ export class SessionManager {
 					const publishPartial =
 						firstCandidateLoaded &&
 						(index === 0 || loaded % ALL_SESSION_LIST_PUBLISH_INTERVAL === 0 || loaded === totalFiles);
-					progress?.(loaded, totalFiles, publishPartial ? sortSessionInfos([...partialSessions]) : undefined);
+					progress?.(loaded, totalFiles, publishPartial ? sortSessionInfos([...partialSessions]) : undefined, [
+						...errors,
+					]);
 				},
 				abortSignal,
+				(error) => errors.push(error),
 			);
+			if (totalFiles === 0) progress?.(0, 0, [], [...errors]);
 
 			return sortSessionInfos(results.filter((info): info is SessionInfo => info !== null));
-		} catch {
+		} catch (error) {
+			// Same as listSessionsFromDir: an unreadable sessions root is a failure to report, not an
+			// empty history.
 			abortSignal?.throwIfAborted();
-			return [];
+			throw error;
 		}
 	}
 }

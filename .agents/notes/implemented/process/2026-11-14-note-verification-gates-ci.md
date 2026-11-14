@@ -62,10 +62,13 @@ GitHub 侧没有再开一个 job：`build-check-test` 是 ruleset 的必选检�
 并在 CI 上打一行 warning——比让 `git show <全0>:...` 失败、被 `verify-archived`
 当成「基线里没有 manifest」放过去要诚实。
 
-**CNB 那一步单独指 `node:24` 镜像。** 默认构建镜像里没有 node，其他 stage 都是
-`apt-get install nodejs` 现装，装到的是 Debian 的包，`process.features.typescript`
-是 `false`——它不能剥类型，而三条校验脚本是 `.ts`。走 `ts-import.mjs` 要 esbuild，
-那要先 `pnpm install` 整个工作区；为三条只读文件的检查不值得，所以直接换镜像。
+**CNB 那一步要跑在会剥类型的 node 上。** Debian 的 `nodejs` 包
+`process.features.typescript` 是 `false`——它不能剥类型，而三条校验脚本是 `.ts`。
+走 `ts-import.mjs` 要 esbuild，那要先 `pnpm install` 整个工作区；为三条只读文件的
+检查不值得。当时的做法是这一条 stage 单独指 `node:24`，其余 stage 继续
+`apt-get install nodejs`。2026-11-14 之后整个 `pull_request.target` 流水线都是
+`node:24`，这条 stage 不再单独指镜像，理由见
+[CNB 流水线的 node 一律取自 node:24 镜像](../bug-fix/2026-11-14-cnb-pipeline-node-from-image.md)。
 入口脚本自己也兜了这一层：有类型剥离就直接跑，没有就找 `ts-import.mjs`，再没有就
 报清楚「需要一个能剥类型的 node」，不让人对着 `Unknown file extension ".ts"` 猜。
 
