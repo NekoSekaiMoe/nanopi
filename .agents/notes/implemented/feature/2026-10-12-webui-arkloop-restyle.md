@@ -102,7 +102,7 @@ app.css re-skins by palette swap.
 - Verification: `pnpm run check` (incl. biome + tsc + browser smoke),
   webui `pnpm run test` (244 pass, incl. the CSS fallback and contrast guard
   tests that caught two regressions during development), webui
-  `pnpm run build`, and `test/webui-auth.test.ts` for the constant-time
+  `pnpm run build`, and `packages/webui/test/webui-auth.test.ts` for the constant-time
   bearer check. The composer/typography guard tests
   (`composerStyles.test.ts`, `typographyStyles.test.ts`) were updated to the
   ported contracts (one-row composer at 16px absolute type, 300px cap) — they

@@ -37,4 +37,4 @@ Status: implemented
 
 ## Testing
 
-`test/preset-prompt.test.ts` 覆盖默认发现、未受信项目忽略、显式覆盖、名字解析、排序、缺失名字不注入；`test/args.test.ts` 覆盖参数解析与和 `--append-system-prompt` 的独立性。
+`packages/coding-agent/test/preset-prompt.test.ts` 覆盖默认发现、未受信项目忽略、显式覆盖、名字解析、排序、缺失名字不注入；`packages/coding-agent/test/args.test.ts` 覆盖参数解析与和 `--append-system-prompt` 的独立性。

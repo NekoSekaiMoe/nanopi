@@ -57,5 +57,5 @@ sidecar 不是可选的，它是 `full` 里图像能力和原生剪贴板的唯�
   prefetch，不阻塞 TUI，但进程退出前可能仍在等。
 - photon 的按需加载（`ensurePhotonWasmSidecar`）走同一个探测，所以「离线且不可达」
   时第一次读图会等一次探测，之后结果被 memoize。
-- `test/standalone.test.ts` 覆盖两条新分支：离线 + 可达时照常安装；离线 + 不可达时
+- `packages/coding-agent/test/standalone.test.ts` 覆盖两条新分支：离线 + 可达时照常安装；离线 + 不可达时
   不发起下载并打那条新 warning。

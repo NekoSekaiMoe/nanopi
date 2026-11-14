@@ -46,7 +46,7 @@ transcript 的状态塞进纯投影层。
   纯函数约定、抛异常保留原文、执行顺序（宿主的 Mermaid 在前，所以后跑的 transformer
   看到的是 inline code span 而不是 fence）、每模块一个槽位。
 - `MarkdownTransformContext` / `MarkdownTransformer` 的字段与契约注释。
-- `test/markdown-transformer.test.ts` 证明注册的 transformer 真的作用到了 `custom` 与
+- `packages/coding-agent/test/markdown-transformer.test.ts` 证明注册的 transformer 真的作用到了 `custom` 与
   两种 summary 行上，并且 Mermaid 不再改这两种行。
 
 ## Alternatives considered

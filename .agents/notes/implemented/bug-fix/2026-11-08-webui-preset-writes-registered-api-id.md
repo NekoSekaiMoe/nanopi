@@ -68,9 +68,9 @@ build 的 API 集合里（`isApiIncluded`），`"openai"` 不在集合里也不�
 
 ## Testing
 
-- `test/provider-accounts.test.ts` 断言十种 preset 写出的 `api` 是 api id，
+- `packages/coding-agent/test/provider-accounts.test.ts` 断言十种 preset 写出的 `api` 是 api id，
   并断言 `toView` 的 `type` 仍是协议。
-- `test/webui-provider-account-add.test.ts` 起真服务 + 一个 OpenAI-compatible
+- `packages/coding-agent/test/webui-provider-account-add.test.ts` 起真服务 + 一个 OpenAI-compatible
   stub 端点：创建后 `models.json` 里是 `openai-completions`，`/models` 列出该模型，
   `/chat` 的流里出现 stub 回的文本且不含 `No API provider registered`；第二个覆盖
   同协议第二个账号（无 id 时 409，带 id 后能对话）。

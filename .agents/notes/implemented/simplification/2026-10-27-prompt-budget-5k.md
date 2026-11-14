@@ -56,7 +56,7 @@ chars/4 口径（与 `/context` 命令一致）：
 - 合计 5934 → 5590 token，落到 5k 线上浮 10% 以内
 
 `node ./test.mjs` 全绿（323 文件 / 2473 用例），`pnpm run check` 全绿。
-`test/system-prompt.test.ts` 与 `todo-lite` 的 prompt 回归测试跟着新文案改：
+`packages/coding-agent/test/system-prompt.test.ts` 与 `todo-lite` 的 prompt 回归测试跟着新文案改：
 断言从"完整 JSON 正例"改成"每个 action 的字段形态"，因为 description 不再给
 正例，消歧这件事改由那一条 never 句子承担。工具调用行为没有变化：被删掉的每
 一条都是另一处已经写过的同一事实，schema 与 `execute` 一律未动。

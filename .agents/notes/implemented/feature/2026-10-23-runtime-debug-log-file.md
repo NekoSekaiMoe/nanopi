@@ -66,6 +66,6 @@ Opt-in runtime diagnostics write to a file, keyed by one flag.
   default and the file is only created when the flag is on.
 - The header sample is taken before the UI mounts, so it reports the cost of
   the runtime rather than of the rendered frame; later lines cover the rest.
-- Testing: `test/memory-usage.test.ts` covers the flag, the interval fallback,
+- Testing: `packages/coding-agent/test/memory-usage.test.ts` covers the flag, the interval fallback,
   the log path resolution, the header line, and `createFileLogger` writing
   timestamped lines into a fresh directory.

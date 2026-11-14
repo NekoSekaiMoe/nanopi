@@ -55,7 +55,7 @@ if (!modelRegistry.hasProvider(provider)) { ... "provider not in this build"; co
 ## Consequences
 
 - 注销现在是持久的，`refresh()` / `rebuildProviders()` 不会把它恢复；回归测试
-  `test/model-registry.test.ts` 的 "a full reload keeps a provider the process removed out"
+  `packages/coding-agent/test/model-registry.test.ts` 的 "a full reload keeps a provider the process removed out"
   盯着这条。
 - 代价是内置 provider 一旦被注销，本次进程内没有公开的恢复路径（重新
   `registerProvider(id, ...)` 会走 `models.json` 覆盖那条路，不是"重新内置"）。

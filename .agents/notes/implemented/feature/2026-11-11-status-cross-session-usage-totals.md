@@ -72,7 +72,7 @@ Usage totals:   1.2M tokens, $12.34 over 143 sessions (902 responses), cache hit
 
 ## Testing
 
-- `test/usage-ledger.test.ts`：跨项目目录求和、增量（只重解析 stamp 变了的文件）、文件消失后剔除、
+- `packages/coding-agent/test/usage-ledger.test.ts`：跨项目目录求和、增量（只重解析 stamp 变了的文件）、文件消失后剔除、
   空/不存在的 sessions 目录、行文本的三种状态（indexing / no sessions yet / 真实数字）、
   「不报缓存」与「全 miss」的区分。
-- `test/status-command.test.ts`：`Usage totals` 行出现在 `Context` 与 `Memory` 之间。
+- `packages/coding-agent/test/status-command.test.ts`：`Usage totals` 行出现在 `Context` 与 `Memory` 之间。

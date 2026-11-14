@@ -69,6 +69,6 @@ provider 会拒收的图片送出去，代价是整条会话请求失败——�
   转前的方向进入对话。选它是因为"方向不对的图"和"根本没有图"差一个数量级。
 - 像素检查是 BMP 之外的四类格式；一个头读不出来的图被当作"无法证明超大"而
   放行，代价是一次失败的请求，而不是悄悄隐藏文件。
-- 回归测试在 `test/image-process.test.ts`：小图放行并带 hint、超 payload 预算
+- 回归测试在 `packages/coding-agent/test/image-process.test.ts`：小图放行并带 hint、超 payload 预算
   仍然丢弃、超像素上限仍然丢弃。既有的 `photon-unavailable` 那条（BMP 转换
   失败）没有变，因为它走的是 `normalizeImage` 的空返回，不是 resize 路径。

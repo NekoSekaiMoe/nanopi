@@ -11,7 +11,7 @@ Status: implemented
 `agent_settled` 到 `prompt()` 真正 resolve 之间还有一段时间 `isStreaming` 已经是 false、
 上一轮却还在收尾。这段窗口里启动的第二轮会被 `agent.prompt()` 拒掉，抛出的 rejection
 被 `.catch` 吞掉——作业跑完了，通知没了。subagent 的同一处已经改用
-`deliverMessage`（`test/suite/regressions/subagent-report-delivery.test.ts`），
+`deliverMessage`（`packages/coding-agent/test/suite/regressions/subagent-report-delivery.test.ts`），
 `bash_bg` 是同一条路上的另一个出口。
 
 **「停写者、留服务」没有落脚点。** `npm run dev` 这类命令的 shell 会退出（job 变
@@ -85,7 +85,7 @@ append-only，同一个 id 的最新一条胜出。字段是恢复路径真正�
 
 ## Verification
 
-`test/suite/regressions/bash-bg-delivery-and-archive.test.ts`：
+`packages/coding-agent/test/suite/regressions/bash-bg-delivery-and-archive.test.ts`：
 
 - 空闲时完成的作业，报告经 `deliverMessage` 落地，归档记录里 `delivered === "started"`；
 - `action=run` 完成的作业被归档，`logDeleted === false` 且日志文件里有输出；

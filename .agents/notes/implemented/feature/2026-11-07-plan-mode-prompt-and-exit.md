@@ -109,7 +109,7 @@ user's request is already the plan-mode turn.
   question phrased in prose rather than `ask_user_question` still gets the
   approval prompt. That is the intended tradeoff — the tool is the case the
   guideline asks for.
-- Testing: `test/plan-shell.test.ts` covers the widened allowlist and the
-  `git`/`gh` write verbs, `test/plan-mode-policy.test.ts` covers the tool
-  policy and the block message, and `test/system-prompt.test.ts` covers
+- Testing: `packages/extra/test/plan-shell.test.ts` covers the widened allowlist and the
+  `git`/`gh` write verbs, `packages/extra/test/plan-mode-policy.test.ts` covers the tool
+  policy and the block message, and `packages/coding-agent/test/system-prompt.test.ts` covers
   `<guidelines>` rendering and its empty case.

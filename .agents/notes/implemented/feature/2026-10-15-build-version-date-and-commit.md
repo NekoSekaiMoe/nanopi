@@ -83,9 +83,9 @@ note's layout decisions still hold.
   it as strict semver (only `scripts/coding-agent-smoke.mjs`'s equality check
   against the manifest version) needs to compare against the package version
   instead.
-- Testing: `test/build-version.test.ts` covers date extraction, short-commit
+- Testing: `packages/coding-agent/test/build-version.test.ts` covers date extraction, short-commit
   slicing, the no-commit fallback, and the repository lookup;
-  `test/status-command.test.ts` covers the folded row (both ends kept, box
+  `packages/coding-agent/test/status-command.test.ts` covers the folded row (both ends kept, box
   width respected, short paths untouched).
 - The branch suffix is dropped, not rendered as `detached`, when the checkout
   has no symbolic HEAD: the row answers "where am I", and a bare `detached`

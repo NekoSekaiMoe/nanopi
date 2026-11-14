@@ -127,7 +127,7 @@ supersedes a core setting does not patch `SettingsList.render`.
 - Cost: `registerAssistantMessageRenderer` runs on every message, including
   plain text ones. Each renderer must return `false` cheaply; pi-ui checks for
   thinking content first.
-- Testing: `test/module-transcript-hooks.test.ts` covers resolver ordering,
+- Testing: `packages/coding-agent/test/module-transcript-hooks.test.ts` covers resolver ordering,
   `next()` delegation, `hide()`, shell delegation, settings rows and removal,
   and working-indicator replacement. The existing pi-ui suites
   (`pi-ui-exploring-group`, `pi-ui-working-step`, `pi-ui-footer-status`) still

@@ -88,8 +88,8 @@ Codex APIs; total Codex-API saving ≈ 2.9 KB (~720 tokens) per request.
 - `vitest.base.ts` gained an `@earendil-works/pi-coding-agent` alias
   (mirroring the tsconfig paths) so first-party tests can import extra
   sources directly.
-- Verification: `test/pi-fake-codex-apply-patch.test.ts` covers the
-  mutual-exclusion hook and the alias construction; `test/system-prompt.test.ts`
+- Verification: `packages/coding-agent/test/pi-fake-codex-apply-patch.test.ts` (deleted in 96ad1e846, which removed the alias) covered the
+  mutual-exclusion hook and the alias construction; `packages/coding-agent/test/system-prompt.test.ts`
   covers the trimmed docs section and the hidden-tools prompt behavior.
 
 Related: [bundled extras](../feature/2026-10-11-bundled-extras.md),

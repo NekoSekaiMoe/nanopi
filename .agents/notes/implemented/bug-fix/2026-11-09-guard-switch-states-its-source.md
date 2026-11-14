@@ -54,10 +54,10 @@ Status: implemented
 
 ## 验证
 
-`test/guard-switch.test.ts` 驱动真实 extension factory（假 API）断言三个视图：
+`packages/extra/test/guard-switch.test.ts` 驱动真实 extension factory（假 API）断言三个视图：
 裸敲带来源、项目层写入只落项目文件、`session` 档不落盘且活过 reload、
-三选项各自的结果、headless 取保守档。`test/settings-store.test.ts` 单独断言
-逐层读取与 `null` 删键。`test/permissions.test.ts` 断言 explain 后的
+三选项各自的结果、headless 取保守档。`packages/extra/test/settings-store.test.ts` 单独断言
+逐层读取与 `null` 删键。`packages/extra/test/permissions.test.ts` 断言 explain 后的
 `allow_session` 不再进白名单，而普通 prompt 仍然会。
 
 冒烟阶段抓到三个实现缺陷，都在这些用例里固定下来：默认层被误判成 project、

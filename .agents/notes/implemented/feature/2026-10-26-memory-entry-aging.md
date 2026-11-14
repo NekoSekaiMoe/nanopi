@@ -130,9 +130,9 @@ they are guesses, and a guess that is configurable invites tuning instead of
 pruning. `buildExtractionPrompt` gained an optional `stale` list, so the
 extraction request is unchanged for callers that do not have one.
 
-Tests: `test/suite/memory-store.test.ts` covers stamp round-tripping, the
+Tests: `packages/coding-agent/test/suite/memory-store.test.ts` covers stamp round-tripping, the
 stamp-stripped comparison, the restamp scoping, deletion and its section
 cleanup, `missing` versus `aged`, and `blameDays` against a real temporary git
-repository (skipped when git is unavailable). `test/suite/memory-command.test.ts`
+repository (skipped when git is unavailable). `packages/coding-agent/test/suite/memory-command.test.ts`
 covers `/remember --list`, `/forget`, and `/remember --prune` end to end through
 the session harness, including the branch where the user confirms nothing.

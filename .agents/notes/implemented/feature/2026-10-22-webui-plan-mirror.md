@@ -107,8 +107,8 @@ The frontend needed one line: `loadSession` seeds the hook's `plan` from
   wire). They are deliberately similar but separately typed, so the browser
   does not import the extension's module types; the initializer in
   `planSnapshotOf` is the single place the mapping is written.
-- Testing: `test/webui-plan-snapshot.test.ts` covers mirroring, the `clear`
-  snapshot, non-plan tools, and malformed rows; `test/webui-plan-history.test.ts`
+- Testing: `packages/coding-agent/test/webui-plan-snapshot.test.ts` covers mirroring, the `clear`
+  snapshot, non-plan tools, and malformed rows; `packages/coding-agent/test/webui-plan-history.test.ts`
   covers the log derivation (branch order, edits, empty plan, shapeless
   results, malformed rows). `pnpm run check` covers types and the browser smoke
   check; the card was verified visually against a live webui session.
