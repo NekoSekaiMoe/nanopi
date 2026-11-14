@@ -1,4 +1,4 @@
-# Agent Note: Kimi K3 的 cacheWrite 按 $3/MTok 计，不再当 0
+# Agent Note: Kimi K3 的 cacheWrite 按官方 5m 档 $3/MTok 计，不再是 0
 
 Status: implemented
 
@@ -31,17 +31,26 @@ cache_write for Kimi K3」。这条断言是错的：Moonshot 确实对 prompt c
 `supportsExplicitPromptCacheMode` 时下发 `prompt_cache_options`，Kimi 走
 `openai-completions`，不在这条路径上。1 小时档（$6）不参与计价。
 
+出处是 `https://platform.kimi.ai/docs/pricing/chat`：kimi-k3 行是
+`$3.00 / $15.00 / $0.30 / $3.00 / $6.00`，后两列即 5m / 1h 的 cache write。
+models.dev 的 `moonshotai/models/kimi-k3.toml` 写
+`cache = { read = 0.3, write = { "5m" = 3, "1h" = 6 } }` 并引同一个页面，两处
+独立来源一致。
+
 改的是生成器，不是生成物 —— `packages/ai/src/models.generated.ts` 一类的
 shard 每次构建重写且被 gitignore，永远改脚本。
 
 ## Alternatives considered
 
-- **维持 0，等官方账单**：否。上一轮的顾虑是「models.dev 的 cache_write 可能只是
-  抄了 input 价」，但 models.dev 的 `moonshotai/kimi-k3` 条目注释直接引
-  `platform.kimi.ai/docs/pricing/chat`，且官方 API 文档确认用量里有
-  `prompt_tokens_details.cache_write_tokens` 字段 —— 字段存在，就不可能不收钱。
-  两个一手来源互证之后，等账单只是拖延。
-- **写成 1 小时档的 6**：否，见上，我们不投递 `prompt_cache_options`。
+- **维持 0，等官方账单**：否。最初的顾虑是「没有账单就不能推翻一条价格判断」，
+  但官方计价页与 models.dev 的 toml 是两个独立的一手来源，且官方 API 文档确认用量里
+  有 `prompt_tokens_details.cache_write_tokens` 字段 —— 字段存在，就不可能不收钱。
+  账单只会再确认一次，等它只是拖延。
+- **写成 1 小时档的 6**：否，见上，我们不投递 `prompt_cache_options`，写 6 会让每笔
+  缓存写入都被高估一倍。
+- **改成从 models.dev 直接读、删掉 `KIMI_K3_COST`**：否。Moonshot 的 `kimi-k3` 条目
+  里 cost 是全的，但 kimi-coding（订阅制）那边 models.dev 报 0，常量存在的理由就是补
+  这个缺口。删掉等于让订阅制那侧的估算归零。
 - **只改 moonshotai，把 kimi-coding 的订阅估算留在 0**：否。订阅版的「等价值」
   本来就该按 API 实际计价算，两边用同一个常量正是为了不让它们漂移。
 - **顺手把 `kimi-for-coding*` 几条的 cacheWrite 也改掉**：否，那是另一个问题。

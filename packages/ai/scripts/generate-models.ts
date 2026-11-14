@@ -668,6 +668,8 @@ const QWEN_TOKEN_PLAN_INDIVIDUAL_MODEL_IDS = new Set<string>([
 ]);
 
 const KIMI_K3_MAX_TOKENS = 131072;
+// Official Moonshot pricing for Kimi K3: $3 input / $15 output / $0.3 cache read /
+// $3 cache write (5m TTL). Source: https://platform.kimi.ai/docs/pricing/chat
 const KIMI_K3_COST = {
 	input: 3,
 	output: 15,
