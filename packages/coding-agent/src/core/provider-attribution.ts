@@ -1,5 +1,6 @@
 import type { Api, Model, ProviderHeaders } from "@nanopi/pi-ai";
 import { OPENCODE_CLIENT_HEADER, OPENCODE_SESSION_HEADER } from "@nanopi/pi-ai/providers/opencode-headers";
+import { matchesHostname } from "@nanopi/pi-ai/utils/endpoint";
 import type { SettingsManager } from "./settings-manager.ts";
 import { isProviderAttributionEnabled } from "./telemetry.ts";
 
@@ -10,28 +11,20 @@ const CLOUDFLARE_AI_GATEWAY_HOST = "gateway.ai.cloudflare.com";
 const OPENCODE_HOST = "opencode.ai";
 const OPENCODE_PROVIDERS = new Set(["opencode", "opencode-go"]);
 
-function matchesHost(baseUrl: string, expectedHost: string): boolean {
-	try {
-		return new URL(baseUrl).hostname === expectedHost;
-	} catch {
-		return false;
-	}
-}
-
 function isOpenRouterModel(model: Model<Api>): boolean {
 	return model.provider === "openrouter" || model.baseUrl.includes(OPENROUTER_HOST);
 }
 
 function isNvidiaNimModel(model: Model<Api>): boolean {
-	return model.provider === "nvidia" || matchesHost(model.baseUrl, NVIDIA_NIM_HOST);
+	return model.provider === "nvidia" || matchesHostname(model.baseUrl, NVIDIA_NIM_HOST);
 }
 
 function isCloudflareModel(model: Model<Api>): boolean {
 	return (
 		model.provider === "cloudflare-workers-ai" ||
 		model.provider === "cloudflare-ai-gateway" ||
-		matchesHost(model.baseUrl, CLOUDFLARE_API_HOST) ||
-		matchesHost(model.baseUrl, CLOUDFLARE_AI_GATEWAY_HOST)
+		matchesHostname(model.baseUrl, CLOUDFLARE_API_HOST) ||
+		matchesHostname(model.baseUrl, CLOUDFLARE_AI_GATEWAY_HOST)
 	);
 }
 
@@ -40,7 +33,7 @@ function isCloudflareModel(model: Model<Api>): boolean {
  * provider pointed at the host, such as a models.json entry or a proxy.
  */
 export function isOpenCodeModel(model: Model<Api>): boolean {
-	return OPENCODE_PROVIDERS.has(model.provider) || matchesHost(model.baseUrl, OPENCODE_HOST);
+	return OPENCODE_PROVIDERS.has(model.provider) || matchesHostname(model.baseUrl, OPENCODE_HOST);
 }
 
 function getDefaultAttributionHeaders(model: Model<Api>): Record<string, string> | undefined {

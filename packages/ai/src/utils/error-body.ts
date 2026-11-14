@@ -62,7 +62,7 @@ export function normalizeProviderError(error: unknown): NormalizedProviderError 
 }
 
 /** The innermost `cause` message, which is where `fetch failed` keeps its reason. */
-function deepestCause(error: Error): string | undefined {
+export function deepestCause(error: Error): string | undefined {
 	let detail: string | undefined;
 	let current: unknown = error.cause;
 	// Bounded: a cause cycle would otherwise spin forever.

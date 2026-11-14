@@ -15,6 +15,7 @@ import type {
 	TranscriptContext,
 	Usage,
 } from "../types.ts";
+import { matchesHostname } from "../utils/endpoint.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
@@ -62,8 +63,8 @@ function getClientApiKey(provider: string, apiKey: string | undefined, headers: 
 }
 
 function detectSessionAffinityFormat(model: Pick<Model<"openai-responses">, "provider" | "baseUrl">) {
-	if (model.provider === "xai" || model.baseUrl.includes("api.x.ai")) return "xai";
-	return model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai") ? "openrouter" : "openai";
+	if (model.provider === "xai" || matchesHostname(model.baseUrl, "x.ai")) return "xai";
+	return model.provider === "openrouter" || matchesHostname(model.baseUrl, "openrouter.ai") ? "openrouter" : "openai";
 }
 
 /**

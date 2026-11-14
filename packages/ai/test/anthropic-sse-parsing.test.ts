@@ -145,6 +145,32 @@ describe("Anthropic raw SSE parsing", () => {
 		expect(providerEvents).toEqual(minimalAnthropicEvents.map(({ data }) => JSON.parse(data)));
 	});
 
+	it("appends the cause chain to a bare Connection error", async () => {
+		// The Anthropic SDK reports every transport failure as "Connection error." and
+		// keeps the reason (`connect ECONNREFUSED ...`) on the cause chain only.
+		const client = {
+			beta: {
+				messages: {
+					create: () => ({
+						asResponse: async () => {
+							throw new Error("Connection error.", {
+								cause: new Error("connect ECONNREFUSED 127.0.0.1:8080"),
+							});
+						},
+					}),
+				},
+			},
+		} as unknown as Anthropic;
+		const result = await streamAnthropic(
+			getModel("anthropic", "claude-haiku-4-5"),
+			normalizeContext({ messages: [{ role: "user", content: "Hello", timestamp: 1 }] }),
+			{ client },
+		).result();
+
+		expect(result.stopReason).toBe("error");
+		expect(result.errorMessage).toBe("Connection error.: connect ECONNREFUSED 127.0.0.1:8080");
+	});
+
 	it("forwards parsed provider stream events in order", async () => {
 		const model = getModel("anthropic", "claude-haiku-4-5");
 		const providerEvents: unknown[] = [];

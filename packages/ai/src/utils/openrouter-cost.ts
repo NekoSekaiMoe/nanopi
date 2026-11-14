@@ -1,4 +1,5 @@
 import type { Usage } from "../types.ts";
+import { matchesHostname } from "./endpoint.ts";
 
 export interface OpenRouterUsageAccounting {
 	/** Amount charged to the user's OpenRouter account. */
@@ -22,7 +23,7 @@ function isValidCost(value: unknown): value is number {
 }
 
 export function isOpenRouterModel(model: { provider: string; baseUrl: string }): boolean {
-	return model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai");
+	return model.provider === "openrouter" || matchesHostname(model.baseUrl, "openrouter.ai");
 }
 
 /** Replace the catalog total with OpenRouter's billed cost when the response contains complete, valid accounting. */

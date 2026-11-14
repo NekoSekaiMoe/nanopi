@@ -59,6 +59,23 @@ describe("provider retry classification", () => {
 		}
 	});
 
+	it("matches node-fetch and stream transport wording that names no cause", () => {
+		// `request to ... failed, reason:` is node-fetch's generic wording; the Vertex
+		// ADC token fetch surfaces it with an empty reason, so nothing else in the
+		// message says the failure was transient.
+		for (const errorMessage of [
+			"request to https://us-central1-aiplatform.googleapis.com/v1/projects/p/locations/us-central1/endpoints/e:generateContent failed, reason: ",
+			"upstream_request_failed",
+			"upstream request failed",
+			"upstream_stream_read_error",
+			"stream was interrupted",
+			"http/2 stream failed",
+			"HTTP2 stream failed",
+		]) {
+			expect(isRetryableAssistantError(fauxAssistantMessage("", { stopReason: "error", errorMessage }))).toBe(true);
+		}
+	});
+
 	it("matches upstream request buffer exhaustion wording", () => {
 		expect(
 			isRetryableAssistantError(

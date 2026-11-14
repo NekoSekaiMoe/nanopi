@@ -39,6 +39,8 @@ import type {
 	ToolResultMessage,
 } from "../types.ts";
 import { appendAssistantMessageDiagnostic } from "../utils/diagnostics.ts";
+import { matchesHostname } from "../utils/endpoint.ts";
+import { deepestCause } from "../utils/error-body.ts";
 import { AssistantMessageEventStream } from "../utils/event-stream.ts";
 import { headersToRecord } from "../utils/headers.ts";
 import { parseJsonWithRepair, parseStreamingJson, parseToolCallArguments } from "../utils/json-parse.ts";
@@ -231,7 +233,7 @@ function shouldUseServerSideFallbackBeta(model: Model<"anthropic-messages">): bo
 }
 
 function getAnthropicCompat(model: Model<"anthropic-messages">) {
-	const isOpenRouter = model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai");
+	const isOpenRouter = model.provider === "openrouter" || matchesHostname(model.baseUrl, "openrouter.ai");
 	return {
 		supportsEagerToolInputStreaming: model.compat?.supportsEagerToolInputStreaming ?? true,
 		supportsLongCacheRetention: model.compat?.supportsLongCacheRetention ?? true,
@@ -954,7 +956,11 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 				delete (block as { partialJson?: string }).partialJson;
 			}
 			output.stopReason = options?.signal?.aborted ? "aborted" : "error";
-			output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+			// The Anthropic SDK collapses every transport failure into `"Connection error."`.
+			// The reason (`connect ECONNREFUSED 127.0.0.1:8080`) lives only on the cause chain.
+			const cause = error instanceof Error ? deepestCause(error) : undefined;
+			const message = error instanceof Error ? error.message : JSON.stringify(error);
+			output.errorMessage = cause && !message.includes(cause) ? `${message}: ${cause}` : message;
 			stream.push({ type: "error", reason: output.stopReason, error: output });
 			stream.end();
 		}
