@@ -57,8 +57,15 @@ import { analyzeFileInspection, shellGuardNotice } from "./shell-guard.ts";
 import { type RunMode, SUBSYSTEM_KEYS, type SubsystemKey, type SubsystemStatus } from "./types.ts";
 
 const SHELL_TOOL_NAMES = new Set(["bash", "powershell"]);
-/** Tools that prompt for permission when not in yolo or plan mode. */
-const GATED_TOOL_NAMES = new Set(["edit", "write", "bash", "powershell"]);
+/**
+ * Tools that prompt for permission when not in yolo or plan mode.
+ *
+ * `generate_image` is here because one call is a paid provider request the model
+ * can issue on its own: the guideline lets it draw unprompted when the task's
+ * output is an image, so the user is the one who decides whether that spend
+ * happens.
+ */
+const GATED_TOOL_NAMES = new Set(["edit", "write", "bash", "powershell", "generate_image"]);
 
 const PLAN_GUIDELINE = `You are in PLAN MODE: exploration and planning only. Investigate, resolve ambiguity, and return a plan another engineer can execute without asking you anything. The repository is read-only here: edits, writes, and every shell command that is not on the read-only list are refused, and the refusal names the boundary.
 

@@ -321,6 +321,17 @@ describe("permission prompts by frontend", () => {
 		session: { mode: string; hasUI: boolean; select: () => Promise<string | undefined> },
 		notes: string[],
 	): Promise<{ blocked: boolean; reason?: string; asked: number }> {
+		return runToolCall(fake, session, notes, "bash", { command: "echo hi" });
+	}
+
+	/** The same for any tool name: the gate keys off it, not off the arguments. */
+	async function runToolCall(
+		fake: ReturnType<typeof fakeApi>,
+		session: { mode: string; hasUI: boolean; select: () => Promise<string | undefined> },
+		notes: string[],
+		toolName: string,
+		input: Record<string, unknown>,
+	): Promise<{ blocked: boolean; reason?: string; asked: number }> {
 		let asked = 0;
 		const ctx = {
 			mode: session.mode,
@@ -344,7 +355,7 @@ describe("permission prompts by frontend", () => {
 		const handlers = fake.handlers();
 		await handlers.get("session_start")?.({ type: "session_start", reason: "new" }, ctx);
 		const result = (await handlers.get("tool_call")?.(
-			{ type: "tool_call", toolCallId: "call-1", toolName: "bash", input: { command: "echo hi" } },
+			{ type: "tool_call", toolCallId: "call-1", toolName, input },
 			ctx,
 		)) as { block?: boolean; reason?: string } | undefined;
 		return { blocked: result?.block === true, reason: result?.reason, asked };
@@ -372,6 +383,23 @@ describe("permission prompts by frontend", () => {
 		);
 		expect(outcome.asked).toBe(1);
 		expect(outcome.blocked).toBe(true);
+	});
+
+	test("a paid image generation asks before the model spends anything", async () => {
+		// `generate_image` is in GATED_TOOL_NAMES: the guideline lets the model
+		// draw on its own when the task's output is an image, so the gate is the
+		// only place the spend is approved (issue #757).
+		const fake = fakeApi();
+		createExtraExtension(fake.api);
+		const notes: string[] = [];
+		const outcome = await runToolCall(
+			fake,
+			{ mode: "tui", hasUI: true, select: async () => "Reject (this call only)" },
+			notes,
+			"generate_image",
+			{ prompt: "a red fox" },
+		);
+		expect(outcome).toMatchObject({ asked: 1, blocked: true });
 	});
 
 	test("picking Explain in the dialog pauses the call instead of rejecting it", async () => {
