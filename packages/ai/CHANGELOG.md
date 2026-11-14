@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- A CRLF shell frame split across two SSE chunks no longer drops the event: the line reader treated a trailing `\r` as a complete line break, so the frame that followed it lost its `event:` field. A bare `\r` is now held until the next chunk (or the final drain) proves it is not the first half of `\r\n`
+- A failed OAuth token exchange names the missing or invalid fields instead of echoing the response body, which carried the access and refresh tokens the call had just refused to parse
 - Google's discrete thinking control is chosen from the model's `thinkingLevelMap` instead of an id pattern, so `gemini-4-*` reaches it: `gemini-4-hydrogen` no longer throws `Unsupported Google thinking level mapping` when `xhigh` (or `max`, clamped to it) is selected, and `gemini-4-argon` / `gemini-4-carbon` send their declared `low`/`medium`/`high` instead of a silent `thinkingBudget: -1`. `xhigh` maps to the SDK's `XHIGH`, which `@google/genai` 3.3.0 added; `max` still clamps to `xhigh` because Google has no such value (issue [#731](https://cnb.cool/shinytale/nanopi/-/issues/731))
 
 ## [20261114]

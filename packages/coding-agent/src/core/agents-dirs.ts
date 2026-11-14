@@ -50,9 +50,27 @@ export function projectResourceDirs(cwd: string, resource: ProjectResource): str
 /**
  * Whether the project contributes skills or prompts, which is what makes it
  * need a trust decision. The user's `~/.agents/` directory is their own and
- * never counts, even when `cwd` is `$HOME`.
+ * never counts, even when `cwd` is `$HOME`, and the ancestor walk stops at
+ * `$HOME`: directories above it (`/home`, `/`) are user territory rather than
+ * project context, so a stray `.agents/` there must not put every checkout
+ * below it behind a trust prompt.
  */
 export function hasProjectResourceDirs(cwd: string): boolean {
 	const resources: ProjectResource[] = ["skills", "prompts"];
-	return resources.some((resource) => projectResourceDirs(cwd, resource).some((dir) => existsSync(dir)));
+	const homeDir = homedir();
+	const dirs = projectContextDirs(cwd, homeDir);
+	return resources.some((resource) => dirs.some((dir) => existsSync(join(dir, SHARED_CONFIG_DIR_NAME, resource))));
+}
+
+/**
+ * `cwd` and its ancestors up to, but not including, the user's home directory.
+ * Empty when `cwd` is `$HOME`: the home directory is the user's own.
+ */
+function projectContextDirs(cwd: string, homeDir: string): string[] {
+	const dirs: string[] = [];
+	for (const dir of selfAndAncestorDirs(cwd)) {
+		if (dir === homeDir) break;
+		dirs.push(dir);
+	}
+	return dirs;
 }

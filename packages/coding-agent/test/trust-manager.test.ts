@@ -60,6 +60,14 @@ describe("ProjectTrustStore", () => {
 			rmSync(join(cwd, ".agents", "skills"), { recursive: true, force: true });
 			mkdirSync(join(cwd, ".agents", "prompts"), { recursive: true });
 			expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+			rmSync(join(cwd, ".agents"), { recursive: true, force: true });
+
+			// Above the home directory is user territory, not project context: a stray
+			// `.agents/skills` next to it must not gate every checkout underneath.
+			mkdirSync(join(tempDir, ".agents", "skills"), { recursive: true });
+			expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
+			mkdirSync(join(tempDir, ".agents", "prompts"), { recursive: true });
+			expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
 		} finally {
 			if (originalHome === undefined) {
 				delete process.env.HOME;

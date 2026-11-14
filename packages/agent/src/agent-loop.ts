@@ -400,7 +400,9 @@ async function runLoop(
 			const decision = await config.finishTurn?.(lastCompletedTurn, signal);
 			await emit({ type: "turn_end", message, toolResults });
 
-			if (decision?.action === "end") {
+			// An aborted run stops here even when finishTurn asks to continue: the tool batch
+			// stopped early, so continuing would send a transcript with unanswered calls.
+			if (signal?.aborted || decision?.action === "end") {
 				await emit({ type: "agent_end", messages: newMessages });
 				return;
 			}

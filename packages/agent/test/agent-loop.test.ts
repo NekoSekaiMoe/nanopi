@@ -1214,6 +1214,62 @@ describe("agentLoop with AgentMessage", () => {
 		},
 	);
 
+	it("ends the run when a tool aborts it even though finishTurn asks to continue", async () => {
+		const controller = new AbortController();
+		const toolSchema = Type.Object({});
+		const tool: AgentTool<typeof toolSchema, undefined> = {
+			name: "cancel",
+			label: "Cancel",
+			description: "Cancel tool",
+			parameters: toolSchema,
+			async execute() {
+				controller.abort("the user interrupted the run");
+				return { content: [{ type: "text", text: "cancelled" }], details: undefined };
+			},
+		};
+		let providerCalls = 0;
+		let followUpPolls = 0;
+		const ordering: string[] = [];
+		await runAgentLoop(
+			[createUserMessage("run")],
+			{ messages: [], tools: [tool] },
+			{
+				model: createModel(),
+				convertToLlm: identityConverter,
+				finishTurn: () => ({ action: "continue" }),
+				getFollowUpMessages: async () => {
+					followUpPolls++;
+					return [createUserMessage("queued")];
+				},
+			},
+			(event) => {
+				if (event.type === "turn_end") ordering.push("turn_end");
+				if (event.type === "agent_end") ordering.push("agent_end");
+			},
+			controller.signal,
+			() => {
+				providerCalls++;
+				const response = createAssistantMessageEventStream();
+				queueMicrotask(() => {
+					response.push({
+						type: "done",
+						reason: "toolUse",
+						message: createAssistantMessage(
+							[{ type: "toolCall", id: "tool-1", name: "cancel", arguments: {} }],
+							"toolUse",
+						),
+					});
+				});
+				return response;
+			},
+		);
+
+		// A second request would replay a tool call whose result the aborted batch dropped.
+		expect(providerCalls).toBe(1);
+		expect(followUpPolls).toBe(0);
+		expect(ordering).toEqual(["turn_end", "agent_end"]);
+	});
+
 	it("action:end skips queue polling and next-turn preparation", async () => {
 		const toolSchema = Type.Object({});
 		const tool: AgentTool<typeof toolSchema, undefined> = {

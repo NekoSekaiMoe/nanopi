@@ -948,6 +948,33 @@ describe("Coding Agent Tools", () => {
 	});
 
 	describe("grep tool", () => {
+		it("should reject when the run is aborted before ripgrep is spawned", async () => {
+			const testFile = join(testDir, "abort.txt");
+			writeFileSync(testFile, "match line\n");
+			const controller = new AbortController();
+			const grep = createGrepToolDefinition(testDir, {
+				operations: {
+					// Abort lands while the search is still checking the path, before any child exists.
+					isDirectory: async () => {
+						await new Promise((resolve) => setTimeout(resolve, 50));
+						return false;
+					},
+					readFile: () => "",
+				},
+			});
+
+			const pending = grep.execute(
+				"test-call-grep-abort",
+				{ pattern: "match", path: testFile },
+				controller.signal,
+				undefined,
+				fakeCtx(testDir),
+			);
+			controller.abort("the user interrupted the run");
+
+			await expect(pending).rejects.toThrow(/Operation aborted/);
+		});
+
 		it("should include filename when searching a single file", async () => {
 			const testFile = join(testDir, "example.txt");
 			writeFileSync(testFile, "first line\nmatch line\nlast line");

@@ -1,6 +1,7 @@
 import type { WriteStream } from "node:fs";
 import { readFileSync } from "node:fs";
 import { open } from "node:fs/promises";
+import { finished } from "node:stream/promises";
 import { createOutputFileStream } from "../../utils/output-files.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, type TruncationResult, truncateTail } from "./truncate.ts";
 
@@ -56,6 +57,7 @@ export class OutputAccumulator {
 
 	private tempFilePath: string | undefined;
 	private tempFileStream: WriteStream | undefined;
+	private tempFileCompletion: Promise<void> | undefined;
 
 	constructor(options: OutputAccumulatorOptions = {}) {
 		this.maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
@@ -130,19 +132,10 @@ export class OutputAccumulator {
 		const stream = this.tempFileStream;
 		this.tempFileStream = undefined;
 
-		await new Promise<void>((resolve, reject) => {
-			const onError = (error: Error) => {
-				stream.off("finish", onFinish);
-				reject(error);
-			};
-			const onFinish = () => {
-				stream.off("error", onError);
-				resolve();
-			};
-			stream.once("error", onError);
-			stream.once("finish", onFinish);
-			stream.end();
-		});
+		// `finished` is observed from the moment the stream exists, so a write failure during
+		// collection is reported here instead of surfacing as an unhandled error event.
+		stream.end();
+		await this.tempFileCompletion;
 	}
 
 	/**
@@ -269,6 +262,9 @@ export class OutputAccumulator {
 		const { path, stream } = createOutputFileStream(this.tempFilePrefix, ".log");
 		this.tempFilePath = path;
 		this.tempFileStream = stream;
+		this.tempFileCompletion = finished(stream);
+		// Errors can arrive while the producer is still running; closeTempFile() reports them.
+		void this.tempFileCompletion.catch(() => undefined);
 		for (const chunk of this.rawChunks) {
 			this.tempFileStream.write(chunk);
 		}
