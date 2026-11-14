@@ -76,15 +76,15 @@
 	},
 	"dependencies": {
 		"@anthropic-ai/sdk": "1.8.0",
-		"@aws-sdk/client-bedrock-runtime": "3.1167.0",
+		"@aws-sdk/client-bedrock-runtime": "3.1168.0",
 		"@google/genai": "3.3.0",
 		"@smithy/node-http-handler": "4.14.2",
 		"@smithy/types": "4.20.0",
 		"http-proxy-agent": "9.1.0",
 		"https-proxy-agent": "9.1.0",
-		"openai": "7.55.0",
+		"openai": "7.56.0",
 		"partial-json": "0.1.7",
-		"typebox": "1.4.6",
+		"typebox": "1.4.7",
 		"@aws/bedrock-token-generator": "1.1.0"
 	},
 	"keywords": [
