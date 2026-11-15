@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 
@@ -88,10 +88,33 @@ describe("package root barrel", () => {
 		}
 	});
 
+	it("counts sources, not the generated model catalogs", () => {
+		// #761: the root also reaches `models.generated.ts` and one `<provider>.models.ts` shard per
+		// provider, and that number follows models.dev plus the build flavor that generated last
+		// (16 shards after a `base` run, 302 after a `full` one). Counting them made the budget a
+		// function of a gitignored build product, so a legitimate tree failed after regenerating.
+		const providers = fileURLToPath(new URL("../../ai/src/providers", import.meta.url));
+		const shards = existsSync(providers) ? readdirSync(providers).filter((name) => name.endsWith(".models.ts")) : [];
+		expect(shards.length, "run `pnpm run ensure:model-catalogs` to make this test meaningful").toBeGreaterThan(0);
+		const [violation] = findViolations({ "packages/coding-agent": { ".": { maxFiles: 1 } } });
+		const listed = violation
+			.split("\n")
+			.slice(1)
+			.map((line) => line.trim());
+		expect(listed.length).toBeGreaterThan(400);
+		expect(
+			listed.filter((file) =>
+				/packages\/ai\/src\/(?:models\.generated\.ts|providers\/[^/]+\.models\.ts)$/.test(file),
+			),
+		).toEqual([]);
+	});
+
 	it("stays inside the entry graph budget the root now has", () => {
+		// 550 counted files (498 today): the budget counts the sources the root reaches, not the
+		// generated model catalogs, whose number follows models.dev and the last build flavor (#761).
 		expect(
 			findViolations({
-				"packages/coding-agent": { ".": { maxFiles: 780 } },
+				"packages/coding-agent": { ".": { maxFiles: 550 } },
 			}),
 		).toEqual([]);
 	});
