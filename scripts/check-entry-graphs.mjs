@@ -44,12 +44,16 @@ const BUDGETS = {
 		// The public root: 43 lines of `export *`, so nothing in the file says how expensive it is.
 		// Every source it names is public, and a source that grows an import grows this graph.
 		//
-		// Measured at 707 files (336 `pi-ai`, 318 `coding-agent`, 46 `pi-tui`, 7 `agent`), 601 of
-		// which `./modules` does not reach. The biggest chunk is `ai/src/providers` (270): the SDK
-		// hands out `createAgentSession`, which resolves models, so the whole provider catalog is
-		// behind the root by design — that is what a coding agent is. The budget is here to catch the
-		// next subsystem that hangs itself off the root, not to forbid what is already there.
-		".": { maxFiles: 780 },
+		// Measured at 498 counted files (323 `coding-agent`, 122 `pi-ai`, 46 `pi-tui`, 7 `agent`),
+		// 388 of which `./modules` does not reach. The biggest chunk is `ai/src/providers` (58
+		// checked-in files): the SDK hands out `createAgentSession`, which resolves models, so the
+		// provider layer is behind the root by design — that is what a coding agent is. The budget is
+		// here to catch the next subsystem that hangs itself off the root, not to forbid what is
+		// already there.
+		//
+		// The 300-odd generated catalogs the root also reaches are not in that number, see
+		// `GENERATED_MODEL_CATALOG`. The headroom (10%) is the one the 780 carried over 707.
+		".": { maxFiles: 550 },
 		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
 		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
 		// Not an entry point, so no `exports` lookup: `sourcePath` budgets the source file itself.
@@ -74,6 +78,18 @@ const BUDGETS = {
 };
 
 const SPEC = /(?:^|\n)\s*(?:import|export)\s+(?!type\s)([^;]*?\sfrom\s*)?["']([^"']+)["']/g;
+
+/**
+ * The generated model catalogs: `models.generated.ts` plus one `<provider>.models.ts` shard per
+ * provider, both gitignored build products of `pnpm run generate-models`.
+ *
+ * They stay in the graph — a `forbid` pattern still has to see them — but they are not counted,
+ * because their count is not a property of this tree. The generator writes one shard per provider
+ * models.dev lists, narrowed by the build flavor that ran last, so the same source measured 801
+ * files after a `full` generation and 515 after a `base` one, and only the first one failed the
+ * budget (#761). A number that moves when nothing in the repository moved cannot guard anything.
+ */
+const GENERATED_MODEL_CATALOG = /^packages\/ai\/src\/(?:models\.generated\.ts|providers\/[^/]+\.models\.ts)$/;
 
 function resolveSpec(spec, fromFile) {
 	if (spec.startsWith("node:")) return null;
@@ -134,10 +150,11 @@ function checkGraph(pkgDir, label, source, budget, report) {
 		return;
 	}
 	const graph = [...walk(source)].map((file) => relative(ROOT, file));
-	if (graph.length > budget.maxFiles) {
+	const counted = graph.filter((file) => !GENERATED_MODEL_CATALOG.test(file));
+	if (counted.length > budget.maxFiles) {
 		report(
-			`${pkgDir} "${label}" reaches ${graph.length} files, budget ${budget.maxFiles}\n` +
-				graph.map((file) => `    ${file}`).join("\n"),
+			`${pkgDir} "${label}" reaches ${counted.length} files, budget ${budget.maxFiles}\n` +
+				counted.map((file) => `    ${file}`).join("\n"),
 		);
 	}
 	for (const pattern of budget.forbid ?? []) {

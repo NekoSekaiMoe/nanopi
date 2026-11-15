@@ -82,10 +82,16 @@ eye and were wrong in both directions; re-run before quoting a number.
 
 ### Where the cost is held
 
-`scripts/check-entry-graphs.mjs` now budgets `packages/coding-agent` `"."`: 707 files, budget 780
-(`pi-ai` 336, `coding-agent` 318, `pi-tui` 46, `agent` 7). Root-only files from `./modules` — 601 —
-are mostly the provider catalog (270) behind `createAgentSession`'s model resolution. There is no
-`forbid` list: the root is a whole agent and always reached `providers/`.
+`scripts/check-entry-graphs.mjs` budgeted `packages/coding-agent` `"."` at 780 files against the
+707 measured here (`pi-ai` 336, `coding-agent` 318, `pi-tui` 46, `agent` 7). Root-only files from
+`./modules` — 601 — are mostly the provider catalog behind `createAgentSession`'s model resolution.
+There is no `forbid` list: the root is a whole agent and always reached `providers/`.
+
+Those numbers counted the generated model catalogs, which is not a property of this tree: #761 saw
+the same source at 801 and fail. The budget now counts the sources the root reaches (498 today,
+`maxFiles: 550`) and leaves `models.generated.ts` plus the `<provider>.models.ts` shards out of the
+count while still walking them, so a `forbid` pattern still sees them. See
+[the entry-graph count](../process/2026-11-15-entry-graphs-count-sources-not-catalogs.md).
 
 `packages/coding-agent/test/root-barrel-exports.test.ts` pins the shape: 43 `export *` lines, no
 named block, and the budget.
