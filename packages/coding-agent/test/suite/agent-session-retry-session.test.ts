@@ -64,6 +64,27 @@ describe("AgentSession run records and /retry", () => {
 		expect(lastRunRecord(harness)?.outcome).toBe("failed");
 	});
 
+	// #763 (tier 2): the run that gave up could not be retried at all, because every attempt it
+	// made was omitted from the projection. It replays the turn instead, and the failure goes back
+	// into the transcript so a second `/retry` still has something to replay.
+	it("retries the turn auto-retry gave up on", async () => {
+		const harness = await createHarness({ settings: { retry: { enabled: true, maxRetries: 1, baseDelayMs: 0 } } });
+		harnesses.push(harness);
+		harness.setResponses([
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+			fauxAssistantMessage("", { stopReason: "error", errorMessage: "overloaded_error" }),
+			fauxAssistantMessage("recovered"),
+		]);
+
+		await harness.session.prompt("hello");
+
+		await harness.session.retryLastRun();
+
+		// The provider was asked again, and the retry's own answer ended the conversation.
+		expect(harness.faux.state.callCount).toBe(3);
+		expect(lastRunRecord(harness)?.outcome).toBe("completed");
+	});
+
 	it("replays a failure that stayed in the projection", async () => {
 		const harness = await createHarness({ settings: { retry: { enabled: false } } });
 		harnesses.push(harness);

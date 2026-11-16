@@ -1153,6 +1153,38 @@ describe("Coding Agent Tools", () => {
 			expect(output).toContain("cr.txt-3- world");
 		});
 
+		// #763 (tier 2): a hit inside a file with NUL bytes was printed as an ordinary source row.
+		// The row is still reported - it is a real match - but the answer now says the content is
+		// binary data, so a minified bundle or a `git show` dump is not read as code.
+		it("should mark matches inside binary content", async () => {
+			const binaryFile = join(testDir, "bundle.min.js");
+			writeFileSync(binaryFile, 'var a = 1;\u0000\u0000var target = "needle";\n');
+			writeFileSync(join(testDir, "plain.txt"), "nothing here\n");
+
+			const result = await grepTool.execute("test-call-grep-binary-match", {
+				pattern: "needle",
+				path: binaryFile,
+			});
+			const output = getTextOutput(result);
+
+			expect(output).toContain("needle");
+			expect(output).toContain("inside binary content (NUL bytes), not source text");
+			expect(result.details?.binaryMatches).toBe(1);
+		});
+
+		it("should not mark a match in a text file as binary", async () => {
+			const textFile = join(testDir, "plain-source.ts");
+			writeFileSync(textFile, "const needle = 1;\n");
+
+			const result = await grepTool.execute("test-call-grep-binary-text", {
+				pattern: "needle",
+				path: textFile,
+			});
+
+			expect(getTextOutput(result)).not.toContain("binary content");
+			expect(result.details?.binaryMatches).toBeUndefined();
+		});
+
 		// Ported from earendil-works/pi#11203: RIPGREP_CONFIG_PATH options such as
 		// --fixed-strings used to silently turn the tool's regex search into a literal one.
 		it("should ignore ambient ripgrep config", async () => {

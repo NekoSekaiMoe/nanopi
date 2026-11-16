@@ -154,6 +154,22 @@ describe("AgentSession retry", () => {
 		expect(created.session.isRetrying).toBe(false);
 	});
 
+	// #763 (tier 2): once the last auto-retry attempt ran out of budget, `/retry` answered "No failed
+	// response to retry in this session" right after a visible failure, because every attempt had been
+	// omitted from the model projection. It replays the last attempt's turn with a fresh budget.
+	it("retries the turn when auto-retry already spent its budget", async () => {
+		const created = await createSession({ failCount: 99, maxRetries: 1 });
+		await created.session.prompt("Test");
+
+		// One initial call plus the single retry the budget allowed.
+		expect(created.getCallCount()).toBe(2);
+		await expect(created.session.retryLastRun()).resolves.toBeUndefined();
+
+		// The manual retry asked the provider again instead of reporting nothing to retry, and its
+		// own auto-retry ran once more: the exhausted budget belonged to the run that gave up.
+		expect(created.getCallCount()).toBe(4);
+	});
+
 	it("caps agent retry delay", async () => {
 		// Regression for #8826.
 		const created = await createSession({ failCount: 4, maxRetries: 5, maxAgentDelayMs: 5 });

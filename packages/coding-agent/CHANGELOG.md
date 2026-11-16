@@ -8,6 +8,8 @@
 
 ### Fixed
 
+- `/retry` works on the failure auto-retry gave up on: every attempt that loop made is omitted from the model projection, so the branch held no replayable response and the command answered "No failed response to retry" right after a visible failure. The turn is repeated with a fresh retry budget now, and the failure returns to the transcript so a second `/retry` still has something to replay
+- A grep match inside a file with NUL bytes is reported as a binary match: a minified bundle, a `git show` dump, or a UTF-16 document printed as ordinary source rows, so the answer looked like source code the model could quote. The rows are still returned, and a notice says how many of them are inside binary content ([#763](https://cnb.cool/shinytale/nanopi/-/issues/763))
 - A bash or tool-output temp file is closed once, on every exit path, and its write completion is awaited: a failed write used to surface as an unhandled `error` event (or not at all) while the caller got a truncated log path back
 - The grep tool aborts during tool lookup and path probing, not only once ripgrep is running: an interrupt that landed before the child existed left the search to finish on its own, and a child killed by the abort was no longer reported as a ripgrep exit failure
 - Project trust stops its ancestor walk at the user's home directory: a stray `.agents/skills` above it (`/home`, `/`) is user territory, and treating it as project context put every checkout underneath behind a trust prompt
