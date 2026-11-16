@@ -83,6 +83,9 @@ importers:
       '@smithy/types':
         specifier: 4.20.0
         version: 4.20.0
+      gpt-tokenizer:
+        specifier: 4.1.2
+        version: 4.1.2
       http-proxy-agent:
         specifier: 9.1.0
         version: 9.1.0
@@ -1771,6 +1774,9 @@ packages:
   google-logging-utils@1.1.3:
     resolution: {integrity: sha512-eAmLkjDjAFCVXg7A1unxHsLf961m6y17QFqXqAXGj/gVkKFrEICfStRfwUlGNfeCEjNRa32JEWOUTlYXPyyKvA==}
     engines: {node: '>=14'}
+
+  gpt-tokenizer@4.1.2:
+    resolution: {integrity: sha512-5GwcLcZd6IqCdrGTTPcoKqbJk8cCWHHsoTHR/uQGZKT29CFcnJEg69qisGbKesQpzxRq9yQO4lBgsaZ8SawcGQ==}
 
   graceful-fs@4.2.12:
     resolution: {integrity: sha512-iuyGF2E4oafQfPsRrG2wtY2ILupMhvtdrhzrxB+0VcjsPpSPttpfYdjnGFGsTi5MaJFjI1jOKHPQ6UTbTj9TAw==}
@@ -3825,6 +3831,8 @@ snapshots:
       - supports-color
 
   google-logging-utils@1.1.3: {}
+
+  gpt-tokenizer@4.1.2: {}
 
   graceful-fs@4.2.12: {}
 

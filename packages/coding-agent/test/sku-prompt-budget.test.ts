@@ -22,7 +22,7 @@ const CWD = "/home/user/project";
 /** Estimated tokens (prompt + declarations) each SKU is aiming at. */
 const TARGET = { minimal: 300, base: 900 } as const;
 /** Estimated tokens each SKU spends today, pinned so a change has to be paid for. */
-const PINNED = { minimal: 405, base: 1540 } as const;
+const PINNED = { minimal: 318, base: 1226 } as const;
 
 interface Sku {
 	defines: Record<string, unknown>;
@@ -140,6 +140,6 @@ describe("SKU prompt budget", () => {
 	// the total; the per-tool split is what names the declaration behind it.
 	test("breaks the declaration cost down per tool", async () => {
 		const measurement = await measure(SKUS.minimal);
-		expect(measurement.byTool).toEqual({ bash: 109, powershell: 112 });
+		expect(measurement.byTool).toEqual({ bash: 86, powershell: 88 });
 	});
 });

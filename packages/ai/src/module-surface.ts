@@ -13,7 +13,13 @@ export {
 	type RetryPolicy,
 	retryAssistantCall,
 } from "./utils/retry.ts";
-export { contentText, getSystemMessageText, renderSystemMessageUpdate } from "./utils/text.ts";
+export {
+	contentText,
+	countTextTokens,
+	countTokenFragments,
+	getSystemMessageText,
+	renderSystemMessageUpdate,
+} from "./utils/text.ts";
 export {
 	getCurrentSystemMessage,
 	getCurrentTools,

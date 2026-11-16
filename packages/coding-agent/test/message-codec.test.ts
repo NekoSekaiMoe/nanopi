@@ -74,7 +74,7 @@ describe("message codecs", () => {
 	test("a codec can re-measure a core role", () => {
 		const registry = new MessageTypeRegistry();
 		const assistant = { role: "assistant", content: [{ type: "text", text: "hello" }], timestamp: 1 } as AgentMessage;
-		expect(estimateTokens(assistant, registry.table())).toBe(2);
+		expect(estimateTokens(assistant, registry.table())).toBe(1);
 
 		registry.register({ kind: "assistant", toLlm: () => [], estimateTokens: () => 99 });
 		expect(estimateTokens(assistant, registry.table())).toBe(99);

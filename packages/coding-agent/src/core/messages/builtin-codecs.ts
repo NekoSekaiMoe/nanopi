@@ -9,6 +9,7 @@
  */
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
+import { countTextTokens, countTokenFragments } from "@nanopi/pi-ai/utils/text";
 import {
 	type BashExecutionMessage,
 	BRANCH_SUMMARY_PREFIX,
@@ -22,7 +23,7 @@ import {
 import { renderBranchSummary, renderCompactionSummary } from "./builtin-renderers.ts";
 import type { MessageTypeCodec, MessageTypeCodecMap } from "./codec.ts";
 
-/** Chars-per-token convention shared by every estimate in this app. */
+/** Legacy chars/4 fallback for callers that already hold only a character count. */
 export function charsToTokens(chars: number): number {
 	return Math.ceil(chars / 4);
 }
@@ -40,7 +41,7 @@ const bashExecution: MessageTypeCodec<BashExecutionMessage> = {
 			},
 		];
 	},
-	estimateTokens: (message) => charsToTokens(message.command.length + message.output.length),
+	estimateTokens: (message) => countTokenFragments([message.command, message.output]),
 };
 
 const branchSummary: MessageTypeCodec<BranchSummaryMessage> = {
@@ -52,7 +53,7 @@ const branchSummary: MessageTypeCodec<BranchSummaryMessage> = {
 			timestamp: message.timestamp,
 		},
 	],
-	estimateTokens: (message) => charsToTokens(message.summary.length),
+	estimateTokens: (message) => countTextTokens(message.summary),
 	renderRun: renderBranchSummary,
 };
 
@@ -65,7 +66,7 @@ const compactionSummary: MessageTypeCodec<CompactionSummaryMessage> = {
 			timestamp: message.timestamp,
 		},
 	],
-	estimateTokens: (message) => charsToTokens(message.summary.length),
+	estimateTokens: (message) => countTextTokens(message.summary),
 	renderRun: renderCompactionSummary,
 };
 

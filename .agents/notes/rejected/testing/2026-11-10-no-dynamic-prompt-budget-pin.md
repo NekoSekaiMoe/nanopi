@@ -4,8 +4,11 @@ Status: rejected — 动态钉会把「涨了要付账」这条唯一的机制�
 
 ## Problem
 
-`packages/coding-agent/test/sku-prompt-budget.test.ts` 里 `PINNED = { minimal: 405, base: 1540 }`
-是 58768f055 当天在源码树上的读数，写死成字面量。shinytale/nanopi#680 里问了能不能改成动态的：
+`packages/coding-agent/test/sku-prompt-budget.test.ts` 里 `PINNED` 是写下它当天在源码树上的读数，写死成字面量（本篇写作时为
+`{ minimal: 405, base: 1540 }`；2026-11-16 估算器从 chars/3.5 换成 o200k 原生计数后，
+读数更新为 `{ minimal: 318, base: 1226 }`，原因见
+[原生 token 计数](../../implemented/feature/2026-11-16-native-token-counting.md)，
+这次是估值器换代而非 prompt/schema 涨价）。shinytale/nanopi#680 里问了能不能改成动态的：
 钉住的数字会漂（#681 就是 `find`/`ls` 的 `limit` 描述各加一句让 base 从 1540 变 1554），
 每次都要人肉改常量。
 
