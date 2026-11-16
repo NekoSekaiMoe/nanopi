@@ -18,6 +18,8 @@ import type {
 } from "@nanopi/pi-ai";
 import {
 	contentText,
+	countTextTokens,
+	countTokenFragments,
 	getCurrentSystemMessage,
 	normalizeContext,
 	type RetryCallbacks,
@@ -306,27 +308,31 @@ export function shouldCompact(contextTokens: number, contextWindow: number, sett
 // Cut point detection
 // ============================================================================
 
-const ESTIMATED_IMAGE_CHARS = 4800;
+/** Images have no local tokenizer; keep a fixed charge comparable to the ai estimate. */
+const ESTIMATED_IMAGE_TOKENS = 1200;
 
-function estimateTextAndImageContentChars(content: string | Array<{ type: string; text?: string }>): number {
-	if (typeof content === "string") {
-		return content.length;
-	}
-
-	let chars = 0;
+/** Count text blocks plus a fixed charge for image blocks with the native tokenizer. */
+function estimateTextAndImageContentTokens(content: string | Array<{ type: string; text?: string }>): number {
+	if (typeof content === "string") return countTextTokens(content);
+	let tokens = 0;
+	const texts: string[] = [];
 	for (const block of content) {
 		if (block.type === "text" && block.text) {
-			chars += block.text.length;
+			texts.push(block.text);
 		} else if (block.type === "image") {
-			chars += ESTIMATED_IMAGE_CHARS;
+			tokens += ESTIMATED_IMAGE_TOKENS;
 		}
 	}
-	return chars;
+	return tokens + countTokenFragments(texts);
 }
 
 /**
- * Estimate token count for a message using chars/4 heuristic.
- * This is conservative (overestimates tokens).
+ * Estimate token count for a message with the o200k_base tokenizer.
+ *
+ * The old chars/4 rule undercounted code, JSON and CJK text by up to ~3x, so
+ * compaction fired late after switching to a denser tokenizer. Real counts are
+ * the floor for deciding when to compact; provider-reported usage still wins
+ * for the settled prefix.
  *
  * Core roles are measured here; a kind the session registered a codec for is measured
  * by that codec, so a message type a module added is priced by its own definition
@@ -341,42 +347,43 @@ export function estimateTokens(message: AgentMessage, codecs?: MessageTypeCodecM
 	}
 	if (!isCoreRole(message.role)) return 0;
 
-	let chars = 0;
-
 	switch (message.role) {
 		case "system": {
 			const system = message as SystemMessage;
-			chars = estimateTextAndImageContentChars(system.content);
+			const fragments: string[] = [];
+			const tokens = estimateTextAndImageContentTokens(system.content);
 			if (system.sections) {
 				for (const section of Object.values(system.sections)) {
-					if (section) chars += section.length;
+					if (section) fragments.push(section);
 				}
 			}
-			if (system.toolsAdded) chars += JSON.stringify(system.toolsAdded).length;
-			return Math.ceil(chars / 4);
+			if (system.toolsAdded) fragments.push(JSON.stringify(system.toolsAdded));
+			return tokens + countTokenFragments(fragments);
 		}
 		case "user": {
-			chars = estimateTextAndImageContentChars(
+			return estimateTextAndImageContentTokens(
 				(message as { content: string | Array<{ type: string; text?: string }> }).content,
 			);
-			return Math.ceil(chars / 4);
 		}
 		case "assistant": {
 			const assistant = message as AssistantMessage;
+			const fragments: string[] = [];
 			for (const block of assistant.content) {
 				if (block.type === "text") {
-					chars += block.text.length;
+					fragments.push(block.text);
 				} else if (block.type === "thinking") {
-					chars += block.thinking.length;
+					fragments.push(block.thinking);
+					// thinkingSignature is an opaque provider payload stripped on replay;
+					// counting its local bytes would charge text the reader never sees.
 				} else if (block.type === "toolCall") {
-					chars += block.name.length + JSON.stringify(block.arguments).length;
+					fragments.push(block.name);
+					fragments.push(JSON.stringify(block.arguments));
 				}
 			}
-			return Math.ceil(chars / 4);
+			return countTokenFragments(fragments);
 		}
 		case "toolResult": {
-			chars = estimateTextAndImageContentChars(message.content);
-			return Math.ceil(chars / 4);
+			return estimateTextAndImageContentTokens(message.content);
 		}
 		default:
 			return 0;

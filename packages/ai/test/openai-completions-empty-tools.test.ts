@@ -140,10 +140,10 @@ describe("openai-completions empty tools handling", () => {
 
 		const params = mockState.lastParams as { max_tokens?: number; max_completion_tokens?: number };
 		expect(params.max_tokens).toBeUndefined();
-		// 10_000 - ceil(8000 / 3.5 * 1.15) - 4_096: the input estimate carries
-		// headroom, because a max_tokens clamped from an under-estimate is a
-		// request the provider rejects as an overflow.
-		expect(params.max_completion_tokens).toBe(3275);
+		// 10_000 - ceil(1000 * 1.15) - 4_096: the native tokenizer counts 8000
+		// repeated 'x' as 1000 tokens, and the request still carries headroom
+		// for provider framing.
+		expect(params.max_completion_tokens).toBe(4754);
 	});
 
 	it("clamps explicit maxTokens to remaining context", async () => {
@@ -160,7 +160,7 @@ describe("openai-completions empty tools handling", () => {
 
 		const params = mockState.lastParams as { max_tokens?: number; max_completion_tokens?: number };
 		expect(params.max_tokens).toBeUndefined();
-		expect(params.max_completion_tokens).toBe(3275);
+		expect(params.max_completion_tokens).toBe(4754);
 	});
 
 	it("uses conservative OpenAI-compatible fields for Cloudflare AI Gateway /compat models", async () => {

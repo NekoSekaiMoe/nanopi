@@ -42,19 +42,19 @@ const model: Model<"openai-responses"> = {
 };
 
 describe("context token estimation", () => {
-	// Regression for #10497: large new inputs need more room than chars/4 allows.
-	it("reserves 3.5 characters per token for new text when limiting output", () => {
+	// Regression for #10497: large new inputs need more room than a char ratio allows.
+	it("counts new text with a native tokenizer when limiting output", () => {
 		const context = normalizeContext({
 			messages: [createAssistant(100, 2_000), { role: "user", content: "x".repeat(3_500), timestamp: 200 }],
 		});
 
 		expect(estimateContextTokens(context)).toEqual({
-			tokens: 3_000,
+			tokens: 2_438,
 			usageTokens: 2_000,
-			trailingTokens: 1_000,
+			trailingTokens: 438,
 			lastUsageIndex: 0,
 		});
-		expect(buildBaseOptions(model, context).maxTokens).toBe(2_454);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(3_100);
 	});
 
 	it("ignores stale assistant usage after a newer message is inserted before it", () => {
@@ -68,12 +68,12 @@ describe("context token estimation", () => {
 		});
 
 		expect(estimateContextTokens(context)).toEqual({
-			tokens: 1_149,
+			tokens: 504,
 			usageTokens: 0,
-			trailingTokens: 1_149,
+			trailingTokens: 504,
 			lastUsageIndex: null,
 		});
-		expect(buildBaseOptions(model, context).maxTokens).toBe(4_582);
+		expect(buildBaseOptions(model, context).maxTokens).toBe(5_324);
 	});
 
 	it("reserves output room above the raw estimate so a request does not overshoot the window", () => {
@@ -85,9 +85,9 @@ describe("context token estimation", () => {
 			messages: [{ role: "user", content: "x".repeat(3_500), timestamp: 200 }],
 		});
 
-		expect(estimateContextTokens(context).tokens).toBe(1_000);
-		// 10_000 - ceil(1_000 * 1.15) - 4_096
-		expect(buildBaseOptions(model, context).maxTokens).toBe(4_754);
+		expect(estimateContextTokens(context).tokens).toBe(438);
+		// 10_000 - ceil(438 * 1.15) - 4_096
+		expect(buildBaseOptions(model, context).maxTokens).toBe(5_400);
 	});
 
 	it("sends the clamped max_tokens to OpenRouter instead of omitting it", () => {
@@ -119,10 +119,22 @@ describe("context token estimation", () => {
 		});
 
 		expect(estimateContextTokens(context)).toEqual({
-			tokens: 2_002,
+			tokens: 2_001,
 			usageTokens: 2_000,
-			trailingTokens: 2,
+			trailingTokens: 1,
 			lastUsageIndex: 3,
 		});
+	});
+
+	it("counts CJK text close to its real token cost instead of chars/4", () => {
+		// A chars/4 heuristic estimated 190 tokens for this CJK text while the
+		// o200k tokenizer charges 480. Under-counting let compaction fire late
+		// after switching to a denser tokenizer (oh-my-pi #17607).
+		const cjk = "这是一个测试句子，用来验证中文的 token 计数是否比字符数除以四更准确。".repeat(20);
+		const context = normalizeContext({ messages: [{ role: "user", content: cjk, timestamp: 200 }] });
+		const estimate = estimateContextTokens(context);
+		expect(estimate.tokens).toBe(480);
+		// A chars/4 estimate would have been Math.ceil(cjk.length / 4).
+		expect(estimate.tokens).toBeGreaterThan(Math.ceil(cjk.length / 4));
 	});
 });

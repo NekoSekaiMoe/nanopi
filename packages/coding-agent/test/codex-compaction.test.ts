@@ -42,9 +42,9 @@ describe("planUserRetention", () => {
 
 	it("moves the cut back so recent user messages survive verbatim", () => {
 		const entries = [
-			messageEntry("u1", "user", "a".repeat(400)),
-			messageEntry("a1", "assistant", "b".repeat(400)),
-			messageEntry("u2", "user", "c".repeat(400)),
+			messageEntry("u1", "user", "a".repeat(797)),
+			messageEntry("a1", "assistant", "b".repeat(401)),
+			messageEntry("u2", "user", "c".repeat(401)),
 		];
 		// Default cut keeps only u2; the budget forces u1 back into the kept region.
 		const plan = planUserRetention(entries, "u2", 300);
@@ -54,11 +54,11 @@ describe("planUserRetention", () => {
 
 	it("summarizes from the previous compaction boundary, never re-reading summarized entries", () => {
 		const entries = [
-			messageEntry("u0", "user", "x".repeat(400)),
+			messageEntry("u0", "user", "x".repeat(798)),
 			compactionEntry("c1", "u1"),
-			messageEntry("u1", "user", "y".repeat(400)),
-			messageEntry("u2", "user", "y".repeat(400)),
-			messageEntry("u3", "user", "z".repeat(400)),
+			messageEntry("u1", "user", "y".repeat(401)),
+			messageEntry("u2", "user", "y".repeat(401)),
+			messageEntry("u3", "user", "z".repeat(202)),
 		];
 		// The cut moves back to u2; the summarize set starts at the previous
 		// compaction's boundary (u1) and excludes the already-summarized u0.
@@ -72,9 +72,9 @@ describe("planUserRetention", () => {
 
 	it("never snaps the cut onto a tool-result-only entry", () => {
 		const entries = [
-			messageEntry("u1", "user", "x".repeat(400)),
-			messageEntry("r1", "toolResult", "y".repeat(400)),
-			messageEntry("u2", "user", "z".repeat(400)),
+			messageEntry("u1", "user", "x".repeat(798)),
+			messageEntry("r1", "toolResult", "y".repeat(401)),
+			messageEntry("u2", "user", "z".repeat(202)),
 		];
 		const plan = planUserRetention(entries, "u2", 300);
 		strictEqual(plan.firstKeptEntryId, "u1");

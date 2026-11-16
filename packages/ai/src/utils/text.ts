@@ -1,3 +1,4 @@
+import { countTokens } from "gpt-tokenizer/encoding/o200k_base";
 import type { ImageContent, SystemMessage, TextContent, ThinkingContent, ToolCall } from "../types.ts";
 
 type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
@@ -37,4 +38,44 @@ export function renderSystemMessageUpdate(message: SystemMessage): string {
 		);
 	}
 	return parts.join("\n\n");
+}
+
+/**
+ * Local token counting for context sizing.
+ *
+ * A chars/constant heuristic undercounts code, JSON tool arguments and CJK text
+ * by up to ~3x, so compaction fires late after switching to a denser tokenizer.
+ * o200k_base counts every provider's text closely and is used only for sizing:
+ * a provider's reported usage still wins for the settled prefix. The import is
+ * top-level (not deferred) because every estimate path needs it.
+ */
+/** Above this length a text is counted without entering the cache. */
+const MAX_CACHED_LENGTH = 16 * 1024;
+/** Bounded so growing streamed text cannot evict the reusable short fragments. */
+const MAX_CACHE_ENTRIES = 512;
+
+const cache = new Map<string, number>();
+
+/** Count tokens in one text with o200k_base, memoizing short repeated strings. */
+export function countTextTokens(text: string): number {
+	if (text.length === 0) return 0;
+	if (text.length > MAX_CACHED_LENGTH) return countTokens(text);
+	const cached = cache.get(text);
+	if (cached !== undefined) return cached;
+	const tokens = countTokens(text);
+	if (cache.size >= MAX_CACHE_ENTRIES) {
+		// Map iterates in insertion order; dropping the oldest entry keeps the
+		// recently used fragments and bounds memory for session-long chats.
+		const oldest = cache.keys().next().value;
+		if (oldest !== undefined) cache.delete(oldest);
+	}
+	cache.set(text, tokens);
+	return tokens;
+}
+
+/** Sum of {@link countTextTokens} over fragments, counted independently. */
+export function countTokenFragments(fragments: readonly string[]): number {
+	let total = 0;
+	for (const fragment of fragments) total += countTextTokens(fragment);
+	return total;
 }

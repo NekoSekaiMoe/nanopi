@@ -1,5 +1,5 @@
 import type { AssistantMessage, ImageContent, Message, TextContent, TranscriptContext, Usage } from "../types.ts";
-import { getSystemMessageText } from "./text.ts";
+import { countTextTokens, countTokenFragments, getSystemMessageText } from "./text.ts";
 
 export interface ContextUsageEstimate {
 	/** Estimated total context tokens. */
@@ -12,20 +12,16 @@ export interface ContextUsageEstimate {
 	lastUsageIndex: number | null;
 }
 
-const CHARS_PER_TOKEN = 3.5;
-const ESTIMATED_IMAGE_CHARS = 4800;
+/** Images have no local tokenizer; keep the historical fixed charge. */
+const ESTIMATED_IMAGE_TOKENS = 1200;
 
 /**
- * Input estimate multiplied out for callers that must not overshoot the window.
+ * Safety margin for sizing a request against the context window.
  *
- * `CHARS_PER_TOKEN` is an average, and code, JSON tool arguments and non-Latin
- * scripts all tokenize denser than it, so the figure it produces runs under the
- * provider's count. That is harmless when the estimate is only shown, but a
- * `max_tokens` clamped from it is sent to the provider, which adds the two up:
- * OpenRouter rejected requests whose real input was 12% above the estimate with
- * "maximum context length" and the agent then compacted a conversation that
- * still had room. The margin covers the underestimate; it does not make the
- * estimate a tokenizer.
+ * o200k_base counts every provider's text closely, but providers may charge
+ * framing tokens (role markers, tool schemas, reasoning replay) that a local
+ * count of message bodies does not see. The margin absorbs that framing. It is
+ * no longer compensating for a chars/constant underestimate.
  */
 const INPUT_HEADROOM = 1.15;
 
@@ -41,25 +37,23 @@ function safeJsonStringify(value: unknown): string {
 	}
 }
 
-function estimateTextAndImageContentChars(content: string | Array<TextContent | ImageContent>): number {
-	if (typeof content === "string") return content.length;
-
-	let chars = 0;
-	for (const block of content) chars += block.type === "text" ? block.text.length : ESTIMATED_IMAGE_CHARS;
-	return chars;
+/** Count text blocks plus a fixed charge for image blocks. */
+export function estimateTextAndImageContentTokens(content: string | Array<TextContent | ImageContent>): number {
+	if (typeof content === "string") return countTextTokens(content);
+	let tokens = 0;
+	const texts: string[] = [];
+	for (const block of content) {
+		if (block.type === "text") texts.push(block.text);
+		else tokens += ESTIMATED_IMAGE_TOKENS;
+	}
+	return tokens + countTokenFragments(texts);
 }
 
 export function estimateTextTokens(text: string): number {
-	return Math.ceil(text.length / CHARS_PER_TOKEN);
-}
-
-export function estimateTextAndImageContentTokens(content: string | Array<TextContent | ImageContent>): number {
-	return Math.ceil(estimateTextAndImageContentChars(content) / CHARS_PER_TOKEN);
+	return countTextTokens(text);
 }
 
 export function estimateMessageTokens(message: Message): number {
-	let chars = 0;
-
 	if (message.role === "system") {
 		return (
 			estimateTextTokens(getSystemMessageText(message)) +
@@ -70,16 +64,21 @@ export function estimateMessageTokens(message: Message): number {
 	if (message.role === "user") return estimateTextAndImageContentTokens(message.content);
 	if (message.role === "toolResult") return estimateTextAndImageContentTokens(message.content);
 
+	const fragments: string[] = [];
 	for (const block of message.content) {
 		if (block.type === "text") {
-			chars += block.text.length;
+			fragments.push(block.text);
 		} else if (block.type === "thinking") {
-			chars += block.thinking.length;
+			fragments.push(block.thinking);
+			// thinkingSignature / redactedThinking are opaque provider payloads. The
+			// request strips another model's signatures before replay, so counting
+			// their local bytes would charge the reader for text it never sees.
 		} else {
-			chars += block.name.length + safeJsonStringify(block.arguments).length;
+			fragments.push(block.name);
+			fragments.push(safeJsonStringify(block.arguments));
 		}
 	}
-	return Math.ceil(chars / CHARS_PER_TOKEN);
+	return countTokenFragments(fragments);
 }
 
 function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage; index: number } | undefined {
@@ -110,7 +109,7 @@ function getLastAssistantUsageInfo(messages: readonly Message[]): { usage: Usage
 
 /**
  * The estimate multiplied by {@link INPUT_HEADROOM}, for sizing a request against the
- * context window. Reporting callers keep the raw figure: 15% is not news.
+ * context window. Reporting callers keep the raw figure.
  */
 export function estimateContextTokensForRequest(context: TranscriptContext | readonly Message[]): number {
 	return Math.ceil(estimateContextTokens(context).tokens * INPUT_HEADROOM);

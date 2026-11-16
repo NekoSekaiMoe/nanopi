@@ -246,7 +246,7 @@ describe("session context edits", () => {
 		const session = SessionManager.inMemory();
 		session.appendMessage({
 			role: "system",
-			content: "system prompt ".repeat(3_000),
+			content: "system prompt ".repeat(6_000),
 			toolsAdded: [
 				{
 					name: "example",

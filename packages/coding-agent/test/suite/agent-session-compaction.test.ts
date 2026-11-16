@@ -456,7 +456,7 @@ describe("AgentSession compaction characterization", () => {
 	it.each([false, true])(
 		"compacts after an oversized tool result in the same run (model override: %s)",
 		async (modelOverride) => {
-			const toolResult = `large-tool-result:${"x".repeat(8000)}`;
+			const toolResult = `large-tool-result:${"x".repeat(16000)}`;
 			const largeTool: AgentTool = {
 				name: "large_result",
 				label: "Large result",
@@ -537,7 +537,7 @@ describe("AgentSession compaction characterization", () => {
 			description: "Returns enough content to cross the compaction threshold",
 			parameters: Type.Object({}),
 			execute: async () => ({
-				content: [{ type: "text", text: `large-tool-result:${"x".repeat(6800)}` }],
+				content: [{ type: "text", text: `large-tool-result:${"x".repeat(13600)}` }],
 				details: {},
 			}),
 		};
@@ -605,7 +605,7 @@ describe("AgentSession compaction characterization", () => {
 			description: "Returns enough content to cross the compaction threshold, then terminates",
 			parameters: Type.Object({}),
 			execute: async () => ({
-				content: [{ type: "text", text: `large-tool-result:${"x".repeat(6800)}` }],
+				content: [{ type: "text", text: `large-tool-result:${"x".repeat(13600)}` }],
 				details: {},
 				terminate: true,
 			}),
