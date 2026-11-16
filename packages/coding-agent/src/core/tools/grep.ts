@@ -88,6 +88,12 @@ export interface GrepToolDetails {
 	trimmedFiles?: GrepTrimmedFile[];
 	/** True when ripgrep was missing, so the in-process walker ran instead. */
 	fallback?: boolean;
+	/**
+	 * Matches whose line holds a NUL byte, which makes the file binary data rather than text. The
+	 * content is still reported, but a minified bundle or a `git show` dump reads like source, so
+	 * the notice says what it is instead of letting the model quote it as code.
+	 */
+	binaryMatches?: number;
 }
 
 /**
@@ -308,6 +314,8 @@ export function createGrepToolDefinition(
 						let trailingContextEnd = 0;
 						let trailingFile: string | undefined;
 						let linesTruncated = false;
+						/** Match rows printed for content with a NUL byte in it, i.e. not text. */
+						let binaryRows = 0;
 						let killedDueToLimit = false;
 						let stoppedEarly = false;
 						// No ripgrep means the in-process walker runs instead, and that is the only
@@ -421,6 +429,10 @@ export function createGrepToolDefinition(
 							const block: string[] = [];
 							for (const row of rows) {
 								const text = formatRowText(row.lineText);
+								// ripgrep escapes a NUL byte as the six characters backslash-x-zero-zero. The
+								// line reader decodes that escape while reading, so the NUL itself is what the
+								// row holds: a match inside a bundle or a dump reads as source without this.
+								if (row.isMatch && text.includes("\u0000")) binaryRows++;
 								block.push(
 									`${relativePath}${row.isMatch ? ":" : "-"}${row.lineNumber}${row.isMatch ? ":" : "-"} ${text}`,
 								);
@@ -659,6 +671,12 @@ export function createGrepToolDefinition(
 									`Some files have more matches than shown: ${named.join(", ")}${rest > 0 ? `, and ${rest} more file${rest === 1 ? "" : "s"}` : ""}. Use path= to search one file at a time`,
 								);
 								details.trimmedFiles = trimmedFiles;
+							}
+							if (binaryRows > 0) {
+								notices.push(
+									`${binaryRows} match${binaryRows === 1 ? " is" : "es are"} inside binary content (NUL bytes), not source text. Use read to inspect the file`,
+								);
+								details.binaryMatches = binaryRows;
 							}
 							if (linesTruncated) {
 								notices.push(

@@ -154,7 +154,9 @@ export type BeforeAgentStartTrigger =
 	| Pick<BeforeAgentStartUserEvent, "messageType" | "prompt" | "images">
 	| Pick<BeforeAgentStartCustomEvent, "messageType" | "message">
 	/** A replay of the last turn, which adds no message of its own. */
-	| { messageType: "continue" };
+	| { messageType: "continue" }
+	/** A `/retry` past an exhausted auto-retry, which repeats the request without the response. */
+	| { messageType: "retry" };
 
 /** Combined result from all before_agent_start handlers. */
 interface BeforeAgentStartCombinedResult {

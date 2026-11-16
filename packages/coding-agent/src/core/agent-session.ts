@@ -134,8 +134,10 @@ import type { ResourceLoader } from "./resource-loader.ts";
 import {
 	findLastRunRecord,
 	findRecoverableRun,
+	findReplayableFailure,
 	getRunRecordData,
 	type RecoverableRun,
+	type ReplayableFailure,
 	RUN_RECORD_CUSTOM_TYPE,
 	type RunRecordData,
 	type RunRecordTarget,
@@ -537,6 +539,14 @@ export class AgentSession {
 	 * retry is routed with it as `failed`, since the context no longer contains it.
 	 */
 	private _failedResponse: AssistantMessage | undefined;
+	/**
+	 * Entry ID of the newest assistant response the branch holds, whatever its outcome.
+	 *
+	 * The run record of a failed run names its response, but auto-retry omits every attempt from the
+	 * model projection, and the last one ends up without a source entry. This survives that, so a
+	 * `/retry` that arrives after the budget ran out can still say which response failed.
+	 */
+	private _lastAssistantEntryId: string | undefined;
 	/** Run record of the active run, rewritten as the run learns its outcome. Undefined while idle. */
 	private _runRecord: RunRecordTarget | undefined;
 	private _runRecordFirstEntryId: string | undefined;
@@ -1573,6 +1583,7 @@ export class AgentSession {
 			}
 			if (entryId) {
 				this._entryIdsByMessage.set(event.message, entryId);
+				if (event.message.role === "assistant") this._lastAssistantEntryId = entryId;
 				if (event.message.role === "toolResult" && this._runRecordFirstEntryId === undefined) {
 					this._runRecordFirstEntryId = entryId;
 				}
@@ -1690,9 +1701,12 @@ export class AgentSession {
 
 	/** Record how the run ended, so a failure that outlives this process can be replayed. */
 	private _recordRunEnd(message: AssistantMessage): void {
+		const messageEntryId = this._findPersistedMessageEntryId(message);
 		this._appendRunRecord({
 			firstEntryId: this._runRecordFirstEntryId,
-			lastEntryId: this._findPersistedMessageEntryId(message),
+			// A response the run has already omitted from the model projection still has an entry;
+			// when the lookup fails anyway, the newest assistant entry is the response in question.
+			lastEntryId: messageEntryId ?? this._lastAssistantEntryId,
 			stopReason: message.stopReason,
 			errorMessage: message.errorMessage,
 			turns: this._runRecordTurns,
@@ -2408,32 +2422,70 @@ export class AgentSession {
 	}
 
 	/**
-	 * Replay the newest failed run.
+	 * The response `/retry` would replay: the newest failed one, or the failure auto-retry gave up
+	 * on. See {@link findReplayableFailure}.
+	 */
+	private _replayableFailure(): ReplayableFailure | undefined {
+		return findReplayableFailure(this.sessionManager.getBranch(), this._lastAssistantEntryId);
+	}
+
+	/**
+	 * Bring a response back into the model projection by dropping the omission that removed it.
+	 *
+	 * Auto-retry and `/retry` both omit a failed attempt to keep it out of the next request. Undoing
+	 * that is how a failure stopped being a dead end: the response is history again, so the
+	 * conversation continues from what the model actually said, and the next `/retry` still has a
+	 * failure to replay.
+	 */
+	private _clearFailureOmission(entryId: string): void {
+		this.sessionManager.appendContextEdit(entryId, null);
+		this._refreshFinalizedContext();
+	}
+
+	/**
+	 * Replay the newest failed response.
 	 *
 	 * The failed response is routed as `failed`, which the request projection uses to pick the
 	 * virtual-model route, and the context projection decides what the model sees. Retry attempts the
 	 * failed run already spent are charged to this one, so replaying does not reset the budget.
 	 *
-	 * @throws when the branch holds no replayable failure, for instance because auto-retry already
-	 * omitted the response or a later message superseded it.
+	 * Auto-retry that ran out of budget leaves a response the branch can no longer replay directly:
+	 * every attempt is omitted from the model projection on purpose, so the failure ended up applied
+	 * instead of retried. `/retry` there repeats the turn rather than the response, with a fresh
+	 * budget, because the user asking again is not the automatic loop that just gave up.
+	 *
+	 * @throws when the branch holds no failure to replay, for instance because a later message
+	 * superseded it.
 	 */
 	async retryLastRun(): Promise<void> {
 		this.assertRuntimeAvailable();
 		if (this.isStreaming || this.isCompacting) {
 			throw new Error("Cannot retry while the agent or compaction is running.");
 		}
-		const recoverable = this.recoverableRun;
-		if (!recoverable) {
+		const failure = this._replayableFailure();
+		if (!failure) {
 			throw new Error("No failed response to retry in this session.");
 		}
-		const failed = this.sessionManager.getEntry(recoverable.lastEntryId);
-		if (failed?.type !== "message" || failed.message.role !== "assistant") {
-			throw new Error("No failed response to retry in this session.");
+		if (failure.replay === "response") {
+			const failed = this.sessionManager.getEntry(failure.lastEntryId);
+			if (failed?.type !== "message" || failed.message.role !== "assistant") {
+				throw new Error("No failed response to retry in this session.");
+			}
+			// The run replays the same turn, so it starts from the failed response instead of a message.
+			this._failedResponse = failed.message as AssistantMessage;
+			if (failure.attempts > 0) this._retryAttempt = failure.attempts;
+			await this._startRun({ messageType: "continue" });
+			return;
 		}
-		// The run replays the same turn, so it starts from the failed response instead of a message.
-		this._failedResponse = failed.message as AssistantMessage;
-		if (recoverable.attempts > 0) this._retryAttempt = recoverable.attempts;
-		await this._startRun({ messageType: "continue" });
+		// The budget of the run that gave up is spent, and the user asking again is a new run, not a
+		// continuation of the loop that exhausted it.
+		this._retryAttempt = 0;
+		// Every auto-retry attempt was omitted from the model projection, so the continuation that
+		// follows would start from the failure it is supposed to replace. Clearing the omission for
+		// the request keeps the replay honest: this run repeats the turn against the provider, it does
+		// not append a reply on top of the failed one.
+		this._clearFailureOmission(failure.lastEntryId);
+		await this._startRun({ messageType: "retry" });
 	}
 
 	/**
@@ -2468,8 +2520,10 @@ export class AgentSession {
 		}
 
 		const messages: AgentMessage[] = [];
-		if (trigger.messageType === "continue") {
+		if (trigger.messageType === "continue" || trigger.messageType === "retry") {
 			// A replay adds no message of its own; the request repeats the failed turn.
+			// `retry` is the same request one run later: every auto-retry attempt was omitted from the
+			// model projection, so the conversation already ends with the input that failed.
 		} else if (trigger.messageType === "custom") {
 			messages.push(trigger.message);
 		} else {

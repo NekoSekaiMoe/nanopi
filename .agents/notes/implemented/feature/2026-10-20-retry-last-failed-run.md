@@ -30,15 +30,26 @@ as one dim chat row when the run failed and is ignored by the model.
   raw messages survive, no context edit removed it from the projection, no compaction followed it,
   and the run recorded nothing after it that the model would see.
 - A reclaimable failure is rare in practice. Auto-retry omits each attempt it makes, so a run that
-  exhausted retries leaves its last failure omitted too. What stays replayable is the case this
-  issue is about: a failure the process never got to retry, or an attempt that is still the newest
-  thing the model saw.
-- The replay starts through a new `before_agent_start` trigger, `messageType: "continue"`. It adds
-  no message of its own and sets `_failedResponse`, so the request repeats the failed turn and
-  virtual-model routing still sees the failure. `_startRun` keeps `_failedResponse` for this
-  trigger; a normal prompt still clears it.
+  exhausted retries leaves its last failure omitted too: `findRecoverableRun()` finds nothing right
+  after the most common failure there is. `findReplayableFailure()` covers that shape (see below).
+- A replay whose response is still in the projection starts through a `before_agent_start` trigger,
+  `messageType: "continue"`. It adds no message of its own and sets `_failedResponse`, so the
+  request repeats the failed turn and virtual-model routing still sees the failure. `_startRun`
+  keeps `_failedResponse` for this trigger; a normal prompt still clears it.
 - Attempts are charged across processes. The record stores the absolute attempt count, so a replay
   of a session with two spent attempts starts at three instead of resetting the budget to zero.
+- A failure auto-retry gave up on is retried as a turn, not as a response. Every attempt that run
+  made was omitted from the projection, so replaying the response is impossible by construction:
+  `findRecoverableRun()` refuses it on purpose. `findReplayableFailure()` reads the same record but
+  accepts that omission, and `retryLastRun()` then drops the omission, clears `_retryAttempt`, and
+  starts the run through a `before_agent_start` trigger `messageType: "retry"` that adds no message
+  either. The request is the one the omitted attempt would have sent, against a provider that has
+  had time to recover, and the retry budget restarts because the run that exhausted it is over.
+- `AgentSession` remembers `_lastAssistantEntryId`, the newest assistant entry it persisted. It
+  exists because the omission above also takes away the source entry `_recordRunEnd()` would name:
+  the run record of the final attempt falls back to this ID instead of recording `undefined`, which
+  is what makes the failed run findable at all. A retry that itself failed again replaces it with
+  its own response, so `/retry` keeps targeting the newest failure rather than the first one.
 - The same entry point is exposed as the RPC command `retry_last_run` and its client method. The
   webui still answers "slash commands are not available" for `/retry`, as it does for every other
   command.
@@ -55,6 +66,17 @@ spend tokens without consent.
   `defer-threshold-compaction` (#115): a failure that stays visible also stays in the token count
   until its retry resolves. Doing it here would make the `/retry` entry point unusable to test
   against existing files, so it waits for real usage data as the issue proposes.
+- **Leave the omission in place and repeat the request from the input before the failure.** This is
+  what the turn replay first did, on the theory that the provider should not see the failure it is
+  being asked to replace. It does not run: with the response omitted, the projection ends with the
+  user message, the prompt path takes no message of its own, and `Agent.continue()` refuses to
+  start from what is left. Appending a synthetic "try again" message instead would have put words
+  in the user's mouth and polluted the transcript for a retry the model can read as a normal turn.
+- **Reset the retry budget silently and let the response replay.** Replaying the response sets
+  `_retryAttempt` to the attempts the failed run spent, which is what makes a normal `/retry` a
+  continuation of the same budget. For a run that already spent the whole budget that number means
+  the first `_prepareRetry` gives up again without asking the provider, so the command answers by
+  doing nothing. Restarting the budget is the difference between "retry" and "give up twice".
 - **A dedicated `run_attempt` entry type.** It would need touching `snapshot`, `projectContextEntry`,
   the tree selector, the HTML export, and JSONL export. A `custom` entry with a payload needs none
   of that: `sessionEntryToContextMessages` already returns nothing for it.
@@ -82,6 +104,13 @@ spend tokens without consent.
   errors reach the user as a normal command error rather than a silent no-op.
 - Attempt accounting for a replay relies on `_retryAttempt` being restored before the run starts.
   `_startRun` does not reset it, so the value survives into the first `_prepareRetry` call.
+- A turn replay leaves the failed response back in the projection: the omission goes away before
+  the run starts, so the transcript shows the failure followed by whatever the retry produced. That
+  costs context (the failure is text the model did not need to keep) and is the price of the retry
+  staying reachable after it runs. Keeping the omission instead made the retry unrepeatable: the
+  projection ended with the input that failed, and `Agent.continue()` refused to start from it.
 - Coverage: `packages/coding-agent/test/suite/agent-session-retry-session.test.ts` records a completed run, a run whose
   auto-retry gave up, a failure without auto-retry, a replay, a replay that keeps charging
-  attempts, and a recovery from a session file reopened after a restart.
+  attempts, a retry of the turn auto-retry gave up on, and a recovery from a session file reopened
+  after a restart. `packages/coding-agent/test/agent-session-retry.test.ts` covers the budget
+  restarting for the manual retry.

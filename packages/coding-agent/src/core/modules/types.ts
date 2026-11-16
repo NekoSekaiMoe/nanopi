@@ -1006,11 +1006,20 @@ export interface BeforeAgentStartContinueEvent extends BeforeAgentStartEventBase
 	messageType: "continue";
 }
 
+/**
+ * A run that asks the provider again without replaying a response: `/retry` after auto-retry
+ * exhausted its budget, where the failed response stays out of the model projection.
+ */
+export interface BeforeAgentStartRetryEvent extends BeforeAgentStartEventBase {
+	messageType: "retry";
+}
+
 /** Fired before a run starts from a user message, an idle custom message with `triggerTurn`, or a replay. */
 export type BeforeAgentStartEvent =
 	| BeforeAgentStartUserEvent
 	| BeforeAgentStartCustomEvent
-	| BeforeAgentStartContinueEvent;
+	| BeforeAgentStartContinueEvent
+	| BeforeAgentStartRetryEvent;
 
 /** Fired when an agent loop starts */
 export interface AgentStartEvent {
