@@ -5,6 +5,7 @@
 ### Added
 
 - Compaction summaries now follow explicit long-session retention rules: exact paths, signatures, errors, decisions, constraints, and unfinished work are kept; consumed logs, repeated reads, and settled discussions are dropped. The rules live in the summarization system prompt and do not change the summary format (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
+- Compaction summaries gain a `## Key Facts` block with stable refs (`c0r2`) to the session entries they compress; the `recall_context` tool restores those original messages on demand when a summary is too compressed to continue safely (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Fixed
