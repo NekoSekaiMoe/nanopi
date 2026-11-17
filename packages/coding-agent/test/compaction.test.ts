@@ -279,10 +279,24 @@ describe("shouldCompact", () => {
 			enabled: true,
 			reserveTokens: 10000,
 			keepRecentTokens: 20000,
+			growthGateTokens: 0,
 		};
 
 		expect(shouldCompact(95000, 100000, settings)).toBe(true);
 		expect(shouldCompact(89000, 100000, settings)).toBe(false);
+	});
+
+	it("waits for enough growth after a compaction when the gate is configured", () => {
+		const settings: CompactionSettings = {
+			enabled: true,
+			reserveTokens: 10000,
+			keepRecentTokens: 20000,
+			growthGateTokens: 5000,
+		};
+
+		expect(shouldCompact(95000, 100000, settings, 4999)).toBe(false);
+		expect(shouldCompact(95000, 100000, settings, 5000)).toBe(true);
+		expect(shouldCompact(89000, 100000, settings, 10000)).toBe(false);
 	});
 
 	it("should return false when disabled", () => {
@@ -290,6 +304,7 @@ describe("shouldCompact", () => {
 			enabled: false,
 			reserveTokens: 10000,
 			keepRecentTokens: 20000,
+			growthGateTokens: 0,
 		};
 
 		expect(shouldCompact(95000, 100000, settings)).toBe(false);

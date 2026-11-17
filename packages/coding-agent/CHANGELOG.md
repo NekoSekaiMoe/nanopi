@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added opt-in `compaction.growthGateTokens`. Automatic threshold compaction now waits for enough estimated context growth since the last compaction, so a threshold that is barely exceeded cannot produce a second summary right after one finished. The default `0` keeps the existing threshold-only behavior (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Fixed
