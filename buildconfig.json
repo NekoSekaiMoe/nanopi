@@ -74,7 +74,7 @@
 			"description": "Built-in slash commands (/compact, /context, /status, /init)"
 		},
 		"module/codex-compaction": {
-			"description": "Codex-style compaction and its post-compaction warning"
+			"description": "Codex-style compaction, its post-compaction warning, and Key Facts ref recall"
 		},
 		"module/qoder-checkin": {
 			"description": "Qoder daily check-in on session start (claims the campaign credits for every logged-in Qoder account)"
