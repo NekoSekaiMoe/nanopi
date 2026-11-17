@@ -23,6 +23,7 @@ import {
 	validateFlavorModules,
 	validateFlavorProviders,
 } from "./buildconfig.mjs";
+import { readBuiltinModuleNames } from "./module-registry.mjs";
 
 const validConfig = {
 	defaultFlavor: "full",
@@ -417,6 +418,15 @@ describe("module components", () => {
 		throws(() => validateFlavorModules(dir, ["alpha"]), /"moduleBundles" does not list every builtin module/);
 		throws(() => validateFlavorModules(dir, ["alpha", "beta", "gamma"]), /modules without a "module\/" component: gamma/);
 		assert.doesNotThrow(() => validateFlavorModules(dir, modules));
+	});
+
+	it("keeps the real moduleBundles in sync with BUILTIN_MODULES (issue #775)", () => {
+		// Regression: tool-result-store was registered and given a component,
+		// but its moduleBundles entry was lost in the merge, so the bundle build
+		// failed before esbuild started.
+		assert.doesNotThrow(() =>
+			validateFlavorModules(join(import.meta.dirname, ".."), readBuiltinModuleNames(join(import.meta.dirname, ".."))),
+		);
 	});
 });
 

@@ -233,6 +233,9 @@
 		"todo-lite": {
 			"source": "packages/coding-agent/src/extras/todo-lite/index.ts"
 		},
+		"tool-result-store": {
+			"source": "packages/coding-agent/src/extras/tool-result-store/index.ts"
+		},
 		"websearch": {
 			"source": "packages/coding-agent/src/extras/websearch/src/index.ts"
 		}
