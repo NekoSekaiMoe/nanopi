@@ -80,29 +80,30 @@ function removalsOf(remoteTip, localTree) {
 	return removals;
 }
 
-export function mirrorMain(remote) {
-	const head = git(["rev-parse", "HEAD"]);
-	const localTree = treeOf("HEAD");
+function isNonFastForward(error) {
+	return /fetch first|non-fast-forward|is at [0-9a-f]+ but expected|stale info|simulated race: remote advanced/i.test((error.stderr ?? "").toString());
+}
 
-	withRetry("git fetch", () => git(["fetch", "--quiet", remote, "main"]));
 
-	if (treeOf("FETCH_HEAD") === localTree) {
+
+function plan(head, remoteTip, remoteTree, localTree) {
+	if (remoteTree === localTree) {
 		console.log(`remote main already has this tree: ${localTree}`);
-		return;
+		return null;
 	}
 
 	// 远端 tip 是 HEAD 的祖先时快进，历史连贯。否则推一个「父是远端 tip、树是本地
 	// HEAD 的」单父合成提交：合并提交（-p HEAD -p FETCH_HEAD）会把整个待推区间带进
 	// 通告，GitHub 的 push protection 会因此重新扫描历史里的提交，等于白推。
-	const fastForward = git(["merge-base", "--is-ancestor", "FETCH_HEAD", "HEAD"], { allowFailure: true }) !== null;
+	const fastForward = git(["merge-base", "--is-ancestor", remoteTip, head], { allowFailure: true }) !== null;
 
 	// 合成提交只搬内容，被它落下的远端提交在历史上留不下痕迹。非快进时必须先证明
 	// 那些提交的文件本地树仍然都有，否则就是一次内容回退（#242：b3ffe400 用旧树
 	// 盖掉了 c897cdf2 的 #235 改动）。
 	if (!fastForward) {
-		const removals = removalsOf("FETCH_HEAD", localTree);
+		const removals = removalsOf(remoteTip, localTree);
 		if (removals.length > 0) {
-			console.error(`refusing to overwrite ${remote} main: ${removals.length} file(s) from its tip are absent locally`);
+			console.error(`refusing to overwrite the remote main: ${removals.length} file(s) from its tip are absent locally`);
 			for (const path of removals.slice(0, 20)) console.error(`  ${path}`);
 			if (removals.length > 20) console.error(`  ... and ${removals.length - 20} more`);
 			console.error("merge the remote main into this branch and rerun; the mirror never reverts content");
@@ -110,28 +111,62 @@ export function mirrorMain(remote) {
 		}
 	}
 
-	const target = fastForward ? head : git(["commit-tree", localTree, "-p", "FETCH_HEAD", "-m", `Merge CNB main ${head}`]);
+	const target = fastForward ? head : git(["commit-tree", localTree, "-p", remoteTip, "-m", `Merge CNB main ${head}`]);
+	if (fastForward) console.log(`fast-forward: ${head} is ahead of the remote main`);
+	else console.log(`diverged histories; pushing ${target} (tree of ${head} on the remote tip)`);
+	return `${target}:refs/heads/main`;
+}
 
-	if (fastForward) {
-		console.log(`fast-forward: ${head} is ahead of ${remote} main`);
-	} else {
-		console.log(`diverged histories; pushing ${target} (tree of ${head} on the remote tip)`);
+function fetchRemote(remote) {
+	withRetry("git fetch", () => git(["fetch", "--quiet", remote, "main"]));
+	return { tip: git(["rev-parse", "FETCH_HEAD"]), tree: treeOf("FETCH_HEAD") };
+}
+
+// A single push can fail because another writer advanced the ref between our
+// fetch and push. Recompute against the new tip. Transport failures still use
+// withRetry; a stale plan must not replay the same ref.
+function pushWithRecompute(remote, head, localTree) {
+	for (let attempt = 1; ; attempt += 1) {
+		const observed = fetchRemote(remote);
+		const ref = plan(head, observed.tip, observed.tree, localTree);
+		if (ref === false) return false;
+		if (!ref) return true;
+
+		try {
+			for (let pushAttempt = 1; ; pushAttempt += 1) {
+				try {
+					git(["push", "--quiet", remote, ref]);
+					break;
+				} catch (error) {
+					if (!isNonFastForward(error) || pushAttempt >= ATTEMPTS) throw error;
+					const detail = (error.stderr ?? "").toString().trim().split("\n").at(-1) ?? error.message;
+					console.log(`git push failed (attempt ${pushAttempt}/${ATTEMPTS}): ${detail}`);
+					sleep(BACKOFF_MS * pushAttempt);
+				}
+			}
+		} catch (error) {
+			if (!isNonFastForward(error) || attempt >= ATTEMPTS) throw error;
+			console.log(`remote main advanced during push (attempt ${attempt}/${ATTEMPTS}); recomputing`);
+			sleep(BACKOFF_MS * attempt);
+			continue;
+		}
+
+		withRetry("git fetch (verify)", () => git(["fetch", "--quiet", remote, "main"]));
+		const remoteTree = treeOf("FETCH_HEAD");
+		if (remoteTree !== localTree) {
+			console.error("tree mismatch after push:");
+			console.error(`  local  ${localTree}`);
+			console.error(`  remote ${remoteTree}`);
+			console.error(git(["diff", "--stat", localTree, remoteTree], { allowFailure: true }) ?? "");
+			return false;
+		}
+		return true;
 	}
+}
 
-	withRetry("git push", () => git(["push", "--quiet", remote, `${target}:refs/heads/main`]));
-
-	// 退出码不足以证明内容落地，回读远端树逐字节比一次。
-	withRetry("git fetch (verify)", () => git(["fetch", "--quiet", remote, "main"]));
-
-	const remoteTree = treeOf("FETCH_HEAD");
-	if (remoteTree !== localTree) {
-		console.error("tree mismatch after push:");
-		console.error(`  local  ${localTree}`);
-		console.error(`  remote ${remoteTree}`);
-		console.error(git(["diff", "--stat", localTree, remoteTree], { allowFailure: true }) ?? "");
-		return false;
-	}
-
-	console.log(`mirrored ${head}: ${remoteTree}`);
+export function mirrorMain(remote) {
+	const head = git(["rev-parse", "HEAD"]);
+	const localTree = treeOf("HEAD");
+	return pushWithRecompute(remote, head, localTree);
 }
 

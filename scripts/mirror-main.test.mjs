@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { chmodSync, writeFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -161,5 +161,48 @@ test("a diverged remote whose content survives locally is still mirrored", async
 	const result = mirror(local, remote);
 	assert.equal(result.status, 0, result.stderr);
 	assert.match(result.stdout, /diverged histories/);
+	assert.equal(git(remote, ["rev-parse", "main^{tree}"]), git(local, ["rev-parse", "HEAD^{tree}"]));
+});
+
+// A local pre-push hook moves the remote ref after the script's fetch and exits
+// non-zero, so git rejects the first push. This reproduces the compare-and-swap
+// failure from CI: the mirror must refetch and recompute, not replay the stale
+// ref.
+test("a remote that advances between fetch and push is recomputed", async (t) => {
+	const { remote, root } = await createFixture(t, "race");
+	seedRepo(t, root, remote);
+	const local = clone(t, root, remote, "local");
+	const other = clone(t, root, remote, "other");
+
+	commit(local, "a.txt", "local", "local change");
+	assert.equal(mirror(local, remote).status, 0);
+	const firstLocal = git(local, ["rev-parse", "HEAD"]);
+
+	commit(local, "a.txt", "shared", "shared tree on local side");
+	commit(local, "race.txt", "shared", "shared content on local side");
+	git(other, ["fetch", "--quiet", remote, "main"]);
+	git(other, ["reset", "--hard", "FETCH_HEAD"]);
+	commit(other, "a.txt", "shared", "shared tree on remote side");
+	commit(other, "race.txt", "shared", "shared content on remote side");
+	assert.equal(git(local, ["rev-parse", "HEAD^{tree}"]), git(other, ["rev-parse", "HEAD^{tree}"]));
+
+	git(remote, ["fetch", "--quiet", local, `${firstLocal}:refs/heads/local-base`]);
+	git(remote, ["update-ref", "refs/heads/main", "refs/heads/local-base"]);
+	git(remote, ["fetch", "--quiet", other, "main:refs/heads/push-target"]);
+
+	const hook = join(local, ".git", "hooks", "pre-push");
+	writeFileSync(hook, `#!/bin/sh
+cat >/dev/null
+git --git-dir="${remote}" update-ref refs/heads/main refs/heads/push-target
+echo "simulated race: remote advanced" >&2
+exit 1
+`);
+	chmodSync(hook, 0o755);
+
+	const result = mirror(local, remote);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stderr, /simulated race: remote advanced/);
+	assert.match(result.stdout, /remote main advanced during push/);
+	assert.match(result.stdout, /already has this tree/);
 	assert.equal(git(remote, ["rev-parse", "main^{tree}"]), git(local, ["rev-parse", "HEAD^{tree}"]));
 });
