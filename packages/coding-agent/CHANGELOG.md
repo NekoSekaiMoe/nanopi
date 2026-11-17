@@ -9,6 +9,8 @@
 
 ### Fixed
 
+- Truncated `read`, `grep`, `find` and `ls` results are saved under the agent dir instead of being lost: the tool result carries a `recall_tool_result` ref and a path, and the new module reads the stored text back in 50KB pages so one oversized log can no longer spend the whole context on the way back (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
+
 - `/retry` works on the failure auto-retry gave up on: every attempt that loop made is omitted from the model projection, so the branch held no replayable response and the command answered "No failed response to retry" right after a visible failure. The turn is repeated with a fresh retry budget now, and the failure returns to the transcript so a second `/retry` still has something to replay
 - A grep match inside a file with NUL bytes is reported as a binary match: a minified bundle, a `git show` dump, or a UTF-16 document printed as ordinary source rows, so the answer looked like source code the model could quote. The rows are still returned, and a notice says how many of them are inside binary content ([#763](https://cnb.cool/shinytale/nanopi/-/issues/763))
 - A bash or tool-output temp file is closed once, on every exit path, and its write completion is awaited: a failed write used to surface as an unhandled `error` event (or not at all) while the caller got a truncated log path back
