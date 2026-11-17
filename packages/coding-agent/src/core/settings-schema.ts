@@ -2,7 +2,7 @@ import { ModelThinkingLevelSchema } from "@nanopi/pi-ai/providers/model-schema";
 import { type Static, type TSchemaOptions, Type } from "typebox";
 import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
 
-function nonNegativeSafeInteger(options: { default?: number } = {}) {
+function nonNegativeSafeInteger(options: { default?: number; description?: string } = {}) {
 	return Type.Integer({ minimum: 0, maximum: Number.MAX_SAFE_INTEGER, ...options });
 }
 
@@ -26,6 +26,13 @@ const CompactionSettingsSchema = Type.Object({
 	),
 	reserveTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.reserveTokens })),
 	keepRecentTokens: Type.Optional(nonNegativeSafeInteger({ default: SETTINGS_DEFAULTS.compaction.keepRecentTokens })),
+	growthGateTokens: Type.Optional(
+		nonNegativeSafeInteger({
+			description:
+				"Additional context tokens required since the last compaction before auto-compaction may run again. 0 keeps the threshold-only behavior.",
+			default: SETTINGS_DEFAULTS.compaction.growthGateTokens,
+		}),
+	),
 	modelOverrides: Type.Optional(
 		Type.Record(Type.String(), CompactionModelOverrideSchema, {
 			description: 'Per-model overrides keyed by exact "provider/modelId" strings.',
@@ -416,6 +423,7 @@ export interface CompactionSettings extends CompactionSettingsInput {
 	enabled: boolean;
 	reserveTokens: number;
 	keepRecentTokens: number;
+	growthGateTokens?: number;
 }
 export interface BranchSummarySettings extends Static<typeof BranchSummarySettingsSchema> {}
 export interface ProviderRetrySettings extends Static<typeof ProviderRetrySettingsSchema> {}

@@ -950,8 +950,23 @@ export class AgentSession {
 			estimateProjectedContextTokens(projection, this.sessionManager.getBranch(), this.messageTypes).tokens +
 				additionalTokens,
 			model.contextWindow,
-			this.settingsManager.getCompactionSettings(this.model),
+			this.settingsManager.getCompactionSettings(model),
+			this._tokensSinceLastCompaction(),
 		);
+	}
+
+	/** Context added after the most recent compaction on this branch. */
+	private _tokensSinceLastCompaction(): number | undefined {
+		const settings = this.settingsManager.getCompactionSettings(this.model);
+		if (settings.growthGateTokens <= 0) return undefined;
+		const branch = this.sessionManager.getBranch();
+		const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
+		if (compactionIndex < 0) return undefined;
+		let tokens = 0;
+		for (const entry of branch.slice(compactionIndex + 1)) {
+			if (entry.type === "message") tokens += estimateTokens(entry.message, this.messageTypes);
+		}
+		return tokens;
 	}
 
 	private async _compactBeforeNextAssistantResponse(turn: PrepareNextTurnContext): Promise<AgentContext> {
@@ -3912,7 +3927,7 @@ export class AgentSession {
 		} else {
 			contextTokens = directContextTokens;
 		}
-		if (shouldCompact(contextTokens, contextWindow, settings)) {
+		if (shouldCompact(contextTokens, contextWindow, settings, this._tokensSinceLastCompaction())) {
 			return await this._runAutoCompaction("threshold", false);
 		}
 		return false;
