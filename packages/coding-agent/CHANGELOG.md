@@ -4,6 +4,7 @@
 
 ### Added
 
+- A compaction summary now lists the history it replaced, and `recall_context` pulls one region back. The summary ends with a `## Replaced Context (recallable)` section, one line per replaced turn with a ref, a one-line preview, an entry count, and a token size; `recall_context({ ref })` answers with the original messages of that region, capped at 8000 tokens so a recall cannot refill the window the summary just freed. A ref is an ordinal over the branch (`E3` = the third model-visible entry), recomputed from the branch and the newest cut point, so it survives a reload and a fork with no schema change. `session_before_compact` can now post-process a summary it did not write: the event is dispatched a second time with `replacedSummary` when no handler built one, which is what lets the appendix land on the Codex-style summary ([#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Fixed

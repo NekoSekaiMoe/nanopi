@@ -76,6 +76,9 @@
 		"module/codex-compaction": {
 			"description": "Codex-style compaction and its post-compaction warning"
 		},
+		"module/compaction-recall": {
+			"description": "Recallable compaction refs: a region table appended to the summary and the recall_context tool"
+		},
 		"module/qoder-checkin": {
 			"description": "Qoder daily check-in on session start (claims the campaign credits for every logged-in Qoder account)"
 		},
@@ -178,6 +181,9 @@
 		},
 		"codex-compaction": {
 			"source": "packages/coding-agent/src/modules/codex-compaction/index.ts"
+		},
+		"compaction-recall": {
+			"source": "packages/coding-agent/src/modules/compaction-recall/index.ts"
 		},
 		"qoder-checkin": {
 			"source": "packages/coding-agent/src/modules/qoder/index.ts"

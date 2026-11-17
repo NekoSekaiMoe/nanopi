@@ -3623,27 +3623,39 @@ export class AgentSession {
 
 			let extensionCompaction: CompactionResult | undefined;
 
-			if (this._moduleRegistry.hasHandlers("session_before_compact")) {
+			let rewrittenCompaction: Partial<CompactionResult> | undefined;
+			const compactionAbortController = this._compactionAbortController;
+
+			const runHandlers = async (replaced?: CompactionResult): Promise<void> => {
 				const result = (await this._moduleRegistry.emit({
 					type: "session_before_compact",
 					preparation,
 					branchEntries: pathEntries,
+					replacedSummary: replaced?.summary,
 					customInstructions,
 					reason: "manual",
 					willRetry: false,
-					signal: this._compactionAbortController.signal,
+					signal: compactionAbortController.signal,
 				})) as SessionBeforeCompactResult | undefined;
 
 				if (result?.cancel) {
 					cancelledByExtension = true;
 					throw new Error("Compaction cancelled");
 				}
-
-				if (result?.compaction) {
-					extensionCompaction = result.compaction;
+				if (!result?.compaction) return;
+				if (replaced) {
+					rewrittenCompaction = { ...replaced, ...result.compaction };
 					fromExtension = true;
+					return;
 				}
-			}
+				extensionCompaction = result.compaction as CompactionResult;
+				fromExtension = true;
+			};
+
+			// A handler that builds a summary of its own answers here. Handlers that rewrite
+			// whatever summary exists (a footer of recallable regions, a warning) get a second
+			// pass once the default generator has run, carrying its text in `replacedSummary`.
+			await runHandlers();
 
 			let summary: string;
 			let firstKeptEntryId: string;
@@ -3667,11 +3679,12 @@ export class AgentSession {
 					this._compactionAbortController.signal,
 					"manual",
 				);
-				summary = result.summary;
-				firstKeptEntryId = result.firstKeptEntryId;
-				tokensBefore = result.tokensBefore;
-				usage = result.usage;
-				details = result.details;
+				await runHandlers(result);
+				summary = rewrittenCompaction?.summary ?? result.summary;
+				firstKeptEntryId = rewrittenCompaction?.firstKeptEntryId ?? result.firstKeptEntryId;
+				tokensBefore = rewrittenCompaction?.tokensBefore ?? result.tokensBefore;
+				usage = rewrittenCompaction?.usage ?? result.usage;
+				details = rewrittenCompaction?.details ?? result.details;
 			}
 
 			if (this._compactionAbortController.signal.aborted) {
@@ -3955,15 +3968,22 @@ export class AgentSession {
 
 			let extensionCompaction: CompactionResult | undefined;
 
-			if (this._moduleRegistry.hasHandlers("session_before_compact")) {
+			let rewrittenCompaction: Partial<CompactionResult> | undefined;
+			// Captured once: the field is cleared while the run unwinds, and the second pass
+			// still has to see the same signal.
+			const compactionAbortController = abortController;
+
+			const runHandlers = async (replaced?: CompactionResult): Promise<void> => {
+				if (!this._moduleRegistry.hasHandlers("session_before_compact")) return;
 				const extensionResult = (await this._moduleRegistry.emit({
 					type: "session_before_compact",
 					preparation,
 					branchEntries: pathEntries,
+					replacedSummary: replaced?.summary,
 					customInstructions: undefined,
 					reason,
 					willRetry,
-					signal: abortController.signal,
+					signal: compactionAbortController.signal,
 				})) as SessionBeforeCompactResult | undefined;
 
 				if (extensionResult?.cancel) {
@@ -3971,11 +3991,19 @@ export class AgentSession {
 					throw new Error("Compaction cancelled");
 				}
 
-				if (extensionResult?.compaction) {
-					extensionCompaction = extensionResult.compaction;
+				if (!extensionResult?.compaction) return;
+				if (replaced) {
+					rewrittenCompaction = { ...replaced, ...extensionResult.compaction };
 					fromExtension = true;
+					return;
 				}
-			}
+				extensionCompaction = extensionResult.compaction as CompactionResult;
+				fromExtension = true;
+			};
+
+			// A handler that builds a summary of its own answers here. Handlers that rewrite
+			// whatever summary exists are called again with the default generator's text.
+			await runHandlers();
 			abortController.signal.throwIfAborted();
 
 			let summary: string;
@@ -4000,11 +4028,12 @@ export class AgentSession {
 					abortController.signal,
 					reason,
 				);
-				summary = compactResult.summary;
-				firstKeptEntryId = compactResult.firstKeptEntryId;
-				tokensBefore = compactResult.tokensBefore;
-				usage = compactResult.usage;
-				details = compactResult.details;
+				await runHandlers(compactResult);
+				summary = rewrittenCompaction?.summary ?? compactResult.summary;
+				firstKeptEntryId = rewrittenCompaction?.firstKeptEntryId ?? compactResult.firstKeptEntryId;
+				tokensBefore = rewrittenCompaction?.tokensBefore ?? compactResult.tokensBefore;
+				usage = rewrittenCompaction?.usage ?? compactResult.usage;
+				details = rewrittenCompaction?.details ?? compactResult.details;
 			}
 			abortController.signal.throwIfAborted();
 
