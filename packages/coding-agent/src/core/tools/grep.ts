@@ -5,6 +5,8 @@ import { spawn } from "child_process";
 import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
+import { getAgentDir } from "../../config.ts";
+import { storeToolResult } from "../../utils/tool-result-store.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { relativeToRoot, walkFiles } from "./fallback-walker.ts";
@@ -80,6 +82,8 @@ export interface GrepTrimmedFile {
 
 export interface GrepToolDetails {
 	truncation?: TruncationResult;
+	/** Ref for the full text when truncation dropped part of the output. */
+	toolResultRef?: string;
 	matchLimitReached?: number;
 	linesTruncated?: boolean;
 	/** True when ripgrep was stopped before it finished, so files were never searched. */
@@ -683,6 +687,13 @@ export function createGrepToolDefinition(
 									`Some lines truncated to ${GREP_MAX_LINE_LENGTH} chars. Use read tool to see full lines`,
 								);
 								details.linesTruncated = true;
+							}
+							if (truncation.truncated) {
+								const stored = await storeToolResult(getAgentDir(), rawOutput, "grep");
+								details.toolResultRef = stored.ref;
+								notices.push(
+									`Full matches saved to ${stored.path} (ref ${stored.ref}). Use recall_tool_result to read it`,
+								);
 							}
 							if (notices.length > 0) output += `\n\n[${notices.join(". ")}]`;
 							settle(() =>
