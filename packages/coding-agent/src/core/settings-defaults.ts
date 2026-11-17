@@ -9,6 +9,7 @@ export const SETTINGS_DEFAULTS = {
 		enabled: true,
 		reserveTokens: 16384,
 		keepRecentTokens: 20000,
+		growthGateTokens: 0,
 	},
 	branchSummary: {
 		reserveTokens: 16384,

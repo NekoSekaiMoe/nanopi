@@ -7,7 +7,12 @@
  */
 
 import type { AgentMessage } from "@nanopi/pi-agent-core";
-import { createBranchSummaryMessage, createCompactionSummaryMessage, createCustomMessage } from "./messages.ts";
+import {
+	createBranchSummaryMessage,
+	createCompactionSummaryMessage,
+	createCustomMessage,
+	createRecalledContextMessage,
+} from "./messages.ts";
 import type {
 	CompactionEntry,
 	ContextEditEntry,
@@ -115,6 +120,9 @@ export function sessionEntryToContextMessages(entry: SessionEntry): AgentMessage
 		return [
 			createCustomMessage(entry.customType, entry.content ?? [], entry.display, entry.details, entry.timestamp),
 		];
+	}
+	if (entry.type === "context_recall" && entry.content) {
+		return [createRecalledContextMessage(entry.content, entry.refs, entry.sourceEntryIds, entry.timestamp)];
 	}
 	if (entry.type === "branch_summary" && entry.summary) {
 		return [createBranchSummaryMessage(entry.summary, entry.fromId, entry.timestamp)];

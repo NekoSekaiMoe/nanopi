@@ -1,6 +1,6 @@
 /**
  * Codecs for the message kinds this app writes itself: `bashExecution`,
- * `branchSummary`, and `compactionSummary`.
+ * `branchSummary`, `compactionSummary`, and `recalledContext`.
  *
  * They are built in because the app produces them: bash executions come from the shell
  * tool, the summaries from compaction and branch navigation. A module that adds its own
@@ -19,6 +19,9 @@ import {
 	COMPACTION_SUMMARY_PREFIX,
 	COMPACTION_SUMMARY_SUFFIX,
 	type CompactionSummaryMessage,
+	RECALLED_CONTEXT_PREFIX,
+	RECALLED_CONTEXT_SUFFIX,
+	type RecalledContextMessage,
 } from "../messages.ts";
 import { renderBranchSummary, renderCompactionSummary } from "./builtin-renderers.ts";
 import type { MessageTypeCodec, MessageTypeCodecMap } from "./codec.ts";
@@ -70,8 +73,20 @@ const compactionSummary: MessageTypeCodec<CompactionSummaryMessage> = {
 	renderRun: renderCompactionSummary,
 };
 
+const recalledContext: MessageTypeCodec<RecalledContextMessage> = {
+	kind: "recalledContext",
+	toLlm: (message) => [
+		{
+			role: "user",
+			content: [{ type: "text", text: RECALLED_CONTEXT_PREFIX + message.content + RECALLED_CONTEXT_SUFFIX }],
+			timestamp: message.timestamp,
+		},
+	],
+	estimateTokens: (message) => countTextTokens(message.content),
+};
+
 export function createBuiltinMessageCodecs(): MessageTypeCodecMap {
-	const codecs = [bashExecution, branchSummary, compactionSummary] as MessageTypeCodec[];
+	const codecs = [bashExecution, branchSummary, compactionSummary, recalledContext] as MessageTypeCodec[];
 	return new Map(codecs.map((codec) => [codec.kind, codec]));
 }
 

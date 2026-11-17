@@ -35,6 +35,8 @@ contextTokens > contextWindow - reserveTokens
 
 By default, `reserveTokens` is 16384 tokens (configurable in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanopi/settings.json`). It only decides when compaction starts: summary requests use the model's output limit, reduced when needed so input and output fit the context window.
 
+With `growthGateTokens` set, an automatic threshold compaction also needs enough context to have grown since the last compaction on the branch. The gate is measured from estimated tokens of messages after the last `compaction` entry. It prevents a threshold that is still barely exceeded from producing a second summary right after one finished. The default `0` keeps threshold-only behavior.
+
 During a multi-turn agent run, nanopi checks the canonical projected context after tools finish and their results are appended, before starting the next assistant response. If the threshold is crossed, nanopi compacts during `prepareNextTurn`, then performs the existing catch-up steering poll before `turn_start`. It skips this between-turn check when the completed tool batch terminates the run and no queued message requires another response. nanopi also performs final-attempt overflow recovery after the low-level run ends.
 
 A threshold crossed by a finished answer is compacted only when another request needs the context: nanopi checks the projection plus the pending input in `prepareInput`, before that input becomes session history. Stopping after an answer therefore costs no summary nobody would read.
@@ -438,6 +440,7 @@ Configure compaction in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanop
     "enabled": true,
     "reserveTokens": 16384,
     "keepRecentTokens": 20000,
+    "growthGateTokens": 0,
     "inContext": false
   }
 }
@@ -448,6 +451,7 @@ Configure compaction in `~/.nanopi/agent/settings.json` or `<project-dir>/.nanop
 | `enabled` | `true` | Enable auto-compaction |
 | `reserveTokens` | `16384` | Free context tokens below which auto-compaction starts |
 | `keepRecentTokens` | `20000` | Recent tokens to keep (not summarized) |
+| `growthGateTokens` | `0` | Additional context tokens required since the last compaction before auto-compaction runs again. `0` disables the gate |
 | `inContext` | `false` | Generate the summary inside the cached conversation when that is cheaper. See [In-context compaction](#in-context-compaction) |
 
 Disable auto-compaction with `"enabled": false`. You can still compact manually with `/compact`.

@@ -3488,6 +3488,11 @@ export class InteractiveMode {
 				// Tool results are rendered inline with tool calls, handled separately
 				break;
 			}
+			case "recalledContext": {
+				// Recalled history is transcript-only: it was already shown when it first
+				// happened, and repeating it here would double a long block on screen.
+				break;
+			}
 			default: {
 				const _exhaustive: never = message;
 			}

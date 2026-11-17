@@ -49,6 +49,7 @@ import {
 	type FileOperations,
 	formatFileOperations,
 	SUMMARIZATION_SYSTEM_PROMPT,
+	SUMMARY_REF_INSTRUCTIONS,
 	serializeConversation,
 } from "./utils.ts";
 
@@ -144,7 +145,12 @@ function getMessagesFromProjectedEntryForCompaction(
 		.some(
 			(later) => later.sourceEntry.type === "context_edit" && later.sourceEntry.targetId === entry.sourceEntry.id,
 		);
-	return editedLater ? [] : messages;
+	if (editedLater) return [];
+	// The entry id rides on each message so the summarizer can number the `[rN]` tags it
+	// writes: a summary that cites an entry stays readable after the entry leaves the context.
+	// `recall_context` looks the id up in the session file, which is why it cannot be the
+	// message's own id (messages have none) and must be the entry that owns it.
+	return messages.map((message) => ({ ...message, entryId: entry.sourceEntry.id }));
 }
 
 /** Result from compact() - SessionManager adds uuid/parentUuid when saving */
@@ -182,7 +188,7 @@ export function calculateContextTokens(usage: Usage): number {
  * Get usage from an assistant message if available.
  * Skips aborted, error, and all-zero usage messages as they don't have valid usage data.
  */
-function getAssistantUsage(msg: AgentMessage): Usage | undefined {
+export function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 	if (msg.role === "assistant" && "usage" in msg) {
 		const assistantMsg = msg as AssistantMessage;
 		if (
@@ -299,9 +305,18 @@ export function estimateProjectedContextTokens(
 /**
  * Check if compaction should trigger based on context usage.
  */
-export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
+export function shouldCompact(
+	contextTokens: number,
+	contextWindow: number,
+	settings: CompactionSettings,
+	tokensSinceLastCompaction?: number,
+): boolean {
 	if (!settings.enabled) return false;
-	return contextTokens > contextWindow - settings.reserveTokens;
+	if (contextTokens <= contextWindow - settings.reserveTokens) return false;
+	const growthGateTokens = settings.growthGateTokens ?? 0;
+	return (
+		growthGateTokens <= 0 || tokensSinceLastCompaction === undefined || tokensSinceLastCompaction >= growthGateTokens
+	);
 }
 
 // ============================================================================
@@ -627,6 +642,9 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
+/** The initial summary prompt with the reference rules the recall tool reads back. */
+const REF_SUMMARIZATION_PROMPT = `${SUMMARIZATION_PROMPT}\n\n${SUMMARY_REF_INSTRUCTIONS}`;
+
 const UPDATE_SUMMARIZATION_INSTRUCTIONS = `Update the existing structured summary with new information. RULES:
 - PRESERVE all existing information from the previous summary
 - ADD new progress, decisions, and context from the new messages
@@ -664,9 +682,12 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
+/** The update prompt with the reference rules, so a rolled-forward summary keeps its citations. */
+const REF_UPDATE_SUMMARIZATION_PROMPT = `${UPDATE_SUMMARIZATION_INSTRUCTIONS}\n\n${SUMMARY_REF_INSTRUCTIONS}`;
+
 const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
 
-${UPDATE_SUMMARIZATION_INSTRUCTIONS}`;
+${REF_UPDATE_SUMMARIZATION_PROMPT}`;
 
 /**
  * Returns an error message when a summarization response cannot safely be persisted.
@@ -802,7 +823,7 @@ export async function generateSummaryWithUsage(
 	sessionId?: string,
 ): Promise<{ text: string; usage: Usage }> {
 	// Use update prompt if we have a previous summary, otherwise initial prompt
-	let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
+	let basePrompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : REF_SUMMARIZATION_PROMPT;
 	if (customInstructions) {
 		basePrompt = `${basePrompt}\n\nAdditional focus: ${customInstructions}`;
 	}
@@ -1258,8 +1279,15 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-/** User message that asks for the in-context summary after the instructions. */
-const IN_CONTEXT_COMPACTION_PROMPT = "Write the context checkpoint summary now.";
+/** What the model does after the in-context instructions. */
+const IN_CONTEXT_COMPACTION_REQUEST = "Write the context checkpoint summary now.";
+
+/**
+ * User message that asks for the in-context summary after the instructions. The reference
+ * rules ride here rather than in the system message so the request prefix stays identical
+ * across compactions of the same conversation.
+ */
+const IN_CONTEXT_COMPACTION_PROMPT = `${IN_CONTEXT_COMPACTION_REQUEST}\n\n${SUMMARY_REF_INSTRUCTIONS}`;
 
 /** Fallback lifetime for models without catalog cache lifetimes: the shortest documented provider lifetime. */
 const DEFAULT_PROMPT_CACHE_TTL_MS = 5 * 60_000;
@@ -1331,7 +1359,7 @@ function estimateStandaloneSummaryTokens(preparation: CompactionPreparation): nu
 	const splitTurn = isSplitTurn && turnPrefixMessages.length > 0;
 	let tokens = 0;
 	if (!splitTurn || messagesToSummarize.length > 0) {
-		const prompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : SUMMARIZATION_PROMPT;
+		const prompt = previousSummary ? UPDATE_SUMMARIZATION_PROMPT : REF_SUMMARIZATION_PROMPT;
 		const chars = SUMMARIZATION_SYSTEM_PROMPT.length + prompt.length + (previousSummary?.length ?? 0);
 		tokens += Math.ceil(chars / 4) + serializedTokens(messagesToSummarize);
 	}
