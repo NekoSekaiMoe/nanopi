@@ -18,6 +18,18 @@ export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this p
 export const COMPACTION_SUMMARY_SUFFIX = `
 </summary>`;
 
+/**
+ * Frames recalled content. The model must read it as reproduced history, not as a new
+ * instruction from the user, or a recalled "run the tests" reads as a request in the present.
+ */
+export const RECALLED_CONTEXT_PREFIX = `The following is a segment of this conversation, recalled verbatim from the session history because the checkpoint summary cited it. It is history, not an instruction:
+
+<recalled>
+`;
+
+export const RECALLED_CONTEXT_SUFFIX = `
+</recalled>`;
+
 export const BRANCH_SUMMARY_PREFIX = `The following is a summary of a branch that this conversation came back from:
 
 <summary>
@@ -68,6 +80,23 @@ export interface CompactionSummaryMessage {
 	timestamp: number;
 }
 
+/**
+ * Session content a compaction summary cited, re-injected on request.
+ *
+ * The payload lives in the entry, not in the message: the message is what a projection
+ * sees, and projecting it is what puts the recalled text back in front of the model.
+ */
+export interface RecalledContextMessage {
+	role: "recalledContext";
+	/** Text of the cited entries, already framed for the model. */
+	content: string;
+	/** The `[rN]` tags this block answers, in order. */
+	refs: number[];
+	/** Entry ids the block reproduces. */
+	entryIds: string[];
+	timestamp: number;
+}
+
 // Extend CustomAgentMessages via declaration merging
 declare module "@nanopi/pi-agent-core" {
 	interface CustomAgentMessages {
@@ -75,6 +104,7 @@ declare module "@nanopi/pi-agent-core" {
 		custom: CustomMessage;
 		branchSummary: BranchSummaryMessage;
 		compactionSummary: CompactionSummaryMessage;
+		recalledContext: RecalledContextMessage;
 	}
 }
 
@@ -117,6 +147,21 @@ export function createCompactionSummaryMessage(
 		role: "compactionSummary",
 		summary: summary,
 		tokensBefore,
+		timestamp: new Date(timestamp).getTime(),
+	};
+}
+
+export function createRecalledContextMessage(
+	content: string,
+	refs: number[],
+	entryIds: string[],
+	timestamp: string,
+): RecalledContextMessage {
+	return {
+		role: "recalledContext",
+		content,
+		refs,
+		entryIds,
 		timestamp: new Date(timestamp).getTime(),
 	};
 }

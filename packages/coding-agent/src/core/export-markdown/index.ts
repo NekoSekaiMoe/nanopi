@@ -191,6 +191,8 @@ function renderEntry(entry: SessionEntry): string[] {
 		}
 		case "branch_summary":
 			return [heading(2, "Branch summary"), entry.summary];
+		case "context_recall":
+			return [heading(2, `Recalled context (${entry.refs.map((ref) => `[r${ref}]`).join(" ")})`), entry.content];
 		case "model_change":
 			return [`_Switched to model: ${entry.provider}/${entry.modelId}_`];
 		case "thinking_level_change":

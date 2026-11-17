@@ -425,8 +425,13 @@ describe("findCutPoint", () => {
 			keepRecentTokens: 1000,
 		});
 		expect(preparation?.firstKeptEntryId).toBe(toolCall.id);
-		expect(preparation?.messagesToSummarize).toEqual([oldUser.message, oldAssistant.message]);
-		expect(preparation?.turnPrefixMessages).toEqual([currentUser.message]);
+		// Every message carries the id of the entry it came from, which is what the summarizer
+		// numbers its [rN] citations against.
+		expect(preparation?.messagesToSummarize).toEqual([
+			{ ...oldUser.message, entryId: oldUser.id },
+			{ ...oldAssistant.message, entryId: oldAssistant.id },
+		]);
+		expect(preparation?.turnPrefixMessages).toEqual([{ ...currentUser.message, entryId: currentUser.id }]);
 	});
 });
 
@@ -535,7 +540,7 @@ describe("prepareCompaction", () => {
 		expect(preparation?.firstKeptEntryId).toBe(assistant.id);
 		expect(preparation?.isSplitTurn).toBe(true);
 		expect(preparation?.messagesToSummarize).toEqual([]);
-		expect(preparation?.turnPrefixMessages).toEqual([user.message]);
+		expect(preparation?.turnPrefixMessages).toEqual([{ ...user.message, entryId: user.id }]);
 	});
 
 	it("reuses one request identity across split summaries", async () => {

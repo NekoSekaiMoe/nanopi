@@ -44,6 +44,7 @@ import {
 	type BranchSummaryEntry,
 	type CompactionEntry,
 	type ContextEditEntry,
+	type ContextRecallEntry,
 	CURRENT_SESSION_VERSION,
 	type CustomEntry,
 	type CustomMessageEntry,
@@ -106,6 +107,7 @@ export type ReadonlySessionManager = Pick<
 	| "getEntries"
 	| "getTree"
 	| "getSessionName"
+	| "appendContextRecall"
 >;
 
 function createSessionId(): string {
@@ -1108,6 +1110,25 @@ export class SessionManager {
 			id: generateId(this.byId),
 			parentId: this.leafId,
 			timestamp: this._entryTimestamp(),
+		};
+		this._appendEntry(entry);
+		return entry.id;
+	}
+
+	/**
+	 * Append content recalled from earlier in the session. The recalled text is copied into
+	 * the entry, and the projection replays it after the point that asked for it.
+	 */
+	appendContextRecall(refs: number[], sourceEntryIds: string[], content: string, requestedBy?: string): string {
+		const entry: ContextRecallEntry = {
+			type: "context_recall",
+			id: generateId(this.byId),
+			parentId: this.leafId,
+			timestamp: this._entryTimestamp(),
+			refs,
+			sourceEntryIds,
+			content,
+			...(requestedBy ? { requestedBy } : {}),
 		};
 		this._appendEntry(entry);
 		return entry.id;
