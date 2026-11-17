@@ -46,6 +46,8 @@ export const DEFAULT_USER_RETAIN_TOKENS = 20_000;
 export interface CodexCompactConfig {
 	/** Verbatim token budget for recent user messages across the cut point. */
 	userRetainTokens: number;
+	/** Ordinal of this checkpoint in the session, used to build stable fact refs. */
+	compactionIndex: number;
 }
 
 /** Request auth pieces `generateSummaryWithUsage` accepts. */
@@ -224,6 +226,62 @@ function rollForwardFileLists(branchEntries: SessionEntry[], fileOps: FileOperat
 	}
 }
 
+/** Stable reference for one checkpoint: `c<compaction index>r<fact index>`. */
+export function factRef(compactionIndex: number, factIndex: number): string {
+	return `c${compactionIndex}r${factIndex}`;
+}
+
+/** A compacted fact a later turn can ask to see verbatim again. */
+export interface CheckpointFact {
+	/** Stable reference used by the summary and by `recall_context`. */
+	ref: string;
+	/** Session entry id whose original messages the ref resolves to. */
+	entryId: string;
+	/** One-line description of what the original messages contain. */
+	label: string;
+}
+
+function factLabel(entry: SessionEntry): string {
+	const first = sessionEntryToContextMessages(entry).find(
+		(message) => message.role === "user" || message.role === "assistant",
+	);
+	if (!first) return "compacted exchange";
+	const text =
+		typeof first.content === "string"
+			? first.content
+			: first.content.map((block) => ("text" in block ? block.text : "")).join(" ");
+	const line =
+		text
+			.split("\n")
+			.find((part) => part.trim())
+			?.trim() ?? "compacted exchange";
+	return line.length > 120 ? `${line.slice(0, 117)}...` : line;
+}
+
+/** Build facts for the entries that will be summarized away by this compaction. */
+export function collectCheckpointFacts(
+	summarizedEntries: readonly SessionEntry[],
+	compactionIndex: number,
+	maxFacts = 30,
+): CheckpointFact[] {
+	return summarizedEntries
+		.filter(
+			(entry) =>
+				entry.type === "message" &&
+				entry.message.role !== "system" &&
+				sessionEntryToContextMessages(entry).length > 0,
+		)
+		.slice(0, maxFacts)
+		.map((entry, index) => ({ ref: factRef(compactionIndex, index), entryId: entry.id, label: factLabel(entry) }));
+}
+
+/** Structured block appended to the summary, plus the facts in `details` for ref resolution. */
+export function formatKeyFacts(facts: readonly CheckpointFact[]): string {
+	if (facts.length === 0) return "";
+	const rows = facts.map((fact) => `- ${fact.ref}: ${fact.label} (entry ${fact.entryId})`).join("\n");
+	return `\n\n## Key Facts\n${rows}`;
+}
+
 /**
  * Produce a Codex-style CompactionResult, or `undefined` to let the default
  * compaction run.
@@ -263,12 +321,27 @@ export async function runCodexCompaction(
 	extractFileOps(messages, fileOps);
 	rollForwardFileLists(event.branchEntries, fileOps);
 	const { readFiles, modifiedFiles } = computeFileLists(fileOps);
+	const facts = collectCheckpointFacts(
+		plan.summarizeEntries ?? summarizedEntriesFor(preparation, event.branchEntries),
+		config.compactionIndex,
+	);
+	const summary = `${text}${formatKeyFacts(facts)}${formatFileOperations(readFiles, modifiedFiles)}`;
 
 	return {
-		summary: assembleCodexSummary(`${text}${formatFileOperations(readFiles, modifiedFiles)}`),
+		summary: assembleCodexSummary(summary),
 		firstKeptEntryId: plan.firstKeptEntryId ?? preparation.firstKeptEntryId,
 		tokensBefore: preparation.tokensBefore,
 		usage,
-		details: { readFiles, modifiedFiles },
+		details: { readFiles, modifiedFiles, facts },
 	};
+}
+
+/** Entries before the cut that the default compaction would summarize. */
+function summarizedEntriesFor(
+	preparation: SessionBeforeCompactEvent["preparation"],
+	branchEntries: SessionEntry[],
+): SessionEntry[] {
+	const cut = branchEntries.findIndex((entry) => entry.id === preparation.firstKeptEntryId);
+	const boundary = branchEntries.findLastIndex((entry) => entry.type === "compaction");
+	return branchEntries.slice(boundary + 1, cut < 0 ? boundary + 1 : cut);
 }

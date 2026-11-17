@@ -74,7 +74,7 @@
 			"description": "Built-in slash commands (/compact, /context, /status, /init)"
 		},
 		"module/codex-compaction": {
-			"description": "Codex-style compaction and its post-compaction warning"
+			"description": "Codex-style compaction, its post-compaction warning, and Key Facts ref recall"
 		},
 		"module/compaction-recall": {
 			"description": "Recallable compaction refs: a region table appended to the summary and the recall_context tool"
@@ -123,6 +123,9 @@
 		},
 		"module/todo-lite": {
 			"description": "todo tool and its rendering"
+		},
+		"module/tool-result-store": {
+			"description": "recall_tool_result: paged recall of truncated tool output"
 		},
 		"module/websearch": {
 			"description": "web_search and read_page tools with the keyless engine chain"
@@ -265,6 +268,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/tool-result-store": false,
 				"module/websearch": false,
 				"syntax-highlight": true,
 				"providers": "core",
@@ -293,6 +297,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/tool-result-store": false,
 				"module/websearch": false,
 				"toolset": "bash",
 				"providers": "none",

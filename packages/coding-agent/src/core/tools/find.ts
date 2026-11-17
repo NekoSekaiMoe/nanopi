@@ -4,6 +4,8 @@ import { spawn, spawnSync } from "child_process";
 import { minimatch } from "minimatch";
 import path from "path";
 import { type Static, Type } from "typebox";
+import { getAgentDir } from "../../config.ts";
+import { storeToolResult } from "../../utils/tool-result-store.ts";
 import { ensureTool } from "../../utils/tools-manager.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { relativeToRoot, walkFiles } from "./fallback-walker.ts";
@@ -44,7 +46,7 @@ function isUnknownFdOptionError(stderr: string): boolean {
 	return stderr.includes("which wasn't expected") || stderr.includes("isn't valid in this context");
 }
 
-function formatFindResult(lines: string[], searchPath: string, effectiveLimit: number, fallback = false) {
+async function formatFindResult(lines: string[], searchPath: string, effectiveLimit: number, fallback = false) {
 	if (lines.length === 0) {
 		const text = fallback
 			? `No files found matching pattern\n\n[${FALLBACK_NOTICE}]`
@@ -67,7 +69,11 @@ function formatFindResult(lines: string[], searchPath: string, effectiveLimit: n
 		details.resultLimitReached = effectiveLimit;
 	}
 	if (truncation.truncated) {
-		notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+		const stored = await storeToolResult(getAgentDir(), relativized.join("\n"), "find");
+		details.toolResultRef = stored.ref;
+		notices.push(
+			`${formatSize(DEFAULT_MAX_BYTES)} limit reached; full list saved to ${stored.path} (ref ${stored.ref}). Use recall_tool_result to read it`,
+		);
 		details.truncation = truncation;
 	}
 	if (fallback) {
@@ -170,6 +176,7 @@ export interface FindToolDetails {
 	resultLimitReached?: number;
 	/** True when fd was missing, so the in-process walker ran instead. */
 	fallback?: boolean;
+	toolResultRef?: string;
 }
 
 /**
@@ -268,7 +275,7 @@ export function createFindToolDefinition(
 								return;
 							}
 
-							settle(() => resolve(formatFindResult(results, searchPath, effectiveLimit)));
+							settle(() => void formatFindResult(results, searchPath, effectiveLimit).then(resolve, reject));
 							return;
 						}
 
@@ -284,7 +291,9 @@ export function createFindToolDefinition(
 								settle(() => reject(new Error("Operation aborted")));
 								return;
 							}
-							settle(() => resolve(formatFindResult(matches, searchPath, effectiveLimit, true)));
+							settle(
+								() => void formatFindResult(matches, searchPath, effectiveLimit, true).then(resolve, reject),
+							);
 							return;
 						}
 
@@ -376,7 +385,7 @@ export function createFindToolDefinition(
 							if (paths.length > effectiveLimit) break;
 						}
 						paths.sort();
-						settle(() => resolve(formatFindResult(paths, searchPath, effectiveLimit)));
+						settle(() => void formatFindResult(paths, searchPath, effectiveLimit).then(resolve, reject));
 					} catch (e) {
 						if (signal?.aborted) {
 							settle(() => reject(new Error("Operation aborted")));
