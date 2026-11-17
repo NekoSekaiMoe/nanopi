@@ -180,3 +180,22 @@ export function serializeConversation(messages: Message[]): string {
 export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
 
 Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+
+// ============================================================================
+// Recoverable references
+// ============================================================================
+
+/** Appended to every compaction summary prompt. */
+export const SUMMARY_REF_INSTRUCTIONS = `## Recoverable references
+
+The conversation above is serialized. Those entries are also stored in the session file, so the summary can point back at one instead of paraphrasing it away.
+
+- After a line that records a fact a later model may need exactly (an error, a path plus line number, a decision and its why, a constraint, an unfinished item), add the entry tag it came from: \`[r1]\` or \`[r1][r2]\`.
+- Number tags from \`[r1]\` in order of first appearance, from scratch. A previous summary's tags do not carry over.
+- Directly below the summary, list what each tag holds:
+
+<refs>
+- [r1] <one line: what the entry contains and when to read it again>
+</refs>
+
+- When you cited nothing, write \`<refs>\` then \`(none)\` then \`</refs>\`. Never invent a tag.`;

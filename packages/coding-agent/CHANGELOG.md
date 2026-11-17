@@ -4,6 +4,7 @@
 
 ### Added
 
+- A compaction summary cites the session entries behind its facts as `[rN]`, and `recall_context` reads one back. Every message handed to the summarizer carries its entry id, the summary prompt asks for a trailing `<refs>` block that defines each tag, and the tool resolves the tags against that block and appends a `context_recall` entry, so the recalled history returns as history instead of a tool result the next compaction eats. An undefined tag, a summary without a `<refs>` block (any session compacted before this change), an entry still inside the kept region, and a block over a quarter of the context window are all refused with a reason ([#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Fixed

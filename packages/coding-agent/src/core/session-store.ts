@@ -150,6 +150,23 @@ export type ContextEditableContent =
 	| ToolResultMessage["content"]
 	| CustomMessage["content"];
 
+/**
+ * Content from earlier in the session, put back in front of the model because a compaction
+ * summary cited it. Append-only like any other entry: the recalled text is copied here, so a
+ * later context edit to the original does not rewrite history that was already shown.
+ */
+export interface ContextRecallEntry extends SessionEntryBase {
+	type: "context_recall";
+	/** The `[rN]` tags this entry answers. */
+	refs: number[];
+	/** Entry ids whose content is reproduced in `content`. */
+	sourceEntryIds: string[];
+	/** Recalled text, already framed for the model. */
+	content: string;
+	/** Display name of the tool call that asked for it, for the transcript. */
+	requestedBy?: string;
+}
+
 /** Append-only change to one earlier entry's contribution to model context. */
 export interface ContextEditEntry extends SessionEntryBase {
 	type: "context_edit";
@@ -169,6 +186,7 @@ export type SessionEntry =
 	| CustomEntry
 	| CustomMessageEntry
 	| ContextEditEntry
+	| ContextRecallEntry
 	| LabelEntry
 	| SessionInfoEntry;
 
