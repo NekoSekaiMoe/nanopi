@@ -177,9 +177,25 @@ export function serializeConversation(messages: Message[]): string {
 // Summarization System Prompt
 // ============================================================================
 
-export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
+export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Read a conversation between a user and an AI assistant and produce the structured summary the user prompt asks for.
 
-Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.
+
+Use these rules when choosing what the next model needs:
+
+KEEP
+- Exact file paths, line numbers, function and type signatures, commands, and error text.
+- Decisions with their rationale, constraints, user preferences, and the user's original goal.
+- Open tasks, blockers, and the next action, including unfinished work visible in tool calls.
+
+DROP
+- Logs whose conclusion is already recorded, repeated file reads or status checks, and tool results whose useful content is captured elsewhere.
+- Back-and-forth discussion that ended in a decision already listed.
+- Prompts, instructions, and boilerplate repeated across turns.
+
+PRIORITY
+- Prefer precise, current facts over broad narration. When two entries conflict, keep the later one and note the change.
+- Keep enough detail to resume without re-reading the dropped material. Never invent facts that are not in the conversation.`;
 
 // ============================================================================
 // Recoverable references
