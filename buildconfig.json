@@ -121,6 +121,9 @@
 		"module/todo-lite": {
 			"description": "todo tool and its rendering"
 		},
+		"module/tool-result-store": {
+			"description": "recall_tool_result: paged recall of truncated tool output"
+		},
 		"module/websearch": {
 			"description": "web_search and read_page tools with the keyless engine chain"
 		},
@@ -259,6 +262,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/tool-result-store": false,
 				"module/websearch": false,
 				"syntax-highlight": true,
 				"providers": "core",
@@ -287,6 +291,7 @@
 				"module/pi-subagent-mini": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
+				"module/tool-result-store": false,
 				"module/websearch": false,
 				"toolset": "bash",
 				"providers": "none",

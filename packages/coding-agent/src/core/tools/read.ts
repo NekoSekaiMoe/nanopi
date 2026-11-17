@@ -3,8 +3,10 @@ import type { Api, ImageContent, Model, ModelImageResizeOptions, TextContent } f
 import { constants, type Stats } from "fs";
 import { access as fsAccess, readFile as fsReadFile, stat as fsStat } from "fs/promises";
 import { type Static, Type } from "typebox";
+import { getAgentDir } from "../../config.ts";
 import { processImage } from "../../utils/image-process.ts";
 import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
+import { storeToolResult } from "../../utils/tool-result-store.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { readLinePage } from "./line-reader.ts";
 import { resolveReadPathAsync } from "./path-utils.ts";
@@ -41,6 +43,7 @@ export type ReadToolOutput = Static<typeof readOutputSchema>;
 
 export interface ReadToolDetails {
 	truncation?: TruncationResult;
+	toolResultRef?: string;
 }
 
 /**
@@ -217,13 +220,15 @@ export function createReadToolDefinition(
 									const endLineDisplay = startLineDisplay + truncation.outputLines - 1;
 									const nextOffset = endLineDisplay + 1;
 									const shown = `Showing lines ${startLineDisplay}-${endLineDisplay}`;
+									const stored = await storeToolResult(getAgentDir(), page.content, "read");
 									outputText = truncation.content;
+									const hint = `Full page saved to ${stored.path} (ref ${stored.ref}). Use recall_tool_result to read it`;
 									if (truncation.truncatedBy === "lines") {
-										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`}. Use offset=${nextOffset} to continue.]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`}. Use offset=${nextOffset} to continue. ${hint}]`;
 									} else {
-										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue. ${hint}]`;
 									}
-									details = { truncation };
+									details = { truncation, toolResultRef: stored.ref };
 								} else if (totalFileLines === undefined) {
 									// The read stopped at the requested limit instead of reaching the end of
 									// the file, so there is more to read. `totalFileLines` is undefined

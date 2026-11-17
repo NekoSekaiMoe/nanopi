@@ -2,6 +2,8 @@ import { readdir as fsReaddir, stat as fsStat } from "node:fs/promises";
 import type { AgentTool } from "@nanopi/pi-agent-core";
 import nodePath from "path";
 import { type Static, Type } from "typebox";
+import { getAgentDir } from "../../config.ts";
+import { storeToolResult } from "../../utils/tool-result-store.ts";
 import type { ModuleContext, ToolDefinition } from "../modules/types.ts";
 import { pathExists, resolveToCwd } from "./path-utils.ts";
 import { lsRenderers } from "./renderers/ls.ts";
@@ -25,6 +27,7 @@ const DEFAULT_LIMIT = 500;
 export interface LsToolDetails {
 	truncation?: TruncationResult;
 	entryLimitReached?: number;
+	toolResultRef?: string;
 }
 
 /**
@@ -149,7 +152,11 @@ export function createLsToolDefinition(
 							details.entryLimitReached = effectiveLimit;
 						}
 						if (truncation.truncated) {
-							notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+							const stored = await storeToolResult(getAgentDir(), rawOutput, "ls");
+							details.toolResultRef = stored.ref;
+							notices.push(
+								`${formatSize(DEFAULT_MAX_BYTES)} limit reached; full list saved to ${stored.path} (ref ${stored.ref}). Use recall_tool_result to read it`,
+							);
 							details.truncation = truncation;
 						}
 						if (notices.length > 0) {
