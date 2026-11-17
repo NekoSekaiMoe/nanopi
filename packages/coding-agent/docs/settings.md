@@ -70,6 +70,7 @@ CLI tool options override this setting for one invocation. `--tools` with only `
 | `compaction.enabled` | boolean | `true` | Enable automatic compaction. |
 | `compaction.reserveTokens` | number | `16384` | Free context tokens below which auto-compaction starts. |
 | `compaction.keepRecentTokens` | number | `20000` | Recent tokens retained without summarization. |
+| `compaction.growthGateTokens` | number | `0` | Additional context tokens required since the last compaction before auto-compaction runs again. `0` disables the gate. |
 | `compaction.inContext` | boolean | `false` | Generate summaries inside the cached conversation on verified models when that is cheaper. See [In-context compaction](compaction.md#in-context-compaction). |
 | `compaction.modelOverrides` | object | None | Per-model token settings keyed by exact `provider/modelId`. |
 

@@ -182,7 +182,7 @@ export function calculateContextTokens(usage: Usage): number {
  * Get usage from an assistant message if available.
  * Skips aborted, error, and all-zero usage messages as they don't have valid usage data.
  */
-function getAssistantUsage(msg: AgentMessage): Usage | undefined {
+export function getAssistantUsage(msg: AgentMessage): Usage | undefined {
 	if (msg.role === "assistant" && "usage" in msg) {
 		const assistantMsg = msg as AssistantMessage;
 		if (
@@ -299,9 +299,18 @@ export function estimateProjectedContextTokens(
 /**
  * Check if compaction should trigger based on context usage.
  */
-export function shouldCompact(contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean {
+export function shouldCompact(
+	contextTokens: number,
+	contextWindow: number,
+	settings: CompactionSettings,
+	tokensSinceLastCompaction?: number,
+): boolean {
 	if (!settings.enabled) return false;
-	return contextTokens > contextWindow - settings.reserveTokens;
+	if (contextTokens <= contextWindow - settings.reserveTokens) return false;
+	const growthGateTokens = settings.growthGateTokens ?? 0;
+	return (
+		growthGateTokens <= 0 || tokensSinceLastCompaction === undefined || tokensSinceLastCompaction >= growthGateTokens
+	);
 }
 
 // ============================================================================

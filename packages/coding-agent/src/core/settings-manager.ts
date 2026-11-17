@@ -848,11 +848,22 @@ export class SettingsManager {
 		enabled: boolean;
 		reserveTokens: number;
 		keepRecentTokens: number;
+		growthGateTokens: number;
 	} {
+		const growthGateTokens = this.settings.compaction?.growthGateTokens;
+		if (
+			growthGateTokens !== undefined &&
+			(typeof growthGateTokens !== "number" || !Number.isSafeInteger(growthGateTokens) || growthGateTokens < 0)
+		) {
+			throw new Error(
+				`Invalid compaction.growthGateTokens setting: ${String(growthGateTokens)}. Expected a non-negative safe integer.`,
+			);
+		}
 		return {
 			enabled: this.getCompactionEnabled(),
 			reserveTokens: this.getCompactionReserveTokens(model),
 			keepRecentTokens: this.getCompactionKeepRecentTokens(model),
+			growthGateTokens: growthGateTokens ?? SETTINGS_DEFAULTS.compaction.growthGateTokens,
 		};
 	}
 
