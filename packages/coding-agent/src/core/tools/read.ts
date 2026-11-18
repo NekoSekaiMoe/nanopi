@@ -224,9 +224,9 @@ export function createReadToolDefinition(
 									outputText = truncation.content;
 									const hint = `Full page saved to ${stored.path} (ref ${stored.ref}). Use recall_tool_result to read it`;
 									if (truncation.truncatedBy === "lines") {
-										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`}. Use offset=${nextOffset} to continue. ${hint}]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`}. Use offset=${nextOffset} to continue.]\n${hint}`;
 									} else {
-										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue. ${hint}]`;
+										outputText += `\n\n[${shown}${totalFileLines === undefined ? "" : ` of ${totalFileLines}`} (${formatSize(DEFAULT_MAX_BYTES)} limit). Use offset=${nextOffset} to continue.]\n${hint}`;
 									}
 									details = { truncation, toolResultRef: stored.ref };
 								} else if (totalFileLines === undefined) {
