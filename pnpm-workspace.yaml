@@ -28,8 +28,8 @@ overrides:
   # 而 @smithy/core 是 aws-sdk 的公共底座，单份约 200 KB，单文件产物里两份都进。
   # 这里钉住跨版本线的那两家，理由与判据见
   # .agents/notes/implemented/process/2026-11-13-aws-sdk-version-line.md。
-  '@aws-sdk/token-providers': 3.1169.0
-  '@smithy/core': 3.40.0
+  '@aws-sdk/token-providers': 3.1170.0
+  '@smithy/core': 3.41.0
 
 # 36 小时冷却期，挡住刚发布的供应链投毒版本。
 # 单位是分钟，不是天：pnpm 的惯例是分钟（默认 1440 = 1 天），写 2 只等于 2 分钟，
