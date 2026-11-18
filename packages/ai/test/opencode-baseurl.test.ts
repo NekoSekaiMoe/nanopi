@@ -60,7 +60,7 @@ const calls = {
  */
 describe("OpenCode Zen catalog base URLs reach the served route", () => {
 	const samples = [
-		["glm-5.3-flash-free", "https://opencode.ai/inference/openai/v1/chat/completions"],
+		["glm-5.3-flash", "https://opencode.ai/inference/openai/v1/chat/completions"],
 		["gpt-5.4", "https://opencode.ai/inference/openai/v1/responses"],
 		// No `?beta=true`: the Anthropic client marked its beta route that way up to
 		// 1.2.0 and stopped in 1.3.0 (the qualifier never reached the wire), so the
