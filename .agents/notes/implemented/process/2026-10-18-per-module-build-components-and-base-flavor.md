@@ -82,6 +82,11 @@ imports.
 - A flavored build now has an extra failure mode the build scripts check
   mechanically: `validateFlavorModules` refuses a build when the module list,
   `module/*` components, and `moduleBundles` disagree.
+- Issue #775 showed the check was not enough on its own: a module can be
+  registered and given a `module/*` component while its `moduleBundles` source
+  is lost in a merge. `scripts/buildconfig.test.mjs` now runs
+  `validateFlavorModules` against the real repo, so a unit-test run catches that
+  drift without needing a full bundle build.
 - Disabled modules leave string references behind (guideline text mentioning
   `ask_user_question`, the `--modules` parser), but no code: the stub replaces
   the import, and `splitting: false` keeps a shared chunk from pulling it back.
