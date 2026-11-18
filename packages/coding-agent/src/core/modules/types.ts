@@ -884,6 +884,16 @@ export interface SessionBeforeCompactEvent {
 	type: "session_before_compact";
 	preparation: CompactionPreparation;
 	branchEntries: SessionEntry[];
+	/**
+	 * The summary the earlier handlers of this event left behind, so the last handler can
+	 * rewrite what actually gets written. Handlers run in module load order and the first
+	 * one that returns a `compaction` replaces everything after it, which used to leave the
+	 * final handler unable to see the summary it was post-processing.
+	 *
+	 * Undefined means no handler produced one yet: the default summary generator runs after
+	 * the event, and its text is not available here.
+	 */
+	replacedSummary?: string;
 	customInstructions?: string;
 	/** What triggered the compaction: manual /compact, the context threshold, or context overflow recovery */
 	reason: "manual" | "threshold" | "overflow";
@@ -1504,7 +1514,12 @@ export interface SessionBeforeForkResult {
 
 export interface SessionBeforeCompactResult {
 	cancel?: boolean;
-	compaction?: CompactionResult;
+	/**
+	 * The summary to write. Fields the handler leaves out inherit the summary it replaced
+	 * (`replacedSummary` on the event), so a handler that only rewrites the text does not
+	 * have to restate the cut point, the token count, or the usage.
+	 */
+	compaction?: Partial<CompactionResult>;
 }
 
 export interface SessionBeforeTreeResult {

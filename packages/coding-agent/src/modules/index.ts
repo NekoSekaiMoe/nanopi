@@ -32,6 +32,7 @@ import toolResultStore from "../extras/tool-result-store/index.ts";
 import websearch from "../extras/websearch/src/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
+import compactionRecallExtension from "./compaction-recall/index.ts";
 import contextRecallExtension from "./context-recall/index.ts";
 import qoderCheckinExtension from "./qoder/index.ts";
 
@@ -44,6 +45,7 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "extra", factory: extraInlineExtension.factory, hidden: true },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
+	{ name: "compaction-recall", factory: compactionRecallExtension, hidden: true },
 	{ name: "context-recall", factory: contextRecallExtension, hidden: true },
 	{ name: "qoder-checkin", factory: qoderCheckinExtension, hidden: true },
 	// Bundled extras (formerly dist/extras packages, now compiled in).
