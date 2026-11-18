@@ -75,10 +75,10 @@
 		"prepublishOnly": "pnpm run clean && pnpm run build"
 	},
 	"dependencies": {
-		"@anthropic-ai/sdk": "1.8.0",
-		"@aws-sdk/client-bedrock-runtime": "3.1169.0",
+		"@anthropic-ai/sdk": "1.9.0",
+		"@aws-sdk/client-bedrock-runtime": "3.1170.0",
 		"@aws/bedrock-token-generator": "1.1.0",
-		"@google/genai": "3.3.0",
+		"@google/genai": "3.4.0",
 		"@smithy/node-http-handler": "4.14.2",
 		"@smithy/types": "4.20.0",
 		"gpt-tokenizer": "4.1.2",
