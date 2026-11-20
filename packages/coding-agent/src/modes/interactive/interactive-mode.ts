@@ -136,6 +136,7 @@ import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardFilePaths, readClipboardText } from "../../utils/clipboard.ts";
 import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
+import { flushStdout } from "../../utils/flush-stdout.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { ensurePngTranscoder } from "../../utils/image-convert.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
@@ -3848,6 +3849,7 @@ export class InteractiveMode {
 			this.themeController.dispose();
 			await this.ui.terminal.drainInput(1000);
 			this.stop();
+			await flushStdout();
 			process.exit(0);
 		}
 
@@ -3873,6 +3875,7 @@ export class InteractiveMode {
 		const bundle = await this.writeDiagnosticBundle("exit");
 		if (bundle) process.stdout.write(`${chalk.dim("Diagnostic bundle:")} ${bundle.directory}\n`);
 
+		await flushStdout();
 		process.exit(0);
 	}
 

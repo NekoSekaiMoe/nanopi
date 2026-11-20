@@ -13,6 +13,7 @@
 
 ### Fixed
 
+- Terminal restore sequences are flushed before CLI exit: interactive shutdown, `--resume` cancellation, and startup selectors now wait for queued stdout/stderr writes (at most one second), so the cursor, bracketed paste, and Kitty keyboard state are not left behind when the process exits (upstream `7c05885bc`)
 - Unscoped syntax-highlighted text uses the theme foreground again, so tool previews stay readable when the terminal and nanopi use contrasting color themes (upstream `562da75f9`)
 - An external `SIGTSTP` (`kill -TSTP`) now follows the same suspend path as Ctrl+Z, restoring the terminal and redrawing on `fg`; the listener is tied to terminal ownership so a child that owns the terminal afterwards is suspended normally (upstream `e4f50d76d`, `3107a58d2`)
 - `read` keeps the non-vision image warning in the tool details renderer instead of the tool result text: switching to a vision model no longer sends an image with a stale note saying the model cannot see it (upstream `4be4cb4f5`)
