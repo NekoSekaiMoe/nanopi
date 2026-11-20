@@ -1,6 +1,7 @@
 # Agent Note: Drop the todo count from the composer corner
 
 Status: implemented
+Archived: 2026-11-21
 
 ## Problem
 

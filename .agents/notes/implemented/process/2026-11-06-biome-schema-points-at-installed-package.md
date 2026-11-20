@@ -2,7 +2,7 @@
 
 Status: implemented
 
-> **完全取代** [biome.json 的 $schema 由 Renovate 的 customManager 一起升](./2026-11-06-biome-schema-follows-renovate.md)
+> **完全取代** [biome.json 的 $schema 由 Renovate 的 customManager 一起升](../../archived/process/2026-11-06-biome-schema-follows-renovate.md)
 > （同日的 #545）。那套方案的提取是好的，但它漏掉了「两条分组规则不合并成一条分支」
 > 这件事，而这个洞不可能靠再补一条 packageRule 补住——只能把版本号从仓库里删掉。
 
@@ -81,7 +81,7 @@ lock 升了、`$schema` 没升，正是 #561 看到的现象。
   （VS Code 的 JSON language service 与 Biome 自己的 LSP）都能解析相对路径，代价为零。
 - **改用 `postUpgradeTasks: "pnpm exec biome migrate --write"`**：托管版 Renovate
   （GitHub App）默认禁用，要用得自建 runner；且那套冷却期会让刚发的包装不上。理由与
-  [#545 的笔记](./2026-11-06-biome-schema-follows-renovate.md) 里记的一致，这里不重复。
+  [#545 的笔记](../../archived/process/2026-11-06-biome-schema-follows-renovate.md) 里记的一致，这里不重复。
 
 ## Consequences
 
@@ -109,3 +109,5 @@ lock 升了、`$schema` 没升，正是 #561 看到的现象。
   文件没有变化。对改前的配置跑同一个命令：把 `$schema` 从 2.6.5 改写成 2.6.6。
 - `renovate.json` 用 `renovate-config-validator` 校验通过；本地 dry-run 里 `biome.json`
   不再是任何 dep 的 `packageFile`。
+
+[历史快照：biome.json 的 $schema 由 Renovate 的 customManager 一起升，CI 兜住失手](../../archived/process/2026-11-06-biome-schema-follows-renovate.md)

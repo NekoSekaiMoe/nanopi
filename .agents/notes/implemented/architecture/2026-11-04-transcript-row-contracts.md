@@ -139,4 +139,4 @@ Part of the #453 sequence: the `ModuleApi` split into composed contracts and the
 runtime message codec registry are the other two tiers; this one is independent
 of both.
 Supersedes the "prototype patches are the only option" premise recorded in
-[pi-ui gradient editor](../feature/2026-10-11-pi-ui-gradient-editor-menu-above.md).
+[pi-ui gradient editor](../../archived/feature/2026-10-11-pi-ui-gradient-editor-menu-above.md).

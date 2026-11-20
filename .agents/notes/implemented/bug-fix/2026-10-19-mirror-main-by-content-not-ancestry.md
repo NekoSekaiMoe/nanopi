@@ -68,3 +68,5 @@ GitHub 侧的 `merge-base --is-ancestor` 同样恒假，否则反方向镜像会
   push protection 会照常拦下；此时报错回到「改源码」这条正路上，不再有名单可以绕过。
 - 合成提交的 commit message 只有 `Merge CNB main <sha>` 一行，`CNB_COMMIT` 是定位两侧对应关系的
   唯一线索，日志里要保留。
+
+[历史快照：历史里的 push protection 命中让镜像永久卡死，改用合成提交让远端接管](../../archived/bug-fix/2026-10-19-push-protection-mirror-diverges-main.md)
