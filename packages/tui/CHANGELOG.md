@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- `TUI.setSuspendSignalHandler()` registers a SIGTSTP handler only while the TUI owns the terminal (`start()` to `stop()`). The listener is removed only after the terminal is restored and is not churned on redundant updates (upstream `e4f50d76d`, `3107a58d2`)
+
+### Fixed
+
+- Enter on an absolute-path autocomplete menu completes the path instead of submitting the half-written prompt; only slash-command name menus submit on Enter (upstream `9a7cfba47`)
+
 ## [20261114]
 
 ### Changed

@@ -1180,11 +1180,13 @@ describe("openai-completions tool_choice", () => {
 		expect(params.messages?.[0]?.role).toBe("system");
 	});
 
-	it("keeps developer messages for OpenAI and Anthropic OpenRouter batch instructions", async () => {
-		for (const model of [
+	it("uses system messages for other OpenAI-compatible hosts (#10741)", async () => {
+		const models = [
 			getModel("openrouter", "openai/gpt-5.2-codex"),
 			getModel("openrouter", "anthropic/claude-fable-5.1:batch"),
-		]) {
+			{ ...localOpenAICompletionsModel, id: "qwen3.8-27b", name: "Qwen3.8 27B" },
+		];
+		for (const model of models) {
 			expect(model).toBeDefined();
 			let payload: unknown;
 
@@ -1203,7 +1205,7 @@ describe("openai-completions tool_choice", () => {
 			).result();
 
 			const params = payload as { messages?: Array<{ role?: string }> };
-			expect(params.messages?.[0]?.role).toBe("developer");
+			expect(params.messages?.[0]?.role).toBe("system");
 		}
 	});
 
@@ -1244,7 +1246,9 @@ describe("openai-completions tool_choice", () => {
 			expect(compat?.requiresReasoningContentOnAssistantMessages).toBe(true);
 			expect(compat?.thinkingFormat).toBe("deepseek");
 			expect(compat?.maxTokensField).toBeUndefined();
-			expect(compat?.supportsDeveloperRole).toBeUndefined();
+			// The runtime default is now system for non-OpenAI hosts; an explicit false
+			// from the generator is equivalent and harmless. (#10741)
+			expect(compat?.supportsDeveloperRole ?? false).toBe(false);
 		}
 	});
 

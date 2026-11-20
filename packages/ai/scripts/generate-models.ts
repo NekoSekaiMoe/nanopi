@@ -1104,14 +1104,15 @@ function detectOpenAICompletionsCompat(model: Model<"openai-completions">): Open
 		isSelfHosted;
 
 	const isGrok = provider === "xai" || baseUrl.includes("api.x.ai");
-	const isOpenRouterDeveloperRoleModel =
-		isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
+	// The developer role is OpenAI's. Other hosts' chat templates often reject it (#10741),
+	// so only api.openai.com gets developer by default; every other host uses system.
+	const isOpenAI = provider === "openai" || baseUrl.includes("api.openai.com");
 	const cacheControlFormat =
 		provider === "openrouter" && /^~?anthropic\//.test(model.id) ? "anthropic" : undefined;
 
 	return {
 		supportsStore: !isNonStandard,
-		supportsDeveloperRole: isOpenRouterDeveloperRoleModel || (!isNonStandard && !isOpenRouter),
+		supportsDeveloperRole: isOpenAI,
 		supportsReasoningEffort:
 			!isGrok &&
 			!isZai &&
