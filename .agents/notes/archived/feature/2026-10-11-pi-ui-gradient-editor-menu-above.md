@@ -1,6 +1,7 @@
 # Agent Note: pi-ui keeps its open gradient editor with the menu above the input
 
 Status: implemented
+Archived: 2026-11-21
 
 > Superseded the same day by
 > [composer-menu-above-no-piui-editor](./2026-10-11-composer-menu-above-no-piui-editor.md):

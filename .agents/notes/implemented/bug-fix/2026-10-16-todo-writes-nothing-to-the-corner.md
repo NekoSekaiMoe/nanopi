@@ -83,3 +83,5 @@ still holds, its conclusion about the corner does not.
 
 Related: [footer badges through the status channel](2026-10-13-footer-badges-status-channel.md)
 (the channel that renders the corner text).
+
+[历史快照：Drop the todo count from the composer corner](../../archived/bug-fix/2026-10-15-drop-todo-count-from-composer-corner.md)

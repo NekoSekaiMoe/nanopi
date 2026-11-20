@@ -28,7 +28,7 @@ Two successive wrong turns on where "menu above" and "gradient" live:
   stay in pi-ui's `working.ts`, untouched by the editor changes.
 
 Supersedes
-[pi-ui-gradient-editor-menu-above](./2026-10-11-pi-ui-gradient-editor-menu-above.md)
+[pi-ui-gradient-editor-menu-above](../../archived/feature/2026-10-11-pi-ui-gradient-editor-menu-above.md)
 (same day): the menu direction survives, the restored editor frame does not.
 
 ## Alternatives considered
@@ -50,3 +50,5 @@ Supersedes
   `renderedAutocompleteHeight` bookkeeping is shared by render and
   hit-testing, so geometry changes must update both (covered by
   `packages/tui/test/editor.test.ts`).
+
+[历史快照：pi-ui keeps its open gradient editor with the menu above the input](../../archived/feature/2026-10-11-pi-ui-gradient-editor-menu-above.md)

@@ -1,0 +1,9 @@
+{
+  "version": 1,
+  "files": {
+    "archived/bug-fix/2026-10-15-drop-todo-count-from-composer-corner.md": "sha256:9fded5283264d4a2bff7237c023f111c49a64e2f275dd5a5aee5187dd59fcc6e",
+    "archived/bug-fix/2026-10-19-push-protection-mirror-diverges-main.md": "sha256:e2b3b08d7f5c71bf7f739eee3c297ef0d6da5a1b0b7d9735c28f9515236f2946",
+    "archived/feature/2026-10-11-pi-ui-gradient-editor-menu-above.md": "sha256:a53967d8db4a5d17eeff351f16d4b3dea2b41bc1cf81c6e0f4d337cc728a0cca",
+    "archived/process/2026-11-06-biome-schema-follows-renovate.md": "sha256:6348dfb00c67489d9be631cf4ef460ccd0d3096a47b9f2f1d32b059a438ac8d6"
+  }
+}
