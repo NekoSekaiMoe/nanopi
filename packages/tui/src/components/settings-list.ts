@@ -254,8 +254,10 @@ export class SettingsList implements Component {
 		} else if (kb.matches(data, "tui.select.cancel")) {
 			this.onCancel();
 		} else if (this.searchEnabled && this.searchInput) {
+			const previousQuery = this.searchInput.getValue();
 			this.searchInput.handleInput(data);
-			this.applyFilter(this.searchInput.getValue());
+			const query = this.searchInput.getValue();
+			if (query !== previousQuery) this.applyFilter(query);
 		}
 	}
 

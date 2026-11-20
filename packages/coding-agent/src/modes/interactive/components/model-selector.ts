@@ -470,8 +470,10 @@ export class ModelSelectorComponent extends Container implements Focusable {
 		}
 		// Pass everything else to search input
 		else {
+			const previousQuery = this.searchInput.getValue();
 			this.searchInput.handleInput(keyData);
-			this.filterModels(this.searchInput.getValue());
+			const query = this.searchInput.getValue();
+			if (query !== previousQuery) this.filterModels(query);
 		}
 	}
 

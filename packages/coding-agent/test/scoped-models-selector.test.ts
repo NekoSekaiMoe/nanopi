@@ -105,6 +105,22 @@ describe("scoped models selector", () => {
 		expect(getMarkerStates(selector, models)).toEqual([true, false, false]);
 	});
 
+	it("keeps the selected row while arrowing inside an unchanged search query", async () => {
+		const models = [
+			{ id: "model-openai", name: "OpenAI", enabled: true },
+			{ id: "model-anthropic", name: "Anthropic", enabled: true },
+			{ id: "model-google", name: "Google", enabled: true },
+		];
+		const selector = await createSelector(models);
+
+		for (const character of "o") selector.handleInput(character);
+		selector.handleInput("\x1b[B");
+		selector.handleInput("\x1b[D");
+		selector.handleInput("\r");
+
+		expect(models.map((model) => model.enabled)).toEqual([true, false, true]);
+	});
+
 	it("restores the all-enabled state after re-enabling the last disabled model", async () => {
 		const models = [
 			{ id: "model-a", name: "Model A", enabled: true },
