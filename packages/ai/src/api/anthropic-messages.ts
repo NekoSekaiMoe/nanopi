@@ -1680,13 +1680,15 @@ function convertTools(
 				? undefined
 				: resolveJsonSchemaStrictSampling(tool, supportsStrictTools, isAnthropicStrictUnsupportedKeyword);
 		const parameters = getJsonSchemaToolParameters(tool, strict);
-		const schema = parameters as { properties?: unknown; required?: string[] };
+		const schema = parameters as { properties?: unknown; required?: string[]; additionalProperties?: unknown };
 		const legacyInputSchema = {
 			type: "object" as const,
-			// The non-strict schema is rebuilt from these two keys alone, which drops a
-			// root $defs while the $refs inside properties survive. Inline it first.
+			// Keep shared definitions so property $refs still resolve, and additionalProperties so the
+			// model knows whether extra arguments are allowed. Other root keywords stay out: Anthropic
+			// rejects root anyOf/oneOf/allOf with a 400.
 			properties: strict === true ? (schema.properties ?? {}) : inlinedProperties(parameters),
 			required: schema.required ?? [],
+			...(schema.additionalProperties === undefined ? {} : { additionalProperties: schema.additionalProperties }),
 		};
 		const inputSchema =
 			strict === true

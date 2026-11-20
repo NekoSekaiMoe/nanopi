@@ -854,6 +854,8 @@ export class InteractiveMode {
 
 	private mountInteractiveTui(tui: TuiMainScreen, components: readonly Component[]): void {
 		for (const component of components) tui.addChild(component);
+		// An external SIGTSTP (kill -TSTP) restores the terminal like Ctrl+Z (#12272).
+		tui.setSuspendSignalHandler(() => this.handleCtrlZ());
 	}
 
 	private stopInteractiveTui(): void {

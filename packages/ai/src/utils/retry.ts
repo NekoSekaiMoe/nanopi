@@ -113,9 +113,16 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 	"connection.?error",
 	"connection.?refused",
 	"connection.?lost",
+	// Gateway mid-stream drop relayed as an Anthropic-style `api_error` event
+	// ("Connection closed."), and the agent proxy's own EOF wording.
+	"connection.?closed",
 	"other side closed",
 	"fetch failed",
 	"getaddrinfo",
+	// Bare Node socket codes, e.g. "read ECONNRESET" or "connect ETIMEDOUT 1.2.3.4:443".
+	// The lookaround keeps a code inside a longer identifier non-retryable.
+	"(?<![a-z0-9_])(?:ECONNRESET|ECONNABORTED|ECONNREFUSED|ETIMEDOUT|EPIPE)(?![a-z0-9_])",
+	"connection reset by peer",
 	"ENOTFOUND",
 	"EAI_AGAIN",
 	"upstream.?connect",

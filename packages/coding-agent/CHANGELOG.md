@@ -13,6 +13,9 @@
 
 ### Fixed
 
+- Unscoped syntax-highlighted text uses the theme foreground again, so tool previews stay readable when the terminal and nanopi use contrasting color themes (upstream `562da75f9`)
+- An external `SIGTSTP` (`kill -TSTP`) now follows the same suspend path as Ctrl+Z, restoring the terminal and redrawing on `fg`; the listener is tied to terminal ownership so a child that owns the terminal afterwards is suspended normally (upstream `e4f50d76d`, `3107a58d2`)
+- `read` keeps the non-vision image warning in the tool details renderer instead of the tool result text: switching to a vision model no longer sends an image with a stale note saying the model cannot see it (upstream `4be4cb4f5`)
 - Truncated `read`, `grep`, `find` and `ls` results are saved under the agent dir instead of being lost: the tool result carries a `recall_tool_result` ref and a path, and the new module reads the stored text back in 50KB pages so one oversized log can no longer spend the whole context on the way back (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 
 - `/retry` works on the failure auto-retry gave up on: every attempt that loop made is omitted from the model projection, so the branch held no replayable response and the command answered "No failed response to retry" right after a visible failure. The turn is repeated with a fresh retry budget now, and the failure returns to the transcript so a second `/retry` still has something to replay

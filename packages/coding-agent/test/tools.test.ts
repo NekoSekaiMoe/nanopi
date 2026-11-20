@@ -1,3 +1,5 @@
+import { stripVTControlCharacters } from "node:util";
+import type { TUI } from "@nanopi/pi-tui";
 import { spawnSync } from "child_process";
 import { applyPatch } from "diff";
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
@@ -27,6 +29,8 @@ import {
 	createReadTool,
 	createWriteTool,
 } from "../src/index.ts";
+import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
+import { initTheme } from "../src/modes/interactive/theme/theme.ts";
 import * as shellModule from "../src/utils/shell.ts";
 import * as toolsManager from "../src/utils/tools-manager.ts";
 
@@ -253,6 +257,41 @@ describe("Coding Agent Tools", () => {
 				mimeType: "image/png",
 				note: getTextOutput(result),
 			});
+		});
+
+		it("keeps a text-only model's image warning out of what the model gets", async () => {
+			const png1x1Base64 =
+				"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYGD4DwABBAEAX+XDSwAAAABJRU5ErkJggg==";
+			const testFile = join(testDir, "text-model.png");
+			writeFileSync(testFile, Buffer.from(png1x1Base64, "base64"));
+			const ctx = { cwd: testDir, model: { id: "text-only", input: ["text"] } } as unknown as ModuleToolContext;
+
+			const result = await createReadToolDefinition(testDir).execute(
+				"test-call-img-text-model",
+				{ path: testFile },
+				undefined,
+				undefined,
+				ctx,
+			);
+
+			expect(getTextOutput(result)).toBe("Read image file [image/png]");
+			expect(result.content.some((c) => c.type === "image")).toBe(true);
+
+			initTheme();
+			const component = new ToolExecutionComponent(
+				"read",
+				"test-call-img-text-model",
+				{ path: testFile },
+				{},
+				createReadToolDefinition(testDir),
+				{ requestRender() {} } as TUI,
+				testDir,
+			);
+			component.updateResult({ ...result, isError: false });
+			const warning = "[text-only does not support images; it saw a placeholder instead]";
+			expect(stripVTControlCharacters(component.render(120).join("\n"))).toContain(warning);
+			component.setExpanded(true);
+			expect(stripVTControlCharacters(component.render(120).join("\n"))).toContain(warning);
 		});
 
 		it("should read BMP files from disk as PNG image attachments", async () => {
