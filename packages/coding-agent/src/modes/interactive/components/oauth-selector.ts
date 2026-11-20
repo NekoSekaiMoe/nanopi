@@ -141,7 +141,8 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 					(provider) => `${provider.name} ${provider.id} ${provider.authType} ${provider.method?.name ?? ""}`,
 				)
 			: this.allProviders;
-		this.selectedIndex = Math.max(0, Math.min(this.selectedIndex, Math.max(0, this.filteredProviders.length - 1)));
+		if (query) this.selectedIndex = 0;
+		else this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredProviders.length - 1));
 		this.updateList();
 	}
 
@@ -228,8 +229,10 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 		}
 		// Pass everything else to search input
 		else {
+			const previousQuery = this.searchInput.getValue();
 			this.searchInput.handleInput(keyData);
-			this.filterProviders(this.searchInput.getValue());
+			const query = this.searchInput.getValue();
+			if (query !== previousQuery) this.filterProviders(query);
 		}
 	}
 }

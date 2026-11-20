@@ -85,6 +85,30 @@ describe("SettingsList", () => {
 		assert.deepStrictEqual(changes, ["setting-5", "setting-0"]);
 	});
 
+	it("keeps the selected setting while arrowing inside an unchanged search query", () => {
+		const many = [
+			{ id: "alpha", label: "Alpha", currentValue: "off", values: ["off", "on"] },
+			{ id: "alpine", label: "Alpine", currentValue: "off", values: ["off", "on"] },
+			{ id: "beta", label: "Beta", currentValue: "off", values: ["off", "on"] },
+		];
+		const changes: string[] = [];
+		const list = new SettingsList(
+			many,
+			5,
+			testTheme,
+			(id) => changes.push(id),
+			() => {},
+			{ enableSearch: true },
+		);
+
+		for (const character of "al") list.handleInput(character);
+		list.handleInput("\x1b[B");
+		list.handleInput("\x1b[D");
+		list.handleInput("\r");
+
+		assert.deepStrictEqual(changes, ["alpine"]);
+	});
+
 	it("falls back to the list when PageUp/PageDown arrive inside a search", () => {
 		const many = Array.from({ length: 20 }, (_, index) => ({
 			id: `setting-${index}`,

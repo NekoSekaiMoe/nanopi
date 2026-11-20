@@ -400,8 +400,9 @@ export class ScopedModelsSelectorComponent extends Container implements Focusabl
 		}
 
 		// Pass everything else to search input
+		const previousQuery = this.searchInput.getValue();
 		this.searchInput.handleInput(data);
-		this.refresh();
+		if (this.searchInput.getValue() !== previousQuery) this.refresh();
 	}
 
 	getSearchInput(): Input {

@@ -132,7 +132,7 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 		const filtered = query
 			? fuzzyFilter(this.allItems, query, (item) => `${item.value} ${item.description ?? ""}`)
 			: this.allItems;
-		const selectedValue = this.selectList.getSelectedItem()?.value as ThinkingLevel | undefined;
+		const selectedValue = query ? undefined : (this.selectList.getSelectedItem()?.value as ThinkingLevel | undefined);
 		const newList = this.buildSelectList(filtered, selectedValue);
 		this.children[this.selectListChildIndex] = newList;
 		this.selectList = newList;
@@ -163,8 +163,10 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 			return;
 		}
 
+		const previousQuery = this.searchInput.getValue();
 		this.searchInput.handleInput(keyData);
-		this.applyFilter(this.searchInput.getValue());
+		const query = this.searchInput.getValue();
+		if (query !== previousQuery) this.applyFilter(query);
 	}
 
 	getSelectList(): SelectList {

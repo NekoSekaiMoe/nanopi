@@ -35,6 +35,18 @@ describe("thinking selector", () => {
 		expect(getLevelRow("high")?.startsWith("→   high")).toBe(true);
 	});
 
+	it("keeps the selected level while arrowing inside an unchanged search query", () => {
+		const selected = vi.fn();
+		const selector = new ThinkingSelectorComponent("off", ["off", "low", "medium", "high"], selected, () => {});
+
+		for (const character of "h") selector.handleInput(character);
+		selector.handleInput("\x1b[B");
+		selector.handleInput("\x1b[D");
+		selector.handleInput("\r");
+
+		expect(selected).toHaveBeenCalledWith("low");
+	});
+
 	it("uses the configured save binding", () => {
 		setKeybindings(new KeybindingsManager({ "app.thinking.save": "ctrl+r" }));
 		const saveDefault = vi.fn();

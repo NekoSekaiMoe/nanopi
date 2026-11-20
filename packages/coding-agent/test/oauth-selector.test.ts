@@ -71,6 +71,46 @@ describe("OAuthSelectorComponent", () => {
 		]);
 	});
 
+	it("selects the best fuzzy match after moving then searching", () => {
+		const selected: string[] = [];
+		const selector = new OAuthSelectorComponent(
+			"login",
+			[
+				{ id: "openai", name: "OpenAI", authType: "api_key" },
+				{ id: "anthropic", name: "Anthropic", authType: "api_key" },
+			],
+			(id) => selected.push(id),
+			() => {},
+		);
+
+		selector.handleInput("\x1b[B");
+		for (const character of "openai") selector.handleInput(character);
+		selector.handleInput("\r");
+
+		expect(selected).toEqual(["openai"]);
+	});
+
+	it("keeps the selected row while the search query is unchanged", () => {
+		const selected: string[] = [];
+		const selector = new OAuthSelectorComponent(
+			"login",
+			[
+				{ id: "openai", name: "OpenAI", authType: "api_key" },
+				{ id: "anthropic", name: "Anthropic", authType: "api_key" },
+				{ id: "google", name: "Google", authType: "api_key" },
+			],
+			(id) => selected.push(id),
+			() => {},
+		);
+
+		for (const character of "o") selector.handleInput(character);
+		selector.handleInput("\x1b[B");
+		selector.handleInput("\x1b[D");
+		selector.handleInput("\r");
+
+		expect(selected).toEqual(["google"]);
+	});
+
 	it("renders an option without compiled auth status as not configured", () => {
 		const selector = new OAuthSelectorComponent(
 			"login",

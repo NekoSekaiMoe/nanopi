@@ -140,6 +140,33 @@ describe("model selector", () => {
 		});
 	});
 
+	it("keeps the selected row while arrowing inside an unchanged search query", async () => {
+		harness = await createHarness({
+			models: [
+				{ id: "model-openai", name: "OpenAI", reasoning: true },
+				{ id: "model-anthropic", name: "Anthropic", reasoning: true },
+				{ id: "model-google", name: "Google", reasoning: true },
+			],
+		});
+		const selected = vi.fn();
+		const selector = new ModelSelectorComponent(
+			createFakeTui(),
+			harness.getModel("model-openai")!,
+			harness.session.modelRuntime,
+			[],
+			selected,
+			() => {},
+		);
+
+		for (const character of "o") selector.handleInput(character);
+		selector.handleInput("\x1b[B");
+		selector.handleInput("\x1b[D");
+		selector.handleInput("\r");
+
+		expect(selected).toHaveBeenCalledWith(harness.getModel("model-anthropic"));
+		selector.dispose();
+	});
+
 	it("moves the selection by a window on PageUp/PageDown", async () => {
 		harness = await createHarness({
 			models: Array.from({ length: 20 }, (_, index) => ({
