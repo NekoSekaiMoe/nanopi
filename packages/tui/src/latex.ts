@@ -612,7 +612,12 @@ function replaceCharacters(value: string, replacements: Readonly<Record<string, 
 }
 
 function normalizeScriptValue(value: string): string {
-	return value.trim().replace(/\s*([=+-])\s*/g, "$1");
+	// Strip only whitespace immediately around an operator. Splitting on all whitespace
+	// would collapse spaces between words, which must survive in a script value.
+	return value
+		.split(/(\s*[=+-]\s*)/)
+		.map((part) => (/^\s*[=+-]\s*$/.test(part) ? part.trim() : part))
+		.join("");
 }
 
 function formatUnicodeScript(value: string, kind: "sub" | "sup"): string | undefined {

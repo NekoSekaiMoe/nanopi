@@ -414,6 +414,12 @@ R\left(\frac{\pi}{4}\right)
 		);
 	});
 
+	it("normalizes script operators without changing script performance", () => {
+		const longSpace = " ".repeat(100_000);
+		assert.strictEqual(renderLatex(`x^{a${longSpace}=${longSpace}b}`), "xᵃ⁼ᵇ");
+		assert.strictEqual(renderLatex("x^{a b + c}"), "x^(a b+c)");
+	});
+
 	it("normalizes relation, multiplication, and named-operator spacing", () => {
 		for (const source of ["x=y", "x =y", "x=\ny", "x\n=\ny"]) {
 			assert.strictEqual(renderLatex(source), "x = y");
