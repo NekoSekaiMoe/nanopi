@@ -612,12 +612,28 @@ function replaceCharacters(value: string, replacements: Readonly<Record<string, 
 }
 
 function normalizeScriptValue(value: string): string {
-	// Strip only whitespace immediately around an operator. Splitting on all whitespace
-	// would collapse spaces between words, which must survive in a script value.
-	return value
-		.split(/(\s*[=+-]\s*)/)
-		.map((part) => (/^\s*[=+-]\s*$/.test(part) ? part.trim() : part))
-		.join("");
+	// Strip whitespace around an operator, plus leading/trailing whitespace. A linear
+	// scan avoids the quadratic backtracking a quantified regex hits on long runs of
+	// whitespace that contain no operator.
+	let result = "";
+	let pending = "";
+	let dropWhitespace = true;
+	for (const character of value) {
+		if (/\s/u.test(character)) {
+			if (!dropWhitespace) pending += character;
+			continue;
+		}
+		if (character === "=" || character === "+" || character === "-") {
+			pending = "";
+			result += character;
+			dropWhitespace = true;
+			continue;
+		}
+		result += pending + character;
+		pending = "";
+		dropWhitespace = false;
+	}
+	return result;
 }
 
 function formatUnicodeScript(value: string, kind: "sub" | "sup"): string | undefined {

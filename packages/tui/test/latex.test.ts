@@ -414,9 +414,10 @@ R\left(\frac{\pi}{4}\right)
 		);
 	});
 
-	it("normalizes script operators without changing script performance", () => {
+	it("normalizes script operators without quadratic whitespace backtracking", () => {
 		const longSpace = " ".repeat(100_000);
 		assert.strictEqual(renderLatex(`x^{a${longSpace}=${longSpace}b}`), "xᵃ⁼ᵇ");
+		assert.strictEqual(renderLatex(`x_{${longSpace}}`), "x");
 		assert.strictEqual(renderLatex("x^{a b + c}"), "x^(a b+c)");
 	});
 
