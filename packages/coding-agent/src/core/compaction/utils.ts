@@ -187,6 +187,7 @@ KEEP
 - Exact file paths, line numbers, function and type signatures, commands, and error text.
 - Decisions with their rationale, constraints, user preferences, and the user's original goal.
 - Open tasks, blockers, and the next action, including unfinished work visible in tool calls.
+- Every open objective in the summarized range: a user request that is unfinished and not superseded must keep its own line, even when this range made no progress on it. Do not drop a goal because this turn did not touch it.
 
 DROP
 - Logs whose conclusion is already recorded, repeated file reads or status checks, and tool results whose useful content is captured elsewhere.
@@ -195,7 +196,8 @@ DROP
 
 PRIORITY
 - Prefer precise, current facts over broad narration. When two entries conflict, keep the later one and note the change.
-- Keep enough detail to resume without re-reading the dropped material. Never invent facts that are not in the conversation.`;
+- Keep enough detail to resume without re-reading the dropped material. Never invent facts that are not in the conversation.
+- Reproduce user requests, decisions, and constraints verbatim. If you shorten or rephrase one, mark it as a paraphrase; never present a reconstructed phrase as the original wording.`;
 
 // ============================================================================
 // Recoverable references

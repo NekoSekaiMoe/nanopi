@@ -36,6 +36,17 @@ describe("summary references", () => {
 	});
 });
 
+describe("summarization rules", () => {
+	it("requires open objectives and verbatim-or-marked user wording", () => {
+		// Both compaction paths share this system prompt, so a rule here is the
+		// only place that reaches the default and the Codex summarizer alike.
+		strictEqual(SUMMARIZATION_SYSTEM_PROMPT.includes("Every open objective"), true);
+		strictEqual(SUMMARIZATION_SYSTEM_PROMPT.includes("unfinished and not superseded"), true);
+		strictEqual(SUMMARIZATION_SYSTEM_PROMPT.includes("Reproduce user requests"), true);
+		strictEqual(SUMMARIZATION_SYSTEM_PROMPT.includes("mark it as a paraphrase"), true);
+	});
+});
+
 describe("reference instruction wiring", () => {
 	it("carries the reference rules in the prompt that can produce a summary", () => {
 		// The rules are what make a [rN] exist at all, so a prompt that can produce a summary
