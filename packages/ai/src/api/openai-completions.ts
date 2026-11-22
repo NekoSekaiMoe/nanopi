@@ -166,6 +166,10 @@ function isJsonObjectValue(value: unknown): value is JsonObject {
  */
 function mergeStreamingArgumentObject(target: JsonObject, delta: JsonObject): void {
 	for (const [key, value] of Object.entries(delta)) {
+		if (key === "__proto__" || key === "constructor" || key === "prototype") {
+			Object.defineProperty(target, key, { value, enumerable: true, configurable: true, writable: true });
+			continue;
+		}
 		const existing = target[key];
 		if (isJsonObjectValue(existing) && isJsonObjectValue(value)) {
 			mergeStreamingArgumentObject(existing, value);

@@ -132,6 +132,42 @@ describe("openai-completions non-standard stream shapes", () => {
 		expect(message.stopReason).toBe("toolUse");
 	});
 
+	it("keeps prototype-sensitive keys from object-form arguments as own properties", async () => {
+		const argumentsPayload = JSON.parse(
+			'{"__proto__":{"polluted":true},"constructor":{"name":"ctor"},"prototype":{"tag":"p"}}',
+		) as Record<string, unknown>;
+		mockState.chunks = [
+			{
+				id: "chatcmpl-1",
+				choices: [
+					{
+						index: 0,
+						delta: {
+							tool_calls: [
+								{
+									index: 0,
+									id: "call_1",
+									type: "function",
+									function: { name: "read", arguments: argumentsPayload },
+								},
+							],
+						},
+					},
+				],
+			},
+			finish("tool_calls"),
+		];
+
+		const message = await streamOpenAICompletions(model, context, { apiKey: "test" }).result();
+		const call = message.content[0];
+		expect(call?.type).toBe("toolCall");
+		if (call?.type !== "toolCall") throw new Error("Expected a tool call");
+		for (const key of ["__proto__", "constructor", "prototype"]) {
+			expect(Object.hasOwn(call.arguments, key)).toBe(true);
+		}
+		expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+	});
+
 	it("appends argument-only continuation chunks to the previous tool call", async () => {
 		mockState.chunks = [
 			{
