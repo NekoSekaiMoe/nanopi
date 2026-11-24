@@ -127,7 +127,9 @@ serialized unless they are isolated, which gives each one its own tree.
 - Children keep `AGENTS.md` (`--no-skills --no-prompt-templates` are the only
   discovery flags turned off): the child has `bash` and can commit, so the
   repository rules (no `git add -A`, `pnpm run check`, no emoji) are the cheapest
-  thing to keep.
+  thing to keep. An MCP call child is the exception: the `mcp` shell sets
+  `mcpOnlyPrompt`, which turns on `--mcp-only-prompt --no-context-files` and
+  leaves only the one MCP tool in the child's tool list.
 - The notification clips a long report head-and-tail so the conclusion survives;
   the full text goes to the session as a `subagent-job` entry, which is also how
   `/compact` and a restart learn which subagents ran and which session each one owns.

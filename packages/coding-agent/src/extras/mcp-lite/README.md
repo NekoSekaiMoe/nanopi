@@ -13,7 +13,7 @@ Every MCP call is one round trip:
 
 ```
 main agent --mcp(server, tool, args)--> mcp shell
-                                         |  spawn subagent, tools = mcp__<server>__<tool>,read
+                                         |  spawn subagent, tools = mcp__<server>__<tool>
                                          v
                                        subagent --mcp__<server>__<tool>(args)--> MCP server
                                          |  passes the arguments through unchanged
@@ -29,7 +29,8 @@ main agent <------------- the tool's output, verbatim
   no `subagent` tool, the shell runs the call in-process instead of failing.
 - **`mcp__<server>__<tool>` — the server's own tools, subagent-only.** They
   register with `defaultActive: false`, so the main agent never declares them;
-  the shell activates exactly the one it needs in the child's `tools` list. None
+  the shell activates exactly the one it needs in the child's `tools` list and
+  replaces the child's system prompt with an MCP-only one. None
   are added to a child's defaults (pi-subagent-mini's `DEFAULT_TOOLS` is
   `read,bash,grep,find,ls`), so a hand-written `spawn` that wants MCP has to
   name the tool. The extra module blocks every `mcp__*` call in main-agent

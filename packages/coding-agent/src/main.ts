@@ -40,6 +40,7 @@ import {
 	printMcpCommandHelp,
 	runMcpCommand,
 } from "./cli/mcp-command.ts";
+import { MCP_ONLY_SYSTEM_PROMPT } from "./cli/mcp-only-prompt.ts";
 import { createProjectTrustContext } from "./cli/project-trust.ts";
 import { selectSession } from "./cli/session-picker.ts";
 import { shouldRunFirstTimeSetup, showFirstTimeSetup, showStartupSelector } from "./cli/startup-ui.ts";
@@ -988,7 +989,7 @@ export async function main(args: string[], options?: MainOptions) {
 				noSkills: parsed.noSkills,
 				noPromptTemplates: parsed.noPromptTemplates,
 				noContextFiles: parsed.noContextFiles,
-				systemPrompt: parsed.systemPrompt,
+				systemPrompt: parsed.mcpOnlyPrompt ? MCP_ONLY_SYSTEM_PROMPT : parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
 				preset: parsed.preset,
 			},

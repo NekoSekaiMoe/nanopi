@@ -730,7 +730,7 @@ export interface ToolDefinition<TParams extends TSchema = TSchema, TDetails = un
 
 	/**
 	 * JSON Schema of `structuredContent` in successful results. Tools that declare it should always
-	 * set `structuredContent`; codemode scripts then receive it instead of the text content.
+	 * set `structuredContent`; programmatic callers then receive it instead of the text content.
 	 */
 	outputSchema?: TSchema;
 
@@ -1154,7 +1154,7 @@ export interface ToolExecutionStartEvent {
 	toolCallId: string;
 	toolName: string;
 	args: any;
-	/** Set when another tool (for example a codemode script) made this call. */
+	/** Set when another tool made this call. */
 	parentToolCallId?: string;
 }
 
@@ -1165,7 +1165,7 @@ export interface ToolExecutionUpdateEvent {
 	toolName: string;
 	args: any;
 	partialResult: any;
-	/** Set when another tool (for example a codemode script) made this call. */
+	/** Set when another tool made this call. */
 	parentToolCallId?: string;
 }
 
@@ -1178,7 +1178,7 @@ export interface ToolExecutionEndEvent {
 	isError: boolean;
 	/** Milliseconds `execute()` took, measured with a monotonic clock; absent when the tool did not run. */
 	durationMs?: number;
-	/** Set when another tool (for example a codemode script) made this call. */
+	/** Set when another tool made this call. */
 	parentToolCallId?: string;
 }
 
@@ -1238,7 +1238,7 @@ interface ToolCallEventBase {
 	 * in the parent result's `nestedCalls` record.
 	 */
 	toolCallId: string;
-	/** Set when another tool (for example a codemode script) issued this call. */
+	/** Set when another tool issued this call. */
 	parentToolCallId?: string;
 }
 
@@ -1308,7 +1308,7 @@ interface ToolResultEventBase {
 	type: "tool_result";
 	/** The call's id; `<parent id>/<n>` for nested calls, see `ToolCallEvent`. */
 	toolCallId: string;
-	/** Set when another tool (for example a codemode script) issued this call. */
+	/** Set when another tool issued this call. */
 	parentToolCallId?: string;
 	input: Record<string, unknown>;
 	content: (TextContent | ImageContent)[];
@@ -2117,8 +2117,7 @@ export interface ModuleSessionSurface extends ModuleEvents {
 	getSettings(): Settings;
 
 	/**
-	 * Set the active tools by name. Unknown and `hidden` tools are ignored. Tools with `codemode` or
-	 * `deferred` exposure stay callable from codemode scripts whether active or not.
+	 * Set the active tools by name. Unknown and `hidden` tools are ignored.
 	 */
 	setActiveTools(toolNames: string[]): void;
 

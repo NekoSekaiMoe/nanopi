@@ -30,7 +30,7 @@ export function createFileOps(): FileOperations {
  */
 export function extractFileOpsFromMessage(message: AgentMessage, fileOps: FileOperations): void {
 	if (message.role === "toolResult") {
-		// Calls made from codemode scripts are recorded on the script's result.
+		// Calls made by a tool are recorded on that tool's result.
 		for (const call of message.nestedCalls?.calls ?? []) addFileOp(call.name, call.arguments, fileOps);
 		return;
 	}
