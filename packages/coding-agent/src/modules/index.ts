@@ -30,6 +30,7 @@ import piUi from "../extras/pi-ui/src/index.ts";
 import todoLite from "../extras/todo-lite/index.ts";
 import toolResultStore from "../extras/tool-result-store/index.ts";
 import websearch from "../extras/websearch/src/index.ts";
+import batchExtension from "./batch/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
 import compactionRecallExtension from "./compaction-recall/index.ts";
@@ -43,6 +44,7 @@ const BUILTIN_MODULES: SessionModule[] = [
 	// "module/extra" component alias @nanopi/pi-extra to an inert stub whose
 	// factory registers nothing.
 	{ name: "extra", factory: extraInlineExtension.factory, hidden: true },
+	{ name: "batch", factory: batchExtension, hidden: true },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
 	{ name: "compaction-recall", factory: compactionRecallExtension, hidden: true },

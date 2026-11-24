@@ -70,6 +70,9 @@
 		"module/extra": {
 			"description": "Run-mode, permission, and webui bridge module (packages/extra, @nanopi/pi-extra); a flavor that drops it aliases the module to an inert stub"
 		},
+		"module/batch": {
+			"description": "Hidden execute_many tool: batches callable tools into one model round trip"
+		},
 		"module/builtin-commands": {
 			"description": "Built-in slash commands (/compact, /context, /status, /init)"
 		},
@@ -181,6 +184,9 @@
 				"extraBridge",
 				"extraInlineExtension"
 			]
+		},
+		"batch": {
+			"source": "packages/coding-agent/src/modules/batch/index.ts"
 		},
 		"builtin-commands": {
 			"source": "packages/coding-agent/src/modules/builtin-commands/index.ts"
