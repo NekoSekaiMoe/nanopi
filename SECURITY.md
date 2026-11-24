@@ -21,6 +21,28 @@ skills and only to use nanopi within trusted repositories.  This is because file
 like `AGENTS.md` or instructions in comments can be used to prompt inject the
 coding agent trivially and this cannot be protected against.
 
+## Shell sandbox boundary
+
+The optional `/sandbox` backend (`packages/extra/src/sandbox.ts`) constrains only
+the built-in `bash`/`powershell` tools: bubblewrap on Linux and `sandbox-exec`
+(Seatbelt) on macOS. It is filesystem/network containment for those shell
+commands, not a sandbox for the nanopi process or its plugins.
+
+Outside that boundary:
+
+- **MCP servers are not sandboxed.** stdio MCP servers are spawned under the
+  user's OS account by `mcp-lite`, outside the session filesystem sandbox;
+  HTTP MCP servers control their own remote side effects. Shell sandbox rules
+  do not apply to either.
+- **Extensions and skills run in-process.** They are trusted code and are not
+  isolated by `/sandbox`.
+- **Windows has no sandbox backend.** `detectSandbox` reports unsupported there;
+  configuring `/sandbox on` fails rather than falling back to an unsandboxed
+  shell.
+- When a configured sandbox launcher is missing, interactive sessions warn and
+  run shell commands locally, while unattended sessions (`print`, `json`, `rpc`)
+  fail closed so commands cannot silently run without containment.
+
 ## Reporting a Vulnerability
 
 If you believe you found a security vulnerability in nanopi or another package in

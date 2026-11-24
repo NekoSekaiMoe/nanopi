@@ -29,11 +29,16 @@ export function addUsageToTotals(totals: UsageTotals, usage: Usage): void {
 
 /** Sum of two usages, keeping the optional token splits when either side reports them. */
 export function combineUsage(first: Usage, second: Usage): Usage {
+	// Two usages from different price snapshots cannot share one snapshot: keep
+	// the first (the base response) and let the caller treat the merge as one
+	// billed response at that price, which is how the usage already got folded.
+	const pricing = first.pricing ?? second.pricing;
 	return {
 		input: first.input + second.input,
 		output: first.output + second.output,
 		cacheRead: first.cacheRead + second.cacheRead,
 		cacheWrite: first.cacheWrite + second.cacheWrite,
+		...(pricing ? { pricing } : {}),
 		...(first.cacheWrite1h !== undefined || second.cacheWrite1h !== undefined
 			? { cacheWrite1h: (first.cacheWrite1h ?? 0) + (second.cacheWrite1h ?? 0) }
 			: {}),

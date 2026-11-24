@@ -58,6 +58,7 @@ export {
 	detectSandbox,
 	normalizeSandboxConfig,
 	resolveSandboxHome,
+	sandboxIsUnattended,
 	shellQuote,
 } from "./sandbox.ts";
 export type { ExtraSettingsPatch, ResolvedExtraSettings } from "./settings-store.ts";

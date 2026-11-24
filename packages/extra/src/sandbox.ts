@@ -198,6 +198,15 @@ export function describeSandboxCall(config: SandboxConfig, toolName: string): st
 	return SHELL_TOOL_NAMES.has(toolName) ? "network blocked by sandbox" : undefined;
 }
 
+/**
+ * Whether a session is unattended: no terminal/web UI to read a warning in.
+ * A configured sandbox whose launcher is missing must fail closed here, or a
+ * `print`/`json`/`rpc` run silently executes commands without containment.
+ */
+export function sandboxIsUnattended(mode: string | undefined, hasUI: boolean | undefined): boolean {
+	return hasUI !== true && mode !== "tui" && mode !== "webui";
+}
+
 export interface SandboxRunnerOptions {
 	config: SandboxConfig;
 	availability: SandboxAvailability;
