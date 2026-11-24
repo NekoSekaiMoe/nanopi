@@ -2081,10 +2081,7 @@ export class AgentSession {
 		return this._toolDefinitions.get(name)?.definition.exposure ?? "direct";
 	}
 
-	/**
-	 * Tools callable through `ctx.executeTool()`: the active `direct` tools and every registered
-	 * `codemode` or `deferred` tool.
-	 */
+	/** Tools callable through `ctx.executeTool()`: the active direct tools. */
 	private _getCallableTools(active: ReadonlySet<string> = new Set(this.getActiveToolNames())): AgentTool[] {
 		return [...this._toolRegistry.values()].filter(
 			(tool) => this._getToolExposure(tool.name) === "direct" && active.has(tool.name),

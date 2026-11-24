@@ -46,6 +46,8 @@ export interface Args {
 	promptTemplates?: string[];
 	noPromptTemplates?: boolean;
 	noContextFiles?: boolean;
+	/** `--mcp-only-prompt`: replace the default system prompt with the MCP tool-call prompt. */
+	mcpOnlyPrompt?: boolean;
 	/** `--hot`: reload module files from disk as they change. */
 	hot?: boolean;
 	/** `--no-hot`: keep modules static even when settings turn hot reload on. */
@@ -219,6 +221,8 @@ export function parseArgs(args: string[]): Args {
 			result.noSkills = true;
 		} else if (arg === "--no-prompt-templates" || arg === "-np") {
 			result.noPromptTemplates = true;
+		} else if (arg === "--mcp-only-prompt") {
+			result.mcpOnlyPrompt = true;
 		} else if (arg === "--no-context-files" || arg === "-nc") {
 			result.noContextFiles = true;
 		} else if (arg === "--hot") {
@@ -331,6 +335,7 @@ ${chalk.bold("Options:")}
   --prompt-template <path>       Load a prompt template file or directory (can be used multiple times)
   --no-prompt-templates, -np     Disable prompt template discovery and loading
   --no-context-files, -nc        Disable AGENTS.md and CLAUDE.md discovery and loading
+  --mcp-only-prompt              Use the minimal prompt for a single MCP tool call
   --hot                          Reload module files from disk as they change
   --no-hot                       Keep modules static even when settings enable hot reload
   --export <file>                Export a session file and exit (format from the extension)

@@ -31,6 +31,12 @@ describe("mcp shell brief", () => {
 		expect(brief).toContain("Do not summarize");
 	});
 
+	it("keeps the brief to the MCP call without file instructions", () => {
+		expect(brief).not.toContain("working tree");
+		expect(brief).not.toContain("read files");
+		expect(brief).not.toContain("shell");
+	});
+
 	it("stops instead of guessing when the server or tool is missing", () => {
 		expect(brief).toContain("STOP RULES:");
 		expect(brief).toContain("does not exist or the server is not connected");

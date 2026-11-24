@@ -85,20 +85,16 @@ function textOf(result: { content: Array<{ type: string; text?: string }> }): st
 }
 
 /**
- * The brief handed to a subagent.
- *
- * The shell already validated server and tool, so the child's only job is to
- * forward the arguments it was given: it must not reword them, add fields, or
- * retry a different way. The expected output is the tool's text unchanged, so
- * the result the main agent gets back is what the server returned rather than
- * the child's summary of it.
+ * The brief handed to a subagent. It is the only task text the MCP child reads:
+ * server, tool, and arguments are already validated here, and the child exists
+ * only to call that one tool and return its text unchanged.
  */
 export function mcpBrief(request: { server: string; tool: string; args: Record<string, unknown> }): string {
 	return [
 		"GOAL: run exactly one MCP tool call and return its output verbatim.",
 		`CONTEXT: server "${request.server}", tool "${request.tool}". The arguments were given to you by the caller and must be passed through unchanged: ${JSON.stringify(request.args)}.`,
 		`Call \`${mcpToolName(request.server, request.tool)}\` with exactly those arguments. Do not add, rename, or drop a field, and do not retry with different arguments.`,
-		"EXPECTED OUTPUT: the tool's textual output verbatim, with nothing before or after it. If the call errored, output the error text. Do not summarize, and do not edit or read files of the working tree.",
+		"EXPECTED OUTPUT: the tool's textual output verbatim, with nothing before or after it. If the call errored, output the error text. Do not summarize.",
 		"STOP RULES: if the tool does not exist or the server is not connected, output that error and stop.",
 	].join("\n");
 }
@@ -308,10 +304,11 @@ function registerWrapperTool(
 							args: (params.args ?? {}) as Record<string, unknown>,
 						}),
 						description: `mcp ${params.server}/${params.tool}`,
-						// Only the one tool plus `read`: the child has no reason to touch
-						// the working tree, and a read-only child cannot block a writer.
-						tools: `${mcpToolName(params.server, params.tool)},read`,
+						// The child exists to make this one call: no file tools, no subagent.
+						tools: mcpToolName(params.server, params.tool),
 						timeoutSec,
+						// Replace the coding-assistant prompt; the brief is the whole job.
+						mcpOnlyPrompt: true,
 					},
 					{ signal },
 				);

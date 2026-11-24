@@ -326,6 +326,14 @@ describe("parseArgs", () => {
 		});
 	});
 
+	describe("--mcp-only-prompt flag", () => {
+		test("parses --mcp-only-prompt flag", () => {
+			const result = parseArgs(["--mcp-only-prompt"]);
+			expect(result.mcpOnlyPrompt).toBe(true);
+			expect(result.diagnostics).toEqual([]);
+		});
+	});
+
 	describe("--no-context-files flag", () => {
 		test("parses --no-context-files flag", () => {
 			const result = parseArgs(["--no-context-files"]);

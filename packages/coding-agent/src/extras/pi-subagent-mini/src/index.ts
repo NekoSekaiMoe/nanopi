@@ -104,6 +104,8 @@ export interface Job {
 	tools: string;
 	model?: string;
 	modules: string[];
+	/** Replace the child's coding-assistant prompt with the minimal MCP call prompt. */
+	mcpOnlyPrompt?: boolean;
 	timeoutSec: number;
 	onFailure: "retry" | "report";
 	/** Job ids this one waits for, and the ones that were not settled when it was spawned. */
@@ -611,6 +613,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		// package layout can (the single-file build runs from an asset cache).
 		const child = ctx.resolveHostEntry();
 		const args = [...child.args, "--output", "json", "-p", "--no-skills", "--no-prompt-templates"];
+		if (job.mcpOnlyPrompt) args.push("--mcp-only-prompt", "--no-context-files");
 		// A child session is a file we own: `--session <id>` reuses the same id and
 		// directory the tool recorded, so a later `continue` appends to the growing
 		// transcript instead of meeting the id in a different project directory.
@@ -882,6 +885,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			tools?: string;
 			model?: string;
 			modules: string[];
+			mcpOnlyPrompt?: boolean;
 			timeoutSec?: number;
 			onFailure?: "retry" | "report";
 			dependsOn?: string[];
@@ -909,6 +913,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			tools,
 			model: params.model,
 			modules: params.modules,
+			mcpOnlyPrompt: params.mcpOnlyPrompt,
 			timeoutSec: params.timeoutSec ?? DEFAULT_TIMEOUT_SEC,
 			onFailure: params.onFailure ?? "report",
 			dependsOn: params.dependsOn ?? [],
@@ -1200,6 +1205,11 @@ export default function subagentMini(pi: ModuleEventsSurface &
 						"spawn/continue: comma-separated built-in module names for the child, replacing the inherited set; default: this session's modules minus interactive-only ones",
 				}),
 			),
+			mcpOnlyPrompt: Type.Optional(
+				Type.Boolean({
+					description: "spawn: replace the child's coding-assistant prompt with the minimal MCP call prompt (used by the `mcp` shell)",
+				}),
+			),
 			timeoutSec: Type.Optional(
 				Type.Number({ description: `spawn/continue: max seconds per attempt, default ${DEFAULT_TIMEOUT_SEC}` }),
 			),
@@ -1282,6 +1292,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 						tools,
 						model: inheritedModel(),
 						modules: inheritedModules(),
+						mcpOnlyPrompt: params.mcpOnlyPrompt === true,
 						timeoutSec: params.timeoutSec,
 						onFailure: params.onFailure,
 						dependsOn,

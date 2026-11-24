@@ -637,7 +637,7 @@ export interface AuthorizationUpdate {
 	continues?: boolean;
 }
 
-/** A tool call that another tool made while it ran, for example from a codemode script. */
+/** A tool call that another tool made while it ran. */
 export interface NestedToolCallRecord {
 	id: string;
 	name: string;

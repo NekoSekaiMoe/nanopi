@@ -21,7 +21,7 @@ import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, type TruncationResult } from "./truncate.ts";
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
-/** Output limit of `structuredContent.output`, which programmatic callers such as codemode scripts receive. */
+/** Output limit of `structuredContent.output`, which programmatic callers receive. */
 const STRUCTURED_OUTPUT_MAX_BYTES = 1024 * 1024;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
@@ -82,8 +82,9 @@ export const bashToolSystemPromptContribution = {
 export type BashToolInput = Static<typeof bashSchema>;
 
 /**
- * Result for programmatic callers such as codemode scripts. A non-zero exit code is an error result for the model, but scripts still resolve to this value.
- * `output` is not limited like the model-facing output: callers decide how much of it reaches the model.
+ * Structured result for programmatic callers. A non-zero exit code is an error result for the
+ * model, but the structured result is still available. `output` is not limited like the
+ * model-facing output: callers decide how much of it reaches the model.
  */
 const bashOutputSchema = Type.Object({
 	output: Type.String({ description: "Combined stdout and stderr, possibly truncated" }),

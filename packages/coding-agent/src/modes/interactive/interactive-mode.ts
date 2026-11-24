@@ -3088,7 +3088,7 @@ export class InteractiveMode {
 				break;
 
 			case "tool_execution_start": {
-				// Nested calls (from codemode scripts) are shown inside their parent's row.
+				// Nested calls are shown inside their parent's row.
 				if (event.parentToolCallId) break;
 				let component = this.pendingTools.get(event.toolCallId);
 				if (!component) {
