@@ -2,6 +2,8 @@
 
 Status: rejected — 用户拍板先否决整套 CodeMode / fork 脚本改造：四层契约工程量大，当前 `mcp` shell 的进程隔离已够用，维持现状。见 ISSUE #801。
 
+> **已被部分取代（2026-11-24，ISSUE #803）**：本篇否决的是脚本运行时与四层契约；用户随后明确只要一个 hidden module 用 `pi.registerTool` + `ctx.executeTool()` 做批量编排，不要新引擎。批量工具已落地，见[用隐藏内置模块把多次工具往返压成一次](../../implemented/feature/2026-11-24-hidden-batch-tool-module.md)。脚本运行时、`vm`/QuickJS、四层契约的否决仍然有效。
+
 ## Problem
 
 ISSUE #801 从 #799 的讨论延伸，想弄清楚「nanopi 的 MCP 要往 CodeMode 走，具体怎么改」。当时的 `mcp` shell（[MCP discovery 与 mcp 壳工具](../../implemented/architecture/2026-10-21-mcp-discovery-and-wrapper-tool.md)）是上下文隔离的搬运工：主会话调 `mcp(server, tool, args)`，每次 spawn 一个 subagent 跑真正的 `mcp__*` 工具，外部 payload 不进主 transcript。代价是每次调用约 1 秒启动、无法在一段脚本里编排多次工具调用。

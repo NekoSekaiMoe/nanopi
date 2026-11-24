@@ -41,6 +41,7 @@ import {
 	resolveSandboxHome,
 	type SandboxAvailability,
 	type SandboxConfig,
+	sandboxIsUnattended,
 } from "./sandbox.ts";
 import {
 	type GuardKey,
@@ -607,6 +608,8 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	const SANDBOX_BACKEND_ID = "sandbox";
 	let sandboxConfig: SandboxConfig | undefined;
 	let sandboxAvailability: SandboxAvailability | undefined;
+	/** Set when an unattended session must refuse shell calls because the configured sandbox cannot start. */
+	let sandboxUnavailable = false;
 
 	/**
 	 * Build the sandbox backend from the current settings and hand it to the
@@ -618,6 +621,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		if (!configured) {
 			sandboxConfig = undefined;
 			sandboxAvailability = undefined;
+			sandboxUnavailable = false;
 			nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, undefined);
 			nanopi.setActiveBashOperations?.(undefined);
 			return;
@@ -625,11 +629,27 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		sandboxConfig = { ...DEFAULT_SANDBOX_CONFIG, ...configured };
 		sandboxAvailability = detectSandbox(sandboxConfig);
 		if (!sandboxAvailability.available) {
-			// Leave shell execution local instead of failing every command, and say
-			// so: without the notice the only trace of a configured sandbox was a
-			// `/sandbox` the user had no reason to type, so commands they believed
-			// were contained ran unsandboxed. Notifying throws nowhere, so a session
-			// without a UI (`notify` is a no-op there) still ends up local.
+			const unattended = sandboxIsUnattended(sessionCtx?.mode, sessionCtx?.hasUI);
+			if (unattended) {
+				// Print/rpc/json sessions have nobody to read a warning: fail closed
+				// with a backend that reports the error on every shell call instead
+				// of silently running commands without the configured containment.
+				sandboxUnavailable = true;
+				const reason = sandboxAvailability.reason;
+				nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, {
+					exec: async (_command, _cwd, call) => {
+						call.onData(Buffer.from(`sandbox unavailable: ${reason}\n`));
+						return { exitCode: 1 };
+					},
+				});
+				nanopi.setActiveBashOperations?.(SANDBOX_BACKEND_ID);
+				return;
+			}
+			// Interactive sessions keep local execution with a visible warning:
+			// otherwise a missing launcher turns every command into an error for
+			// a user who can still fix it. Without the notice they would believe
+			// commands were contained when they were not.
+			sandboxUnavailable = false;
 			nanopi.registerBashOperations?.(SANDBOX_BACKEND_ID, undefined);
 			nanopi.setActiveBashOperations?.(undefined);
 			sessionCtx?.ui.notify(
@@ -638,6 +658,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 			);
 			return;
 		}
+		sandboxUnavailable = false;
 		nanopi.registerBashOperations?.(
 			SANDBOX_BACKEND_ID,
 			createSandboxedBashOperations({
@@ -654,7 +675,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 	function sandboxStatusLine(): string {
 		if (!sandboxConfig) return "off (shell commands run unsandboxed)";
 		if (!sandboxAvailability?.available) {
-			return `off: ${sandboxAvailability?.reason ?? "launcher unavailable"}`;
+			return `${sandboxUnavailable ? "blocked" : "off"}: ${sandboxAvailability?.reason ?? "launcher unavailable"}`;
 		}
 		const network = sandboxConfig.allowNetwork ? "network on" : "network off";
 		return `${sandboxAvailability.kind} (${network})`;

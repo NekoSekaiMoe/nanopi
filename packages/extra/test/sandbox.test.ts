@@ -11,6 +11,7 @@ import {
 	detectSandbox,
 	normalizeSandboxConfig,
 	resolveSandboxHome,
+	sandboxIsUnattended,
 	shellQuote,
 } from "../src/sandbox.ts";
 import { normalizeExtraSettings } from "../src/types.ts";
@@ -193,5 +194,19 @@ describe("describeSandboxCall", () => {
 		expect(describeSandboxCall(DEFAULT_SANDBOX_CONFIG, "bash")).toBe("network blocked by sandbox");
 		expect(describeSandboxCall(DEFAULT_SANDBOX_CONFIG, "read")).toBeUndefined();
 		expect(describeSandboxCall({ ...DEFAULT_SANDBOX_CONFIG, allowNetwork: true }, "bash")).toBeUndefined();
+	});
+});
+
+describe("sandboxIsUnattended", () => {
+	test("treats headless modes as unattended", () => {
+		expect(sandboxIsUnattended("print", false)).toBe(true);
+		expect(sandboxIsUnattended("json", undefined)).toBe(true);
+		expect(sandboxIsUnattended("rpc", false)).toBe(true);
+	});
+
+	test("keeps interactive and webui sessions attended", () => {
+		expect(sandboxIsUnattended("tui", true)).toBe(false);
+		expect(sandboxIsUnattended("webui", true)).toBe(false);
+		expect(sandboxIsUnattended("tui", false)).toBe(false);
 	});
 });

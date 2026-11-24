@@ -457,6 +457,20 @@ export interface ToolCall {
 	argumentsError?: string;
 }
 
+/**
+ * Pricing snapshot frozen when a response was costed. A later catalog edit
+ * changes the rates but never rewrites this record, so historical spend stays
+ * explainable: provider + model + the exact rate set that produced the cost.
+ */
+export interface UsagePricing {
+	provider: string;
+	model: string;
+	/** Hash of provider, model, and the exact rate set. A catalog price edit yields a new revision. */
+	revision: string;
+	/** Rates in USD per million tokens, copied at request time (including any tiers). */
+	rates: ModelCost;
+}
+
 export interface Usage {
 	input: number;
 	output: number;
@@ -483,6 +497,8 @@ export interface Usage {
 		/** Best available total: provider-reported billed cost when supported, otherwise the catalog estimate. */
 		total: number;
 	};
+	/** Pricing snapshot used for the catalog estimate. Written by calculateCost; absent on legacy or provider-billed-only usage. */
+	pricing?: UsagePricing;
 }
 
 export type StopReason = "pending" | "stop" | "length" | "toolUse" | "error" | "aborted" | "deferred";
