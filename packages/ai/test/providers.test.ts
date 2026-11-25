@@ -176,8 +176,8 @@ describe("builtin providers", () => {
 			["opencode", "claude-opus-5"],
 			["opencode", "kimi-k3"],
 			["opencode-go", "kimi-k3"],
-			["github-copilot", "gpt-5.6-terra"],
-			["github-copilot", "claude-opus-5"],
+			["github-copilot", "gpt-6-sol"],
+			["github-copilot", "claude-opus-5.5"],
 			["github-copilot", "claude-opus-4.8"],
 			["github-copilot", "kimi-k3"],
 			["deepseek", "deepseek-v4-pro"],
@@ -232,7 +232,7 @@ describe("builtin providers", () => {
 			["deepseek", "deepseek-v4-pro"],
 			["opencode-go", "kimi-k3"],
 			["anthropic", "claude-opus-5"],
-			["github-copilot", "claude-opus-5"],
+			["github-copilot", "claude-opus-5.5"],
 			["anthropic", "claude-sonnet-4-5"],
 		] as const) {
 			expect(models.getModel(provider, modelId), `${provider}/${modelId}`).not.toHaveProperty(
@@ -245,7 +245,7 @@ describe("builtin providers", () => {
 		const models = builtinModels();
 		for (const [provider, modelId] of [
 			["opencode", "gpt-5.6-terra"],
-			["github-copilot", "gpt-5.6-terra"],
+			["github-copilot", "gpt-6-sol"],
 		] as const) {
 			// Proxies pass `additional_tools` through to OpenAI but are not verified for tool search.
 			expect(models.getModel(provider, modelId)?.compat, `${provider}/${modelId}`).toMatchObject({
@@ -256,11 +256,12 @@ describe("builtin providers", () => {
 			);
 		}
 		// Proxied Anthropic endpoints reject `tool_addition`/`tool_removal` blocks.
-		for (const provider of ["opencode", "github-copilot"] as const) {
-			expect(models.getModel(provider, "claude-opus-5")?.compat, provider).not.toHaveProperty(
-				"supportsMidConvoToolChanges",
-			);
-		}
+		expect(models.getModel("opencode", "claude-opus-5")?.compat, "opencode").not.toHaveProperty(
+			"supportsMidConvoToolChanges",
+		);
+		expect(models.getModel("github-copilot", "claude-opus-5.5")?.compat, "github-copilot").not.toHaveProperty(
+			"supportsMidConvoToolChanges",
+		);
 		expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
 			supportsMidConvoToolChanges: true,
 		});
