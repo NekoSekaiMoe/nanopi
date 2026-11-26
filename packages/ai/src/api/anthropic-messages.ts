@@ -682,7 +682,9 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 							maxRetries: options?.maxRetries,
 							maxRetryDelayMs: options?.maxRetryDelayMs,
 							signal: options?.signal,
+							onErrorResponse: options?.onErrorResponse,
 						},
+						model,
 					);
 					break;
 				} catch (error) {

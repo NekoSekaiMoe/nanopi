@@ -89,7 +89,9 @@ export const stream: StreamFunction<"azure-openai-responses", AzureOpenAIRespons
 					maxRetries: options?.maxRetries,
 					maxRetryDelayMs: options?.maxRetryDelayMs,
 					signal: options?.signal,
+					onErrorResponse: options?.onErrorResponse,
 				},
+				model,
 			);
 			await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
 			stream.push({ type: "start", partial: output });

@@ -87,3 +87,99 @@ describe("provider request retries", () => {
 		expect(vi.getTimerCount()).toBe(0);
 	});
 });
+
+describe("failed response reporting", () => {
+	function instantError(status: number): Error {
+		return providerError(status, { "retry-after-ms": "0" });
+	}
+
+	it("reports only the last failure when consecutive attempts share a status", async () => {
+		const request = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(instantError(429))
+			.mockRejectedValueOnce(instantError(429))
+			.mockResolvedValue("ok");
+		const onErrorResponse = vi.fn();
+
+		const result = retryProviderRequest(request, { maxRetries: 2, maxRetryDelayMs: 0, onErrorResponse }, {
+			id: "test-model",
+		} as never);
+
+		await expect(result).resolves.toBe("ok");
+		expect(onErrorResponse).toHaveBeenCalledTimes(1);
+		expect(onErrorResponse.mock.calls[0][0].status).toBe(429);
+		expect(onErrorResponse.mock.calls[0][1]).toEqual({ id: "test-model" });
+	});
+
+	it("reports the latest failure per status when a status repeats later in the sequence", async () => {
+		const request = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(instantError(429))
+			.mockRejectedValueOnce(instantError(429))
+			.mockRejectedValueOnce(instantError(503))
+			.mockRejectedValueOnce(instantError(429))
+			.mockResolvedValue("ok");
+		const onErrorResponse = vi.fn();
+
+		const result = retryProviderRequest(request, { maxRetries: 4, maxRetryDelayMs: 0, onErrorResponse }, {
+			id: "test-model",
+		} as never);
+
+		await expect(result).resolves.toBe("ok");
+		expect(onErrorResponse).toHaveBeenCalledTimes(2);
+		expect(onErrorResponse.mock.calls.map(([response]) => response.status)).toEqual([429, 503]);
+	});
+
+	it("keeps the latest headers for each status", async () => {
+		const request = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(providerError(429, { "x-attempt": "first" }))
+			.mockRejectedValueOnce(providerError(429, { "x-attempt": "last" }))
+			.mockResolvedValue("ok");
+		const onErrorResponse = vi.fn();
+
+		const result = retryProviderRequest(request, { maxRetries: 2, maxRetryDelayMs: 0, onErrorResponse }, {
+			id: "test-model",
+		} as never);
+
+		await expect(result).resolves.toBe("ok");
+		expect(onErrorResponse).toHaveBeenCalledTimes(1);
+		expect(onErrorResponse.mock.calls[0][0].headers["x-attempt"]).toBe("last");
+	});
+
+	it("reports the final failure when all retries are exhausted", async () => {
+		const error = instantError(503);
+		const request = vi.fn<() => Promise<string>>().mockRejectedValue(error);
+		const onErrorResponse = vi.fn();
+
+		const result = retryProviderRequest(request, { maxRetries: 2, maxRetryDelayMs: 0, onErrorResponse }, {
+			id: "test-model",
+		} as never);
+
+		await expect(result).rejects.toBe(error);
+		expect(onErrorResponse).toHaveBeenCalledTimes(1);
+		expect(onErrorResponse.mock.calls[0][0].status).toBe(503);
+	});
+
+	it("reports a provider failure even when the backoff is aborted", async () => {
+		const controller = new AbortController();
+		const request = vi
+			.fn<() => Promise<string>>()
+			.mockRejectedValueOnce(instantError(429))
+			.mockImplementation(() => {
+				controller.abort();
+				return Promise.reject(instantError(429));
+			});
+		const onErrorResponse = vi.fn();
+
+		const result = retryProviderRequest(
+			request,
+			{ maxRetries: 2, maxRetryDelayMs: 0, signal: controller.signal, onErrorResponse },
+			{ id: "test-model" } as never,
+		);
+
+		await expect(result).rejects.toMatchObject({ name: "AbortError" });
+		expect(onErrorResponse).toHaveBeenCalledTimes(1);
+		expect(onErrorResponse.mock.calls[0][0].status).toBe(429);
+	});
+});

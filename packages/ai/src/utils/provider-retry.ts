@@ -1,11 +1,16 @@
+import type { Api, Model, ProviderResponse } from "../types.ts";
+import { headersToRecord } from "./headers.ts";
+
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 
-interface ProviderRetryOptions {
+interface ProviderRetryOptions<TModel = Model<Api>> {
 	maxRetries?: number;
 	maxRetryDelayMs?: number;
 	signal?: AbortSignal;
 	/** HTTP statuses that fail at once although the default policy would retry them. */
 	noRetryStatuses?: readonly number[];
+	/** Called for failed attempts with the request's model. See `retryProviderRequest`. */
+	onErrorResponse?: (response: ProviderResponse, model: TModel) => void | Promise<void>;
 }
 
 interface ProviderError extends Error {
@@ -96,6 +101,17 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
 	});
 }
 
+function reportErrorResponse<TModel>(
+	error: ProviderError,
+	model: TModel | undefined,
+	onErrorResponse: ((response: ProviderResponse, model: TModel) => void | Promise<void>) | undefined,
+): Promise<void> {
+	if (!onErrorResponse || model === undefined) return Promise.resolve();
+	return Promise.resolve(
+		onErrorResponse({ status: error.status ?? 0, headers: headersToRecord(error.headers ?? new Headers()) }, model),
+	);
+}
+
 /**
  * Reproduce the retry behavior used by the OpenAI and Anthropic SDKs while making
  * their backoff sleep interruptible. Their built-in retry timers ignore the
@@ -103,26 +119,60 @@ function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
  * wrap the request with this helper. Provider-requested delays above
  * `maxRetryDelayMs` fail immediately (60 seconds by default); set it to zero to
  * disable the limit.
+ *
+ * `onErrorResponse` reports failed attempts after the request settles: each
+ * distinct status contributes one report, using its latest attempt. No report
+ * is made for a successful response.
  */
-export async function retryProviderRequest<T>(
+export async function retryProviderRequest<T, TModel = Model<Api>>(
 	request: () => Promise<T>,
-	options: ProviderRetryOptions = {},
+	options: ProviderRetryOptions<TModel> = {},
+	model?: TModel,
 ): Promise<T> {
 	const maxRetries = options.maxRetries ?? 0;
 	let retriesRemaining = maxRetries;
+	const latestErrorByStatus = new Map<number | undefined, ProviderError>();
+
+	const flushErrorResponses = async (): Promise<void> => {
+		for (const error of latestErrorByStatus.values()) {
+			await reportErrorResponse(error, model, options.onErrorResponse);
+		}
+	};
 
 	for (;;) {
 		try {
 			// Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
-			return await request();
+			const result = await request();
+			await flushErrorResponses();
+			return result;
 		} catch (error) {
-			if (options.signal?.aborted) throw createAbortError();
-			if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error)) throw error;
-			if (error.status !== undefined && options.noRetryStatuses?.includes(error.status)) throw error;
+			const currentError = isProviderError(error) ? error : undefined;
+
+			if (options.signal?.aborted) {
+				if (currentError) {
+					latestErrorByStatus.set(currentError.status, currentError);
+				}
+				await flushErrorResponses();
+				throw createAbortError();
+			}
+
+			if (!currentError) {
+				throw error;
+			}
+			latestErrorByStatus.set(currentError.status, currentError);
+
+			if (retriesRemaining <= 0 || !isRetryableProviderError(currentError)) {
+				await flushErrorResponses();
+				throw error;
+			}
+			if (currentError.status !== undefined && options.noRetryStatuses?.includes(currentError.status)) {
+				await flushErrorResponses();
+				throw error;
+			}
 
 			const retryIndex = maxRetries - retriesRemaining;
 			retriesRemaining--;
-			await abortableSleep(getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs), options.signal);
+			await abortableSleep(getRetryDelayMs(currentError, retryIndex, options.maxRetryDelayMs), options.signal);
 		}
 	}
 }
