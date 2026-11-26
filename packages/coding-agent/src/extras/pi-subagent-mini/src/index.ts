@@ -5,6 +5,7 @@ import { Type } from "typebox";
 import type { ModuleApi, ModuleContext, ModuleUIContext, SessionStartEvent, ToolLoadout, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface, ModuleSessionSurface } from "../../../core/modules/types.ts";
 import { mergeWorktree, type Worktree } from "./worktree.ts";
 import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
+import { buildCliArgs, collectCliOutput, parsePreferredCli, spawnCli, type PreferredCli } from "./cli-adapter.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
 /**
@@ -127,6 +128,10 @@ export interface Job {
 	cwd?: string;
 	/** Child session id, so a later `continue` resumes the same transcript. */
 	sessionId?: string;
+	/** External CLI selected by settings; nanopi children leave this undefined. */
+	cli?: PreferredCli;
+	/** Resume token reported by an external CLI, kept for `action: "continue"`. */
+	cliSessionId?: string;
 	/** `git worktree add` result: the directory comes from the tool, not from the model. */
 	worktree?: Worktree;
 	/** True for a continue round: it appends to an existing transcript. */
@@ -171,6 +176,8 @@ type RestoredJob = {
 	scope: string;
 	report: string;
 	sessionId?: string;
+	cli?: PreferredCli;
+	cliSessionId?: string;
 	worktree?: Worktree;
 	usage?: { input: number; output: number };
 	startedAt: number;
@@ -254,6 +261,39 @@ function isMcpSubsystemEnabled(agentDir: string): boolean {
 }
 
 /**
+ * `subagents.preferredCli` in <agentDir>/extra/settings.json, with a
+ * `.nanopi/extra/settings.json` project override. Unset means nanopi itself;
+ * an unknown value is ignored instead of turning every spawn into a failure.
+ */
+function preferredCli(agentDir: string): PreferredCli {
+	const read = (): PreferredCli | undefined => {
+		try {
+			const parsed: unknown = JSON.parse(readFileSync(path.join(process.cwd(), ".nanopi", "extra", "settings.json"), "utf8"));
+			const value =
+				parsed && typeof parsed === "object"
+					? (parsed as { subagents?: { preferredCli?: unknown } }).subagents?.preferredCli
+					: undefined;
+			return parsePreferredCli(value);
+		} catch {
+			return undefined;
+		}
+	};
+	const fromAgent = (): PreferredCli | undefined => {
+		try {
+			const parsed: unknown = JSON.parse(readFileSync(path.join(agentDir, "extra", "settings.json"), "utf8"));
+			const value =
+				parsed && typeof parsed === "object"
+					? (parsed as { subagents?: { preferredCli?: unknown } }).subagents?.preferredCli
+					: undefined;
+			return parsePreferredCli(value);
+		} catch {
+			return undefined;
+		}
+	};
+	return read() ?? fromAgent() ?? "nanopi";
+}
+
+/**
  * Built-in modules a child should load, derived from the modules this process
  * actually registered — not from a hand-written path list. The previous
  * `src/<pkg>/index.ts` guesses only existed in a source checkout, so bundled and
@@ -326,6 +366,8 @@ function archive(job: Job, scope: string): RestoredJob {
 		scope,
 		report: job.finalOutput || job.errorMessage || "",
 		sessionId: job.sessionId,
+		cli: job.cli,
+		cliSessionId: job.cliSessionId,
 		worktree: job.worktree,
 		usage: job.usage,
 		startedAt: job.startedAt,
@@ -594,6 +636,50 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		}
 	};
 
+	/**
+	 * Launch an external CLI (`claude`/`codex`/`agy`) in place of a nanopi child.
+	 * The same `finish` path settles the job, so retries, timeouts, kill, and
+	 * dependency release behave exactly as they do for a nanopi child.
+	 */
+	const launchCli = (
+		job: Job,
+		cli: PreferredCli,
+		prompt: string,
+		baseCwd: string,
+		ctx: ModuleContext,
+		getCallbacks: () => {
+			finish: (status: Job["status"], errorMessage?: string, outputOverride?: string) => void;
+			terminate: (graceful: boolean) => void;
+		},
+	): void => {
+		job.cli = cli;
+		const launchConfig = buildCliArgs(cli, {
+			brief: prompt,
+			model: job.model,
+			sessionId: job.cliSessionId,
+			cwd: jobCwd(job, baseCwd),
+		});
+		const proc = spawnCli(launchConfig, jobCwd(job, baseCwd), prompt);
+		job.proc = proc;
+		collectCliOutput(proc, cli, job.timeoutSec * 1000).then((outcome) => {
+			const { finish } = getCallbacks();
+			if (job.status !== "running") return;
+			if (outcome.sessionId) job.cliSessionId = outcome.sessionId;
+			if (outcome.usage) job.usage = outcome.usage;
+			// The relay reads `job.finalOutput` from `finish`, so put the answer in a
+			// synthetic last assistant message before settling.
+			if (outcome.killed) finish("killed", outcome.error, outcome.text);
+			else if (outcome.error) finish("failed", outcome.error, outcome.text);
+			else finish("completed", undefined, outcome.text);
+		});
+		const timer = setTimeout(() => {
+			const { terminate } = getCallbacks();
+			if (job.status === "running") terminate(true);
+		}, job.timeoutSec * 1000);
+		timer.unref?.();
+		job.cancelTimeout = () => clearTimeout(timer);
+	};
+
 	/** Launch one child process for `job` (a first attempt or a retry) and wire its report. */
 	const launch = (job: Job, prompt: string, baseCwd: string, ctx: ModuleContext): void => {
 		// A retry replaces the previous attempt's process and its timeout.
@@ -611,6 +697,11 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		// The child must be this same installation: `resolveHostEntry()` answers
 		// "the entry the parent is running", which no path guessed from the
 		// package layout can (the single-file build runs from an asset cache).
+		const cli = job.cli ?? preferredCli(ctx.getAgentDir());
+		if (cli !== "nanopi") {
+			launchCli(job, cli, prompt, baseCwd, ctx, () => ({ finish, terminate }));
+			return;
+		}
 		const child = ctx.resolveHostEntry();
 		const args = [...child.args, "--output", "json", "-p", "--no-skills", "--no-prompt-templates"];
 		if (job.mcpOnlyPrompt) args.push("--mcp-only-prompt", "--no-context-files");
@@ -645,7 +736,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		let attemptSettled = false;
 
 		/** End this attempt: retry, or settle the job and report. */
-		const finish = (status: Job["status"], errorMessage?: string): void => {
+		const finish = (status: Job["status"], errorMessage?: string, outputOverride?: string): void => {
 			if (attemptSettled) return;
 			attemptSettled = true;
 			job.cancelTimeout?.();
@@ -661,8 +752,8 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			// A killed attempt may still have printed a message, but it was not the
 			// answer: the payload is why it died, or the report would say "completed"
 			// in the notification while the status says `killed`.
-			job.finalOutput = status === "killed" ? "" : (lastAssistant?.text ?? "");
-			job.usage = lastAssistant?.usage;
+			job.finalOutput = status === "killed" ? "" : (outputOverride ?? lastAssistant?.text ?? "");
+			job.usage = job.cli ? job.usage : lastAssistant?.usage;
 			job.durationMs = Date.now() - job.startedAt;
 			// Record the attempt before the retry replaces the job's status: a killed or
 			// timed-out attempt is otherwise invisible once attempt 2 starts.
@@ -892,6 +983,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			dependsOnTimeoutSec?: number;
 			isolated?: boolean;
 			cwd?: string;
+			cli?: PreferredCli;
 		},
 		baseCwd: string,
 		ctx: ModuleContext,
@@ -928,6 +1020,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			truncated: false,
 			startedAt: Date.now(),
 			cwd,
+			cli: params.cli,
 			done,
 			resolveDone,
 		};
@@ -990,6 +1083,8 @@ export default function subagentMini(pi: ModuleEventsSurface &
 				attempts: data.attemptLog?.length ?? 1,
 				attemptLog: data.attemptLog ?? [],
 				sessionId: data.sessionId,
+				cli: data.cli,
+				cliSessionId: data.cliSessionId,
 				worktree: data.worktree,
 				isContinue: false,
 				lastReport: data.report,
@@ -1129,7 +1224,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		const waiting =
 			job.pendingDependencies.length > 0 ? `, waiting on ${job.pendingDependencies.join(", ")}` : "";
 		const round = job.isContinue ? ", continuing an existing child session" : "";
-		return `subagent ${job.id}: ${job.status}${waiting} (cwd: ${where}, tools: ${job.tools}, model: ${job.model || "default"}, modules: ${job.modules.length || "inherited"}, onFailure: ${job.onFailure}, attempt ${job.attempts}/${MAX_ATTEMPTS}${round})`;
+		return `subagent ${job.id}: ${job.status}${waiting} (cwd: ${where}, tools: ${job.tools}, model: ${job.model || "default"}, cli: ${job.cli ?? "configured"}, modules: ${job.modules.length || "inherited"}, onFailure: ${job.onFailure}, attempt ${job.attempts}/${MAX_ATTEMPTS}${round})`;
 	};
 
 	pi.registerTool({
@@ -1198,6 +1293,12 @@ export default function subagentMini(pi: ModuleEventsSurface &
 			),
 			model: Type.Optional(
 				Type.String({ description: "spawn/continue: model id (provider/model); defaults to the current session model" }),
+			),
+			cli: Type.Optional(
+				Type.String({
+					description:
+						"spawn/continue: override subagents.preferredCli for this job (nanopi|claude|codex|agy; default: configured preference)",
+				}),
 			),
 			modules: Type.Optional(
 				Type.String({
@@ -1291,6 +1392,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 						task: `Task: ${params.task}`,
 						tools,
 						model: inheritedModel(),
+						cli: parsePreferredCli(params.cli),
 						modules: inheritedModules(),
 						mcpOnlyPrompt: params.mcpOnlyPrompt === true,
 						timeoutSec: params.timeoutSec,
@@ -1388,6 +1490,7 @@ export default function subagentMini(pi: ModuleEventsSurface &
 				job.task = `Task: ${params.task}`;
 				job.tools = tools;
 				job.model = params.model || job.model;
+				if (params.cli !== undefined) job.cli = parsePreferredCli(params.cli);
 				if (params.modules !== undefined) job.modules = inheritedModules();
 				if (params.timeoutSec !== undefined) job.timeoutSec = params.timeoutSec;
 				if (params.onFailure !== undefined) job.onFailure = params.onFailure;

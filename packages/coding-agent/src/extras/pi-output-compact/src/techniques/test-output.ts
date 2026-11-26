@@ -1,0 +1,272 @@
+import { matchesCommandPatterns } from "./command-detection.ts";
+
+interface TestSummary {
+	passed: number;
+	failed: number;
+	skipped: number;
+	failures: string[];
+}
+
+// Vitest 5.x summary: "Tests  4 failed | 39 passed (43)" - pipe-separated
+// tokens (any order, some omitted when zero) plus a "(total)" suffix that real
+// vitest output always carries. Requiring the suffix keeps this from matching
+// comma-form summaries or test titles, which the generic patterns below must
+// stay reachable for; it still needs to be checked before them, because they
+// misread "4 failed | 39 passed" as 4 passed.
+const VITEST_SUMMARY_PATTERN =
+	/Tests\s+((?:\d+\s+(?:failed|passed|skipped|expected fail|todo)\s*(?:\|\s*)?)+)\s*\((\d+)\)/i;
+
+const TEST_COMMAND_PATTERNS = [
+	/^npm\s+test\b/,
+	/^pnpm\s+test\b/,
+	/^yarn\s+test\b/,
+	/^bun\s+test\b/,
+	/^cargo\s+test\b/,
+	/^go\s+test\b/,
+	/^pytest\b/,
+	/^python\s+-m\s+pytest\b/,
+	/^(?:pnpm\s+)?(?:npx\s+)?vitest\b/,
+	/^(?:npx\s+)?jest\b/,
+	/^mocha\b/,
+	/^ava\b/,
+	/^tap\b/,
+	/^node\s+(?:\S+\s+)*--test\b/,
+] as const;
+
+const TEST_RESULT_PATTERNS = [
+	/test result:\s*(\w+)\.\s*(\d+)\s*passed;\s*(\d+)\s*failed;/,
+	/(\d+)\s*passed(?:,\s*(\d+)\s*failed)?(?:,\s*(\d+)\s*skipped)?/i,
+	/(\d+)\s*pass(?:,\s*(\d+)\s*fail)?(?:,\s*(\d+)\s*skip)?/i,
+	/tests?:\s*(\d+)\s*passed(?:,\s*(\d+)\s*failed)?(?:,\s*(\d+)\s*skipped)?/i,
+];
+
+const FAILURE_START_PATTERNS = [
+	/^FAIL\s+/,
+	/^FAILED\s+/,
+	/^\s*●\s+/,
+	/^\s*✕\s+/,
+	/^\s*✖\s+(?!failing tests:)/,
+	/^not ok\b/,
+	/test\s+\w+\s+\.\.\.\s*FAILED/,
+	/thread\s+'\w+'\s+panicked/,
+];
+const FALLBACK_PASS_PATTERN = /(?:\b(?:ok|PASS)\b|[✓✔])/;
+// Anchored to line starts so titles and prose containing "fail" cannot inflate
+// the count; `--- FAIL:` keeps Go per-test failures countable.
+const FALLBACK_FAIL_PATTERN = /^\s*(?:[✗✖✕❌]|(?:---\s+)?(?:FAIL|FAILED)\b)/;
+
+// node:test prints an authoritative summary block for every reporter: the spec
+// and dot reporters prefix lines with "ℹ", the TAP reporter with "#". When it
+// is present, the line-scanning fallback must be skipped entirely (the summary
+// line "ℹ fail 0" itself matches the fail pattern; a green run must not
+// report phantom failures).
+const NODE_TEST_SUMMARY_LINE = /^\s*(?:ℹ|#)\s*(tests|pass|fail|cancelled|skipped|todo)\s+(\d+)\s*$/;
+
+function isFailureStart(line: string): boolean {
+	return FAILURE_START_PATTERNS.some((pattern) => pattern.test(line));
+}
+
+function extractNodeTestSummary(output: string): Partial<TestSummary> | null {
+	let passed: number | undefined;
+	let failed: number | undefined;
+	let skipped: number | undefined;
+
+	for (const line of output.split("\n")) {
+		const match = NODE_TEST_SUMMARY_LINE.exec(line);
+		if (!match) {
+			continue;
+		}
+		const count = Number.parseInt(match[2] ?? "0", 10);
+		if (match[1] === "pass") {
+			passed = count;
+		} else if (match[1] === "fail") {
+			failed = count;
+		} else if (match[1] === "skipped") {
+			skipped = count;
+		}
+	}
+
+	if (passed === undefined && failed === undefined) {
+		return null;
+	}
+	return { passed: passed ?? 0, failed: failed ?? 0, skipped: skipped ?? 0 };
+}
+
+function extractTestStats(output: string): Partial<TestSummary> | null {
+	const vitestMatch = output.match(VITEST_SUMMARY_PATTERN);
+	if (vitestMatch) {
+		const stats: Partial<TestSummary> = {};
+		for (const token of vitestMatch[1].split("|")) {
+			const counts = token.match(/(\d+)\s+(failed|passed|skipped)/i);
+			if (!counts) {
+				continue;
+			}
+			const count = Number.parseInt(counts[1], 10);
+			if (counts[2].toLowerCase() === "failed") {
+				stats.failed = count;
+			} else if (counts[2].toLowerCase() === "passed") {
+				stats.passed = count;
+			} else {
+				stats.skipped = count;
+			}
+		}
+		return stats;
+	}
+	// Checked after vitest: a test logging a stray "ℹ pass 99" line must not
+	// override a vitest summary parsed from the same output.
+	const nodeSummary = extractNodeTestSummary(output);
+	if (nodeSummary) {
+		return nodeSummary;
+	}
+	for (const pattern of TEST_RESULT_PATTERNS) {
+		const match = output.match(pattern);
+		if (!match) {
+			continue;
+		}
+		return {
+			passed: Number.parseInt(match[1] ?? "0", 10) || 0,
+			failed: Number.parseInt(match[2] ?? "0", 10) || 0,
+			skipped: Number.parseInt(match[3] ?? "0", 10) || 0,
+		};
+	}
+	return null;
+}
+
+export function isTestCommand(command: string | undefined | null): boolean {
+	return matchesCommandPatterns(command, TEST_COMMAND_PATTERNS);
+}
+
+export function aggregateTestOutput(
+	output: string,
+	command: string | undefined | null,
+	isError?: boolean,
+): string | null {
+	if (!isTestCommand(command)) {
+		return null;
+	}
+
+	const lines = output.split("\n");
+	const summary: TestSummary = {
+		passed: 0,
+		failed: 0,
+		skipped: 0,
+		failures: [],
+	};
+
+	const stats = extractTestStats(output);
+	if (stats) {
+		summary.passed = stats.passed ?? 0;
+		summary.failed = stats.failed ?? 0;
+		summary.skipped = stats.skipped ?? 0;
+	}
+	// All-zero summaries (a cargo binary with zero tests) still scan: the
+	// anchored fail pattern keeps summary lookalikes like "ℹ fail 0" out, so the
+	// scan cannot resurrect phantom failures.
+	if (!stats || (summary.passed === 0 && summary.failed === 0)) {
+		for (const line of lines) {
+			if (FALLBACK_PASS_PATTERN.test(line)) {
+				summary.passed++;
+			}
+			if (FALLBACK_FAIL_PATTERN.test(line)) {
+				summary.failed++;
+			}
+		}
+	}
+
+	if (summary.failed > 0) {
+		let inFailure = false;
+		let currentFailure: string[] = [];
+		let blankCount = 0;
+
+		for (const line of lines) {
+			if (isFailureStart(line)) {
+				if (inFailure && currentFailure.length > 0) {
+					summary.failures.push(currentFailure.join("\n"));
+				}
+				inFailure = true;
+				currentFailure = [line];
+				blankCount = 0;
+				continue;
+			}
+
+			if (!inFailure) {
+				continue;
+			}
+
+			if (line.trim() === "") {
+				blankCount++;
+				if (blankCount >= 2 && currentFailure.length > 3) {
+					summary.failures.push(currentFailure.join("\n"));
+					inFailure = false;
+					currentFailure = [];
+				} else {
+					currentFailure.push(line);
+				}
+				continue;
+			}
+
+			if (line.match(/^\s/) || line.match(/^-/)) {
+				currentFailure.push(line);
+				blankCount = 0;
+				continue;
+			}
+
+			summary.failures.push(currentFailure.join("\n"));
+			inFailure = false;
+			currentFailure = [];
+		}
+
+		if (inFailure && currentFailure.length > 0) {
+			summary.failures.push(currentFailure.join("\n"));
+		}
+	}
+
+	// node:test repeats each failure under "✖ failing tests:"; keep the richest
+	// block per name so repeats never crowd the five-slot failure list.
+	const byFirstLine = new Map<string, string>();
+	for (const failure of summary.failures) {
+		const firstLine = failure.split("\n")[0] ?? "";
+		const existing = byFirstLine.get(firstLine);
+		if (!existing || failure.length > existing.length) {
+			byFirstLine.set(firstLine, failure);
+		}
+	}
+	summary.failures = [...byFirstLine.values()];
+
+	const result: string[] = ["Test Results:"];
+	if (isError && summary.failed === 0) {
+		result.push("   FAIL: command exited with a failure status");
+		result.push(
+			"   WARNING: no test failures were parsed from the output, so the counts above may be incomplete. Read the raw output before trusting this summary.",
+		);
+	}
+	result.push(`   PASS: ${summary.passed} passed`);
+	if (summary.failed > 0) {
+		result.push(`   FAIL: ${summary.failed} failed`);
+	}
+	if (summary.skipped > 0) {
+		result.push(`   SKIP: ${summary.skipped} skipped`);
+	}
+
+	if (summary.failed > 0 && summary.failures.length > 0) {
+		result.push("\n   Failures:");
+		for (const failure of summary.failures.slice(0, 5)) {
+			const failureLines = failure.split("\n");
+			const firstLine = failureLines[0] ?? "";
+			result.push(`   - ${firstLine.slice(0, 70)}${firstLine.length > 70 ? "..." : ""}`);
+			for (const detailLine of failureLines.slice(1, 4)) {
+				if (detailLine.trim()) {
+					result.push(`     ${detailLine.slice(0, 65)}${detailLine.length > 65 ? "..." : ""}`);
+				}
+			}
+			if (failureLines.length > 4) {
+				result.push(`     ... (${failureLines.length - 4} more lines)`);
+			}
+		}
+		if (summary.failures.length > 5) {
+			result.push(`   ... and ${summary.failures.length - 5} more failures`);
+		}
+	}
+
+	return result.join("\n");
+}
