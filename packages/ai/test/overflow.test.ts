@@ -43,6 +43,25 @@ describe("isContextOverflow", () => {
 		expect(isContextOverflow(createErrorMessage(errorMessage))).toBe(true);
 	});
 
+	// Regression: request_too_large must be a complete error code, not part of another identifier.
+	it.each([
+		"request_too_large",
+		'400 {"error":{"type":"request_too_large","message":"Request exceeds the maximum size"}}',
+		"Anthropic error: REQUEST_TOO_LARGE",
+	])("detects a complete request-size error code: %s", (errorMessage) => {
+		expect(isContextOverflow(createErrorMessage(errorMessage))).toBe(true);
+	});
+
+	it.each([
+		'400 {"code":"plugin_request_too_large","message":"plugin input rejected"}',
+		"400 invalid_request_error: my_plugin_request_too_large_flag was set",
+		"Unknown error code xrequest_too_large",
+		"Unknown error code request_too_large2",
+		"Unknown error code request_too_large_flag",
+	])("does not match request-size error codes inside longer identifiers: %s", (errorMessage) => {
+		expect(isContextOverflow(createErrorMessage(errorMessage), 200000)).toBe(false);
+	});
+
 	it.each([
 		'github-copilot API error (400): {"message":"failed to parse request","code":""}', // other status, same body
 		"custom-provider API error (429): Too many requests",

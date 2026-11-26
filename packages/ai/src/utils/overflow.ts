@@ -39,7 +39,7 @@ import type { AssistantMessage } from "../types.ts";
 const OVERFLOW_PATTERNS = [
 	/prompt (?:is )?too long/i, // Anthropic and z.ai token overflow
 	/prompt exceeds max length/i, // z.ai CN endpoint token overflow
-	/request_too_large/i, // Anthropic request byte-size overflow (HTTP 413)
+	/(?<![A-Za-z0-9_])request_too_large(?![A-Za-z0-9_])/i, // Anthropic request byte-size overflow (HTTP 413)
 	/input is too long for requested model/i, // Amazon Bedrock
 	/exceeds the context window/i, // OpenAI (Completions & Responses API)
 	/exceeds (?:the )?(?:model'?s )?maximum context length(?: of [\d,]+ tokens?|\s*\([\d,]+\))/i, // OpenAI-compatible proxies (LiteLLM)
