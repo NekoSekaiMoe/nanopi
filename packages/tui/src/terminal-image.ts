@@ -742,7 +742,13 @@ export function renderImage(
  * @param text - The visible text to display
  * @param url - The URL to link to
  */
+/** Longest URL that {@link hyperlink} wraps in an OSC 8 sequence. Real links are far shorter. */
+const MAX_HYPERLINK_URL_LENGTH = 8192;
+
 export function hyperlink(text: string, url: string): string {
+	if (url.length > MAX_HYPERLINK_URL_LENGTH) {
+		return text;
+	}
 	return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 
