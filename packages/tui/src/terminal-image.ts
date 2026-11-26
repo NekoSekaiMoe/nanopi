@@ -743,6 +743,9 @@ export function renderImage(
  * @param url - The URL to link to
  */
 export function hyperlink(text: string, url: string): string {
+	// Wrapping re-opens the link on every line with the full URL; beyond this cap that
+	// makes the output grow quadratically and exhausts the heap (#12416).
+	if (url.length > 8192) return text;
 	return `\x1b]8;;${url}\x1b\\${text}\x1b]8;;\x1b\\`;
 }
 

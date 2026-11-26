@@ -496,8 +496,9 @@ export class Editor implements Component, Focusable {
 	addToHistory(text: string): void {
 		const trimmed = text.trim();
 		if (!trimmed) return;
-		// Don't add consecutive duplicates
-		if (this.history.length > 0 && this.history[0] === trimmed) return;
+		// Keep each prompt once, at its most recent position (#12279).
+		const existing = this.history.indexOf(trimmed);
+		if (existing >= 0) this.history.splice(existing, 1);
 		this.history.unshift(trimmed);
 		// Limit history size
 		if (this.history.length > 100) {
