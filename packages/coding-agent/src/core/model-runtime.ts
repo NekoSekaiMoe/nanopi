@@ -114,6 +114,8 @@ interface ModelRuntimeSnapshot {
 	auth: ReadonlyMap<string, AuthCheck>;
 	/** Provider ids with a stored or runtime credential, including providers that are not registered. */
 	storedProviders: ReadonlySet<string>;
+	/** Stored credentials the availability pass tried but could not resolve (for example a failing `!command`). */
+	unresolvedStoredProviders: ReadonlySet<string>;
 }
 
 /** Availability check that a later request can still widen because it has not started. */
@@ -211,6 +213,7 @@ export class ModelRuntime implements Models {
 		available: [],
 		auth: new Map(),
 		storedProviders: new Set(),
+		unresolvedStoredProviders: new Set(),
 	};
 	/** Settles when the last requested availability pass finishes. Passes run one at a time. */
 	private availabilityTail: Promise<unknown> = Promise.resolve();
@@ -436,6 +439,7 @@ export class ModelRuntime implements Models {
 			const auth = new Map(this.snapshot.auth);
 			const checkedAvailable = new Map<string, readonly Model<Api>[]>();
 			const errors = new Map<string, Error>();
+			const unresolvedStored = new Set(this.snapshot.unresolvedStoredProviders);
 			for (const result of results) {
 				if (result.error) {
 					errors.set(result.id, result.error);
@@ -448,6 +452,16 @@ export class ModelRuntime implements Models {
 			for (const id of auth.keys()) {
 				if (!this.models.getProvider(id)) auth.delete(id);
 			}
+			const storedIds = new Set(credentials.map((entry) => entry.providerId));
+			for (const result of results) {
+				if (result.error) continue;
+				if (!storedIds.has(result.id)) continue;
+				if (result.check && auth.has(result.id)) unresolvedStored.delete(result.id);
+				else if (!result.check) unresolvedStored.add(result.id);
+			}
+			for (const id of unresolvedStored) {
+				if (!storedIds.has(id) || auth.has(id)) unresolvedStored.delete(id);
+			}
 			const previousAvailable = Map.groupBy(this.snapshot.available, (model) => model.provider);
 			this.snapshot = {
 				available: this.models
@@ -456,7 +470,8 @@ export class ModelRuntime implements Models {
 						auth.has(id) ? (checkedAvailable.get(id) ?? previousAvailable.get(id) ?? []) : [],
 					),
 				auth,
-				storedProviders: new Set(credentials.map((entry) => entry.providerId)),
+				storedProviders: storedIds,
+				unresolvedStoredProviders: unresolvedStored,
 			};
 			this.availabilityError =
 				errors.size > 0 ? [...errors.values()].map((error) => error.message).join("\n") : undefined;
@@ -720,13 +735,20 @@ export class ModelRuntime implements Models {
 
 	getProviderAuthStatus(providerId: string): AuthStatus {
 		if (this.credentials.hasRuntimeApiKey(providerId)) return { configured: true, source: "runtime" };
+
+		const check = this.snapshot.auth.get(providerId);
+		// A stored `!command` can resolve to nothing. The availability pass records that as a
+		// stored credential with no auth check; report it separately from a credential that worked
+		// so /login can tell the user to re-enter it instead of claiming it is configured.
+		if (this.snapshot.unresolvedStoredProviders.has(providerId)) {
+			return { configured: false, source: "stored", unresolved: true };
+		}
 		if (this.snapshot.storedProviders.has(providerId)) return { configured: true, source: "stored" };
 		const configured = configuredRequestAuthStatus(
 			this.config.getProvider(providerId),
 			this.extensionProviders.get(providerId),
 		);
 		if (configured) return configured;
-		const check = this.snapshot.auth.get(providerId);
 		return check ? { configured: true, source: "environment", label: check.source } : { configured: false };
 	}
 

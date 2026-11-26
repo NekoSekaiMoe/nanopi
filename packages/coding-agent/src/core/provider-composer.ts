@@ -113,6 +113,8 @@ export type AuthStatus = {
 	configured: boolean;
 	source?: "stored" | "runtime" | "environment" | "fallback" | "models_json_key" | "models_json_command";
 	label?: string;
+	/** A stored credential exists, but its value (for example a `!command`) did not resolve. */
+	unresolved?: boolean;
 };
 
 export const clearApiKeyCache = clearConfigValueCache;
