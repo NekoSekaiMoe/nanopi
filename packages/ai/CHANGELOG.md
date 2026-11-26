@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Failed provider responses now report through a dedicated `onErrorResponse` hook: consecutive failures with the same HTTP status collapse into one report, while a status change reports each run (issue [#815](https://cnb.cool/shinytale/nanopi/-/issues/815))
 - Error codes like `my_plugin_request_too_large_flag` are no longer treated as context overflow; only the standalone `request_too_large` code and HTTP 413 are (upstream `32c7f6d7b`)
 - A completed retry backoff now removes its abort listener, so repeated retries no longer accumulate listeners on a caller-owned signal (upstream `51ba3ab5b`)
 - `createProvider` merges a fetched model catalog once per published refresh instead of on every `getModels()`/`getModel()`, removing the quadratic lookup cost with large catalogs (upstream `073b0bae8`)

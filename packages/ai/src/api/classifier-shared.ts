@@ -97,7 +97,9 @@ export async function postClassifierRequest(
 			maxRetryDelayMs: options.maxRetryDelayMs,
 			signal: options.signal,
 			noRetryStatuses,
+			onErrorResponse: options.onErrorResponse,
 		},
+		model,
 	);
 	await options.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
 	return json;

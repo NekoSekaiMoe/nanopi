@@ -181,6 +181,11 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	 */
 	onResponse?: (response: ProviderResponse, model: TModel) => void | Promise<void>;
 	/**
+	 * Optional callback invoked after a failed HTTP response. Failed retries with
+	 * the same status collapse into one report; different statuses report each run.
+	 */
+	onErrorResponse?: (response: ProviderResponse, model: TModel) => void | Promise<void>;
+	/**
 	 * Optional custom HTTP headers to include in API requests.
 	 * Merged with provider defaults; caller values override default headers.
 	 * On AWS Bedrock these are injected via a Smithy `build`-step middleware so
