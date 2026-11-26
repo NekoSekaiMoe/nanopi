@@ -176,7 +176,11 @@ export function buildContextEntries(
 			contextEntries.push(entry);
 		}
 	}
-	contextEntries.push(...path.slice(compactionIdx + 1));
+	// A loop, not `push(...path.slice(...))`: a spread passes every entry as an argument and
+	// overflows the call stack once a branch holds about 120k entries after its compaction.
+	for (let i = compactionIdx + 1; i < path.length; i++) {
+		contextEntries.push(path[i]);
+	}
 	return contextEntries;
 }
 

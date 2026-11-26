@@ -46,6 +46,33 @@ describe("RPC JSONL framing", () => {
 		expect(lines).toEqual(['{"a":1}', '{"b":2}']);
 	});
 
+	test("keeps the next line separate when a handler throws", async () => {
+		// A handler that throws must not leave its line in the pending buffer and prepend it to the next one.
+		const lines: string[] = [];
+		const stream = new Readable({ read() {} });
+		// `data` listeners that throw surface as uncaught exceptions; count instead of failing the run.
+		const uncaught: Error[] = [];
+		const onUncaught = (error: Error) => uncaught.push(error);
+		process.on("uncaughtException", onUncaught);
+
+		attachJsonlLineReader(stream, (line) => {
+			lines.push(line);
+			if (lines.length === 1) throw new Error("handler failed");
+		});
+
+		stream.push(Buffer.from('{"a":1}\n'));
+		stream.push(Buffer.from('{"b":2}\n'));
+		stream.push(null);
+
+		await new Promise<void>((resolve) => {
+			stream.on("end", resolve);
+		});
+
+		process.off("uncaughtException", onUncaught);
+		expect(uncaught.map((error) => error.message)).toEqual(["handler failed"]);
+		expect(lines).toEqual(['{"a":1}', '{"b":2}']);
+	});
+
 	test("emits a final line without trailing LF", async () => {
 		const lines: string[] = [];
 		const stream = Readable.from([Buffer.from('{"a":1}')]);
