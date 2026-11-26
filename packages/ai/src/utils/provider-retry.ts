@@ -120,9 +120,9 @@ function reportErrorResponse<TModel>(
  * `maxRetryDelayMs` fail immediately (60 seconds by default); set it to zero to
  * disable the limit.
  *
- * `onErrorResponse` reports failed attempts: consecutive failures with the same
- * status collapse to their last attempt, while a different status reports the
- * earlier attempt immediately. No report is made for a successful response.
+ * `onErrorResponse` reports failed attempts after the request settles: each
+ * distinct status contributes one report, using its latest attempt. No report
+ * is made for a successful response.
  */
 export async function retryProviderRequest<T, TModel = Model<Api>>(
 	request: () => Promise<T>,
@@ -131,42 +131,42 @@ export async function retryProviderRequest<T, TModel = Model<Api>>(
 ): Promise<T> {
 	const maxRetries = options.maxRetries ?? 0;
 	let retriesRemaining = maxRetries;
-	let pendingError: ProviderError | undefined;
+	const latestErrorByStatus = new Map<number | undefined, ProviderError>();
+
+	const flushErrorResponses = async (): Promise<void> => {
+		for (const error of latestErrorByStatus.values()) {
+			await reportErrorResponse(error, model, options.onErrorResponse);
+		}
+	};
 
 	for (;;) {
 		try {
 			// Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
 			const result = await request();
-			// Consecutive failures with the same status collapse into one report.
-			if (pendingError && model !== undefined) {
-				await reportErrorResponse(pendingError, model, options.onErrorResponse);
-			}
+			await flushErrorResponses();
 			return result;
 		} catch (error) {
 			const currentError = isProviderError(error) ? error : undefined;
 
-			// A status change ends the previous run: report its last attempt.
-			if (pendingError && options.onErrorResponse && currentError?.status !== pendingError.status) {
-				await reportErrorResponse(pendingError, model, options.onErrorResponse);
-			}
-
 			if (options.signal?.aborted) {
-				if (currentError) await reportErrorResponse(currentError, model, options.onErrorResponse);
+				if (currentError) {
+					latestErrorByStatus.set(currentError.status, currentError);
+				}
+				await flushErrorResponses();
 				throw createAbortError();
 			}
 
 			if (!currentError) {
 				throw error;
 			}
-			pendingError = currentError;
+			latestErrorByStatus.set(currentError.status, currentError);
 
 			if (retriesRemaining <= 0 || !isRetryableProviderError(currentError)) {
-				// Only the final attempt of a same-status run is reported.
-				await reportErrorResponse(currentError, model, options.onErrorResponse);
+				await flushErrorResponses();
 				throw error;
 			}
 			if (currentError.status !== undefined && options.noRetryStatuses?.includes(currentError.status)) {
-				await reportErrorResponse(currentError, model, options.onErrorResponse);
+				await flushErrorResponses();
 				throw error;
 			}
 
