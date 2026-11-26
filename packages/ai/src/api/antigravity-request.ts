@@ -81,6 +81,9 @@ export function buildEnvelope(
  * Headers the native client puts on every Cloud Code call. The Google SDK client
  * built underneath always identifies itself as `nanopi (...)`, so the Antigravity
  * identity has to be layered on top of it.
+ *
+ * The OAuth project lookup is a direct Cloud Code call outside the SDK, so it
+ * uses the same list. Do not let the login and inference paths drift.
  */
 export function clientHeaders(): Record<string, string> {
 	return {

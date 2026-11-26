@@ -6,7 +6,9 @@
  * CLIProxyAPI and Antigravity-Manager:
  *
  * 1. Google OAuth (authorization code, `access_type=offline`) grants
- *    `cloud-platform` plus the antigravity-specific scopes.
+ *    `cloud-platform`, `userinfo.email` and the `aicode` scope. The flow uses
+ *    PKCE (S256) and a `state` nonce, matching the official client's live
+ *    authorization URL (pi-antigravity-bridge's ACP protocol reference).
  * 2. `loadCodeAssist` returns the Cloud Code project bound to the account. Free
  *    accounts have none until `onboardUser` provisions one, so that call is
  *    retried until the project shows up.
@@ -19,9 +21,11 @@
  * the login surfaces say so before starting.
  */
 
+import { clientHeaders } from "../../api/antigravity-request.ts";
 import { getProviderEnvValue } from "../../utils/provider-env.ts";
 import type { OAuthAuth, OAuthCredential, ProviderAuthInteraction } from "../types.ts";
 import { startOAuthCallbackServer, waitForCallbackOrManualInput } from "./callback-server.ts";
+import { generatePKCE } from "./pkce.ts";
 
 // Antigravity desktop client — a public OAuth client, so the secret ships with every install.
 // Both values are base64-encoded so GitHub's push protection does not read them as leaked
@@ -38,9 +42,7 @@ const ONBOARD_USER_URL = "https://daily-cloudcode-pa.googleapis.com/v1internal:o
 const SCOPES = [
 	"https://www.googleapis.com/auth/cloud-platform",
 	"https://www.googleapis.com/auth/userinfo.email",
-	"https://www.googleapis.com/auth/userinfo.profile",
-	"https://www.googleapis.com/auth/cclog",
-	"https://www.googleapis.com/auth/experimentsandconfigs",
+	"https://www.googleapis.com/auth/aicode",
 ].join(" ");
 const CALLBACK_HOST = getProviderEnvValue("NANOPI_OAUTH_CALLBACK_HOST") || "127.0.0.1";
 const CALLBACK_PORT = 51121;
@@ -50,8 +52,38 @@ const ONBOARD_ATTEMPTS = 5;
 const ONBOARD_POLL_MS = 2000;
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
 
-/** Sent as the client UA on Google API calls the flow makes itself. */
-const FLOW_USER_AGENT = "antigravity";
+/** State nonce round-tripped through the browser and the manual redirect URL. */
+function generateState(): string {
+	const bytes = new Uint8Array(32);
+	crypto.getRandomValues(bytes);
+	return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * Accepts a full redirect URL, a bare `code=...` / `code#state` fragment, or the code itself.
+ */
+function parseRedirectInput(input: string): { code?: string; state?: string } {
+	const value = input.trim();
+	if (!value) return {};
+	try {
+		const url = new URL(value);
+		return {
+			code: url.searchParams.get("code") ?? undefined,
+			state: url.searchParams.get("state") ?? undefined,
+		};
+	} catch {
+		// not a URL
+	}
+	if (value.includes("#")) {
+		const [code, state] = value.split("#", 2);
+		return { code, state };
+	}
+	if (value.includes("code=")) {
+		const params = new URLSearchParams(value.split("?")[1] ?? value);
+		return { code: params.get("code") ?? undefined, state: params.get("state") ?? undefined };
+	}
+	return { code: value };
+}
 
 type ProjectLookup = { projectId: string; tierId?: string };
 
@@ -120,11 +152,14 @@ function defaultTierId(json: Record<string, unknown> | null): string {
 async function requestTokens(
 	body: Record<string, string>,
 	signal: AbortSignal,
+	codeVerifier?: string,
 ): Promise<{ access: string; refresh?: string; expiresInSeconds?: number }> {
+	const params = new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...body });
+	if (codeVerifier) params.set("code_verifier", codeVerifier);
 	const response = await fetch(TOKEN_URL, {
 		method: "POST",
 		headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-		body: new URLSearchParams({ client_id: CLIENT_ID, client_secret: CLIENT_SECRET, ...body }).toString(),
+		body: params.toString(),
 		signal: requestSignal(signal),
 	});
 	const json = await readJson(response);
@@ -147,7 +182,6 @@ async function postCloudCode(
 	accessToken: string,
 	body: Record<string, unknown>,
 	signal: AbortSignal,
-	userAgent: string,
 ): Promise<Record<string, unknown> | null> {
 	const response = await fetch(url, {
 		method: "POST",
@@ -155,7 +189,7 @@ async function postCloudCode(
 			Authorization: `Bearer ${accessToken}`,
 			"Content-Type": "application/json",
 			Accept: "*/*",
-			"User-Agent": userAgent,
+			...clientHeaders(),
 		},
 		body: JSON.stringify(body),
 		signal: requestSignal(signal),
@@ -178,7 +212,6 @@ async function resolveProject(accessToken: string, signal: AbortSignal): Promise
 		accessToken,
 		{ metadata: { ideType: "ANTIGRAVITY" } },
 		signal,
-		FLOW_USER_AGENT,
 	);
 	const projectId = extractProjectId(assist);
 	if (projectId) return { projectId };
@@ -193,7 +226,6 @@ async function resolveProject(accessToken: string, signal: AbortSignal): Promise
 				metadata: { ide_type: "ANTIGRAVITY", ide_name: "antigravity", ide_version: "antigravity" },
 			},
 			signal,
-			`${FLOW_USER_AGENT} google-api-nodejs-client/10.3.0`,
 		);
 		const response = onboard?.response;
 		if (response && typeof response === "object") {
@@ -213,6 +245,8 @@ async function loginAntigravity(interaction: ProviderAuthInteraction): Promise<O
 		type: "info",
 		message: "Third-party Antigravity sign-in can get your Google account suspended.",
 	});
+	const { verifier, challenge } = await generatePKCE();
+	const state = generateState();
 	const startCallbackServer = (port: number) =>
 		startOAuthCallbackServer({
 			providerName: "Google Antigravity",
@@ -220,6 +254,7 @@ async function loginAntigravity(interaction: ProviderAuthInteraction): Promise<O
 			port,
 			path: CALLBACK_PATH,
 			redirectHost: "localhost",
+			state,
 			complete: async (code) => code,
 			signal: interaction.signal,
 		});
@@ -237,7 +272,9 @@ async function loginAntigravity(interaction: ProviderAuthInteraction): Promise<O
 			scope: SCOPES,
 			access_type: "offline",
 			prompt: "consent",
-			include_granted_scopes: "true",
+			code_challenge: challenge,
+			code_challenge_method: "S256",
+			state,
 		});
 		interaction.notify({
 			type: "auth_url",
@@ -250,12 +287,20 @@ async function loginAntigravity(interaction: ProviderAuthInteraction): Promise<O
 			message: "Complete login in your browser, or paste the redirect URL here:",
 			placeholder: redirectUri,
 		});
-		const code = result.type === "callback" ? result.value : parseRedirectInput(result.input);
+		let code: string | undefined;
+		if (result.type === "callback") {
+			code = result.value;
+		} else {
+			const parsed = parseRedirectInput(result.input);
+			if (parsed.state && parsed.state !== state) throw new Error("Antigravity OAuth state mismatch");
+			code = parsed.code;
+		}
 		if (!code) throw new Error("Missing authorization code");
 		interaction.notify({ type: "progress", message: "Exchanging authorization code for tokens..." });
 		const tokens = await requestTokens(
 			{ grant_type: "authorization_code", code, redirect_uri: redirectUri },
 			interaction.signal,
+			verifier,
 		);
 		if (!tokens.refresh) {
 			throw new Error(
@@ -278,20 +323,6 @@ async function loginAntigravity(interaction: ProviderAuthInteraction): Promise<O
 	} finally {
 		callback?.close();
 	}
-}
-
-/** Accepts a full redirect URL, a bare `code=...` fragment, or the code itself. */
-function parseRedirectInput(input: string): string | undefined {
-	const value = input.trim();
-	if (!value) return undefined;
-	try {
-		const code = new URL(value).searchParams.get("code");
-		if (code) return code;
-	} catch {
-		// not a URL
-	}
-	if (value.includes("code=")) return new URLSearchParams(value.split("?")[1] ?? value).get("code") ?? undefined;
-	return value;
 }
 
 function tokenExpiry(expiresInSeconds: number | undefined): number {
