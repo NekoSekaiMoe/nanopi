@@ -59,7 +59,7 @@
 		"grok-mermaid": "0.2.3",
 		"highlight.js": "11.12.0",
 		"hosted-git-info": "10.1.1",
-		"ignore": "7.0.16",
+		"ignore": "7.0.17",
 		"jiti": "2.7.0",
 		"minimatch": "11.0.9",
 		"proper-lockfile": "4.1.2",
@@ -77,7 +77,7 @@
 		"@types/semver": "7.8.0",
 		"marked": "18.3.0",
 		"shx": "0.4.0",
-		"vitest": "5.1.1"
+		"vitest": "5.1.2"
 	},
 	"keywords": [
 		"coding-agent",
