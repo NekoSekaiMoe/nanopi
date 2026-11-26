@@ -1082,7 +1082,7 @@ export async function main(args: string[], options?: MainOptions) {
 	}
 
 	if (parsed.listModels !== undefined) {
-		reportDiagnostics(startupSettingsDiagnostics);
+		reportDiagnostics([...startupSettingsDiagnostics, ...runtime.diagnostics]);
 		const searchPattern = typeof parsed.listModels === "string" ? parsed.listModels : undefined;
 		await listModels(modelRuntime, searchPattern, {
 			refresh: parsed.listModelsRefresh,

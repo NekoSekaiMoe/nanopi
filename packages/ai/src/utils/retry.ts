@@ -242,13 +242,14 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 			reject(new RetrySleepAbortError());
 			return;
 		}
-		// `{ once: true }` only removes the listener when the signal aborts, so a completed backoff
-		// must release it itself or repeated retries pile up on the caller's signal.
+		let timeout: ReturnType<typeof setTimeout>;
 		const onAbort = () => {
 			clearTimeout(timeout);
 			reject(new RetrySleepAbortError());
 		};
-		const timeout = setTimeout(() => {
+		timeout = setTimeout(() => {
+			// `{ once: true }` only removes the listener when the signal aborts, so a completed backoff
+			// must release it itself or repeated retries pile up on the caller's signal.
 			signal?.removeEventListener("abort", onAbort);
 			resolve();
 		}, ms);

@@ -8,6 +8,12 @@
 
 ### Fixed
 
+- Right-click paste no longer inserts the clipboard twice in Tabby on Windows, which pastes on right-click itself (upstream `165c70df9`)
+- Repeated prompts already in Up-arrow history now move to the most recent position instead of being added again, so `/tree`, fork and resume do not duplicate them (upstream `06a20368a`)
+- Markdown after an unclosed `$` before a number, such as `+$50`, is no longer rendered as raw text across the rest of the paragraph (upstream `362bf6f1b`)
+- `hyperlink()` no longer emits OSC 8 for URLs over 8192 characters, so a bare URL running into a multi-megabyte line cannot exhaust the heap when wrapped (upstream `6ca01d1e9`)
+- Bracketed-paste end markers split across input chunks are found without rescanning the whole paste on every chunk (upstream `da7e26cc8`)
+
 - Enter on an absolute-path autocomplete menu completes the path instead of submitting the half-written prompt; only slash-command name menus submit on Enter (upstream `9a7cfba47`)
 
 ## [20261114]

@@ -85,11 +85,9 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
 	if (closingIndex < 0) {
 		const pendingSource = source.slice(opening.length);
 		// A closed dollar formula cannot span lines, and "$" before a digit is usually currency:
-		// neither can be a formula still streaming, so leave the rest of the paragraph to Markdown.
-		if (
-			opening.startsWith("\\") ||
-			(!/^\d/.test(pendingSource) && !pendingSource.includes("\n") && looksLikePendingDollarMath(pendingSource))
-		) {
+		// neither can be a formula still streaming, so leave the rest of the paragraph to Markdown (#12389).
+		const validPendingDollar = opening !== "$" || (!/^\d/.test(pendingSource) && !pendingSource.includes("\n"));
+		if (validPendingDollar && (opening.startsWith("\\") || looksLikePendingDollarMath(pendingSource))) {
 			return { type: "latex", raw: source, text: pendingSource, pending: true };
 		}
 		return undefined;

@@ -908,11 +908,11 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 	const fetchModels = input.fetchModels;
 	const chatModelsOf = (models: readonly ProviderModel<TApi>[]): readonly Model<TApi>[] =>
 		models.filter((model): model is Model<TApi> => isModelType(model, "chat"));
-	// Merged once per publish, not per read: getModels() sits on hot paths such as Models.getModel().
+	// Merged once per publish, not per read: getModels() is on hot paths such as Models.getModel().
 	let allModels: readonly ProviderModel<TApi>[] = baselineModels;
 	let chatModels = chatModelsOf(allModels);
 	const setDynamicModels = (dynamicModels: readonly ProviderModel<TApi>[]): void => {
-		const merged = [...baselineModels];
+		const merged: ProviderModel<TApi>[] = [...baselineModels];
 		const indexByKey = new Map<string, number>();
 		const keyOf = (model: ProviderModel<TApi>) => `${getModelType(model)}\0${model.id}`;
 		merged.forEach((model, index) => {
@@ -963,7 +963,9 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 							.map((model) => model as ProviderModel<TApi>);
 						if (
 							!(await context.publish({
-								update: () => setDynamicModels(restored),
+								update: () => {
+									setDynamicModels(restored);
+								},
 							}))
 						) {
 							return;
@@ -975,7 +977,9 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 					const refreshed = fetched.filter(hasKnownModelType);
 					await context.publish({
 						persist: { models: refreshed, checkedAt: Date.now() },
-						update: () => setDynamicModels(refreshed),
+						update: () => {
+							setDynamicModels(refreshed);
+						},
 					});
 				}
 			: undefined,

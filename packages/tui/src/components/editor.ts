@@ -497,6 +497,7 @@ export class Editor implements Component, Focusable {
 		const trimmed = text.trim();
 		if (!trimmed) return;
 		// Callers re-add prompts when re-rendering a session (tree navigation, fork, resume).
+		// Keep each prompt once, at its most recent position (#12279).
 		const existing = this.history.indexOf(trimmed);
 		if (existing !== -1) this.history.splice(existing, 1);
 		this.history.unshift(trimmed);
