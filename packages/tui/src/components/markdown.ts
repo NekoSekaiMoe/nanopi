@@ -84,7 +84,10 @@ function tokenizeInlineLatex(source: string): LatexToken | undefined {
 
 	if (closingIndex < 0) {
 		const pendingSource = source.slice(opening.length);
-		if (opening.startsWith("\\") || looksLikePendingDollarMath(pendingSource)) {
+		// A closed $…$ cannot span lines or start with a digit (currency), so a pending
+		// opener must follow the same rules (#12389).
+		const validPendingDollar = opening !== "$" || (!/^\d/.test(pendingSource) && !pendingSource.includes("\n"));
+		if (validPendingDollar && (opening.startsWith("\\") || looksLikePendingDollarMath(pendingSource))) {
 			return { type: "latex", raw: source, text: pendingSource, pending: true };
 		}
 		return undefined;

@@ -905,18 +905,32 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 	}
 
 	const baselineModels = input.models;
-	let dynamicModels: readonly ProviderModel<TApi>[] = [];
 	const fetchModels = input.fetchModels;
-	const currentModels = (): readonly ProviderModel<TApi>[] => {
-		const merged = [...baselineModels];
+	const chatModelsOf = (models: readonly ProviderModel<TApi>[]): readonly Model<TApi>[] =>
+		models.filter((model): model is Model<TApi> => isModelType(model, "chat"));
+	// Merged once per publish, not per read: getModels() is on hot paths such as Models.getModel().
+	let allModels: readonly ProviderModel<TApi>[] = baselineModels;
+	let chatModels = chatModelsOf(allModels);
+	const setDynamicModels = (dynamicModels: readonly ProviderModel<TApi>[]): void => {
+		const merged: ProviderModel<TApi>[] = [...baselineModels];
+		const indexByKey = new Map<string, number>();
+		const keyOf = (model: ProviderModel<TApi>) => `${getModelType(model)}\0${model.id}`;
+		merged.forEach((model, index) => {
+			const key = keyOf(model);
+			if (!indexByKey.has(key)) indexByKey.set(key, index);
+		});
 		for (const model of dynamicModels) {
-			const index = merged.findIndex(
-				(entry) => getModelType(entry) === getModelType(model) && entry.id === model.id,
-			);
-			if (index >= 0) merged[index] = model;
-			else merged.push(model);
+			const key = keyOf(model);
+			const index = indexByKey.get(key);
+			if (index !== undefined) {
+				merged[index] = model;
+			} else {
+				indexByKey.set(key, merged.length);
+				merged.push(model);
+			}
 		}
-		return merged;
+		allModels = merged;
+		chatModels = chatModelsOf(merged);
 	};
 	const apiFor = (model: Model<Api>): ProviderStreams | undefined => single ?? byApi?.[model.api];
 
@@ -939,8 +953,8 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 		baseUrl: input.baseUrl,
 		headers: input.headers,
 		auth: input.auth,
-		getModels: () => currentModels().filter((model): model is Model<TApi> => isModelType(model, "chat")),
-		getAllModels: currentModels,
+		getModels: () => chatModels,
+		getAllModels: () => allModels,
 		refreshModels: fetchModels
 			? async (context) => {
 					if (context.stored) {
@@ -950,7 +964,7 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 						if (
 							!(await context.publish({
 								update: () => {
-									dynamicModels = restored;
+									setDynamicModels(restored);
 								},
 							}))
 						) {
@@ -964,7 +978,7 @@ export function createProvider<TApi extends Api = Api>(input: CreateProviderOpti
 					await context.publish({
 						persist: { models: refreshed, checkedAt: Date.now() },
 						update: () => {
-							dynamicModels = refreshed;
+							setDynamicModels(refreshed);
 						},
 					});
 				}

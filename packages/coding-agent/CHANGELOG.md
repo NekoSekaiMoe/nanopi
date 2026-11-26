@@ -14,6 +14,11 @@
 
 ### Fixed
 
+- Sessions with more entries after the last compaction than fit in a function call's arguments now build their context instead of throwing `RangeError: Maximum call stack size exceeded` (upstream `cb1205e46`)
+- Invalid `models.json` is reported as a warning in services diagnostics, so print, JSON, and RPC modes name the cause instead of failing with "Model not found" (upstream `eee9f85fc`)
+- The `!` command cancel hint names the configured interrupt key instead of `tui.select.cancel` or a hardcoded Esc (upstream `745338811`)
+- The RPC JSONL reader and session file loader scan only newly read text, so a line larger than the read chunk is not rescanned on every chunk (upstream `da7e26cc8`)
+
 - Terminal restore sequences are flushed before CLI exit: interactive shutdown, `--resume` cancellation, and startup selectors now wait for queued stdout/stderr writes (at most one second), so the cursor, bracketed paste, and Kitty keyboard state are not left behind when the process exits (upstream `7c05885bc`)
 - Unscoped syntax-highlighted text uses the theme foreground again, so tool previews stay readable when the terminal and nanopi use contrasting color themes (upstream `562da75f9`)
 - An external `SIGTSTP` (`kill -TSTP`) now follows the same suspend path as Ctrl+Z, restoring the terminal and redrawing on `fg`; the listener is tied to terminal ownership so a child that owns the terminal afterwards is suspended normally (upstream `e4f50d76d`, `3107a58d2`)
