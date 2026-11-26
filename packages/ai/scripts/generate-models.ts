@@ -840,10 +840,7 @@ const XAI_RESPONSES_COMPAT: OpenAIResponsesCompat = {
 const OPENCODE_OPENAI_COMPLETIONS_LONG_CACHE_RETENTION_UNSUPPORTED_MODELS = new Set([
 	"opencode:deepseek-v4.1-flash",
 	"opencode:deepseek-v4-pro",
-	"opencode:kimi-k2.5",
-	"opencode:kimi-k2.6",
 	"opencode:minimax-m2.7",
-	"opencode-go:kimi-k2.6",
 ]);
 
 // GitHub's "Models with extended capabilities" table lists these Copilot models as supporting

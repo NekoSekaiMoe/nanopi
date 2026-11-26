@@ -511,7 +511,7 @@ describe("Cache Retention (NANOPI_CACHE_RETENTION)", () => {
 			// The generator's rejection list is keyed by provider:model id, so a
 			// catalog rename (deepseek-v4-flash -> deepseek-v4.1-flash) silently
 			// stops matching and the route keeps sending prompt_cache_retention.
-			const unsupported = ["deepseek-v4.1-flash", "deepseek-v4-pro", "kimi-k2.5", "kimi-k2.6", "minimax-m2.7"];
+			const unsupported = ["deepseek-v4.1-flash", "deepseek-v4-pro", "minimax-m2.7"];
 			const catalog = MODELS.opencode as Record<string, { compat?: { supportsLongCacheRetention?: boolean } }>;
 			for (const modelId of unsupported) {
 				expect(catalog[modelId], `${modelId} is missing from the opencode catalog`).toBeDefined();
@@ -522,8 +522,6 @@ describe("Cache Retention (NANOPI_CACHE_RETENTION)", () => {
 		it.each([
 			MODELS.opencode["deepseek-v4.1-flash"],
 			MODELS.opencode["deepseek-v4-pro"],
-			MODELS.opencode["kimi-k2.5"],
-			MODELS.opencode["kimi-k2.6"],
 			MODELS.opencode["minimax-m2.7"],
 		] as const)("should omit long cache retention for $provider/$id", async (metadata) => {
 			const model = metadata as Model<"openai-completions">;
