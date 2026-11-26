@@ -207,6 +207,7 @@ describe("buildSessionContext", () => {
 			expect(ctx.messages.map((message) => message.role)).toEqual(["compactionSummary", "user"]);
 		});
 
+		// #12154: appending the post-compaction tail with a spread overflows the call stack.
 		it("handles more entries after compaction than fit in the call stack", () => {
 			const entries: SessionEntry[] = [msg("1", null, "user", "first"), compaction("2", "1", "Summary", "1")];
 			let parentId = "2";

@@ -36,6 +36,7 @@ describe("isContextOverflow", () => {
 		'github-copilot API error (413): {"message":"failed to parse request","code":""}', // formatProviderError prefix
 		"custom-provider API error (413): Payload Too Large", // any provider, not just Copilot
 		'413 {"error":{"message":"failed to parse request","code":""}}', // raw SDK error
+		'413: {"code":"plugin_request_too_large","message":"request too large"}', // status alone indicates overflow
 		"413", // bare status at end of string
 	])("detects provider-independent request-size overflow: %s", (errorMessage) => {
 		// The request can exceed the byte limit even with zero usage and a large token window.
@@ -43,7 +44,7 @@ describe("isContextOverflow", () => {
 		expect(isContextOverflow(createErrorMessage(errorMessage))).toBe(true);
 	});
 
-	// Regression: request_too_large must be a complete error code, not part of another identifier.
+	// #12343: request_too_large must be a complete error code, not part of another identifier.
 	it.each([
 		"request_too_large",
 		'400 {"error":{"type":"request_too_large","message":"Request exceeds the maximum size"}}',
@@ -59,7 +60,7 @@ describe("isContextOverflow", () => {
 		"Unknown error code request_too_large2",
 		"Unknown error code request_too_large_flag",
 	])("does not match request-size error codes inside longer identifiers: %s", (errorMessage) => {
-		expect(isContextOverflow(createErrorMessage(errorMessage), 200000)).toBe(false);
+		expect(isContextOverflow(createErrorMessage(errorMessage), 200_000)).toBe(false);
 	});
 
 	it.each([

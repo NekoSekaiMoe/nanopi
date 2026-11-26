@@ -645,6 +645,19 @@ describe("StdinBuffer", () => {
 			assert.deepStrictEqual(emittedPaste, ["Hello 世界 🎉"]);
 			assert.deepStrictEqual(emittedSequences, []);
 		});
+
+		it("should find an end marker split across chunks at every position", () => {
+			// Only the new chunk plus the tail is searched, so the tail must span the whole marker.
+			const marker = "\x1b[201~";
+			for (let split = 1; split < marker.length; split++) {
+				emittedPaste = [];
+				processInput(`\x1b[200~pasted${marker.slice(0, split)}`);
+				assert.deepStrictEqual(emittedPaste, [], `split ${split}`);
+				processInput(`${marker.slice(split)}`);
+				assert.deepStrictEqual(emittedPaste, ["pasted"], `split ${split}`);
+				assert.deepStrictEqual(emittedSequences, [], `split ${split}`);
+			}
+		});
 	});
 
 	describe("Destroy", () => {

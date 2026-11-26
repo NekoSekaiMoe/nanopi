@@ -407,7 +407,7 @@ describe("Models runtime", () => {
 		expect(offline.getModel("dynamic", "fetched")).toBeDefined();
 	});
 
-	// The merged catalog is built once per publish, not on every read.
+	// #12311: the merged catalog is built once per publish, not on every read.
 	it("merges fetched models over the baseline once per publish", async () => {
 		const baseline = [testModel("dynamic", "a"), testModel("dynamic", "b")];
 		const fetchedB = { ...testModel("dynamic", "b"), name: "fetched b" };

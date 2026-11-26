@@ -405,7 +405,8 @@ export class StdinBuffer extends EventEmitter<StdinBufferEventMap> {
 		this.buffer += str;
 
 		if (this.pasteMode) {
-			// Only the new text is searched, so a large paste arriving in many chunks is not rescanned per chunk.
+			// Only the new text plus the tail is searched, so a large paste arriving in many
+			// chunks is not rescanned per chunk.
 			const searched = this.pasteTail + this.buffer;
 			const found = searched.indexOf(BRACKETED_PASTE_END);
 			const endIndex = found === -1 ? -1 : this.pasteBuffer.length - this.pasteTail.length + found;
