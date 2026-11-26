@@ -1112,10 +1112,6 @@ export class InteractiveMode {
 			this.showWarning(`Migrated credentials to auth.json: ${migratedProviders.join(", ")}`);
 		}
 
-		const modelsJsonError = this.session.modelRuntime.getError();
-		if (modelsJsonError) {
-			this.showError(`models.json error: ${modelsJsonError}`);
-		}
 		const modelsJsonWarning = this.session.modelRuntime.getWarnings();
 		if (modelsJsonWarning) {
 			this.showWarning(`models.json warning: ${modelsJsonWarning}`);
@@ -2836,7 +2832,9 @@ export class InteractiveMode {
 				const command = isExcluded ? text.slice(2).trim() : text.slice(1).trim();
 				if (command) {
 					if (this.session.isBashRunning) {
-						this.showWarning("A bash command is already running. Press Esc to cancel it first.");
+						this.showWarning(
+							`A bash command is already running. Press ${keyText("app.interrupt")} to cancel it first.`,
+						);
 						this.editor.setText(text);
 						return;
 					}
@@ -5966,7 +5964,7 @@ export class InteractiveMode {
 				this.showLoadedResources();
 				const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
 				const modelsJsonError = this.session.modelRuntime.getError();
-				if (modelsJsonError) this.showError(`models.json error: ${modelsJsonError}`);
+				if (modelsJsonError) this.showWarning(`models.json error: ${modelsJsonError}`);
 				const modelsJsonWarning = this.session.modelRuntime.getWarnings();
 				if (modelsJsonWarning) this.showWarning(`models.json warning: ${modelsJsonWarning}`);
 				this.showStatus(
