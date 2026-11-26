@@ -4,27 +4,31 @@ Status: implemented
 
 ## Problem
 
-`interactive-mode.ts` 重复 `!` 时的警告硬编码 `Press Esc to cancel it first.`
+两处文案把「取消正在跑的 bash 命令」写成了错误的键：
+
+- `bash-execution.ts` 的 loader 用 `keyText("tui.select.cancel")`，默认 `escape` + `ctrl+c`。
+- `interactive-mode.ts` 重复 `!` 时的警告硬编码 `Press Esc to cancel it first.`
 
 实际取消走 `app.interrupt`（默认只有 `escape`，`custom-editor.ts:171` 和 `interactive-mode.ts:2568` 都在这条路上）。默认键位恰好都以 `escape` 开头，所以缺陷平时看不见；用户一旦把 `app.interrupt` 改成别的键，提示就指向一个不生效的键——而 `ctrl+c` 在编辑器里是 `app.clear`，按下会清空输入而不是取消命令。
 
-上游的同一处修复随 #813 先落到本仓库，改了 `bash-execution.ts` 那一行；这次补上 `interactive-mode.ts` 的硬编码文案，并给 loader 那一行补上回归测试——上游只改代码，没有测试钉住键位来源。
-
 ## Decision
 
-警告改成 `` `A bash command is already running. Press ${keyText("app.interrupt")} to cancel it first.` ``，和 `bash-execution.ts` 的 loader 提示（`Running... (<键> to cancel)`）同一个键位来源。
+两处都读 `keyText("app.interrupt")`：loader 文案 `Running... (<键> to cancel)`，警告 `A bash command is already running. Press <键> to cancel it first.`
 
 `keyText` 读全局 `getKeybindings()`，该实例由 `startup-ui.ts:44` 和 `interactive-mode.ts:614` 的 `KeybindingsManager.create()` 设置，已经带上用户配置；所以 remap 后提示自动跟上，不需要额外的配置点。
 
+代码改动随 #813 的上游 backport 进入 `main`（`8a6a081dd`）。那次 backport 只带代码，没有测试钉住键位来源：把 `app.interrupt` 换回 `tui.select.cancel` 编译和现有测试都不会响，而默认配置下两者显示同一行字。所以本改动只剩测试和这篇记录。
+
 ## Alternatives considered
 
-- **保留 `tui.select.cancel`（`bash-execution.ts` 原来的写法），只在文案里说明「两者默认相同」**：默认相同正是缺陷藏起来的原因；remap 之后提示继续错，等于把一次性的可见错误换成永久的静默错误。
+- **保留 `tui.select.cancel`，只在文案里说明「两者默认相同」**：默认相同正是缺陷藏起来的原因；remap 之后提示继续错，等于把一次性的可见错误换成永久的静默错误。
 - **新增一个 `bash.cancel` 绑定**：bash 取消没有独立键位，它走的就是中断；多加一个绑定要吃 `keybindings.json` 的迁移、冲突检测和文档，收益只是名字更贴合。
 
 ## Consequences
 
 - 默认配置下文案不变（都是 `escape`），只有 remap 之后行为不同。
-- loader 文案（`bash-execution.ts`）和这条警告从此同源，也和 `status-indicator.ts`、`interactive-mode.ts:1982` 的既有多处 `app.interrupt` 提示一致。
+- loader 文案和这条警告同源，也和 `status-indicator.ts`、`interactive-mode.ts:1982` 的既有多处 `app.interrupt` 提示一致。
+- 回归测试是断言「两个默认值相同」之外的那一半：remap 之后提示必须换键。没有它，这个缺陷的下一次回退不会有人发现。
 
 ## Testing
 
