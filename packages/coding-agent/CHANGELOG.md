@@ -14,6 +14,9 @@
 
 ### Fixed
 
+- The bash tool on Windows now finds Git for Windows installed outside Program Files: it asks the `git.exe` on `PATH` for its installation (`git var GIT_SHELL_PATH`, Git 2.47+) and uses that Git Bash before the WSL launcher `System32\bash.exe` (upstream `e8ee38887`)
+- Copies on Wayland pass an explicit `text/plain` MIME type to `wl-copy`, so clipboard managers such as Klipper no longer discard text whose inferred type was e.g. `application/x-ruby` (upstream `2d8133085`)
+
 - Sessions with more entries after the last compaction than fit in a function call's arguments now build their context instead of throwing `RangeError: Maximum call stack size exceeded` (upstream `cb1205e46`)
 - Invalid `models.json` is reported as a warning in services diagnostics, so print, JSON, and RPC modes name the cause instead of failing with "Model not found" (upstream `eee9f85fc`)
 - The `!` command cancel hint names the configured interrupt key instead of `tui.select.cancel` or a hardcoded Esc (upstream `745338811`)
