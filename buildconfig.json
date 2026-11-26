@@ -124,6 +124,24 @@
 		"module/pi-subagent-mini": {
 			"description": "subagent tool and child sessions"
 		},
+		"module/pi-deepwiki": {
+			"description": "DeepWiki documentation tools for public GitHub repositories"
+		},
+		"module/pi-hostname": {
+			"description": "hostname in the footer status line"
+		},
+		"module/pi-git-tools": {
+			"description": "read-only git tools without a GitHub dependency"
+		},
+		"module/pi-meat": {
+			"description": "faithful reading-diff tool backed by a subagent"
+		},
+		"module/pi-output-compact": {
+			"description": "opt-in compaction of bash/read/grep tool outputs"
+		},
+		"module/pi-token-usage": {
+			"description": "/token-usage command backed by the session usage ledger"
+		},
 		"module/pi-ui": {
 			"description": "UI enhancements module"
 		},
@@ -239,6 +257,24 @@
 		"pi-subagent-mini": {
 			"source": "packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts"
 		},
+		"pi-deepwiki": {
+			"source": "packages/coding-agent/src/extras/pi-deepwiki/src/index.ts"
+		},
+		"pi-hostname": {
+			"source": "packages/coding-agent/src/extras/pi-hostname/src/index.ts"
+		},
+		"pi-git-tools": {
+			"source": "packages/coding-agent/src/extras/pi-git-tools/src/index.ts"
+		},
+		"pi-meat": {
+			"source": "packages/coding-agent/src/extras/pi-meat/src/index.ts"
+		},
+		"pi-output-compact": {
+			"source": "packages/coding-agent/src/extras/pi-output-compact/src/index.ts"
+		},
+		"pi-token-usage": {
+			"source": "packages/coding-agent/src/extras/pi-token-usage/src/index.ts"
+		},
 		"pi-ui": {
 			"source": "packages/coding-agent/src/extras/pi-ui/src/index.ts"
 		},
@@ -281,6 +317,12 @@
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
+				"module/pi-deepwiki": false,
+				"module/pi-hostname": false,
+				"module/pi-git-tools": false,
+				"module/pi-meat": false,
+				"module/pi-output-compact": false,
+				"module/pi-token-usage": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
 				"module/tool-result-store": false,
@@ -310,6 +352,12 @@
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
+				"module/pi-deepwiki": false,
+				"module/pi-hostname": false,
+				"module/pi-git-tools": false,
+				"module/pi-meat": false,
+				"module/pi-output-compact": false,
+				"module/pi-token-usage": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
 				"module/tool-result-store": false,
