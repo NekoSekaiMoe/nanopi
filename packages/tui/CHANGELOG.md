@@ -8,10 +8,11 @@
 
 ### Fixed
 
-- Repeated prompts already in editor history now move to the most recent position instead of being added again on tree navigation, fork, or resume (upstream `06a20368a`)
-- Markdown after an unclosed `$` before a number (such as `+$50`) or across a line break stays Markdown instead of rendering as raw text (upstream `362bf6f1b`)
-- `hyperlink()` no longer emits OSC 8 sequences for URLs over 8192 characters, so a long bare URL cannot grow rendered output quadratically (upstream `6ca01d1e9`)
-- A long bracketed paste split across chunks no longer rescans the accumulated paste buffer on every chunk (upstream `da7e26cc8`)
+- Repeated prompts already in Up-arrow history now move to the most recent position instead of being added again, so `/tree`, fork and resume do not duplicate them (upstream `06a20368a`)
+- Markdown after an unclosed `$` before a number, such as `+$50`, is no longer rendered as raw text across the rest of the paragraph (upstream `362bf6f1b`)
+- `hyperlink()` no longer emits OSC 8 for URLs over 8192 characters, so a bare URL running into a multi-megabyte line cannot exhaust the heap when wrapped (upstream `6ca01d1e9`)
+- Bracketed-paste end markers split across input chunks are found without rescanning the whole paste on every chunk (upstream `da7e26cc8`)
+
 - Enter on an absolute-path autocomplete menu completes the path instead of submitting the half-written prompt; only slash-command name menus submit on Enter (upstream `9a7cfba47`)
 
 ## [20261114]

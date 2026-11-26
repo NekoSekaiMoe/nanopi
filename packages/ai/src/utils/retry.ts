@@ -242,11 +242,13 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 			reject(new RetrySleepAbortError());
 			return;
 		}
+		let timeout: ReturnType<typeof setTimeout>;
 		const onAbort = () => {
 			clearTimeout(timeout);
 			reject(new RetrySleepAbortError());
 		};
-		const timeout = setTimeout(() => {
+		timeout = setTimeout(() => {
+			// A completed backoff must not leave a listener on the caller's signal.
 			signal?.removeEventListener("abort", onAbort);
 			resolve();
 		}, ms);

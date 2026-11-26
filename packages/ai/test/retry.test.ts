@@ -380,7 +380,7 @@ describe("retryAssistantCall", () => {
 		expect(onRetryScheduled.mock.calls.map((call) => call[2])).toEqual([10, 15, 15, 15]);
 	});
 
-	// Regression for #10506.
+	// A completed backoff must release the caller's signal, not just fire once on abort.
 	it("stops retrying once a call succeeds and removes backoff abort listeners", async () => {
 		const controller = new AbortController();
 		let n = 0;

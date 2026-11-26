@@ -4,7 +4,8 @@
 
 ### Fixed
 
-- Long SSE lines split across chunks no longer rescan the accumulated buffer on every chunk, so a large line takes linear rather than quadratic time (upstream `da7e26cc8`)
+- The proxy stream reader scans only newly decoded text for line breaks, so a long line arriving in many chunks is not rescanned on every chunk (upstream `da7e26cc8`)
+
 - An aborted run ends at the turn boundary even when `finishTurn` returns `continue`: the tool batch had already stopped, so the extra request replayed a transcript with unanswered tool calls instead of returning control to the user
 
 ## [20261114]

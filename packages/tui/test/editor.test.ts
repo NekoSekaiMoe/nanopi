@@ -199,7 +199,7 @@ describe("Editor component", () => {
 			assert.strictEqual(editor.getText(), "second");
 		});
 
-		// #12279: re-rendering a session branch re-adds its prompts on every tree navigation.
+		// Re-rendering a session branch re-adds its prompts on every tree navigation.
 		it("does not grow when the same prompts are re-added", () => {
 			const editor = new Editor(createTestTUI(), defaultEditorTheme);
 			const browse = (count: number) =>

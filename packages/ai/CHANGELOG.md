@@ -4,9 +4,10 @@
 
 ### Fixed
 
-- `request_too_large` now matches as a complete error code, so unrelated errors such as `plugin_request_too_large` no longer trigger compact-and-retry (upstream `32c7f6d7b`)
-- `retryAssistantCall()` removes its backoff abort listener when the delay completes, so repeated retries do not accumulate listeners (upstream `51ba3ab5b`)
-- `createProvider` providers with `fetchModels` merge the model catalog once per published refresh instead of on every `getModels()` call, keeping `getModel()` linear (upstream `073b0bae8`)
+- Error codes like `my_plugin_request_too_large_flag` are no longer treated as context overflow; only the standalone `request_too_large` code and HTTP 413 are (upstream `32c7f6d7b`)
+- A completed retry backoff now removes its abort listener, so repeated retries no longer accumulate listeners on a caller-owned signal (upstream `51ba3ab5b`)
+- `createProvider` merges a fetched model catalog once per published refresh instead of on every `getModels()`/`getModel()`, removing the quadratic lookup cost with large catalogs (upstream `073b0bae8`)
+
 - Provider errors that only say "Connection closed.", report a bare Node socket code (`ECONNRESET`, `EPIPE`, `ETIMEDOUT`, ...), or mention "connection reset by peer" now enter the retry classifier instead of ending the turn. Codes inside longer identifiers stay non-retryable (upstream `9b88b94e2`, `4699b5b26`)
 - `openai-completions` now sends reasoning-model system messages with the `developer` role only on `api.openai.com`; every other OpenAI-compatible host gets `system`, which Groq's Qwen template and other chat templates require instead of returning 400. The generator was changed alongside the runtime so regenerating catalogs does not undo it (upstream `b82477b7b`)
 - Strict tool schemas fall back to non-strict when a node has no type, such as `items: {}`, `Type.Unknown()` or a bare `const`; OpenAI rejected those with 400. Enum-only nodes stay strict (upstream `406e719a6`)
