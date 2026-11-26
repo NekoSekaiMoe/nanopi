@@ -199,7 +199,7 @@ export function streamProxy(
 				// Split only the new text, so a long line arriving in many chunks is not rescanned per chunk.
 				const lines = decoder.decode(value, { stream: true }).split("\n");
 				lines[0] = buffer + lines[0];
-				buffer = lines.pop() || "";
+				buffer = lines.pop() ?? "";
 
 				for (const line of lines) {
 					processLine(line);

@@ -295,7 +295,8 @@ function loadEntriesFromFile(filePath: string): FileEntry[] {
 			if (bytesRead === 0) break;
 
 			const text = decoder.write(buffer.subarray(0, bytesRead));
-			// Only the new text is scanned, so a line longer than the read buffer is not rescanned per read.
+			// Only the new text is scanned: searching `pending` after every read makes a line
+			// longer than the read buffer cost quadratic time.
 			let lineStart = 0;
 			let newlineIndex = text.indexOf("\n", lineStart);
 			while (newlineIndex !== -1) {

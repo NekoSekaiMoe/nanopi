@@ -43,6 +43,17 @@ Issue #807 批次：
 - models：在两次 `publish` 的 `update` 回调里用 type+id 索引合并一次，缓存全量和 chat 两个数组，读取只返回引用。
 - 线性读取：只 `indexOf` 新增文本，命中时才把 pending 和该段拼接；StdinBuffer 多留末尾 `BRACKETED_PASTE_END.length - 1` 字符覆盖跨 chunk marker。本地 session reader 没有上游的 `pending` 尾部残留问题，不做那部分改动；统一 `SseDecoder` 涉及 5 个 API 适配器和本地 CRLF 修复，留单独 PR。
 
+Issue #807 批次：
+
+- overflow：用 `(?<![A-Za-z0-9_])request_too_large(?![A-Za-z0-9_])` 限定完整标识符，保留大小写不敏感和独立 HTTP 413 判定。
+- 长会话：把 spread 换成逐条 push，输出条目和顺序不变。
+- editor history：同一 prompt 用 `indexOf` 找旧位置、`splice` 移除后再 `unshift`，最多保留 100 条。
+- Markdown pending `$`：跟数字或跨行时不建 pending 公式；本地已有的 LaTeX 线性化不改。
+- `hyperlink()`：URL 超过 8192 字符返回纯文本，仍显示但不可点。
+- retry backoff：`setTimeout` 回调里先 `removeEventListener`，abort 时仍由 `{ once: true }` 自摘。
+- models：在两次 `publish` 的 `update` 回调里用 type+id 索引合并一次，缓存全量和 chat 两个数组，读取只返回引用。
+- 线性读取：只 `indexOf` 新增文本，命中时才把 pending 和该段拼接；StdinBuffer 多留末尾 `BRACKETED_PASTE_END.length - 1` 字符覆盖跨 chunk marker。本地 session reader 没有上游的 `pending` 尾部残留问题，不做那部分改动；统一 `SseDecoder` 涉及 5 个 API 适配器和本地 CRLF 修复，留单独 PR。
+
 上游的 Mistral strict 修复不适用于本仓库：`mistral-conversations` API 和 provider 已在历史版本中移除（见 `packages/ai/CHANGELOG.md` [20261114] 的 Removed 条目）。Codex WebSocket / 系统提示缓存修复涉及本仓库未采用的传输路径，未纳入。
 
 ## Alternatives considered
@@ -51,7 +62,6 @@ Issue #807 批次：
 - **只改生成的 catalog 修 instruction role**：`pnpm run generate:models` 会从 `generate-models.ts` 重建目录，覆盖生成物里的改动；因此必须改生成器。
 - **把 SIGTSTP listener 装在 InteractiveMode 构造时**：`TUI` 的终端所有权是 start()/stop() 区间；构造时或 stop() 之前摘除都会把外部编辑器的 SIGTSTP 吞掉，或在终端半恢复时被默认动作打断。按所有权绑定是唯一同时覆盖两种场景的方案。
 - **保留 read 的警告文本以兼容导出**：工具结果文本会进会话并被模型重放，模型切到视觉模型后仍看到错误提示；放到 `details` 里既保留用户可见性又不污染上下文。
-
 - **整包 cherry-pick 上游 `#12451`**：它会把 Anthropic/OpenAI Codex/Mistral/pi-messages 四个 SSE 解析器统一到 `SseDecoder`，改动跨 33 个文件，且 Codex 接受 CRLF、pi-messages 合并多行 data 等行为变化会碰到本地已有的 CRLF 修复；这里只取四处 reader 的线性化，风险与 diff 都小得多。
 - **保留 editor 的非连续重复**：上游 test 证明 `/tree` 重渲染会让历史成倍增长；移动而非去重会改变 Up-arrow 导航的语义，但这是采纳修复的前提。
 - **把超长 URL 截断显示**：会丢失原始数据，且用户无法复制；只取消 OSC 8 链接不改文本。

@@ -28,7 +28,8 @@ export function attachJsonlLineReader(stream: Readable, onLine: (line: string) =
 
 	const onData = (chunk: string | Buffer) => {
 		const text = typeof chunk === "string" ? chunk : decoder.write(chunk);
-		// Only the new text is scanned, so a long line arriving in many chunks is not rescanned per chunk.
+		// Only the new text is scanned: searching `buffer` after every chunk makes a line
+		// longer than one chunk cost quadratic time.
 		let start = 0;
 		for (let newlineIndex = text.indexOf("\n"); newlineIndex !== -1; newlineIndex = text.indexOf("\n", start)) {
 			const line = buffer + text.slice(start, newlineIndex);
@@ -42,7 +43,9 @@ export function attachJsonlLineReader(stream: Readable, onLine: (line: string) =
 	const onEnd = () => {
 		const line = buffer + decoder.end();
 		buffer = "";
-		if (line.length > 0) emitLine(line);
+		if (line.length > 0) {
+			emitLine(line);
+		}
 	};
 
 	stream.on("data", onData);
