@@ -31,7 +31,7 @@ import {
 	appendInContextCompactionRequest,
 	IN_CONTEXT_COMPACTION_INSTRUCTIONS,
 	IN_CONTEXT_COMPACTION_PROMPT,
-} from "../../coding-agent/src/core/compaction/compaction.ts";
+} from "../../coding-agent/src/core/compaction/compaction-core.ts";
 import { ModelRuntime } from "../../coding-agent/src/core/model-runtime.ts";
 import { normalizeContext } from "../src/compat.ts";
 import type {

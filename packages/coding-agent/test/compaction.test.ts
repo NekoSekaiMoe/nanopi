@@ -15,7 +15,10 @@ import {
 	prepareCompaction,
 	shouldCompact,
 } from "../src/core/compaction/index.ts";
-import { getRequestIdentityMetadata, type InternalRequestIdentity } from "../src/core/compaction/request-metadata.ts";
+import {
+	getRequestIdentityMetadata,
+	type InternalRequestIdentity,
+} from "../src/core/compaction/request-metadata-core.ts";
 import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import {
 	buildSessionContext,

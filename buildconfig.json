@@ -76,7 +76,7 @@
 		"module/builtin-commands": {
 			"description": "Built-in slash commands (/compact, /context, /status, /init)"
 		},
-		"module/codex-compaction": {
+		"module/compaction": {
 			"description": "Codex-style compaction, its post-compaction warning, and the single recall_context tool for [rN], Key Facts cNrN, and replaced-region E<n> refs"
 		},
 		"module/qoder-checkin": {
@@ -200,8 +200,8 @@
 		"builtin-commands": {
 			"source": "packages/coding-agent/src/modules/builtin-commands/index.ts"
 		},
-		"codex-compaction": {
-			"source": "packages/coding-agent/src/modules/codex-compaction/index.ts"
+		"compaction": {
+			"source": "packages/coding-agent/src/core/compaction/index.ts"
 		},
 		"qoder-checkin": {
 			"source": "packages/coding-agent/src/modules/qoder/index.ts"

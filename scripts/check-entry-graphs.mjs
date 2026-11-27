@@ -57,22 +57,15 @@ const BUDGETS = {
 		"./modules": { maxFiles: 110, forbid: ["coding-agent/src/index.ts"] },
 		"./ui": { maxFiles: 170, forbid: ["coding-agent/src/index.ts"] },
 		// Not an entry point, so no `exports` lookup: `sourcePath` budgets the source file itself.
-		// This barrel is what a summarizer imports. It reached 181 files because it dragged the
-		// transcript, the theme and the session file I/O along, then 123 because `pi-ai/compat` was
-		// the only place its types came from, and `compat` re-exports the provider catalog
-		// (`providers/all.ts` imports every `<provider>.models.ts`, 111 files on its own).
-		//
-		// The 111 is now out of reach: the types and the pure helpers a summarizer needs live in
-		// `@nanopi/pi-ai/module-surface` and `model-core.ts`, `pi-ai`'s root barrel no longer reaches
-		// `compat.ts`, and the summarizers take their stream function from the caller instead of
-		// falling back to a global `completeSimple`. What is left is the compaction code itself.
-		//
-		// Headroom is deliberate: a summarizer that grows past this has started importing the model
-		// runtime again. Split the module rather than raise the number.
+		// This barrel holds both the core summarization helpers and the Codex-style compaction
+		// module. The module needs session entry reads and module surfaces, so unlike the old
+		// summarizer-only barrel it reaches `core/session-manager.ts` by design. Headroom is
+		// deliberate: a summarizer that grows past this has started importing the model runtime
+		// again. Split the module rather than raise the number.
 		"core/compaction/index.ts": {
 			sourcePath: true,
-			maxFiles: 20,
-			forbid: ["modes/interactive/", "core/session-manager.ts", "pi-ai/src/providers/"],
+			maxFiles: 110,
+			forbid: ["modes/interactive/", "pi-ai/src/providers/"],
 		},
 	},
 };

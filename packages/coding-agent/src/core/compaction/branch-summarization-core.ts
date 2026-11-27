@@ -16,8 +16,8 @@ import {
 } from "../messages.ts";
 import type { ReadonlySessionManager } from "../session-manager.ts";
 import type { SessionEntry } from "../session-store.ts";
-import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction.ts";
-import { withCompactionRequestMetadata } from "./request-metadata.ts";
+import { completeSummarization, estimateTokens, getSummarizationFailure } from "./compaction-core.ts";
+import { withCompactionRequestMetadata } from "./request-metadata-core.ts";
 import {
 	computeFileLists,
 	createFileOps,
@@ -26,7 +26,7 @@ import {
 	formatFileOperations,
 	SUMMARIZATION_SYSTEM_PROMPT,
 	serializeConversation,
-} from "./utils.ts";
+} from "./utils-core.ts";
 
 // ============================================================================
 // Types
@@ -47,7 +47,7 @@ interface BranchSummaryDetails {
 	modifiedFiles: string[];
 }
 
-export type { FileOperations } from "./utils.ts";
+export type { FileOperations } from "./utils-core.ts";
 
 interface BranchPreparation {
 	/** Messages extracted for summarization, in chronological order */

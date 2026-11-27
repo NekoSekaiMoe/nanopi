@@ -8,7 +8,7 @@ import {
 } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
 import { generateBranchSummary } from "../src/core/compaction/index.ts";
-import { getRequestIdentityMetadata } from "../src/core/compaction/request-metadata.ts";
+import { getRequestIdentityMetadata } from "../src/core/compaction/request-metadata-core.ts";
 import type { SessionEntry } from "../src/core/session-manager.ts";
 
 const model: Model<"anthropic-messages"> = {

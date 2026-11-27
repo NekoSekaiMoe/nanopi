@@ -11,7 +11,10 @@ import {
 } from "@nanopi/pi-ai";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
-import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "../src/core/compaction/request-metadata.ts";
+import {
+	getRequestIdentityMetadata,
+	setRequestIdentityMetadata,
+} from "../src/core/compaction/request-metadata-core.ts";
 import type { ModuleFactory } from "../src/core/modules/types.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { createAgentSession } from "../src/core/sdk.ts";

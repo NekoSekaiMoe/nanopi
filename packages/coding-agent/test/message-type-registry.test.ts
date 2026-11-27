@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@nanopi/pi-agent-core";
 import { describe, expect, it } from "vitest";
-import { estimateTokens } from "../src/core/compaction/compaction.ts";
+import { estimateTokens } from "../src/core/compaction/compaction-core.ts";
 import type { MessageTypeCodec } from "../src/core/messages/codec.ts";
 import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import { convertToLlm } from "../src/core/messages.ts";

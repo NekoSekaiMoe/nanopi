@@ -8,7 +8,7 @@ import { resolvePath } from "../utils/paths.ts";
 import { AgentSession } from "./agent-session.ts";
 import { formatNoModelsAvailableMessage } from "./auth-guidance.ts";
 import { CacheWarmer } from "./cache-warmer.ts";
-import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "./compaction/request-metadata.ts";
+import { getRequestIdentityMetadata, setRequestIdentityMetadata } from "./compaction/request-metadata-core.ts";
 import { DEFAULT_THINKING_LEVEL } from "./defaults.ts";
 import { convertToLlm } from "./messages.ts";
 import { findInitialModel } from "./model-resolver.ts";

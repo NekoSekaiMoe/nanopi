@@ -14,7 +14,7 @@ import {
 	IN_CONTEXT_COMPACTION_INSTRUCTIONS,
 	IN_CONTEXT_COMPACTION_PROMPT,
 } from "../../src/core/compaction/index.ts";
-import { SUMMARIZATION_SYSTEM_PROMPT } from "../../src/core/compaction/utils.ts";
+import { SUMMARIZATION_SYSTEM_PROMPT } from "../../src/core/compaction/utils-core.ts";
 import { createHarness, type Harness, type HarnessOptions } from "./harness.ts";
 
 const SESSION_ID = "in-context-compaction-session";

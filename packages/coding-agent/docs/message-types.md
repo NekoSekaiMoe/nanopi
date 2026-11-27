@@ -297,7 +297,7 @@ registerMessageType({
 | `renderRun(message, options)` | draws the message in the transcript; absent falls back to `[kind]` |
 
 `convertToLlm()`, `estimateTokens()`
-([`core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts)),
+([`core/compaction/compaction-core.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction-core.ts)),
 and the interactive transcript all read the session's table. A kind nobody
 registered is dropped from the request: guessing a projection would put module
 payloads in front of the model without anyone deciding they belong there.
