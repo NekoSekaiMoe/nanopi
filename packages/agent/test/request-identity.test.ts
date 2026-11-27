@@ -1,4 +1,5 @@
 import { fauxAssistantMessage, fauxToolCall, registerFauxProvider, streamSimple } from "@nanopi/pi-ai/compat";
+import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vitest";
 import { Agent } from "../src/agent.ts";
 import { getAgentRequestIdentity } from "../src/request-metadata.ts";
@@ -138,5 +139,59 @@ describe("Agent request identity", () => {
 		await agent.continue();
 
 		expect(identities[1]).toEqual(identities[0]);
+	});
+});
+
+describe("Agent.captureNextRequestConfig", () => {
+	// #830: replay must carry the same fields the loop would send; a hand-built config missed tools.
+	it("captures the live tools, metadata, options, and resolved API key without sending a request", async () => {
+		const faux = registerFauxProvider();
+		registrations.push(faux);
+		let calls = 0;
+		faux.setResponses([
+			(_context, options) => {
+				calls++;
+				expect(getAgentRequestIdentity(options?.metadata)).toBeDefined();
+				return fauxAssistantMessage("done");
+			},
+		]);
+		const tool = {
+			name: "noop",
+			label: "Noop",
+			description: "Noop tool",
+			parameters: Type.Object({}),
+			execute: async () => ({ content: [{ type: "text" as const, text: "ok" }], details: {} }),
+		};
+		let keyCalls = 0;
+		const agent = new Agent({
+			sessionId: "session",
+			streamFn: streamSimple,
+			initialState: { model: faux.getModel(), tools: [tool], thinkingLevel: "high" },
+			getApiKey: () => {
+				keyCalls++;
+				return "dynamic-key";
+			},
+			transport: "websocket",
+			maxRetryDelayMs: 1234,
+		});
+
+		const { context, config } = await agent.captureNextRequestConfig();
+
+		expect(calls).toBe(0);
+		expect(keyCalls).toBe(1);
+		expect(config.apiKey).toBe("dynamic-key");
+		expect(config.model).toBe(faux.getModel());
+		expect(config.reasoning).toBe("high");
+		expect(config.sessionId).toBe("session");
+		expect(config.transport).toBe("websocket");
+		expect(config.maxRetryDelayMs).toBe(1234);
+		expect(context.tools).toEqual([tool]);
+		expect(getAgentRequestIdentity(config.metadata)).toMatchObject({
+			sessionId: "session",
+			threadId: "session",
+			requestKind: "turn",
+		});
+		expect(config.getSteeringMessages).toBeUndefined();
+		expect(config.getFollowUpMessages).toBeUndefined();
 	});
 });

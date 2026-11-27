@@ -15,6 +15,8 @@
 
 ### Fixed
 
+- In-context compaction now replays the captured next-turn request, including tool declarations, request metadata, and the resolved API key. A provider that keys its cache on any of those fields no longer drops the cached prefix and falls back to a paid standalone summary (issue [#830](https://cnb.cool/shinytale/nanopi/-/issues/830))
+
 - The bash tool on Windows now finds Git for Windows installed outside Program Files: it asks the `git.exe` on `PATH` for its installation (`git var GIT_SHELL_PATH`, Git 2.47+) and uses that Git Bash before the WSL launcher `System32\bash.exe` (upstream `e8ee38887`)
 - Copies on Wayland pass an explicit `text/plain` MIME type to `wl-copy`, so clipboard managers such as Klipper no longer discard text whose inferred type was e.g. `application/x-ruby` (upstream `2d8133085`)
 

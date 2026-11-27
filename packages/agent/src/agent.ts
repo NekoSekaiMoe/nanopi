@@ -114,6 +114,17 @@ function createMutableAgentState(initialState?: AgentInitialState): MutableAgent
 	};
 }
 
+/**
+ * A captured request from {@link Agent.captureNextRequestConfig}.
+ *
+ * `context` is the loop's context snapshot; `config` carries the stream options and the resolved
+ * API key. Together they describe the next provider request the loop would send.
+ */
+export interface NextRequestConfig {
+	context: AgentContext;
+	config: AgentLoopConfig & { apiKey?: string };
+}
+
 /** Options for constructing an {@link Agent}. */
 export interface AgentOptions {
 	initialState?: AgentInitialState;
@@ -479,6 +490,32 @@ export class Agent {
 			content.push(...images);
 		}
 		return [{ role: "user", content, timestamp: Date.now() }];
+	}
+
+	/**
+	 * Capture the request configuration a continuation would use right now.
+	 *
+	 * Callers that must reproduce the next provider request (for example prompt-cache compaction)
+	 * need the same tools, metadata, options, and resolved API key the loop passes to the stream
+	 * function. Rebuilding those fields by hand misses payload fields the provider keys its cache
+	 * on. The returned config is a snapshot: it shares the loop's config type but queues are not
+	 * drained and no provider request is sent.
+	 */
+	async captureNextRequestConfig(): Promise<NextRequestConfig> {
+		const activeMetadata = this.activeRequestMetadata ?? createAgentRequestMetadata(this.attributionSessionId);
+		const config = this.createLoopConfig();
+		const apiKey = (config.getApiKey ? await config.getApiKey(config.model.provider) : undefined) || config.apiKey;
+		return {
+			context: this.createContextSnapshot(),
+			config: {
+				...config,
+				metadata: activeMetadata,
+				apiKey,
+				// The queue callbacks belong to a live loop; a captured replay has no messages to drain.
+				getSteeringMessages: undefined,
+				getFollowUpMessages: undefined,
+			},
+		};
 	}
 
 	private async runPromptMessages(

@@ -3541,10 +3541,12 @@ export class AgentSession {
 			};
 		};
 
-		// Rebuild the request the next turn would send (see _installAgentRequestProjection and the
-		// agent loop), including payload hooks: they can rewrite the cached prefix.
+		// Replay the request the next turn would send (see _installAgentRequestProjection and the
+		// agent loop). The captured context/config pair carries tools, metadata, options, and the
+		// resolved API key, so the provider sees the same cache prefix; hand-building these fields
+		// used to miss payload entries a provider can key its cache on.
 		let messages: Message[];
-		let apiKey: string | undefined;
+		let captured: Awaited<ReturnType<Agent["captureNextRequestConfig"]>>;
 		try {
 			const transformed = this.agent.transformContext
 				? await this.agent.transformContext(projection.messages, signal)
@@ -3554,7 +3556,7 @@ export class AgentSession {
 			messages = await this.agent.convertToLlm(
 				forced === undefined ? transformed : withForcedSystemPrompt(transformed, forced),
 			);
-			apiKey = await this.agent.getApiKey?.(model.provider);
+			captured = await this.agent.captureNextRequestConfig();
 		} catch (error) {
 			return fail("rebuild", error);
 		}
@@ -3564,18 +3566,7 @@ export class AgentSession {
 				preparation,
 				model,
 				messages,
-				{
-					apiKey,
-					sessionId: this.agent.sessionId,
-					reasoning: thinkingLevel === "off" ? undefined : thinkingLevel,
-					thinkingBudgets: this.agent.thinkingBudgets,
-					transport: this.agent.transport,
-					maxRetryDelayMs: this.agent.maxRetryDelayMs,
-					onPayload: this.agent.onPayload,
-					onResponse: this.agent.onResponse,
-					onProviderStreamEvent: this.agent.onProviderStreamEvent,
-					signal,
-				},
+				{ ...captured.config, signal },
 				this.agent.streamFunction,
 				customInstructions,
 				this.settingsManager.getRetrySettings(),
