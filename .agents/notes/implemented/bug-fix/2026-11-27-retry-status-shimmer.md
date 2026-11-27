@@ -45,4 +45,6 @@ pi-ui 用第二个注册把 retry/compaction 的宿主文案（`Retrying (1/3) i
 renderer 后的首帧 `dtMs=0`、倒计时文案更新与 dispose；
 `packages/coding-agent/test/pi-ui-working-step.test.ts` 覆盖 retry shimmer 的 ANSI
 分段与相位推进；`packages/coding-agent/test/module-transcript-hooks.test.ts` 覆盖按
-kind 独立注册。
+kind 独立注册。`packages/coding-agent/test/interactive-tui.test.ts` 的 prototype
+context 必须带 `session.moduleRegistry.getWorkingIndicatorRenderer`，否则新路由会在
+测试夹具上抛 `TypeError`；它验证的是路由依赖，而不是 shimmer 本身。

@@ -130,6 +130,7 @@ type StatusEditor = {
 };
 
 type ClearStatusContext = {
+	session: { moduleRegistry: { getWorkingIndicatorRenderer: (kind: StatusIndicatorKind) => undefined } };
 	activeStatusIndicator: { kind: StatusIndicatorKind; dispose: () => void } | undefined;
 	activeWorkingIndicatorEmbedded: boolean;
 	statusContainer: Container;
@@ -154,6 +155,7 @@ describe("clear-on-shrink status spacing", () => {
 		const tui = { requestRender: vi.fn() } as unknown as TUI;
 		const editor: StatusEditor = { embedWorkingStatus, setWorkingStatusIndicator: vi.fn() };
 		const context: ClearStatusContext = {
+			session: { moduleRegistry: { getWorkingIndicatorRenderer: () => undefined } },
 			activeStatusIndicator: undefined,
 			activeWorkingIndicatorEmbedded: false,
 			statusContainer: new Container(),
@@ -194,6 +196,7 @@ describe("clear-on-shrink status spacing", () => {
 			const dispose = vi.fn();
 			const editor: StatusEditor = { embedWorkingStatus: true, setWorkingStatusIndicator: vi.fn() };
 			const context: ClearStatusContext = {
+				session: { moduleRegistry: { getWorkingIndicatorRenderer: () => undefined } },
 				activeStatusIndicator: { kind, dispose },
 				activeWorkingIndicatorEmbedded: true,
 				statusContainer: new Container(),
@@ -216,6 +219,7 @@ describe("clear-on-shrink status spacing", () => {
 		const defaultEditor: StatusEditor = { embedWorkingStatus: true, setWorkingStatusIndicator: vi.fn() };
 		const customEditor = { embedWorkingStatus: false, setWorkingStatusIndicator: vi.fn() };
 		const context: ClearStatusContext = {
+			session: { moduleRegistry: { getWorkingIndicatorRenderer: () => undefined } },
 			activeStatusIndicator: { kind: "working", dispose: vi.fn() },
 			activeWorkingIndicatorEmbedded: false,
 			statusContainer: new Container(),
