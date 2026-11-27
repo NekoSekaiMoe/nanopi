@@ -45,6 +45,6 @@ jobs:
           CNB_KEY: ${{ secrets.CNB_KEY }}
         run: |
           set -euo pipefail
-          remote=https://cnb.cool/shinytale/nanopi.git
+          remote=https://cnb.cool/shinytale/agent/nanopi.git
           node scripts/mirror.mjs main --remote "$remote" --token-user cnb --token-env CNB_KEY
           node scripts/mirror.mjs tags --remote "$remote" --token-user cnb --token-env CNB_KEY
