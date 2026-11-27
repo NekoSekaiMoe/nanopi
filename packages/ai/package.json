@@ -31,10 +31,6 @@
 			"types": "./dist/providers/*.d.ts",
 			"import": "./dist/providers/*.js"
 		},
-		"./qoder": {
-			"types": "./dist/qoder/index.d.ts",
-			"import": "./dist/qoder/index.js"
-		},
 		"./api/*": {
 			"types": "./dist/api/*.d.ts",
 			"import": "./dist/api/*.js"

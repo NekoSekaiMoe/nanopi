@@ -4258,13 +4258,6 @@ async function generateModels() {
 		providers[model.provider].classifier[model.id] ??= model;
 	}
 
-	// Qoder keeps no packaged catalog (its models come from the account's list
-	// endpoint), but its provider set names it, so it still gets an empty data
-	// artifact; the ids are added before the flavor filter so a trimmed build
-	// that ships Qoder keeps them.
-	for (const providerId of ["qoder", "qoder-cn"]) {
-		providers[providerId] ??= { chat: {}, image: {}, classifier: {} };
-	}
 	// A flavored run can name a provider the data directory has not recorded yet:
 	// `base` ships `amazon-bedrock` (providerSets.core) while dropping its
 	// endpoint APIs (apiSets.endpoint), and on a clean checkout the "known" list
@@ -4290,35 +4283,22 @@ async function generateModels() {
 	const jsonImageProviders: Record<string, Record<string, ImageModel<ImageApi>>> = {};
 	const jsonClassifierProviders: Record<string, Record<string, ClassifierModel<ClassifierApi>>> = {};
 	const jsonAllProviders: Record<string, AnyModel[]> = {};
-	// Qoder's catalog is empty on purpose (the account's list endpoint is the
-	// source). Its data file still carries one empty group, because the validator
-	// rejects a file without an API group and a real group would need a model.
-	const emptyApiGroup = (providerId: string): Record<string, Record<string, never>> =>
-		providerId === "qoder" || providerId === "qoder-cn" ? { "openai-completions": {} } : {};
 	for (const providerId of sortedProviderIds) {
 		const chatEntries = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].chat).sort(([left], [right]) => left.localeCompare(right)),
 		);
-		// Qoder's file shape carries one empty API group; every other provider's
-		// catalog map is empty when it ships no model.
-		const noPackagedModels = Object.keys(chatEntries).length === 0;
-		jsonChatProviders[providerId] = noPackagedModels ? emptyApiGroup(providerId) : chatEntries;
+		jsonChatProviders[providerId] = chatEntries;
 		jsonImageProviders[providerId] = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].image).sort(([left], [right]) => left.localeCompare(right)),
 		);
 		jsonClassifierProviders[providerId] = Object.fromEntries(
 			Object.entries(catalogProviders[providerId].classifier).sort(([left], [right]) => left.localeCompare(right)),
 		);
-		// The placeholder group is a file shape, not a model: the structure the
-		// data validator compares against must stay empty.
-		const placeholderGroup = Object.keys(emptyApiGroup(providerId)).length > 0;
-		jsonAllProviders[providerId] = noPackagedModels && placeholderGroup
-			? []
-			: [
-					...Object.values(jsonChatProviders[providerId]),
-					...Object.values(jsonImageProviders[providerId]),
-					...Object.values(jsonClassifierProviders[providerId]),
-				];
+		jsonAllProviders[providerId] = [
+			...Object.values(jsonChatProviders[providerId]),
+			...Object.values(jsonImageProviders[providerId]),
+			...Object.values(jsonClassifierProviders[providerId]),
+		];
 	}
 
 	const serializeJson = (value: unknown) => `${JSON.stringify(value, null, generatorOptions.pretty ? 2 : undefined)}\n`;

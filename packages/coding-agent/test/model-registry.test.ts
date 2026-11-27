@@ -1439,8 +1439,7 @@ describe("ModelRegistry", () => {
 			expect(registry.hasProvider("anthropic")).toBe(false);
 
 			// A reload rebuilds from the catalog. Which providers the build carries is a
-			// build-time fact, so a removed one must not come back: that is what made the
-			// Qoder check-in report "provider not in this build" for a build that has it.
+			// build-time fact, so a removed one must not come back.
 			await registry.refresh();
 
 			expect(registry.hasProvider("anthropic")).toBe(false);

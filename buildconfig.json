@@ -79,9 +79,6 @@
 		"module/compaction": {
 			"description": "Codex-style compaction, its post-compaction warning, and the single recall_context tool for [rN], Key Facts cNrN, and replaced-region E<n> refs"
 		},
-		"module/qoder-checkin": {
-			"description": "Qoder daily check-in on session start (claims the campaign credits for every logged-in Qoder account)"
-		},
 		"module/ask-lite": {
 			"description": "ask_user_question tool and its dialog"
 		},
@@ -196,9 +193,6 @@
 		},
 		"compaction": {
 			"source": "packages/coding-agent/src/core/compaction/index.ts"
-		},
-		"qoder-checkin": {
-			"source": "packages/coding-agent/src/modules/qoder/index.ts"
 		},
 		"ask-lite": {
 			"source": "packages/coding-agent/src/modules/ask-lite/index.ts"
@@ -375,7 +369,6 @@
 				"openai-codex-responses",
 				"openai-completions",
 				"openrouter-images",
-				"qoder",
 				"typesafe-system-one",
 				"antigravity"
 			]
@@ -417,8 +410,6 @@
 				"opencode",
 				"opencode-go",
 				"openrouter",
-				"qoder",
-				"qoder-cn",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
 				"qwen-token-plan-individual",
@@ -482,8 +473,6 @@
 				"opencode",
 				"opencode-go",
 				"openrouter",
-				"qoder",
-				"qoder-cn",
 				"qwen-token-plan",
 				"qwen-token-plan-cn",
 				"qwen-token-plan-individual",

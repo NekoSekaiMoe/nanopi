@@ -9,7 +9,6 @@ import {
 	type AuthCheck,
 	type AuthInteraction,
 	type AuthOperationOptions,
-	type AuthorizationUpdate,
 	type AuthResult,
 	type AuthType,
 	type ClassifierApi,
@@ -73,7 +72,7 @@ import { getAgentDir } from "../config.ts";
 import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
 import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
 import { type CopilotAutoState, copilotAutoVirtualModel } from "./copilot-auto.ts";
-import { withLiveCatalog, withProviderCatalog } from "./live-catalog-provider.ts";
+import { withLiveCatalog } from "./live-catalog-provider.ts";
 import { ModelConfig } from "./model-config.ts";
 import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
 import { mergeProviderAttributionHeaders } from "./provider-attribution.ts";
@@ -277,11 +276,6 @@ export class ModelRuntime implements Models {
 			.builtinProviders()
 			.filter((provider) => isProviderIncluded(provider.id))
 			.map((provider) => {
-				// Qoder has no packaged catalog: the account's signed model list is the
-				// only source, so the provider's own refresh fills the overlay.
-				if (provider.id === "qoder" || provider.id === "qoder-cn") {
-					return withProviderCatalog(provider);
-				}
 				// OpenRouter narrows the catalog to the models, limits and prices of the user's key.
 				if (provider.id === "openrouter") {
 					return withPersonalizedCatalog(
@@ -623,14 +617,6 @@ export class ModelRuntime implements Models {
 		return this.snapshot.auth.has(providerId);
 	}
 
-	storeAuthorizationUpdate(
-		providerId: string,
-		update: AuthorizationUpdate,
-		options?: AuthOperationOptions,
-	): Promise<void> {
-		return this.models.storeAuthorizationUpdate(providerId, update, options);
-	}
-
 	getAuth(providerId: string, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
 	getAuth(model: AnyModel, overrides?: ModelRuntimeAuthOverrides): Promise<AuthResult | undefined>;
 	async getAuth(
@@ -723,16 +709,6 @@ export class ModelRuntime implements Models {
 		return this.credentials.list(options);
 	}
 
-	/**
-	 * The stored credential as-is, without resolving or refreshing it. `getAuth`
-	 * rotates an expired OAuth token, which retires the stored refresh token; a
-	 * path that only reads an account fact (the Qoder check-in) must not pay
-	 * that, and must still work while the token is due for renewal.
-	 */
-	readCredential(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-		return this.credentials.read(providerId, options);
-	}
-
 	getProviderAuthStatus(providerId: string): AuthStatus {
 		if (this.credentials.hasRuntimeApiKey(providerId)) return { configured: true, source: "runtime" };
 
@@ -763,7 +739,6 @@ export class ModelRuntime implements Models {
 		model: TModel;
 		options: Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>;
 	}> {
-		const runtime = this;
 		const provider = this.models.getProvider(model.provider);
 		if (!provider) throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
 		const resolution = await this.getAuth(model, {
@@ -792,7 +767,6 @@ export class ModelRuntime implements Models {
 				? { ...(resolution.env ?? {}), ...(providerOptions.env ?? {}) }
 				: undefined;
 		const requestModel: TModel = resolution.auth.baseUrl ? { ...model, baseUrl: resolution.auth.baseUrl } : model;
-		const onAuthorizationUpdate = providerOptions.onAuthorizationUpdate;
 		return {
 			provider,
 			model: requestModel,
@@ -801,15 +775,6 @@ export class ModelRuntime implements Models {
 				apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
 				headers,
 				env,
-				// A provider may renew its own credential mid-response (Qoder's device token
-				// expires under a signed request). Persist the rotation so the next request
-				// starts from it, then let the caller's hook see it too.
-				async onAuthorizationUpdate(update) {
-					await runtime.models.storeAuthorizationUpdate(model.provider, update, {
-						signal: providerOptions.signal,
-					});
-					await onAuthorizationUpdate?.(update);
-				},
 			} as Omit<TOptions, "transformHeaders"> & ProviderRequestOptions<TModel>,
 		};
 	}
@@ -1060,8 +1025,7 @@ export class ModelRuntime implements Models {
 	unregisterProvider(providerId: string): void {
 		// A built-in provider leaves the catalog for this process. Recomposing it from
 		// `builtins` alone was not enough: `refresh()` rebuilds every registered provider,
-		// and the build's own selection decided which of those survive. That is how a
-		// logged-out Qoder provider came back able to answer `hasProvider`.
+		// and the build's own selection decides which of those survive.
 		this.builtins.delete(providerId);
 		this.extensionProviders.delete(providerId);
 		this.nativeExtensionProviders.delete(providerId);

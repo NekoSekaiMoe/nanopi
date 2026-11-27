@@ -121,8 +121,6 @@ export type KnownProvider =
 	| "qwen-token-plan"
 	| "qwen-token-plan-cn"
 	| "qwen-token-plan-individual"
-	| "qoder"
-	| "qoder-cn"
 	| "xiaomi"
 	| "xiaomi-token-plan-cn"
 	| "xiaomi-token-plan-ams"
@@ -204,15 +202,6 @@ export interface ProviderRequestOptions<TModel = Model<Api>> {
 	 * For example, OpenAI and Anthropic SDK clients default to 2.
 	 */
 	maxRetries?: number;
-	/**
-	 * Store tokens the provider renewed while serving the response, the ones it
-	 * also reports on `message.authorizationUpdate`. Called at most once per
-	 * response, when the rotation happens rather than at the end: a rotation the
-	 * upstream already retired cannot be recovered from a failed turn, so the
-	 * caller has to be able to persist it before the rest of the turn runs.
-	 * Providers that never rotate credentials never call it.
-	 */
-	onAuthorizationUpdate?: (update: AuthorizationUpdate) => void | Promise<void>;
 	/**
 	 * Maximum delay in milliseconds to wait for a retry when the server requests a long wait.
 	 * If the server's requested delay exceeds this value, the request fails immediately
@@ -636,26 +625,6 @@ export interface AssistantMessage {
 	 * for deferred results fetched later.
 	 */
 	durationMs?: number;
-	/**
-	 * Tokens the provider renewed while serving this response and that the caller
-	 * must store, e.g. Qoder's device token renewed after upstream reported the
-	 * login expired. Absent when the request changed no credentials.
-	 */
-	authorizationUpdate?: AuthorizationUpdate;
-}
-
-/** A credential pair a provider rotated mid-response; storing it keeps later turns signed in. */
-export interface AuthorizationUpdate {
-	/** Replacement access token: the string a request authenticates with. */
-	token: string;
-	/** Replacement refresh token, when the rotation issued one. */
-	refreshToken?: string;
-	/**
-	 * `token` continues the credential the request started from, so storing it
-	 * cannot clobber a login or refresh that replaced that credential meanwhile.
-	 * True for a token the provider renewed itself during this response.
-	 */
-	continues?: boolean;
 }
 
 /** A tool call that another tool made while it ran. */
