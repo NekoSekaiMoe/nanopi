@@ -101,7 +101,6 @@
 		"packages/coding-agent/src/modules/ask-lite/**/__tests__/**",
 		"packages/coding-agent/src/modules/mcp-lite/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-btw/**/__tests__/**",
-		"packages/coding-agent/src/modules/pi-deepwiki/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-fake-codex/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-fake-opencode/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-git-tools/**/__tests__/**",

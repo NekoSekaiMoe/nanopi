@@ -1,10 +1,10 @@
 /**
- * pi-git-tools — read-only git tools that do not depend on GitHub.
+ * pi-git-tools — read-only git tool that does not depend on GitHub.
  *
- * `git_status`, `git_diff`, `git_log` and `git_current_branch` cover the same
- * ground as pi-git-me's local commands, without `gh`. `git_diff` can ask a
- * subagent to abridge a large patch; the compiler in `pi-meat` guarantees the
- * abridged diff is a projection of the original, not invented prose.
+ * `git` covers status, diff, log and current branch behind one action field.
+ * `action=diff` can ask a subagent to abridge a large patch; the compiler in
+ * `pi-meat` guarantees the abridged diff is a projection of the original, not
+ * invented prose.
  */
 
 import { spawnSync } from "node:child_process";
@@ -137,6 +137,39 @@ function currentBranch(cwd: string): string {
 
 const cwdParam = Type.Optional(Type.String({ description: "Repository directory (default: session cwd)." }));
 
+const gitParams = Type.Object({
+	action: Type.Optional(
+		Type.Union([Type.Literal("status"), Type.Literal("diff"), Type.Literal("log"), Type.Literal("branch")], {
+			description:
+				"status (default): working tree and branch. diff: patch, target=staged|unstaged|all|branch, base for branch, max_bytes, abridge. log: recent commits, limit. branch: current branch.",
+		}),
+	),
+	cwd: cwdParam,
+	max_lines: Type.Optional(Type.Integer({ description: "status: max porcelain lines (default 200).", minimum: 1, maximum: 5000 })),
+	target: Type.Optional(
+		Type.Union(DIFF_TARGETS.map((t) => Type.Literal(t)), {
+			description: 'diff: staged, unstaged (default), all, or branch (vs origin/<base>).',
+		}),
+	),
+	base: Type.Optional(Type.String({ description: 'diff: base branch for target="branch" (default: main).' })),
+	max_bytes: Type.Optional(
+		Type.Integer({ description: "diff: patch byte cap (default 50000).", minimum: 1000, maximum: 1_000_000 }),
+	),
+	abridge: Type.Optional(Type.Boolean({ description: 'diff: ask a subagent to abridge a large patch (default: false).' })),
+	limit: Type.Optional(Type.Integer({ description: "log: commit count (default 10, max 100).", minimum: 1, maximum: 100 })),
+});
+
+interface GitParams {
+	action?: "status" | "diff" | "log" | "branch";
+	cwd?: string;
+	max_lines?: number;
+	target?: DiffTarget;
+	base?: string;
+	max_bytes?: number;
+	abridge?: boolean;
+	limit?: number;
+}
+
 /**
  * Parse `subagent spawn` output for its job id. The tool's own reply is the
  * only source; there is no second channel to guess an id from.
@@ -188,81 +221,46 @@ async function abridgedDiff(
 
 export default function gitTools(pi: ModuleToolsSurface): void {
 	pi.registerTool({
-		name: "git_status",
-		label: "git: Status",
+		name: "git",
+		label: "git",
 		description:
-			"Read git working-tree + branch status (git status --branch --porcelain), with a line cap. Prefer this over an uncapped shell git status.",
-		promptSnippet: "Read git status",
+			"Read-only git inspection in one tool. action=status (default), diff (staged/unstaged/all/branch, optional subagent abridging), log, or branch. All outputs are capped.",
+		promptSnippet: "Inspect git status, diff, log or the current branch",
 		annotations: { readOnlyHint: true },
-		parameters: Type.Object({
-			max_lines: Type.Optional(Type.Integer({ minimum: 1, maximum: 5000 })),
-			cwd: cwdParam,
-		}),
-		async execute(_id, params: { max_lines?: number; cwd?: string }, _signal, _onUpdate, ctx) {
-			return text(gitStatus(params.cwd ?? ctx.cwd, params.max_lines ?? 200));
-		},
-	});
-
-	pi.registerTool({
-		name: "git_diff",
-		label: "git: Diff",
-		description:
-			"Read a git diff with a patch size cap. Targets: staged, unstaged (default), all, branch (vs origin/<base>). When a subagent is available, large diffs are abridged into a faithful reading diff by the `meat` compiler.",
-		promptSnippet: "Read a git diff, optionally abridged to the lines that matter",
-		annotations: { readOnlyHint: true },
-		parameters: Type.Object({
-			target: Type.Optional(Type.Union(DIFF_TARGETS.map((t) => Type.Literal(t)))),
-			base: Type.Optional(Type.String()),
-			max_bytes: Type.Optional(Type.Integer({ minimum: 1000, maximum: 1_000_000 })),
-			abridge: Type.Optional(Type.Boolean({ description: "Ask a subagent to abridge a large diff (default: false)." })),
-			cwd: cwdParam,
-		}),
-		async execute(_id, params: { target?: string; base?: string; max_bytes?: number; abridge?: boolean; cwd?: string }, signal, _onUpdate, ctx) {
-			const target = DIFF_TARGETS.includes(params.target as DiffTarget) ? (params.target as DiffTarget) : "unstaged";
+		parameters: gitParams,
+		async execute(_id, params: GitParams, signal, _onUpdate, ctx) {
 			const cwd = params.cwd ?? ctx.cwd;
-			const base = params.base ?? "main";
-			const maxBytes = params.max_bytes ?? 50_000;
-			const diff = rawDiff(target, cwd, base, maxBytes);
-			if (params.abridge !== true) return text(diff);
-			const abridged = await abridgedDiff(ctx, { target, cwd, base, maxBytes }, signal);
-			return text(abridged ?? diff);
-		},
-	});
-
-	pi.registerTool({
-		name: "git_log",
-		label: "git: Log",
-		description:
-			"Read recent commits on the current branch as hash, ISO date, author, subject and body. Capped at 100 entries.",
-		promptSnippet: "Read recent git history",
-		annotations: { readOnlyHint: true },
-		parameters: Type.Object({ limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })), cwd: cwdParam }),
-		async execute(_id, params: { limit?: number; cwd?: string }, _signal, _onUpdate, ctx) {
-			const entries = gitLog(params.limit ?? 10, params.cwd ?? ctx.cwd);
-			if (entries.length === 0) return text("(no commits on the current branch)");
-			return text(
-				entries
-					.map((e) => {
-						const body = e.body ? `\n    ${e.body.replace(/\n/g, "\n    ")}` : "";
-						return `${e.hash.slice(0, 7)} ${e.isoDate} ${e.author}: ${e.subject}${body}`;
-					})
-					.join("\n"),
-			);
-		},
-	});
-
-	pi.registerTool({
-		name: "git_current_branch",
-		label: "git: Current Branch",
-		description: "Read the current branch name, or HEAD (detached at <sha>). Read only.",
-		promptSnippet: "Read the current git branch",
-		annotations: { readOnlyHint: true },
-		parameters: Type.Object({ cwd: cwdParam }),
-		async execute(_id, params: { cwd?: string }, _signal, _onUpdate, ctx) {
-			return text(currentBranch(params.cwd ?? ctx.cwd) || "(not inside a git repository)");
+			switch (params.action ?? "status") {
+				case "diff": {
+					const target = DIFF_TARGETS.includes(params.target as DiffTarget)
+						? (params.target as DiffTarget)
+						: "unstaged";
+					const base = params.base ?? "main";
+					const maxBytes = params.max_bytes ?? 50_000;
+					const diff = rawDiff(target, cwd, base, maxBytes);
+					if (params.abridge !== true) return text(diff);
+					const abridged = await abridgedDiff(ctx, { target, cwd, base, maxBytes }, signal);
+					return text(abridged ?? diff);
+				}
+				case "log": {
+					const entries = gitLog(params.limit ?? 10, cwd);
+					if (entries.length === 0) return text("(no commits on the current branch)");
+					return text(
+						entries
+							.map((e) => {
+								const body = e.body ? `\n    ${e.body.replace(/\n/g, "\n    ")}` : "";
+								return `${e.hash.slice(0, 7)} ${e.isoDate} ${e.author}: ${e.subject}${body}`;
+							})
+							.join("\n"),
+					);
+				}
+				case "branch":
+					return text(currentBranch(cwd) || "(not inside a git repository)");
+				case "status":
+					return text(gitStatus(cwd, params.max_lines ?? 200));
+			}
 		},
 	});
 }
-
 
 export { runGit, gitStatus, rawDiff, currentBranch, isGitRepo };

@@ -101,7 +101,7 @@ export default function (pi: ModuleEventsSurface &
   // It is installed ONCE for the process lifetime and intentionally NOT
   // restored on session_shutdown: that event also fires on session switches
   // (/resume, /new, fork), and restoring there would silently revert
-  // grep/find/web_search/etc. to Pi's bordered default for the rest of the
+  // grep/find/web/etc. to Pi's bordered default for the rest of the
   // process, since nothing reinstalls the patch between sessions.
   installExternalToolRenderers(pi);
   installShellRenderer(pi);

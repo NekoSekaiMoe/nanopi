@@ -19,7 +19,6 @@ const vendoredModulePaths = new Set([
 	"packages/coding-agent/src/modules/ask-lite",
 	"packages/coding-agent/src/modules/mcp-lite",
 	"packages/coding-agent/src/modules/pi-btw",
-	"packages/coding-agent/src/modules/pi-deepwiki",
 	"packages/coding-agent/src/modules/pi-fake-codex",
 	"packages/coding-agent/src/modules/pi-fake-opencode",
 	"packages/coding-agent/src/modules/pi-git-tools",

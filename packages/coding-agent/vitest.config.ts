@@ -7,7 +7,6 @@ const vendoredModulePaths = [
 	"ask-lite",
 	"mcp-lite",
 	"pi-btw",
-	"pi-deepwiki",
 	"pi-fake-codex",
 	"pi-fake-opencode",
 	"pi-git-tools",

@@ -71,7 +71,7 @@ expand shortcut.
 Shell results keep an up-to-seven-line collapsed preview (three leading lines,
 a hidden line count, and three trailing lines when output is longer). Every
 other tool — `grep` and `find`, extension tools like `fffind`, `ffgrep`,
-`web_search`, `batch_web_fetch`, `ask_user_question`, and `subagent`, plus any
+`web`, `batch_web_fetch`, `ask_user_question`, and `subagent`, plus any
 tool added later by newly installed extensions or MCP servers — is covered
 automatically: Pi UI redirects the TUI renderer lookups on
 `ToolExecutionComponent` to the same flat rows without touching the owning
