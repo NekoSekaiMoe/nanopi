@@ -1,6 +1,7 @@
 # Agent Note: 移除 Qoder 的 OAuth 登录，保留 provider 与签到
 
 Status: implemented
+Archived: 2026-11-27
 
 **Superseded for Qoder by [2026-11-27-remove-qoder-entirely](./2026-11-27-remove-qoder-entirely.md):** Qoder provider, signed API, model catalog and daily check-in are now all removed. This note records the earlier login-only step; its "provider and check-in stay" conclusion no longer holds.
 

@@ -2,7 +2,7 @@
 
 Status: implemented
 
-**Superseded for Qoder by [2026-11-27-remove-qoder-oauth-login](../simplification/2026-11-27-remove-qoder-oauth-login.md):** Qoder's browser login (and with it its login dialog notice) is gone. The generic `OAuthAuth.notice` field and the TUI/CLI rendering still stand for other providers.
+**Superseded for Qoder by [2026-11-27-remove-qoder-entirely](../simplification/2026-11-27-remove-qoder-entirely.md):** Qoder's browser login, provider, and daily check-in are all gone. The generic `OAuthAuth.notice` field and the TUI/CLI rendering still stand for other providers.
 
 ## Problem
 

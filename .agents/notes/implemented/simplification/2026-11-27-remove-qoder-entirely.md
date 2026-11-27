@@ -48,5 +48,5 @@ QODER 专用 env 写入无法在删掉 Qoder 后自圆其说。
 - `pnpm run check` exits 0（generate:models、typecheck、agent-note 校验均通过）。
 - `grep -rin qoder --exclude-dir=node_modules --exclude-dir=.git .` 只命中 CHANGELOG 与 `.agents/notes/`。
 
-> 同日的 [2026-11-27-remove-qoder-oauth-login](./2026-11-27-remove-qoder-oauth-login.md)
+> 同日的 [2026-11-27-remove-qoder-oauth-login](../../archived/simplification/2026-11-27-remove-qoder-oauth-login.md)
 > 记录只移除浏览器登录的第一步；本文取代它关于"provider 与签到保留"的结论。

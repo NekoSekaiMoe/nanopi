@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Sign in with ChatGPT accepts the single `.onboarding_entrypoint=life_sciences` suffix OpenAI appends to the OAuth callback `state` for some accounts. Other suffixes and repeated suffixes still fail with `OAuth state mismatch`, and the authorization request is unchanged (issue [#854](https://cnb.cool/shinytale/agent/nanopi/-/issues/854))
 - `pi-fake-opencode` follows opencode2api's latest free-tier shaping rules: client tools now travel under the plain `mcp_<digest>` namespace instead of `clint_`, which the tier learned to refuse with 429, and top-level client tool descriptions use NBSP instead of ASCII spaces, which the tier also rejects. Parameter descriptions and official tool definitions stay verbatim ([#841](https://cnb.cool/shinytale/agent/nanopi/-/issues/841))
 
 - `recall_context` loads without startup errors again. The three recall strategies now live inside one `codex-compaction` module, whose single `recall_context` tool dispatches by ref shape: `[rN]` citations, Key Facts `cNrN` refs, and replaced-region `E<n>` refs all work from one tool call (issue [#832](https://cnb.cool/shinytale/nanopi/-/issues/832))
