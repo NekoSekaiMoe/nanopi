@@ -43,6 +43,7 @@ jobs:
       - name: Push main and tags to CNB
         env:
           CNB_KEY: ${{ secrets.CNB_KEY }}
+          MIRROR_SOURCE_REMOTE: https://github.com/${{ github.repository }}.git
         run: |
           set -euo pipefail
           remote=https://cnb.cool/shinytale/agent/nanopi.git

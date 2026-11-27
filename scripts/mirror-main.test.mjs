@@ -206,3 +206,42 @@ exit 1
 	assert.match(result.stdout, /already has this tree/);
 	assert.equal(git(remote, ["rev-parse", "main^{tree}"]), git(local, ["rev-parse", "HEAD^{tree}"]));
 });
+
+// CI can start from a checkout that is already behind source main (two back-to-back
+// pushes). Mirroring that stale tree as-is makes the guard treat files added by the
+// newer source commit as a removal, so the mirror must follow source main first.
+test("a stale local checkout mirrors the latest source tree", async (t) => {
+	const root = await scratch(t, "stale-checkout");
+	const sourceRepo = join(root, "source.git");
+	git(root, ["init", "-q", "--bare", sourceRepo]);
+
+	const local = join(root, "local");
+	git(root, ["init", "-q", "--initial-branch=main", local]);
+	git(local, ["config", "user.name", "Test"]);
+	git(local, ["config", "user.email", "test@example.com"]);
+	commit(local, "base.txt", "base", "init");
+	const staleHead = git(local, ["rev-parse", "HEAD"]);
+	git(local, ["remote", "add", "origin", sourceRepo]);
+	git(local, ["push", "-q", sourceRepo, "HEAD:refs/heads/main"]);
+
+	// Advance source main with a commit that adds a file the stale checkout lacks.
+	const source = clone(t, root, sourceRepo, "source");
+	commit(source, "source-only.txt", "source", "newer source commit");
+	const sourceHead = git(source, ["rev-parse", "HEAD"]);
+	git(source, ["push", "-q", sourceRepo, "HEAD:refs/heads/main"]);
+	// Simulate a CI checkout pinned to the old commit while the source branch
+	// has advanced: HEAD stays at the old commit.
+	git(local, ["symbolic-ref", "HEAD", "refs/heads/detached-main"]);
+	git(local, ["update-ref", "refs/heads/detached-main", staleHead]);
+
+	const result = spawnSync(process.execPath, [script, COMMAND, "--remote", sourceRepo], {
+		cwd: local,
+		encoding: "utf8",
+		env: { ...gitEnv, MIRROR_SOURCE_REMOTE: sourceRepo },
+	});
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /checkout is behind main/);
+	assert.equal(git(sourceRepo, ["rev-parse", "main"]), sourceHead);
+	assert.equal(git(sourceRepo, ["rev-parse", "main^{tree}"]), git(source, ["rev-parse", "HEAD^{tree}"]));
+	assert.notEqual(git(sourceRepo, ["rev-parse", "main"]), staleHead);
+});

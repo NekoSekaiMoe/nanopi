@@ -75,6 +75,8 @@ main:
         # 内联 bash 分不清。凭据由入口自己落进一个进程私有的 credential store：
         # 远端 URL 不带 token，token 也不经过这里的 shell 与 ~/.git-credentials。
         - name: mirror main and tags
+          env:
+            MIRROR_SOURCE_REMOTE: https://cnb.cool/$CNB_REPO_SLUG.git
           script: |
             set -eu
             remote=https://github.com/NekoSekaiMoe/nanopi.git

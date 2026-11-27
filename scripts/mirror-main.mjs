@@ -165,8 +165,26 @@ function pushWithRecompute(remote, head, localTree) {
 }
 
 export function mirrorMain(remote) {
-	const head = git(["rev-parse", "HEAD"]);
-	const localTree = treeOf("HEAD");
+	let head = git(["rev-parse", "HEAD"]);
+	let localTree = treeOf("HEAD");
+
+	// A CI can check out an older source commit when two pushes land back to
+	// back. If the source branch has moved past the checkout, mirror that new
+	// tip instead of the stale tree: pushing the old tree would look like a
+	// revert of files added by the newer source commit. Only a strict
+	// fast-forward qualifies; a diverged checkout still hits the no-revert
+	// guard below.
+	const sourceRemote = process.env.MIRROR_SOURCE_REMOTE;
+	if (sourceRemote) {
+		withRetry("git fetch (source)", () => git(["fetch", "--quiet", sourceRemote, "main"]));
+		const sourceHead = git(["rev-parse", "FETCH_HEAD"]);
+		if (sourceHead !== head && git(["merge-base", "--is-ancestor", head, sourceHead], { allowFailure: true }) !== null) {
+			head = sourceHead;
+			localTree = treeOf(head);
+			console.log(`checkout is behind main; mirroring ${head}`);
+		}
+	}
+
 	return pushWithRecompute(remote, head, localTree);
 }
 
