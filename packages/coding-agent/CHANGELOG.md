@@ -5,6 +5,10 @@
 ### Changed
 - The git tools are now one `git` tool with `action=status|diff|log|branch`, and `web_search`, `read_page`, and the DeepWiki tools are now one `web` tool with `action=search|fetch|wiki_structure|ask_repo`. The `pi-deepwiki` module is merged into `websearch`; `/deepwiki` now prefills a `web` call (issue [#852](https://cnb.cool/shinytale/agent/nanopi/-/issues/852))
 
+### Removed
+
+- `/login qoder`, `/login qoder-cn` and `nanopi auth login --provider qoder*` no longer offer a browser sign-in. Set the Qoder device token through the environment instead; the Qoder API and `/qoder-checkin` stay available (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
+
 ### Added
 - Ported five pi-extensions picks as built-in modules: `pi-deepwiki` (repo-grounded Q&A), `pi-git-tools` (read-only git, no `gh`), `pi-meat` (faithful reading diff via subagent), `pi-output-compact` (opt-in lossy tool-output compaction), and `/token-usage` over the existing usage ledger. `subagents-mini` gains `subagents.preferredCli` so a spawn can run claude, codex, or agy with the harness default model (issue [#824](https://cnb.cool/shinytale/nanopi/-/issues/824))
 

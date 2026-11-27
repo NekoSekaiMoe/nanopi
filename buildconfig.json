@@ -175,9 +175,6 @@
 		"oauth/openrouter": {
 			"description": "OpenRouter OAuth login flow"
 		},
-		"oauth/qoder-oauth": {
-			"description": "Qoder OAuth login flow (qoder.com and qoder.com.cn)"
-		},
 		"oauth/xai": {
 			"description": "xAI OAuth login flow"
 		}

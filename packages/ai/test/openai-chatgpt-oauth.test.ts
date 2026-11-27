@@ -33,6 +33,7 @@ function stubTokenEndpoint(response: unknown, inspect?: (body: URLSearchParams) 
 
 function loginInteraction(options?: {
 	callbackClientId?: string;
+	callbackState?: (state: string) => string;
 	onAuthorize?: (url: URL) => void;
 }): ProviderAuthInteraction {
 	let authorizeUrl: URL | undefined;
@@ -48,7 +49,8 @@ function loginInteraction(options?: {
 			if (!authorizeUrl) throw new Error("Authorization URL was not emitted before the callback prompt");
 			const callback = new URL(authorizeUrl.searchParams.get("redirect_uri") ?? "");
 			callback.searchParams.set("code", "authorization-code");
-			callback.searchParams.set("state", authorizeUrl.searchParams.get("state") ?? "");
+			const state = authorizeUrl.searchParams.get("state") ?? "";
+			callback.searchParams.set("state", options?.callbackState?.(state) ?? state);
 			if (options?.callbackClientId) callback.searchParams.set("client_id", options.callbackClientId);
 			return callback.toString();
 		},
@@ -125,6 +127,57 @@ describe("OpenAI ChatGPT OAuth", () => {
 		expect(authorizeUrls[0]?.searchParams.get("agent_name_hint")).toBeNull();
 		expect(exchangeBody?.get("client_id")).toBe("oaiapp_existing");
 		expect(credential).toMatchObject({ access: "access-token", clientId: "oaiapp_existing" });
+	});
+
+	// Issue #854: ChatGPT appended this suffix and the strict comparison failed the login.
+	it("accepts the onboarding state suffix ChatGPT appends to the callback", async () => {
+		let authorizeUrl: URL | undefined;
+		stubTokenEndpoint(tokenResponse());
+
+		const credential = await openaiChatGPTOAuth.login(
+			loginInteraction({
+				callbackClientId: "oaiapp_issued",
+				callbackState: (state) => `${state}.onboarding_entrypoint=life_sciences`,
+				onAuthorize: (url) => {
+					authorizeUrl = url;
+				},
+			}),
+			{ getDeviceId: () => DEVICE_ID },
+		);
+
+		expect(authorizeUrl?.searchParams.get("state")).not.toContain("onboarding_entrypoint");
+		expect(credential.access).toBe("access-token");
+	});
+
+	it("rejects an unknown state suffix", async () => {
+		const fetchMock = stubTokenEndpoint(tokenResponse());
+
+		await expect(
+			openaiChatGPTOAuth.login(
+				loginInteraction({
+					callbackClientId: "oaiapp_issued",
+					callbackState: (state) => `${state}.onboarding_entrypoint=unknown`,
+				}),
+				{ getDeviceId: () => DEVICE_ID },
+			),
+		).rejects.toThrow("OAuth state mismatch");
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("rejects a repeated onboarding state suffix", async () => {
+		const fetchMock = stubTokenEndpoint(tokenResponse());
+		const suffix = ".onboarding_entrypoint=life_sciences";
+
+		await expect(
+			openaiChatGPTOAuth.login(
+				loginInteraction({
+					callbackClientId: "oaiapp_issued",
+					callbackState: (state) => `${state}${suffix}${suffix}`,
+				}),
+				{ getDeviceId: () => DEVICE_ID },
+			),
+		).rejects.toThrow("OAuth state mismatch");
+		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
 	it("rejects a reauthorization callback carrying a different client ID", async () => {

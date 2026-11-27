@@ -2,6 +2,8 @@
 
 Status: implemented
 
+**Superseded for Qoder by [2026-11-27-remove-qoder-oauth-login](../simplification/2026-11-27-remove-qoder-oauth-login.md):** Qoder's browser login (and with it its login dialog notice) is gone. The generic `OAuthAuth.notice` field and the TUI/CLI rendering still stand for other providers.
+
 ## Problem
 
 Qoder 国际站只把每日签到活动发给"看起来像真实安装"的请求，而判断依据是 `cosy-machinetoken` /

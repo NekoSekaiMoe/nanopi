@@ -38,7 +38,6 @@ describe("oauth flows outside a flavored bundle", () => {
 			"openai-chatgpt",
 			"openai-codex",
 			"openrouter",
-			"qoder-oauth",
 			"xai",
 		]);
 		expect(hasOAuthFlows()).toBe(true);
