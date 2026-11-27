@@ -14,6 +14,7 @@
 
 import { join } from "node:path";
 import { BUILD_VERSION } from "../../core/build-version.ts";
+import { getHostname } from "../../core/hostname.ts";
 import { formatMiB, type MemorySample, sampleMemory } from "../../core/memory-usage.ts";
 import type { ModuleApi, ModuleCommandContext, ToolInfo } from "../../core/modules/types.ts";
 import { formatContextPath, getCompactExtensionLabels, type ResourceItem } from "../../core/resource-listing.ts";
@@ -193,6 +194,7 @@ export function collectStatusRows(
 		{ label: "Model:", value: model?.id ?? "no-model" },
 		{ label: "Model provider:", value: model?.provider ?? "n/a" },
 		{ label: "Directory:", value: formatCwd(ctx.cwd) },
+		{ label: "Hostname:", value: getHostname() },
 		{ label: "Session:", value: session },
 		{ label: "Thinking:", value: thinking },
 		{

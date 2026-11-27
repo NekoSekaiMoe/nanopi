@@ -41,6 +41,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: "~",
+				hostname: "mini",
 			},
 			80,
 		).map(stripAnsi);
@@ -63,6 +64,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: "~",
+				hostname: "mini",
 			},
 			80,
 		)
@@ -79,6 +81,7 @@ describe("welcome box", () => {
 			thinkingLevel: "high",
 			showThinking: true,
 			cwd: "~",
+			hostname: "mini",
 		}));
 		expect(header.render(80).map(stripAnsi).join("\n")).toContain("π NanoPi v0.99.0");
 	});
@@ -92,6 +95,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: "~/project",
+				hostname: "mini",
 				branch: "main",
 			},
 			80,
@@ -110,6 +114,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: "~/project",
+				hostname: "mini",
 			},
 			80,
 		)
@@ -129,6 +134,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: longCwd,
+				hostname: "mini",
 				branch: "main",
 			},
 			60,
@@ -160,6 +166,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: longCwd,
+				hostname: "mini",
 			},
 			60,
 		)
@@ -181,6 +188,7 @@ describe("welcome box", () => {
 				thinkingLevel: "high",
 				showThinking: true,
 				cwd: "~/project",
+				hostname: "mini",
 			},
 			80,
 		)
@@ -188,6 +196,26 @@ describe("welcome box", () => {
 			.find((line) => line.includes("directory:"));
 		expect(shortRow).toContain("directory: ~/project");
 		expect(shortRow).not.toContain("…");
+	});
+
+	it("shows the hostname below the directory row", () => {
+		const lines = renderWelcomeBox(
+			{
+				version: "v20261114.0.0",
+				modelId: "gpt-test",
+				provider: "github-copilot",
+				thinkingLevel: "max",
+				showThinking: true,
+				cwd: "~/repo/nanopi",
+				branch: "main",
+				hostname: "mini",
+			},
+			80,
+		).map(stripAnsi);
+		const directoryIndex = lines.findIndex((line) => line.includes("directory:"));
+		const hostnameRow = lines.find((line) => line.includes("hostname:"));
+		expect(hostnameRow).toContain("hostname: mini");
+		expect(lines.indexOf(hostnameRow ?? "")).toBe(directoryIndex + 1);
 	});
 });
 
@@ -199,6 +227,7 @@ describe("collectStatusRows", () => {
 			"Model:",
 			"Model provider:",
 			"Directory:",
+			"Hostname:",
 			"Session:",
 			"Thinking:",
 			"Token usage:",
@@ -209,6 +238,7 @@ describe("collectStatusRows", () => {
 		const byLabel = new Map(rows.map((row) => [row.label, row.value]));
 		expect(byLabel.get("Model:")).toBe("gpt-test");
 		expect(byLabel.get("Model provider:")).toBe("openai");
+		expect(byLabel.get("Hostname:")).toBeTruthy();
 		expect(byLabel.get("Thinking:")).toBe("high");
 		expect(byLabel.get("Token usage:")).toContain("150 total");
 		expect(byLabel.get("Context:")).toContain("12.3k / 200k");
@@ -231,6 +261,7 @@ describe("collectStatusSections", () => {
 		const ctx = {
 			...createStatusCtx(),
 			cwd: "/repo",
+			hostname: "mini",
 			getLoadedResources: () => ({
 				contextFiles: [{ path: "/repo/.nanopi/SYSTEM.md" }, { path: "/repo/AGENTS.md" }],
 				skills: [{ name: "zeta", path: "/repo/.nanopi/skills/zeta/SKILL.md" }],
@@ -262,6 +293,7 @@ describe("collectStatusSections", () => {
 		const ctx = {
 			...createStatusCtx(),
 			cwd: "/repo",
+			hostname: "mini",
 			getLoadedResources: () => ({ contextFiles: [], skills: [], prompts: [], extensions: [] }),
 		} as unknown as ModuleCommandContext;
 

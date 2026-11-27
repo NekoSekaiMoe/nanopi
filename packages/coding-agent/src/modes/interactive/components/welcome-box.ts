@@ -11,6 +11,8 @@ export interface WelcomeBoxData {
 	cwd: string;
 	/** Current git branch of the working directory, when it is a repository. */
 	branch?: string | undefined;
+	/** Machine hostname, reduced to its first DNS label. */
+	hostname: string;
 }
 
 function fitRow(text: string, innerWidth: number): string {
@@ -47,6 +49,7 @@ export function foldMiddle(text: string, maxWidth: number): string {
  * │ model: xxx                       │
  * │ provider: xxx  thinking: high    │
  * │ directory: ~/a/.../d (main)      │
+ * │ hostname: mini                   │
  * └──────────────────────────────────┘
  *
  * Border is dim; title is bold. Content rows fold long paths in the middle and
@@ -79,6 +82,7 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 	const directory = data.branch ? `${data.cwd} (${data.branch})` : data.cwd;
 	const dirLine =
 		theme.fg("dim", "│ ") + fitRow(`directory: ${foldMiddle(directory, inner - 11)}`, inner) + theme.fg("dim", " │");
+	const hostLine = row(`hostname: ${data.hostname}`);
 
 	return [
 		border("┌", "─", "┐"),
@@ -87,6 +91,7 @@ export function renderWelcomeBox(data: WelcomeBoxData, width: number): string[] 
 		modelLine,
 		metaLine,
 		dirLine,
+		hostLine,
 		border("└", "─", "┘"),
 	];
 }

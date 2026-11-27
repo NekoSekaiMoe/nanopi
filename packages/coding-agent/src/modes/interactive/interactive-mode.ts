@@ -80,6 +80,7 @@ import {
 	writeDiagnosticBundle,
 } from "../../core/diagnostic-bundle.ts";
 import { FooterDataProvider, type ReadonlyFooterDataProvider } from "../../core/footer-data-provider.ts";
+import { getHostname } from "../../core/hostname.ts";
 import { configureHttpDispatcher, formatHttpIdleTimeoutMs } from "../../core/http-dispatcher.ts";
 import { type AppKeybinding, KeybindingsManager } from "../../core/keybindings.ts";
 import {
@@ -938,6 +939,7 @@ export class InteractiveMode {
 						process.env.HOME || process.env.USERPROFILE,
 					),
 					branch: this.footerDataProvider.getGitBranch() ?? undefined,
+					hostname: getHostname(),
 				};
 			});
 			this.builtInHeader = header;
