@@ -1,47 +1,31 @@
 /**
- * One `web` tool: search and fetch through the failover engine chain, plus
- * repo-grounded questions through DeepWiki. Every branch returns evidence and
- * names the source; nothing here invents an answer.
+ * One `web` tool: search and fetch through the failover engine chain.
+ * Every branch returns evidence and names the source; nothing here invents
+ * an answer.
  */
 
 import { Text } from "@nanopi/pi-tui";
-import type { Theme, ModuleCommandsSurface, ModuleToolContext, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
+import type { Theme, ModuleToolContext, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { getWebsearchConfigPath, loadWebsearchConfig } from "./config.ts";
-import { callDeepWikiTool, errorText } from "./deepwiki.ts";
 import type { SearchAttempt, SearchItem } from "./engines.ts";
 import { MAX_LIMIT, runFetch, runSearch } from "./search.ts";
 
-const repoName = Type.Union([Type.String(), Type.Array(Type.String(), { minItems: 1, maxItems: 10 })], {
-	description: 'owner/repo, or up to 10 owner/repo strings for a cross-repo question.',
-});
-
 const webParams = Type.Object({
 	action: Type.Optional(
-		Type.Union(
-			[
-				Type.Literal("search"),
-				Type.Literal("fetch"),
-				Type.Literal("wiki_structure"),
-				Type.Literal("ask_repo"),
-			],
-			{
-				description:
-					"search (default): ranked web results. fetch: one http(s) page as markdown. wiki_structure: a public GitHub repo's outline via DeepWiki. ask_repo: a codebase-grounded question about one or several public GitHub repos via DeepWiki.",
-			},
-		),
+		Type.Union([Type.Literal("search"), Type.Literal("fetch")], {
+			description: "search (default): ranked web results. fetch: one http(s) page as markdown.",
+		}),
 	),
 	query: Type.Optional(Type.String({ description: 'search: what to look for, in plain words.' })),
 	max_results: Type.Optional(
 		Type.Number({ description: `search: result count (1-${MAX_LIMIT}, default 8).` }),
 	),
 	url: Type.Optional(Type.String({ description: "fetch: the http(s) URL to read." })),
-	repoName: Type.Optional(repoName),
-	question: Type.Optional(Type.String({ description: "ask_repo: the question. Be specific." })),
 });
 
 export interface SearchDetails {
-	action: "search" | "fetch" | "wiki_structure" | "ask_repo";
+	action: "search" | "fetch";
 	engine?: string;
 	keyIndex?: number;
 	attempts: SearchAttempt[];
@@ -105,9 +89,6 @@ function actionSummary(args: Static<typeof webParams>): string {
 	switch (args.action) {
 		case "fetch":
 			return args.url ?? "";
-		case "wiki_structure":
-		case "ask_repo":
-			return Array.isArray(args.repoName) ? args.repoName.join(", ") : (args.repoName ?? "");
 		default:
 			return args.query ?? "";
 	}
@@ -118,11 +99,11 @@ export function registerWebTools(pi: ModuleToolsSurface): void {
 		name: "web",
 		label: "web",
 		description:
-			"Open-web and public-repo research in one tool. action=search (default), fetch, wiki_structure, or ask_repo. Search and fetch failover across engines; DeepWiki actions answer repo-grounded questions. Cite the URLs or repo names you used.",
-		promptSnippet: "Search the web, read a page, or ask DeepWiki about a public GitHub repo",
+			"Open-web research in one tool. action=search (default) or fetch. Search and fetch failover across engines. Cite the URLs you used.",
+		promptSnippet: "Search the web or read a page",
 		promptGuidelines: [
 			"Use web action=search for current facts (releases, prices, news, API changes); read the returned items as evidence and cite the URL you used.",
-			"Use action=fetch for a specific http(s) URL, and action=wiki_structure / action=ask_repo for public GitHub repositories.",
+			"Use action=fetch for a specific http(s) URL.",
 		],
 		annotations: { readOnlyHint: true, openWorldHint: true },
 		parameters: webParams,
@@ -162,51 +143,32 @@ export function registerWebTools(pi: ModuleToolsSurface): void {
 				}
 			}
 
-			if (action === "fetch") {
-				if (!params.url?.trim()) return fail(action, "web action=fetch needs a url");
-				try {
-					const outcome = await runFetch(params.url, {
-						config: loadWebsearchConfig(getWebsearchConfigPath(agentDir)),
-						agentDir,
-						signal,
-					});
-					const notes: string[] = [];
-					if (outcome.truncated) notes.push("Content truncated at 60000 characters.");
-					if (attemptsUsedFallback(outcome.attempts)) {
-						notes.push(`Fetched by ${outcome.engine} after an earlier engine failed.`);
-					}
-					const header = `# ${outcome.title?.trim() || outcome.url}\n(${outcome.url} — ${provenanceLine(outcome.engine, outcome.keyIndex, outcome.attempts)})`;
-					const text = [header, outcome.content.trim(), notes.length > 0 ? `\nNote: ${notes.join("; ")}` : ""]
-						.filter((part) => part !== "")
-						.join("\n\n");
-					return textResult(text, {
-						action,
-						engine: outcome.engine,
-						keyIndex: outcome.keyIndex,
-						attempts: outcome.attempts,
-						items: [],
-						uncertainty: notes,
-					});
-				} catch (err) {
-					return fail(action, err instanceof Error ? err.message : String(err));
-				}
-			}
-
-			if (!params.repoName) return fail(action, `web action=${action} needs repoName in owner/repo form`);
-			if (action === "ask_repo" && !params.question?.trim()) {
-				return fail(action, "web action=ask_repo needs a question");
-			}
+			if (!params.url?.trim()) return fail(action, "web action=fetch needs a url");
 			try {
-				const answer = await callDeepWikiTool(
-					action === "ask_repo" ? "ask_question" : "read_wiki_structure",
-					action === "ask_repo"
-						? { repoName: params.repoName, question: params.question }
-						: { repoName: params.repoName },
+				const outcome = await runFetch(params.url, {
+					config: loadWebsearchConfig(getWebsearchConfigPath(agentDir)),
+					agentDir,
 					signal,
-				);
-				return textResult(answer, { action, attempts: [], items: [], uncertainty: [] });
+				});
+				const notes: string[] = [];
+				if (outcome.truncated) notes.push("Content truncated at 60000 characters.");
+				if (attemptsUsedFallback(outcome.attempts)) {
+					notes.push(`Fetched by ${outcome.engine} after an earlier engine failed.`);
+				}
+				const header = `# ${outcome.title?.trim() || outcome.url}\n(${outcome.url} — ${provenanceLine(outcome.engine, outcome.keyIndex, outcome.attempts)})`;
+				const text = [header, outcome.content.trim(), notes.length > 0 ? `\nNote: ${notes.join("; ")}` : ""]
+					.filter((part) => part !== "")
+					.join("\n\n");
+				return textResult(text, {
+					action,
+					engine: outcome.engine,
+					keyIndex: outcome.keyIndex,
+					attempts: outcome.attempts,
+					items: [],
+					uncertainty: notes,
+				});
 			} catch (err) {
-				return textResult(errorText(err), { action, attempts: [], items: [], uncertainty: [] });
+				return fail(action, err instanceof Error ? err.message : String(err));
 			}
 		},
 
@@ -240,28 +202,6 @@ export function registerWebTools(pi: ModuleToolsSurface): void {
 				if (text?.type === "text") lines.push(text.text);
 			}
 			return new Text(lines.join("\n"), 0, 0);
-		},
-	});
-}
-
-export function registerDeepwikiCommand(pi: ModuleCommandsSurface): void {
-	pi.registerCommand("deepwiki", {
-		description:
-			"DeepWiki: ask about a GitHub repo. Usage: /deepwiki <owner/repo> [question]. With a question, asks web action=ask_repo; without, lists the outline with action=wiki_structure.",
-		handler: async (args: string, ctx) => {
-			const trimmed = args.trim();
-			if (!trimmed) {
-				ctx.ui.notify("Usage: /deepwiki <owner/repo> [question]", "warning");
-				return;
-			}
-			const space = trimmed.indexOf(" ");
-			const repo = space === -1 ? trimmed : trimmed.slice(0, space);
-			const question = space === -1 ? "" : trimmed.slice(space + 1).trim();
-			ctx.ui.setEditorText(
-				question
-					? `Answer this question about the GitHub repository ${repo} using the web tool with action=ask_repo: ${question}`
-					: `List the documentation outline for the GitHub repository ${repo} using the web tool with action=wiki_structure.`,
-			);
 		},
 	});
 }

@@ -1,15 +1,13 @@
 # Web Search and Page Reading
 
-The `web` tool gives nanopi access to the open web and public GitHub repositories. It ships in the `websearch` module and works on a fresh install: the default chain starts with Firecrawl's keyless channel, which allows a monthly free credit allowance with no sign-up.
+The `web` tool gives nanopi access to the open web. It ships in the `websearch` module and works on a fresh install: the default chain starts with Firecrawl's keyless channel, which allows a monthly free credit allowance with no sign-up.
 
 ## What the tool does
 
 - `web` with `action=search` (default) returns ranked results (title, URL, snippet) for a query.
 - With `action=fetch`, it returns one http(s) page as markdown, truncated at 60,000 characters.
-- With `action=wiki_structure`, it lists a public GitHub repository's documentation outline via DeepWiki.
-- With `action=ask_repo`, it asks a codebase-grounded question about one or up to ten public repositories via DeepWiki.
 
-The tool does not invent an answer. Search and fetch name the engine that answered, and every search item is evidence the model can read; Tavily's written `answer` is passed through when the provider supplies one. DeepWiki errors are reported with the endpoint's status message.
+The tool does not invent an answer. Search and fetch name the engine that answered, and every search item is evidence the model can read; Tavily's written `answer` is passed through when the provider supplies one.
 
 ## Engine chain and failover
 
@@ -76,7 +74,7 @@ A key that reports an exhausted quota is recorded in `websearch-state.json` next
 
 ## Enabling the tools
 
-`web` is a `direct` tool, so a build that carries the `websearch` module activates it at session start. DeepWiki actions are part of the same tool. To keep it out of a session:
+`web` is a `direct` tool, so a build that carries the `websearch` module activates it at session start. To keep it out of a session:
 
 ```bash
 nanopi --exclude-tools web

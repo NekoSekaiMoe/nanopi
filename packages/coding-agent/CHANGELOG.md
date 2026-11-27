@@ -7,6 +7,8 @@
 
 ### Removed
 
+- DeepWiki research is removed from the `web` tool: `action=wiki_structure`, `action=ask_repo`, the `/deepwiki` command and the `DEEPWIKI_MCP_URL` override no longer exist. Search and fetch are unchanged (issue [#861](https://cnb.cool/shinytale/agent/nanopi/-/issues/861))
+
 - `/login qoder`, `/login qoder-cn` and `nanopi auth login --provider qoder*` no longer offer a browser sign-in. Set the Qoder device token through the environment instead; the Qoder API and `/qoder-checkin` stay available (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
 
 ### Added
