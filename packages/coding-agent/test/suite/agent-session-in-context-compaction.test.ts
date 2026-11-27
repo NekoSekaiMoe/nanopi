@@ -139,6 +139,43 @@ describe("AgentSession in-context compaction", () => {
 		expect(result.usage?.cacheRead).toBeGreaterThanOrEqual(fauxPromptTokens(lastResponse.usage));
 	});
 
+	// #830: the in-context request must replay the loop's options, not a hand-built subset.
+	it("replays the captured metadata, API key, and tool declarations", async () => {
+		const readTool: AgentTool = {
+			name: "read",
+			label: "Read",
+			description: "Read a file",
+			parameters: Type.Object({ path: Type.String() }),
+			execute: async () => ({ content: [{ type: "text", text: "file" }], details: {} }),
+		};
+		const harness = await createInContextHarness(true, undefined, [readTool]);
+		harnesses.push(harness);
+		const turns = await runConversation(harness);
+		const lastTurn = turns.at(-1)!;
+		expect(lastTurn.options?.apiKey).toBe("faux-key");
+		expect(lastTurn.options?.metadata).toBeDefined();
+		const toolDeclaration = lastTurn.messages[0];
+		expect(JSON.stringify(toolDeclaration)).toContain("read");
+
+		let compactionRequest: CapturedRequest | undefined;
+		harness.appendResponses([
+			(context, options) => {
+				compactionRequest = { messages: context.messages, options };
+				return fauxAssistantMessage("Summary.");
+			},
+		]);
+		await harness.session.compact();
+
+		expect(compactionRequest).toBeDefined();
+		expect(compactionRequest!.options?.apiKey).toBe(lastTurn.options?.apiKey);
+		expect(compactionRequest!.options?.metadata).toBe(lastTurn.options?.metadata);
+		expect(compactionRequest!.options?.sessionId).toBe(SESSION_ID);
+		expect(compactionRequest!.options?.toolChoice).toBe("none");
+		expect(JSON.stringify(compactionRequest!.messages.slice(0, lastTurn.messages.length))).toBe(
+			JSON.stringify(lastTurn.messages),
+		);
+	});
+
 	it("never executes a tool call from the in-context response and falls back", async () => {
 		let executions = 0;
 		const readTool: AgentTool = {

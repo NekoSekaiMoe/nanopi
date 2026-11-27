@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `Agent.captureNextRequestConfig()`: a snapshot of the context and loop config a continuation would send, with request metadata and the resolved API key. Callers that must replay a provider request can use it instead of rebuilding the fields by hand (issue [#830](https://cnb.cool/shinytale/nanopi/-/issues/830))
+
 ### Fixed
 
 - The proxy stream reader scans only newly decoded text for line breaks, so a long line arriving in many chunks is not rescanned on every chunk (upstream `da7e26cc8`)
