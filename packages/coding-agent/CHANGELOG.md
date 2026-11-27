@@ -2,18 +2,8 @@
 
 ## [Unreleased]
 
-### Changed
-- `meat` is folded into the `git` tool as `git action=diff` with `mode=raw|reading`. The `pi-meat` module and build component are removed; the compiler and chunker now live under `pi-git-tools/src/vendor/`. `mode=reading` still requires `pi-subagent-mini` (issue [#870](https://cnb.cool/shinytale/agent/nanopi/-/issues/870))
-
-- The git tools are now one `git` tool with `action=status|diff|log|branch`, and `web_search`, `read_page`, and the DeepWiki tools are now one `web` tool with `action=search|fetch|wiki_structure|ask_repo`. The `pi-deepwiki` module is merged into `websearch`; `/deepwiki` now prefills a `web` call (issue [#852](https://cnb.cool/shinytale/agent/nanopi/-/issues/852))
-
-### Removed
-
-- DeepWiki research is removed from the `web` tool: `action=wiki_structure`, `action=ask_repo`, the `/deepwiki` command and the `DEEPWIKI_MCP_URL` override no longer exist. Search and fetch are unchanged (issue [#861](https://cnb.cool/shinytale/agent/nanopi/-/issues/861))
-
-- Removed Qoder entirely: the startup/`/qoder-checkin` daily check-in, the `module/qoder-checkin` build component, Qoder provider docs and the `NANOPI_QODER_CHECKIN` switch. The browser sign-in was already removed; now `/qoder-checkin` does not exist and no Qoder credential is read (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
-
 ### Added
+
 - Ported five pi-extensions picks as built-in modules: `pi-deepwiki` (repo-grounded Q&A), `pi-git-tools` (read-only git, no `gh`), `pi-meat` (faithful reading diff via subagent), `pi-output-compact` (opt-in lossy tool-output compaction), and `/token-usage` over the existing usage ledger. `subagents-mini` gains `subagents.preferredCli` so a spawn can run claude, codex, or agy with the harness default model (issue [#824](https://cnb.cool/shinytale/nanopi/-/issues/824))
 
 - A compaction summary cites the session entries behind its facts as `[rN]`, and `recall_context` reads one back. Every message handed to the summarizer carries its entry id, the summary prompt asks for a trailing `<refs>` block that defines each tag, and the tool resolves the tags against that block and appends a `context_recall` entry, so the recalled history returns as history instead of a tool result the next compaction eats. An undefined tag, a summary without a `<refs>` block (any session compacted before this change), an entry still inside the kept region, and a block over a quarter of the context window are all refused with a reason ([#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
@@ -25,6 +15,11 @@
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Changed
+
+- `meat` is folded into the `git` tool as `git action=diff` with `mode=raw|reading`. The `pi-meat` module and build component are removed; the compiler and chunker now live under `pi-git-tools/src/vendor/`. `mode=reading` still requires `pi-subagent-mini` (issue [#870](https://cnb.cool/shinytale/agent/nanopi/-/issues/870))
+
+- The git tools are now one `git` tool with `action=status|diff|log|branch`, and `web_search`, `read_page`, and the DeepWiki tools are now one `web` tool with `action=search|fetch|wiki_structure|ask_repo`. The `pi-deepwiki` module is merged into `websearch`; `/deepwiki` now prefills a `web` call (issue [#852](https://cnb.cool/shinytale/agent/nanopi/-/issues/852))
+
 - The `codex-compaction` module is renamed to `compaction` and moved from `src/modules/codex-compaction/` into `src/core/compaction/`. The session machinery it replaced lives there as `*-core.ts` files; the module registry, buildconfig component, and test imports use the new name (issue [#842](https://cnb.cool/shinytale/nanopi/-/issues/842))
 - `full` embeds the TUI native prebuilds and photon wasm again; the on-demand sidecar download, its release tarball, the GitHub/AtomGit mirror URLs, the `NANOPI_OFFLINE` host probe, and `--sidecars-out` are removed. First image read and first clipboard use need no network (issue [#840](https://cnb.cool/shinytale/nanopi/-/issues/840))
 - The machine hostname is now shown on its own line under the welcome box directory and as a `Hostname:` row in `/status`. The standalone `pi-hostname` module is removed (issue [#835](https://cnb.cool/shinytale/nanopi/-/issues/835))
@@ -58,6 +53,12 @@
 - Project trust stops its ancestor walk at the user's home directory: a stray `.agents/skills` above it (`/home`, `/`) is user territory, and treating it as project context put every checkout underneath behind a trust prompt
 - `RpcClient.promptAndWait` returns as soon as a prompt the session handled itself reports `handled`, instead of waiting out the event timeout for an `agent_settled` that will never arrive
 - `pi-fake-opencode` replays each lane's own identity instead of one shape for both: the 2.x lanes (`/inference`, `/zen/go`) send the conversation affinity in `x-opencode-session`, `x-session-affinity` and `X-Session-Id` with the client's own session in `x-opencode-session-id`, and stop sending `x-opencode-request`, which the v2 gate answers with 403 `FreeTierError`; a forked session keeps its child id while affinity stays on the parent. The 1.x `/zen` lane gains the AI SDK's `Accept: */*` and a provider-utils version that depends on the wire protocol (`4.0.23` chat, `4.0.40` responses, `4.0.46` anthropic) instead of a fixed one. The 1.x prompt and tool set are now their own captures rather than the 2.x pair with names substituted: eleven tools (`bash`, `task`, `todowrite` where the 2.x CLI has `shell`, `subagent`, `question`), a different description and schema behind every shared name, no `strict` field on any of them (issue [#725](https://cnb.cool/shinytale/nanopi/-/issues/725))
+
+### Removed
+
+- DeepWiki research is removed from the `web` tool: `action=wiki_structure`, `action=ask_repo`, the `/deepwiki` command and the `DEEPWIKI_MCP_URL` override no longer exist. Search and fetch are unchanged (issue [#861](https://cnb.cool/shinytale/agent/nanopi/-/issues/861))
+
+- Removed Qoder entirely: the startup/`/qoder-checkin` daily check-in, the `module/qoder-checkin` build component, Qoder provider docs and the `NANOPI_QODER_CHECKIN` switch. The browser sign-in was already removed; now `/qoder-checkin` does not exist and no Qoder credential is read (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
 
 ## [20261114]
 
