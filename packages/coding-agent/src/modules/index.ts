@@ -37,7 +37,6 @@ import toolResultStore from "../modules/tool-result-store/index.ts";
 import websearch from "../modules/websearch/src/index.ts";
 import batchExtension from "./batch/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
-import qoderCheckinExtension from "./qoder/index.ts";
 
 /** Modules compiled into every nanopi build. Order matters: `extra` loads
  * first so it can answer `project_trust` for `--yolo` before anything else. */
@@ -49,7 +48,6 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "batch", factory: batchExtension, hidden: true },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "compaction", factory: compactionExtension, hidden: true },
-	{ name: "qoder-checkin", factory: qoderCheckinExtension, hidden: true },
 	// Bundled extras (formerly dist/extras packages, now compiled in).
 	{ name: "ask-lite", factory: askLite },
 	{ name: "mcp-lite", factory: mcpLite, hidden: true },

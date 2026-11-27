@@ -30,7 +30,6 @@ import type {
 	AssistantImages,
 	AssistantMessage,
 	AssistantMessageEventStream,
-	AuthorizationUpdate,
 	ClassifierApi,
 	ClassifierContext,
 	ClassifierModel,
@@ -295,19 +294,6 @@ export interface Models {
 	 */
 	getAuth(providerId: string, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
 	getAuth(model: AnyModel, overrides?: AuthResolutionOverrides): Promise<AuthResult | undefined>;
-
-	/**
-	 * Store tokens a provider renewed while serving a response
-	 * (`message.authorizationUpdate`), so later requests start from them instead of
-	 * renewing again. Applied only when the rotation still continues the stored
-	 * credential: an access token that already changed means a refresh or a new
-	 * login won the race, and a stale rotation must not roll that back.
-	 */
-	storeAuthorizationUpdate(
-		providerId: string,
-		update: AuthorizationUpdate,
-		options?: AuthOperationOptions,
-	): Promise<void>;
 
 	/** Run a provider-owned login flow and persist its returned credential. */
 	login(providerId: string, type: AuthType, interaction: AuthInteraction, options?: LoginOptions): Promise<Credential>;

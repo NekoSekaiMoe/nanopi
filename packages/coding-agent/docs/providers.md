@@ -230,22 +230,6 @@ The token does not refresh itself, so it suits one-off runs rather than a long s
 
 If login reports no Cloud Code project, open Antigravity once with the same account so Google provisions one, then log in again.
 
-### Qoder
-
-Qoder has no browser sign-in now. Set `QODER_DEVICE_TOKEN` or `QODER_CN_DEVICE_TOKEN` to a device token captured from the desktop client and configure `baseUrl` in `models.json` if it differs. The model list comes from the account's own list endpoint, so `/model` shows what the plan can run.
-
-The daily check-in is not configured by the device token alone. The global site pays the daily campaign only to a request that looks like an official installation, and it recognizes one by a device identity the token cannot derive:
-
-```
-QODER_MACHINE_TOKEN      # cosy-machinetoken
-QODER_MACHINE_TYPE       # cosy-machinetype
-QODER_CLIENT_VERSION     # cosy-version
-```
-
-Capture them from the desktop client: proxy it, open the usage panel, and read the request to `/sash/api/v1/me/campaigns`. Without a sign-in flow there is no stored credential to put them on, so set them in the process environment — `QODER_MACHINE_TOKEN`, `QODER_MACHINE_TYPE`, `QODER_CLIENT_VERSION`. Every Qoder account on this machine will present the same capture.
-
-Do not invent these values. The CN site rejects a forged fingerprint, and the global site withholds the campaign from one. A check-in that cannot claim says which fields it carried and which campaigns the server listed instead, so a `/qoder-checkin` run tells you whether the identity is missing or the account was issued nothing.
-
 ### Kiro
 
 `/login kiro` runs the AWS builder-id device flow: it registers a client, prints a code, and waits while you approve it in the browser. Kiro is subscription-backed, so the catalog carries zero prices.

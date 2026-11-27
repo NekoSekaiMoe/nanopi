@@ -2,6 +2,8 @@
 
 Status: implemented
 
+**Superseded for Qoder by [2026-11-27-remove-qoder-entirely](./2026-11-27-remove-qoder-entirely.md):** Qoder provider, signed API, model catalog and daily check-in are now all removed. This note records the earlier login-only step; its "provider and check-in stay" conclusion no longer holds.
+
 ## Problem
 
 Qoder 的浏览器登录把一份设备 token 和账号事实写进 `auth.json`，但签到所需的设备指纹仍要从桌面端抓：

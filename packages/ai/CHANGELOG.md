@@ -4,7 +4,7 @@
 
 ### Removed
 
-- Removed the `qoder` / `qoder-cn` browser OAuth login. Qoder providers now carry only API-key auth (`QODER_DEVICE_TOKEN` / `QODER_CN_DEVICE_TOKEN`); the inference API, provider registration and daily check-in stay (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
+- Removed Qoder entirely: the `qoder` / `qoder-cn` providers, the signed chat API, model-list refresh, daily check-in, and the `./qoder` package export. The browser OAuth login was already gone; now no Qoder code path ships. The token-rotation-only `AuthorizationUpdate` / `storeAuthorizationUpdate` interface and the QODER-specific credential env writes went with it (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
 
 ### Fixed
 

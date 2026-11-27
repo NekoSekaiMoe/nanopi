@@ -11,7 +11,6 @@ import type {
 	ClassifierModel,
 	ClassifierResult,
 	Context,
-	Credential,
 	CredentialInfo,
 	ImageApi,
 	ImageModel,
@@ -215,15 +214,6 @@ export class ModelRegistry {
 
 	getProviderAuth(provider: string): Promise<AuthResult | undefined> {
 		return this.runtime.getAuth(provider);
-	}
-
-	/**
-	 * Stored credential without resolving or renewing it. Use it when a caller
-	 * reads an account fact and has no use for a rotated token: `getProviderAuth`
-	 * refreshes an expiring OAuth credential, which retires its refresh token.
-	 */
-	readCredential(provider: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-		return this.runtime.readCredential(provider, options);
 	}
 
 	/** Stored credential metadata, without secrets: which providers are logged in. */
