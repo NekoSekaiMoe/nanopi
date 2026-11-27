@@ -41,9 +41,9 @@ function loadNativePlatformHelper(platform: string): NativePlatformHelper | unde
 			// Try the next possible packaging location.
 		}
 	}
-	// Single-file distributions may finish downloading the native sidecar
-	// after the first lookup; keep those paths retryable instead of caching
-	// the miss for the whole process.
+	// Single-file distributions install the embedded native sidecar into this
+	// root at startup; keep those paths retryable instead of caching a miss
+	// before installation has finished.
 	if (!process.env.NANOPI_TUI_NATIVE_ROOT) {
 		helpers.set(nativePath, undefined);
 	}

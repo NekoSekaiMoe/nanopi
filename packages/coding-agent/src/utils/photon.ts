@@ -3,7 +3,7 @@
  *
  * This module provides a unified interface to @silvia-odwyer/photon-node that works in:
  * 1. Node.js installs (development and npm packages, wasm next to the package)
- * 2. Single-file distributions (wasm downloaded as a sidecar into .nanopi/bin)
+ * 2. Single-file distributions (wasm embedded in the bundle and installed into .nanopi/bin)
  *
  * The challenge: photon-node's CJS entry reads the wasm via
  * fs.readFileSync(__dirname + '/photon_rs_bg.wasm'), which only resolves inside
@@ -18,7 +18,6 @@ import { createRequire } from "module";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { getBinDir } from "../config.ts";
-import { ensurePhotonWasmSidecar } from "./sidecars.ts";
 
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
@@ -126,9 +125,6 @@ export async function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon
 	}
 
 	loadPromise = (async () => {
-		// Single-file bundles ship the wasm as a downloadable sidecar; make sure
-		// it exists before the package's own readFileSync resolution runs.
-		await ensurePhotonWasmSidecar();
 		const restoreReadFileSync = patchPhotonWasmRead();
 		try {
 			photonModule = await import("@silvia-odwyer/photon-node");

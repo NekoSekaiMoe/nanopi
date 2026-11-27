@@ -9,20 +9,17 @@
  *   package.json) embedded as gzip+base64 and extracted to a versioned cache
  *   directory at startup by src/standalone/assets.ts
  * - builtin sidecars for flavors enabling `sidecar/*` (file contents embedded
- *   as gzip+base64 and installed to the agent bin directory with the same
- *   sha256 verification), plus a sidecar manifest pinning npm-registry
- *   tarball URLs plus per-file sha256 hashes for on-demand download fallback,
- *   both installed by src/utils/sidecars.ts
+ *   as gzip+base64 and installed to the agent bin directory with sha256
+ *   verification by src/utils/sidecars.ts)
  *
  * Requires the workspace packages to be built first (pnpm run build).
  */
 
-import { execFileSync } from "node:child_process";
-import { chmodSync, cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { createHash } from "node:crypto";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { gzipSync } from "node:zlib";
@@ -65,8 +62,6 @@ const codingAgentDistDir = join(codingAgentDir, "dist");
 const aiDistDir = join(repoRoot, "packages", "ai", "dist");
 const webuiDistDir = join(repoRoot, "packages", "webui", "dist");
 const tuiNativeDir = join(repoRoot, "packages", "tui", "native");
-// AtomGit repository that mirrors the release assets (scripts/publish-atomgit.mjs).
-const ATOMGIT_ASSETS_SLUG = "nanopi/releases-assets";
 const defaultOutput = join(codingAgentDir, "binaries", "nanopi.js");
 
 // Build flavors (buildconfig.json) drop peripheral components from the
@@ -98,14 +93,6 @@ const isComponentEnabled = (name) => components[name] !== false;
 const outArgs = process.argv.slice(2);
 const outIndex = outArgs.indexOf("--out");
 const outputFilePath = outIndex !== -1 && outArgs[outIndex + 1] ? resolve(outArgs[outIndex + 1]) : defaultOutput;
-// Where the TUI sidecar tarball goes. Defaults to this checkout's agent bin
-// directory; a caller that builds from an extracted source archive has to pass
-// --sidecars-out, because repoRoot is then the temporary tree and the tarball
-// would be written into it (see the release workflow).
-const sidecarsOutIndex = outArgs.indexOf("--sidecars-out");
-const sidecarsDir =
-	sidecarsOutIndex !== -1 && outArgs[sidecarsOutIndex + 1] ? resolve(outArgs[sidecarsOutIndex + 1]) : dirname(defaultOutput);
-
 const requireFromCodingAgent = createRequire(join(codingAgentDir, "package.json"));
 
 // Optional native accelerators stay external: callers fall back to JavaScript
@@ -210,9 +197,8 @@ function buildAssetsPayload() {
 }
 
 /**
- * Sidecar file collection, shared by the builtin payload and the download manifest.
- * Each entry carries the file content so flavors enabling `sidecar/*` can embed
- * it, while the manifest path only needs hashes and URLs for on-demand download.
+ * Sidecar file collection for the builtin payload: content plus a sha256 so
+ * the runtime can verify and repair the installed copy without network.
  */
 function collectSidecarFiles() {
 	// Photon wasm: universal, one file.
@@ -270,37 +256,10 @@ function collectSidecarFiles() {
 }
 
 /**
- * GitHub release asset URL of the TUI sidecar tarball. The tarball also lives in
- * the AtomGit assets repository (see atomgitSidecarTarballUrls); both flows
- * publish it under a tag because the URLs are baked into the bundle.
- */
-export function githubSidecarTarballUrl(repository, version, name) {
-	return `https://github.com/${repository}/releases/download/v${version}/${name}`;
-}
-
-/**
- * AtomGit mirror of the same tarball, tried after GitHub by the runtime.
- *
- * AtomGit serves raw files per tag, not per release. A release and a nightly
- * both publish the tarball under their own tag there, and the version in the
- * name is the same for both (it is the TUI package version), so either tag
- * serves the same bytes. `v<version>` is the exact tag; `nightly` is only the
- * fallback for builds whose version has not been released yet (an unreleased
- * version 404s on GitHub too).
- */
-export function atomgitSidecarTarballUrls(version, name, slug = ATOMGIT_ASSETS_SLUG) {
-	return [
-		`https://atomgit.com/${slug}/raw/main/v${version}/${name}`,
-		`https://atomgit.com/${slug}/raw/main/nightly/${name}`,
-	];
-}
-
-/**
  * Builtin sidecar payload: file contents for flavors enabling `sidecar/*`.
  * Packed as gzip+base64 like the package assets; the runtime installs the
- * platform-matching entries into the agent bin directory with the same
- * sha256 verification as downloads. Disabled components resolve to an empty
- * list and keep the download fallback.
+ * platform-matching entries into the agent bin directory with sha256
+ * verification. Disabled components resolve to an empty list.
  */
 function buildBuiltinSidecars(collected) {
 	const files = [];
@@ -315,51 +274,6 @@ function buildBuiltinSidecars(collected) {
 	return { payload: gzipSync(Buffer.from(JSON.stringify({ files }))).toString("base64"), count: files.length };
 }
 
-/** Sidecar manifest sources, pinned by per-file sha256. */
-function buildSidecarManifest(collected) {
-	const registry = "https://registry.npmjs.org";
-	const npmTarballUrl = (name, version) => {
-		const unscoped = name.startsWith("@") ? name.split("/")[1] : name;
-		return `${registry}/${name}/-/${unscoped}-${version}.tgz`;
-	};
-	// The fork's workspace packages are not on the public npm registry, so the
-	// TUI prebuilds ship as a release asset next to nanopi.js. Unreleased local
-	// builds keep working: the download 404s and the optional accelerators
-	// stay off (photon still comes from npm).
-	//
-	// Several hosts, tried in order: GitHub Releases is the official site, and
-	// the AtomGit release-assets repository mirrors the same file for readers who
-	// cannot reach it. All of them are named here because the URLs are baked into
-	// the artifact — a bundle that only knows GitHub keeps failing in exactly the
-	// place the mirror exists for. Each host must carry the file under its own
-	// release tag, which is what both publish flows do.
-	const repositoryUrl = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).repository.url;
-	const repository = repositoryUrl.replace(/^git\+https:\/\/github\.com\//, "").replace(/\.git$/, "");
-	const sidecarTarballUrls = (version, name) => [
-		githubSidecarTarballUrl(repository, version, name),
-		...atomgitSidecarTarballUrls(version, name),
-	];
-
-	const { photon, photonVersion, tuiFiles, tuiVersion } = collected;
-	return {
-		sources: [
-			{
-				packageName: "@silvia-odwyer/photon-node",
-				version: photonVersion,
-				urls: [npmTarballUrl("@silvia-odwyer/photon-node", photonVersion)],
-				files: [photon.info],
-			},
-			{
-				packageName: "@nanopi/pi-tui",
-				version: tuiVersion,
-				urls: sidecarTarballUrls(tuiVersion, `nanopi-sidecars-${tuiVersion}.tgz`),
-				// The tarball mirrors the agent bin directory layout.
-				files: tuiFiles.map((file) => ({ ...file.info, tarPath: file.info.destPath })),
-			},
-		],
-	};
-}
-
 const entryPoint = join(codingAgentDistDir, "standalone", "cli.js");
 const requiredInputs = [entryPoint, join(codingAgentDistDir, "cli.js")];
 if (isComponentEnabled("webui")) requiredInputs.push(join(webuiDistDir, "index.html"));
@@ -371,7 +285,6 @@ for (const required of requiredInputs) {
 
 const { payload: assetsPayload, rawBytes: assetCount, skipped: assetsSkipped } = buildAssetsPayload();
 const collectedSidecars = collectSidecarFiles();
-const sidecarManifest = buildSidecarManifest(collectedSidecars);
 const builtinSidecars = buildBuiltinSidecars(collectedSidecars);
 const { name: packageName, version } = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8"));
 // A flavor without assets embeds no package.json, so config.ts (which reads the
@@ -488,7 +401,6 @@ try {
 			NANOPI_SINGLE_FILE_ASSETS: embedsPackageJson ? JSON.stringify(assetsPayload) : "undefined",
 			NANOPI_SINGLE_FILE_VERSION: JSON.stringify(version),
 			NANOPI_SINGLE_FILE_VERSION_FALLBACK: embedsPackageJson ? "undefined" : JSON.stringify(version),
-			NANOPI_SIDECARS: JSON.stringify(JSON.stringify(sidecarManifest)),
 			NANOPI_BUILTIN_SIDECARS: JSON.stringify(builtinSidecars.payload),
 		},
 		entryPoints: [entryPoint],
@@ -540,7 +452,6 @@ chmodSync(outputFilePath, 0o755);
 
 const mib = (bytes) => (bytes / (1024 * 1024)).toFixed(1);
 const outputBytes = statSync(outputFilePath).size;
-const sidecarCount = sidecarManifest.sources.reduce((total, source) => total + source.files.length, 0);
 console.log(
 	`Built ${relative(repoRoot, outputFilePath)} (${mib(outputBytes)} MiB, flavor: ${flavor}, toolset: ${toolset}` +
 		(excludedTools.length > 0 ? `, excluded tools: ${excludedTools.join(", ")}` : "") +
@@ -552,32 +463,6 @@ console.log(
 		")",
 );
 console.log(
-	`  embedded assets: ${assetsSkipped ? "none (no asset component in this flavor)" : `${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed`}; sidecar manifest: ${sidecarCount} files; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
+	`  embedded assets: ${assetsSkipped ? "none (no asset component in this flavor)" : `${assetCount} files, ${mib(assetsPayload.length * 0.75)} MiB packed`}; builtin sidecars: ${builtinSidecars.count} files (${mib(builtinSidecars.payload.length * 0.75)} MiB packed)`,
 );
 
-// Emit the TUI sidecar tarball referenced by the manifest as a release asset.
-// Layout inside the tarball equals the agent bin directory layout.
-//
-// It lands in the agent bin directory (--sidecars-out), not next to whatever
-// --out names: there is one tarball per build (its name carries the TUI
-// version, not the flavor), every flavor emits the same bytes, and the
-// publishing workflows look for it in packages/coding-agent/binaries/. Writing
-// it next to --out put one copy inside release-assets/ per flavor instead, and
-// the nightly job's "exactly one tarball" check then counted zero.
-const tuiSource = sidecarManifest.sources.find((source) => source.packageName === "@nanopi/pi-tui");
-mkdirSync(sidecarsDir, { recursive: true });
-const sidecarArchivePath = join(sidecarsDir, `nanopi-sidecars-${tuiSource.version}.tgz`);
-const sidecarStaging = join(dirname(sidecarArchivePath), `.sidecar-staging-${process.pid}`);
-rmSync(sidecarStaging, { recursive: true, force: true });
-try {
-	for (const file of tuiSource.files) {
-		const sourceRoot = join(tuiNativeDir, file.os, "prebuilds", `${file.os}-${file.arch}`);
-		const staged = join(sidecarStaging, file.destPath);
-		mkdirSync(dirname(staged), { recursive: true });
-		cpSync(join(sourceRoot, basename(file.tarPath)), staged);
-	}
-	execFileSync("tar", ["-czf", sidecarArchivePath, "-C", sidecarStaging, "native"], { stdio: "pipe" });
-} finally {
-	rmSync(sidecarStaging, { recursive: true, force: true });
-}
-console.log(`Built ${relative(repoRoot, sidecarArchivePath)} (${mib(statSync(sidecarArchivePath).size)} MiB)`);

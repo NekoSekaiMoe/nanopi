@@ -14,6 +14,7 @@
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
 ### Changed
+- `full` embeds the TUI native prebuilds and photon wasm again; the on-demand sidecar download, its release tarball, the GitHub/AtomGit mirror URLs, the `NANOPI_OFFLINE` host probe, and `--sidecars-out` are removed. First image read and first clipboard use need no network (issue [#840](https://cnb.cool/shinytale/nanopi/-/issues/840))
 - The machine hostname is now shown on its own line under the welcome box directory and as a `Hostname:` row in `/status`. The standalone `pi-hostname` module is removed (issue [#835](https://cnb.cool/shinytale/nanopi/-/issues/835))
 
 ### Fixed

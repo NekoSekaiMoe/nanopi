@@ -146,10 +146,10 @@
 			"description": "web_search and read_page tools with the keyless engine chain"
 		},
 		"sidecar/tui-native": {
-			"description": "TUI native prebuilds builtin in single-file builds (all platforms embedded; the matching one installs to the agent bin directory, otherwise downloaded on demand). `full` leaves this off: the four prebuilds are the worst-compressing payload in the bundle (4.19 MiB raw, 0.90 MiB packed) and the download path is the same one an embedded-but-missing platform already takes"
+			"description": "TUI native prebuilds embedded in single-file builds (all platforms embedded; the matching one installs to the agent bin directory at startup, no network needed)"
 		},
 		"sidecar/photon-wasm": {
-			"description": "photon wasm builtin in single-file builds (installed to the agent bin directory, otherwise downloaded on demand). `full` leaves this off for the same reason as `sidecar/tui-native`: the download fallback is the original design, and the wasm is only needed once an image or the clipboard is touched"
+			"description": "photon wasm embedded in single-file builds (installed to the agent bin directory at startup, no network needed)"
 		},
 		"oauth/anthropic": {
 			"description": "Anthropic OAuth login flow"
@@ -272,13 +272,11 @@
 	},
 	"flavors": {
 		"full": {
-			"description": "Everything included except the embedded native sidecars, which download on demand; the only flavor the npm packages are published from",
+			"description": "Everything included, with the TUI native prebuilds and photon wasm embedded in the single-file bundle; the only flavor the npm packages are published from",
 			"components": {
 				"*": true,
 				"providers": "presets",
 				"apis": "all",
-				"sidecar/tui-native": false,
-				"sidecar/photon-wasm": false,
 				"grammars": "curated"
 			}
 		},

@@ -10,7 +10,7 @@
  */
 import "./assets.ts";
 import "./runtime-setup.ts";
-import { ensureSidecars, type SidecarStatus } from "../utils/sidecars.ts";
+import { installEmbeddedSidecars, type SidecarStatus } from "../utils/sidecars.ts";
 import "../cli.ts";
 
 function reportSidecarStatus(status: SidecarStatus): void {
@@ -19,7 +19,6 @@ function reportSidecarStatus(status: SidecarStatus): void {
 	}
 }
 
-// Prefetch sidecars (photon wasm, TUI native prebuilds) in the background;
-// photon also awaits its sidecar on demand before the first image read. Offline
-// mode still installs them, it only probes the hosts first.
-void ensureSidecars({ onStatus: reportSidecarStatus }).catch(() => undefined);
+// Install the embedded sidecars (photon wasm, TUI native prebuilds). They are
+// packed into the bundle at build time, so this needs no network.
+installEmbeddedSidecars(reportSidecarStatus);

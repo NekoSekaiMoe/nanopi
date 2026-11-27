@@ -12,7 +12,6 @@ import { exitStatus, repositoryRoot } from "./lib/node-runner.mjs";
 // Usage:
 //   node scripts/build-single-file.mjs [--skip-install] [--skip-build]
 //                                      [--offline-model-data] [--out <dir>]
-//                                      [--sidecars-out <dir>]
 
 const { values } = parseArgs({
 	options: {
@@ -20,7 +19,6 @@ const { values } = parseArgs({
 		"skip-build": { type: "boolean", default: false },
 		"offline-model-data": { type: "boolean", default: false },
 		out: { type: "string" },
-		"sidecars-out": { type: "string" },
 		help: { type: "boolean", default: false },
 	},
 });
@@ -32,7 +30,6 @@ if (values.help) {
   --skip-build         Skip the workspace build
   --offline-model-data Build with bundled model data instead of refreshing it
   --out <dir>          Output directory (default: packages/coding-agent/binaries)
-  --sidecars-out <dir> Directory for the TUI sidecar tarball (default: packages/coding-agent/binaries)
 `);
 	process.exit(0);
 }
@@ -65,9 +62,11 @@ if (values["skip-build"]) {
 
 process.stdout.write("==> Building single-file distribution...\n");
 mkdirSync(outputDirectory, { recursive: true });
-const bundleArgs = [join(repositoryRoot, "scripts", "build-coding-agent-single-file.mjs"), "--out", bundleOutput];
-if (values["sidecars-out"]) bundleArgs.push("--sidecars-out", resolve(values["sidecars-out"]));
-run("Bundling nanopi.js", process.execPath, bundleArgs);
+run("Bundling nanopi.js", process.execPath, [
+	join(repositoryRoot, "scripts", "build-coding-agent-single-file.mjs"),
+	"--out",
+	bundleOutput,
+]);
 
 const bytes = statSync(bundleOutput).size;
 process.stdout.write(

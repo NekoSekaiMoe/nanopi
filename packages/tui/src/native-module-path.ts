@@ -26,7 +26,7 @@ export function getNativeModuleCandidates(nativePath: string, options: NativeMod
 	const candidates: string[] = [];
 
 	// Sidecar root for single-file distributions: the coding-agent entrypoint
-	// sets this to the agent bin directory where downloaded prebuilds live.
+	// sets this to the agent bin directory where embedded prebuilds are installed.
 	const sidecarRoot = process.env.NANOPI_TUI_NATIVE_ROOT;
 	if (sidecarRoot) {
 		candidates.push(join(sidecarRoot, nativePath));
