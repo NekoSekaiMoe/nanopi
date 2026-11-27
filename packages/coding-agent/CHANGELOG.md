@@ -19,6 +19,8 @@
 
 ### Fixed
 
+- `pi-fake-opencode` follows opencode2api's latest free-tier shaping rules: client tools now travel under the plain `mcp_<digest>` namespace instead of `clint_`, which the tier learned to refuse with 429, and top-level client tool descriptions use NBSP instead of ASCII spaces, which the tier also rejects. Parameter descriptions and official tool definitions stay verbatim ([#841](https://cnb.cool/shinytale/agent/nanopi/-/issues/841))
+
 - `recall_context` loads without startup errors again. The three recall strategies now live inside one `codex-compaction` module, whose single `recall_context` tool dispatches by ref shape: `[rN]` citations, Key Facts `cNrN` refs, and replaced-region `E<n>` refs all work from one tool call (issue [#832](https://cnb.cool/shinytale/nanopi/-/issues/832))
 
 - In-context compaction now replays the captured next-turn request, including tool declarations, request metadata, and the resolved API key. A provider that keys its cache on any of those fields no longer drops the cached prefix and falls back to a paid standalone summary (issue [#830](https://cnb.cool/shinytale/nanopi/-/issues/830))
