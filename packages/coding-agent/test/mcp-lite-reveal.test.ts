@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import mcpLiteExtension from "../src/extras/mcp-lite/src/index.ts";
+import mcpLiteExtension from "../src/modules/mcp-lite/src/index.ts";
 
 const temps: string[] = [];
 

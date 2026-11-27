@@ -78,7 +78,7 @@ const { plugin: toolStubPlugin, excluded: excludedTools } = createToolStubPlugin
 });
 
 const buildCommit = resolveBuildCommit(repoRoot);
-// The bundled extras import the SDK by package name (see selfReferencePlugin).
+// The bundled modules import the SDK by package name (see selfReferencePlugin).
 const PACKAGE_NAME = JSON.parse(readFileSync(join(codingAgentDir, "package.json"), "utf8")).name;
 const allowedExternalPackages = new Set(BUNDLE_EXTERNAL_PACKAGES);
 

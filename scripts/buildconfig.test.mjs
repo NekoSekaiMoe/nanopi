@@ -378,7 +378,7 @@ describe("module components", () => {
 		components: { "module/alpha": {}, "module/beta": {} },
 		moduleBundles: {
 			alpha: { source: "packages/coding-agent/src/modules/alpha/index.ts" },
-			beta: { source: "packages/coding-agent/src/extras/beta/index.ts" },
+			beta: { source: "packages/coding-agent/src/modules/beta/index.ts" },
 		},
 		flavors: {
 			full: { components: { "*": true } },

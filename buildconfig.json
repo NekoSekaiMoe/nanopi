@@ -207,67 +207,67 @@
 			"source": "packages/coding-agent/src/modules/qoder/index.ts"
 		},
 		"ask-lite": {
-			"source": "packages/coding-agent/src/extras/ask-lite/index.ts"
+			"source": "packages/coding-agent/src/modules/ask-lite/index.ts"
 		},
 		"mcp-lite": {
-			"source": "packages/coding-agent/src/extras/mcp-lite/src/index.ts"
+			"source": "packages/coding-agent/src/modules/mcp-lite/src/index.ts"
 		},
 		"pi-btw": {
-			"source": "packages/coding-agent/src/extras/pi-btw/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-btw/src/index.ts"
 		},
 		"pi-fake-codex": {
-			"source": "packages/coding-agent/src/extras/pi-fake-codex/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-fake-codex/src/index.ts"
 		},
 		"pi-fake-opencode": {
-			"source": "packages/coding-agent/src/extras/pi-fake-opencode/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-fake-opencode/src/index.ts"
 		},
 		"pi-image": {
-			"source": "packages/coding-agent/src/extras/pi-image/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-image/src/index.ts"
 		},
 		"pi-lsp-mini": {
-			"source": "packages/coding-agent/src/extras/pi-lsp-mini/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-lsp-mini/src/index.ts"
 		},
 		"pi-memory": {
-			"source": "packages/coding-agent/src/extras/pi-memory/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-memory/src/index.ts"
 		},
 		"pi-rewind": {
-			"source": "packages/coding-agent/src/extras/pi-rewind/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-rewind/src/index.ts"
 		},
 		"pi-simplify": {
-			"source": "packages/coding-agent/src/extras/pi-simplify/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-simplify/src/index.ts"
 		},
 		"pi-smart-flow": {
-			"source": "packages/coding-agent/src/extras/pi-smart-flow/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-smart-flow/src/index.ts"
 		},
 		"pi-subagent-mini": {
-			"source": "packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-subagent-mini/src/index.ts"
 		},
 		"pi-deepwiki": {
-			"source": "packages/coding-agent/src/extras/pi-deepwiki/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-deepwiki/src/index.ts"
 		},
 		"pi-git-tools": {
-			"source": "packages/coding-agent/src/extras/pi-git-tools/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-git-tools/src/index.ts"
 		},
 		"pi-meat": {
-			"source": "packages/coding-agent/src/extras/pi-meat/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-meat/src/index.ts"
 		},
 		"pi-output-compact": {
-			"source": "packages/coding-agent/src/extras/pi-output-compact/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-output-compact/src/index.ts"
 		},
 		"pi-token-usage": {
-			"source": "packages/coding-agent/src/extras/pi-token-usage/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-token-usage/src/index.ts"
 		},
 		"pi-ui": {
-			"source": "packages/coding-agent/src/extras/pi-ui/src/index.ts"
+			"source": "packages/coding-agent/src/modules/pi-ui/src/index.ts"
 		},
 		"todo-lite": {
-			"source": "packages/coding-agent/src/extras/todo-lite/index.ts"
+			"source": "packages/coding-agent/src/modules/todo-lite/index.ts"
 		},
 		"tool-result-store": {
-			"source": "packages/coding-agent/src/extras/tool-result-store/index.ts"
+			"source": "packages/coding-agent/src/modules/tool-result-store/index.ts"
 		},
 		"websearch": {
-			"source": "packages/coding-agent/src/extras/websearch/src/index.ts"
+			"source": "packages/coding-agent/src/modules/websearch/src/index.ts"
 		}
 	},
 	"flavors": {

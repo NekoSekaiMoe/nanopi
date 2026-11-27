@@ -51,8 +51,8 @@ import {
 	SessionManager,
 } from "../../core/session-manager.ts";
 import { SettingsManager } from "../../core/settings-manager.ts";
-import { loadMcpConfig } from "../../extras/mcp-lite/src/config.ts";
-import { commandAvailable } from "../../extras/mcp-lite/src/executables.ts";
+import { loadMcpConfig } from "../../modules/mcp-lite/src/config.ts";
+import { commandAvailable } from "../../modules/mcp-lite/src/executables.ts";
 import { killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } from "../../utils/shell.ts";
 import { dropUnauthenticated, mergeModelLists, modelsWithinAllowlist } from "./model-list.ts";
 import {

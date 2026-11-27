@@ -6,11 +6,12 @@ import { join } from "node:path";
 // fields, so a checkout that has built the webui must not discover them.
 const SKIPPED_DIRECTORIES = new Set(["dist", "node_modules", ".next"]);
 
-// Vendored bundled extras directories (packages/coding-agent/src/extras/<name>)
-// are jiti-loaded at runtime via loader aliases, not workspace packages: they
-// must never be discovered as publishable packages or dependency-checked as
-// public source. Any directory named "extras" is that mount point.
-const SKIPPED_NESTED_DIRECTORIES = new Set(["extras"]);
+// Vendored bundled modules (packages/coding-agent/src/modules/<name>) carry
+// package.json files from upstream but are compiled in, not workspace
+// packages: they must never be discovered as publishable packages or
+// dependency-checked as public source. Any directory named "modules" is
+// that mount point.
+const SKIPPED_NESTED_DIRECTORIES = new Set(["modules"]);
 
 export function findPackageDirectories(root = "packages") {
 	const packageDirectories = [];

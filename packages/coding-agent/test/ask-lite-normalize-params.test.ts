@@ -1,9 +1,9 @@
 // Regression test for CNB issue #635: a bare CR in model-supplied tool args
 // tore the option row apart and slipped past the label guards.
 import { describe, expect, test } from "vitest";
-import { normalizeQuestionParams, normalizeText } from "../src/extras/ask-lite/tool/normalize-params.ts";
-import type { QuestionParams } from "../src/extras/ask-lite/tool/types.ts";
-import { validateQuestionnaire } from "../src/extras/ask-lite/tool/validate-questionnaire.ts";
+import { normalizeQuestionParams, normalizeText } from "../src/modules/ask-lite/tool/normalize-params.ts";
+import type { QuestionParams } from "../src/modules/ask-lite/tool/types.ts";
+import { validateQuestionnaire } from "../src/modules/ask-lite/tool/validate-questionnaire.ts";
 
 function params(overrides: Partial<QuestionParams["questions"][number]> = {}): QuestionParams {
 	return {

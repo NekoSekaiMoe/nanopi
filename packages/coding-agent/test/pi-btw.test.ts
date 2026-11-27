@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildContext, transcriptExcerpt } from "../src/extras/pi-btw/src/index.ts";
+import { buildContext, transcriptExcerpt } from "../src/modules/pi-btw/src/index.ts";
 
 function user(text: string) {
 	return { role: "user" as const, content: [{ type: "text" as const, text }], timestamp: 1 };

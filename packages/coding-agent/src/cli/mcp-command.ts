@@ -14,9 +14,9 @@
  */
 
 import { APP_NAME, getAgentDir } from "../config.ts";
-import type { McpServerConfig } from "../extras/mcp-lite/src/client.ts";
-import { loadMcpConfig } from "../extras/mcp-lite/src/config.ts";
-import { addServer, type McpConfigScope, removeServer, resolveWriteTarget } from "../extras/mcp-lite/src/write.ts";
+import type { McpServerConfig } from "../modules/mcp-lite/src/client.ts";
+import { loadMcpConfig } from "../modules/mcp-lite/src/config.ts";
+import { addServer, type McpConfigScope, removeServer, resolveWriteTarget } from "../modules/mcp-lite/src/write.ts";
 
 export type McpCommandKind = "add" | "remove" | "list";
 

@@ -1,6 +1,6 @@
 import { defineConfig } from "vitest/config";
 
-// The workspace config excludes extras/ (they are vendored snapshots), so this
+// The workspace config excludes this vendored snapshot, so this
 // suite needs its own entry point.
 export default defineConfig({
 	test: {

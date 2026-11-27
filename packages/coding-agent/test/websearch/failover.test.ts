@@ -5,9 +5,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { WebsearchConfig } from "../../src/extras/websearch/src/config.ts";
-import { splitKeys } from "../../src/extras/websearch/src/engines.ts";
-import { dedupeItems, orderChain, runSearch } from "../../src/extras/websearch/src/search.ts";
+import type { WebsearchConfig } from "../../src/modules/websearch/src/config.ts";
+import { splitKeys } from "../../src/modules/websearch/src/engines.ts";
+import { dedupeItems, orderChain, runSearch } from "../../src/modules/websearch/src/search.ts";
 
 interface Call {
 	url: string;

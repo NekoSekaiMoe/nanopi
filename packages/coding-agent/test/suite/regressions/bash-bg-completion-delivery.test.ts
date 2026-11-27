@@ -1,7 +1,7 @@
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
 import type { ModuleApi } from "../../../src/core/modules/types.ts";
-import { registerBashBg } from "../../../src/extras/pi-smart-flow/src/bash-bg.ts";
+import { registerBashBg } from "../../../src/modules/pi-smart-flow/src/bash-bg.ts";
 import { createHarness, getMessageText, type Harness } from "../harness.ts";
 
 /**

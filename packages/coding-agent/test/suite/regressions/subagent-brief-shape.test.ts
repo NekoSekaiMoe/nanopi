@@ -60,7 +60,7 @@ describe("subagent brief contract", () => {
 
 describe("subagent description", () => {
 	test("names every section the brief contract requires", async () => {
-		const { default: subagent } = await import("../../../src/extras/pi-subagent-mini/src/index.ts");
+		const { default: subagent } = await import("../../../src/modules/pi-subagent-mini/src/index.ts");
 		const descriptions: string[] = [];
 		const toolTexts: string[] = [];
 		const pi = {

@@ -6,7 +6,7 @@ Status: implemented
 
 ## Problem
 
-The builtin `pi-fake-opencode` module (see `packages/coding-agent/src/extras/pi-fake-opencode/`) unlocks OpenCode Zen's anonymous free tier by making nanopi's requests look like the official OpenCode client. Around 2026-10 users started getting `FreeTierError` ("OpenCode's free tier can only be used from within OpenCode") on every free-model request, while the official open-source OpenCode client kept working from home and datacenter networks alike.
+The builtin `pi-fake-opencode` module (see `packages/coding-agent/src/modules/pi-fake-opencode/`) unlocks OpenCode Zen's anonymous free tier by making nanopi's requests look like the official OpenCode client. Around 2026-10 users started getting `FreeTierError` ("OpenCode's free tier can only be used from within OpenCode") on every free-model request, while the official open-source OpenCode client kept working from home and datacenter networks alike.
 
 The gateway is closed-source (`FreeTierError` appears nowhere in anomalyco/opencode), so the rules were re-derived by black-box experiment: capture the official 1.19.0 client's real requests (local TLS+h2 capture server via hosts-file hijack), then replay them with one signal varied at a time.
 

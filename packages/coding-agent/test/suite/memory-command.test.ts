@@ -2,7 +2,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fauxAssistantMessage } from "@nanopi/pi-ai";
 import { describe, expect, test } from "vitest";
-import memory from "../../src/extras/pi-memory/src/index.ts";
+import memory from "../../src/modules/pi-memory/src/index.ts";
 import { createHarness, type Harness } from "./harness.ts";
 
 const AGENTS = "# Repo\n\nIntro.\n\n## Build\n\n- Existing rule\n";

@@ -3,9 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { collectEditDiagnostics } from "../src/extras/pi-lsp-mini/src/edit-diagnostics.ts";
-import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
-import { DEFAULT_EDIT_DIAGNOSTICS, loadEditDiagnosticsSettings } from "../src/extras/pi-lsp-mini/src/settings.ts";
+import { collectEditDiagnostics } from "../src/modules/pi-lsp-mini/src/edit-diagnostics.ts";
+import { LspManager } from "../src/modules/pi-lsp-mini/src/manager.ts";
+import { DEFAULT_EDIT_DIAGNOSTICS, loadEditDiagnosticsSettings } from "../src/modules/pi-lsp-mini/src/settings.ts";
 
 const tempDirs: string[] = [];
 

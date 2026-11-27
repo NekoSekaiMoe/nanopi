@@ -47,7 +47,7 @@ Status: rejected — 用户判断：先记下现状，不做。采集和注入�
 
 最强理由：零代码，第三方生态已有截图/点击服务器，模型侧只要连上就能用。
 
-否决理由：图片在那条路上过不去，两层都断。`mcp-lite` 的结果类型只有文本（`packages/coding-agent/src/extras/mcp-lite/src/client.ts:26`），`textOf` 只留 `type === "text"`（同目录 `src/index.ts:67`）；就算修了，`mcp` 工具把调用扔进子代理，子代理报告是纯文本（`pi-subagent-mini/src/index.ts:661` 只取最后一轮 assistant 文本），而「报告保持纯文本」是已落地的决定，见 [子代理报告维持纯文本](./2026-11-07-subagent-report-stays-plain-text.md)。任何第三方桌面 MCP 服务器带回来的截图都会在子代理那一跳消失。
+否决理由：图片在那条路上过不去，两层都断。`mcp-lite` 的结果类型只有文本（`packages/coding-agent/src/modules/mcp-lite/src/client.ts:26`），`textOf` 只留 `type === "text"`（同目录 `src/index.ts:67`）；就算修了，`mcp` 工具把调用扔进子代理，子代理报告是纯文本（`pi-subagent-mini/src/index.ts:661` 只取最后一轮 assistant 文本），而「报告保持纯文本」是已落地的决定，见 [子代理报告维持纯文本](./2026-11-07-subagent-report-stays-plain-text.md)。任何第三方桌面 MCP 服务器带回来的截图都会在子代理那一跳消失。
 
 ### 引 nut.js 这类现成库，自己不做原生层
 

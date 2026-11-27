@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModuleApi, ToolDefinition } from "../../../src/core/modules/types.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
-import { registerBashBg } from "../../../src/extras/pi-smart-flow/src/bash-bg.ts";
+import { registerBashBg } from "../../../src/modules/pi-smart-flow/src/bash-bg.ts";
 import { createHarness, createTestUiContext, type Harness } from "../harness.ts";
 
 /**

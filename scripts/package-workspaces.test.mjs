@@ -13,7 +13,7 @@ function writeManifest(directory, manifest) {
 // A checkout that has built the webui carries .next/build/package.json with no
 // name or version, which made sync-versions.js throw before it could bump
 // anything.
-test("skips build output and vendored extras", (t) => {
+test("skips build output and vendored modules", (t) => {
 	const root = mkdtempSync(join(tmpdir(), "nanopi-package-workspaces-test-"));
 	t.after(() => rmSync(root, { recursive: true, force: true }));
 
@@ -23,7 +23,7 @@ test("skips build output and vendored extras", (t) => {
 	writeManifest(join(root, "webui", ".next", "build"), {});
 	writeManifest(join(root, "agent", "dist", "chunk"), {});
 	writeManifest(join(root, "agent", "node_modules", "typebox"), { name: "typebox" });
-	writeManifest(join(root, "coding-agent", "src", "extras", "todo-lite"), { name: "@nanopi/todo-lite" });
+	writeManifest(join(root, "coding-agent", "src", "modules", "todo-lite"), { name: "@nanopi/todo-lite" });
 
 	const found = findPackageDirectories(root).map((directory) => relative(root, directory).split("\\").join("/"));
 	assert.deepEqual(found, ["agent", "webui"]);

@@ -14,7 +14,8 @@ register them automatically at runtime, and land extracted copies in
 
 ## Decision
 
-Extras live under `packages/coding-agent/src/extras/<name>/` (upstream
+Extras now live under `packages/coding-agent/src/modules/<name>/` beside the
+first-party modules (upstream
 snapshots; `devDependencies`/`scripts`/`tsconfig.json`/`*.bak` stripped
 because the repo never builds them and the upstream tsconfig `extends` paths
 do not exist here). At the time they were optional vendored packages: one
@@ -87,7 +88,7 @@ fixed rather than patching the packages:
 - Extras load with lowest precedence; `nanopi package list` does not show
   them (it lists configured settings packages) — flavor is the control
   surface, plus the env kill switch.
-- Upstream sync is manual file replacement under `extras/`; the build fails
+- Upstream sync is manual file replacement under `modules/<name>/`; the build fails
   if a new directory lacks a `buildconfig.json` component.
 - Fact update 2026-10-11: pi-extra-cmd and pi-codex-compact were later
   promoted to built-in inline extensions and removed from the registry
@@ -102,7 +103,7 @@ fixed rather than patching the packages:
   [vendored extra tests and HEAD sync](../process/2026-10-28-vendored-extra-tests-and-head-sync.md).
 - Fact update 2026-11-14: the extras no longer ship as optional vendored
   packages. The plugin system they loaded through is gone and every extra is
-  now a compiled-in module bundle under the same `src/extras/<name>/` paths,
+  now a compiled-in module bundle under `src/modules/<name>/` paths,
   so `scripts/extras.mjs`, the `extra/<name>` flavor components,
   `dist/extras/` and `NANOPI_BUNDLED_EXTRAS` no longer exist. See
   [remove the plugin system](../architecture/2026-10-13-remove-plugin-system-programmatic-modules.md).

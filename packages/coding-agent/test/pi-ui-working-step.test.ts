@@ -1,8 +1,8 @@
 import { visibleWidth } from "@nanopi/pi-tui";
 import { beforeEach, describe, expect, test } from "vitest";
-import type { SweepState } from "../src/extras/pi-ui/src/shimmer.ts";
-import { captureTerminalWidth, syncPlanFromToolResult, workingMessage } from "../src/extras/pi-ui/src/working.ts";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+import type { SweepState } from "../src/modules/pi-ui/src/shimmer.ts";
+import { captureTerminalWidth, syncPlanFromToolResult, workingMessage } from "../src/modules/pi-ui/src/working.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 /** Plain theme: no ANSI wrapping, so the shimmer output is the visible text. */

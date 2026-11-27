@@ -22,7 +22,7 @@ developed on.
 
 ## Decision
 
-**Executable lookup is shared and platform-aware.** `src/extras/*/src/executables.ts`
+**Executable lookup is shared and platform-aware.** `src/modules/*/src/executables.ts`
 resolves a name through `which` (`where` on Windows) first, then walks PATH with
 `PATHEXT` (defaults `.COM;.EXE;.BAT;.CMD`), then hands back the absolute path. The
 absolute path is what gets spawned. On native Windows a `.cmd`/`.bat` result is

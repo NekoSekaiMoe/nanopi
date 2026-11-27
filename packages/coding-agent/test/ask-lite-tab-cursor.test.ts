@@ -1,11 +1,11 @@
 // Regression test for CNB issue #635: switching back to an answered tab reset the
 // cursor to row 0, so a stray Enter replaced the stored answer with option 1.
 import { describe, expect, test } from "vitest";
-import { answeredRowIndex } from "../src/extras/ask-lite/state/selectors/derivations.ts";
-import type { QuestionnaireState } from "../src/extras/ask-lite/state/state.ts";
-import { reduce } from "../src/extras/ask-lite/state/state-reducer.ts";
-import type { QuestionAnswer, QuestionData } from "../src/extras/ask-lite/tool/types.ts";
-import type { WrappingSelectItem } from "../src/extras/ask-lite/view/components/wrapping-select.ts";
+import { answeredRowIndex } from "../src/modules/ask-lite/state/selectors/derivations.ts";
+import type { QuestionnaireState } from "../src/modules/ask-lite/state/state.ts";
+import { reduce } from "../src/modules/ask-lite/state/state-reducer.ts";
+import type { QuestionAnswer, QuestionData } from "../src/modules/ask-lite/tool/types.ts";
+import type { WrappingSelectItem } from "../src/modules/ask-lite/view/components/wrapping-select.ts";
 
 const singleItems: WrappingSelectItem[] = [
 	{ kind: "option", label: "A" },

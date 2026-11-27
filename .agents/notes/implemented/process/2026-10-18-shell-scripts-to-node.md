@@ -16,7 +16,7 @@ node --import "$TS_IMPORT_URL" --import "$RESOLVER_URL" .../cli.ts
 传进去的是模块 specifier，不是路径，所以 `argv[1]` 是 `undefined`，
 `pathToFileURL` 抛错，命令替换失败；`set -e` 在赋值里不触发，
 `RESOLVER_URL` 变成空串，最后只挂了 `ts-import.mjs`。
-没有 `source-resolver.ts` 时，`src/extras/ask-lite` 的 `./x.js` specifier
+没有 `source-resolver.ts` 时，`src/modules/ask-lite` 的 `./x.js` specifier
 解析不到源码，从仓库外的任意目录运行必然 `ERR_MODULE_NOT_FOUND`。
 
 同时，任何要「探测编译器 / SDK、构造参数数组、按退出码决定是否继续」的脚本，

@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
-import { blameDays, missingPaths, staleCandidates } from "../../src/extras/pi-memory/src/freshness.ts";
+import { blameDays, missingPaths, staleCandidates } from "../../src/modules/pi-memory/src/freshness.ts";
 import {
 	ageInDays,
 	isDuplicate,
@@ -11,8 +11,8 @@ import {
 	renderEntry,
 	sectionOf,
 	validateEntry,
-} from "../../src/extras/pi-memory/src/parse.ts";
-import { buildExtractionPrompt, parseCandidates } from "../../src/extras/pi-memory/src/prompt.ts";
+} from "../../src/modules/pi-memory/src/parse.ts";
+import { buildExtractionPrompt, parseCandidates } from "../../src/modules/pi-memory/src/prompt.ts";
 import {
 	applyEntry,
 	otherContextFiles,
@@ -20,7 +20,7 @@ import {
 	removeEntries,
 	resolveTarget,
 	touchSections,
-} from "../../src/extras/pi-memory/src/store.ts";
+} from "../../src/modules/pi-memory/src/store.ts";
 
 /** A fixed day, so a stamped assertion does not depend on when it runs. */
 const TODAY = new Date(2026, 4, 1);

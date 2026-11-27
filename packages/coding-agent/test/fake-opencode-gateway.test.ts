@@ -8,14 +8,14 @@ import {
 	laneForBaseUrl,
 	shouldSpoof,
 	userTurnFingerprint,
-} from "../src/extras/pi-fake-opencode/src/headers.ts";
+} from "../src/modules/pi-fake-opencode/src/headers.ts";
 import {
 	DEFAULT_MAX_COMPLETION_TOKENS,
 	SYSTEM_PROMPT_SEPARATOR,
 	shapeForGateway,
 	WIRE_TOOL_PREFIX,
 	wireToolName,
-} from "../src/extras/pi-fake-opencode/src/payload.ts";
+} from "../src/modules/pi-fake-opencode/src/payload.ts";
 
 const CONTEXT = { modelId: "glm-5.3-flash-free", cwd: "/workspace" };
 const V1_CONTEXT = { ...CONTEXT, lane: "v1" as const };

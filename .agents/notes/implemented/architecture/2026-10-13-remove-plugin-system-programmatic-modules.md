@@ -75,9 +75,9 @@ registerVirtualModel (+unregister*).
   src/modules/ registering through ModuleApi.
 - packages/extra keeps its structural-slice approach; ExtraExtensionAPI is
   re-sliced against ModuleApi (names unchanged where possible).
-- extras/* (11 packages, pi-lsp-mini joined post-migration on 2026-10-13) live
-  under `src/extras/<name>` and are imported
-  directly from src/modules/index.ts (compiled in). Their host imports stay
+- Extras (11 packages, pi-lsp-mini joined post-migration on 2026-10-13) now
+  live directly under `src/modules/<name>` beside the first-party modules and
+  are imported directly from src/modules/index.ts (compiled in). Their host imports stay
   bare `@nanopi/pi-coding-agent` specifiers: the root tsconfig already maps
   the self-name to src/, tsconfig.build.json gained the same mapping (a clean
   checkout has no dist for the exports map to point at, and a stale dist
@@ -139,13 +139,14 @@ pi-extra) get the same export audit.
 The WIP checkpoint compiled extras in but left the build broken on a clean
 tree; completing it set three rules:
 
-- Extras sit under `src/extras/`, not beside `src/`. `rootDir: "src"` in
-  tsconfig.build.json stays valid and the emitted layout is unchanged
-  (tsc now emits dist/extras/<name> itself), so package.json exports, the
-  bundle entry list (dist/cli.js, dist/index.js, dist/rpc-entry.js),
-  copy-assets, and config.ts dist-path asset resolution all keep working.
-- Relative specifiers inside src/extras must climb exactly to the src root
-  and stop — never a literal `../src/` segment. A specifier that escapes
+- Extras sit under `src/modules/<name>`, beside the first-party modules.
+  `rootDir: "src"` in tsconfig.build.json stays valid and the emitted layout
+  is unchanged (tsc now emits dist/modules/<name> itself), so package.json
+  exports, the bundle entry list (dist/cli.js, dist/index.js,
+  dist/rpc-entry.js), copy-assets, and config.ts dist-path asset resolution
+  all keep working.
+- Relative specifiers inside src/modules/<vendored-name> must climb exactly
+  to the src root and stop — never a literal `../src/` segment. A specifier that escapes
   rootDir still type-resolves (against the source tree), but emitted JS
   mirrors the src tree under dist, so the same climb lands back in src/ at
   runtime and fails with ERR_MODULE_NOT_FOUND. 28 such specifiers were
@@ -157,10 +158,11 @@ tree; completing it set three rules:
   optional-i18n TLAs became fire-and-forget imports that fall back to English
   until (if ever) the SDK resolves.
 
-Vendored boundaries: biome excludes `packages/coding-agent/src/extras/**`
-(vendored formatting is preserved byte-for-byte), and extras' own `__tests__`
-directories are excluded from both tsc programs (they drift against core
-APIs and are not shipped).
+Vendored boundaries: biome and the TypeScript relative-import checker exclude
+`packages/coding-agent/src/modules/<vendored-name>` per subtree (vendored
+formatting is preserved byte-for-byte), the workspace vitest config excludes
+the same subtrees, and their own `__tests__` directories are excluded from
+both tsc programs (they drift against core APIs and are not shipped).
 
 ## Alternatives considered
 

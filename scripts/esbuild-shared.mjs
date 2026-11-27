@@ -157,7 +157,7 @@ export function generatedModulePlugin({ name, filter, namespace, contents }) {
 /**
  * Resolves the coding-agent's own package name to its compiled entry point.
  *
- * The bundled modules inside `packages/coding-agent/src/extras` import values
+ * The bundled modules inside `packages/coding-agent/src/modules` import values
  * (`DynamicBorder`, `getMarkdownTheme`) from `@nanopi/pi-coding-agent` — the
  * public SDK surface — instead of reaching into `src/`. That is an ordinary
  * self-reference, and Node resolves it through the package's `exports` map.

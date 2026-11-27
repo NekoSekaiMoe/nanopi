@@ -6,7 +6,7 @@ Status: implemented
 
 Issue #824 asked which packages in EstebanForge/pi-extensions are worth picking and then confirmed a port with modifications: take deepwiki and hostname directly; merge git-me's local git commands with show-me-the-meat's diff abridging; move the ask-* delegation into subagents-mini as a preferred-CLI setting; take only rtk's output compactor; take only token-cost-ledger's display layer. The rest stays out.
 
-The port has to fit nanopi's programmatic module system: there is no extension directory or `--extension` flag. Each pick becomes a built-in module under `packages/coding-agent/src/extras/`, registered in `src/modules/index.ts` and declared as a `module/<name>` buildconfig component so flavors can exclude it.
+The port has to fit nanopi's programmatic module system: there is no extension directory or `--extension` flag. Each pick becomes a built-in module under `packages/coding-agent/src/modules/`, registered in `src/modules/index.ts` and declared as a `module/<name>` buildconfig component so flavors can exclude it.
 
 ## Decision
 

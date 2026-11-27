@@ -98,6 +98,26 @@
 	"exclude": [
 		"**/dist/**",
 		"packages/webui",
-		"packages/coding-agent/src/extras/**/__tests__/**"
+		"packages/coding-agent/src/modules/ask-lite/**/__tests__/**",
+		"packages/coding-agent/src/modules/mcp-lite/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-btw/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-deepwiki/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-fake-codex/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-fake-opencode/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-git-tools/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-image/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-lsp-mini/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-meat/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-memory/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-output-compact/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-rewind/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-simplify/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-smart-flow/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-subagent-mini/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-token-usage/**/__tests__/**",
+		"packages/coding-agent/src/modules/pi-ui/**/__tests__/**",
+		"packages/coding-agent/src/modules/todo-lite/**/__tests__/**",
+		"packages/coding-agent/src/modules/tool-result-store/**/__tests__/**",
+		"packages/coding-agent/src/modules/websearch/**/__tests__/**"
 	]
 }

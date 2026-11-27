@@ -71,7 +71,7 @@ exists (dropping it only ever frees a line).
 - Cost: an RPC consumer that wants a corner summary has no todo status string
   to read; RPC has no composer corner either, and the tool's `details.todos`
   remains the machine-readable source.
-- Testing: `src/extras/todo-lite/src/__tests__/tool-rpc.test.ts` gains C-1 and
+- Testing: `src/modules/todo-lite/src/__tests__/tool-rpc.test.ts` gains C-1 and
   C-2, which drive the real factory entry (`src/index.ts`) and assert that
   every `setStatus("todo", …)` on the tool path and on the
   `before_agent_start` path is empty. Re-running with the pre-fix

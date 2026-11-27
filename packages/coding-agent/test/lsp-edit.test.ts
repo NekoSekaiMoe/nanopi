@@ -1,8 +1,8 @@
 import { readFileSync, rmSync } from "node:fs";
 import { afterEach, beforeEach, expect, it } from "vitest";
-import { resetServersCache } from "../src/extras/pi-lsp-mini/src/config.ts";
-import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
-import { EDIT } from "../src/extras/pi-lsp-mini/src/schemas.ts";
+import { resetServersCache } from "../src/modules/pi-lsp-mini/src/config.ts";
+import { LspManager } from "../src/modules/pi-lsp-mini/src/manager.ts";
+import { EDIT } from "../src/modules/pi-lsp-mini/src/schemas.ts";
 import { contents, lspTools, project, run } from "./helpers/pi-lsp-tools.ts";
 
 const savedEnv = { ...process.env };

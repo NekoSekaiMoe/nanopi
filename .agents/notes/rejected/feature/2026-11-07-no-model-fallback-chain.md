@@ -20,7 +20,7 @@ nanopi 的现状：
 - 但**基础设施是现成的**：`packages/coding-agent/src/core/virtual-models.ts`（257 行）就是
   「请求级路由到物理模型」的层，`_getSummarizationRequestAuth`
   （`packages/coding-agent/src/core/agent-session.ts:720`）已经用它给 compaction 选模型。
-- 多凭据轮换在 nanopi 里有先例，但是**按模块做的**：`packages/coding-agent/src/extras/websearch/src/engines.ts:10-12`
+- 多凭据轮换在 nanopi 里有先例，但是**按模块做的**：`packages/coding-agent/src/modules/websearch/src/engines.ts:10-12`
   写着「一个引擎的 N 个 key 先试 N 次再换引擎，只有 auth / rate-limit / quota 失败才烧 key，
   500 和网络错误直接换下一个引擎」。
 

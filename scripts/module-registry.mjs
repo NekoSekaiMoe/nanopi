@@ -73,8 +73,8 @@ function readHelperModuleName(source, path, helper) {
  * Module descriptors for the stub plugin: name plus the import specifiers
  * the coding-agent may write for it, taken from buildconfig.json's
  * `moduleBundles`. Two spellings are listed because the bundle can see the
- * compiled output either way: `../extras/x/index.js` from the modules barrel,
- * `../../extras/x/index.js` from an importer two levels below src.
+ * compiled output either way: `../modules/x/index.js` from the modules barrel,
+ * `../../modules/x/index.js` from an importer two levels below src.
  *
  * A module that lives outside the coding-agent package (`@nanopi/pi-extra`) is
  * imported by package name, so its specifier is the name itself and its stub
@@ -94,8 +94,8 @@ export function resolveModuleBundles(repoRoot, config) {
 			source,
 			specifiers: [
 				// The modules barrel sits one directory below src, so it writes
-				// `../extras/x/index.js`; an importer at the src root writes
-				// `./extras/x/index.js`. Both spellings point at the same file.
+				// `../modules/x/index.js`; an importer at the src root writes
+				// `./modules/x/index.js`. Both spellings point at the same file.
 				specifierFor(join(repoRoot, codingAgentSrcDir), source),
 				specifierFor(join(repoRoot, codingAgentSrcDir), source, 2),
 			].filter((specifier) => specifier !== undefined),

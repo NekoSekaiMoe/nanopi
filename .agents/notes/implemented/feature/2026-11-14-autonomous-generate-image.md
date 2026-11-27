@@ -33,7 +33,7 @@ for a component, a test fixture), or when the user asks for an image.
 放行交给人：非 yolo 会话第一次自主出图要过 `PermissionGate` 的四答。一次出图就是一次花钱，
 闸门按调用拦是够的——`allow_once` 只放行这一次，模型再问还得再问人。
 
-**入口只从 #753 捡 `pi-image` 的两个文件**（`src/extras/pi-image/src/{index,tool}.ts`）+ `BUILTIN_MODULES`
+**入口只从 #753 捡 `pi-image` 的两个文件**（`src/modules/pi-image/src/{index,tool}.ts`）+ `BUILTIN_MODULES`
 一行 + `buildconfig.json` 的组件/`moduleBundles` 条目 + tool 测试。#753 的 provider 侧
 （`openai-codex-images`、`openai-responses-shared` 的钩子、`register-builtins` 的注册）与自主出图无关：
 `openrouter-images` 在 main 上已经注册好，tool 直接调 `ctx.modelRegistry.generateImages()` 就能出图。

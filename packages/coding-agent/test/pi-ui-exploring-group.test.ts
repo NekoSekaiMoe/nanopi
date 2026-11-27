@@ -1,13 +1,13 @@
 import { describe, expect, test } from "vitest";
 import type { CustomMessage } from "../src/core/messages.ts";
+import type { Theme } from "../src/modes/interactive/theme/theme.ts";
 import {
 	EXPLORING_MESSAGE_TYPE,
 	exploringHeader,
 	exploringHistoryRenderer,
 	exploringRows,
-} from "../src/extras/pi-ui/src/subagent-widget.ts";
-import { exploreCallFor, exploringCalls } from "../src/extras/pi-ui/src/tools.ts";
-import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+} from "../src/modules/pi-ui/src/subagent-widget.ts";
+import { exploreCallFor, exploringCalls } from "../src/modules/pi-ui/src/tools.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 /** Plain theme: no ANSI wrapping, so the output is the visible text. */

@@ -12,8 +12,8 @@ import { join } from "node:path";
 import type { AssistantImages, ImageModel } from "@nanopi/pi-ai";
 import type { ModuleEventsSurface, ModuleToolContext, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import piImageModule from "../src/extras/pi-image/src/index.ts";
-import { extensionForMimeType } from "../src/extras/pi-image/src/tool.ts";
+import piImageModule from "../src/modules/pi-image/src/index.ts";
+import { extensionForMimeType } from "../src/modules/pi-image/src/tool.ts";
 
 const IMAGE_MODEL: ImageModel<string> = {
 	type: "image",

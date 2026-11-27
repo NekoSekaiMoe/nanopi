@@ -5,8 +5,8 @@ import {
 	buildQuestionnaireResponse,
 	DECLINE_MESSAGE,
 	ENVELOPE_SUFFIX,
-} from "../src/extras/ask-lite/tool/response-envelope.ts";
-import type { QuestionnaireResult, QuestionParams } from "../src/extras/ask-lite/tool/types.ts";
+} from "../src/modules/ask-lite/tool/response-envelope.ts";
+import type { QuestionnaireResult, QuestionParams } from "../src/modules/ask-lite/tool/types.ts";
 
 const params: QuestionParams = {
 	questions: [

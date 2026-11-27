@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { mcpBrief } from "../src/extras/mcp-lite/src/index.ts";
+import { mcpBrief } from "../src/modules/mcp-lite/src/index.ts";
 
 /**
  * The `mcp` shell exists to hand one call to a subagent, so the brief is the

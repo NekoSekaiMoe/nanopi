@@ -9,8 +9,8 @@ import {
 	engineChain,
 	engineKeyValue,
 	loadWebsearchConfig,
-} from "../../src/extras/websearch/src/config.ts";
-import { enginesForRole } from "../../src/extras/websearch/src/engines.ts";
+} from "../../src/modules/websearch/src/config.ts";
+import { enginesForRole } from "../../src/modules/websearch/src/engines.ts";
 
 let dir: string;
 

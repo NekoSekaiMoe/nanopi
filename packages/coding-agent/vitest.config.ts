@@ -1,6 +1,32 @@
 import { defineConfig, mergeConfig } from "vitest/config";
 import baseConfig, { workspaceSourcePaths } from "../../vitest.base.ts";
 
+// Vendored snapshots under src/modules keep their own test configs; the
+// workspace suite must not discover them.
+const vendoredModulePaths = [
+	"ask-lite",
+	"mcp-lite",
+	"pi-btw",
+	"pi-deepwiki",
+	"pi-fake-codex",
+	"pi-fake-opencode",
+	"pi-git-tools",
+	"pi-image",
+	"pi-lsp-mini",
+	"pi-meat",
+	"pi-memory",
+	"pi-output-compact",
+	"pi-rewind",
+	"pi-simplify",
+	"pi-smart-flow",
+	"pi-subagent-mini",
+	"pi-token-usage",
+	"pi-ui",
+	"todo-lite",
+	"tool-result-store",
+	"websearch",
+] as const;
+
 export default mergeConfig(
 	baseConfig,
 	defineConfig({
@@ -12,7 +38,11 @@ export default mergeConfig(
 			env: { NANOPI_OFFLINE: "1", NANOPI_BUNDLED_EXTRAS: "0" },
 			// Vendored bundled extras (and their dist copies) are not first-party
 			// test suites; bundled-extras-registration.test.ts covers registration.
-			exclude: ["**/node_modules/**", "**/dist/**", "**/extras/**"],
+			exclude: [
+				"**/node_modules/**",
+				"**/dist/**",
+				...vendoredModulePaths.map((name) => `**/modules/${name}/**`),
+			],
 			unstubEnvs: true,
 			reporters: process.env.GITHUB_ACTIONS ? ["dot", "github-actions"] : ["dot"],
 			silent: "passed-only",
