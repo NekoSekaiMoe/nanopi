@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- `/login qoder`, `/login qoder-cn` and `nanopi auth login --provider qoder*` no longer offer a browser sign-in. Set the Qoder device token through the environment instead; the Qoder API and `/qoder-checkin` stay available (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
+
 ### Added
 - Ported five pi-extensions picks as built-in modules: `pi-deepwiki` (repo-grounded Q&A), `pi-git-tools` (read-only git, no `gh`), `pi-meat` (faithful reading diff via subagent), `pi-output-compact` (opt-in lossy tool-output compaction), and `/token-usage` over the existing usage ledger. `subagents-mini` gains `subagents.preferredCli` so a spawn can run claude, codex, or agy with the harness default model (issue [#824](https://cnb.cool/shinytale/nanopi/-/issues/824))
 

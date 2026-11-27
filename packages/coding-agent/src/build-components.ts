@@ -138,7 +138,6 @@ const OAUTH_FLOW_IDS: readonly string[] = [
 	"openai-chatgpt",
 	"openai-codex",
 	"openrouter",
-	"qoder-oauth",
 	"xai",
 ];
 
