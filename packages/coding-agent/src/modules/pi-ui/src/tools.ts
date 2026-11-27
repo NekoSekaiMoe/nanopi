@@ -69,10 +69,11 @@ const ROWS: Record<string, RowConfig> = {
       return Array.isArray(args.queries) ? `${args.queries.length} queries` : "";
     },
   },
-  web_search: {
+  web: {
     running: "Searching",
     done: "Searched",
     primary: (args) => {
+      if (args.action === "fetch" && typeof args.url === "string") return args.url;
       if (typeof args.query === "string") return args.query;
       return Array.isArray(args.queries) ? `${args.queries.length} queries` : "";
     },

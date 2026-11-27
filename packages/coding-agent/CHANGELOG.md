@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### Changed
+- The git tools are now one `git` tool with `action=status|diff|log|branch`, and `web_search`, `read_page`, and the DeepWiki tools are now one `web` tool with `action=search|fetch|wiki_structure|ask_repo`. The `pi-deepwiki` module is merged into `websearch`; `/deepwiki` now prefills a `web` call (issue [#852](https://cnb.cool/shinytale/agent/nanopi/-/issues/852))
+
 ### Removed
 
 - `/login qoder`, `/login qoder-cn` and `nanopi auth login --provider qoder*` no longer offer a browser sign-in. Set the Qoder device token through the environment instead; the Qoder API and `/qoder-checkin` stay available (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))

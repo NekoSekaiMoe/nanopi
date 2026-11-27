@@ -118,9 +118,6 @@
 		"module/pi-subagent-mini": {
 			"description": "subagent tool and child sessions"
 		},
-		"module/pi-deepwiki": {
-			"description": "DeepWiki documentation tools for public GitHub repositories"
-		},
 		"module/pi-git-tools": {
 			"description": "read-only git tools without a GitHub dependency"
 		},
@@ -143,7 +140,7 @@
 			"description": "recall_tool_result: paged recall of truncated tool output"
 		},
 		"module/websearch": {
-			"description": "web_search and read_page tools with the keyless engine chain"
+			"description": "web tool with search, page fetch and DeepWiki actions"
 		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds embedded in single-file builds (all platforms embedded; the matching one installs to the agent bin directory at startup, no network needed)"
@@ -239,9 +236,6 @@
 		"pi-subagent-mini": {
 			"source": "packages/coding-agent/src/modules/pi-subagent-mini/src/index.ts"
 		},
-		"pi-deepwiki": {
-			"source": "packages/coding-agent/src/modules/pi-deepwiki/src/index.ts"
-		},
 		"pi-git-tools": {
 			"source": "packages/coding-agent/src/modules/pi-git-tools/src/index.ts"
 		},
@@ -294,7 +288,6 @@
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
-				"module/pi-deepwiki": false,
 				"module/pi-git-tools": false,
 				"module/pi-meat": false,
 				"module/pi-output-compact": false,
@@ -328,7 +321,6 @@
 				"module/pi-simplify": false,
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
-				"module/pi-deepwiki": false,
 				"module/pi-git-tools": false,
 				"module/pi-meat": false,
 				"module/pi-output-compact": false,

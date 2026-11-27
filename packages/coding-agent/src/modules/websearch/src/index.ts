@@ -1,22 +1,17 @@
 /**
- * websearch: keyless web search and page reading for nanopi.
- *
- * Two tools, one module, no account required. `web_search` walks an engine
- * chain (Firecrawl keyless, Keenable keyless, then Tavily and Exa when keys are
- * configured) and rotates multiple keys per engine on auth, rate-limit, or
- * quota failures. `read_page` fetches one URL as markdown through the engines
- * that can fetch (Firecrawl today).
- *
- * Configuration lives in `websearch.json` next to settings.json, with env vars
- * as the fallback; see ./README.md. Credits: the keyless channels carry their
- * own monthly allowance, so a fresh install searches without a key.
+ * websearch: keyless web search and page reading for nanopi, plus DeepWiki
+ * questions about public GitHub repositories. One `web` tool keeps the engine
+ * chain and repo-grounded answers in the model's tool list without two extra
+ * tool names. Configuration lives in `websearch.json` next to settings.json,
+ * with env vars as the fallback; see ./README.md.
  */
 
-import type { ModuleApi, ModuleEventsSurface, ModuleToolsSurface, ModuleCommandsSurface } from "@nanopi/pi-coding-agent";
-import { registerWebsearchTools } from "./tools.ts";
+import type { ModuleCommandsSurface, ModuleEventsSurface, ModuleToolsSurface } from "@nanopi/pi-coding-agent";
+import { registerDeepwikiCommand, registerWebTools } from "./tools.ts";
 
-export default function websearchExtension(pi: ModuleEventsSurface &
-	ModuleToolsSurface &
-	ModuleCommandsSurface): void {
-	registerWebsearchTools(pi);
+export default function websearchExtension(
+	pi: ModuleEventsSurface & ModuleToolsSurface & ModuleCommandsSurface,
+): void {
+	registerWebTools(pi);
+	registerDeepwikiCommand(pi);
 }

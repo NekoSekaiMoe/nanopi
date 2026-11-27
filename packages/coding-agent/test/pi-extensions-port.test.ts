@@ -1,11 +1,11 @@
 /** Regression for issue #824: the pi-extensions pick keeps its pure contracts. */
 import { describe, expect, test } from "vitest";
 import { formatHostname } from "../src/core/hostname.ts";
-import { parseSseJson } from "../src/modules/pi-deepwiki/src/index.ts";
 import { parseGitLog } from "../src/modules/pi-git-tools/src/index.ts";
 import { sizeOk, splitForChunking } from "../src/modules/pi-meat/src/index.ts";
 import { buildCliArgs, parsePreferredCli } from "../src/modules/pi-subagent-mini/src/cli-adapter.ts";
 import { periodStart } from "../src/modules/pi-token-usage/src/index.ts";
+import { parseSseJson } from "../src/modules/websearch/src/deepwiki.ts";
 
 describe("pi-extensions port", () => {
 	test("hostname drops the trailing dot and DNS domain", () => {
@@ -13,7 +13,7 @@ describe("pi-extensions port", () => {
 		expect(formatHostname("host.example.com")).toBe("host");
 	});
 
-	test("deepwiki parses an SSE frame and bare JSON", () => {
+	test("DeepWiki parses an SSE frame and bare JSON", () => {
 		expect(parseSseJson('event: message\ndata: {"ok":true}\n\n')).toEqual({ ok: true });
 		expect(parseSseJson('{"ok":false}')).toEqual({ ok: false });
 	});

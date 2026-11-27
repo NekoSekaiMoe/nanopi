@@ -10,6 +10,8 @@ The port has to fit nanopi's programmatic module system: there is no extension d
 
 ## Decision
 
+> The tool surface and module split below were later superseded by [Git and web research use one name each](../simplification/2026-11-27-git-and-web-tool-merge.md) (issue #852). The constraints and non-tool decisions still hold.
+
 Each pick is a separate module rather than one combined extension, so a flavor or a `--modules` run can take a subset:
 
 - `pi-deepwiki` speaks the hosted DeepWiki MCP JSON-RPC endpoint inline. No MCP adapter. Tool awareness goes into `before_agent_start`; `/deepwiki` only prefills the editor because a command cannot start a turn by itself.

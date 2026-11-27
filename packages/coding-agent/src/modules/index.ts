@@ -18,7 +18,6 @@ import type { SessionModule } from "../core/modules/types.ts";
 import askLite from "../modules/ask-lite/index.ts";
 import mcpLite from "../modules/mcp-lite/src/index.ts";
 import piBtw from "../modules/pi-btw/src/index.ts";
-import piDeepwiki from "../modules/pi-deepwiki/src/index.ts";
 import piFakeCodex from "../modules/pi-fake-codex/src/index.ts";
 import piFakeOpencode from "../modules/pi-fake-opencode/src/index.ts";
 import piGitTools from "../modules/pi-git-tools/src/index.ts";
@@ -64,7 +63,6 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "pi-simplify", factory: piSimplify },
 	{ name: "pi-smart-flow", factory: piSmartFlow },
 	{ name: "pi-subagent-mini", factory: piSubagentMini },
-	{ name: "pi-deepwiki", factory: piDeepwiki },
 	{ name: "pi-git-tools", factory: piGitTools },
 	{ name: "pi-meat", factory: piMeat },
 	{ name: "pi-output-compact", factory: piOutputCompact },

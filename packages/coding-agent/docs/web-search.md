@@ -1,17 +1,19 @@
 # Web Search and Page Reading
 
-`web_search` and `read_page` give nanopi access to the open web without an account. Both ship in the `websearch` module and work on a fresh install: the default chain starts with Firecrawl's keyless channel, which allows a monthly free credit allowance with no sign-up.
+The `web` tool gives nanopi access to the open web and public GitHub repositories. It ships in the `websearch` module and works on a fresh install: the default chain starts with Firecrawl's keyless channel, which allows a monthly free credit allowance with no sign-up.
 
-## What the tools do
+## What the tool does
 
-- `web_search` returns ranked results (title, URL, snippet) for a query.
-- `read_page` returns one http(s) page as markdown, truncated at 60,000 characters.
+- `web` with `action=search` (default) returns ranked results (title, URL, snippet) for a query.
+- With `action=fetch`, it returns one http(s) page as markdown, truncated at 60,000 characters.
+- With `action=wiki_structure`, it lists a public GitHub repository's documentation outline via DeepWiki.
+- With `action=ask_repo`, it asks a codebase-grounded question about one or up to ten public repositories via DeepWiki.
 
-Neither tool invents an answer. Every engine returns ranked pages, so the model reads the items for evidence; Tavily's written `answer` is passed through when the provider supplies one.
+The tool does not invent an answer. Search and fetch name the engine that answered, and every search item is evidence the model can read; Tavily's written `answer` is passed through when the provider supplies one. DeepWiki errors are reported with the endpoint's status message.
 
 ## Engine chain and failover
 
-The chain is walked in order and the first engine that answers wins:
+The `search` and `fetch` actions walk the chain in order, and the first engine that answers wins:
 
 1. `firecrawl` — search and page fetch, keyless by default
 2. `keenable` — search only, keyless by default (anonymous calls are capped per IP)
@@ -74,10 +76,10 @@ A key that reports an exhausted quota is recorded in `websearch-state.json` next
 
 ## Enabling the tools
 
-`web_search` and `read_page` are `direct` tools, so a build that carries the `websearch` module activates them at session start. To keep them out of a session:
+`web` is a `direct` tool, so a build that carries the `websearch` module activates it at session start. DeepWiki actions are part of the same tool. To keep it out of a session:
 
 ```bash
-nanopi --exclude-tools web_search,read_page
+nanopi --exclude-tools web
 ```
 
 The `minimal` and `base` build flavors leave the module out entirely.

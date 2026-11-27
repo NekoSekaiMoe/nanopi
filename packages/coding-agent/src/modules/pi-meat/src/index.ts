@@ -277,7 +277,7 @@ export default function meat(pi: ModuleToolsSurface): void {
 		async execute(_id, p: Static<typeof params>, signal, _onUpdate, ctx: ModuleToolContext) {
 			if (!ctx.tools.some((tool) => tool.name === "subagent")) {
 				return {
-					content: [{ type: "text" as const, text: "meat: requires the subagent tool; use git_diff for a raw diff." }],
+					content: [{ type: "text" as const, text: "meat: requires the subagent tool; use git action=diff for a raw diff." }],
 					details: {},
 					isError: true,
 				};
