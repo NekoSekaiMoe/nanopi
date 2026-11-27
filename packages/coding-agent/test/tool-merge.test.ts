@@ -1,4 +1,4 @@
-/** Regression for issue #852: git and web actions live behind two tool names. */
+/** Regression for issues #852 and #870: git and web actions live behind two tool names, and the reading diff is a git action. */
 import { spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -22,7 +22,7 @@ function surface(): { tools: Map<string, Tool>; pi: any } {
 }
 
 function ctx(cwd = process.cwd()): any {
-	return { cwd, getAgentDir: () => cwd };
+	return { cwd, getAgentDir: () => cwd, tools: [] };
 }
 
 function git(cwd: string, args: string[]): void {
@@ -50,12 +50,45 @@ afterEach(() => {
 	while (tempRepos.length) rmSync(tempRepos.pop()!, { recursive: true, force: true });
 });
 
-describe("tool merge (issue #852)", () => {
+describe("tool merge (issues #852, #870)", () => {
 	test("registers one git tool and one web tool", () => {
 		const first = surface();
 		gitTools(first.pi as never);
 		websearch(first.pi as never);
 		expect([...first.tools.keys()]).toEqual(["git", "web"]);
+	});
+
+	test("registers no separate meat tool (issue #870)", () => {
+		const onlyGit = surface();
+		gitTools(onlyGit.pi as never);
+		expect([...onlyGit.tools.keys()]).toEqual(["git"]);
+		expect(onlyGit.tools.get("meat")).toBeUndefined();
+	});
+
+	test("git action=diff raw stays the default", async () => {
+		const repo = createRepo();
+		const { tools, pi } = surface();
+		gitTools(pi as never);
+		const gitTool = tools.get("git")!;
+		const result = await gitTool.execute("call-raw", { action: "diff" }, undefined, undefined, ctx(repo));
+		expect(result.content[0].text).toContain("git-status-fixture.txt");
+		expect(result.details.mode).toBe("raw");
+	});
+
+	test("git action=diff mode=reading needs subagent and reports it", async () => {
+		const repo = createRepo();
+		const { tools, pi } = surface();
+		gitTools(pi as never);
+		const gitTool = tools.get("git")!;
+		const result = await gitTool.execute(
+			"call-reading",
+			{ action: "diff", mode: "reading", cwd: repo },
+			undefined,
+			undefined,
+			ctx(repo),
+		);
+		expect(result.isError).toBe(true);
+		expect(result.content[0].text).toContain("requires the subagent tool");
 	});
 
 	test("git actions dispatch to status and log", async () => {

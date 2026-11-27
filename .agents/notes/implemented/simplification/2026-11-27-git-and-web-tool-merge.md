@@ -12,7 +12,7 @@ These names are not just labels in the tool list. Each one carries a repeated na
 
 ## Decision
 
-`pi-git-tools` now registers one `git` tool. `action` selects `status` (default), `diff`, `log`, or `branch`; `cwd` stays at the top level, and the fields used by only one branch (`max_lines`, `target`/`base`/`max_bytes`/`abridge`, `limit`) stay optional in the same object. `git` keeps every earlier output cap and the opt-in `abridge` path through `subagent` + `meat`.
+`pi-git-tools` now registers one `git` tool. `action` selects `status` (default), `diff`, `log`, or `branch`; `cwd` stays at the top level, and the fields used by only one branch (`max_lines`, `target`/`base`/`max_bytes`/`mode`, `limit`) stay optional in the same object. `git` keeps every earlier output cap. Issue #870 later removed the separate `meat` tool: `git action=diff` takes `mode=raw|reading`, where `reading` compiles a faithful diff from a subagent's line-coordinate plan. The compiler, chunker, rubric and import mask moved into `src/modules/pi-git-tools/src/vendor/`, and the `pi-meat` module plus its build component were deleted.
 
 `websearch` now registers one `web` tool. `action` selects `search` (default) or `fetch`. Search and fetch keep the engine chain, failover, and key cooldown. The `wiki_structure` and `ask_repo` actions, the DeepWiki JSON-RPC client, and `/deepwiki` were removed later by [Remove DeepWiki research](../simplification/2026-11-27-remove-deepwiki.md) (issue #861); the tool-merge decision of one name per capability still holds.
 
@@ -30,8 +30,8 @@ No aliases are kept. A session that remembered `git_diff` or `deepwiki_ask_quest
 
 - Active tool names for these capabilities drop from eight to two. The cost is two larger schemas: branch-only fields are no longer enforced by TypeBox per tool, so missing fields are checked in `execute` and reported as text. If action confusion shows up in tool errors or retries, split the action back into a named tool.
 - `/deepwiki` was removed later by [Remove DeepWiki research](../simplification/2026-11-27-remove-deepwiki.md) (issue #861).
-- `git` with `action=diff` and `abridge: true` still depends on `pi-subagent-mini`; without it, the raw diff is returned.
-- `packages/coding-agent/test/tool-merge.test.ts` covers the registered tool names, git dispatch, and missing-field errors.
+- `git` with `action=diff` and `mode=reading` still depends on `pi-subagent-mini`; without it, the tool reports the missing dependency instead of silently returning a raw diff. The raw mode stays available with no subagent.
+- `packages/coding-agent/test/tool-merge.test.ts` covers the registered tool names, git dispatch, reading-mode dependency error, and missing-field errors.
 
 ## Verification
 
@@ -40,4 +40,4 @@ No aliases are kept. A session that remembered `git_diff` or `deepwiki_ask_quest
 - `packages/coding-agent/test/tool-merge.test.ts` passes with five cases.
 - `packages/coding-agent/test/builtin-modules-startup.test.ts` loads the built-in set without startup errors.
 
-The earlier [pi-extensions port note](../feature/2026-11-26-pi-extensions-port.md) owns the original module split. Its tool-surface decisions are superseded by this note; its constraints about subagents, CLI aliases, and output compaction still stand.
+The earlier [pi-extensions port note](../feature/2026-11-26-pi-extensions-port.md) owns the original module split. Its tool-surface decisions are superseded by this note; its constraints about subagents, CLI aliases, and output compaction still stand. The [meat merge note](../simplification/2026-11-28-meat-merged-into-git.md) (issue #870) supersedes the tool split between git and meat.

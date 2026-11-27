@@ -1,8 +1,7 @@
 /** Regression for issue #824: the pi-extensions pick keeps its pure contracts. */
 import { describe, expect, test } from "vitest";
 import { formatHostname } from "../src/core/hostname.ts";
-import { parseGitLog } from "../src/modules/pi-git-tools/src/index.ts";
-import { sizeOk, splitForChunking } from "../src/modules/pi-meat/src/index.ts";
+import { parseGitLog, sizeOk, splitForChunking } from "../src/modules/pi-git-tools/src/index.ts";
 import { buildCliArgs, parsePreferredCli } from "../src/modules/pi-subagent-mini/src/cli-adapter.ts";
 import { periodStart } from "../src/modules/pi-token-usage/src/index.ts";
 
