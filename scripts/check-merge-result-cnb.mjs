@@ -78,6 +78,11 @@ execFileSync("git", ["merge", "--no-edit", "refs/remotes/pr/head"], {
 
 const description = pullRequestDescription();
 const checkArgs = [CHECK];
+// CNB 的 pull_request.target 事件带着合并前目标分支的 tip。显式传给判定脚本，
+// 这样即使 PR 分支把 base 合进了自己（合并提交里有两条父链），基线仍是目标分支，
+// 不会靠「第一父」猜错方向（#880）。
+const targetSha = process.env.CNB_PULL_REQUEST_TARGET_SHA;
+if (targetSha) checkArgs.push("--base", targetSha);
 if (description) {
 	const file = join(mkdtempSync(join(tmpdir(), "pr-desc-")), "description.md");
 	writeFileSync(file, description);

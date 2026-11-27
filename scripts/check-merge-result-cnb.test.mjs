@@ -138,6 +138,37 @@ test("a deletes: claim in CNB_PULL_REQUEST_DESC excuses the deletion", async (t)
 	assert.match(result.stdout, /accounted for/);
 });
 
+// #880：PR 分支把目标分支合进了自己（第一父是分支侧），CNB 工作树里必须先
+// fetch 目标分支的最新提交，再用 CNB_PULL_REQUEST_TARGET_SHA 显式指定基线。
+test("a target SHA from the event keeps the base when the PR merged base into itself", async (t) => {
+	const { root, remote, seed } = await fixture(t, "merged-base");
+	git(seed, ["checkout", "--quiet", "-b", "pr"]);
+	writeFileSync(join(seed, "b.txt"), "two\n");
+	git(seed, ["add", "b.txt"]);
+	git(seed, ["commit", "-q", "--no-gpg-sign", "-m", "add b"]);
+	pushBranch(root, seed, remote, "pr");
+
+	// 目标分支往前走一格，PR 分支随后把它合进来，制造错误的第一父。
+	git(seed, ["checkout", "--quiet", "main"]);
+	writeFileSync(join(seed, "c.txt"), "three\n");
+	git(seed, ["add", "c.txt"]);
+	git(seed, ["commit", "-q", "--no-gpg-sign", "-m", "add c on main"]);
+	git(seed, ["push", "--quiet", remote, "main:refs/heads/main"]);
+	const targetSha = git(seed, ["rev-parse", "HEAD"]);
+	git(seed, ["checkout", "--quiet", "pr"]);
+	git(seed, ["merge", "-q", "--no-edit", "--no-gpg-sign", "main"]);
+	pushBranch(root, seed, remote, "pr");
+
+	const cwd = checkoutMain(t, root, remote, "work");
+	const result = run(cwd, {
+		CNB_PULL_REQUEST_BRANCH: "pr",
+		CNB_PULL_REQUEST_TARGET_SHA: targetSha,
+	});
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
+	assert.doesNotMatch(result.stderr, /drops \d+ file/);
+});
+
 test("a missing CNB_PULL_REQUEST_BRANCH exits 2 instead of passing", async (t) => {
 	const { root, remote } = await fixture(t, "unset");
 	const cwd = checkoutMain(t, root, remote, "work");
