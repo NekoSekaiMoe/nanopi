@@ -32,6 +32,11 @@ const CALLBACK_PATH = "/auth/callback";
 const REDIRECT_URI = `http://127.0.0.1:${CALLBACK_PORT}${CALLBACK_PATH}`;
 const DIRECT_TOKEN_SCOPE = "chatgpt.tokens.use.direct";
 const SCOPE = `openid profile email offline_access resource.invoke ${DIRECT_TOKEN_SCOPE}`;
+// ChatGPT appends this allowlisted suffix to the `state` it echoes on some sign-ins (for example
+// when the account came from a life-sciences onboarding entry point). OpenAI's own CLI accepts and
+// strips it before comparing; any other suffix is still a state mismatch.
+// See https://cnb.cool/shinytale/agent/nanopi/-/issues/854.
+const ONBOARDING_STATE_SUFFIX = ".onboarding_entrypoint=life_sciences";
 // Refresh this long before the real expiry so a request never starts with a token about to expire.
 const EXPIRY_MARGIN_MS = 3 * 60 * 1000;
 
@@ -67,7 +72,9 @@ function authorizationResultFromCallback(
 	if (!code) throw new Error("Missing authorization code");
 	const state = url.searchParams.get("state");
 	if (!state) throw new Error("Missing OAuth state");
-	if (state !== expectedState) throw new Error("OAuth state mismatch");
+	if (state !== expectedState && state !== expectedState + ONBOARDING_STATE_SUFFIX) {
+		throw new Error("OAuth state mismatch");
+	}
 	const callbackClientId = url.searchParams.get("client_id")?.trim();
 	if (expectedClientId === undefined) {
 		// Dynamic registration: the callback carries the newly issued client ID.
