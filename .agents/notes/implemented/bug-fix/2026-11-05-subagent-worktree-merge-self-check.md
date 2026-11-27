@@ -28,7 +28,7 @@ instead, so a half-finished tree never lands in the main checkout」——失败
 
 ## Decision
 
-合并之前先过三道闸，实现在 `packages/coding-agent/src/extras/pi-subagent-mini/src/worktree.ts`
+合并之前先过三道闸，实现在 `packages/coding-agent/src/modules/pi-subagent-mini/src/worktree.ts`
 的 `mergeWorktree`：
 
 - `git status --porcelain` 在主 checkout 上必须为空。否则 `merge` 会把父 agent 未提交

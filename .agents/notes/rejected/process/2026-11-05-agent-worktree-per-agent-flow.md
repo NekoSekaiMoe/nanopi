@@ -8,7 +8,7 @@ ISSUE #501（承自 shinytale/nanopi#499 的后续）里已经否掉整包吸收
 
 这条形态不能当全局规则写下来的原因，是它把三件已经各自成立的事拼成了一套强制流程：
 
-- **worktree 隔离**：`pi-subagent-mini` 的 `isolated: true` 已经是 `git worktree add -b subagent/<jobId>`（`packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts` 的 `createWorktree`），建、删都由工具负责，模型不用自己发明目录。
+- **worktree 隔离**：`pi-subagent-mini` 的 `isolated: true` 已经是 `git worktree add -b subagent/<jobId>`（`packages/coding-agent/src/modules/pi-subagent-mini/src/index.ts` 的 `createWorktree`），建、删都由工具负责，模型不用自己发明目录。
 - **review 完修完再合并**：在 nanopi 里这就是 PR：worktree 一条分支 → PR → 评审 → 改 → 合。平台已经有这条路径。
 - **体检前再检查一遍**：`.husky/pre-commit` 已经跑 `pnpm run check`，`.husky/commit-msg` 补 `Change-Id` / `Signed-off-by`。再加一道同名检查等于第三次跑同一批命令。
 

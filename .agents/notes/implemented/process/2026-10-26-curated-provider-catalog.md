@@ -52,7 +52,7 @@ revision of this note shipped them no data, on the reading that "Zen" was a
 reseller. The install base says otherwise: `opencode` is the default vendor
 people reach for after the first-party assistants, its catalog carries the free
 tier (`*-free` ids with the literal `public` key), and the client fingerprint in
-`packages/coding-agent/src/extras/pi-fake-opencode` only unlocks that tier for a
+`packages/coding-agent/src/modules/pi-fake-opencode` only unlocks that tier for a
 model whose provider is `opencode`/`opencode-go` or whose base URL is
 `opencode.ai`. Leaving them out forced a hand-written `models.json` for the one
 vendor the built-in integration exists to serve. The two catalogs are 68 KiB

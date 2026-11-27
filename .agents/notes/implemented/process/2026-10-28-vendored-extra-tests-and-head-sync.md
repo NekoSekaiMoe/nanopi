@@ -39,12 +39,13 @@ the adaptations the rebrand needs, and make the deltas re-checkable:
   with the upstream files-only quick-rewind body.
 - pi-simplify keeps only the `ModuleApi` renames, plus the upstream
   `git-diff.test.ts`, its own `vitest.config.ts` (the workspace config
-  excludes `extras/**`), and exact-pinned `vitest`/`@types/node`
+  excludes `modules/<vendored-name>/**`), and exact-pinned `vitest`/`@types/node`
   `devDependencies` matching the rest of the repo, so `pnpm run test:scripts`
   and a plain `vitest --run` in that directory both work.
 - `packages/coding-agent/tsconfig.build.json` excludes
-  `src/extras/**/*.test.ts` and `src/extras/**/vitest.config.ts`, the same way
-  it already excluded `extras/**/__tests__/**`. Without the exclusion,
+  `src/modules/<vendored-name>/**/*.test.ts` and
+  `src/modules/<vendored-name>/**/vitest.config.ts`, the same way it already
+  excluded `modules/<vendored-name>/**/__tests__/**`. Without the exclusion,
   `check-runtime-deps` reports `vitest` as an undeclared runtime import of
   `@nanopi/pi-coding-agent` (an extra's test file is not part of any public
   package's runtime).
@@ -55,7 +56,7 @@ the adaptations the rebrand needs, and make the deltas re-checkable:
   fixes.** Rejected earlier for the plugin system removal, and the extras are
   compiled-in modules (`src/modules/index.ts`), not installable packages.
 - **Add `vitest` to coding-agent `devDependencies` and let the vendored tests
-  run in the workspace suite.** Rejected: `extras/**` is excluded from the
+  run in the workspace suite.** Rejected: `modules/<vendored-name>/**` is excluded from the
   workspace config on purpose (vendored snapshots are not first-party suites);
   a nested config keeps that boundary intact.
 - **Keep upstream's inline `import("@mariozechner/pi-coding-agent")` type in

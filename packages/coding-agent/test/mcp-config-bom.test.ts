@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { loadMcpConfig } from "../src/extras/mcp-lite/src/config.ts";
+import { loadMcpConfig } from "../src/modules/mcp-lite/src/config.ts";
 
 describe("mcp-lite config", () => {
 	const roots: string[] = [];

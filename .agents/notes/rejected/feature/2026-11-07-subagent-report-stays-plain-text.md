@@ -5,7 +5,7 @@ Status: rejected — 用户判断：现阶段不改。子代理只回最后一�
 ## Problem
 
 `pi-subagent-mini` 的回传路径是：子进程把每轮消息以 NDJSON 打到 stdout，父进程只留最后一轮的
-assistant 文本（`packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts:638` 的 `lastAssistant`），
+assistant 文本（`packages/coding-agent/src/modules/pi-subagent-mini/src/index.ts:638` 的 `lastAssistant`），
 job 结束时写进 `finalOutput`（`:661`），失败信息走 `errorMessage`（`:778`）。
 
 所以父会话拿到的是「一段话」，不是「符合某个 schema 的对象」。omp 那侧有子代理带回结构化对象的做法，

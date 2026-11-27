@@ -26,7 +26,7 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "..");
 const cliPath = join(repoRoot, "packages", "coding-agent", "dist", "bundle", "cli.js");
-const skipSource = join(repoRoot, "packages", "coding-agent", "src", "extras", "pi-subagent-mini", "src", "index.ts");
+const skipSource = join(repoRoot, "packages", "coding-agent", "src", "modules", "pi-subagent-mini", "src", "index.ts");
 
 /** Modules a child must not load, read from the source of truth in pi-subagent-mini. */
 function readChildModuleSkip() {

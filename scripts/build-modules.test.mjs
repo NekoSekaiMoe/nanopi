@@ -27,9 +27,9 @@ afterEach(() => {
 
 describe("specifierFor", () => {
 	it("maps a source path to the compiled import relative to the importer", () => {
-		const source = join(srcDir, "extras", "ask-lite", "index.ts");
-		strictEqual(specifierFor(srcDir, source, 1), "../extras/ask-lite/index.js");
-		strictEqual(specifierFor(srcDir, source, 2), "../../extras/ask-lite/index.js");
+		const source = join(srcDir, "modules", "ask-lite", "index.ts");
+		strictEqual(specifierFor(srcDir, source, 1), "../modules/ask-lite/index.js");
+		strictEqual(specifierFor(srcDir, source, 2), "../../modules/ask-lite/index.js");
 	});
 
 	it("maps a workspace package source to its own relative path", () => {
@@ -39,8 +39,8 @@ describe("specifierFor", () => {
 
 describe("createModuleStubPlugin", () => {
 	const modules = [
-		{ name: "ask-lite", specifiers: ["../extras/ask-lite/index.js"] },
-		{ name: "pi-ui", specifiers: ["../extras/pi-ui/src/index.js"] },
+		{ name: "ask-lite", specifiers: ["../modules/ask-lite/index.js"] },
+		{ name: "pi-ui", specifiers: ["../modules/pi-ui/src/index.js"] },
 	];
 
 	it("leaves every module alone when the flavor keeps them all", () => {
@@ -60,10 +60,10 @@ describe("createModuleStubPlugin", () => {
 			components: { "module/ask-lite": false, "module/pi-ui": true },
 		});
 		strictEqual(disabled.join(","), "ask-lite");
-		const resolved = resolveWith(plugin, "../extras/ask-lite/index.js");
+		const resolved = resolveWith(plugin, "../modules/ask-lite/index.js");
 		strictEqual(resolved.path, join(dir, "module-0.mjs"));
 		strictEqual(readFileSync(resolved.path, "utf8").includes("export default function noopModule"), true);
 		// An enabled module keeps its real import.
-		strictEqual(resolveWith(plugin, "../extras/pi-ui/src/index.js"), undefined);
+		strictEqual(resolveWith(plugin, "../modules/pi-ui/src/index.js"), undefined);
 	});
 });

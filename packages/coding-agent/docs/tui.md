@@ -111,6 +111,6 @@ Use `NANOPI_TUI_WRITE_LOG` to capture the raw ANSI stream when diagnosing render
 
 ## Examples and source
 
-The compiled-in modules in `packages/coding-agent/src/extras/` are the worked examples: `pi-ui` uses widgets, status lines, and footers, `ask-lite` a dialog, `todo-lite` custom tool rendering. They register through the same `ModuleApi` a user module gets.
+The compiled-in modules in `packages/coding-agent/src/modules/` are the worked examples: `pi-ui` uses widgets, status lines, and footers, `ask-lite` a dialog, `todo-lite` custom tool rendering. They register through the same `ModuleApi` a user module gets.
 
 The public exports are defined in [`packages/tui/src/index.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/tui/src/index.ts). See [SDK modules](sdk.md) for module lifecycle, state, tools, events, and mode behavior.

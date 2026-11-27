@@ -73,5 +73,5 @@ Status: implemented
 - `node -e "JSON.parse(require('fs').readFileSync('renovate.json','utf8'))"` 通过。
 - `node scripts/check-pinned-deps.mjs`、`node scripts/check-renovate-release-age.mjs` 在当前
   树上退出码 0（两者都不读 `rangeStrategy`，这里是确认没被连带改坏）。
-- 逐个检查 `package.json`（7 个工作区包 + `src/extras/*`）：直接外部依赖全部是精确版本，
+- 逐个检查 `package.json`（7 个工作区包 + `src/modules/*`）：直接外部依赖全部是精确版本，
   所以 `rangeStrategy: "replace"` 的实际输出就是原样替换，不会引入 `^`。

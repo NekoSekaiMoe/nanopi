@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ModuleApi, ToolDefinition } from "../../../src/core/modules/types.ts";
 import { SessionManager } from "../../../src/core/session-manager.ts";
-import subagentMini from "../../../src/extras/pi-subagent-mini/src/index.ts";
+import subagentMini from "../../../src/modules/pi-subagent-mini/src/index.ts";
 import { createHarness, createTestUiContext, type Harness } from "../harness.ts";
 
 /**

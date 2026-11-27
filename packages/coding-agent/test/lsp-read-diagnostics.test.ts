@@ -2,15 +2,15 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
-import { collectReadDiagnostics } from "../src/extras/pi-lsp-mini/src/read-diagnostics.ts";
-import { DEFAULT_READ_DIAGNOSTICS, loadReadDiagnosticsSettings } from "../src/extras/pi-lsp-mini/src/settings.ts";
+import { LspManager } from "../src/modules/pi-lsp-mini/src/manager.ts";
+import { collectReadDiagnostics } from "../src/modules/pi-lsp-mini/src/read-diagnostics.ts";
+import { DEFAULT_READ_DIAGNOSTICS, loadReadDiagnosticsSettings } from "../src/modules/pi-lsp-mini/src/settings.ts";
 
 const FAKE_SERVER = join(
 	import.meta.dirname,
 	"..",
 	"src",
-	"extras",
+	"modules",
 	"pi-lsp-mini",
 	"src",
 	"__tests__",

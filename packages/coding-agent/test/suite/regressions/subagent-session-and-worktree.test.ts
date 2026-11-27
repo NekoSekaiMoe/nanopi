@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModuleApi, ToolDefinition } from "../../../src/core/modules/types.ts";
-import subagentMini from "../../../src/extras/pi-subagent-mini/src/index.ts";
+import subagentMini from "../../../src/modules/pi-subagent-mini/src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 /**
@@ -242,7 +242,7 @@ describe("subagent worktree merge self-check", () => {
 	});
 
 	it("returns the changed-file list and the gate outcome to the caller", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		stubCheck(repo, 0);
@@ -279,7 +279,7 @@ describe("subagent worktree merge self-check", () => {
 	// #504: the gate used to run in the main checkout, so it reported the state of
 	// commits that had already merged and passed every branch, broken or not.
 	it("runs the check in the job's worktree, not in the main checkout", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		stubCheck(repo, 0);
@@ -308,7 +308,7 @@ describe("subagent worktree merge self-check", () => {
 	});
 
 	it("refuses to merge while the main checkout has uncommitted changes", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-dirty`);
@@ -328,7 +328,7 @@ describe("subagent worktree merge self-check", () => {
 	});
 
 	it("refuses to merge a branch whose check fails, and keeps the tree", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-fail`);
@@ -349,7 +349,7 @@ describe("subagent worktree merge self-check", () => {
 	// #504: a conflicted merge used to leave `.git/MERGE_HEAD` behind, and every later
 	// git command in the main checkout then refused to run until the user aborted it.
 	it("aborts a conflicted merge instead of leaving the main checkout mid-merge", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-conflict`);
@@ -372,7 +372,7 @@ describe("subagent worktree merge self-check", () => {
 	});
 
 	it("treats a directory without package.json as no gate, not as a failure", async () => {
-		const { mergeWorktree } = await import("../../../src/extras/pi-subagent-mini/src/worktree.ts");
+		const { mergeWorktree } = await import("../../../src/modules/pi-subagent-mini/src/worktree.ts");
 		const repo = createRepo();
 		cleanups.push(() => rmSync(repo, { recursive: true, force: true }));
 		const worktree = resolve(tmpdir(), `.${basename(repo)}-subagent-merge-nogate`);
@@ -392,7 +392,7 @@ describe("subagent worktree merge self-check", () => {
 describe("subagent child argv", () => {
 	it("a child is never launched with --no-session", () => {
 		const source = readFileSync(
-			join(import.meta.dirname, "../../../src/extras/pi-subagent-mini/src/index.ts"),
+			join(import.meta.dirname, "../../../src/modules/pi-subagent-mini/src/index.ts"),
 			"utf8",
 		);
 		expect(source).not.toContain('"--no-session"');

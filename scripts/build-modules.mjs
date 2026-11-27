@@ -6,7 +6,7 @@
  * has to keep its code out of the bundle. Two pieces of work:
  *
  * - `specifierFor(packageDir, path)` turns a source path in buildconfig.json
- *   into the specifier the build has to intercept (`../extras/todo-lite/index.ts`).
+ *   into the specifier the build has to intercept (`../modules/todo-lite/index.ts`).
  *   buildconfig.json lists those paths in its top-level `moduleBundles`, and
  *   validateFlavorModules() cross-checks them against the module names.
  * - `moduleStubPlugin` aliases the disabled ones to a generated file exporting
@@ -34,8 +34,8 @@ export function specifierFor(codingAgentSrcDir, absolutePath, importerDepth = 1)
 	if (!relativePath.endsWith(".ts")) return undefined;
 	const compiled = `${relativePath.slice(0, -3)}.js`;
 	// The modules barrel sits one directory below src, so its imports read
-	// `../extras/x/index.js`; an importer at the src root writes
-	// `./extras/x/index.js`. Both are the same file, so both get a stub.
+	// `../modules/x/index.js`; an importer at the src root writes
+	// `./modules/x/index.js`. Both are the same file, so both get a stub.
 	return `${"../".repeat(importerDepth)}${compiled}`;
 }
 

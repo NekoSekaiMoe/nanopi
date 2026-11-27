@@ -3,10 +3,10 @@
 // the model as `(no input)` — read as "answered, but empty".
 import { getKeybindings } from "@nanopi/pi-tui";
 import { describe, expect, test } from "vitest";
-import { routeKey } from "../src/extras/ask-lite/state/key-router.ts";
-import type { QuestionnaireRuntime, QuestionnaireState } from "../src/extras/ask-lite/state/state.ts";
-import type { QuestionData } from "../src/extras/ask-lite/tool/types.ts";
-import type { WrappingSelectItem } from "../src/extras/ask-lite/view/components/wrapping-select.ts";
+import { routeKey } from "../src/modules/ask-lite/state/key-router.ts";
+import type { QuestionnaireRuntime, QuestionnaireState } from "../src/modules/ask-lite/state/state.ts";
+import type { QuestionData } from "../src/modules/ask-lite/tool/types.ts";
+import type { WrappingSelectItem } from "../src/modules/ask-lite/view/components/wrapping-select.ts";
 
 const ENTER = "\r";
 

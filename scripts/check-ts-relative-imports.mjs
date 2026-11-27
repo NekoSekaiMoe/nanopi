@@ -12,12 +12,37 @@ import {
 } from "typescript/unstable/ast/is";
 import { API } from "typescript/unstable/sync";
 
-// "extras" holds vendored bundled extras (packages/coding-agent/src/extras):
-// third-party sources whose ./x.js specifiers are outside this rule.
-const ignoredDirectories = new Set([".git", ".next", "coverage", "dist", "node_modules", "out", "extras"]);
+// Bundled modules are vendored snapshots under src/modules/<name>. Each
+// subtree keeps upstream ./x.js specifiers, outside this rule. The list
+// must cover every vendored subtree; first-party modules stay checked.
+const vendoredModulePaths = new Set([
+	"packages/coding-agent/src/modules/ask-lite",
+	"packages/coding-agent/src/modules/mcp-lite",
+	"packages/coding-agent/src/modules/pi-btw",
+	"packages/coding-agent/src/modules/pi-deepwiki",
+	"packages/coding-agent/src/modules/pi-fake-codex",
+	"packages/coding-agent/src/modules/pi-fake-opencode",
+	"packages/coding-agent/src/modules/pi-git-tools",
+	"packages/coding-agent/src/modules/pi-image",
+	"packages/coding-agent/src/modules/pi-lsp-mini",
+	"packages/coding-agent/src/modules/pi-meat",
+	"packages/coding-agent/src/modules/pi-memory",
+	"packages/coding-agent/src/modules/pi-output-compact",
+	"packages/coding-agent/src/modules/pi-rewind",
+	"packages/coding-agent/src/modules/pi-simplify",
+	"packages/coding-agent/src/modules/pi-smart-flow",
+	"packages/coding-agent/src/modules/pi-subagent-mini",
+	"packages/coding-agent/src/modules/pi-token-usage",
+	"packages/coding-agent/src/modules/pi-ui",
+	"packages/coding-agent/src/modules/todo-lite",
+	"packages/coding-agent/src/modules/tool-result-store",
+	"packages/coding-agent/src/modules/websearch",
+]);
+const ignoredDirectories = new Set([".git", ".next", "coverage", "dist", "node_modules", "out"]);
 const files = [];
 
 function collectTypescriptFiles(directory) {
+	if (vendoredModulePaths.has(directory.replaceAll("\\", "/"))) return;
 	for (const entry of readdirSync(directory, { withFileTypes: true })) {
 		if (entry.isDirectory()) {
 			if (!ignoredDirectories.has(entry.name)) {

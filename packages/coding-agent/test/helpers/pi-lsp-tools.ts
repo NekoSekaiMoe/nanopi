@@ -2,14 +2,14 @@ import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ModuleApi, ModuleToolContext, ToolDefinition } from "../../src/core/modules/types.ts";
-import lspMiniExtension from "../../src/extras/pi-lsp-mini/src/index.ts";
+import lspMiniExtension from "../../src/modules/pi-lsp-mini/src/index.ts";
 
 export const FAKE_SERVER = join(
 	import.meta.dirname,
 	"..",
 	"..",
 	"src",
-	"extras",
+	"modules",
 	"pi-lsp-mini",
 	"src",
 	"__tests__",

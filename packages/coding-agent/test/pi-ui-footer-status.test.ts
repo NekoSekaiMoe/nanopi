@@ -2,7 +2,7 @@ import { visibleWidth } from "@nanopi/pi-tui";
 import { describe, expect, test } from "vitest";
 import type { ReadonlyFooterDataProvider } from "../src/core/footer-data-provider.ts";
 import type { ModuleContext } from "../src/core/modules/types.ts";
-import { renderStatusSuffix, renderToolbarLine } from "../src/extras/pi-ui/src/footer.ts";
+import { renderStatusSuffix, renderToolbarLine } from "../src/modules/pi-ui/src/footer.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 /** Plain theme: no ANSI wrapping, so width math is plain text width. */

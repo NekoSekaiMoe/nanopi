@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ModuleApi, ToolDefinition } from "../../../src/core/modules/types.ts";
-import subagentMini from "../../../src/extras/pi-subagent-mini/src/index.ts";
+import subagentMini from "../../../src/modules/pi-subagent-mini/src/index.ts";
 import { createHarness, type Harness } from "../harness.ts";
 
 /**

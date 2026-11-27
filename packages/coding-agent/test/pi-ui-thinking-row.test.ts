@@ -1,8 +1,8 @@
 import { Markdown } from "@nanopi/pi-tui";
 import { describe, expect, test } from "vitest";
 import type { AssistantMessageRenderContext } from "../src/core/modules/types.ts";
-import { installThinkingDisplay } from "../src/extras/pi-ui/src/thinking.ts";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+import { installThinkingDisplay } from "../src/modules/pi-ui/src/thinking.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 /**

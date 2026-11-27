@@ -2,22 +2,22 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createBudget } from "../src/extras/pi-lsp-mini/src/budget.ts";
-import { DEFAULT_SETTINGS, resetServersCache } from "../src/extras/pi-lsp-mini/src/config.ts";
-import { clampHover, hoverText } from "../src/extras/pi-lsp-mini/src/hover.ts";
-import { LspManager } from "../src/extras/pi-lsp-mini/src/manager.ts";
+import { createBudget } from "../src/modules/pi-lsp-mini/src/budget.ts";
+import { DEFAULT_SETTINGS, resetServersCache } from "../src/modules/pi-lsp-mini/src/config.ts";
+import { clampHover, hoverText } from "../src/modules/pi-lsp-mini/src/hover.ts";
+import { LspManager } from "../src/modules/pi-lsp-mini/src/manager.ts";
 import {
 	findByName,
 	locateInText,
 	resolveTarget,
 	snapToIdentifier,
-} from "../src/extras/pi-lsp-mini/src/symbol-target.ts";
+} from "../src/modules/pi-lsp-mini/src/symbol-target.ts";
 
 const FAKE_SERVER = join(
 	import.meta.dirname,
 	"..",
 	"src",
-	"extras",
+	"modules",
 	"pi-lsp-mini",
 	"src",
 	"__tests__",

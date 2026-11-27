@@ -1,12 +1,12 @@
 import { getKeybindings } from "@nanopi/pi-tui";
 import { describe, expect, test } from "vitest";
-import { buildQuestionnaire } from "../src/extras/ask-lite/state/build-questionnaire.ts";
-import { routeKey } from "../src/extras/ask-lite/state/key-router.ts";
-import type { QuestionnaireState } from "../src/extras/ask-lite/state/state.ts";
-import type { QuestionData } from "../src/extras/ask-lite/tool/types.ts";
-import { MAX_VISIBLE_OPTIONS } from "../src/extras/ask-lite/view/components/option-list-view.ts";
-import type { WrappingSelectItem } from "../src/extras/ask-lite/view/components/wrapping-select.ts";
 import { Theme, type ThemeBg, type ThemeColor } from "../src/modes/interactive/theme/theme.ts";
+import { buildQuestionnaire } from "../src/modules/ask-lite/state/build-questionnaire.ts";
+import { routeKey } from "../src/modules/ask-lite/state/key-router.ts";
+import type { QuestionnaireState } from "../src/modules/ask-lite/state/state.ts";
+import type { QuestionData } from "../src/modules/ask-lite/tool/types.ts";
+import { MAX_VISIBLE_OPTIONS } from "../src/modules/ask-lite/view/components/option-list-view.ts";
+import type { WrappingSelectItem } from "../src/modules/ask-lite/view/components/wrapping-select.ts";
 
 const PAGE_DOWN = "\u001b[6~";
 

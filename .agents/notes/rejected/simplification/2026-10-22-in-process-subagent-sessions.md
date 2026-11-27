@@ -4,7 +4,7 @@ Status: rejected — 实测父进程内多挂一份会话状态只要 ~1 MiB 匿
 
 ## Problem
 
-`pi-subagent-mini` 的每个子代理是一个独立的 node 进程（`packages/coding-agent/src/extras/pi-subagent-mini/src/index.ts` 的 `resolveChildCommand` + `launch` 里的 `spawn`）。#161 里提出的疑问是：既然每个子进程都要背一整个 node 运行时，能不能把子会话改成进程内，像 peri 那样「一个进程 = 主 Agent + 进程内 SubAgent」，把内存从「按进程数乘」变成「在父进程上叠会话数据」？
+`pi-subagent-mini` 的每个子代理是一个独立的 node 进程（`packages/coding-agent/src/modules/pi-subagent-mini/src/index.ts` 的 `resolveChildCommand` + `launch` 里的 `spawn`）。#161 里提出的疑问是：既然每个子进程都要背一整个 node 运行时，能不能把子会话改成进程内，像 peri 那样「一个进程 = 主 Agent + 进程内 SubAgent」，把内存从「按进程数乘」变成「在父进程上叠会话数据」？
 
 这个提案要成立，必须先证明省下的内存是真的。省不出来，剩下的就只有代价。
 

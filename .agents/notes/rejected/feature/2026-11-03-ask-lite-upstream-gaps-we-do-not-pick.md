@@ -4,7 +4,7 @@ Status: rejected — 用户判断：六条都先不做。核对中发现的三�
 
 ## Problem
 
-`packages/coding-agent/src/extras/ask-lite` 是 vendored 的 `juicesharp/rpiv-mono` 的
+`packages/coding-agent/src/modules/ask-lite` 是 vendored 的 `juicesharp/rpiv-mono` 的
 `rpiv-ask-user-question`，停在 1.20.0，上游已经到 2.15.0。逐条对 changelog 后，有 6 条我们没跟：
 
 1. 会话历史里的 compact receipt（2.14.2）

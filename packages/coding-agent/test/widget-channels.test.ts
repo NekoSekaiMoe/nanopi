@@ -7,8 +7,8 @@ import type {
 	ModuleWidgetDraw,
 } from "../src/core/modules/types.ts";
 import { WidgetChannelHost } from "../src/core/modules/widget-channels.ts";
-import { SUBAGENT_CHANNEL } from "../src/extras/shared-channels.ts";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+import { SUBAGENT_CHANNEL } from "../src/modules/shared-channels.ts";
 import { createTestUiContext } from "./suite/harness.ts";
 
 interface Rows {

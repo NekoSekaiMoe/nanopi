@@ -339,7 +339,7 @@ const narrowOpenAIClientPlugin = createNarrowOpenAIClientPlugin({
 	enabled: narrowOpenAIClient,
 });
 const plugins = [
-	// The bundled extras import the SDK by package name (see selfReferencePlugin).
+	// The bundled modules import the SDK by package name (see selfReferencePlugin).
 	selfReferencePlugin({ packageName: packageName, packageDir: codingAgentDir }),
 	narrowOpenAIClientPlugin,
 	apiStubPlugin,

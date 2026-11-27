@@ -24,7 +24,7 @@
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/NekoSekaiMoe/nanopi.git",
-		"directory": "packages/coding-agent/extras/mcp-lite"
+		"directory": "packages/coding-agent/src/modules/mcp-lite"
 	},
 	"files": [
 		"src/",
