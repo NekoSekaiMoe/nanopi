@@ -21,7 +21,6 @@ import piDeepwiki from "../extras/pi-deepwiki/src/index.ts";
 import piFakeCodex from "../extras/pi-fake-codex/src/index.ts";
 import piFakeOpencode from "../extras/pi-fake-opencode/src/index.ts";
 import piGitTools from "../extras/pi-git-tools/src/index.ts";
-import piHostname from "../extras/pi-hostname/src/index.ts";
 import piImage from "../extras/pi-image/src/index.ts";
 import piLspMini from "../extras/pi-lsp-mini/src/index.ts";
 import piMeat from "../extras/pi-meat/src/index.ts";
@@ -70,7 +69,6 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "pi-smart-flow", factory: piSmartFlow },
 	{ name: "pi-subagent-mini", factory: piSubagentMini },
 	{ name: "pi-deepwiki", factory: piDeepwiki },
-	{ name: "pi-hostname", factory: piHostname },
 	{ name: "pi-git-tools", factory: piGitTools },
 	{ name: "pi-meat", factory: piMeat },
 	{ name: "pi-output-compact", factory: piOutputCompact },
