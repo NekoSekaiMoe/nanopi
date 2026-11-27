@@ -3,9 +3,9 @@
 This reference describes automatic compaction, branch summarization, persisted entries, and the module events around them. For the user workflow, see [Sessions and Context](sessions.md#manage-conversation-context).
 
 **Source files** ([nanopi](https://github.com/NekoSekaiMoe/nanopi)):
-- [`packages/coding-agent/src/core/compaction/compaction.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) - Auto-compaction logic
-- [`packages/coding-agent/src/core/compaction/branch-summarization.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts) - Branch summarization
-- [`packages/coding-agent/src/core/compaction/utils.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils.ts) - Shared utilities (file tracking, serialization)
+- [`packages/coding-agent/src/core/compaction/compaction-core.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction-core.ts) - Auto-compaction logic
+- [`packages/coding-agent/src/core/compaction/branch-summarization-core.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization-core.ts) - Branch summarization
+- [`packages/coding-agent/src/core/compaction/utils-core.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils-core.ts) - Shared utilities (file tracking, serialization)
 - [`packages/coding-agent/src/core/session-store.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-store.ts) - Entry types (`CompactionEntry`, `BranchSummaryEntry`, `SessionEntry`)
 - [`packages/coding-agent/src/core/session-manager.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/session-manager.ts) - Session file I/O over those entries
 - [`packages/coding-agent/src/core/modules/types.ts`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/modules/types.ts) - Module event types
@@ -191,7 +191,7 @@ interface CompactionDetails {
 
 Modules can store any JSON-serializable data in `details`. The default compaction tracks file operations, but a custom implementation can use its own structure. Generated and module-provided summaries store their LLM `usage` when available so session totals include summarization work.
 
-See [`prepareCompaction()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) and [`compact()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction.ts) for the implementation. For direct programmatic summarization, `generateSummary()` returns the summary text and `generateSummaryWithUsage()` returns `{ text, usage }`.
+See [`prepareCompaction()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction-core.ts) and [`compact()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/compaction-core.ts) for the implementation. For direct programmatic summarization, `generateSummary()` returns the summary text and `generateSummaryWithUsage()` returns `{ text, usage }`.
 
 ## Branch Summarization
 
@@ -256,7 +256,7 @@ interface BranchSummaryDetails {
 
 Same as compaction, modules can store custom data in `details`.
 
-See [`collectEntriesForBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts), [`prepareBranchEntries()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts), and [`generateBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization.ts) for the implementation.
+See [`collectEntriesForBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization-core.ts), [`prepareBranchEntries()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization-core.ts), and [`generateBranchSummary()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/branch-summarization-core.ts) for the implementation.
 
 ## Summary Format
 
@@ -302,7 +302,7 @@ path/to/changed.ts
 
 ### Message Serialization
 
-Before summarization, messages are serialized to text via [`serializeConversation()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils.ts):
+Before summarization, messages are serialized to text via [`serializeConversation()`](https://github.com/NekoSekaiMoe/nanopi/blob/main/packages/coding-agent/src/core/compaction/utils-core.ts):
 
 ```
 [User]: What they said

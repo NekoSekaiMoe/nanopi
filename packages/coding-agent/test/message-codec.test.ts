@@ -1,6 +1,6 @@
 import type { AgentMessage } from "@nanopi/pi-agent-core";
 import { describe, expect, test } from "vitest";
-import { estimateTokens, isCutPointMessage, isTurnStartMessage } from "../src/core/compaction/compaction.ts";
+import { estimateTokens, isCutPointMessage, isTurnStartMessage } from "../src/core/compaction/compaction-core.ts";
 import type { MessageTypeCodec } from "../src/core/messages/codec.ts";
 import { MessageTypeRegistry } from "../src/core/messages/registry.ts";
 import { convertToLlm } from "../src/core/messages.ts";

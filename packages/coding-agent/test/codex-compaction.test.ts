@@ -1,6 +1,5 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 import { describe, it } from "vitest";
-import type { SessionEntry } from "../src/index.ts";
 import {
 	collectCheckpointFacts,
 	DEFAULT_USER_RETAIN_TOKENS,
@@ -8,13 +7,14 @@ import {
 	findEntryIdForRef,
 	formatKeyFacts,
 	planUserRetention,
-} from "../src/modules/codex-compaction/compact.ts";
+} from "../src/core/compaction/compact.ts";
 import {
 	assembleCodexSummary,
 	isCodexSummary,
 	SUMMARY_PREFIX,
 	stripCodexPrefix,
-} from "../src/modules/codex-compaction/prompt.ts";
+} from "../src/core/compaction/prompt.ts";
+import type { SessionEntry } from "../src/index.ts";
 
 function messageEntry(id: string, role: "user" | "assistant" | "toolResult", text: string): SessionEntry {
 	const content = role === "toolResult" ? [{ type: "text", text }] : [{ type: "text", text }];

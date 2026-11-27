@@ -25,7 +25,7 @@ describe("subagent child argv", () => {
 		"-t",
 		"read,bash,grep,find,ls",
 		"--modules",
-		"extra,builtin-commands,codex-compaction,pi-fake-opencode",
+		"extra,builtin-commands,compaction,pi-fake-opencode",
 		"Task: list the TODO comments in src",
 	];
 

@@ -1,6 +1,6 @@
 import type { ToolResultMessage } from "@nanopi/pi-ai/compat";
 import { describe, expect, it } from "vitest";
-import { computeFileLists, createFileOps, extractFileOpsFromMessage } from "../src/core/compaction/utils.ts";
+import { computeFileLists, createFileOps, extractFileOpsFromMessage } from "../src/core/compaction/utils-core.ts";
 
 describe("compaction file operations", () => {
 	it("include files touched by nested calls recorded on tool results", () => {

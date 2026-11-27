@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { formatKeyFacts } from "../src/core/compaction/compact.ts";
+import compactionExtension, { registerCompactionRecallTool } from "../src/core/compaction/index.ts";
 import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { SessionEntry } from "../src/index.ts";
-import { formatKeyFacts } from "../src/modules/codex-compaction/compact.ts";
-import codexCompaction, { registerCompactionRecallTool } from "../src/modules/codex-compaction/index.ts";
 
 function createRecallTool(): { execute: (...args: any[]) => Promise<any> } {
 	const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
@@ -22,7 +22,7 @@ describe("context recall module loading (issue #832)", () => {
 			cwd: process.cwd(),
 			agentDir: process.cwd(),
 			settingsManager: SettingsManager.inMemory(),
-			modules: [{ name: "codex-compaction", factory: codexCompaction }],
+			modules: [{ name: "compaction", factory: compactionExtension }],
 		});
 		await loader.reload();
 		expect(loader.getModules().errors).toEqual([]);
@@ -30,7 +30,7 @@ describe("context recall module loading (issue #832)", () => {
 			.getModules()
 			.modules.filter((module) => module.tools.has("recall_context"))
 			.map((module) => module.name);
-		expect(owners).toEqual(["codex-compaction"]);
+		expect(owners).toEqual(["compaction"]);
 	});
 
 	it("resolves a Key Facts ref through the shared tool", async () => {

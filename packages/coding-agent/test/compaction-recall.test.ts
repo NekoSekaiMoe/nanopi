@@ -1,13 +1,13 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 import { describe, it } from "vitest";
-import type { SessionEntry } from "../src/index.ts";
-import { compactBefore, registerCompactionRecallTool } from "../src/modules/codex-compaction/index.ts";
+import { compactBefore, registerCompactionRecallTool } from "../src/core/compaction/index.ts";
 import {
 	describeRecallRegions,
 	formatRecallAppendix,
 	RECALL_SECTION_HEADER,
 	resolveRecallRef,
-} from "../src/modules/codex-compaction/recall.ts";
+} from "../src/core/compaction/recall.ts";
+import type { SessionEntry } from "../src/index.ts";
 
 function messageEntry(id: string, role: "user" | "assistant" | "toolResult", text: string): SessionEntry {
 	return {

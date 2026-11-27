@@ -1,11 +1,11 @@
 import type { AssistantMessage } from "@nanopi/pi-ai";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
-import codexCompaction from "../../src/modules/codex-compaction/index.ts";
+import compactionExtension from "../../src/core/compaction/index.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 /** The module ships in every build; the harness only loads what a test names. */
-const MODULES = [{ name: "codex-compaction", factory: codexCompaction }];
+const MODULES = [{ name: "compaction", factory: compactionExtension }];
 
 /** The checkpoint the session starts from. `CITED` is replaced with the real entry id. */
 const SUMMARY = `## Progress

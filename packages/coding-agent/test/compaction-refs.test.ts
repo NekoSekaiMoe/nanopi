@@ -1,7 +1,7 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 import { describe, it } from "vitest";
+import { citedRefIndexes, parseSummaryRefs } from "../src/core/compaction/citations.ts";
 import { IN_CONTEXT_COMPACTION_PROMPT, SUMMARIZATION_SYSTEM_PROMPT } from "../src/core/compaction/index.ts";
-import { citedRefIndexes, parseSummaryRefs } from "../src/modules/codex-compaction/citations.ts";
 
 const SUMMARY = `## Progress
 - bash_bg 的交接测试有时序竞争 [r1]

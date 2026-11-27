@@ -41,8 +41,8 @@ import { SETTINGS_DEFAULTS } from "../settings-defaults.ts";
 // It used to be declared here as well, under the same name but a narrower shape.
 import type { CompactionSettings } from "../settings-schema.ts";
 import { combineUsage } from "../usage-totals.ts";
-import { getPromptCacheTtlMs, priceTokens } from "./costs.ts";
-import { withCompactionRequestMetadata } from "./request-metadata.ts";
+import { getPromptCacheTtlMs, priceTokens } from "./costs-core.ts";
+import { withCompactionRequestMetadata } from "./request-metadata-core.ts";
 import {
 	computeFileLists,
 	createFileOps,
@@ -52,7 +52,7 @@ import {
 	SUMMARIZATION_SYSTEM_PROMPT,
 	SUMMARY_REF_INSTRUCTIONS,
 	serializeConversation,
-} from "./utils.ts";
+} from "./utils-core.ts";
 
 // ============================================================================
 // File Operation Tracking

@@ -1,6 +1,6 @@
 import type { Message } from "@nanopi/pi-ai";
 import { describe, expect, it } from "vitest";
-import { serializeConversation } from "../src/core/compaction/utils.ts";
+import { serializeConversation } from "../src/core/compaction/utils-core.ts";
 
 describe("serializeConversation", () => {
 	it("should truncate long tool results", () => {

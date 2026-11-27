@@ -13,6 +13,7 @@
 
 import { extraInlineExtension } from "@nanopi/pi-extra";
 import { isBuildComponentEnabled } from "../build-components.ts";
+import compactionExtension from "../core/compaction/index.ts";
 import type { SessionModule } from "../core/modules/types.ts";
 import askLite from "../modules/ask-lite/index.ts";
 import mcpLite from "../modules/mcp-lite/src/index.ts";
@@ -37,7 +38,6 @@ import toolResultStore from "../modules/tool-result-store/index.ts";
 import websearch from "../modules/websearch/src/index.ts";
 import batchExtension from "./batch/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
-import codexCompactionExtension from "./codex-compaction/index.ts";
 import qoderCheckinExtension from "./qoder/index.ts";
 
 /** Modules compiled into every nanopi build. Order matters: `extra` loads
@@ -49,7 +49,7 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "extra", factory: extraInlineExtension.factory, hidden: true },
 	{ name: "batch", factory: batchExtension, hidden: true },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
-	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
+	{ name: "compaction", factory: compactionExtension, hidden: true },
 	{ name: "qoder-checkin", factory: qoderCheckinExtension, hidden: true },
 	// Bundled extras (formerly dist/extras packages, now compiled in).
 	{ name: "ask-lite", factory: askLite },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { serializeConversation } from "../src/core/compaction/utils.ts";
+import { serializeConversation } from "../src/core/compaction/utils-core.ts";
 
 const EMOJI = "\u{1F600}"; // two UTF-16 code units
 
