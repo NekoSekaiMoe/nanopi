@@ -82,8 +82,8 @@
 		"module/compaction-recall": {
 			"description": "Recallable compaction refs: a region table appended to the summary and the recall_context tool"
 		},
-		"module/context-recall": {
-			"description": "recall_context tool: reads back session history a compaction summary cites as [rN]"
+		"module/context-recall-coordinator": {
+			"description": "Single recall_context tool: reads back history cited as [rN], Key Facts cNrN, or replaced-region E<n> refs"
 		},
 		"module/qoder-checkin": {
 			"description": "Qoder daily check-in on session start (claims the campaign credits for every logged-in Qoder account)"
@@ -215,8 +215,8 @@
 		"compaction-recall": {
 			"source": "packages/coding-agent/src/modules/compaction-recall/index.ts"
 		},
-		"context-recall": {
-			"source": "packages/coding-agent/src/modules/context-recall/index.ts"
+		"context-recall-coordinator": {
+			"source": "packages/coding-agent/src/modules/context-recall/coordinator.ts"
 		},
 		"qoder-checkin": {
 			"source": "packages/coding-agent/src/modules/qoder/index.ts"
@@ -327,6 +327,7 @@
 				"module/todo-lite": false,
 				"module/tool-result-store": false,
 				"module/websearch": false,
+				"module/context-recall-coordinator": false,
 				"syntax-highlight": true,
 				"providers": "core",
 				"apis": "endpoint",
@@ -362,6 +363,7 @@
 				"module/todo-lite": false,
 				"module/tool-result-store": false,
 				"module/websearch": false,
+				"module/context-recall-coordinator": false,
 				"toolset": "bash",
 				"providers": "none",
 				"apis": "openai",

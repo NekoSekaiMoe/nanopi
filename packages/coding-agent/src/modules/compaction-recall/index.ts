@@ -7,8 +7,8 @@
  *    summary exists (and answers nothing), then again with the written text in
  *    `replacedSummary`. The region table also goes into `details`, so a reader resolves
  *    a ref without parsing the summary.
- * 2. `recall_context` resolves a ref against the live branch and answers with the original
- *    messages of that region.
+ * 2. The refs it writes are resolved by the `recall_context` tool in the
+ *    `context-recall-coordinator` module.
  *
  * The session format does not change: a ref is an ordinal over the branch, so `E3` names
  * the same region after a reload. A later compaction renumbers the regions, which is why
@@ -17,7 +17,6 @@
 
 import type {
 	ModuleEventsSurface,
-	ModuleToolsSurface,
 	SessionBeforeCompactEvent,
 	SessionBeforeCompactResult,
 } from "../../core/modules/types.ts";
@@ -29,9 +28,8 @@ import {
 	RECALL_DETAILS_KEY,
 	type RecallRegion,
 } from "./recall.ts";
-import { recallTool } from "./tool.ts";
 
-export default function compactionRecallExtension(pi: ModuleEventsSurface & ModuleToolsSurface): void {
+export default function compactionRecallExtension(pi: ModuleEventsSurface): void {
 	pi.on("session_before_compact", (event: SessionBeforeCompactEvent): SessionBeforeCompactResult | undefined => {
 		const summary = event.replacedSummary;
 		// Nothing written yet: this pass runs before the summary exists. The dispatch calls
@@ -49,8 +47,6 @@ export default function compactionRecallExtension(pi: ModuleEventsSurface & Modu
 			},
 		};
 	});
-
-	pi.registerTool(recallTool);
 }
 
 /** Keep whatever `details` the summarizer wrote; add the ref table under its own key. */

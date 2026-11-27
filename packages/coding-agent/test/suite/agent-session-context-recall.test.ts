@@ -1,11 +1,11 @@
 import type { AssistantMessage } from "@nanopi/pi-ai";
 import { fauxAssistantMessage, fauxToolCall } from "@nanopi/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
-import contextRecallExtension from "../../src/modules/context-recall/index.ts";
+import contextRecallCoordinator from "../../src/modules/context-recall/coordinator.ts";
 import { createHarness, getMessageText, type Harness } from "./harness.ts";
 
 /** The module ships in every build; the harness only loads what a test names. */
-const MODULES = [{ name: "context-recall", factory: contextRecallExtension }];
+const MODULES = [{ name: "context-recall-coordinator", factory: contextRecallCoordinator }];
 
 /** The checkpoint the session starts from. `CITED` is replaced with the real entry id. */
 const SUMMARY = `## Progress
@@ -86,7 +86,7 @@ describe("recall_context", () => {
 		expect(requestsOf(harness)).not.toContain("expected 2 to be 3");
 
 		harness.setResponses([
-			fauxAssistantMessage([fauxToolCall("recall_context", { refs: [1] })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("recall_context", { ref: "r1" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage("got it"),
 		]);
 		await harness.session.prompt("what was the assertion?");
@@ -108,7 +108,7 @@ describe("recall_context", () => {
 		seedCompactedSession(harness);
 
 		harness.setResponses([
-			fauxAssistantMessage([fauxToolCall("recall_context", { refs: [9] })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("recall_context", { ref: "r9" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage("ok"),
 		]);
 		await harness.session.prompt("recall r9");
@@ -131,7 +131,7 @@ describe("recall_context", () => {
 		harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 
 		harness.setResponses([
-			fauxAssistantMessage([fauxToolCall("recall_context", { refs: [1] })], { stopReason: "toolUse" }),
+			fauxAssistantMessage([fauxToolCall("recall_context", { ref: "r1" })], { stopReason: "toolUse" }),
 			fauxAssistantMessage("ok"),
 		]);
 		await harness.session.prompt("recall something");
