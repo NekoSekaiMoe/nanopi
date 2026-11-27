@@ -1,16 +1,27 @@
 import { type Component, Loader, type TUI, truncateToWidth } from "@nanopi/pi-tui";
-import type { WorkingIndicatorOptions, WorkingIndicatorRenderer } from "../../../core/modules/index.ts";
+import type {
+	WorkingIndicatorKind,
+	WorkingIndicatorOptions,
+	WorkingIndicatorRenderer,
+} from "../../../core/modules/index.ts";
 import { theme } from "../theme/theme.ts";
 import { CountdownTimer } from "./countdown-timer.ts";
 import { keyText } from "./keybinding-hints.ts";
 
-export type StatusIndicatorKind = "working" | "retry" | "compaction" | "branchSummary";
+export type StatusIndicatorKind = WorkingIndicatorKind;
 
 /** Frame interval for an animated row: 30fps, the cadence the shimmer is tuned for. */
 const ANIMATION_FRAME_MS = 1000 / 30;
 
 export class StatusIndicator extends Loader {
 	readonly kind: StatusIndicatorKind;
+	private rowRenderer: WorkingIndicatorRenderer | undefined;
+	private startedAt = Date.now();
+	/** Wall time of the last frame handed to the row renderer. */
+	private lastFrameAt: number | undefined;
+	private frameTimer: ReturnType<typeof setInterval> | undefined;
+	/** Loader owns a private `ui`; keep the repaint target under its own name. */
+	private readonly repaintTarget: TUI;
 
 	constructor(
 		kind: StatusIndicatorKind,
@@ -22,43 +33,6 @@ export class StatusIndicator extends Loader {
 	) {
 		super(ui, spinnerColorFn, messageColorFn, message, indicator);
 		this.kind = kind;
-	}
-
-	renderInBorder(width: number): string {
-		// `render`, not `super.render`: a subclass that draws its own row (the
-		// working indicator does) has to be asked, or the embedded border shows a
-		// row the host already replaced.
-		const line = this.render(width + 2)[1] ?? "";
-		return truncateToWidth(line.startsWith(" ") ? line.slice(1).trimEnd() : line.trimEnd(), width, "");
-	}
-
-	renderSpinnerInBorder(width: number): string {
-		return truncateToWidth(this.getRenderedIndicator(), width, "");
-	}
-
-	dispose(): void {
-		this.stop();
-	}
-}
-
-export class WorkingStatusIndicator extends StatusIndicator {
-	private rowRenderer: WorkingIndicatorRenderer | undefined;
-	private startedAt = Date.now();
-	/** Wall time of the last frame handed to the row renderer. */
-	private lastFrameAt: number | undefined;
-	private frameTimer: ReturnType<typeof setInterval> | undefined;
-	/** Loader owns a private `ui`; keep the repaint target under its own name. */
-	private readonly repaintTarget: TUI;
-
-	constructor(ui: TUI, message: string, indicator?: WorkingIndicatorOptions, colorFn?: (text: string) => string) {
-		super(
-			"working",
-			ui,
-			colorFn ?? ((text) => theme.fg("accent", text)),
-			colorFn ?? ((text) => theme.fg("muted", text)),
-			message,
-			indicator,
-		);
 		this.repaintTarget = ui;
 	}
 
@@ -90,9 +64,9 @@ export class WorkingStatusIndicator extends StatusIndicator {
 		this.frameTimer = undefined;
 	}
 
-	override dispose(): void {
+	dispose(): void {
 		this.stopFrameLoop();
-		super.dispose();
+		this.stop();
 	}
 
 	/**
@@ -115,6 +89,7 @@ export class WorkingStatusIndicator extends StatusIndicator {
 					message: this.getMessage(),
 					placement: "statusRow",
 					columns: width,
+					kind: this.kind,
 				},
 				theme,
 			);
@@ -125,6 +100,30 @@ export class WorkingStatusIndicator extends StatusIndicator {
 		if (!result) return super.render(width);
 		if (result.hidden) return [];
 		return ["", truncateToWidth(result.text, width, "")];
+	}
+
+	renderInBorder(width: number): string {
+		// `render`, not `super.render`: a subclass that draws its own row has to
+		// be asked, or the embedded border shows a row the host already replaced.
+		const line = this.render(width + 2)[1] ?? "";
+		return truncateToWidth(line.startsWith(" ") ? line.slice(1).trimEnd() : line.trimEnd(), width, "");
+	}
+
+	renderSpinnerInBorder(width: number): string {
+		return truncateToWidth(this.getRenderedIndicator(), width, "");
+	}
+}
+
+export class WorkingStatusIndicator extends StatusIndicator {
+	constructor(ui: TUI, message: string, indicator?: WorkingIndicatorOptions, colorFn?: (text: string) => string) {
+		super(
+			"working",
+			ui,
+			colorFn ?? ((text) => theme.fg("accent", text)),
+			colorFn ?? ((text) => theme.fg("muted", text)),
+			message,
+			indicator,
+		);
 	}
 }
 
@@ -153,7 +152,7 @@ export class RetryStatusIndicator extends StatusIndicator {
 		);
 	}
 
-	override dispose(): void {
+	dispose(): void {
 		this.countdown?.dispose();
 		this.countdown = undefined;
 		super.dispose();

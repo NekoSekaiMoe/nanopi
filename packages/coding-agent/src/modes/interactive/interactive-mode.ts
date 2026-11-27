@@ -1816,6 +1816,7 @@ export class InteractiveMode {
 
 	private showStatusIndicator(indicator: StatusIndicator): void {
 		this.activeStatusIndicator?.dispose();
+		indicator.setRowRenderer(this.session.moduleRegistry.getWorkingIndicatorRenderer(indicator.kind));
 		this.activeStatusIndicator = indicator;
 		this.activeWorkingIndicatorEmbedded = false;
 		this.statusContainer.clear();
@@ -1854,8 +1855,6 @@ export class InteractiveMode {
 			this.workingIndicatorOptions,
 			colorFn,
 		);
-		// A module row replaces the spinner-plus-message pair for the whole turn.
-		indicator.setRowRenderer(this.session.moduleRegistry.getWorkingIndicatorRenderer());
 		this.showStatusIndicator(indicator);
 	}
 

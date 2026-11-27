@@ -13,6 +13,7 @@ import type {
   Theme,
   WorkingIndicatorOptions,
   WorkingIndicatorRenderer,
+  WorkingIndicatorState,
 } from "@nanopi/pi-coding-agent";
 import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
 import { fgRgb } from "./gradient.ts";
@@ -25,6 +26,18 @@ const MIN_STEP_CHARS = 12;
 /** Status row prefix: spinner dot, a space, and the one-cell margin the row keeps. */
 const ROW_PREFIX_COLS = 4;
 const HINT_SUFFIX = " · esc to interrupt)";
+
+/** One sweep per row: retry can appear while the working row is still mounted. */
+const sweeps = new Map<string, SweepState>();
+
+function sweepFor(key: string): SweepState {
+  let sweep = sweeps.get(key);
+  if (!sweep) {
+    sweep = { phase: 0, canvas: 0 };
+    sweeps.set(key, sweep);
+  }
+  return sweep;
+}
 
 /** Terminal width captured from the footer factory; the working row is one line. */
 let terminalColumns = 0;
@@ -167,12 +180,31 @@ function workingRowRenderer(): WorkingIndicatorRenderer {
   };
 }
 
+/**
+ * The same shimmer covers the retry and compaction status rows. The host owns
+ * the text (attempt count, countdown, cancel hint), so a renderer only restyles
+ * it; other modules keep their default spinner when they register a row of
+ * their own. Exported for the pi-ui tests; the registered renderer is the only
+ * production caller.
+ */
+export function statusRowRenderer(state: WorkingIndicatorState, activeTheme: Theme): { text: string } | undefined {
+  if (state.kind !== "retry" && state.kind !== "compaction") return undefined;
+  const sweep = sweepFor(state.kind);
+  const text = shimmerSegmentsAnimated([{ text: state.message }], activeTheme, sweep, state.dtMs);
+  const columns = state.columns > 0 ? state.columns : terminalColumns;
+  if (columns > 0 && visibleWidth(text) > columns - 1) {
+    return { text: truncateToWidth(text, columns - 1, "…") };
+  }
+  return { text };
+}
+
 export function installWorking(
   pi: ModuleRenderingSurface & ModuleEventsSurface & ModuleActionsSurface,
 ): () => void {
   let startedAt: number | undefined;
 
   pi.registerWorkingIndicator(workingRowRenderer());
+  pi.registerWorkingIndicator(statusRowRenderer, ["retry", "compaction"]);
 
   pi.registerEntryRenderer(ELAPSED_ENTRY_TYPE, (entry, _options, theme) => {
     const data = entry.data as { elapsedMs?: unknown } | undefined;

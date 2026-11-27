@@ -1739,6 +1739,8 @@ export type AssistantMessageRenderer = (message: AssistantMessage, context: Assi
 /** Where the working indicator draws its one line. */
 export type WorkingIndicatorPlacement = "editorFrame" | "statusRow" | "none";
 
+export type WorkingIndicatorKind = "working" | "retry" | "compaction" | "branchSummary";
+
 export interface WorkingIndicatorState {
 	/** Milliseconds since the turn started. */
 	readonly elapsedMs: number;
@@ -1750,6 +1752,8 @@ export interface WorkingIndicatorState {
 	readonly placement: WorkingIndicatorPlacement;
 	/** Renderable columns, or 0 when unknown. */
 	readonly columns: number;
+	/** Which status row is drawing; extensions can serve several with one renderer. */
+	readonly kind: WorkingIndicatorKind;
 }
 
 /**
@@ -2020,11 +2024,13 @@ export interface ModuleRenderingSurface extends ModuleEvents {
 	registerAssistantMessageRenderer(renderer: AssistantMessageRenderer): void;
 
 	/**
-	 * Draw the working indicator line — the animated row shown while a turn
-	 * streams. The last registered renderer wins; returning undefined for a frame
-	 * keeps the host text, and `{ hidden: true }` suppresses the row.
+	 * Draw a status-indicator row — the working line while a turn streams, or
+	 * the retry/compaction row while those settle. A renderer receives `kind`
+	 * in its state and can serve several rows with one registration. The last
+	 * renderer that accepts a kind wins; returning undefined for a frame keeps
+	 * the host text, and `{ hidden: true }` suppresses the row.
 	 */
-	registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void;
+	registerWorkingIndicator(renderer: WorkingIndicatorRenderer, kinds?: readonly WorkingIndicatorKind[]): void;
 
 	/**
 	 * Draw one message kind in the interactive transcript. This is `registerMessageType`
@@ -2646,7 +2652,7 @@ export interface RegisteredModule {
 	removedSettingsItems?: Set<string>;
 	/** Widget keys the module recorded with `redrawWidget()`, dropped when it unloads. */
 	widgetKeys?: Set<string>;
-	workingIndicatorRenderer?: WorkingIndicatorRenderer;
+	workingIndicatorRenderers?: Map<WorkingIndicatorKind, WorkingIndicatorRenderer>;
 	/**
 	 * The file this module was loaded from, when it came from disk. A hot reload
 	 * matches records by path, so an in-memory module has no record and is never

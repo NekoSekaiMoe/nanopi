@@ -39,6 +39,10 @@ Status: implemented
   ~1 cell，和改契约之前 pi-ui 自己的帧链节奏一致。`TUI` 的 `MIN_RENDER_INTERVAL_MS`
   （16ms）会自然把重复请求合并掉，所以 30fps 的 interval 不会把终端打爆。
 
+[2026-11-27-retry-status-shimmer](2026-11-27-retry-status-shimmer.md) moves the
+frame loop and delegated rendering into the shared `StatusIndicator` base, so
+the retry and compaction rows get the same treatment.
+
 ## Alternatives considered
 
 - **让宿主按帧渲染（core 提供帧回调）。** 更干净：动画节奏归 TUI，模块只画。

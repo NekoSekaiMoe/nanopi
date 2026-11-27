@@ -208,6 +208,7 @@ export type {
 	TurnEndEventResult,
 	TurnStartEvent,
 	WidgetPlacement,
+	WorkingIndicatorKind,
 	WorkingIndicatorOptions,
 	WorkingIndicatorPlacement,
 	WorkingIndicatorRenderer,

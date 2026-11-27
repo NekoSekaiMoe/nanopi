@@ -2,7 +2,12 @@ import { visibleWidth } from "@nanopi/pi-tui";
 import { beforeEach, describe, expect, test } from "vitest";
 import type { Theme } from "../src/modes/interactive/theme/theme.ts";
 import type { SweepState } from "../src/modules/pi-ui/src/shimmer.ts";
-import { captureTerminalWidth, syncPlanFromToolResult, workingMessage } from "../src/modules/pi-ui/src/working.ts";
+import {
+	captureTerminalWidth,
+	statusRowRenderer,
+	syncPlanFromToolResult,
+	workingMessage,
+} from "../src/modules/pi-ui/src/working.ts";
 import { stripAnsi } from "../src/utils/ansi.ts";
 
 /** Plain theme: no ANSI wrapping, so the shimmer output is the visible text. */
@@ -56,6 +61,38 @@ describe("pi-ui working row", () => {
 			// The row lives in the editor border, so it must fit one line.
 			expect(visibleWidth(row(90_000))).toBeLessThan(columns);
 		}
+	});
+
+	test("shimmers the retry status row with the same band as working", () => {
+		const ansiTheme = {
+			getFgAnsi: (color: string) => (color === "accent" ? "\x1b[35m" : "\x1b[90m"),
+			fg: (_color: string, text: string) => text,
+		} as unknown as Theme;
+		const message = "Retrying (1/3) in 2s... (esc to cancel)";
+		const base = {
+			dtMs: 50,
+			message,
+			placement: "statusRow",
+			columns: 0,
+			kind: "retry",
+		} as const;
+
+		const first = statusRowRenderer({ ...base, elapsedMs: 0 }, ansiTheme)!;
+		expect(stripAnsi(first.text)).toBe(message);
+
+		// The band starts off the left edge; it reaches the text after a few
+		// frames, so compare later frames for the accent crest and movement.
+		let crest = first.text;
+		for (let i = 0; i < 6; i++) {
+			crest = statusRowRenderer({ ...base, elapsedMs: (i + 1) * 100 }, ansiTheme)!.text;
+			if (crest.includes("\x1b[35m")) break;
+		}
+		expect(crest).toContain("\x1b[35m");
+		expect(crest).not.toBe(first.text);
+
+		// The working row keeps its own renderer, so one registration does not
+		// replace the other.
+		expect(statusRowRenderer({ ...base, elapsedMs: 0, kind: "working" }, ansiTheme)).toBeUndefined();
 	});
 
 	test("keeps a short step intact on a narrow terminal", () => {

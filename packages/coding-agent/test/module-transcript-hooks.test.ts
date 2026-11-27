@@ -172,10 +172,26 @@ describe("working indicator", () => {
 			},
 		};
 		const result = await load(module);
-		const renderer = result.modules[0]!.workingIndicatorRenderer!;
+		const renderer = result.modules[0]!.workingIndicatorRenderers!.get("working")!;
 		// The second registration replaced the first; the first one is not called.
 		expect(renderer({ message: "Working", placement: "statusRow" } as never, {} as never)).toEqual({
 			text: "Working",
 		});
+	});
+
+	it("keeps per-kind renderers independent", async () => {
+		const module: SessionModule = {
+			name: "working-kind-test",
+			factory: (nanopi) => {
+				nanopi.registerWorkingIndicator((state) => ({ text: `working: ${state.message}` }));
+				nanopi.registerWorkingIndicator((state) => ({ text: `retry: ${state.message}` }), ["retry"]);
+			},
+		};
+		const result = await load(module);
+		const renderers = result.modules[0]!.workingIndicatorRenderers!;
+		const state = { message: "Retrying (1/3) in 2s...", placement: "statusRow" } as never;
+		expect(renderers.get("working")!(state, {} as never)).toEqual({ text: "working: Retrying (1/3) in 2s..." });
+		expect(renderers.get("retry")!(state, {} as never)).toEqual({ text: "retry: Retrying (1/3) in 2s..." });
+		expect(renderers.get("compaction")).toBeUndefined();
 	});
 });
