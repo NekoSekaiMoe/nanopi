@@ -14,9 +14,9 @@ These names are not just labels in the tool list. Each one carries a repeated na
 
 `pi-git-tools` now registers one `git` tool. `action` selects `status` (default), `diff`, `log`, or `branch`; `cwd` stays at the top level, and the fields used by only one branch (`max_lines`, `target`/`base`/`max_bytes`/`abridge`, `limit`) stay optional in the same object. `git` keeps every earlier output cap and the opt-in `abridge` path through `subagent` + `meat`.
 
-`websearch` now registers one `web` tool. `action` selects `search` (default), `fetch`, `wiki_structure`, or `ask_repo`. Search and fetch keep the engine chain, failover, and key cooldown. DeepWiki's JSON-RPC client moves to `src/modules/websearch/src/deepwiki.ts`; the two former DeepWiki actions become `wiki_structure` and `ask_repo`, and `/deepwiki` prefills a `web` call instead of a removed tool name. `DEEPWIKI_MCP_URL` is unchanged.
+`websearch` now registers one `web` tool. `action` selects `search` (default) or `fetch`. Search and fetch keep the engine chain, failover, and key cooldown. The `wiki_structure` and `ask_repo` actions, the DeepWiki JSON-RPC client, and `/deepwiki` were removed later by [Remove DeepWiki research](../simplification/2026-11-27-remove-deepwiki.md) (issue #861); the tool-merge decision of one name per capability still holds.
 
-The `pi-deepwiki` module is gone. Its component, bundle entry, flavors, vendored-path exclusions, and import in `src/modules/index.ts` are removed with it. DeepWiki now lives with the module that owns the rest of open-web research, so `--modules pi-deepwiki` is no longer a valid selector. `full` still carries DeepWiki through `module/websearch`; `base` and `minimal` still exclude both.
+The `pi-deepwiki` module is gone. Its component, bundle entry, flavors, vendored-path exclusions, and import in `src/modules/index.ts` are removed with it, so `--modules pi-deepwiki` is no longer a valid selector. `full` still carries the web research tool through `module/websearch`; `base` and `minimal` still exclude it.
 
 No aliases are kept. A session that remembered `git_diff` or `deepwiki_ask_question` sees only the current tool list.
 
@@ -29,9 +29,9 @@ No aliases are kept. A session that remembered `git_diff` or `deepwiki_ask_quest
 ## Consequences
 
 - Active tool names for these capabilities drop from eight to two. The cost is two larger schemas: branch-only fields are no longer enforced by TypeBox per tool, so missing fields are checked in `execute` and reported as text. If action confusion shows up in tool errors or retries, split the action back into a named tool.
-- `/deepwiki` still works as a prompt prefill. It no longer registers a command-owned model tool, because commands cannot start a turn directly.
+- `/deepwiki` was removed later by [Remove DeepWiki research](../simplification/2026-11-27-remove-deepwiki.md) (issue #861).
 - `git` with `action=diff` and `abridge: true` still depends on `pi-subagent-mini`; without it, the raw diff is returned.
-- Tests now import DeepWiki's parser from `packages/coding-agent/src/modules/websearch/src/deepwiki.ts`. `packages/coding-agent/test/tool-merge.test.ts` covers the registered names, git dispatch, missing-field errors, and the DeepWiki JSON-RPC call shape.
+- `packages/coding-agent/test/tool-merge.test.ts` covers the registered tool names, git dispatch, and missing-field errors.
 
 ## Verification
 

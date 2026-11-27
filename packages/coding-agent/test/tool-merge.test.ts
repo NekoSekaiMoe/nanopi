@@ -1,5 +1,5 @@
 /** Regression for issue #852: git and web actions live behind two tool names. */
-import { describe, expect, test, vi } from "vitest";
+import { describe, expect, test } from "vitest";
 import gitTools from "../src/modules/pi-git-tools/src/index.ts";
 import websearch from "../src/modules/websearch/src/index.ts";
 
@@ -61,40 +61,5 @@ describe("tool merge (issue #852)", () => {
 		);
 		expect(result.content[0].text).toContain("http(s)");
 		expect(result.details.action).toBe("fetch");
-	});
-
-	test("web DeepWiki actions call the same endpoint adapter", async () => {
-		const fetchMock = vi.fn(
-			async () =>
-				new Response(
-					JSON.stringify({
-						jsonrpc: "2.0",
-						id: 1,
-						result: { content: [{ type: "text", text: "outline" }] },
-					}),
-					{ status: 200, headers: { "content-type": "application/json" } },
-				),
-		);
-		vi.stubGlobal("fetch", fetchMock);
-		try {
-			const { tools, pi } = surface();
-			websearch(pi as never);
-			const web = tools.get("web")!;
-			const structure = await web.execute(
-				"call-wiki",
-				{ action: "wiki_structure", repoName: "owner/repo" },
-				undefined,
-				undefined,
-				ctx(),
-			);
-			expect(structure.content[0].text).toBe("outline");
-			expect(fetchMock).toHaveBeenCalledTimes(1);
-			expect(JSON.parse(((fetchMock.mock.calls[0] as unknown[])[1] as RequestInit).body as string)).toMatchObject({
-				method: "tools/call",
-				params: { name: "read_wiki_structure", arguments: { repoName: "owner/repo" } },
-			});
-		} finally {
-			vi.unstubAllGlobals();
-		}
 	});
 });

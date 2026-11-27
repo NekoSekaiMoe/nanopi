@@ -5,17 +5,11 @@ import { parseGitLog } from "../src/modules/pi-git-tools/src/index.ts";
 import { sizeOk, splitForChunking } from "../src/modules/pi-meat/src/index.ts";
 import { buildCliArgs, parsePreferredCli } from "../src/modules/pi-subagent-mini/src/cli-adapter.ts";
 import { periodStart } from "../src/modules/pi-token-usage/src/index.ts";
-import { parseSseJson } from "../src/modules/websearch/src/deepwiki.ts";
 
 describe("pi-extensions port", () => {
 	test("hostname drops the trailing dot and DNS domain", () => {
 		expect(formatHostname("mini.local.")).toBe("mini");
 		expect(formatHostname("host.example.com")).toBe("host");
-	});
-
-	test("DeepWiki parses an SSE frame and bare JSON", () => {
-		expect(parseSseJson('event: message\ndata: {"ok":true}\n\n')).toEqual({ ok: true });
-		expect(parseSseJson('{"ok":false}')).toEqual({ ok: false });
 	});
 
 	test("git log parser keeps multi-line bodies as one record", () => {

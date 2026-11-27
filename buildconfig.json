@@ -140,7 +140,7 @@
 			"description": "recall_tool_result: paged recall of truncated tool output"
 		},
 		"module/websearch": {
-			"description": "web tool with search, page fetch and DeepWiki actions"
+			"description": "web tool with search and page fetch"
 		},
 		"sidecar/tui-native": {
 			"description": "TUI native prebuilds embedded in single-file builds (all platforms embedded; the matching one installs to the agent bin directory at startup, no network needed)"
