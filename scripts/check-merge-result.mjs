@@ -47,16 +47,20 @@
 // 本身把一棵好树变成了「没了」（回退）。两者在结果树上没有区别，得另外找证据，
 // 而证据只能来自「删除有没有方向」。三种形态各有各的证据：
 //
-//   C 合并提交里的删除：HEAD 的父多于一个时，删除来自 head^1..head 这一跳。
-//     这一跳是 `git merge` 写出来的，方向由 git 保证（把 PR 分支合进来就只会产生
-//     PR 侧的改动），所以这一跳里状态为 D 的路径算「这次改动删的」。
+//   C 合并提交里的删除：HEAD 的第一父就是 base 时，head^1..head 才是「把 PR
+//     合进 base」这一跳；git merge 的方向保证这一跳里 D 的路径是 PR 有意删的。
 //   B 普通提交里的删除：HEAD 只有一个父，head^1..head 就是这个提交本身，D 与
 //     「谁想删」无关——回退型的提交也是 D。这里只认 A。
+//   D 反向合并（PR 分支自己把 base 合进去）：HEAD 是合并提交，但第一父不是 base，
+//     head^1..head 是「base 合进 PR」，不是「PR 合进 base」，这一跳的 D 不能当证据。
 //   A 有据可查：PR 描述或提交消息里逐条列出的 `deletes: <path>`。
 //
-// A 是唯一「意图被记下来」的证据，B/C 只提供方向。C 看着最贴题，但它单独用会把
-// `b3ffe400` 那种「整棵树换回旧快照」也放行（CNB 侧所有 PR 都是合并提交），所以
-// C 只负责给「改名的旧路径」和「普通删除」分类，不负责放行。
+// A 是唯一「意图被记下来」的证据，B/C/D 只提供方向。C 单独用会把 `b3ffe400`
+// 那种「整棵树换回旧快照」放行，所以 C 只负责分类，不负责放行。
+//
+// #880 的现场是 D：PR 分支 tip 是它自己 `git merge origin/main` 的合并提交，
+// 第一父是分支侧、第二父才是目标分支。若还按 parent count 认方向，这次「把
+// main 合进分支」产生的 D 会被误判成 PR 回退了 main 上的 179 个文件。
 //
 // 判据只用 git 对象加调用方传进来的文本：脚本不联网、不读 API，PR 描述由 CI 写进
 // 文件用 --description-file 传（GitHub 侧用 GITHUB_EVENT_PATH，CNB 侧用
@@ -148,15 +152,16 @@ for (const [path, blob] of before) {
 	else if (now !== blob) rewritten.push(path);
 }
 
-// 这条检查的意义在于「合并动作把好树变成了坏树」，所以第一父之外还有父时，说明
-// 结果是一个合并提交，可以让 git 自己说 head^1..head 这一跳干了什么。
+// 这一跳的 D 状态只在「PR 合进 base」这一跳里有方向。合并提交的第一父如果
+// 不是 base，那是 PR 分支自己把 base 合进来的反向合并，方向相反（#880）。
 const parents = git(["rev-list", "--parents", "-n", "1", head]).split(" ").slice(1);
 const isMerge = parents.length > 1;
+const forwardMerge = isMerge && firstParent === base;
 
-// 这一跳的 D 状态。显式 `-M -l0`：默认配置下 diff 会做改名检测，删掉旧名变成
-// `R100` 而不是 `D`；`-l0` 关掉改名上限，免得大改动退化掉配对。
+// 显式 `-M -l0`：默认配置下 diff 会做改名检测，删掉旧名变成 `R100` 而不是
+// `D`；`-l0` 关掉改名上限，免得大改动退化掉配对。
 const droppedInMerge = new Set();
-if (isMerge) {
+if (forwardMerge) {
 	const raw = git(["diff", "--raw", "-M", "-l0", `${head}^1`, head]);
 	for (const line of raw.split("\n")) {
 		// `:100644 000000 <src> <dst> D\t<path>`；改名是 `R100\t<old>\t<new>`
@@ -200,10 +205,9 @@ if (commit) {
 const excused = [];
 const blocked = [];
 for (const path of removed) {
-	// 合并提交里被这一跳删掉的、或者 PR 描述里认领过的，算有据可查。普通提交
-	// （单父）只有认领这一条路：这一跳本身就是「回退」最常见的形态，方向说明
-	// 不了任何事。
-	if (claimed.has(path) || (isMerge && droppedInMerge.has(path))) excused.push(path);
+	// 「PR 合进 base」那一跳里的 D、以及 PR 描述认领的路径算有据可查。反向合并
+	// 的 D 不算：它的方向是 base 合进 PR，不是 PR 回退 base。
+	if (claimed.has(path) || droppedInMerge.has(path)) excused.push(path);
 	else blocked.push(path);
 }
 
@@ -214,7 +218,7 @@ if (rewritten.length > 0) {
 }
 
 if (excused.length > 0) {
-	const how = isMerge ? "deletes: claim or a D in head^1..head" : "deletes: claim";
+	const how = forwardMerge ? "deletes: claim or a D in head^1..head" : "deletes: claim";
 	console.log(`${excused.length} file(s) from ${base} are gone and accounted for (${how}):`);
 	for (const path of excused.slice(0, 40)) console.log(`  ${path}`);
 	if (excused.length > 40) console.log(`  ... and ${excused.length - 40} more`);

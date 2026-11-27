@@ -230,6 +230,51 @@ test("a stale tree merged over newer work is still reported", async (t) => {
 	assert.doesNotMatch(result.stderr, /accounted for/);
 });
 
+// #880：PR 分支把 base 合进自己后，第一父是分支侧、最后一父才是目标分支。
+// 这一跳里的 D 是「base 合进分支」造成的，不能被当成 PR 回退了 base 上的文件。
+test("a branch that merged base into itself is not judged by the wrong parent", async (t) => {
+	const cwd = await repo(t, "base-merged-into-branch");
+	commit(cwd, { "a.txt": "one" }, "base");
+	const base = pinBase(cwd);
+	// 目标分支往旁边走一格，造出「PR 这一跳里 D」的形态。
+	git(cwd, ["checkout", "-q", "-B", "main", "base"]);
+	commit(cwd, { "on-target.txt": "landed after the fork" }, "work on the target");
+	git(cwd, ["checkout", "-q", "topic"]);
+	commit(cwd, { "b.txt": "two" }, "work on the branch");
+	git(cwd, ["merge", "-q", "--no-edit", "--no-gpg-sign", "main"]);
+
+	const result = check(cwd, "main");
+	assert.notEqual(git(cwd, ["rev-parse", "HEAD^1"]), git(cwd, ["rev-parse", base]), "first parent must be the branch, not the target");
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /no file from [0-9a-f]{40} disappears/);
+	assert.doesNotMatch(result.stderr, /drops \d+ file/);
+});
+
+// 同样的形态下，真正丢失目标分支文件的回退仍然要红：关掉按父数量认方向不能
+// 把「PR 分支上合成的一棵树」变成免检通道。
+test("a branch that merged base into itself but drops a target file is reported", async (t) => {
+	const cwd = await repo(t, "base-merged-into-branch-stale");
+	commit(cwd, { "a.txt": "one" }, "base");
+	git(cwd, ["checkout", "-q", "-B", "main", "HEAD"]);
+	commit(cwd, { "on-target.txt": "landed after the fork" }, "work on the target");
+	git(cwd, ["checkout", "-q", "topic"]);
+	commit(cwd, { "b.txt": "two" }, "work on the branch");
+	git(cwd, ["merge", "-q", "--no-edit", "--no-gpg-sign", "main"]);
+	// 把合并结果里目标分支独有的文件拿掉，父链不变。
+	const tree = git(cwd, ["ls-tree", "-r", "HEAD"])
+		.split("\n")
+		.filter((line) => line && !line.endsWith("\ton-target.txt"))
+		.join("\n");
+	const staleTree = git(cwd, ["mktree"], { input: `${tree}\n` });
+	const head = git(cwd, ["commit-tree", staleTree, "-p", git(cwd, ["rev-parse", "HEAD^1"]), "-p", git(cwd, ["rev-parse", "HEAD^2"]), "-m", "stale tree after merging base"]);
+	git(cwd, ["update-ref", "HEAD", head]);
+
+	const result = check(cwd, "main");
+	assert.equal(result.status, 1);
+	assert.match(result.stderr, /on-target\.txt/);
+	assert.doesNotMatch(result.stderr, /accounted for/);
+});
+
 // 合并提交里的改名：旧路径在这一跳里是 R100，不是 D，仍然要红。与
 // `a rename in a single-parent commit is reported` 配对，钉住「只认 D」。
 test("a rename inside a merge commit is still a deletion", async (t) => {
