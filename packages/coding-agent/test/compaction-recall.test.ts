@@ -1,14 +1,13 @@
 import { deepStrictEqual, strictEqual } from "node:assert";
 import { describe, it } from "vitest";
 import type { SessionEntry } from "../src/index.ts";
-import compactionRecallExtension from "../src/modules/compaction-recall/index.ts";
+import { compactBefore, registerCompactionRecallTool } from "../src/modules/codex-compaction/index.ts";
 import {
 	describeRecallRegions,
 	formatRecallAppendix,
 	RECALL_SECTION_HEADER,
 	resolveRecallRef,
-} from "../src/modules/compaction-recall/recall.ts";
-import contextRecallCoordinator from "../src/modules/context-recall/coordinator.ts";
+} from "../src/modules/codex-compaction/recall.ts";
 
 function messageEntry(id: string, role: "user" | "assistant" | "toolResult", text: string): SessionEntry {
 	return {
@@ -164,29 +163,36 @@ describe("compaction recall hook", () => {
 	}
 
 	it("appends the region table to the summary it is handed", async () => {
-		const { surface, handlers } = pluginSurface();
-		compactionRecallExtension(surface as never);
-		const result = (await handlers[0]({
-			type: "session_before_compact",
-			branchEntries: compactedBranch(),
-			replacedSummary: "the summary",
-		})) as { compaction?: { summary: string; details?: unknown } } | undefined;
+		const result = await compactBefore(
+			{
+				type: "session_before_compact",
+				branchEntries: compactedBranch(),
+				replacedSummary: "the summary",
+			} as never,
+			{} as never,
+			{ userRetainTokens: 0, compactionIndex: 0 },
+		);
 		strictEqual(
-			result?.compaction?.summary.startsWith("the summary\n\n## Replaced Context (recallable)\n- E1:"),
+			result?.compaction?.summary?.startsWith("the summary\n\n## Replaced Context (recallable)\n- E1:"),
 			true,
 		);
 		strictEqual(JSON.stringify(result?.compaction?.details).includes('"ref":"E1"'), true);
 	});
 
 	it("does nothing on the pass that runs before a summary exists", async () => {
-		const { surface, handlers } = pluginSurface();
-		compactionRecallExtension(surface as never);
-		strictEqual(await handlers[0]({ type: "session_before_compact", branchEntries: compactedBranch() }), undefined);
+		strictEqual(
+			await compactBefore(
+				{ type: "session_before_compact", branchEntries: compactedBranch() } as never,
+				{} as never,
+				{ userRetainTokens: 0, compactionIndex: 0 },
+			),
+			undefined,
+		);
 	});
 
 	it("resolves a replaced-region ref through the shared tool", async () => {
 		const { surface, tools } = pluginSurface();
-		contextRecallCoordinator(surface as never);
+		registerCompactionRecallTool(surface as never);
 		const tool = tools.get("recall_context");
 		strictEqual(tool !== undefined, true);
 		const result = await tool!.execute("call-1", { ref: "E1" }, undefined, undefined, {
@@ -201,7 +207,7 @@ describe("compaction recall hook", () => {
 
 	it("refuses a ref the branch does not carry", async () => {
 		const { surface, tools } = pluginSurface();
-		contextRecallCoordinator(surface as never);
+		registerCompactionRecallTool(surface as never);
 		const tool = tools.get("recall_context");
 		let message = "";
 		try {

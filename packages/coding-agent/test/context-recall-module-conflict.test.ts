@@ -3,9 +3,7 @@ import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 import type { SessionEntry } from "../src/index.ts";
 import { formatKeyFacts } from "../src/modules/codex-compaction/compact.ts";
-import codexCompaction from "../src/modules/codex-compaction/index.ts";
-import compactionRecall from "../src/modules/compaction-recall/index.ts";
-import contextRecallCoordinator from "../src/modules/context-recall/coordinator.ts";
+import codexCompaction, { registerCompactionRecallTool } from "../src/modules/codex-compaction/index.ts";
 
 function createRecallTool(): { execute: (...args: any[]) => Promise<any> } {
 	const tools = new Map<string, { execute: (...args: any[]) => Promise<any> }>();
@@ -14,21 +12,17 @@ function createRecallTool(): { execute: (...args: any[]) => Promise<any> } {
 			tools.set(tool.name, tool);
 		},
 	};
-	contextRecallCoordinator(surface as never);
+	registerCompactionRecallTool(surface as never);
 	return tools.get("recall_context")!;
 }
 
 describe("context recall module loading (issue #832)", () => {
-	it("registers one recall_context tool when all recall modules load", async () => {
+	it("registers one recall_context tool from the single compaction module", async () => {
 		const loader = new DefaultResourceLoader({
 			cwd: process.cwd(),
 			agentDir: process.cwd(),
 			settingsManager: SettingsManager.inMemory(),
-			modules: [
-				{ name: "codex-compaction", factory: codexCompaction },
-				{ name: "compaction-recall", factory: compactionRecall },
-				{ name: "context-recall-coordinator", factory: contextRecallCoordinator },
-			],
+			modules: [{ name: "codex-compaction", factory: codexCompaction }],
 		});
 		await loader.reload();
 		expect(loader.getModules().errors).toEqual([]);
@@ -36,7 +30,7 @@ describe("context recall module loading (issue #832)", () => {
 			.getModules()
 			.modules.filter((module) => module.tools.has("recall_context"))
 			.map((module) => module.name);
-		expect(owners).toEqual(["context-recall-coordinator"]);
+		expect(owners).toEqual(["codex-compaction"]);
 	});
 
 	it("resolves a Key Facts ref through the shared tool", async () => {

@@ -1,10 +1,9 @@
 /**
- * The single `recall_context` tool shared by three built-in recall strategies.
+ * The single `recall_context` tool inside the compaction module.
  *
  * Each strategy writes a different ref format into the compaction summary:
  * `[rN]` citations, Key Facts `c<checkpoint>r<fact>` refs, and `E<ordinal>`
- * replaced-region refs. Registering one tool per strategy collides on the tool
- * name, so this module owns the name and dispatches on the ref shape. A call
+ * replaced-region refs. This tool owns the name and dispatches on the ref shape. A call
  * using more than one shape is refused: mixing them would make an ambiguous
  * answer look successful.
  */
@@ -15,9 +14,9 @@ import { convertToLlm } from "../../core/messages.ts";
 import type { ModuleToolContext, ModuleToolsSurface, ToolDefinition } from "../../core/modules/types.ts";
 import { sessionEntryToContextMessages } from "../../core/session-projection.ts";
 import type { SessionEntry } from "../../core/session-store.ts";
-import { findEntryIdForRef } from "../codex-compaction/compact.ts";
-import { DEFAULT_RECALL_MAX_TOKENS, RECALL_SECTION_HEADER, resolveRecallRef } from "../compaction-recall/recall.ts";
-import { resolveRecalledEntries } from "./resolve.ts";
+import { resolveRecalledEntries } from "./citations.ts";
+import { findEntryIdForRef } from "./compact.ts";
+import { DEFAULT_RECALL_MAX_TOKENS, RECALL_SECTION_HEADER, resolveRecallRef } from "./recall.ts";
 
 const RecallParams = Type.Object({
 	ref: Type.String({
@@ -182,6 +181,6 @@ export const recallTool: ToolDefinition<typeof RecallParams, RecallDetails> = {
 	},
 };
 
-export default function contextRecallCoordinator(pi: ModuleToolsSurface): void {
+export function registerRecallTool(pi: ModuleToolsSurface): void {
 	pi.registerTool(recallTool);
 }

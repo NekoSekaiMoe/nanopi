@@ -38,8 +38,6 @@ import websearch from "../extras/websearch/src/index.ts";
 import batchExtension from "./batch/index.ts";
 import builtinCommandsExtension from "./builtin-commands/index.ts";
 import codexCompactionExtension from "./codex-compaction/index.ts";
-import compactionRecallExtension from "./compaction-recall/index.ts";
-import contextRecallCoordinator from "./context-recall/coordinator.ts";
 import qoderCheckinExtension from "./qoder/index.ts";
 
 /** Modules compiled into every nanopi build. Order matters: `extra` loads
@@ -52,8 +50,6 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "batch", factory: batchExtension, hidden: true },
 	{ name: "builtin-commands", factory: builtinCommandsExtension, hidden: true },
 	{ name: "codex-compaction", factory: codexCompactionExtension, hidden: true },
-	{ name: "compaction-recall", factory: compactionRecallExtension, hidden: true },
-	{ name: "context-recall-coordinator", factory: contextRecallCoordinator, hidden: true },
 	{ name: "qoder-checkin", factory: qoderCheckinExtension, hidden: true },
 	// Bundled extras (formerly dist/extras packages, now compiled in).
 	{ name: "ask-lite", factory: askLite },
