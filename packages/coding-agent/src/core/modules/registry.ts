@@ -103,6 +103,7 @@ import type {
 	ToolRowRendererResolver,
 	ToolRowRenderers,
 	TurnEndEvent,
+	WorkingIndicatorKind,
 	WorkingIndicatorRenderer,
 } from "./types.ts";
 import { WidgetChannelHost } from "./widget-channels.ts";
@@ -878,11 +879,12 @@ export class ModuleRegistry {
 		return removed;
 	}
 
-	/** Last registered working-indicator renderer, or undefined when none is registered. */
-	getWorkingIndicatorRenderer(): WorkingIndicatorRenderer | undefined {
+	/** Last registered renderer for a status row, or undefined when none is registered. */
+	getWorkingIndicatorRenderer(kind: WorkingIndicatorKind = "working"): WorkingIndicatorRenderer | undefined {
 		let renderer: WorkingIndicatorRenderer | undefined;
 		for (const ext of this.modules) {
-			if (ext.workingIndicatorRenderer) renderer = ext.workingIndicatorRenderer;
+			const candidate = ext.workingIndicatorRenderers?.get(kind);
+			if (candidate) renderer = candidate;
 		}
 		return renderer;
 	}
@@ -1836,12 +1838,19 @@ function createModuleApi(
 			});
 		},
 
-		registerWorkingIndicator(renderer: WorkingIndicatorRenderer): void {
-			const previous = module.workingIndicatorRenderer;
-			module.workingIndicatorRenderer = renderer;
+		registerWorkingIndicator(renderer: WorkingIndicatorRenderer, kinds?: readonly WorkingIndicatorKind[]): void {
+			const registeredKinds = kinds ?? ["working"];
+			module.workingIndicatorRenderers ??= new Map();
+			const previous = new Map(
+				registeredKinds.map((kind) => [kind, module.workingIndicatorRenderers?.get(kind)] as const),
+			);
+			for (const kind of registeredKinds) module.workingIndicatorRenderers.set(kind, renderer);
 			undo(() => {
-				if (module.workingIndicatorRenderer !== renderer) return;
-				module.workingIndicatorRenderer = previous;
+				for (const [kind, prior] of previous) {
+					if (module.workingIndicatorRenderers?.get(kind) !== renderer) continue;
+					if (prior) module.workingIndicatorRenderers.set(kind, prior);
+					else module.workingIndicatorRenderers?.delete(kind);
+				}
 			});
 		},
 

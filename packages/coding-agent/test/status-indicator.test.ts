@@ -187,6 +187,33 @@ describe("status indicators", () => {
 		}
 	});
 
+	it("lets a module shimmer the retry row through the status-row renderer", () => {
+		initTheme();
+		vi.useFakeTimers();
+		const requestRender = vi.fn();
+		const tui = { requestRender } as unknown as TUI;
+		const indicator = new RetryStatusIndicator(tui, 1, 3, 3000);
+		const frames: { kind: string; dtMs: number; message: string }[] = [];
+		indicator.setRowRenderer((state) => {
+			frames.push({ kind: state.kind, dtMs: state.dtMs, message: state.message });
+			return { text: theme.fg("warning", state.message) };
+		});
+
+		try {
+			const first = indicator.render(80)[1]!;
+			expect(frames[0]).toMatchObject({ kind: "retry", dtMs: 0 });
+			expect(stripAnsi(first)).toContain("Retrying (1/3) in 3s");
+			expect(first).toContain(theme.getFgAnsi("warning"));
+
+			vi.advanceTimersByTime(1000);
+			indicator.render(80);
+			expect(frames[1]!.dtMs).toBeGreaterThan(0);
+			expect(frames[1]!.message).toContain("in 2s");
+		} finally {
+			indicator.dispose();
+		}
+	});
+
 	it("disposes retry countdown updates", () => {
 		initTheme();
 		vi.useFakeTimers();

@@ -85,7 +85,9 @@ supersedes a core setting does not patch `SettingsList.render`.
   already implements it that way.
 - `Loader.updateDisplay` for retry/compaction status text. Those are not the
   working row; they carry their own copy and would need a status-row contract
-  of their own.
+  of their own. [2026-11-27-retry-status-shimmer](../bug-fix/2026-11-27-retry-status-shimmer.md)
+  later extended `registerWorkingIndicator` with a `kind` so those rows share
+  the contract instead.
 
 ## Alternatives considered
 

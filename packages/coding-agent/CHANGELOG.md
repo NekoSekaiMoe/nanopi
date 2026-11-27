@@ -26,6 +26,7 @@
 
 ### Fixed
 
+- Retry and compaction status rows shimmer again like the working row: a module can register a status renderer for those kinds, the host keeps the countdown text, and each row advances its own band at 30fps. The renderer receives `kind` in its state; existing working-only registrations keep their behavior (issue [#877](https://cnb.cool/shinytale/agent/nanopi/-/issues/877))
 - Sign in with ChatGPT accepts the single `.onboarding_entrypoint=life_sciences` suffix OpenAI appends to the OAuth callback `state` for some accounts. Other suffixes and repeated suffixes still fail with `OAuth state mismatch`, and the authorization request is unchanged (issue [#854](https://cnb.cool/shinytale/agent/nanopi/-/issues/854))
 - `pi-fake-opencode` follows opencode2api's latest free-tier shaping rules: client tools now travel under the plain `mcp_<digest>` namespace instead of `clint_`, which the tier learned to refuse with 429, and top-level client tool descriptions use NBSP instead of ASCII spaces, which the tier also rejects. Parameter descriptions and official tool definitions stay verbatim ([#841](https://cnb.cool/shinytale/agent/nanopi/-/issues/841))
 
