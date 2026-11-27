@@ -12,7 +12,6 @@ const vendoredModulePaths = [
 	"pi-git-tools",
 	"pi-image",
 	"pi-lsp-mini",
-	"pi-meat",
 	"pi-memory",
 	"pi-output-compact",
 	"pi-rewind",

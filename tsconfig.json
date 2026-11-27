@@ -103,7 +103,6 @@
 		"packages/coding-agent/src/modules/pi-git-tools/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-image/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-lsp-mini/**/__tests__/**",
-		"packages/coding-agent/src/modules/pi-meat/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-memory/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-output-compact/**/__tests__/**",
 		"packages/coding-agent/src/modules/pi-rewind/**/__tests__/**",

@@ -45,7 +45,6 @@
 			"!packages/coding-agent/src/modules/pi-git-tools/**/*",
 			"!packages/coding-agent/src/modules/pi-image/**/*",
 			"!packages/coding-agent/src/modules/pi-lsp-mini/**/*",
-			"!packages/coding-agent/src/modules/pi-meat/**/*",
 			"!packages/coding-agent/src/modules/pi-memory/**/*",
 			"!packages/coding-agent/src/modules/pi-output-compact/**/*",
 			"!packages/coding-agent/src/modules/pi-rewind/**/*",

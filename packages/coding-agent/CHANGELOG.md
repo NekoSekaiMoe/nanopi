@@ -3,6 +3,8 @@
 ## [Unreleased]
 
 ### Changed
+- `meat` is folded into the `git` tool as `git action=diff` with `mode=raw|reading`. The `pi-meat` module and build component are removed; the compiler and chunker now live under `pi-git-tools/src/vendor/`. `mode=reading` still requires `pi-subagent-mini` (issue [#870](https://cnb.cool/shinytale/agent/nanopi/-/issues/870))
+
 - The git tools are now one `git` tool with `action=status|diff|log|branch`, and `web_search`, `read_page`, and the DeepWiki tools are now one `web` tool with `action=search|fetch|wiki_structure|ask_repo`. The `pi-deepwiki` module is merged into `websearch`; `/deepwiki` now prefills a `web` call (issue [#852](https://cnb.cool/shinytale/agent/nanopi/-/issues/852))
 
 ### Removed

@@ -17,7 +17,7 @@ Each pick is a separate module rather than one combined extension, so a flavor o
 - `pi-deepwiki` speaks the hosted DeepWiki MCP JSON-RPC endpoint inline. No MCP adapter. Tool awareness goes into `before_agent_start`; `/deepwiki` only prefills the editor because a command cannot start a turn by itself.
 - `pi-hostname` writes one footer status under key `0-hostname`, reduced to the first DNS label. The emoji from upstream is dropped per repository style.
 - `pi-git-tools` keeps the pure `git` half of git-me (status, diff, log, current-branch) and drops every `gh`/GitHub call. `git_diff` has an opt-in `abridge` flag that delegates to a subagent.
-- `pi-meat` keeps the compiler and chunker from show-me-the-meat. The model submits remove/fold/replace line coordinates; the compiler renders every untouched line verbatim, so a compiled diff is always a projection of the original. The select step runs in a nanopi subagent instead of `createAgentSession`, which is not in this repository's API.
+- The meat compiler and chunker from show-me-the-meat are now vendored under `pi-git-tools/src/vendor/`. The model submits remove/fold/replace line coordinates; the compiler renders every untouched line verbatim, so a compiled diff is always a projection of the original. The select step runs in a nanopi subagent instead of `createAgentSession`, which is not in this repository's API. The standalone `pi-meat` module was removed by issue #870.
 - `pi-output-compact` is only the output-compaction half of rtk, with no `rtk` binary and no command rewriting. It is off unless `<agentDir>/output-compaction.json` sets `outputCompaction.enabled: true`, because every technique is lossy. It returns `structuredContent: undefined` when replacing content, since the old value no longer matches.
 - `pi-token-usage` exposes `/token-usage` over nanopi's own `UsageLedgerIndex` and `getUsageCostBreakdown`. There is no second JSONL format and no prices.json: historical cost stays the price recorded on each response.
 - subagents-mini gains `subagents.preferredCli` in `extra/settings.json` (project override under `.nanopi/extra/settings.json`). `spawn` accepts a one-off `cli` override. For claude/codex/agy the brief goes to stdin (claude) or a trailing positional after `--` (codex/agy); the current session model id is passed where the CLI accepts `--model`, so there is no second model map. The external CLI's session token is kept on the job for `continue`.
@@ -40,7 +40,7 @@ Each pick is a separate module rather than one combined extension, so a flavor o
 ## Consequences
 
 - The full build grows by six modules; the base and minimal builds are unchanged.
-- `pi-meat` and `git_diff`'s abridging depend on `pi-subagent-mini`. In a build without subagents, `git_diff` returns the raw diff and `meat` reports the missing dependency instead of failing silently.
+- The git reading diff (`git action=diff` with `mode=reading`) depends on `pi-subagent-mini`. In a build without subagents, the raw diff mode still works and the reading mode reports the missing dependency instead of failing silently.
 - Tool output compaction changes what the model sees. It is disabled by default and must be enabled explicitly for a session that values context over verbatim output.
 - Verified by `packages/coding-agent/test/pi-extensions-port.test.ts` (SSE parsing, git log record boundaries, diff chunking, CLI argv and alias resolution, hostname formatting, period boundaries) and `pnpm run check`.
 
