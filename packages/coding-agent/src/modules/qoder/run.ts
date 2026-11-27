@@ -1,11 +1,11 @@
 /**
  * Run the Qoder daily check-in against the model runtime's stored credentials.
  *
- * The check-in needs the device token the OAuth login stored, plus the region
- * the login recorded. It reads the credential instead of resolving request auth:
+ * The check-in needs a stored device token, plus the region the credential
+ * records. It reads the credential instead of resolving request auth:
  * `getProviderAuth` refreshes an OAuth credential that is close to expiring, and
  * that refresh retires the stored refresh token, so a check-in would rotate the
- * login every time it ran past the 24h mark for no benefit.
+ * credential every time it ran past the 24h mark for no benefit.
  *
  * A check-in that renews the pair anyway (an expired device token, once the
  * check-in reports 105) stores the rotation before the next account runs.

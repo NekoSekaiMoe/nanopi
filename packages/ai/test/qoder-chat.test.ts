@@ -191,7 +191,7 @@ describe("Qoder login expiry", () => {
 
 		expect(delta.tokenExpired).toBe(true);
 		expect(delta.error).toMatch(/HTTP 403.*Login expired/);
-		expect(delta.error).toMatch(/\/login qoder/);
+		expect(delta.error).toMatch(/QODER_ACCOUNT_REFRESH_TOKEN/);
 	});
 
 	it("leaves every other upstream error alone", () => {
@@ -245,7 +245,7 @@ describe("Qoder login expiry", () => {
 
 		expect(result.stopReason).toBe("error");
 		expect(result.errorMessage).toMatch(/Login expired/);
-		expect(result.errorMessage).toMatch(/\/login qoder/);
+		expect(result.errorMessage).toMatch(/QODER_ACCOUNT_REFRESH_TOKEN/);
 	});
 });
 

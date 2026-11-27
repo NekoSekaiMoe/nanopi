@@ -9,8 +9,8 @@
  * the signed stream endpoint instead: one envelope per turn, answered by SSE
  * frames carrying OpenAI-shaped deltas.
  *
- * Credentials: the stream is signed with the COSY bearer an OAuth login
- * stores. `QODER_*` env vars on the resolved credential carry the account
+ * Credentials: the stream is signed with the COSY bearer the device token
+ * provides. `QODER_*` env vars on the resolved credential carry the account
  * facts the signing identity needs, so a device token alone is enough to
  * start a turn.
  *
@@ -77,7 +77,10 @@ function regionFor(model: Model<QoderApi>, env: ProviderEnv | undefined): QoderR
 function signingIdentity(model: Model<QoderApi>, apiKey: string | undefined, env: ProviderEnv | undefined) {
 	const token =
 		apiKey ?? getProviderEnvValue("QODER_DEVICE_TOKEN", env) ?? getProviderEnvValue("QODER_CN_DEVICE_TOKEN", env);
-	if (!token) throw new Error(`No Qoder device token for provider ${model.provider}. Sign in again.`);
+	if (!token)
+		throw new Error(
+			`No Qoder device token for provider ${model.provider}. Set the device token in the provider environment.`,
+		);
 	const uid = getProviderEnvValue("QODER_ACCOUNT_ID", env) ?? token;
 	return {
 		uid,

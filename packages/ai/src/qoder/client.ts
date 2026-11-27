@@ -1,10 +1,9 @@
 /**
- * Qoder request helpers shared by the OAuth flow and the daily check-in.
+ * Qoder request helpers shared by the model catalog and the daily check-in.
  *
- * The device-token poll and the check-in endpoints are plain Bearer calls: no
- * request signing is involved, only the headers a desktop Qoder client sends.
- * Signing starts at inference requests, which this provider does not cover (the
- * models point at the OpenAI-compatible gateway instead).
+ * The check-in endpoints are plain Bearer calls: no request signing is involved,
+ * only the headers a desktop Qoder client sends. Signed requests (inference and
+ * the model list) add COSY signing on top of these helpers.
  */
 
 import { getProviderEnvValue } from "../utils/provider-env.ts";

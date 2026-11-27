@@ -54,7 +54,9 @@ callback server / PKCE 代码带进产物，base flavor 还会为它保留一个
   之前由登录写入的 `QODER_ACCOUNT_*`、`QODER_REGION` 需要自己设置。模型列表刷新要求
   `QODER_ACCOUNT_ID` 加 token，缺任一个就保留 `auto` entry，不做网络请求。
 - daily check-in 仍只读 stored OAuth credential，新环境变量方式不会让它"登录"。
-  文档明确签到需要已存 token，机器头走进程环境。
+  文档明确签到需要已存 token，机器头走进程环境。源码和提示里不再指向 `/login qoder` 做重登：
+  推理/签到过期时提示补 `QODER_ACCOUNT_REFRESH_TOKEN` 或重新抓 token，未配置时提示设置
+  `QODER_DEVICE_TOKEN` / `QODER_CN_DEVICE_TOKEN`（或用 `/login` 存一个 key）。
 - `packages/coding-agent/docs/providers.md` 的 Qoder 小节改为无浏览器登录的说明；
   上一轮关于登录对话框 notice 的决定由本文取代：
   [2026-11-13-qoder-login-carries-the-checkin-caveat](../feature/2026-11-13-qoder-login-carries-the-checkin-caveat.md)

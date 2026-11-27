@@ -51,7 +51,8 @@ export function collectCheckinMessage(summaries: readonly QoderCheckinSummary[])
 	return withResult
 		.map((summary) => {
 			const name = summary.account ? `${summary.provider} (${summary.account})` : summary.provider;
-			if (summary.status === "unconfigured") return `${name}: missing OAuth login, run /login ${summary.provider}`;
+			if (summary.status === "unconfigured")
+				return `${name}: credential has no device token, set QODER_DEVICE_TOKEN or QODER_CN_DEVICE_TOKEN`;
 			if (summary.status === "error") return `${name}: check-in failed, ${summary.message}`;
 			if (summary.status === "no_campaign") return `${name}: ${noCampaignDetail(summary)}`;
 			return `${name}: ${summary.message}`;
@@ -74,7 +75,10 @@ export default function qoderCheckinExtension(pi: ModuleApi): void {
 			const summaries = await runQoderCheckin(ctx.modelRegistry, AbortSignal.timeout(60_000));
 			const configured = summaries.filter((summary) => summary.status !== "none");
 			if (configured.length === 0) {
-				ctx.ui.notify("No Qoder account is logged in. Run /login qoder or /login qoder-cn.", "warning");
+				ctx.ui.notify(
+					"No Qoder credential found. Set QODER_DEVICE_TOKEN or QODER_CN_DEVICE_TOKEN, or store a device token with /login.",
+					"warning",
+				);
 				return;
 			}
 			const message = collectCheckinMessage(summaries) ?? "nothing to report";

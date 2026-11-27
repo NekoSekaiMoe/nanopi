@@ -175,7 +175,7 @@ const EXPIRED_TOKEN_CODES = new Set(["105", "TOKEN_EXPIRE"]);
 
 /** What to do about an expired token, once the provider has nothing left to retry with. */
 export const TOKEN_EXPIRED_HINT =
-	"Qoder rejected the device token. Run '/login qoder' (or set QODER_ACCOUNT_REFRESH_TOKEN so the token renews itself).";
+	"Qoder rejected the device token. Set QODER_ACCOUNT_REFRESH_TOKEN so the token renews itself, or capture a fresh device token.";
 
 function expiredToken(body: QoderJson | undefined): boolean {
 	if (!body) return false;
