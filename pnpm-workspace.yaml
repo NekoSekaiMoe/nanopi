@@ -49,7 +49,6 @@ minimumReleaseAgeExcludePrune: true
 minimumReleaseAgeIgnoreMissingTime: true
 minimumReleaseAgeExclude:
   - '@isaacs/nonrecursive-glob-match@1.1.0'
-  - 'undici@8.12.4'
 
 allowBuilds:
   '@google/genai': true
