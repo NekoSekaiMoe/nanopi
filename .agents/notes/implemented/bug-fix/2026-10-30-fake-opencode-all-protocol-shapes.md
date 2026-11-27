@@ -24,7 +24,7 @@ Two smaller things were also wrong against the captures:
 | `anthropic-messages` | `system`, string or block list | `tools[].input_schema` |
 | `google-generative-ai` | `config.systemInstruction` | `config.tools[].functionDeclarations` |
 
-Every path renames client tools to `clint_<digest>` (opencode2api's `ClientToolWireName`), appends the official set, and renames the request's own references — chat `tool_choice`/`function_call`/`tool_calls`, Anthropic `tool_choice` and `tool_use` blocks, Responses `tool_choice`/`allowed_tools`/`function_call` items — so the body stays self-consistent.
+Every path renames client tools to an opaque wire name — currently `mcp_<digest>` (opencode2api's `ClientToolWireName`), after the free tier learned the old `clint_` literal — appends the official set, and renames the request's own references — chat `tool_choice`/`function_call`/`tool_calls`, Anthropic `tool_choice` and `tool_use` blocks, Responses `tool_choice`/`allowed_tools`/`function_call` items — so the body stays self-consistent.
 
 The lane is derived from the base URL, matching `models.IsV1Upstream`: a base URL ending in `/zen` is the 1.x gate (`bash`, bare `opencode/<v>` User-Agent, `opencode/<v> ai-sdk/... runtime/bun/...` on model requests); `/inference` and `/zen/go` are the 2.x CLI (`shell`, `opencode/latest/<v>/cli`). nanopi's built-in Zen base is `/inference`, so the v2 default is the one that runs.
 
@@ -42,8 +42,11 @@ Chat also stops stripping `tool_choice` and gains `stream_options.include_usage`
 
 - Free/authenticated Zen models on all four protocols now send a shaped body, not just chat ones.
 - `gateway-tools.ts` carries a second set (`bash` for `/zen`). It shares every definition with the 2.x set except that one name, so a recapture of either generation touches one file.
-- The rename is still one-way. `shapeForGateway` returns the wire-to-client table, but the module API has no response hook, so a streamed tool call arrives as `clint_<digest>`. opencode2api restores names (`ToolRenames` + `RenameStreamReader`); nanopi cannot yet, and the README says so.
+- The rename is still one-way. `shapeForGateway` returns the wire-to-client table, but the module API has no response hook, so a streamed tool call arrives under the wire name. opencode2api restores names (`ToolRenames` + `RenameStreamReader`); nanopi cannot yet, and the README says so.
 - `wireToolName` stays exported for tests but the shaping path uses the collision-aware variant, so two client tools that hash alike get `_2` instead of one name overwriting the other.
+
+
+> The wire namespace and client-description wording were later updated; see [pi-fake-opencode rotates the wire namespace and breaks client description wording](2026-11-27-fake-opencode-free-tier-wire-wording.md).
 
 ## Verification
 

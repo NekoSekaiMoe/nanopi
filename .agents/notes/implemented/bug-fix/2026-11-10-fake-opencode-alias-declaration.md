@@ -76,6 +76,9 @@ upstream shrinks it to the client tool's own at call time.
 - The candidate table is a copied constant. When opencode2api's
   `OfficialToolCandidates` changes, `OFFICIAL_TOOL_CLIENTS` has to follow.
 
+
+> The wire namespace and client-description wording were later updated; see [pi-fake-opencode rotates the wire namespace and breaks client description wording](2026-11-27-fake-opencode-free-tier-wire-wording.md).
+
 ## Verification
 
 `packages/coding-agent/test/fake-opencode-gateway.test.ts`: the aliased official

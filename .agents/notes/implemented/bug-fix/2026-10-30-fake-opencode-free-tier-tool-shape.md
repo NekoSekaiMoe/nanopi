@@ -19,7 +19,7 @@ The module sends the shape a current official CLI sends, on all three signal gro
 **Body** (`payload.ts`).
 
 1. Every system/developer message folds into one leading system message: the official CLI system prompt (with its `<env>` block and skill listing, `gateway-prompt.ts`), a separator, then nanopi's own system prompt verbatim. The gate reads the head of the string; the model reads the tail.
-2. nanopi's tools are renamed to opaque `clint_<hash>` wire names and the official tool set is appended in the CLI's order (`gateway-tools.ts`). The gate compares the entire tool list, so a client name or schema of our own cannot travel; the hash name keeps the tool *reachable* so the model can still ask for work.
+2. nanopi's tools are renamed to opaque wire names (currently `mcp_<hash>`; the older `clint_` literal is refused with 429) and the official tool set is appended in the CLI's order (`gateway-tools.ts`). The gate compares the entire tool list, so a client name or schema of our own cannot travel; the hash name keeps the tool *reachable* so the model can still ask for work.
 3. `stream: true`, `max_completion_tokens`, no `tool_choice`.
 
 The turn fingerprint for the request id comes from the previous shaped body of the same session: pi-ai builds headers before the body, so the transform that sees the body is the only place the turn is known, and the header transform reads what it recorded.

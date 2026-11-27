@@ -13,6 +13,7 @@ import {
 	DEFAULT_MAX_COMPLETION_TOKENS,
 	SYSTEM_PROMPT_SEPARATOR,
 	shapeForGateway,
+	WIRE_TOOL_PREFIX,
 	wireToolName,
 } from "../src/extras/pi-fake-opencode/src/payload.ts";
 
@@ -246,7 +247,7 @@ describe("pi-fake-opencode body shaping", () => {
 		// The client's own names travel only as opaque wire names; `read` is the
 		// official entry.
 		expect(names.filter((name) => name === "read")).toHaveLength(1);
-		expect(names.filter((name) => !name.startsWith("clint_")).slice(0, 13)).toEqual([
+		expect(names.filter((name) => !name.startsWith(WIRE_TOOL_PREFIX)).slice(0, 13)).toEqual([
 			"edit",
 			"execute",
 			"glob",
@@ -317,7 +318,7 @@ describe("pi-fake-opencode body shaping", () => {
 	it("sends the 1.x tool set on the v1 lane", () => {
 		const body = completionsBody();
 		shapeForGateway(body, "openai-completions", V1_CONTEXT);
-		const official = body.tools.filter((tool) => !tool.function.name.startsWith("clint_"));
+		const official = body.tools.filter((tool) => !tool.function.name.startsWith(WIRE_TOOL_PREFIX));
 		expect(official.map((tool) => tool.function.name)).toEqual([
 			"bash",
 			"edit",
@@ -338,7 +339,7 @@ describe("pi-fake-opencode body shaping", () => {
 	it("marks the 2.x official tools strict:false, as that client does", () => {
 		const body = completionsBody();
 		shapeForGateway(body, "openai-completions", CONTEXT);
-		const official = body.tools.filter((tool) => !tool.function.name.startsWith("clint_"));
+		const official = body.tools.filter((tool) => !tool.function.name.startsWith(WIRE_TOOL_PREFIX));
 		expect(official.every((tool) => tool.function.strict === false)).toBe(true);
 	});
 
@@ -429,5 +430,66 @@ describe("pi-fake-opencode body shaping", () => {
 		const first = body.system[0].text;
 		shapeForGateway(body, "anthropic-messages", CONTEXT);
 		expect(body.system[0].text).toBe(first);
+	});
+
+	// opencode2api's #182: the free tier learned the old `clint_` prefix and
+	// answers a shaped body with 429. The rename itself still works under any
+	// plain tool-like namespace; the current capture uses `mcp_`.
+	it("uses the plain wire namespace the free tier has not learned", () => {
+		expect(WIRE_TOOL_PREFIX).toBe("mcp_");
+		expect(wireToolName("bash")).toMatch(/^mcp_[0-9a-f]{12}$/);
+		const body = completionsBody();
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		expect(body.tools.map((tool) => tool.function.name)).not.toContain("clint_");
+	});
+
+	// opencode2api's #188: literal wording in client descriptions is refused.
+	// NBSP keeps the text readable to the model without repeating on re-shaping,
+	// and leaves the official definitions and parameter descriptions verbatim.
+	it("breaks literal wording in client tool descriptions with NBSP", () => {
+		const body = completionsBody({
+			tools: [
+				{
+					type: "function",
+					function: {
+						name: "bash",
+						description: "Run a command now",
+						parameters: { type: "object", description: "Parameter docs" },
+					},
+				},
+			],
+		});
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		expect(body.tools[0].function.description).toBe("Run\u00a0a\u00a0command\u00a0now");
+		expect((body.tools[0].function.parameters as { description: string }).description).toBe("Parameter docs");
+		const official = body.tools.find((tool) => tool.function.name === "shell");
+		expect(official?.function.description).toContain(" ");
+		shapeForGateway(body, "openai-completions", CONTEXT);
+		expect(body.tools[0].function.description).toBe("Run\u00a0a\u00a0command\u00a0now");
+	});
+
+	it("rewrites client descriptions on every protocol", () => {
+		const anthropic = anthropicBody({
+			tools: [{ name: "bash", description: "Run a command", input_schema: { type: "object" } }],
+		});
+		shapeForGateway(anthropic, "anthropic-messages", CONTEXT);
+		expect(anthropic.tools[0].description).toBe("Run\u00a0a\u00a0command");
+
+		const responses = responsesBody({
+			tools: [{ type: "function", name: "bash", description: "Run a command", parameters: { type: "object" } }],
+		});
+		shapeForGateway(responses, "openai-responses", CONTEXT);
+		expect(responses.tools[0].description).toBe("Run\u00a0a\u00a0command");
+
+		const google = googleBody({
+			config: {
+				systemInstruction: "nanopi system prompt",
+				tools: [
+					{ functionDeclarations: [{ name: "bash", description: "Run a command", parametersJsonSchema: {} }] },
+				],
+			},
+		});
+		shapeForGateway(google, "google-generative-ai", CONTEXT);
+		expect(google.config.tools[0].functionDeclarations[0].description).toBe("Run\u00a0a\u00a0command");
 	});
 });
