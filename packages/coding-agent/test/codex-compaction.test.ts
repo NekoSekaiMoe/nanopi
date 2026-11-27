@@ -5,10 +5,10 @@ import {
 	collectCheckpointFacts,
 	DEFAULT_USER_RETAIN_TOKENS,
 	factRef,
+	findEntryIdForRef,
 	formatKeyFacts,
 	planUserRetention,
 } from "../src/modules/codex-compaction/compact.ts";
-import { findEntryIdForRef } from "../src/modules/codex-compaction/index.ts";
 import {
 	assembleCodexSummary,
 	isCodexSummary,

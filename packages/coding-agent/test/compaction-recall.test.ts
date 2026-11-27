@@ -8,12 +8,13 @@ import {
 	RECALL_SECTION_HEADER,
 	resolveRecallRef,
 } from "../src/modules/compaction-recall/recall.ts";
+import contextRecallCoordinator from "../src/modules/context-recall/coordinator.ts";
 
 function messageEntry(id: string, role: "user" | "assistant" | "toolResult", text: string): SessionEntry {
 	return {
 		type: "message",
 		id,
-		parentId: null,
+		parentId: "root",
 		timestamp: "2026-11-17T00:00:00.000Z",
 		message:
 			role === "toolResult"
@@ -33,7 +34,7 @@ function compactionEntry(id: string, firstKeptEntryId: string, summary = "old su
 	return {
 		type: "compaction",
 		id,
-		parentId: null,
+		parentId: "root",
 		timestamp: "2026-11-17T00:00:10.000Z",
 		summary,
 		tokensBefore: 100,
@@ -153,6 +154,15 @@ describe("compaction recall hook", () => {
 		return { surface, handlers, tools };
 	}
 
+	function recallContextManager() {
+		const branch = compactedBranch();
+		return {
+			getBranch: () => branch,
+			getEntry: (id: string) => branch.find((entry) => entry.id === id),
+			buildContextEntries: () => [branch[4]],
+		};
+	}
+
 	it("appends the region table to the summary it is handed", async () => {
 		const { surface, handlers } = pluginSurface();
 		compactionRecallExtension(surface as never);
@@ -174,27 +184,31 @@ describe("compaction recall hook", () => {
 		strictEqual(await handlers[0]({ type: "session_before_compact", branchEntries: compactedBranch() }), undefined);
 	});
 
-	it("answers recall_context with the entries a ref covers", async () => {
+	it("resolves a replaced-region ref through the shared tool", async () => {
 		const { surface, tools } = pluginSurface();
-		compactionRecallExtension(surface as never);
+		contextRecallCoordinator(surface as never);
 		const tool = tools.get("recall_context");
 		strictEqual(tool !== undefined, true);
 		const result = await tool!.execute("call-1", { ref: "E1" }, undefined, undefined, {
-			sessionManager: { getBranch: () => compactedBranch() },
-		});
-		strictEqual(result.content[0].text.includes("first question"), true);
-		strictEqual(result.details.entries, 2);
+			sessionManager: recallContextManager(),
+			getContextUsage: () => undefined,
+		} as never);
+		// The recalled text is carried in details for the renderer; the user-facing
+		// result is a short acknowledgement, like the other recall strategies.
+		strictEqual(result.details.strategy, "region");
+		strictEqual(result.details.entryIds.length, 2);
 	});
 
 	it("refuses a ref the branch does not carry", async () => {
 		const { surface, tools } = pluginSurface();
-		compactionRecallExtension(surface as never);
+		contextRecallCoordinator(surface as never);
 		const tool = tools.get("recall_context");
 		let message = "";
 		try {
 			await tool!.execute("call-1", { ref: "E9" }, undefined, undefined, {
-				sessionManager: { getBranch: () => compactedBranch() },
-			});
+				sessionManager: recallContextManager(),
+				getContextUsage: () => undefined,
+			} as never);
 		} catch (error) {
 			message = error instanceof Error ? error.message : String(error);
 		}

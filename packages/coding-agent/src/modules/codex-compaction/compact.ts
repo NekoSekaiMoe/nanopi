@@ -282,6 +282,12 @@ export function formatKeyFacts(facts: readonly CheckpointFact[]): string {
 	return `\n\n## Key Facts\n${rows}`;
 }
 
+/** Read a Key Facts ref back from a summary. The row format is pinned by `formatKeyFacts()`. */
+export function findEntryIdForRef(summaryText: string, ref: string): string | undefined {
+	const pattern = new RegExp(`^-\\s+${ref.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}:.*\\(entry ([^)]+)\\)$`, "m");
+	return pattern.exec(summaryText)?.[1];
+}
+
 /**
  * Produce a Codex-style CompactionResult, or `undefined` to let the default
  * compaction run.
