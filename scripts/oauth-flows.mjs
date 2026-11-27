@@ -26,8 +26,6 @@ export const OAUTH_FLOWS = [
 	{ module: "openai-chatgpt", loader: "openaiChatGPT", exportName: "openaiChatGPTOAuth" },
 	{ module: "openai-codex", loader: "openaiCodex", exportName: "openaiCodexOAuth" },
 	{ module: "openrouter", loader: "openRouter", exportName: "openRouterOAuth" },
-	{ module: "qoder-oauth", loader: "qoder", exportName: "qoderOAuth" },
-	{ module: "qoder-oauth", loader: "qoderCn", exportName: "qoderCnOAuth" },
 	{ module: "xai", loader: "xai", exportName: "xaiOAuth" },
 ];
 

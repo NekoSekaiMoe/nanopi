@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the `qoder` / `qoder-cn` browser OAuth login. Qoder providers now carry only API-key auth (`QODER_DEVICE_TOKEN` / `QODER_CN_DEVICE_TOKEN`); the inference API, provider registration and daily check-in stay (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
+
 ### Fixed
 
 - Antigravity `/login` now matches the official `agy` client's captured authorization URL: PKCE S256 `code_challenge`, a `state` nonce validated on both the loopback callback and a pasted redirect URL, and the `cloud-platform` / `userinfo.email` / `aicode` scopes. The `loadCodeAssist` / `onboardUser` calls made during login now carry the same client identity headers as inference requests instead of a bare `antigravity` User-Agent (issue [#825](https://cnb.cool/shinytale/nanopi/-/issues/825))
