@@ -15,7 +15,7 @@
 
 ### Fixed
 
-- `recall_context` loads without startup errors again. Three built-in modules registered that name independently, so the loader reported conflicts for `compaction-recall` and `context-recall` while only `codex-compaction`'s tool survived. A single coordinator module now owns `recall_context` and dispatches by ref shape, so `[rN]` citations, Key Facts `cNrN` refs, and replaced-region `E<n>` refs all work from one tool call (issue [#832](https://cnb.cool/shinytale/nanopi/-/issues/832))
+- `recall_context` loads without startup errors again. The three recall strategies now live inside one `codex-compaction` module, whose single `recall_context` tool dispatches by ref shape: `[rN]` citations, Key Facts `cNrN` refs, and replaced-region `E<n>` refs all work from one tool call (issue [#832](https://cnb.cool/shinytale/nanopi/-/issues/832))
 
 - In-context compaction now replays the captured next-turn request, including tool declarations, request metadata, and the resolved API key. A provider that keys its cache on any of those fields no longer drops the cached prefix and falls back to a paid standalone summary (issue [#830](https://cnb.cool/shinytale/nanopi/-/issues/830))
 

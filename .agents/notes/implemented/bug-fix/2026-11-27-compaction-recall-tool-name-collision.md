@@ -4,6 +4,8 @@ Status: implemented
 
 Ref: shinytale/nanopi#832
 
+Superseded on module topology by [One compaction module owns all recall strategies](../../implemented/simplification/2026-11-27-one-compaction-module.md). The single-tool contract below still holds; the four-module layout does not.
+
 ## Problem
 
 Three built-in modules registered `recall_context` independently: `codex-compaction` for Key Facts refs (`c0r2`), `context-recall` for citation tags (`[rN]`), and `compaction-recall` for replaced-region ordinals (`E3`). The registry resolves a duplicate tool name by load order, so `codex-compaction` won and `DefaultResourceLoader` turned the other two registrations into startup errors:
@@ -17,7 +19,7 @@ A generic loader change would weaken a check that names real mistakes (two unrel
 
 ## Decision
 
-A new hidden `context-recall-coordinator` module owns the single `recall_context` tool. The other three modules keep their writers and resolvers but register no tool:
+The first fix added a hidden `context-recall-coordinator` module to own the single `recall_context` tool while the three writers stayed registered. That layout has since been folded into one module; the writer/resolver split below remains the internal contract:
 
 - `codex-compaction` still writes the `## Key Facts` block. `findEntryIdForRef()` moved from its `index.ts` into `compact.ts` so the reader stays next to the writer.
 - `context-recall` is now a resolver-only module: `resolveRecalledEntries()` is its public surface.
@@ -25,7 +27,7 @@ A new hidden `context-recall-coordinator` module owns the single `recall_context
 
 The coordinator takes one `ref: string` and dispatches on shape: `[rN]` citations append a `context_recall` entry (the `[rN]` strategy's durable-history rule), while Key Facts and `E<n>` refs answer with projected session text as a tool result, as they did before. A ref using two shapes, or an unrecognized shape, is refused instead of guessed. The 25% context-window ceiling applies to all three.
 
-The module is a separate build component (`module/context-recall-coordinator`). The trimmed `base` and `minimal` flavors disable it along with the two optional recall writers; a custom flavor that disables it while enabling a writer keeps that writer's summary appendix without exposing a tool that cannot resolve it.
+The coordinator was initially a separate build component (`module/context-recall-coordinator`). The trimmed `base` and `minimal` flavors disabled it along with the two optional recall writers. The later simplification removed those switches with the separate modules.
 
 ## Alternatives considered
 
