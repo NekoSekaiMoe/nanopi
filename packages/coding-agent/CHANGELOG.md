@@ -26,6 +26,11 @@
 
 ### Fixed
 
+- Fixed HTML export inserting viewer scripts and CSS with `String.replace` string replacements, which expanded `$$` and `$&` in template.js and highlight.js and showed the cost without its dollar sign (upstream `41da1a524`)
+- Fixed WSL detection in terminals that start the shell without WSL environment variables: keybindings, footer branch polling and clipboard now share one check that falls back to `/proc/version` (upstream `e4ed3d610`)
+- Fixed `app.message.followUp` (Alt+Enter) ignoring an open autocomplete menu and queuing the half-typed text; it now applies the selected suggestion like Enter (upstream `27157503e`)
+- Fixed key hints that named hardcoded keys: the extension editor and session rename name `tui.input.submit`, `/hotkeys` names `tui.select.cancel` for autocomplete, and session and submenu selectors follow remapped keys (upstream `b882d08f3`)
+
 - Retry and compaction status rows shimmer again like the working row: a module can register a status renderer for those kinds, the host keeps the countdown text, and each row advances its own band at 30fps. The renderer receives `kind` in its state; existing working-only registrations keep their behavior (issue [#877](https://cnb.cool/shinytale/agent/nanopi/-/issues/877))
 - Sign in with ChatGPT accepts the single `.onboarding_entrypoint=life_sciences` suffix OpenAI appends to the OAuth callback `state` for some accounts. Other suffixes and repeated suffixes still fail with `OAuth state mismatch`, and the authorization request is unchanged (issue [#854](https://cnb.cool/shinytale/agent/nanopi/-/issues/854))
 - `pi-fake-opencode` follows opencode2api's latest free-tier shaping rules: client tools now travel under the plain `mcp_<digest>` namespace instead of `clint_`, which the tier learned to refuse with 429, and top-level client tool descriptions use NBSP instead of ASCII spaces, which the tier also rejects. Parameter descriptions and official tool definitions stay verbatim ([#841](https://cnb.cool/shinytale/agent/nanopi/-/issues/841))

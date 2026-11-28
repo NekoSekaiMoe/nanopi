@@ -32,6 +32,7 @@ export function applyOpenRouterReportedCost(usage: Usage, reported: OpenRouterUs
 
 	if (reported.is_byok === false) {
 		usage.cost.total = reported.cost;
+		usage.cost.totalFromProvider = true;
 		return;
 	}
 
@@ -50,5 +51,6 @@ export function applyOpenRouterReportedCost(usage: Usage, reported: OpenRouterUs
 		}
 		if (!isValidCost(upstreamCost)) return;
 		usage.cost.total = reported.cost + upstreamCost;
+		usage.cost.totalFromProvider = true;
 	}
 }

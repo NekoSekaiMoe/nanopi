@@ -117,7 +117,7 @@ describe("openai-completions provider stream events", () => {
 			{ apiKey: "test" },
 		);
 
-		expect(message.usage.cost).toEqual({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.004 });
+		expect(message.usage.cost).toMatchObject({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.004 });
 	});
 
 	it("includes upstream inference cost for OpenRouter BYOK requests", async () => {

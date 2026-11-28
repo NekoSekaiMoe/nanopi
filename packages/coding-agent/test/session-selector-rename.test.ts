@@ -1,5 +1,5 @@
-import { setKeybindings } from "@nanopi/pi-tui";
-import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { setKeybindings, stripTerminalSequences } from "@nanopi/pi-tui";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { KeybindingsManager } from "../src/core/keybindings.ts";
 import type { SessionInfo } from "../src/core/session-manager.ts";
 import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
@@ -27,6 +27,10 @@ function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionI
 
 // Kitty keyboard protocol encoding for Ctrl+R
 const CTRL_R = "\x1b[114;5u";
+
+afterEach(() => {
+	setKeybindings(new KeybindingsManager());
+});
 
 describe("session selector rename", () => {
 	beforeAll(() => {
@@ -107,5 +111,23 @@ describe("session selector rename", () => {
 
 		expect(renameSession).toHaveBeenCalledTimes(1);
 		expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "XOld");
+	});
+
+	it("names the key that submits the rename", async () => {
+		const keybindings = new KeybindingsManager({ "tui.input.submit": "ctrl+s" });
+		setKeybindings(keybindings);
+		const selector = new SessionSelectorComponent(
+			async () => [makeSession({ id: "a" })],
+			async () => [],
+			() => {},
+			() => {},
+			() => {},
+			() => {},
+			{ renameSession: async () => {}, showRenameHint: true, keybindings },
+		);
+		await flushPromises();
+		selector.getSessionList().handleInput(CTRL_R);
+		await flushPromises();
+		expect(stripTerminalSequences(selector.render(120).join("\n"))).toContain("ctrl+s to save");
 	});
 });

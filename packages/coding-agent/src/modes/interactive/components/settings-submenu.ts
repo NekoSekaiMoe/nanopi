@@ -11,6 +11,7 @@ import {
 	Text,
 } from "@nanopi/pi-tui";
 import { getSelectListTheme, theme } from "../theme/theme.ts";
+import { keyText } from "./keybinding-hints.ts";
 import { listRowBudget } from "./list-window.ts";
 
 const SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
@@ -100,9 +101,8 @@ export class SelectSubmenu extends Container {
 
 		// Hint
 		this.addChild(new Spacer(1));
-		const hint = submenuOptions?.searchable
-			? "  Type to filter \u00b7 Enter to select \u00b7 Esc to go back"
-			: "  Enter to select \u00b7 Esc to go back";
+		const keysHint = `${keyText("tui.select.confirm")} to select \u00b7 ${keyText("tui.select.cancel")} to go back`;
+		const hint = submenuOptions?.searchable ? `  Type to filter \u00b7 ${keysHint}` : `  ${keysHint}`;
 		this.addChild(new Text(theme.fg("dim", hint), 0, 0));
 	}
 

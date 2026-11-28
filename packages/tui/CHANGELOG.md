@@ -4,10 +4,12 @@
 
 ### Added
 
+- Added protected `Editor.confirmAutocomplete()` so subclasses can apply the selected autocomplete suggestion the way `tui.select.confirm` does (upstream `27157503e`)
 - `TUI.setSuspendSignalHandler()` registers a SIGTSTP handler only while the TUI owns the terminal (`start()` to `stop()`). The listener is removed only after the terminal is restored and is not churned on redundant updates (upstream `e4f50d76d`, `3107a58d2`)
 
 ### Fixed
 
+- Fixed `SettingsList` hint hardcoding Enter and Esc instead of naming the configured `tui.select.confirm` and `tui.select.cancel` keys (upstream `b882d08f3`)
 - Right-click paste no longer inserts the clipboard twice in Tabby on Windows, which pastes on right-click itself (upstream `165c70df9`)
 - Repeated prompts already in Up-arrow history now move to the most recent position instead of being added again, so `/tree`, fork and resume do not duplicate them (upstream `06a20368a`)
 - Markdown after an unclosed `$` before a number, such as `+$50`, is no longer rendered as raw text across the rest of the paragraph (upstream `362bf6f1b`)

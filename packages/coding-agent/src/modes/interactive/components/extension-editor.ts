@@ -90,7 +90,7 @@ export class ExtensionEditorComponent extends Container implements Focusable {
 
 		// Add hint
 		const hint =
-			keyHint("tui.select.confirm", "submit") +
+			keyHint("tui.input.submit", "submit") +
 			"  " +
 			keyHint("tui.input.newLine", "newline") +
 			"  " +
