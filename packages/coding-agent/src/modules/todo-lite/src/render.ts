@@ -172,12 +172,7 @@ export function renderTodoResult(result: unknown, options: { expanded: boolean }
 		case "clear": {
 			const text = r.content[0];
 			const msg = text?.type === "text" ? (text.text ?? "") : "";
-			const listText = buildTodoListText(todoList, options, theme);
-			return new Text(
-				theme.fg("success", "\u2713 ") + theme.fg("muted", msg) + "\n\n" + listText,
-				0,
-				0,
-			);
+			return new Text(theme.fg("success", "\u2713 ") + theme.fg("muted", msg), 0, 0);
 		}
 
 		default: {
