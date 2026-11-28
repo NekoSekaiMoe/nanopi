@@ -25,6 +25,7 @@
 - The machine hostname is now shown on its own line under the welcome box directory and as a `Hostname:` row in `/status`. The standalone `pi-hostname` module is removed (issue [#835](https://cnb.cool/shinytale/nanopi/-/issues/835))
 
 ### Fixed
+- `ask_user_question` now decodes double-encoded tool arguments before schema validation. A resumed session whose `questions` array or its elements were serialized as JSON strings opens the dialog instead of failing validation (upstream `#244`, issue [#885](https://cnb.cool/shinytale/agent/nanopi/-/issues/885))
 
 - Fixed HTML export inserting viewer scripts and CSS with `String.replace` string replacements, which expanded `$$` and `$&` in template.js and highlight.js and showed the cost without its dollar sign (upstream `41da1a524`)
 - Fixed WSL detection in terminals that start the shell without WSL environment variables: keybindings, footer branch polling and clipboard now share one check that falls back to `/proc/version` (upstream `e4ed3d610`)
