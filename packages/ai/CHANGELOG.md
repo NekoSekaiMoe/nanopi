@@ -7,12 +7,14 @@
 - Added `Usage.imageOutput`, the image output tokens as a subset of `output` reported by OpenRouter. `openrouter-images` sets it from `completion_tokens_details.image_tokens`, alongside `reasoning` from `completion_tokens_details.reasoning_tokens` (upstream `a512c3fe2`, `d02145c49`)
 - Added `cost.imageOutput`, the image output rate for models that generate images. The OpenRouter catalog reads it from `image_output`, and `calculateCost()` prices image tokens at that rate while pricing the rest of output (text and reasoning) at `output`. Without the provider's split, all output uses the image rate; without the image rate, all output keeps the text rate (upstream `ccda1f74b`)
 - Added `aspectRatio` and `size` to `ImagesOptions`; `openrouter-images` forwards them to OpenRouter's `image_config` (upstream `c863bdf19`)
+- Added `Usage.pricing` (`UsagePricing`): `calculateCost()` freezes a deep-copied snapshot of the provider, model, rate revision hash, and `ModelCost` rates (including tiers) on each costed response so historical spend stays explainable across catalog updates (issue [#803](https://cnb.cool/shinytale/agent/nanopi/-/issues/803))
 
 ### Changed
 
 - Qwen Token Plan Individual now lists `qwen4-max` instead of the retired `qwen4-max-preview` (upstream `22f5f2995`)
 - Together drops reasoning-effort overrides for models deprecated in the upstream catalog; every listed Together reasoning model takes the Together thinking toggle (upstream `e459be65a`)
 - GitHub Copilot Claude and GPT-6 models keep the prompt cache across thinking-level and tool changes: Claude uses mid-conversation effort and tool changes, GPT-6 uses `configuration_update` items, and Claude models declare Anthropic's 5-minute and 1-hour cache lifetimes for warming (upstream `d5b453814`)
+- Context token estimation (`estimateTextTokens`, `estimateTextAndImageContentTokens`, `estimateMessageTokens`) now uses `gpt-tokenizer`'s `o200k_base` encoding via `countTextTokens()` / `countTokenFragments()` instead of dividing characters by 3.5, and excludes opaque `thinkingSignature` payloads from local counts (issue [#763](https://cnb.cool/shinytale/agent/nanopi/-/issues/763))
 
 ### Removed
 
@@ -37,6 +39,13 @@
 
 - A CRLF shell frame split across two SSE chunks no longer drops the event: the line reader treated a trailing `\r` as a complete line break, so the frame that followed it lost its `event:` field. A bare `\r` is now held until the next chunk (or the final drain) proves it is not the first half of `\r\n`
 - A failed OAuth token exchange names the missing or invalid fields instead of echoing the response body, which carried the access and refresh tokens the call had just refused to parse
+- Fixed `openai-completions` streamed tool-argument merging (`mergeStreamingArgumentObject`) guarding `__proto__`, `constructor`, and `prototype` keys with `Object.defineProperty` instead of assigning onto the object prototype chain (issue [#796](https://cnb.cool/shinytale/agent/nanopi/-/issues/796))
+- Endpoint provider detection (`detectCompat`, `detectSessionAffinityFormat`, `getAnthropicCompat`, `isOpenRouterModel`) now matches exact domains/subdomains via `matchesHostname` instead of `baseUrl.includes(...)`, preventing untrusted hosts or query parameters from inheriting another vendor's request shape or accounting (issue [#743](https://cnb.cool/shinytale/agent/nanopi/-/issues/743))
+- Anthropic OAuth authorization URLs now include `prompt=login` so browsers offer an account picker instead of silently reusing an active `claude.ai` session, and Anthropic stream `Connection error.` failures append `deepestCause(error)` (issue [#743](https://cnb.cool/shinytale/agent/nanopi/-/issues/743))
+- Added five retryable transport error patterns (`request to \S+ failed, reason:`, `upstream_request_failed`, `upstream_stream_read_error`, `stream was interrupted`, `http2 stream failed`) to the provider retry classifier (issue [#743](https://cnb.cool/shinytale/agent/nanopi/-/issues/743))
+- Azure catalog clones now preserve OpenAI long-context pricing `tiers` (above 272k input tokens), and `gpt-6-astra`, `gpt-6-sol`, `gpt-6-luna`, and `gpt-6.1-sol` on Azure receive their 1.05M `contextWindow` (issue [#750](https://cnb.cool/shinytale/agent/nanopi/-/issues/750))
+- Kimi K3 `cacheWrite` pricing now uses Moonshot's 5-minute rate ($3/MTok) instead of `0`, correcting cache-warming and cache-stats cost estimates (issue [#743](https://cnb.cool/shinytale/agent/nanopi/-/issues/743))
+- Google `mapStopReason` now maps the four `@google/genai` 3.3.0 `FinishReason` values (`MISSING_THOUGHT_SIGNATURE`, `ESCALATION`, `PUP_LIMITED_DISABLED`, `MODEL_ARMOR`) to `"error"` (issue [#723](https://cnb.cool/shinytale/agent/nanopi/-/issues/723))
 - Google's discrete thinking control is chosen from the model's `thinkingLevelMap` instead of an id pattern, so `gemini-4-*` reaches it: `gemini-4-hydrogen` no longer throws `Unsupported Google thinking level mapping` when `xhigh` (or `max`, clamped to it) is selected, and `gemini-4-argon` / `gemini-4-carbon` send their declared `low`/`medium`/`high` instead of a silent `thinkingBudget: -1`. `xhigh` maps to the SDK's `XHIGH`, which `@google/genai` 3.3.0 added; `max` still clamps to `xhigh` because Google has no such value (issue [#731](https://cnb.cool/shinytale/nanopi/-/issues/731))
 
 ## [20261114]
