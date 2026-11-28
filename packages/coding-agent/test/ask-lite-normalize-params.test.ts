@@ -1,7 +1,11 @@
 // Regression test for CNB issue #635: a bare CR in model-supplied tool args
 // tore the option row apart and slipped past the label guards.
 import { describe, expect, test } from "vitest";
-import { normalizeQuestionParams, normalizeText } from "../src/modules/ask-lite/tool/normalize-params.ts";
+import {
+	normalizeQuestionParams,
+	normalizeText,
+	prepareQuestionArguments,
+} from "../src/modules/ask-lite/tool/normalize-params.ts";
 import type { QuestionParams } from "../src/modules/ask-lite/tool/types.ts";
 import { validateQuestionnaire } from "../src/modules/ask-lite/tool/validate-questionnaire.ts";
 
@@ -112,5 +116,54 @@ describe("normalizeQuestionParams", () => {
 	test("keeps the normalized form for the questions the dialog renders", () => {
 		const out = normalizeQuestionParams(params());
 		expect(out.questions[0]!.options[0]!.label).toBe("GEMBA_LOG");
+	});
+});
+
+// Regression for CNB issue #885: resume replays stringified tool arguments;
+// decoding must happen before schema validation, otherwise `questions` is not
+// recognized as an array and the questionnaire never opens.
+describe("prepareQuestionArguments", () => {
+	test("decodes a stringified questions array with stringified elements and options", () => {
+		const raw = {
+			questions: JSON.stringify([
+				JSON.stringify({
+					question: "Which database?",
+					header: "db",
+					options: JSON.stringify([
+						JSON.stringify({ label: "Postgres", description: "relational" }),
+						JSON.stringify({ label: "SQLite", description: "embedded" }),
+					]),
+					multiSelect: false,
+				}),
+			]),
+		};
+		const prepared = prepareQuestionArguments(raw);
+		expect(prepared).toEqual({
+			questions: [
+				{
+					question: "Which database?",
+					header: "db",
+					options: [
+						{ label: "Postgres", description: "relational" },
+						{ label: "SQLite", description: "embedded" },
+					],
+					multiSelect: false,
+				},
+			],
+		});
+	});
+
+	test("passes through non-object args and well-formed args unchanged", () => {
+		const valid: QuestionParams = params();
+		expect(prepareQuestionArguments(valid)).toBe(valid);
+		expect(prepareQuestionArguments(null)).toBe(null);
+		expect(prepareQuestionArguments("garbage")).toBe("garbage");
+	});
+
+	test("leaves malformed JSON strings for validation to reject", () => {
+		const raw = { questions: "not json" };
+		expect(prepareQuestionArguments(raw)).toBe(raw);
+		const badElement = { questions: [JSON.stringify("not an object")] };
+		expect(prepareQuestionArguments(badElement)).toEqual(badElement);
 	});
 });

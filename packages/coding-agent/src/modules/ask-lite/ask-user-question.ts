@@ -14,7 +14,7 @@ import {
 	type QuestionParams,
 	QuestionParamsSchema,
 } from "./tool/types.js";
-import { normalizeQuestionParams } from "./tool/normalize-params.js";
+import { normalizeQuestionParams, prepareQuestionArguments } from "./tool/normalize-params.js";
 import { validateQuestionnaire } from "./tool/validate-questionnaire.js";
 import type { WrappingSelectItem } from "./view/components/wrapping-select.js";
 
@@ -129,6 +129,7 @@ export function registerAskUserQuestionTool(pi: ModuleToolsSurface): void {
 		promptSnippet: guidance.promptSnippet ?? DEFAULT_PROMPT_SNIPPET,
 		promptGuidelines: guidance.promptGuidelines ?? DEFAULT_PROMPT_GUIDELINES,
 		parameters: QuestionParamsSchema,
+		prepareArguments: prepareQuestionArguments,
 
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const typed = normalizeQuestionParams(params as unknown as QuestionParams);
