@@ -26,6 +26,11 @@ function row(elapsedMs = 0): string {
 	return stripAnsi(workingMessage(theme, elapsedMs, sweep, 0));
 }
 
+/** The working row starts with the breathing dot; tests read the shimmer text after it. */
+function textAfterDot(row: string): string {
+	return row.replace(/^\S /, "");
+}
+
 describe("pi-ui working row", () => {
 	beforeEach(() => {
 		captureTerminalWidth(0);
@@ -33,7 +38,7 @@ describe("pi-ui working row", () => {
 	});
 
 	test("falls back to the plain label without a plan", () => {
-		expect(row()).toBe("Working (0s · esc to interrupt)");
+		expect(textAfterDot(row())).toBe("Working (0s · esc to interrupt)");
 	});
 
 	test("shows the current plan step", () => {
@@ -41,13 +46,13 @@ describe("pi-ui working row", () => {
 			{ text: "Read AGENTS.md", status: "completed" },
 			{ text: "Fix the welcome tip", status: "in_progress" },
 		]);
-		expect(row()).toContain("1/2 Fix the welcome tip");
+		expect(textAfterDot(row())).toContain("1/2 Fix the welcome tip");
 	});
 
 	test("folds a long step with a trailing marker instead of cutting the word", () => {
 		const step = "Implement the working row folding so long steps keep their tail";
 		setPlan([{ text: step, status: "in_progress" }]);
-		const text = row();
+		const text = textAfterDot(row());
 		expect(text).toContain("(working …)");
 		expect(text).not.toMatch(/\w…/);
 		expect(text.endsWith("(0s · esc to interrupt)")).toBe(true);
@@ -61,6 +66,17 @@ describe("pi-ui working row", () => {
 			// The row lives in the editor border, so it must fit one line.
 			expect(visibleWidth(row(90_000))).toBeLessThan(columns);
 		}
+	});
+
+	test("prefixes the working row with a breathing dot that advances with elapsed time", () => {
+		const dotPrefix = (value: string) => value.slice(0, value.indexOf(" ") + 1);
+		const first = workingMessage(theme, 0, sweep, 0);
+		expect(dotPrefix(first)).toMatch(/^\x1b\[38;2;\d+;\d+;\d+m[∙⋅✦]\x1b\[39m $/);
+		// The dot is driven by elapsed time, not the shimmer frame delta: a new
+		// renderer with dtMs=0 still shows the same frame for the same elapsed time.
+		expect(dotPrefix(workingMessage(theme, 0, sweep, 50))).toBe(dotPrefix(first));
+		expect(dotPrefix(workingMessage(theme, 100, sweep, 0))).not.toBe(dotPrefix(first));
+		expect(stripAnsi(workingMessage(theme, 100, sweep, 0))).toHaveLength(stripAnsi(first).length);
 	});
 
 	test("shimmers the retry status row with the same band as working", () => {
@@ -98,6 +114,6 @@ describe("pi-ui working row", () => {
 	test("keeps a short step intact on a narrow terminal", () => {
 		setPlan([{ text: "Read AGENTS.md", status: "in_progress" }]);
 		captureTerminalWidth(80);
-		expect(row()).toContain("0/1 Read AGENTS.md");
+		expect(textAfterDot(row())).toContain("0/1 Read AGENTS.md");
 	});
 });

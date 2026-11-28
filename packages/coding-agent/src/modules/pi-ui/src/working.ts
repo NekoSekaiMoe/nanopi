@@ -11,19 +11,18 @@ import type {
   ModuleEventsSurface,
   ModuleRenderingSurface,
   Theme,
-  WorkingIndicatorOptions,
   WorkingIndicatorRenderer,
   WorkingIndicatorState,
 } from "@nanopi/pi-coding-agent";
-import { Loader, Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
-import { fgRgb } from "./gradient.ts";
+import { Text, truncateToWidth, visibleWidth } from "@nanopi/pi-tui";
+import { fgRgb, sampleGradient, type Rgb } from "./gradient.ts";
 import { HINT_SHIMMER_PALETTE, MAIN_SHIMMER_PALETTE, shimmerSegmentsAnimated, type SweepState } from "./shimmer.ts";
 
 const ELAPSED_ENTRY_TYPE = "pi-ui-elapsed";
 const MAX_STEP_CHARS = 48;
 /** Below this many step characters the fold marker costs more than it explains. */
 const MIN_STEP_CHARS = 12;
-/** Status row prefix: spinner dot, a space, and the one-cell margin the row keeps. */
+/** Status row prefix: the dot, a space, and the one-cell margin the row keeps. */
 const ROW_PREFIX_COLS = 4;
 const HINT_SUFFIX = " · esc to interrupt)";
 
@@ -37,6 +36,44 @@ function sweepFor(key: string): SweepState {
     sweeps.set(key, sweep);
   }
   return sweep;
+}
+
+/**
+ * Breathing dot beside the working shimmer. One glyph per 100 ms frame,
+ * matching the spinner cadence the reference uses. `∙` and `⋅` are East Asian
+ * Width neutral, so the row keeps one cell at every frame (unlike `•`/`·`,
+ * which are ambiguous-width and shift a CJK terminal). The dot grows into a
+ * star, flares, then rests before fading back to a point.
+ */
+const DOT_BLUE: Rgb = [71, 150, 227];
+const DOT_PURPLE: Rgb = [145, 119, 199];
+const DOT_BREATH: readonly (readonly [string, number, number])[] = [
+  ["∙", 0.2, 0], ["∙", 0.3, 0], ["⋅", 0.4, 0.1], ["⋅", 0.5, 0.2],
+  ["✦", 0.6, 0.4], ["✦", 0.8, 0.7], ["✦", 1.0, 1.0], ["✦", 0.85, 0.8],
+  ["✦", 0.7, 0.5], ["✦", 0.6, 0.2], ["✦", 0.5, 0], ["✦", 0.5, 0],
+  ["✦", 0.5, 0], ["✦", 0.5, 0], ["✦", 0.5, 0], ["✦", 0.5, 0],
+  ["✦", 0.5, 0], ["✦", 0.5, 0], ["✦", 0.5, 0], ["✦", 0.4, 0],
+  ["⋅", 0.35, 0], ["∙", 0.25, 0], ["∙", 0.2, 0], ["∙", 0.2, 0],
+];
+const DOT_FRAME_MS = 100;
+
+/**
+ * Dot frame for a point in the turn. The breath period is fixed (unlike the
+ * shimmer band, whose canvas changes with text width), so wall time addresses
+ * the frame directly: no accumulator to drift or jump when a frame is missed.
+ */
+function breathingDot(elapsedMs: number): string {
+  const frame = Math.floor(Math.max(0, elapsedMs) / DOT_FRAME_MS) % DOT_BREATH.length;
+  const [glyph, light, hue] = DOT_BREATH[frame]!;
+  const tone = sampleGradient([DOT_BLUE, DOT_PURPLE], hue);
+  const color: Rgb = light < 0.5
+    ? [Math.round((tone[0] * light) / 0.5), Math.round((tone[1] * light) / 0.5), Math.round((tone[2] * light) / 0.5)]
+    : [
+        Math.round(tone[0] + (255 - tone[0]) * (light - 0.5) * 0.9),
+        Math.round(tone[1] + (255 - tone[1]) * (light - 0.5) * 0.9),
+        Math.round(tone[2] + (255 - tone[2]) * (light - 0.5) * 0.9),
+      ];
+  return fgRgb(glyph, color);
 }
 
 /** Terminal width captured from the footer factory; the working row is one line. */
@@ -142,10 +179,11 @@ export function workingMessage(theme: Theme, elapsedMs: number, sweep: SweepStat
     sweep,
     dtMs,
   );
-  if (terminalColumns <= 0 || visibleWidth(line) <= terminalColumns - 1) return line;
+  const withDot = `${breathingDot(elapsedMs)} ${line}`;
+  if (terminalColumns <= 0 || visibleWidth(withDot) <= terminalColumns - 1) return withDot;
   // Last resort for a terminal too narrow for the per-step budget: fold the
   // whole row rather than let it wrap and break the editor frame.
-  return truncateToWidth(line, terminalColumns - 1, "…");
+  return truncateToWidth(withDot, terminalColumns - 1, "…");
 }
 
 /**
@@ -172,11 +210,12 @@ function workingRowRenderer(): WorkingIndicatorRenderer {
       sweep,
       state.dtMs,
     );
+    const withDot = `${breathingDot(state.elapsedMs)} ${line}`;
     const columns = state.columns > 0 ? state.columns : terminalColumns;
-    if (columns > 0 && visibleWidth(line) > columns - 1) {
-      return { text: truncateToWidth(line, columns - 1, "…") };
+    if (columns > 0 && visibleWidth(withDot) > columns - 1) {
+      return { text: truncateToWidth(withDot, columns - 1, "…") };
     }
-    return { text: line };
+    return { text: withDot };
   };
 }
 

@@ -36,6 +36,11 @@ export class StatusIndicator extends Loader {
 		this.repaintTarget = ui;
 	}
 
+	/** Whether a registered renderer owns this row instead of the default Loader. */
+	hasRowRenderer(): boolean {
+		return this.rowRenderer !== undefined;
+	}
+
 	/** Install a `registerWorkingIndicator` renderer; undefined restores the default row. */
 	setRowRenderer(renderer: WorkingIndicatorRenderer | undefined): void {
 		// `dtMs` is the gap since the previous frame; a new renderer has no previous
@@ -106,7 +111,13 @@ export class StatusIndicator extends Loader {
 		// `render`, not `super.render`: a subclass that draws its own row has to
 		// be asked, or the embedded border shows a row the host already replaced.
 		const line = this.render(width + 2)[1] ?? "";
-		return truncateToWidth(line.startsWith(" ") ? line.slice(1).trimEnd() : line.trimEnd(), width, "");
+		// Renderers own their column: strip only the default Loader's leading
+		// spacer, never a registered row's own dot.
+		return truncateToWidth(
+			this.rowRenderer ? line.trimEnd() : line.startsWith(" ") ? line.slice(1).trimEnd() : line.trimEnd(),
+			width,
+			"",
+		);
 	}
 
 	renderSpinnerInBorder(width: number): string {
