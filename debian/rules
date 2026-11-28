@@ -1,6 +1,8 @@
 #!/usr/bin/make -f
 
 export DH_VERBOSE = 1
+export DEB_RULES_REQUIRES_ROOT ?= no
+export NEXT_TELEMETRY_DISABLED = 1
 
 %:
 	dh $@
@@ -12,6 +14,8 @@ override_dh_auto_build:
 		test -f "$(NANOPI_DEB_BUNDLE)"; \
 		mkdir -p debian/tmp-build; \
 		cp "$(NANOPI_DEB_BUNDLE)" debian/tmp-build/nanopi.js; \
+	elif [ -f node_modules/.modules.yaml ] && [ -d packages/coding-agent/node_modules ] && [ -x node_modules/.bin/tsc ] && [ -d node_modules/esbuild ]; then \
+		node scripts/build-single-file.mjs --skip-install --offline-model-data --out debian/tmp-build; \
 	else \
 		node scripts/build-single-file.mjs --offline-model-data --out debian/tmp-build; \
 	fi
@@ -22,7 +26,7 @@ override_dh_auto_test:
 override_dh_auto_install:
 	install -d debian/nanopi/usr/share/nanopi debian/nanopi/usr/bin
 	install -m 0755 debian/tmp-build/nanopi.js debian/nanopi/usr/share/nanopi/nanopi.js
-	ln -s ../share/nanopi/nanopi.js debian/nanopi/usr/bin/nanopi
+	ln -sf ../share/nanopi/nanopi.js debian/nanopi/usr/bin/nanopi
 
 override_dh_fixperms:
 	dh_fixperms

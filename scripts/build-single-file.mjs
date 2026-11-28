@@ -5,6 +5,7 @@ import { mkdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import { exitStatus, repositoryRoot } from "./lib/node-runner.mjs";
+import { resolvePnpmCommand } from "./pnpm-command.mjs";
 
 // Builds the zero-dependency single-file `nanopi.js` distribution locally.
 // Mirrors .github/workflows/build-binaries.yml.
@@ -37,36 +38,45 @@ if (values.help) {
 const outputDirectory = resolve(repositoryRoot, values.out || "packages/coding-agent/binaries");
 const bundleOutput = join(outputDirectory, "nanopi.js");
 
-function run(step, command, args) {
+function run(step, command, args, { env = process.env, shell = process.platform === "win32" } = {}) {
 	process.stdout.write(`==> ${step}\n`);
-	const result = spawnSync(command, args, { cwd: repositoryRoot, stdio: "inherit", shell: process.platform === "win32" });
+	const result = spawnSync(command, args, { cwd: repositoryRoot, env, stdio: "inherit", shell });
 	const status = exitStatus(result);
 	if (status !== 0) process.exit(status);
+}
+
+function runPnpm(step, args) {
+	const resolved = resolvePnpmCommand({ repoRoot: repositoryRoot });
+	if (!resolved) {
+		process.stderr.write("pnpm was not found on PATH, in node_modules/pnpm, or via corepack.\n");
+		process.exit(127);
+	}
+	run(step, resolved.command, [...resolved.prefixArgs, ...args], { env: resolved.env, shell: resolved.shell });
 }
 
 if (values["skip-install"]) {
 	process.stdout.write("==> Skipping pnpm install (--skip-install)\n");
 } else {
-	run("Installing dependencies...", "pnpm", ["install", "--frozen-lockfile", "--ignore-scripts"]);
+	runPnpm("Installing dependencies...", ["install", "--frozen-lockfile", "--ignore-scripts"]);
 }
 
 if (values["skip-build"]) {
 	process.stdout.write("==> Skipping package build (--skip-build)\n");
 } else {
-	run(
+	runPnpm(
 		values["offline-model-data"] ? "Building all packages with bundled model data..." : "Building all packages...",
-		"pnpm",
 		["run", values["offline-model-data"] ? "build:offline" : "build"],
 	);
 }
 
 process.stdout.write("==> Building single-file distribution...\n");
 mkdirSync(outputDirectory, { recursive: true });
-run("Bundling nanopi.js", process.execPath, [
-	join(repositoryRoot, "scripts", "build-coding-agent-single-file.mjs"),
-	"--out",
-	bundleOutput,
-]);
+run(
+	"Bundling nanopi.js",
+	process.execPath,
+	[join(repositoryRoot, "scripts", "build-coding-agent-single-file.mjs"), "--out", bundleOutput],
+	{ shell: false },
+);
 
 const bytes = statSync(bundleOutput).size;
 process.stdout.write(
