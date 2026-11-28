@@ -63,17 +63,20 @@ export class CustomEditor extends Editor {
 		const overflowLabel = hiddenAbove + hiddenBelow > 0 ? `↑ ${hiddenAbove} · ↓ ${hiddenBelow}` : undefined;
 
 		if (this.composerStyle) {
+			// A registered row draws its own leading dot at column 0, the same
+			// column the tool rows use. The default Loader row keeps its margin.
+			const ownedColumn = this.workingStatusIndicator.hasRowRenderer() ? "" : " ";
 			const overflowWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
 			if (overflowLabel && overflowWidth + statusWidth + 3 <= width) {
 				return (
-					" " +
+					ownedColumn +
 					status +
-					" ".repeat(width - 2 - statusWidth - overflowWidth) +
+					" ".repeat(width - ownedColumn.length - statusWidth - overflowWidth - 1) +
 					this.borderColor(overflowLabel) +
 					" "
 				);
 			}
-			return ` ${status} `.padEnd(width);
+			return `${ownedColumn}${status} `.padEnd(width);
 		}
 
 		const borderedOverflowLabel = overflowLabel ? ` ${overflowLabel} ` : undefined;

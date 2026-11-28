@@ -92,6 +92,25 @@ describe("status indicators", () => {
 		}
 	});
 
+	it("draws a module-registered status row flush left, like a tool row", () => {
+		initTheme();
+		const tui = { requestRender: vi.fn(), terminal: { rows: 10 } } as unknown as TUI;
+		const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create(), {
+			embedWorkingStatus: true,
+			style: "composer",
+		});
+		const indicator = new WorkingStatusIndicator(tui, "Working");
+		indicator.setRowRenderer(() => ({ text: "• Running bash ls" }));
+		editor.setWorkingStatusIndicator(indicator);
+
+		try {
+			const topBorder = stripAnsi(editor.render(40)[0]!);
+			expect(topBorder.startsWith("• Running")).toBe(true);
+		} finally {
+			indicator.dispose();
+		}
+	});
+
 	it("repaints while a module-registered row is installed", () => {
 		initTheme();
 		vi.useFakeTimers();
