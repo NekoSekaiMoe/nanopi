@@ -6,6 +6,10 @@
 
 - `generate_image` is a gated tool: one call is a paid provider request the model can issue on its own, so a non-yolo session asks before the money is spent ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
 
+### Fixed
+
+- The `/plan` exit prompt now reaches webui sessions: the same two choices are asked through the structured-input card, so approving submits the plan for execution instead of requiring a manual mode switch ([#903](https://cnb.cool/shinytale/nanopi/-/issues/903))
+
 ## [20261114]
 
 ### Added

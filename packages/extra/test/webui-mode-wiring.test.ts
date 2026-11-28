@@ -2,7 +2,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
-import { ExtraBridge } from "../src/bridge.ts";
+import type { AskBrokerEvent, AskBrokerQuestion } from "../src/ask-broker.ts";
+import { ExtraBridge, extraBridge } from "../src/bridge.ts";
 import { createExtraExtension } from "../src/extension.ts";
 import type { ExtraExtensionAPI, ExtraExtensionContext } from "../src/extension-api.ts";
 import { modeEngine } from "../src/mode-engine.ts";
@@ -33,6 +34,7 @@ beforeEach(() => {
 afterEach(() => {
 	if (previousAgentDir === undefined) delete process.env.NANOPI_CODING_AGENT_DIR;
 	else process.env.NANOPI_CODING_AGENT_DIR = previousAgentDir;
+	extraBridge.asks.cancelAll();
 	resetEngine();
 });
 
@@ -111,6 +113,7 @@ function fakeApi(flags: Record<string, boolean | string> = {}): {
 						if (key === MODE_STATUS_KEY) modeStatus = text;
 					},
 					getEditorText: () => "",
+					setTitle: () => undefined,
 					theme: { fg: (_color: string, text: string) => text },
 				},
 				getContextUsage: () => undefined,
@@ -188,6 +191,88 @@ describe("webui mode switching", () => {
 		modeEngine.setMode("plan", "webui");
 		fake.start("tui", "new");
 		expect(modeEngine.mode).toBe("standard");
+	});
+});
+
+describe("plan exit prompt by frontend", () => {
+	const EXIT_OPTIONS = ["Exit plan mode and execute", "Keep planning (type what to change)"];
+
+	function webuiCtx(): ExtraExtensionContext {
+		return {
+			mode: "webui",
+			hasUI: false,
+			cwd: home,
+			model: undefined,
+			modelRegistry: undefined,
+			ui: {
+				select: async () => undefined,
+				notify: () => undefined,
+				setStatus: () => undefined,
+				getEditorText: () => "",
+				setTitle: () => undefined,
+				theme: { fg: (_color: string, text: string) => text },
+			},
+			getContextUsage: () => undefined,
+		} as unknown as ExtraExtensionContext;
+	}
+
+	/** Arm `/plan`, settle a turn, and capture the question the webui card receives. */
+	async function settleWebuiPlan(
+		fake: ReturnType<typeof fakeApi>,
+		sent: string[],
+	): Promise<{ requestId: number; questions: AskBrokerQuestion[] }> {
+		const prompt = new Promise<{ requestId: number; questions: AskBrokerQuestion[] }>((resolve) => {
+			const unsubscribe = extraBridge.asks.subscribe((event: AskBrokerEvent) => {
+				if (event.type !== "prompt") return;
+				unsubscribe();
+				resolve({ requestId: event.requestId, questions: event.questions });
+			});
+		});
+		await fake.run("plan");
+		sent.length = 0;
+		fake.handlers().get("agent_settled")?.({ type: "agent_settled", aborted: false, messages: [] }, webuiCtx());
+		return prompt;
+	}
+
+	test("the webui asks through the bridge and executes on approval", async () => {
+		const fake = fakeApi();
+		const sent: string[] = [];
+		fake.api.sendUserMessage = (content) => sent.push(content);
+		createExtraExtension(fake.api);
+		fake.start("webui");
+
+		const { requestId, questions } = await settleWebuiPlan(fake, sent);
+		expect(questions[0]).toMatchObject({
+			question: "Execute it, or keep refining?",
+			options: EXIT_OPTIONS.map((label) => ({ label })),
+			custom: false,
+		});
+
+		extraBridge.asks.answer(requestId, {
+			type: "single",
+			answer: { declined: false, selected: [EXIT_OPTIONS[0]], text: null },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(modeEngine.mode).toBe("standard");
+		expect(sent).toHaveLength(1);
+		expect(sent[0]).toContain("Plan approved");
+	});
+
+	test("the webui keeps planning when the exit prompt is declined", async () => {
+		const fake = fakeApi();
+		const sent: string[] = [];
+		fake.api.sendUserMessage = (content) => sent.push(content);
+		createExtraExtension(fake.api);
+		fake.start("webui");
+
+		const { requestId } = await settleWebuiPlan(fake, sent);
+		extraBridge.asks.answer(requestId, {
+			type: "single",
+			answer: { declined: false, selected: [EXIT_OPTIONS[1]], text: null },
+		});
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(modeEngine.mode).toBe("plan");
+		expect(sent).toEqual([]);
 	});
 });
 
