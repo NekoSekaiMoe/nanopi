@@ -14,6 +14,7 @@
 
 ### Fixed
 
+- Fixed GitHub Copilot models on the `openai-completions` API losing their reasoning state between turns: Copilot's `reasoning_opaque` is now stored on the thinking block and sent back with `reasoning_text`, including when it arrives without reasoning text (upstream `ede8bdca0`)
 - Fixed OpenRouter image generation ignoring choice errors and non-stop `finish_reason`, and now applies provider-reported `usage.cost` like chat completions (upstream `596540d43`)
 - Sign in with ChatGPT accepts the single `.onboarding_entrypoint=life_sciences` suffix OpenAI appends to the OAuth callback `state` for some accounts. Other suffixes and repeated suffixes still fail with `OAuth state mismatch`, and the authorization request is unchanged (issue [#854](https://cnb.cool/shinytale/agent/nanopi/-/issues/854))
 - Antigravity `/login` now matches the official `agy` client's captured authorization URL: PKCE S256 `code_challenge`, a `state` nonce validated on both the loopback callback and a pasted redirect URL, and the `cloud-platform` / `userinfo.email` / `aicode` scopes. The `loadCodeAssist` / `onboardUser` calls made during login now carry the same client identity headers as inference requests instead of a bare `antigravity` User-Agent (issue [#825](https://cnb.cool/shinytale/nanopi/-/issues/825))
