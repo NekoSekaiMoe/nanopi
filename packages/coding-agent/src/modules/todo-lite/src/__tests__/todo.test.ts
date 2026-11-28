@@ -9,9 +9,43 @@ import {
 	updateTodos,
 	VALID_STATUSES,
 } from "../model.ts";
-import { renderWidgetLines } from "../render.ts";
+import { renderTodoResult, renderWidgetLines } from "../render.ts";
 import { createTodoSessionState } from "../state.ts";
 import { handleSingleUpdate } from "../tool.ts";
+
+// ── tool result 渲染：创建计划不回显步骤 ──────────────
+
+describe("renderTodoResult", () => {
+	const theme = {
+		fg: (_name: string, text: string) => text,
+		bold: (text: string) => text,
+	} as unknown as Theme;
+
+	const result = (action: string) => ({
+		content: [{ type: "text", text: `Added 2 todos (#1-#2)` }],
+		details: {
+			action,
+			todos: [
+				{ id: 1, text: "同步 main", status: "pending" },
+				{ id: 2, text: "更新版本", status: "pending" },
+			],
+			nextId: 3,
+		},
+	});
+
+	it("add 只显示计数，不列出具体步骤", () => {
+		const text = renderTodoResult(result("add"), { expanded: true }, theme).text;
+		expect(text).toContain("Added 2 todos (#1-#2)");
+		expect(text).not.toContain("同步 main");
+		expect(text).not.toContain("更新版本");
+	});
+
+	it("list 仍保留具体步骤", () => {
+		const text = renderTodoResult(result("list"), { expanded: true }, theme).text;
+		expect(text).toContain("同步 main");
+		expect(text).toContain("更新版本");
+	});
+});
 
 // ── 数据模型 + 向后兼容 ──────────────────────────────
 
