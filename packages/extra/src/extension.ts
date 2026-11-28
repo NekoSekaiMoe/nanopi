@@ -481,6 +481,13 @@ const PLAN_APPROVED_MESSAGE =
 	"Plan approved. Execute the plan above. Track its steps with todo (the draft you made is the starting point), follow it unless you find a reason not to, and say so when you deviate. Verify with the plan's test steps before reporting done.";
 
 /**
+ * The two answers to the plan exit prompt, shared by the TUI dialog and the
+ * webui card so the labels stay identical across frontends.
+ */
+const PLAN_EXIT_OPTIONS = ["Exit plan mode and execute", "Keep planning (type what to change)"] as const;
+const PLAN_STILL_PLANNING = "Still in plan mode (read-only). Type what to change and the next turn revises the plan.";
+
+/**
  * How many plan-mode turns may end in a question before the exit prompt appears
  * anyway. A model that keeps asking is not converging, and the exit prompt is the
  * only way out of plan mode besides `/minimal`; without a bound, a question-shaped
@@ -1221,6 +1228,7 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 
 	nanopi.on("session_shutdown", () => {
 		extraBridge.permissions.cancelAll();
+		extraBridge.asks.cancelAll();
 		forgetExplainedCalls();
 		planIntroActive = false;
 	});
@@ -1249,23 +1257,42 @@ export function createExtraExtension(nanopi: ExtraExtensionAPI): void {
 		}
 		questionTurns = 0;
 		const ctx = sessionCtx;
-		if (!ctx?.hasUI) return;
+		if (!ctx) return;
+		// The webui has no dialog UI, but it has the structured-input card used
+		// by `ask_user_question`. Asking through that bridge keeps the exit
+		// prompt alive in a session where `hasUI` is false.
+		if (ctx.mode === "webui") {
+			void (async () => {
+				const resolution = await extraBridge.asks.ask([
+					{
+						header: "Plan ready",
+						question: "Execute it, or keep refining?",
+						mode: "single",
+						options: PLAN_EXIT_OPTIONS.map((label) => ({ label })),
+						custom: false,
+					},
+				]);
+				const answer = resolution?.type === "single" ? resolution.answer : resolution?.answers[0];
+				if (!answer || answer.declined || answer.selected[0] !== PLAN_EXIT_OPTIONS[0]) {
+					ctx.ui.notify(PLAN_STILL_PLANNING, "info");
+					return;
+				}
+				engine.setMode("standard", "plan approved");
+				nanopi.sendUserMessage(PLAN_APPROVED_MESSAGE);
+			})();
+			return;
+		}
+		if (!ctx.hasUI) return;
 		void (async () => {
 			// Naming the alternative is what makes the second answer usable: a plan
 			// that is close but wrong is the common case, and "keep planning" used to
 			// drop the user back into a mode with no sentence to type.
-			const choice = await ctx.ui.select("Plan ready. Execute it, or keep refining?", [
-				"Exit plan mode and execute",
-				"Keep planning (type what to change)",
-			]);
-			if (choice === "Exit plan mode and execute") {
+			const choice = await ctx.ui.select("Plan ready. Execute it, or keep refining?", [...PLAN_EXIT_OPTIONS]);
+			if (choice === PLAN_EXIT_OPTIONS[0]) {
 				engine.setMode("standard", "plan approved");
 				nanopi.sendUserMessage(PLAN_APPROVED_MESSAGE);
 			} else {
-				ctx.ui.notify(
-					"Still in plan mode (read-only). Type what to change and the next turn revises the plan.",
-					"info",
-				);
+				ctx.ui.notify(PLAN_STILL_PLANNING, "info");
 			}
 		})();
 	});
