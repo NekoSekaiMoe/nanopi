@@ -72,6 +72,8 @@
 
 - Removed Qoder entirely: the startup/`/qoder-checkin` daily check-in, the `module/qoder-checkin` build component, Qoder provider docs and the `NANOPI_QODER_CHECKIN` switch. The browser sign-in was already removed; now `/qoder-checkin` does not exist and no Qoder credential is read (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
 
+- Removed the install-telemetry and analytics shell: `core/telemetry.ts`, the first-time setup dialog, `enableInstallTelemetry`, `enableAnalytics`, and `trackingId` are gone. Provider attribution headers were never telemetry and stay, behind `enableProviderAttribution` (default `true`) and `NANOPI_PROVIDER_ATTRIBUTION`, which replaces `NANOPI_TELEMETRY` (issue [#896](https://cnb.cool/shinytale/agent/nanopi/-/issues/896))
+
 
 ## [20261114]
 

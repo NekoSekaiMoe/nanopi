@@ -80,8 +80,8 @@ export function redactJsonValue(value: unknown): unknown {
 }
 
 function redactSettings(settings: Settings): Settings {
-	// Tracking and device ids identify the installation, not the failure.
-	const { trackingId: _trackingId, deviceId: _deviceId, ...rest } = settings;
+	// The device id identifies the installation, not the failure.
+	const { deviceId: _deviceId, ...rest } = settings;
 	return redactJsonValue(rest) as Settings;
 }
 

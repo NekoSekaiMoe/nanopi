@@ -153,11 +153,10 @@ Resource paths in user settings resolve from the agent directory. Paths in proje
 
 Resource arrays support glob exclusions with `!pattern`, exact inclusion with `+path`, and exact exclusion with `-path`. nanopi loads resources listed in both user-level and project settings.
 
-## Updates, telemetry, and warnings
+## Updates, attribution, and warnings
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
 | `collapseChangelog` | boolean | `false` | Show only the new version number after an update instead of the changelog entries. |
-| `enableInstallTelemetry` | boolean | `true` | Send provider attribution headers (`HTTP-Referer` and similar) with requests to OpenRouter and other gateways. `NANOPI_TELEMETRY` overrides it. |
-| `enableAnalytics` | boolean | `false` | Opt in to analytics data sharing. |
+| `enableProviderAttribution` | boolean | `true` | Send provider attribution headers (`HTTP-Referer` and similar) with requests to OpenRouter and other gateways. `NANOPI_PROVIDER_ATTRIBUTION` overrides it. |
 | `warnings.anthropicExtraUsage` | boolean | `true` | Warn when Anthropic subscription authentication may use paid extra usage. |

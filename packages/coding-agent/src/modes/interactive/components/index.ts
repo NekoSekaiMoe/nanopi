@@ -15,8 +15,6 @@ export { ExtensionSelectorComponent } from "./extension-selector.ts";
 // First-time setup, the scoped-model picker and the trust prompt are screens the interactive mode and
 // the CLI open themselves; a module composes the selectors above it, not these. Their option bags go
 // with them.
-export type { FirstTimeSetupOptions, FirstTimeSetupResult } from "./first-time-setup.ts";
-export { FirstTimeSetupComponent } from "./first-time-setup.ts";
 export { FooterComponent } from "./footer.ts";
 export { keyHint, keyText, rawKeyHint } from "./keybinding-hints.ts";
 export { LoginDialogComponent } from "./login-dialog.ts";

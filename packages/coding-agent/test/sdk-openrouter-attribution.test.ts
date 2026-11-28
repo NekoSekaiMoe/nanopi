@@ -29,15 +29,15 @@ describe("createAgentSession provider attribution headers", () => {
 		agentDir = join(tempDir, "agent");
 		mkdirSync(cwd, { recursive: true });
 		mkdirSync(agentDir, { recursive: true });
-		originalTelemetryEnv = process.env.NANOPI_TELEMETRY;
-		delete process.env.NANOPI_TELEMETRY;
+		originalTelemetryEnv = process.env.NANOPI_PROVIDER_ATTRIBUTION;
+		delete process.env.NANOPI_PROVIDER_ATTRIBUTION;
 	});
 
 	afterEach(() => {
 		if (originalTelemetryEnv === undefined) {
-			delete process.env.NANOPI_TELEMETRY;
+			delete process.env.NANOPI_PROVIDER_ATTRIBUTION;
 		} else {
-			process.env.NANOPI_TELEMETRY = originalTelemetryEnv;
+			process.env.NANOPI_PROVIDER_ATTRIBUTION = originalTelemetryEnv;
 		}
 		if (tempDir && existsSync(tempDir)) {
 			rmSync(tempDir, { recursive: true, force: true });
@@ -85,15 +85,15 @@ describe("createAgentSession provider attribution headers", () => {
 	async function captureHeaders(
 		model: Model<Api>,
 		options: {
-			telemetryEnabled?: boolean;
+			providerAttributionEnabled?: boolean;
 			providerHeaders?: Record<string, string>;
 			requestHeaders?: Record<string, string>;
 			sessionId?: string;
 		} = {},
 	): Promise<ProviderHeaders | undefined> {
 		const settingsManager = SettingsManager.create(cwd, agentDir);
-		if (options.telemetryEnabled === false) {
-			settingsManager.setEnableInstallTelemetry(false);
+		if (options.providerAttributionEnabled === false) {
+			settingsManager.setEnableProviderAttribution(false);
 		}
 
 		const authStorage = AuthStorage.inMemory({
@@ -147,9 +147,9 @@ describe("createAgentSession provider attribution headers", () => {
 		expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
 	});
 
-	it("does not add attribution headers when telemetry is disabled", async () => {
+	it("does not add attribution headers when provider attribution is disabled", async () => {
 		const headers = await captureHeaders(createModel("openrouter", "https://openrouter.ai/api/v1"), {
-			telemetryEnabled: false,
+			providerAttributionEnabled: false,
 		});
 
 		expect(headers?.["HTTP-Referer"]).toBeUndefined();
@@ -201,9 +201,9 @@ describe("createAgentSession provider attribution headers", () => {
 		expect(headers?.["X-BILLING-INVOKE-ORIGIN"]).toBe("nanopi");
 	});
 
-	it("does not add NVIDIA NIM attribution headers when telemetry is disabled", async () => {
+	it("does not add NVIDIA NIM attribution headers when provider attribution is disabled", async () => {
 		const headers = await captureHeaders(createModel("nvidia", "https://integrate.api.nvidia.com/v1"), {
-			telemetryEnabled: false,
+			providerAttributionEnabled: false,
 		});
 
 		expect(headers?.["X-BILLING-INVOKE-ORIGIN"]).toBeUndefined();

@@ -13,6 +13,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { isOpenCodeModel } from "../src/core/provider-attribution.ts";
+import { SettingsManager } from "../src/core/settings-manager.ts";
 import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
 
 /**
@@ -34,7 +35,6 @@ describe("provider attribution headers", () => {
 		agentDir = join(tempDir, "agent");
 		mkdirSync(cwd, { recursive: true });
 		mkdirSync(agentDir, { recursive: true });
-		delete process.env.NANOPI_TELEMETRY;
 	});
 
 	afterEach(() => {
@@ -85,7 +85,15 @@ describe("provider attribution headers", () => {
 		return headers;
 	}
 
-	async function captureWireHeaders(model: Model<Api>, requests: number): Promise<ProviderHeaders[]> {
+	async function captureWireHeaders(
+		model: Model<Api>,
+		requests: number,
+		runOptions: { providerAttribution?: boolean } = {},
+	): Promise<ProviderHeaders[]> {
+		const settingsManager = SettingsManager.create(cwd, agentDir);
+		if (runOptions.providerAttribution === false) {
+			settingsManager.setEnableProviderAttribution(false);
+		}
 		const authStorage = AuthStorage.inMemory({ [model.provider]: { type: "api_key", key: "test-api-key" } });
 		const modelRegistry = await createInMemoryModelRegistry(authStorage);
 		const headers: ProviderHeaders[] = [];
@@ -99,6 +107,7 @@ describe("provider attribution headers", () => {
 		});
 
 		const runtime = getModelRuntime(modelRegistry);
+		runtime.useSettingsManager(settingsManager);
 		const context = normalizeContext({ messages: [] });
 		try {
 			for (let index = 0; index < requests; index++) {
@@ -134,11 +143,10 @@ describe("provider attribution headers", () => {
 		}
 	});
 
-	it("sends no identity headers once install telemetry is off", async () => {
+	it("sends no identity headers once provider attribution is off", async () => {
 		const model = createModel("opencode", "https://opencode.ai/inference/openai/v1");
-		process.env.NANOPI_TELEMETRY = "0";
-
-		const headers = await captureWireHeaders(model, 1);
+		// The switch reads the stored setting; there is no environment override left.
+		const headers = await captureWireHeaders(model, 1, { providerAttribution: false });
 
 		expect(headers[0]).toEqual({ "User-Agent": "nanopi/1.0" });
 	});
