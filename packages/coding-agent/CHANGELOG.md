@@ -4,7 +4,7 @@
 
 ### Added
 
-- Ported five pi-extensions picks as built-in modules: `pi-deepwiki` (repo-grounded Q&A), `pi-git-tools` (read-only git, no `gh`), `pi-meat` (faithful reading diff via subagent), `pi-output-compact` (opt-in lossy tool-output compaction), and `/token-usage` over the existing usage ledger. `subagents-mini` gains `subagents.preferredCli` so a spawn can run claude, codex, or agy with the harness default model (issue [#824](https://cnb.cool/shinytale/nanopi/-/issues/824))
+- Ported five pi-extensions picks as built-in modules: `pi-deepwiki` (repo-grounded Q&A), `pi-git-tools` (read-only git, no `gh`), `pi-meat` (faithful reading diff via subagent), and `/token-usage` over the existing usage ledger. `subagents-mini` gains `subagents.preferredCli` so a spawn can run claude, codex, or agy with the harness default model (issue [#824](https://cnb.cool/shinytale/nanopi/-/issues/824))
 
 - A compaction summary cites the session entries behind its facts as `[rN]`, and `recall_context` reads one back. Every message handed to the summarizer carries its entry id, the summary prompt asks for a trailing `<refs>` block that defines each tag, and the tool resolves the tags against that block and appends a `context_recall` entry, so the recalled history returns as history instead of a tool result the next compaction eats. An undefined tag, a summary without a `<refs>` block (any session compacted before this change), an entry still inside the kept region, and a block over a quarter of the context window are all refused with a reason ([#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - Compaction summaries now follow explicit long-session retention rules: exact paths, signatures, errors, decisions, constraints, and unfinished work are kept; consumed logs, repeated reads, and settled discussions are dropped. The rules live in the summarization system prompt and do not change the summary format (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
@@ -66,7 +66,10 @@
 
 - DeepWiki research is removed from the `web` tool: `action=wiki_structure`, `action=ask_repo`, the `/deepwiki` command and the `DEEPWIKI_MCP_URL` override no longer exist. Search and fetch are unchanged (issue [#861](https://cnb.cool/shinytale/agent/nanopi/-/issues/861))
 
+- Removed the `pi-output-compact` module, its `/output-compaction` command, and its build component. Tool output is no longer rewritten before entering the model context (issue [#886](https://cnb.cool/shinytale/agent/nanopi/-/issues/886))
+
 - Removed Qoder entirely: the startup/`/qoder-checkin` daily check-in, the `module/qoder-checkin` build component, Qoder provider docs and the `NANOPI_QODER_CHECKIN` switch. The browser sign-in was already removed; now `/qoder-checkin` does not exist and no Qoder credential is read (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))
+
 
 ## [20261114]
 

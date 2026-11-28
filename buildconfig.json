@@ -118,9 +118,6 @@
 		"module/pi-git-tools": {
 			"description": "read-only git tools without a GitHub dependency"
 		},
-		"module/pi-output-compact": {
-			"description": "opt-in compaction of bash/read/grep tool outputs"
-		},
 		"module/pi-token-usage": {
 			"description": "/token-usage command backed by the session usage ledger"
 		},
@@ -230,9 +227,6 @@
 		"pi-git-tools": {
 			"source": "packages/coding-agent/src/modules/pi-git-tools/src/index.ts"
 		},
-		"pi-output-compact": {
-			"source": "packages/coding-agent/src/modules/pi-output-compact/src/index.ts"
-		},
 		"pi-token-usage": {
 			"source": "packages/coding-agent/src/modules/pi-token-usage/src/index.ts"
 		},
@@ -277,7 +271,6 @@
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
 				"module/pi-git-tools": false,
-				"module/pi-output-compact": false,
 				"module/pi-token-usage": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,
@@ -309,7 +302,6 @@
 				"module/pi-smart-flow": false,
 				"module/pi-subagent-mini": false,
 				"module/pi-git-tools": false,
-				"module/pi-output-compact": false,
 				"module/pi-token-usage": false,
 				"module/pi-ui": false,
 				"module/todo-lite": false,

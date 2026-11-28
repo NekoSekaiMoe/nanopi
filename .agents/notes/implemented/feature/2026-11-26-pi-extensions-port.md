@@ -4,7 +4,7 @@ Status: implemented
 
 ## Problem
 
-Issue #824 asked which packages in EstebanForge/pi-extensions are worth picking and then confirmed a port with modifications: take deepwiki and hostname directly; merge git-me's local git commands with show-me-the-meat's diff abridging; move the ask-* delegation into subagents-mini as a preferred-CLI setting; take only rtk's output compactor; take only token-cost-ledger's display layer. The rest stays out.
+Issue #824 asked which packages in EstebanForge/pi-extensions are worth picking and then confirmed a port with modifications: take deepwiki and hostname directly; merge git-me's local git commands with show-me-the-meat's diff abridging; move the ask-* delegation into subagents-mini as a preferred-CLI setting; take only rtk's output compactor (later removed by issue #886); take only token-cost-ledger's display layer. The rest stays out.
 
 The port has to fit nanopi's programmatic module system: there is no extension directory or `--extension` flag. Each pick becomes a built-in module under `packages/coding-agent/src/modules/`, registered in `src/modules/index.ts` and declared as a `module/<name>` buildconfig component so flavors can exclude it.
 
@@ -18,7 +18,7 @@ Each pick is a separate module rather than one combined extension, so a flavor o
 - `pi-hostname` writes one footer status under key `0-hostname`, reduced to the first DNS label. The emoji from upstream is dropped per repository style.
 - `pi-git-tools` keeps the pure `git` half of git-me (status, diff, log, current-branch) and drops every `gh`/GitHub call. `git_diff` has an opt-in `abridge` flag that delegates to a subagent.
 - The meat compiler and chunker from show-me-the-meat are now vendored under `pi-git-tools/src/vendor/`. The model submits remove/fold/replace line coordinates; the compiler renders every untouched line verbatim, so a compiled diff is always a projection of the original. The select step runs in a nanopi subagent instead of `createAgentSession`, which is not in this repository's API. The standalone `pi-meat` module was removed by issue #870.
-- `pi-output-compact` is only the output-compaction half of rtk, with no `rtk` binary and no command rewriting. It is off unless `<agentDir>/output-compaction.json` sets `outputCompaction.enabled: true`, because every technique is lossy. It returns `structuredContent: undefined` when replacing content, since the old value no longer matches.
+- `pi-output-compact` was only the output-compaction half of rtk, with no `rtk` binary and no command rewriting. It was off unless `<agentDir>/output-compaction.json` set `outputCompaction.enabled: true`, because every technique is lossy. It has since been removed by issue #886; see [Remove output compaction](../simplification/2026-11-28-remove-output-compaction.md).
 - `pi-token-usage` exposes `/token-usage` over nanopi's own `UsageLedgerIndex` and `getUsageCostBreakdown`. There is no second JSONL format and no prices.json: historical cost stays the price recorded on each response.
 - subagents-mini gains `subagents.preferredCli` in `extra/settings.json` (project override under `.nanopi/extra/settings.json`). `spawn` accepts a one-off `cli` override. For claude/codex/agy the brief goes to stdin (claude) or a trailing positional after `--` (codex/agy); the current session model id is passed where the CLI accepts `--model`, so there is no second model map. The external CLI's session token is kept on the job for `continue`.
 
@@ -32,7 +32,7 @@ Each pick is a separate module rather than one combined extension, so a flavor o
 ## Alternatives considered
 
 - Install the upstream packages as extensions. Rejected: nanopi has no extension loader; the upstream API (`ExtensionAPI`, `createAgentSession`) is not the module API here.
-- Port rtk as a whole, including `rtk rewrite`. Rejected: command rewriting needs the `rtk` binary, a config modal, and a TUI layer. Only output compaction saves context, and it is lossy, so it is opt-in.
+- Port rtk as a whole, including `rtk rewrite`. Rejected: command rewriting needs the `rtk` binary, a config modal, and a TUI layer. Only output compaction saved context, and it was lossy, so it was opt-in; it was then removed entirely by issue #886.
 - Port token-cost-ledger's own JSONL and prices.json. Rejected: nanopi already has a cross-session usage ledger with price snapshots. A second ledger would disagree with `/status`.
 - Keep git-me's GitHub tools behind `gh`. Rejected: this project uses the `cnb` API; a `gh`-backed write path would push to the wrong forge.
 - Use `createAgentSession` for the meat subagent. Rejected: not part of this repository's published API; `ctx.executeTool("subagent", ...)` is the supported path.
@@ -41,7 +41,7 @@ Each pick is a separate module rather than one combined extension, so a flavor o
 
 - The full build grows by six modules; the base and minimal builds are unchanged.
 - The git reading diff (`git action=diff` with `mode=reading`) depends on `pi-subagent-mini`. In a build without subagents, the raw diff mode still works and the reading mode reports the missing dependency instead of failing silently.
-- Tool output compaction changes what the model sees. It is disabled by default and must be enabled explicitly for a session that values context over verbatim output.
+- Tool output compaction is gone as of issue #886; tool output now always reaches the model verbatim. See [Remove output compaction](../simplification/2026-11-28-remove-output-compaction.md).
 - Verified by `packages/coding-agent/test/pi-extensions-port.test.ts` (SSE parsing, git log record boundaries, diff chunking, CLI argv and alias resolution, hostname formatting, period boundaries) and `pnpm run check`.
 
 Ref #824
