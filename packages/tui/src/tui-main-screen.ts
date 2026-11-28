@@ -494,11 +494,11 @@ export class TuiMainScreen extends TuiBase implements TUI {
 			const isImage = isImageLine(line);
 			const imageReservedRows = isImage ? this.getKittyImageReservedRows(newLines, i, renderEnd) : 1;
 			if (imageReservedRows > 1) {
-				const imageStartScreenRow = i - viewportTop;
-				if (imageStartScreenRow < 0 || imageStartScreenRow + imageReservedRows > height) {
-					logRedraw(
-						`kitty image pre-clear would scroll (${imageStartScreenRow} + ${imageReservedRows} > ${height})`,
-					);
+				// An image taller than the viewport cannot be pre-cleared here. A shorter image can:
+				// the append path has already scrolled to its first row, so clearing from there stays
+				// inside the viewport even when the reserved rows extend past the bottom.
+				if (imageReservedRows > height) {
+					logRedraw(`kitty image taller than viewport (${imageReservedRows} > ${height})`);
 					fullRender(true);
 					return;
 				}

@@ -37,6 +37,13 @@ Status: implemented
 在矩阵补齐之前，回归防线就是上面那三条字节序断言；改动 `drawKittyImagesLast` 或
 `imageCellsNeedRedraw` 时那条用例必须一起跑。
 
+2026-11-28 补：`packages/tui/src/tui-main-screen.ts` 的追加路径也动了同一类判定——原先
+`imageStartScreenRow + imageReservedRows > height` 就触发全量重绘，现在只在
+`imageReservedRows > height`（图片比视口还高）时才全量重绘。这意味着「追加图片时滚屏」这条路径
+会从 differential 发出图片预清行（保留字节序：先清 reserved rows，再写 placement），不再整屏擦除。
+`packages/tui/test/tui-render.test.ts` 里对应的用例同样只断言字节序和 `fullRedraws` 计数，
+多终端实拍矩阵的执行范围因此扩到这条新路径。
+
 ## Alternatives considered
 
 **在 CI 里真跑 Ghostty / Kitty。** 上游就是这么验的，也是唯一能证明「图片真没消失」的路径。
@@ -69,5 +76,6 @@ Kitty 的 placement 存活规则、xterm.js addon 的擦除粒度各不相同，
   某版 xterm.js addon 的回归）出问题时，现有测试不会红。症状是「图闪一下没了」，用户报上来
   才发现。
 - 代价：矩阵是人工流程，没有期限也没有自动化兜底。它只在有人愿意开两个终端手测时才前进。
-- 升级触发条件：`packages/tui/src/tui-alt-screen.ts` 里与 Kitty 图片相关的判定再改动一次、
-  或收到「图片在某终端上消失」的实报，就该把矩阵跑一遍并把结果贴到对应 issue。
+- 升级触发条件：`packages/tui/src/tui-alt-screen.ts` 或 `packages/tui/src/tui-main-screen.ts`
+  里与 Kitty 图片相关的判定再改动一次、或收到「图片在某终端上消失」的实报，就该把矩阵跑一遍
+  并把结果贴到对应 issue。
