@@ -24,7 +24,6 @@ import piGitTools from "../modules/pi-git-tools/src/index.ts";
 import piImage from "../modules/pi-image/src/index.ts";
 import piLspMini from "../modules/pi-lsp-mini/src/index.ts";
 import piMemory from "../modules/pi-memory/src/index.ts";
-import piOutputCompact from "../modules/pi-output-compact/src/index.ts";
 import piRewind from "../modules/pi-rewind/src/index.ts";
 import piSimplify from "../modules/pi-simplify/src/index.ts";
 import piSmartFlow from "../modules/pi-smart-flow/src/index.ts";
@@ -61,7 +60,6 @@ const BUILTIN_MODULES: SessionModule[] = [
 	{ name: "pi-smart-flow", factory: piSmartFlow },
 	{ name: "pi-subagent-mini", factory: piSubagentMini },
 	{ name: "pi-git-tools", factory: piGitTools },
-	{ name: "pi-output-compact", factory: piOutputCompact },
 	{ name: "pi-token-usage", factory: piTokenUsage },
 	{ name: "pi-ui", factory: piUi },
 	{ name: "todo-lite", factory: todoLite },

@@ -25,7 +25,6 @@ const vendoredModulePaths = new Set([
 	"packages/coding-agent/src/modules/pi-image",
 	"packages/coding-agent/src/modules/pi-lsp-mini",
 	"packages/coding-agent/src/modules/pi-memory",
-	"packages/coding-agent/src/modules/pi-output-compact",
 	"packages/coding-agent/src/modules/pi-rewind",
 	"packages/coding-agent/src/modules/pi-simplify",
 	"packages/coding-agent/src/modules/pi-smart-flow",

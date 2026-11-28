@@ -13,7 +13,6 @@ const vendoredModulePaths = [
 	"pi-image",
 	"pi-lsp-mini",
 	"pi-memory",
-	"pi-output-compact",
 	"pi-rewind",
 	"pi-simplify",
 	"pi-smart-flow",

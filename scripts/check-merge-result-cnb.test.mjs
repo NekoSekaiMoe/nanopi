@@ -138,6 +138,22 @@ test("a deletes: claim in CNB_PULL_REQUEST_DESC excuses the deletion", async (t)
 	assert.match(result.stdout, /accounted for/);
 });
 
+// #891：删除型 PR 把 `deletes:` 写在提交消息里（没有 PR 描述变量）时，CNB 包装
+// 脚本仍要把 PR 侧提交交给判定脚本，否则同一条分支在 CI 上一直红。
+test("a deletes: claim in the PR commit message excuses the deletion without a PR description", async (t) => {
+	const { root, remote, seed } = await fixture(t, "commit-claim");
+	git(seed, ["checkout", "--quiet", "-b", "pr"]);
+	git(seed, ["rm", "-q", "a.txt"]);
+	git(seed, ["commit", "-q", "--no-gpg-sign", "-m", "drop a\n\ndeletes: a.txt"]);
+	pushBranch(root, seed, remote, "pr");
+	const cwd = checkoutMain(t, root, remote, "work");
+
+	const result = run(cwd, { CNB_PULL_REQUEST_BRANCH: "pr" });
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /a\.txt/);
+	assert.match(result.stdout, /accounted for/);
+});
+
 // #880：PR 分支把目标分支合进了自己（第一父是分支侧），CNB 工作树里必须先
 // fetch 目标分支的最新提交，再用 CNB_PULL_REQUEST_TARGET_SHA 显式指定基线。
 test("a target SHA from the event keeps the base when the PR merged base into itself", async (t) => {

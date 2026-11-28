@@ -8,8 +8,8 @@
 //   node scripts/check-merge-result-cnb.mjs [--remote <name>]
 //
 // 需要环境变量 CNB_PULL_REQUEST_BRANCH（CNB 提供）。PR 的描述（CNB_PULL_REQUEST_DESC，
-// 没有就按 CNB_PULL_REQUEST_IID 现取）写进临时文件交给判定脚本，那是 `deletes:`
-// 白名单的来源——判定本身仍只读 git 对象与这个文件，不联网。
+// 没有就按 CNB_PULL_REQUEST_IID 现取）写进临时文件交给判定脚本；PR 自己提交消息里的
+// `deletes:` 则由 --commit 读。判定本身仍只读 git 对象与这个文件，不联网。
 //
 // 为什么不能直接用事件给的提交：pull_request.target 用的是合并前目标分支的最新
 // 提交（pull_request 给的是预合并结果，按定义已含 main 的树，回退永远查不出来，
@@ -83,6 +83,11 @@ const checkArgs = [CHECK];
 // 不会靠「第一父」猜错方向（#880）。
 const targetSha = process.env.CNB_PULL_REQUEST_TARGET_SHA;
 if (targetSha) checkArgs.push("--base", targetSha);
+// 删除型 PR 的意图证据留在 PR 自己的提交消息里。CNB 事件不保证带 PR 描述，
+// 把整条 PR 侧提交范围交给判定脚本，让认领写在 tip 之外的中间提交上也能读到。
+// 范围用事件给的基线 SHA 与源分支 ref 拼出；没有基线时退回只给 tip。
+const prRange = targetSha ? `${targetSha}..refs/remotes/pr/head` : "refs/remotes/pr/head";
+checkArgs.push("--commit", prRange);
 if (description) {
 	const file = join(mkdtempSync(join(tmpdir(), "pr-desc-")), "description.md");
 	writeFileSync(file, description);
