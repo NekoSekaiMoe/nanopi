@@ -3,7 +3,7 @@
 // 检查「这次改动合进去会不会悄悄回退 base 上已有的内容」。
 //
 // Usage:
-//   node scripts/check-merge-result.mjs [--base <ref>] [--description-file <path>] [--commit <ref>]
+//   node scripts/check-merge-result.mjs [--base <ref>] [--description-file <path>] [--commit <ref>...]
 //
 // 默认 base 是 HEAD 的第一父提交，也就是「把分支合进来之前的目标分支 tip」：
 // 脚本的用法总是「HEAD 是合并结果，它的第一父是基线」。
@@ -85,16 +85,16 @@ function gitOk(args) {
 function parseArgs(argv) {
 	let base;
 	let descriptionFile;
-	let commit;
+	const commits = [];
 	for (let index = 0; index < argv.length; index += 1) {
 		if (argv[index] === "--base") base = argv[index + 1];
 		else if (argv[index] === "--description-file") descriptionFile = argv[index + 1];
-		else if (argv[index] === "--commit") commit = argv[index + 1];
+		else if (argv[index] === "--commit") commits.push(argv[index + 1]);
 	}
-	return { base, descriptionFile, commit };
+	return { base, descriptionFile, commits };
 }
 
-const { base: explicitBase, descriptionFile, commit } = parseArgs(process.argv.slice(2));
+const { base: explicitBase, descriptionFile, commits } = parseArgs(process.argv.slice(2));
 const head = git(["rev-parse", "HEAD"]);
 // 第一父恒为基线：合并提交记的原始 tip 就是它，父链上不可能出现「分支自己合进
 // 自己」的假象，也躲开了远端 main 可能已被别人推进的问题。
@@ -190,9 +190,22 @@ if (descriptionFile) {
 }
 
 // 提交消息也算「有据可查」：CNB 上 PR 描述的变量不一定在，而 NPC 提交时会把说明
-// 写进提交消息。只看 PR 自己的提交（^1..HEAD），不翻 base 的历史。
-if (commit) {
-	for (const line of git(["log", "--format=%B", `${commit}^1..${commit}`]).split("\n")) {
+// 写进提交消息。输入可以是一串 PR 侧 ref（如 `base..head`）或多个提交，逐个读取，
+// 不翻 base 的历史；合并提交自己写的认领也算，因为那是 PR 合进来的一部分。
+//
+// #892：`pull_request.target` 先按目标分支的树加载包装脚本，再 `git merge` 源分支；
+// 源分支里改包装脚本改不了这一次构建传给判定脚本的参数。判定脚本自己已经拿到
+// `--base`，因此默认再读一遍 `base..HEAD`，让写在 PR 中间提交上的认领也能被看到。
+if (explicitBase !== undefined) commits.push(`${base}..${head}`);
+for (const commit of commits) {
+	let log;
+	try {
+		log = git(["log", "--format=%B", commit]);
+	} catch {
+		console.error(`--commit ${commit} does not resolve here; skipping its deletes: claim`);
+		continue;
+	}
+	for (const line of log.split("\n")) {
 		const match = /^\s*deletes:\s*(\S.*)$/i.exec(line);
 		if (!match) continue;
 		for (const raw of match[1].split(",")) {

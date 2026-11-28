@@ -156,6 +156,25 @@ test("a deletes: claim in the description excuses the path on a single-parent co
 	assert.match(result.stdout, /a\.txt/);
 });
 
+// #892：CNB 上 PR 描述的变量不一定在，deletes: 写在 PR 中间的提交里；判定必须
+// 接受提交范围，不能只看传进来的最后一条提交。
+test("a deletes: claim in a PR commit range excuses the deletion", async (t) => {
+	const cwd = await repo(t, "claim-range");
+	commit(cwd, { "a.txt": "one" }, "base");
+	const base = pinBase(cwd);
+	git(cwd, ["rm", "-q", "a.txt"]);
+	git(cwd, ["commit", "-q", "--no-gpg-sign", "-m", "drop a"]);
+	writeFileSync(join(cwd, "claim.txt"), "deletes: a.txt\n");
+	git(cwd, ["add", "claim.txt"]);
+	git(cwd, ["commit", "-q", "--no-gpg-sign", "-m", "declare the deletion\n\ndeletes: a.txt"]);
+	const head = git(cwd, ["rev-parse", "HEAD"]);
+
+	const result = check(cwd, base, ["--commit", `${base}..${head}`]);
+	assert.equal(result.status, 0, result.stderr);
+	assert.match(result.stdout, /accounted for/);
+	assert.match(result.stdout, /a\.txt/);
+});
+
 // 白名单是逐条的：只写一半就还是红，写 `*` 不算数（那等于关掉检查）。
 test("a deletes: claim only covers the paths it names", async (t) => {
 	const cwd = await repo(t, "claim-partial");

@@ -54,6 +54,10 @@ Status: implemented
   `--base`，把「哪边是 base」交给事件给的事实，不再靠第一父推断。
 - CNB 包装脚本把 `refs/remotes/pr/head` 传给 `--commit`。PR 描述变量或 API 取不到时，
   写在 PR 提交消息里的 `deletes:` 仍能放行；判定脚本依旧不联网。
+- #892：`pull_request.target` 先加载目标分支上的包装脚本，再 `git merge` 源分支；
+  包装脚本自己改不了本次构建传给判定脚本的参数。判定脚本改为接受多个/范围形式的
+  `--commit`，并在拿到 `--base` 时默认读 `base..HEAD`，认领写在 PR 中间提交上也能被
+  读到；CNB 包装脚本也改成显式传 `CNB_PULL_REQUEST_TARGET_SHA..refs/remotes/pr/head`。
 
 ## Alternatives considered
 
@@ -68,6 +72,9 @@ Status: implemented
   而且「`^1` 是不是新父」这个分支本身就是那条不对称。改成合并提交自证之后整段不需要了。
 - **判定脚本自己调 CNB / GitHub API 读 PR 描述。** 脚本的价值之一是「只读 git 对象、
   装都不用装」，为了读一段文本引入网络与凭据不值。调用方写文件传进来即可。
+- **只把 PR tip 提交传给 `--commit`。** `git log <tip>` 会连祖先一起读，但 CNB 传的是
+  `refs/remotes/pr/head`；认领写在 tip 之前的 PR 提交上时，包装脚本只读 tip 会漏掉。
+  改用 `base..head` 范围只覆盖 PR 自己的提交，不翻 base 历史。
 - **不放宽，只改文案（原 D 方案）。** 最省事，但意味着每个删除型 PR 都红一次、都靠人
   跳过，绿不绿取决于谁值班。
 
@@ -77,4 +84,5 @@ Status: implemented
 自证放行、合并提交里的回退仍红、合并提交里的改名仍红、同一删除在快进与合并两种形态下
 结论一致（差别只能由「那一跳是不是合并动作」解释）。`check-merge-result-cnb.test.mjs`
 覆盖 `CNB_PULL_REQUEST_DESC` 落地成文件，以及没有描述变量时从 PR 提交消息读 `deletes:`
-这两条线。
+这两条线。`scripts/check-merge-result.test.mjs` 另有 #892 回归：认领发生在中间提交时，
+`--commit base..tip` 放行而 `--commit base..before-claim` 仍红。

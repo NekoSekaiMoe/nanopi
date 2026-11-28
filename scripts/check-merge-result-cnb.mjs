@@ -84,8 +84,10 @@ const checkArgs = [CHECK];
 const targetSha = process.env.CNB_PULL_REQUEST_TARGET_SHA;
 if (targetSha) checkArgs.push("--base", targetSha);
 // 删除型 PR 的意图证据留在 PR 自己的提交消息里。CNB 事件不保证带 PR 描述，
-// 把这次合并的 PR 侧提交交给判定脚本，让它读 `deletes: <path>`。
-checkArgs.push("--commit", "refs/remotes/pr/head");
+// 把整条 PR 侧提交范围交给判定脚本，让认领写在 tip 之外的中间提交上也能读到。
+// 范围用事件给的基线 SHA 与源分支 ref 拼出；没有基线时退回只给 tip。
+const prRange = targetSha ? `${targetSha}..refs/remotes/pr/head` : "refs/remotes/pr/head";
+checkArgs.push("--commit", prRange);
 if (description) {
 	const file = join(mkdtempSync(join(tmpdir(), "pr-desc-")), "description.md");
 	writeFileSync(file, description);
