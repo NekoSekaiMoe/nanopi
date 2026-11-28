@@ -68,6 +68,12 @@ node install.js --out=./nanopi.js
 
 The download is checked against the release's `SHA256SUMS` and fails on a mismatch. Run `node install.js --help` for the same summary.
 
+On Debian and Ubuntu (`nodejs >= 24`), you can also install the `nanopi_<version>_all.deb` package attached to each GitHub Release and AtomGit mirror (including `nightly`):
+
+```bash
+sudo apt install ./nanopi_*.deb
+```
+
 ## Session export
 
 `/export [path]` (or `nanopi --export <session.jsonl> [path]`) writes the current session; the path extension picks the format.

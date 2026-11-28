@@ -22,14 +22,15 @@ bundle 本身不上任何 registry。国内用户下载要过 GitHub Releases，
 主分支 README」：
 
 ```
-README.md                       # 当前指向哪个目录，下载与校验命令
+README.md                                            # 当前指向哪个目录，下载与校验命令
 v20261114.0.0/nanopi.js
 v20261114.0.0/nanopi-base.js
 v20261114.0.0/nanopi-minimal.js
+v20261114.0.0/nanopi_20261114.0.0_all.deb            # Debian/Ubuntu all 包（下个版本起随发）
 v20261114.0.0/SHA256SUMS
-v20261114.0.0/RELEASE_NOTES.md                # 正式版是 release-notes.mjs 的产物
-v20261114.0.0/nanopi-20261114-source.tar.gz   # 只有正式版
-nightly/…                                     # nightly 的同一组文件
+v20261114.0.0/RELEASE_NOTES.md                       # 正式版是 release-notes.mjs 的产物
+v20261114.0.0/nanopi-20261114-source.tar.gz          # 只有正式版
+nightly/…                                            # nightly 的同一组文件（含 +nightly.<date> deb）
 ```
 
 目录名不是 tag，是 bundle 里烘焙的那一段 URL：正式版写的是

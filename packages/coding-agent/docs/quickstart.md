@@ -31,6 +31,12 @@ npm install -g --ignore-scripts @nekosekaimoe/nanopi
 Docker users can pull `ghcr.io/nekosekaimoe/nanopi` instead; see
 [Containerization](containerization.md).
 
+Debian and Ubuntu users (with `nodejs >= 24`) can install the `nanopi_<version>_all.deb` package from GitHub Releases or the AtomGit mirror:
+
+```bash
+sudo apt install ./nanopi_*.deb
+```
+
 nanopi does not require dependency lifecycle scripts for a normal npm installation.
 
 Verify the installation:
@@ -123,6 +129,12 @@ If you installed nanopi with npm, run:
 
 ```bash
 npm uninstall -g @nekosekaimoe/nanopi
+```
+
+If you installed the Debian package, run:
+
+```bash
+sudo apt remove nanopi
 ```
 
 

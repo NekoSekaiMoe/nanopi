@@ -14,7 +14,7 @@
 //
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { copyFileSync, cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { parseArgs } from "node:util";
 
@@ -23,6 +23,7 @@ const DEFAULT_SLUG = "nanopi/releases-assets";
 // 与 .github/workflows/build-binaries.yml 的资产集同名，install.js 的 --sku
 // 才能从两个来源取到同一个文件名。
 const BUNDLES = ["nanopi.js", "nanopi-base.js", "nanopi-minimal.js"];
+const DEB_PACKAGE_RE = /^nanopi_[^/]+_all\.deb$/;
 const CHECKSUMS = "SHA256SUMS";
 const NOTES = "RELEASE_NOTES.md";
 
@@ -47,7 +48,7 @@ if (values.help || !values.tag || !values.commit || !values.input || !values.wor
   --tag <tag>          Release tag in the assets repository (v20261031.1.0, nightly)
   --commit <sha>       Commit the assets were built from; recorded in the README and
                        in the nightly release notes, so "which main" is answerable
-  --input <dir>        Directory holding the built bundles (and optional nanopi-<version>-source.tar.gz)
+  --input <dir>        Directory holding the built bundles, nanopi_*_all.deb (and optional nanopi-<version>-source.tar.gz)
   --work <dir>         Assets repository checkout; created and reused between runs
   --remote <url>       Assets repository URL (default: ${DEFAULT_REMOTE})
   --repo-slug <slug>   <owner>/<repo> used to build asset download URLs (default: ${DEFAULT_SLUG})
@@ -98,18 +99,28 @@ function git(args, { env } = {}) {
 	);
 }
 
-// 三个 bundle 的名字就是契约，少一个都意味着安装路径断了。
+// 三个 bundle 与 Debian 包是契约，少一个都意味着安装路径断了。
+function findDebPackage(input) {
+	const matches = readdirSync(input)
+		.filter((name) => DEB_PACKAGE_RE.test(name))
+		.sort();
+	if (matches.length === 0) throw new Error(`Debian package (nanopi_*_all.deb) is missing from ${input}`);
+	if (matches.length > 1) throw new Error(`Multiple Debian packages found in ${input}: ${matches.join(", ")}`);
+	return matches[0];
+}
+
 function assetsOf(input, tag) {
 	const bundles = BUNDLES.map((name) => {
 		const path = join(input, name);
 		if (!existsSync(path)) throw new Error(`${name} is missing from ${input}; build every flavor before publishing`);
 		return name;
 	});
+	const deb = findDebPackage(input);
 	// 源包只对正式版本有意义：nightly 的源码就是当天的 main，Git tag 是正式
 	// 版本的身份证。
 	const source = tag.startsWith("v") ? `nanopi-${tag.slice(1)}-source.tar.gz` : undefined;
 	if (source && !existsSync(join(input, source))) throw new Error(`${source} is missing from ${input}`);
-	return { bundles, source };
+	return { bundles, deb, source };
 }
 
 // 一次发布一个目录：目录名就是 bundle 里烘焙的那一段 URL，重发同一个版本只覆盖
@@ -122,8 +133,8 @@ function clearAssets() {
 	mkdirSync(ASSETS, { recursive: true });
 }
 
-function writeAssets(input, { bundles, source }) {
-	const names = [...bundles];
+function writeAssets(input, { bundles, deb, source }) {
+	const names = [...bundles, deb];
 	if (source) names.push(source);
 	for (const name of names) copyFileSync(join(input, name), join(ASSETS, name));
 	// `sha256sum -c SHA256SUMS` 是 install.js 与用户共用的校验入口，格式就得是
@@ -135,14 +146,14 @@ function writeAssets(input, { bundles, source }) {
 	writeFileSync(join(ASSETS, CHECKSUMS), `${sums}\n`);
 }
 
-function writeNotes(input, tag) {
+function writeNotes(input, tag, deb) {
 	const notes = join(input, NOTES);
 	if (tag.startsWith("v") && existsSync(notes)) cpSync(notes, join(ASSETS, NOTES));
 	else {
 		const lines = [
 			`Nightly build of ${values.commit}.`,
 			"",
-			`Bundles are raw files in this repository: ${rawBase}/nanopi.js, ${rawBase}/nanopi-base.js, ${rawBase}/nanopi-minimal.js.`,
+			`Bundles are raw files in this repository: ${rawBase}/nanopi.js, ${rawBase}/nanopi-base.js, ${rawBase}/nanopi-minimal.js, and Debian package ${rawBase}/${deb}.`,
 			`Verify with ${rawBase}/${CHECKSUMS}.`,
 			"",
 			"The official release lives on GitHub Releases; this repository mirrors the bundles for readers in mainland China.",
@@ -151,7 +162,7 @@ function writeNotes(input, tag) {
 	}
 }
 
-function writeReadme() {
+function writeReadme(deb) {
 	const tag = TAG;
 	const lines = [
 		`# ${slug}`,
@@ -159,8 +170,8 @@ function writeReadme() {
 		"Bundle distribution for [NanoPi](https://atomgit.com/NanoPi/NanoPi). The official",
 		"release, changelog and source archive live on GitHub",
 		"([NekoSekaiMoe/nanopi](https://github.com/NekoSekaiMoe/nanopi)). This repository",
-		"carries the single-file bundles so readers in mainland China do not have to reach",
-		"GitHub Releases.",
+		"carries the single-file bundles and Debian package so readers in mainland China do",
+		"not have to reach GitHub Releases.",
 		"",
 		`Current: **${tag}** built from ${values.commit}.`,
 		"",
@@ -172,11 +183,12 @@ function writeReadme() {
 		`curl -fsSLO ${rawBase}/nanopi.js`,
 		"```",
 		"",
-		"| Bundle | File | Carries |",
+		"| Bundle / Package | File | Carries |",
 		"|---|---|---|",
 		`| full | ${rawBase}/nanopi.js | everything, what the npm packages ship |`,
 		`| base | ${rawBase}/nanopi-base.js | core CLI, standard tools, curated model catalog |`,
 		`| minimal | ${rawBase}/nanopi-minimal.js | the bash tool alone, one endpoint shape |`,
+		`| deb (all) | ${rawBase}/${deb} | Debian/Ubuntu \`all\` package (\`nanopi\`, requires \`nodejs >= 24\`) |`,
 		"",
 		"```bash",
 		`curl -fsSLO ${rawBase}/${CHECKSUMS}`,
@@ -194,6 +206,10 @@ function writeReadme() {
 		"",
 		"# a smaller bundle",
 		`curl -fsSL https://atomgit.com/NanoPi/NanoPi/raw/main/install.js | node - --mirror=${rawBase} --sku=minimal`,
+		"",
+		"# Debian / Ubuntu (.deb)",
+		`curl -fsSLO ${rawBase}/${deb}`,
+		`sudo apt install ./${deb}`,
 		"```",
 		"",
 		"Check `RELEASE_NOTES.md` for what changed.",
@@ -275,8 +291,8 @@ function main() {
 	const layout = assetsOf(values.input, TAG);
 	clearAssets();
 	writeAssets(values.input, layout);
-	writeNotes(values.input, TAG);
-	writeReadme();
+	writeNotes(values.input, TAG, layout.deb);
+	writeReadme(layout.deb);
 	publish();
 }
 

@@ -1,0 +1,33 @@
+#!/usr/bin/make -f
+
+export DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_configure:
+
+override_dh_auto_build:
+	if [ -n "$(NANOPI_DEB_BUNDLE)" ]; then \
+		test -f "$(NANOPI_DEB_BUNDLE)"; \
+		mkdir -p debian/tmp-build; \
+		cp "$(NANOPI_DEB_BUNDLE)" debian/tmp-build/nanopi.js; \
+	else \
+		node scripts/build-single-file.mjs --offline-model-data --out debian/tmp-build; \
+	fi
+	chmod 0755 debian/tmp-build/nanopi.js
+
+override_dh_auto_test:
+
+override_dh_auto_install:
+	install -d debian/nanopi/usr/share/nanopi debian/nanopi/usr/bin
+	install -m 0755 debian/tmp-build/nanopi.js debian/nanopi/usr/share/nanopi/nanopi.js
+	ln -s ../share/nanopi/nanopi.js debian/nanopi/usr/bin/nanopi
+
+override_dh_fixperms:
+	dh_fixperms
+	chmod 0755 debian/nanopi/usr/share/nanopi/nanopi.js
+
+override_dh_auto_clean:
+	rm -rf debian/tmp-build
+	dh_auto_clean

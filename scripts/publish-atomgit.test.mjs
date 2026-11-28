@@ -28,7 +28,7 @@ function git(cwd, args) {
 	return result.stdout.trim();
 }
 
-async function fixture(t, { source = false, seed = false } = {}) {
+async function fixture(t, { source = false, seed = false, deb = "nanopi_20261128.0.0+nightly.20261129_all.deb" } = {}) {
 	const root = await mkdtemp(join(tmpdir(), "nanopi-atomgit-test-"));
 	t.after(() => rmSync(root, { force: true, recursive: true }));
 
@@ -50,6 +50,7 @@ async function fixture(t, { source = false, seed = false } = {}) {
 	const input = join(root, "input");
 	mkdirSync(input);
 	for (const name of ["nanopi.js", "nanopi-base.js", "nanopi-minimal.js"]) writeFileSync(join(input, name), `${name}\n`);
+	if (deb) writeFileSync(join(input, deb), `${deb}\n`);
 	if (source) writeFileSync(join(input, "nanopi-20261031.1.0-source.tar.gz"), "source\n");
 	return { root, remote, input, work: join(root, "work") };
 }
@@ -65,7 +66,7 @@ function publish(fixture, args, extraEnv = {}) {
 	);
 }
 
-test("nightly publishes the three bundles with checksums and moves its tag", async (t) => {
+test("nightly publishes the three bundles and deb package with checksums and moves its tag", async (t) => {
 	const fixturePaths = await fixture(t);
 
 	const first = publish(fixturePaths, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
@@ -79,11 +80,12 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 		"nightly/nanopi-base.js",
 		"nightly/nanopi-minimal.js",
 		"nightly/nanopi.js",
+		"nightly/nanopi_20261128.0.0+nightly.20261129_all.deb",
 	]);
 
 	// SHA256SUMS 是 install.js 的校验入口，格式错了安装会直接失败。
 	const sums = git(fixturePaths.remote, ["show", "refs/heads/main:nightly/SHA256SUMS"]).split("\n").filter(Boolean);
-	assert.equal(sums.length, 3);
+	assert.equal(sums.length, 4);
 	for (const line of sums) {
 		const [hash, name] = line.split(/\s+/);
 		assert.equal(hash, createHash("sha256").update(readFileSync(join(fixturePaths.input, name))).digest("hex"), name);
@@ -93,6 +95,7 @@ test("nightly publishes the three bundles with checksums and moves its tag", asy
 	assert.match(readme, new RegExp(`Current: \\*\\*nightly\\*\\* built from ${COMMIT}`));
 	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:nightly/RELEASE_NOTES.md"]), new RegExp(`Nightly build of ${COMMIT}`));
 	assert.match(readme, /nanopi\/releases-assets\/raw\/main\/nightly\/nanopi\.js/);
+	assert.match(readme, /nanopi\/releases-assets\/raw\/main\/nightly\/nanopi_20261128\.0\.0\+nightly\.20261129_all\.deb/);
 
 	// 同一天重跑：新提交叠在上面，tag 挪过去，主分支不出现 force。
 	writeFileSync(join(fixturePaths.input, "nanopi.js"), "rebuilt\n");
@@ -137,7 +140,7 @@ test("a release tag carries the source archive and keeps the official notes", as
 // carries no patch part: v20261114 must land in v20261114.0.0/, the directory
 // the shipped bundle asks for, or the mirror answers 404 forever.
 test("a date tag lands in the directory the bundle asks for", async (t) => {
-	const fixturePaths = await fixture(t);
+	const fixturePaths = await fixture(t, { deb: "nanopi_20261114.0.0_all.deb" });
 	writeFileSync(join(fixturePaths.input, "nanopi-20261114-source.tar.gz"), "source\n");
 
 	const result = publish(fixturePaths, ["--tag", "v20261114", "--token-env", "ATOMGIT_KEY", "--push"]);
@@ -145,7 +148,21 @@ test("a date tag lands in the directory the bundle asks for", async (t) => {
 
 	const files = git(fixturePaths.remote, ["ls-tree", "-r", "--name-only", "refs/heads/main"]);
 	assert.match(files, /^v20261114\.0\.0\/nanopi\.js$/m);
+	assert.match(files, /^v20261114\.0\.0\/nanopi_20261114\.0\.0_all\.deb$/m);
 	assert.match(git(fixturePaths.remote, ["show", "refs/heads/main:README.md"]), /raw\/main\/v20261114\.0\.0\/nanopi\.js/);
+});
+
+test("a missing or ambiguous deb package fails fast", async (t) => {
+	const missingDeb = await fixture(t, { deb: null });
+	const missingResult = publish(missingDeb, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
+	assert.equal(missingResult.status, 1);
+	assert.match(missingResult.stderr, /Debian package .* is missing/);
+
+	const multiDeb = await fixture(t);
+	writeFileSync(join(multiDeb.input, "nanopi_20261128.0.0_all.deb"), "extra\n");
+	const multiResult = publish(multiDeb, ["--tag", "nightly", "--token-env", "ATOMGIT_KEY", "--push"]);
+	assert.equal(multiResult.status, 1);
+	assert.match(multiResult.stderr, /Multiple Debian packages found/);
 });
 
 test("a missing flavor is an error, not a silently smaller release", async (t) => {

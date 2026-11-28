@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `debian/` packaging and `scripts/build-deb.mjs`: release builds (`build-binaries.yml`) and nightly builds (`nightly.yml`) now package `nanopi_<version>_all.deb` (`Architecture: all`, depending on `nodejs (>= 24)`) and publish it alongside `SHA256SUMS` to GitHub Releases and AtomGit
+
 ## [20261128]
 
 ### New Features

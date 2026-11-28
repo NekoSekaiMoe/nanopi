@@ -155,6 +155,13 @@ const entries = new Set(manifest);
 
 const requiredPaths = [
 	"package.json",
+	"debian/changelog",
+	"debian/control",
+	"debian/copyright",
+	"debian/nanopi.docs",
+	"debian/rules",
+	"debian/source/format",
+	"scripts/build-deb.mjs",
 	"scripts/build-single-file.mjs",
 	"scripts/build-coding-agent-single-file.mjs",
 	"packages/ai/src/models.generated.ts",

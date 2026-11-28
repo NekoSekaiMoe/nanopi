@@ -1,0 +1,21 @@
+Source: nanopi
+Section: devel
+Priority: optional
+Maintainer: SekaiMoe <sekaimoe@proton.me>
+Build-Depends: debhelper-compat (= 13)
+Standards-Version: 4.7.0
+Homepage: https://github.com/NekoSekaiMoe/nanopi
+Vcs-Git: https://github.com/NekoSekaiMoe/nanopi.git
+Vcs-Browser: https://github.com/NekoSekaiMoe/nanopi
+Rules-Requires-Root: no
+
+Package: nanopi
+Architecture: all
+Depends: ${misc:Depends}, nodejs (>= 24)
+Recommends: ca-certificates, fd-find, git, ripgrep
+Suggests: bubblewrap
+Description: Lightweight coding agent CLI and WebUI
+ NanoPi is a lightweight agent harness tailored from Pi Coding Agent,
+ featuring both a terminal UI and a browser WebUI. It provides an atomic
+ tool execution loop (read, bash, edit, write, grep, find, ls) with
+ built-in modules and zero npm runtime dependencies.

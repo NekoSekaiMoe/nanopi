@@ -1,0 +1,5 @@
+nanopi (20261128.0.0) unstable; urgency=medium
+
+  * Initial Debian packaging.
+
+ -- SekaiMoe <sekaimoe@proton.me>  Sat, 28 Nov 2026 20:42:09 +0800

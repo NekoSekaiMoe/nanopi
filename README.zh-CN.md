@@ -67,6 +67,12 @@ node install.js --out=./nanopi.js
 
 下载内容会对照 Release 的 `SHA256SUMS` 校验，不一致就失败。运行 `node install.js --help` 可以看到同样的说明。
 
+Debian / Ubuntu 用户（需 `nodejs >= 24`）也可以直接安装 GitHub Release 与 AtomGit 镜像（含 `nightly`）中的 `nanopi_<version>_all.deb`：
+
+```bash
+sudo apt install ./nanopi_*.deb
+```
+
 ## 会话导出
 
 `/export [path]`（或 `nanopi --export <session.jsonl> [path]`）导出当前会话，路径的扩展名决定格式。
