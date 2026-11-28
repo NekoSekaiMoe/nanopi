@@ -180,6 +180,7 @@ describe("builtin providers", () => {
 			["github-copilot", "claude-opus-5.5"],
 			["github-copilot", "claude-opus-4.8"],
 			["github-copilot", "kimi-k3"],
+			["github-copilot", "gpt-6-sol"],
 			["deepseek", "deepseek-v4-pro"],
 			["openrouter", "openai/gpt-5.6-terra"],
 		] as const;
@@ -192,6 +193,7 @@ describe("builtin providers", () => {
 			["opencode", "gpt-5.2"],
 			["opencode", "claude-sonnet-4-5"],
 			["github-copilot", "claude-sonnet-4.6"],
+			["github-copilot", "gpt-6.2-sol"],
 			["deepseek", "deepseek-flash"],
 			["openrouter", "anthropic/claude-opus-5"],
 			["openrouter", "moonshotai/kimi-k3"],
@@ -241,6 +243,30 @@ describe("builtin providers", () => {
 		}
 	});
 
+	// #12316
+	it("keeps the Copilot prompt cache across effort and tool changes", () => {
+		const models = builtinModels();
+		const opus = models.getModel("github-copilot", "claude-opus-5.5");
+		expect(opus?.compat).toMatchObject({
+			supportsMidConvoEffort: true,
+			supportsMidConvoToolChanges: true,
+		});
+		expect(opus?.promptCache).toEqual({ short: 300, long: 3600 });
+		const gpt6 = models.getModel("github-copilot", "gpt-6-sol");
+		const gpt56 = models.getModel("github-copilot", "gpt-5.6-sol");
+		expect(gpt6?.compat).toHaveProperty("supportsMidConvoEffort", true);
+		expect(gpt56?.compat).not.toHaveProperty("supportsMidConvoEffort");
+		for (const id of ["gpt-5.3-codex", "mai-code-2-flash"] as const) {
+			expect(models.getModel("github-copilot", id)?.compat, id).toHaveProperty(
+				"supportsMidConvoSystemMessages",
+				true,
+			);
+		}
+		expect(models.getModel("github-copilot", "grok-4.7")?.compat ?? {}).not.toHaveProperty(
+			"supportsMidConvoSystemMessages",
+		);
+	});
+
 	it("routes proxied tool changes through verified transports only", () => {
 		const models = builtinModels();
 		for (const [provider, modelId] of [
@@ -255,13 +281,13 @@ describe("builtin providers", () => {
 				"supportsToolSearch",
 			);
 		}
-		// Proxied Anthropic endpoints reject `tool_addition`/`tool_removal` blocks.
+		// OpenCode rejects tool-change blocks; Copilot passes them through to Claude (#12316).
 		expect(models.getModel("opencode", "claude-opus-5")?.compat, "opencode").not.toHaveProperty(
 			"supportsMidConvoToolChanges",
 		);
-		expect(models.getModel("github-copilot", "claude-opus-5.5")?.compat, "github-copilot").not.toHaveProperty(
-			"supportsMidConvoToolChanges",
-		);
+		expect(models.getModel("github-copilot", "claude-opus-5.5")?.compat, "github-copilot").toMatchObject({
+			supportsMidConvoToolChanges: true,
+		});
 		expect(models.getModel("anthropic", "claude-opus-5")?.compat).toMatchObject({
 			supportsMidConvoToolChanges: true,
 		});

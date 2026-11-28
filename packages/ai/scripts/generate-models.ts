@@ -428,37 +428,15 @@ const TOGETHER_TOGGLE_REASONING_COMPAT: OpenAICompletionsCompat = {
 	...TOGETHER_BASE_COMPAT,
 	thinkingFormat: "together",
 };
-const TOGETHER_REASONING_EFFORT_COMPAT: OpenAICompletionsCompat = {
-	...TOGETHER_BASE_COMPAT,
-	supportsReasoningEffort: true,
-	thinkingFormat: "openai",
-};
-const TOGETHER_TOGGLE_REASONING_EFFORT_COMPAT: OpenAICompletionsCompat = {
-	...TOGETHER_TOGGLE_REASONING_COMPAT,
-	supportsReasoningEffort: true,
-};
 const TOGETHER_REASONING_ONLY_MODELS = new Set([
 	"deepseek-ai/DeepSeek-R1",
 	"MiniMaxAI/MiniMax-M2.7",
 ]);
-const TOGETHER_REASONING_EFFORT_MODELS = new Set(["openai/gpt-oss-20b", "openai/gpt-oss-120b"]);
-const TOGETHER_TOGGLE_REASONING_EFFORT_MODELS = new Set(["deepseek-ai/DeepSeek-V4-Pro-0813"]);
 const TOGETHER_FIXED_REASONING_LEVEL_MAP = {
 	off: null,
 	minimal: null,
 	low: null,
 	medium: null,
-} as const;
-const TOGETHER_REASONING_EFFORT_LEVEL_MAP = {
-	off: null,
-	minimal: null,
-} as const;
-const TOGETHER_DEEPSEEK_V4_THINKING_LEVEL_MAP = {
-	minimal: null,
-	low: null,
-	medium: null,
-	high: "high",
-	xhigh: null,
 } as const;
 const TOGETHER_TOGGLE_REASONING_LEVEL_MAP = {
 	minimal: null,
@@ -645,14 +623,14 @@ const QWEN_TOKEN_PLAN_FALLBACK_THINKING_LEVEL_MAP = {
 	max: "max",
 } as const;
 const QWEN_TOKEN_PLAN_REASONING_EFFORT_FALLBACK_MODEL_IDS = new Set(["glm-5", "glm-5.1"]);
-// Retired preview id — models.dev may still list it after GA ships.
-const QWEN_TOKEN_PLAN_EXCLUDED_MODEL_IDS = new Set(["qwen3.8-max-preview"]);
+// Retired preview ids — models.dev may still list them after GA ships.
+const QWEN_TOKEN_PLAN_EXCLUDED_MODEL_IDS = new Set(["qwen3.8-max-preview", "qwen4-max-preview"]);
 const QWEN_TOKEN_PLAN_PROVIDER_IDS = new Set<string>([
 	"qwen-token-plan",
 	"qwen-token-plan-cn",
 	"qwen-token-plan-individual",
 ]);
-// QwenCloud Token Plan Individual text-model allowlist, verified 2026-09-03.
+// QwenCloud Token Plan Individual text-model allowlist, verified 2026-11-25.
 // Retired models remain excluded above even if the public catalog lags.
 // https://docs.qwencloud.com/token-plan/personal/token-plan-personal-overview
 const QWEN_TOKEN_PLAN_INDIVIDUAL_MODEL_IDS = new Set<string>([
@@ -665,6 +643,7 @@ const QWEN_TOKEN_PLAN_INDIVIDUAL_MODEL_IDS = new Set<string>([
 	"qwen3.7-plus",
 	"qwen3.8-flash",
 	"qwen3.8-max",
+	"qwen4-max",
 ]);
 
 const KIMI_K3_MAX_TOKENS = 131072;
@@ -735,6 +714,24 @@ const OPENAI_TOOL_SEARCH_MODEL_IDS = new Set([
 ]);
 const OPENAI_ADDITIONAL_TOOLS_MODEL_IDS = OPENAI_TOOL_SEARCH_MODEL_IDS;
 const OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS = OPENAI_TOOL_SEARCH_MODEL_IDS;
+const OPENAI_MID_CONVO_EFFORT_MODEL_IDS = new Set([
+	"gpt-6-astra",
+	"gpt-6-sol",
+	"gpt-6-luna",
+	"gpt-6.1-sol",
+	"gpt-6.1-terra",
+	"gpt-6.2-astra",
+	"gpt-6.2-sol",
+]);
+// Copilot-served Responses models that follow a mid-conversation developer message and keep
+// the prompt cache with it. Folded into the leading prompt, these flash models and
+// gpt-5.3-codex ignored the instruction.
+const COPILOT_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS = new Set([
+	"gpt-5.3-codex",
+	"mai-code-1.1-flash",
+	"mai-code-2",
+	"mai-code-2-flash",
+]);
 const OPENAI_CODEX_ADDITIONAL_TOOLS_MODEL_IDS = new Set([
 	"gpt-5.6-sol",
 	"gpt-5.6-terra",
@@ -914,8 +911,8 @@ function applyModelsDevReasoningOptionMetadata(model: Model<Api>): void {
 
 function getTogetherCompat(modelId: string, reasoning: boolean): OpenAICompletionsCompat {
 	if (!reasoning) return TOGETHER_BASE_COMPAT;
-	if (TOGETHER_REASONING_EFFORT_MODELS.has(modelId)) return TOGETHER_REASONING_EFFORT_COMPAT;
-	if (TOGETHER_TOGGLE_REASONING_EFFORT_MODELS.has(modelId)) return TOGETHER_TOGGLE_REASONING_EFFORT_COMPAT;
+	// Every reasoning model Together lists takes its thinking toggle. The effort-controlled
+	// models (gpt-oss and DeepSeek V4 Pro 0813) are deprecated upstream and skipped.
 	if (TOGETHER_REASONING_ONLY_MODELS.has(modelId)) return TOGETHER_BASE_COMPAT;
 	return TOGETHER_TOGGLE_REASONING_COMPAT;
 }
@@ -925,8 +922,6 @@ function getTogetherThinkingLevelMap(
 	reasoning: boolean,
 ): NonNullable<Model<any>["thinkingLevelMap"]> | undefined {
 	if (!reasoning) return undefined;
-	if (TOGETHER_REASONING_EFFORT_MODELS.has(modelId)) return { ...TOGETHER_REASONING_EFFORT_LEVEL_MAP };
-	if (TOGETHER_TOGGLE_REASONING_EFFORT_MODELS.has(modelId)) return { ...TOGETHER_DEEPSEEK_V4_THINKING_LEVEL_MAP };
 	if (TOGETHER_REASONING_ONLY_MODELS.has(modelId)) return { ...TOGETHER_FIXED_REASONING_LEVEL_MAP };
 	return { ...TOGETHER_TOGGLE_REASONING_LEVEL_MAP };
 }
@@ -952,7 +947,7 @@ function supportsOpenAiMax(model: Model<Api>): boolean {
 	);
 }
 
-const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic", "openrouter"]);
+const VERIFIED_ANTHROPIC_MID_CONVO_EFFORT_PROVIDERS = new Set(["anthropic", "openrouter", "github-copilot"]);
 // OpenRouter rejects `configuration_update` system messages on Opus 5 ("Mid-conversation
 // reasoning effort (configuration_update) is not supported on anthropic/claude-opus-5-20260723")
 // while accepting them on Fable 5.1, so gate that model there.
@@ -963,7 +958,7 @@ function supportsAnthropicMidConvoEffort(modelId: string): boolean {
 	return (
 		/^claude-opus-(?:5|5[.-]5)(?:-\d{8})?$/.test(id) ||
 		/^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/.test(id) ||
-		/^claude-(?:fable|mythos)-5(?:[.-]1)(?:-\d{8})?$/.test(id)
+		/^claude-(?:fable|mythos)-5(?:[.-][12])(?:-\d{8})?$/.test(id)
 	);
 }
 
@@ -971,7 +966,7 @@ function supportsAnthropicMidConvoSystemMessages(modelId: string): boolean {
 	return (
 		/^claude-opus-(?:4[.-]8|5(?:[.-]5)?)(?:-\d{8})?$/.test(modelId) ||
 		/^claude-(?:sonnet|haiku)-5[.-]5(?:-\d{8})?$/.test(modelId) ||
-		/^claude-(?:fable|mythos)-5(?:[.-]1)?(?:-\d{8})?$/.test(modelId)
+		/^claude-(?:fable|mythos)-5(?:[.-][12])?(?:-\d{8})?$/.test(modelId)
 	);
 }
 
@@ -1309,9 +1304,11 @@ function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
 	const isOpenAICodex = model.provider === "openai-codex" && model.api === "openai-codex-responses";
 	const isProxiedResponses =
 		OPENAI_RESPONSES_PROXY_PROVIDERS.has(model.provider) && model.api === "openai-responses";
+	const isCopilotExtraMidConvo =
+		model.provider === "github-copilot" && COPILOT_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id);
 	if (
-		!(isOpenAIResponses || isOpenAICodex || isProxiedResponses) ||
-		!OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id)
+		!(isOpenAIResponses || isOpenAICodex || isProxiedResponses || isCopilotExtraMidConvo) ||
+		!(OPENAI_MID_CONVO_SYSTEM_MESSAGE_MODEL_IDS.has(model.id) || isCopilotExtraMidConvo)
 	) {
 		return;
 	}
@@ -1320,6 +1317,18 @@ function applyOpenAIResponsesTranscriptMetadata(model: Model<Api>): void {
 		supportsMidConvoSystemMessages: true,
 		...(isProxiedResponses ? { supportsAdditionalTools: true } : {}),
 	};
+	// Copilot applies `configuration_update` effort items and keeps the prompt cache across
+	// effort changes, which a changed `reasoning.effort` drops (#12316, checked 2026-11-23).
+	if (
+		model.provider === "github-copilot" &&
+		model.api === "openai-responses" &&
+		OPENAI_MID_CONVO_EFFORT_MODEL_IDS.has(model.id)
+	) {
+		model.compat = {
+			...(model.compat as OpenAIResponsesCompat | undefined),
+			supportsMidConvoEffort: true,
+		};
+	}
 }
 
 // OpenAI charges prompt-cache writes starting with the GPT-5.6 family, and exactly
@@ -1388,13 +1397,16 @@ function applyInContextCompactionMetadata(model: Model<Api>): void {
 }
 
 // Anthropic ephemeral entries have a hard five-minute lifetime; `ttl: "1h"`
-// extends it to one hour. Only direct Anthropic is annotated so cache warming
-// does not assume equivalent behavior through proxies.
+// extends it to one hour. GitHub Copilot keeps those lifetimes on the Claude
+// models it serves (#12316); other proxies are left unannotated so cache warming
+// does not assume equivalent behavior.
 // https://docs.anthropic.com/en/docs/build-with-claude/prompt-caching
 const ANTHROPIC_PROMPT_CACHE: ModelPromptCache = { short: 300, long: 3600 };
 
 function applyPromptCacheMetadata(model: Model<Api>): void {
-	if (model.provider === "anthropic" && model.api === "anthropic-messages") {
+	if (model.api === "anthropic-messages" && (model.provider === "anthropic" || model.provider === "github-copilot")) {
+		// Copilot keeps Anthropic's cache lifetimes: a default entry hit after 270 s and
+		// missed after 330 s, and a `ttl: "1h"` entry hit after 420 s (#12316).
 		model.promptCache = ANTHROPIC_PROMPT_CACHE;
 	}
 	// Do not add OpenAI lifetimes yet. Before enabling warming for explicit
@@ -1636,10 +1648,15 @@ function getAnthropicMessagesCompat(provider: string, modelId: string): Anthropi
 		compat.supportsMidConvoSystemMessages = true;
 		compat.supportsMidConvoToolChanges = true;
 	}
-	// OpenCode Zen and GitHub Copilot forward mid-conversation system messages but reject
-	// `tool_addition`/`tool_removal` blocks, so tool changes stay top-level there.
-	if ((provider === "opencode" || provider === "github-copilot") && supportsAnthropicMidConvoSystemMessages(modelId)) {
+	// GitHub Copilot forwards per-message output_config effort and `tool_addition`/`tool_removal`
+	// blocks through to Claude while keeping the prompt cache (#12316, checked 2026-11-23 on
+	// Opus, Sonnet, and Haiku 5.5). OpenCode still rejects the tool-change blocks.
+	if (provider === "opencode" && supportsAnthropicMidConvoSystemMessages(modelId)) {
 		compat.supportsMidConvoSystemMessages = true;
+	}
+	if (provider === "github-copilot" && supportsAnthropicMidConvoSystemMessages(modelId)) {
+		compat.supportsMidConvoSystemMessages = true;
+		compat.supportsMidConvoToolChanges = true;
 	}
 	if (EAGER_TOOL_INPUT_STREAMING_UNSUPPORTED_ANTHROPIC_MODELS.has(`${provider}:${modelId}`)) {
 		compat.supportsEagerToolInputStreaming = false;
