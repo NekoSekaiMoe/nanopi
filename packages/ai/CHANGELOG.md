@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Qwen Token Plan Individual now lists `qwen4-max` instead of the retired `qwen4-max-preview` (upstream `22f5f2995`)
+- Together drops reasoning-effort overrides for models deprecated in the upstream catalog; every listed Together reasoning model takes the Together thinking toggle (upstream `e459be65a`)
+- GitHub Copilot Claude and GPT-6 models keep the prompt cache across thinking-level and tool changes: Claude uses mid-conversation effort and tool changes, GPT-6 uses `configuration_update` items, and Claude models declare Anthropic's 5-minute and 1-hour cache lifetimes for warming (upstream `d5b453814`)
+
 ### Removed
 
 - Removed Qoder entirely: the `qoder` / `qoder-cn` providers, the signed chat API, model-list refresh, daily check-in, and the `./qoder` package export. The browser OAuth login was already gone; now no Qoder code path ships. The token-rotation-only `AuthorizationUpdate` / `storeAuthorizationUpdate` interface and the QODER-specific credential env writes went with it (issue [#855](https://cnb.cool/shinytale/agent/nanopi/-/issues/855))

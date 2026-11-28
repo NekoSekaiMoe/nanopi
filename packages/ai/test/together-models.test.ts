@@ -44,24 +44,17 @@ describe("Together models", () => {
 		});
 	});
 
-	it("models Together reasoning controls from the Together API surface", () => {
-		const kimi = getModel("together", "moonshotai/Kimi-K3");
-		expect(kimi.thinkingLevelMap).toEqual({ minimal: null, low: null, medium: null });
-		expect(kimi.compat).toMatchObject({
-			supportsReasoningEffort: false,
-			thinkingFormat: "together",
-		});
-
-		const deepSeekV4 = getModel("together", "deepseek-ai/DeepSeek-V4.1-Flash");
-		expect(deepSeekV4.thinkingLevelMap).toEqual({ minimal: null, low: null, medium: null });
-		expect(deepSeekV4.compat).toMatchObject({
-			supportsReasoningEffort: false,
-			thinkingFormat: "together",
-		});
-
-		const minimax = getModel("together", "MiniMaxAI/MiniMax-M3.1-Flash");
-		expect(minimax.thinkingLevelMap).toEqual({ minimal: null, low: null, medium: null });
-		expect(minimax.compat).toMatchObject({ thinkingFormat: "together", supportsReasoningEffort: false });
+	it("gives every Together reasoning model the Together thinking toggle", () => {
+		for (const id of [
+			"moonshotai/Kimi-K3",
+			"deepseek-ai/DeepSeek-V4.1-Flash",
+			"MiniMaxAI/MiniMax-M3.1-Flash",
+		] as const) {
+			const model = getModel("together", id);
+			expect(model.reasoning).toBe(true);
+			expect(model.thinkingLevelMap).toEqual({ minimal: null, low: null, medium: null });
+			expect(model.compat).toMatchObject({ supportsReasoningEffort: false, thinkingFormat: "together" });
+		}
 	});
 
 	it("resolves TOGETHER_API_KEY from the environment", () => {

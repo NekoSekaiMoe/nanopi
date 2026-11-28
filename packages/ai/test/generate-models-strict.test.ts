@@ -42,6 +42,7 @@ describe("strict model generation", () => {
 			"qwen3.8-flash",
 			"qwen3.8-max",
 			"qwen3.8-max-preview",
+			"qwen4-max",
 		];
 		const sourceModels = Object.fromEntries(
 			modelIds.map((id) => [

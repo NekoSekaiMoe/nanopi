@@ -373,6 +373,11 @@ export const OpenAIResponsesCompatSchema = Type.Object(
 				"Whether the exact model accepts developer or system messages after the conversation has started. When false, later system messages are folded into the leading system message. The generated catalog enables this for verified models.",
 			default: false,
 		}),
+		supportsMidConvoEffort: optionalCompatBoolean({
+			description:
+				"Whether the model keeps its prompt cache across effort changes by carrying the thinking level in configuration_update items instead of changing reasoning.effort.",
+			default: false,
+		}),
 		supportsInContextCompaction: optionalCompatBoolean({
 			description:
 				"Whether the exact model keeps its prompt cache for in-context compaction: a request that repeats the conversation, appends a system message and a user message, and sets toolChoice none still reads the cached prefix. Requires supportsMidConvoSystemMessages. Default: false; the generated model catalog enables it for models validated in real nanopi sessions.",
@@ -533,6 +538,11 @@ const ProviderCompatPropertyOverrides = {
 	supportsMidConvoSystemMessages: optionalCompatBoolean({
 		description:
 			"Whether the exact model accepts system or developer messages after the conversation has started. When false, later system messages are folded into the leading system message.",
+		default: false,
+	}),
+	supportsMidConvoEffort: optionalCompatBoolean({
+		description:
+			"Whether the model keeps its prompt cache across effort changes via configuration_update items instead of changing reasoning.effort.",
 		default: false,
 	}),
 	supportsInContextCompaction: optionalCompatBoolean({
