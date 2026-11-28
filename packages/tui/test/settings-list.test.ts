@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 import { SettingsList, type SettingsListTheme } from "../src/components/settings-list.ts";
+import { getKeybindings, KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings.ts";
 
 /** PageUp/PageDown as the terminal sends them (xterm CSI 5~/6~). */
 const PAGE_UP = "\u001b[5~";
@@ -129,5 +130,24 @@ describe("SettingsList", () => {
 
 		// The paged list renders the row five below the first one.
 		assert.match(list.render(80).join("\n"), /Setting 5/);
+	});
+
+	it("names the configured select keys in the hint", () => {
+		const previous = getKeybindings();
+		setKeybindings(
+			new KeybindingsManager(TUI_KEYBINDINGS, { "tui.select.confirm": "ctrl+y", "tui.select.cancel": "ctrl+q" }),
+		);
+		try {
+			const list = new SettingsList(
+				items,
+				10,
+				testTheme,
+				() => {},
+				() => {},
+			);
+			assert.match(list.render(80).join("\n"), /ctrl\+y\/space to change \u00b7 ctrl\+q to cancel/);
+		} finally {
+			setKeybindings(previous);
+		}
 	});
 });

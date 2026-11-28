@@ -19,11 +19,17 @@ import type {
 } from "../types.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
+import { applyOpenRouterReportedCost, type OpenRouterUsageAccounting } from "../utils/openrouter-cost.ts";
 import { retryProviderRequest } from "../utils/provider-retry.ts";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
 
 interface OpenRouterGeneratedImage {
 	image_url?: string | { url?: string };
+}
+
+interface OpenRouterChoiceError {
+	message?: string | null;
+	code?: string | number | null;
 }
 
 type OpenRouterImageGenerationMessage = ChatCompletion["choices"][number]["message"] & {
@@ -32,11 +38,24 @@ type OpenRouterImageGenerationMessage = ChatCompletion["choices"][number]["messa
 
 type OpenRouterImageGenerationChoice = ChatCompletion["choices"][number] & {
 	message: OpenRouterImageGenerationMessage;
+	error?: OpenRouterChoiceError;
 };
 
-type OpenRouterImageGenerationResponse = ChatCompletion & {
-	choices: OpenRouterImageGenerationChoice[];
+type OpenRouterImageGenerationResponse = Omit<ChatCompletion, "choices"> & {
+	choices?: OpenRouterImageGenerationChoice[];
+	error?: OpenRouterChoiceError;
 };
+
+function formatOpenRouterError(error: OpenRouterChoiceError | undefined): string | undefined {
+	if (!error) return undefined;
+	if (typeof error.message === "string" && error.message.trim().length > 0) {
+		return error.message.trim();
+	}
+	if (error.code !== undefined && error.code !== null && String(error.code).trim().length > 0) {
+		return `Provider error (${String(error.code).trim()})`;
+	}
+	return undefined;
+}
 
 /** Image generation over OpenRouter's chat completions endpoint. */
 export const generateImages: ImagesFunction<ImagesOptions> = async (
@@ -90,24 +109,46 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
 			output.usage = parseUsage(imageResponse.usage, model);
 		}
 
-		const choice = imageResponse.choices[0];
-		if (choice) {
-			const content = choice.message.content;
-			if (typeof content === "string" && content.length > 0) {
-				output.output.push({ type: "text", text: content } satisfies TextContent);
-			}
+		const choice = imageResponse.choices?.[0];
+		if (!choice) {
+			output.stopReason = "error";
+			output.errorMessage = formatOpenRouterError(imageResponse.error) ?? "Provider returned no choices";
+			return output;
+		}
 
-			for (const image of choice.message.images ?? []) {
-				const imageUrl = typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
-				if (!imageUrl?.startsWith("data:")) continue;
-				const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
-				if (!matches) continue;
-				output.output.push({
-					type: "image",
-					mimeType: matches[1],
-					data: matches[2],
-				} satisfies ImageContent);
-			}
+		const choiceError = formatOpenRouterError(choice.error) ?? formatOpenRouterError(imageResponse.error);
+		if (choiceError) {
+			output.stopReason = "error";
+			output.errorMessage = choiceError;
+			return output;
+		}
+
+		const finishReason = choice.finish_reason as string | null | undefined;
+		if (finishReason && finishReason !== "stop" && finishReason !== "end") {
+			output.stopReason = "error";
+			const nativeReason = (choice as { native_finish_reason?: string | null }).native_finish_reason;
+			output.errorMessage =
+				nativeReason && nativeReason !== finishReason
+					? `Provider finish_reason: ${finishReason} (native_finish_reason: ${nativeReason})`
+					: `Provider finish_reason: ${finishReason}`;
+			return output;
+		}
+
+		const content = choice.message.content;
+		if (typeof content === "string" && content.length > 0) {
+			output.output.push({ type: "text", text: content } satisfies TextContent);
+		}
+
+		for (const image of choice.message.images ?? []) {
+			const imageUrl = typeof image.image_url === "string" ? image.image_url : image.image_url?.url;
+			if (!imageUrl?.startsWith("data:")) continue;
+			const matches = imageUrl.match(/^data:([^;]+);base64,(.+)$/);
+			if (!matches) continue;
+			output.output.push({
+				type: "image",
+				mimeType: matches[1],
+				data: matches[2],
+			} satisfies ImageContent);
 		}
 
 		return output;
@@ -171,6 +212,14 @@ function parseUsage(
 		prompt_tokens?: number;
 		completion_tokens?: number;
 		prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+		cost?: number | null;
+		is_byok?: boolean;
+		cost_details?: {
+			upstream_inference_cost?: number | null;
+			upstream_inference_prompt_cost?: number;
+			upstream_inference_completions_cost?: number;
+			server_tool_cost?: number | null;
+		} | null;
 	},
 	model: ImageModel<ImageApi>,
 ) {
@@ -196,5 +245,6 @@ function parseUsage(
 		},
 	};
 	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
+	applyOpenRouterReportedCost(usage, rawUsage as typeof rawUsage & OpenRouterUsageAccounting);
 	return usage;
 }

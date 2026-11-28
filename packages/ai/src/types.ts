@@ -490,6 +490,8 @@ export interface Usage {
 		cacheWrite: number;
 		/** Best available total: provider-reported billed cost when supported, otherwise the catalog estimate. */
 		total: number;
+		/** Whether `total` came from provider billing data rather than the catalog estimate. */
+		totalFromProvider?: boolean;
 	};
 	/** Pricing snapshot used for the catalog estimate. Written by calculateCost; absent on legacy or provider-billed-only usage. */
 	pricing?: UsagePricing;
