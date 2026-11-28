@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import { Image, setImageTranscoder } from "../src/components/image.ts";
 import {
+	allocateImageId,
 	cropKittyImageLine,
 	deleteAllKittyImages,
 	deleteAllKittyPlacements,
@@ -976,5 +977,23 @@ describe("hyperlink", () => {
 		const result = hyperlink("README.md", "file:///home/user/README.md");
 		assert.ok(result.includes("file:///home/user/README.md"));
 		assert.ok(result.includes("README.md"));
+	});
+});
+
+describe("allocateImageId", () => {
+	it("stays within the signed 32-bit range Kitty and Konsole accept", () => {
+		const originalRandom = Math.random;
+		try {
+			// Extremes of the old range: the upper half was read as 0 by Konsole's toInt().
+			for (const value of [0, 0.5, 0.9999999999999999]) {
+				Math.random = () => value;
+				const id = allocateImageId();
+				assert.ok(Number.isSafeInteger(id), `id should be an integer, got ${id}`);
+				assert.ok(id >= 1, `id should be at least 1, got ${id}`);
+				assert.ok(id <= 0x7fffffff, `id should fit in signed 32-bit, got ${id}`);
+			}
+		} finally {
+			Math.random = originalRandom;
+		}
 	});
 });

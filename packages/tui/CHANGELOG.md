@@ -15,6 +15,8 @@
 - Markdown after an unclosed `$` before a number, such as `+$50`, is no longer rendered as raw text across the rest of the paragraph (upstream `362bf6f1b`)
 - `hyperlink()` no longer emits OSC 8 for URLs over 8192 characters, so a bare URL running into a multi-megabyte line cannot exhaust the heap when wrapped (upstream `6ca01d1e9`)
 - Bracketed-paste end markers split across input chunks are found without rescanning the whole paste on every chunk (upstream `da7e26cc8`)
+- Kitty image IDs stay within the signed 32-bit range so Konsole no longer reads IDs above `0x7fffffff` as 0, which left images undisplayed or deleted every placement (upstream `ed0f27d62`)
+- Appending a Kitty image that fits in the viewport no longer forces a full screen redraw when the append scrolls: differential rendering reserves the image rows and draws the placement without `2J`/`3J` clears (upstream `fd68df1cf`)
 
 - Enter on an absolute-path autocomplete menu completes the path instead of submitting the half-written prompt; only slash-command name menus submit on Enter (upstream `9a7cfba47`)
 

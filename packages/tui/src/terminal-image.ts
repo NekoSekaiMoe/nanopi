@@ -232,8 +232,9 @@ export function isImageLine(line: string): boolean {
  * (e.g., main app vs extensions).
  */
 export function allocateImageId(): number {
-	// Use random ID in range [1, 0xffffffff] to avoid collisions
-	return Math.floor(Math.random() * 0xfffffffe) + 1;
+	// Kitty parses image IDs as signed 32-bit; Konsole reads IDs above 0x7fffffff as 0.
+	// Stay in [1, 0x7fffffff] to avoid collisions and the overflow.
+	return Math.floor(Math.random() * 0x7ffffffe) + 1;
 }
 
 export function encodeKitty(

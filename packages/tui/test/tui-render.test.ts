@@ -340,7 +340,7 @@ describe("TUI Kitty image cleanup", () => {
 		}
 	});
 
-	it("reserves Kitty image rows before drawing during full redraw fallbacks", async () => {
+	it("keeps appended Kitty images on the differential path when scrolling", async () => {
 		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
 		setCellDimensions({ widthPx: 10, heightPx: 10 });
 		try {
@@ -369,14 +369,17 @@ describe("TUI Kitty image cleanup", () => {
 			await terminal.waitForRender();
 
 			const writes = terminal.getWrites();
-			assert.ok(tui.fullRedraws > redrawsBeforeImage, "scrolling image append should force a full redraw");
-			assert.ok(
-				writes.includes(`\r\n\r\n\x1b[2A${imageSequence}\x1b[2B`),
-				"full redraw should reserve visible image rows before drawing the placement",
+			assert.equal(
+				tui.fullRedraws,
+				redrawsBeforeImage,
+				"scrolling image append should stay on the differential path",
 			);
+			assert.ok(!writes.includes("\x1b[2J"), "differential append must not clear the whole screen");
+			assert.ok(!writes.includes("\x1b[3J"), "differential append must not clear the scrollback");
+			assert.ok(writes.includes(imageSequence), "image placement should be drawn");
 			assert.ok(
-				!writes.includes(`${imageSequence}\r\n\x1b[0m`),
-				"full redraw must not write reserved padding rows after drawing the placement",
+				writes.includes(`\r\n\x1b[2K\r\n\x1b[2K\x1b[2A${imageSequence}\x1b[2B`),
+				"differential append should still reserve image rows before drawing the placement",
 			);
 
 			tui.stop();
