@@ -52,6 +52,8 @@ Status: implemented
   `deletes:` 只会写在 PR 自己的提交上。
 - CNB 侧 `check-merge-result-cnb.mjs` 显式把 `CNB_PULL_REQUEST_TARGET_SHA` 传给
   `--base`，把「哪边是 base」交给事件给的事实，不再靠第一父推断。
+- CNB 包装脚本把 `refs/remotes/pr/head` 传给 `--commit`。PR 描述变量或 API 取不到时，
+  写在 PR 提交消息里的 `deletes:` 仍能放行；判定脚本依旧不联网。
 
 ## Alternatives considered
 
@@ -74,4 +76,5 @@ Status: implemented
 `scripts/check-merge-result.test.mjs` 覆盖：白名单放行、白名单逐条（`*` 不算）、合并提交
 自证放行、合并提交里的回退仍红、合并提交里的改名仍红、同一删除在快进与合并两种形态下
 结论一致（差别只能由「那一跳是不是合并动作」解释）。`check-merge-result-cnb.test.mjs`
-覆盖 `CNB_PULL_REQUEST_DESC` 落地成文件这条线。
+覆盖 `CNB_PULL_REQUEST_DESC` 落地成文件，以及没有描述变量时从 PR 提交消息读 `deletes:`
+这两条线。
