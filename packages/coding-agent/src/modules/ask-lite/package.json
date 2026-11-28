@@ -73,7 +73,7 @@
 		]
 	},
 	"peerDependencies": {
-		"@juicesharp/rpiv-i18n": "2.15.0",
+		"@juicesharp/rpiv-i18n": "2.16.0",
 		"@nanopi/pi-coding-agent": "*",
 		"@nanopi/pi-tui": "*",
 		"typebox": "1.4.7"
