@@ -4,7 +4,7 @@ import path from "node:path";
 import { Type } from "typebox";
 import type { ModuleApi, ModuleContext, ModuleUIContext, SessionStartEvent, ToolLoadout, ModuleEventsSurface, ModuleToolsSurface, ModuleActionsSurface, ModuleSessionSurface } from "../../../core/modules/types.ts";
 import { mergeWorktree, type Worktree } from "./worktree.ts";
-import { SUBAGENT_CHANNEL } from "../../shared-channels.ts";
+import { SUBAGENT_CHANNEL, SUBAGENT_VIEW_CHANNEL, type SubagentViewEntry } from "../../shared-channels.ts";
 import { buildCliArgs, collectCliOutput, parsePreferredCli, spawnCli, type PreferredCli } from "./cli-adapter.ts";
 import { killProcessTree } from "../../../utils/shell.ts";
 
@@ -442,7 +442,32 @@ export default function subagentMini(pi: ModuleEventsSurface &
 		return lines;
 	};
 
+	/** One line of context for a job that has not reported yet. */
+	const viewDetail = (job: Job): string =>
+		`cwd ${jobCwdLabel(job)} · tools ${job.tools} · attempt ${job.attempts}`;
+
+	const viewSnapshot = (): SubagentViewEntry[] =>
+		[...jobs.values()].map((job) => ({
+			id: job.id,
+			status: job.status,
+			elapsed: `${Math.round((job.durationMs ?? Date.now() - job.startedAt) / 1000)}s`,
+			scope: scopeOf(job.task),
+			detail: viewDetail(job),
+			report: job.finalOutput || job.errorMessage || "",
+		}));
+
+	/** Publish the data a read-only viewer needs. No widget key is touched here. */
+	const refreshView = (): void => {
+		if (!uiRef) return;
+		try {
+			uiRef.channel(SUBAGENT_VIEW_CHANNEL).update({ label: "subagent views", kind: "view", jobs: viewSnapshot() });
+		} catch {
+			// The viewer is cosmetic; never break the tool flow.
+		}
+	};
+
 	const refreshWidget = (): void => {
+		refreshView();
 		if (!uiRef) return;
 		try {
 			const rows = widgetLines();

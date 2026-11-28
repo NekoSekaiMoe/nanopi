@@ -66,12 +66,19 @@ import type {
 import { installFooter } from "./footer.ts";
 import { installSectionHeadingStyle } from "./section-heading.ts";
 import { installExternalToolRenderers, installShellRenderer, installToolRenderers } from "./tools.ts";
+import { type SubagentViewEntry, SUBAGENT_VIEW_CHANNEL } from "../../shared-channels.ts";
 import {
   EXPLORING_MESSAGE_TYPE,
   exploringHistoryRenderer,
   installExploringBlock,
   skinSubagentWidget,
 } from "./subagent-widget.ts";
+import {
+  type SubagentViewerBridge,
+  createSubagentViewerBridge,
+  SubagentReportComponent,
+  viewEntries,
+} from "./subagent-viewer.ts";
 import { installThinkingDisplay } from "./thinking.ts";
 import { captureTerminalWidth, installWorking } from "./working.ts";
 
@@ -138,6 +145,7 @@ export default function (pi: ModuleEventsSurface &
   // accumulating registration, so calling it per start is safe. The editor
   // stays the default composer: pi-ui deliberately ships no custom input
   // frame (see the pi-ui note in .agents/notes).
+  let viewerBridge: SubagentViewerBridge | undefined;
   pi.on("session_start", async (_event, ctx) => {
     if (ctx.mode !== "tui") return;
     installSectionHeadingStyle(pi, ctx.ui.theme);
@@ -147,5 +155,56 @@ export default function (pi: ModuleEventsSurface &
     // The working row is one line inside the editor frame, so it needs the
     // width to fold its own label instead of wrapping onto a second line.
     captureTerminalWidth(process.stdout.columns || 0);
+
+    viewerBridge?.dispose();
+    const ui = ctx.ui;
+    viewerBridge = createSubagentViewerBridge({
+      theme: ui.theme,
+      invalidate: () => undefined,
+      onClose: () => undefined,
+      getEditorText: () => ui.getEditorText(),
+      subscribe: (listener) => {
+        const stop = ui.channel(SUBAGENT_VIEW_CHANNEL).transform((content) => {
+          listener(viewEntries(content));
+          return undefined;
+        });
+        // A transform registered after the producer's first write sees that
+        // write replayed by the channel host, so no separate read is needed.
+        return stop;
+      },
+      open: (factory) => {
+        void ui.custom((tui, _theme, _kb, done) => factory(done, tui.terminal.rows), {
+          overlay: true,
+          overlayOptions: {
+            anchor: "bottom-center",
+            width: "100%",
+            maxHeight: "100%",
+            margin: { left: 0, right: 0, bottom: 0 },
+          },
+        });
+      },
+      showReport: (job: SubagentViewEntry) => {
+        void ui.custom((tui, _theme, _kb, done) => {
+          const component = new SubagentReportComponent(job, ui.theme, () => done(undefined));
+          component.setHeight(tui.terminal.rows);
+          return component;
+        }, {
+          overlay: true,
+          overlayOptions: {
+            anchor: "bottom-center",
+            width: "100%",
+            maxHeight: "100%",
+            margin: { left: 0, right: 0, bottom: 0 },
+          },
+        });
+      },
+    });
+    const bridge = viewerBridge;
+    const stopInput = ui.onTerminalInput((data) => bridge.onInput(data) ?? undefined);
+    const previousDispose = bridge.dispose.bind(bridge);
+    bridge.dispose = () => {
+      stopInput();
+      previousDispose();
+    };
   });
 }
