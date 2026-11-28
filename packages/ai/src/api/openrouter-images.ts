@@ -16,7 +16,9 @@ import type {
 	ImagesOptions,
 	ProviderHeaders,
 	TextContent,
+	Usage,
 } from "../types.ts";
+import { calculateCost } from "../utils/cost.ts";
 import { formatProviderError, normalizeProviderError } from "../utils/error-body.ts";
 import { headersToRecord, providerHeadersToRecord } from "../utils/headers.ts";
 import { applyOpenRouterReportedCost, type OpenRouterUsageAccounting } from "../utils/openrouter-cost.ts";
@@ -78,7 +80,7 @@ export const generateImages: ImagesFunction<ImagesOptions> = async (
 			throw new Error(`No API key for provider: ${model.provider}`);
 		}
 		const client = createClient(model, apiKey, options?.headers, options?.fetch);
-		let params = buildParams(model, context);
+		let params = buildParams(model, context, options);
 		const nextParams = await options?.onPayload?.(params, model);
 		if (nextParams !== undefined) {
 			params = nextParams as typeof params;
@@ -176,9 +178,17 @@ function createClient(
 
 type OpenRouterImagesCreateParams = Omit<ChatCompletionCreateParamsNonStreaming, "modalities"> & {
 	modalities: Array<"image" | "text">;
+	image_config?: {
+		aspect_ratio?: string;
+		image_size?: string;
+	};
 };
 
-function buildParams(model: ImageModel<ImageApi>, context: ImagesContext): OpenRouterImagesCreateParams {
+function buildParams(
+	model: ImageModel<ImageApi>,
+	context: ImagesContext,
+	options?: ImagesOptions,
+): OpenRouterImagesCreateParams {
 	const content: ChatCompletionContentPart[] = context.input.map((item): ChatCompletionContentPart => {
 		if (item.type === "text") {
 			return {
@@ -194,6 +204,11 @@ function buildParams(model: ImageModel<ImageApi>, context: ImagesContext): OpenR
 		} satisfies ChatCompletionContentPartImage;
 	});
 
+	const imageConfig = {
+		...(options?.aspectRatio ? { aspect_ratio: options.aspectRatio } : {}),
+		...(options?.size ? { image_size: options.size } : {}),
+	};
+
 	return {
 		model: model.id,
 		messages: [
@@ -204,6 +219,7 @@ function buildParams(model: ImageModel<ImageApi>, context: ImagesContext): OpenR
 		],
 		stream: false,
 		modalities: model.output.includes("text") ? ["image", "text"] : ["image"],
+		...(Object.keys(imageConfig).length > 0 ? { image_config: imageConfig } : {}),
 	};
 }
 
@@ -212,6 +228,7 @@ function parseUsage(
 		prompt_tokens?: number;
 		completion_tokens?: number;
 		prompt_tokens_details?: { cached_tokens?: number; cache_write_tokens?: number };
+		completion_tokens_details?: { reasoning_tokens?: number; image_tokens?: number };
 		cost?: number | null;
 		is_byok?: boolean;
 		cost_details?: {
@@ -222,7 +239,7 @@ function parseUsage(
 		} | null;
 	},
 	model: ImageModel<ImageApi>,
-) {
+): Usage {
 	const promptTokens = rawUsage.prompt_tokens || 0;
 	const reportedCachedTokens = rawUsage.prompt_tokens_details?.cached_tokens || 0;
 	const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0;
@@ -230,21 +247,20 @@ function parseUsage(
 		cacheWriteTokens > 0 ? Math.max(0, reportedCachedTokens - cacheWriteTokens) : reportedCachedTokens;
 	const input = Math.max(0, promptTokens - cacheReadTokens - cacheWriteTokens);
 	const output = rawUsage.completion_tokens || 0;
-	const usage = {
+	const usage: Usage = {
 		input,
 		output,
 		cacheRead: cacheReadTokens,
 		cacheWrite: cacheWriteTokens,
+		// completion_tokens already includes reasoning_tokens and image_tokens.
+		reasoning: rawUsage.completion_tokens_details?.reasoning_tokens ?? 0,
+		...(typeof rawUsage.completion_tokens_details?.image_tokens === "number"
+			? { imageOutput: rawUsage.completion_tokens_details.image_tokens }
+			: {}),
 		totalTokens: input + output + cacheReadTokens + cacheWriteTokens,
-		cost: {
-			input: (model.cost.input / 1000000) * input,
-			output: (model.cost.output / 1000000) * output,
-			cacheRead: (model.cost.cacheRead / 1000000) * cacheReadTokens,
-			cacheWrite: (model.cost.cacheWrite / 1000000) * cacheWriteTokens,
-			total: 0,
-		},
+		cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 	};
-	usage.cost.total = usage.cost.input + usage.cost.output + usage.cost.cacheRead + usage.cost.cacheWrite;
+	calculateCost(model, usage);
 	applyOpenRouterReportedCost(usage, rawUsage as typeof rawUsage & OpenRouterUsageAccounting);
 	return usage;
 }

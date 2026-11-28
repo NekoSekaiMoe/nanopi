@@ -98,6 +98,7 @@ describe("openrouter images", () => {
 		expect(params.stream).toBe(false);
 		expect(params.modalities).toEqual(["image", "text"]);
 		expect(params.messages?.[0]?.content?.[0]).toMatchObject({ type: "text", text: "Generate a dog" });
+		expect((params as { image_config?: unknown }).image_config).toBeUndefined();
 	});
 
 	it("passes through abort signal and returns aborted result", async () => {
@@ -144,6 +145,32 @@ describe("openrouter images", () => {
 		expect(output.output.some((item) => item.type === "image")).toBe(true);
 		// Image-only models must not request text output.
 		expect((mockState.lastParams as { modalities?: string[] }).modalities).toEqual(["image"]);
+		expect((mockState.lastParams as { image_config?: unknown }).image_config).toBeUndefined();
+	});
+
+	it("maps aspectRatio and size options to OpenRouter image_config", async () => {
+		const model: ImageModel<"openrouter-images"> = {
+			type: "image",
+			id: "google/gemini-2.5-flash-image",
+			name: "Gemini 2.5 Flash Image",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
+			output: ["image", "text"],
+			cost: { input: 0.3, output: 2.5, cacheRead: 0.03, cacheWrite: 0.083333 },
+		};
+
+		const output = await generateImages(
+			model,
+			{ input: [{ type: "text", text: "A landscape" }] },
+			{ apiKey: "test", aspectRatio: "16:9", size: "2K" },
+		);
+		expect(output.stopReason).toBe("stop");
+		expect((mockState.lastParams as { image_config?: unknown }).image_config).toEqual({
+			aspect_ratio: "16:9",
+			image_size: "2K",
+		});
 	});
 
 	it("returns stopReason error and preserves reported zero cost on OpenRouter finish_reason error", async () => {
@@ -297,5 +324,90 @@ describe("openrouter images", () => {
 		expect(output.stopReason).toBe("stop");
 		expect(output.usage?.cost.total).toBe(0.042);
 		expect(output.usage?.cost.totalFromProvider).toBe(true);
+		expect(output.usage?.reasoning).toBe(0);
+		expect(output.usage?.imageOutput).toBeUndefined();
+	});
+
+	it("reports reasoning and image tokens as subsets of output and prices them at their rates", async () => {
+		mockState.nextResponse = {
+			id: "gen-split-1",
+			usage: {
+				prompt_tokens: 15,
+				completion_tokens: 2290,
+				completion_tokens_details: { reasoning_tokens: 1000, image_tokens: 1120 },
+			},
+			choices: [
+				{
+					finish_reason: "stop",
+					message: {
+						content: null,
+						images: [{ image_url: "data:image/png;base64,ZmFrZS1wbmc=" }],
+					},
+				},
+			],
+		};
+		const model: ImageModel<"openrouter-images"> = {
+			type: "image",
+			id: "google/gemini-3.1-flash-image-preview",
+			name: "Gemini 3.1 Flash Image Preview",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
+			output: ["image", "text"],
+			cost: { input: 3, output: 3, imageOutput: 60, cacheRead: 0, cacheWrite: 0 },
+		};
+
+		const output = await generateImages(
+			model,
+			{ input: [{ type: "text", text: "A compass rose" }] },
+			{ apiKey: "test" },
+		);
+		expect(output.usage?.output).toBe(2290);
+		expect(output.usage?.reasoning).toBe(1000);
+		expect(output.usage?.imageOutput).toBe(1120);
+		// 1120 image tokens at $60/M plus 1170 text/reasoning tokens at $3/M.
+		expect(output.usage?.cost.output).toBeCloseTo(0.07071, 9);
+		expect(output.usage?.cost.total).toBeCloseTo(0.070755, 9);
+	});
+
+	it("prices an image-only model whose text output rate is zero", async () => {
+		mockState.nextResponse = {
+			id: "gen-image-only-1",
+			usage: {
+				prompt_tokens: 8,
+				completion_tokens: 1000,
+				completion_tokens_details: { image_tokens: 1000 },
+			},
+			choices: [
+				{
+					finish_reason: "stop",
+					message: {
+						content: null,
+						images: [{ image_url: "data:image/png;base64,ZmFrZS1wbmc=" }],
+					},
+				},
+			],
+		};
+		const model: ImageModel<"openrouter-images"> = {
+			type: "image",
+			id: "black-forest-labs/flux.2-pro",
+			name: "FLUX.2 Pro",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text"],
+			output: ["image"],
+			cost: { input: 0, output: 0, imageOutput: 60, cacheRead: 0, cacheWrite: 0 },
+		};
+
+		const output = await generateImages(
+			model,
+			{ input: [{ type: "text", text: "A compass rose" }] },
+			{ apiKey: "test" },
+		);
+		expect(output.usage?.imageOutput).toBe(1000);
+		expect(output.usage?.cost.output).toBeCloseTo(0.06, 9);
+		expect(output.usage?.cost.total).toBeGreaterThan(0);
 	});
 });

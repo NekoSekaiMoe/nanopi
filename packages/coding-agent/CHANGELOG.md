@@ -13,6 +13,7 @@
 - A compaction summary now lists the history it replaced, and `recall_context` pulls one region back. The summary ends with a `## Replaced Context (recallable)` section, one line per replaced turn with a ref, a one-line preview, an entry count, and a token size; `recall_context({ ref })` answers with the original messages of that region, capped at 8000 tokens so a recall cannot refill the window the summary just freed. A ref is an ordinal over the branch (`E3` = the third model-visible entry), recomputed from the branch and the newest cut point, so it survives a reload and a fork with no schema change. `session_before_compact` can now post-process a summary it did not write: the event is dispatched a second time with `replacedSummary` when no handler built one, which is what lets the appendix land on the Codex-style summary ([#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - Added opt-in `compaction.growthGateTokens`. Automatic threshold compaction now waits for enough estimated context growth since the last compaction, so a threshold that is barely exceeded cannot produce a second summary right after one finished. The default `0` keeps the existing threshold-only behavior (issue [#767](https://cnb.cool/shinytale/nanopi/-/issues/767))
 - The `pi-image` module registers `generate_image`, the first caller of `modelRegistry.generateImages()`. It picks an image model for the session's own provider when there is one (a ChatGPT OAuth session draws with its own subscription, otherwise the first available image model), returns the image as a tool result, and writes it to the path the model asked for, taking the extension from the returned format. Its guideline lets the model draw on its own when the task's output includes an image file, not only when the user asks for one ([#757](https://cnb.cool/shinytale/nanopi/-/issues/757))
+- `generate_image` accepts optional `aspectRatio` (e.g. `"16:9"`) and `size` (e.g. `"2K"`) arguments and forwards them to image providers. Values are passed through unchanged, so an unsupported value is reported by the provider (issue [#893](https://cnb.cool/shinytale/agent/nanopi/-/issues/893))
 
 ### Changed
 
@@ -25,6 +26,7 @@
 - The machine hostname is now shown on its own line under the welcome box directory and as a `Hostname:` row in `/status`. The standalone `pi-hostname` module is removed (issue [#835](https://cnb.cool/shinytale/nanopi/-/issues/835))
 
 ### Fixed
+
 - `ask_user_question` now decodes double-encoded tool arguments before schema validation. A resumed session whose `questions` array or its elements were serialized as JSON strings opens the dialog instead of failing validation (upstream `#244`, issue [#885](https://cnb.cool/shinytale/agent/nanopi/-/issues/885))
 
 - Fixed HTML export inserting viewer scripts and CSS with `String.replace` string replacements, which expanded `$$` and `$&` in template.js and highlight.js and showed the cost without its dollar sign (upstream `41da1a524`)

@@ -29,6 +29,12 @@ describe("usage pricing snapshot in the ledger", () => {
 		expect(combined.input).toBe(200);
 	});
 
+	it("sums image output tokens when either side reports them", () => {
+		expect(combineUsage({ ...usage(), imageOutput: 3 }, usage()).imageOutput).toBe(3);
+		expect(combineUsage({ ...usage(), imageOutput: 3 }, { ...usage(), imageOutput: 4 }).imageOutput).toBe(7);
+		expect(combineUsage(usage(), usage()).imageOutput).toBeUndefined();
+	});
+
 	it("keeps recorded cost intact in the session cost breakdown", () => {
 		const entries = [
 			{

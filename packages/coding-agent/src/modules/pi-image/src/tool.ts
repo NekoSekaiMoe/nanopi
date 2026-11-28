@@ -23,6 +23,16 @@ const generateImageParams = Type.Object({
 				"File to write the image to, relative to the working directory. The extension comes from the image format. Omit to keep the image in the transcript only.",
 		}),
 	),
+	aspectRatio: Type.Optional(
+		Type.String({
+			description: 'Desired aspect ratio, e.g. "1:1" or "16:9". Supported values depend on the model.',
+		}),
+	),
+	size: Type.Optional(
+		Type.String({
+			description: 'Desired resolution, e.g. "1K" or "2K". Supported values depend on the model.',
+		}),
+	),
 });
 
 export interface GenerateImageDetails {
@@ -81,6 +91,7 @@ export function registerImageTool(pi: ModuleToolsSurface): void {
 		promptGuidelines: [
 			"Use generate_image when the task's output includes an image file (an og:image, a placeholder for a component, a test fixture), or when the user asks for an image. Write the prompt yourself: describe the subject, style and composition instead of repeating the request verbatim.",
 			"Pass path when the image is meant to end up in the repository or a document; the tool picks the extension from the format the provider returned.",
+			"Pass aspectRatio or size only when the user asks for a specific composition or resolution; the provider rejects values a model does not support.",
 		],
 		annotations: { readOnlyHint: false, openWorldHint: true },
 		parameters: generateImageParams,
@@ -90,7 +101,11 @@ export function registerImageTool(pi: ModuleToolsSurface): void {
 			const result = await ctx.modelRegistry.generateImages(
 				model,
 				{ input: [{ type: "text", text: params.prompt }] },
-				{ signal },
+				{
+					signal,
+					...(params.aspectRatio ? { aspectRatio: params.aspectRatio } : {}),
+					...(params.size ? { size: params.size } : {}),
+				},
 			);
 			if (result.stopReason !== "stop") throw new Error(failureMessage(result));
 

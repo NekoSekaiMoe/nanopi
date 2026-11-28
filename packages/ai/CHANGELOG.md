@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added `Usage.imageOutput`, the image output tokens as a subset of `output` reported by OpenRouter. `openrouter-images` sets it from `completion_tokens_details.image_tokens`, alongside `reasoning` from `completion_tokens_details.reasoning_tokens` (upstream `a512c3fe2`, `d02145c49`)
+- Added `cost.imageOutput`, the image output rate for models that generate images. The OpenRouter catalog reads it from `image_output`, and `calculateCost()` prices image tokens at that rate while pricing the rest of output (text and reasoning) at `output`. Without the provider's split, all output uses the image rate; without the image rate, all output keeps the text rate (upstream `ccda1f74b`)
+- Added `aspectRatio` and `size` to `ImagesOptions`; `openrouter-images` forwards them to OpenRouter's `image_config` (upstream `c863bdf19`)
+
 ### Changed
 
 - Qwen Token Plan Individual now lists `qwen4-max` instead of the retired `qwen4-max-preview` (upstream `22f5f2995`)
@@ -14,6 +20,7 @@
 
 ### Fixed
 
+- Fixed OpenRouter image models billing image tokens at the text rate or not at all. `openrouter-images` now uses `calculateCost()` with the catalog's `image_output` rate, so a pure image model with a zero text rate gets a non-zero cost and a Gemini image response splits image tokens from text/reasoning output (upstream `ccda1f74b`)
 - Fixed GitHub Copilot models on the `openai-completions` API losing their reasoning state between turns: Copilot's `reasoning_opaque` is now stored on the thinking block and sent back with `reasoning_text`, including when it arrives without reasoning text (upstream `ede8bdca0`)
 - Fixed OpenRouter image generation ignoring choice errors and non-stop `finish_reason`, and now applies provider-reported `usage.cost` like chat completions (upstream `596540d43`)
 - Sign in with ChatGPT accepts the single `.onboarding_entrypoint=life_sciences` suffix OpenAI appends to the OAuth callback `state` for some accounts. Other suffixes and repeated suffixes still fail with `OAuth state mismatch`, and the authorization request is unchanged (issue [#854](https://cnb.cool/shinytale/agent/nanopi/-/issues/854))

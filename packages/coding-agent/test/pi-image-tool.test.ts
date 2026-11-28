@@ -27,11 +27,13 @@ const IMAGE_MODEL: ImageModel<string> = {
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 };
 
+type GenerateImageParams = { prompt: string; path?: string; aspectRatio?: string; size?: string };
+
 type RegisteredTool = {
 	name: string;
 	execute: (
 		toolCallId: string,
-		params: { prompt: string; path?: string },
+		params: GenerateImageParams,
 		signal: AbortSignal | undefined,
 		onUpdate: undefined,
 		ctx: ModuleToolContext,
@@ -122,6 +124,15 @@ describe("generate_image tool", () => {
 		expect(details.path).toBe(join(dir, "fox.png"));
 		expect(details.bytes).toBe("png-bytes".length);
 		expect(readFileSync(details.path, "utf8")).toBe("png-bytes");
+	});
+
+	it("forwards image options to the provider", async () => {
+		const tool = registerTool();
+		const ctx = context({ imageModels: [IMAGE_MODEL] });
+		await tool.execute("call-1", { prompt: "a red fox", aspectRatio: "16:9", size: "2K" }, undefined, undefined, ctx);
+
+		const registry = ctx.modelRegistry as unknown as { generateImages: ReturnType<typeof vi.fn> };
+		expect(registry.generateImages.mock.calls[0]?.[2]).toMatchObject({ aspectRatio: "16:9", size: "2K" });
 	});
 
 	it("prefers an image model from the session's own provider", async () => {

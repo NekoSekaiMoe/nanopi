@@ -76,6 +76,7 @@ interface Usage {
   cacheWrite: number;
   cacheWrite1h?: number;
   reasoning?: number;
+  imageOutput?: number;
   totalTokens: number;
   cost: {
     input: number;
@@ -87,7 +88,7 @@ interface Usage {
 }
 ```
 
-When present, `reasoning` is already included in `output`; do not add it again. `cacheWrite1h` is the subset of `cacheWrite` written with one-hour retention.
+When present, `reasoning` and `imageOutput` are already included in `output`; do not add them again. `cacheWrite1h` is the subset of `cacheWrite` written with one-hour retention.
 
 ## Base messages
 
