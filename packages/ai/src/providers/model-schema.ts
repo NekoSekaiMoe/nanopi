@@ -29,6 +29,15 @@ const ModelCostRatesProperties = {
 	cacheWrite: Type.Number({ description: "Cache-write cost in USD per million tokens." }),
 };
 
+const imageOutputCostProperty = {
+	imageOutput: Type.Optional(
+		Type.Number({
+			description:
+				"Image output cost in USD per million tokens, for models that generate images. Image output tokens use this rate and the rest of output (text and reasoning) uses `output`. Unset means image tokens cost `output`.",
+		}),
+	),
+};
+
 export const ModelCostRatesSchema = Type.Object(ModelCostRatesProperties);
 export const ModelCostTierSchema = Type.Object({
 	inputTokensAbove: Type.Number({
@@ -38,6 +47,7 @@ export const ModelCostTierSchema = Type.Object({
 });
 export const ModelCostSchema = Type.Object({
 	...ModelCostRatesProperties,
+	...imageOutputCostProperty,
 	tiers: Type.Optional(
 		Type.Array(ModelCostTierSchema, {
 			description: "Request-wide pricing tiers. The highest matching input threshold applies to the full request.",
