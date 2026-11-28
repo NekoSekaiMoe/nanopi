@@ -266,19 +266,10 @@
       "description": "Show only the new version number after an update instead of the changelog entries.",
       "default": false
     },
-    "enableInstallTelemetry": {
+    "enableProviderAttribution": {
       "type": "boolean",
       "description": "Send provider attribution headers (HTTP-Referer and similar) with requests to OpenRouter and other gateways.",
       "default": true
-    },
-    "enableAnalytics": {
-      "type": "boolean",
-      "description": "Opt in to analytics data sharing.",
-      "default": false
-    },
-    "trackingId": {
-      "type": "string",
-      "description": "Analytics tracking identifier, generated when analytics is enabled."
     },
     "deviceId": {
       "type": "string",

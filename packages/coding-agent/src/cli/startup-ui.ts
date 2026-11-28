@@ -1,14 +1,9 @@
 import { ProcessTerminal, setCapabilityOverrides, setKeybindings, type TUI, TuiMainScreen } from "@nanopi/pi-tui";
-import { existsSync } from "fs";
-import { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, getAgentDir, getSettingsPath, PACKAGE_NAME } from "../config.ts";
+import { getAgentDir } from "../config.ts";
 import { KeybindingsManager } from "../core/keybindings.ts";
 import type { SettingsManager } from "../core/settings-manager.ts";
 import { ExtensionInputComponent } from "../modes/interactive/components/extension-input.ts";
 import { ExtensionSelectorComponent } from "../modes/interactive/components/extension-selector.ts";
-import {
-	FirstTimeSetupComponent,
-	type FirstTimeSetupResult,
-} from "../modes/interactive/components/first-time-setup.ts";
 import {
 	initTheme,
 	markTerminalColorsPending,
@@ -17,24 +12,6 @@ import {
 } from "../modes/interactive/theme/theme.ts";
 import { requestTerminalColors } from "../modes/interactive/theme/theme-controller.ts";
 import { flushStdout } from "../utils/flush-stdout.ts";
-
-const OFFICIAL_PACKAGE_NAME = "@nanopi/pi-coding-agent";
-const OFFICIAL_APP_NAME = "nanopi";
-const OFFICIAL_CONFIG_DIR_NAME = ".nanopi";
-
-interface DistributionMetadata {
-	packageName: string;
-	appName: string;
-	configDirName: string;
-}
-
-function isOfficialDistribution({ packageName, appName, configDirName }: DistributionMetadata): boolean {
-	return (
-		packageName === OFFICIAL_PACKAGE_NAME &&
-		appName === OFFICIAL_APP_NAME &&
-		configDirName === OFFICIAL_CONFIG_DIR_NAME
-	);
-}
 
 export async function createStartupTui(settingsManager: SettingsManager): Promise<TUI> {
 	setCapabilityOverrides(settingsManager.getTerminalCapabilityOverrides());
@@ -71,28 +48,6 @@ async function clearStartupTui(ui: TUI): Promise<void> {
 	await new Promise((resolve) => setTimeout(resolve, 25));
 }
 
-/**
- * First-time setup runs when all of these hold:
- * - this is the official nanopi distribution (not a fork/rebrand)
- * - the default agent directory is used (no custom agent dir override)
- * - setup was not completed before (settings.json does not exist)
- */
-export function shouldRunFirstTimeSetup(settingsPath: string = getSettingsPath()): boolean {
-	if (
-		!isOfficialDistribution({
-			packageName: PACKAGE_NAME,
-			appName: APP_NAME,
-			configDirName: CONFIG_DIR_NAME,
-		})
-	) {
-		return false;
-	}
-	if (process.env[ENV_AGENT_DIR]) {
-		return false;
-	}
-	return !existsSync(settingsPath);
-}
-
 export async function showStartupSelector<T>(
 	settingsManager: SettingsManager,
 	title: string,
@@ -122,38 +77,6 @@ export async function showStartupSelector<T>(
 		ui.addChild(selector);
 		ui.setFocus(selector);
 		startStartupTui(ui);
-	});
-}
-
-/** Show the first-time setup dialog and persist the result */
-export async function showFirstTimeSetup(settingsManager: SettingsManager): Promise<void> {
-	const ui = await createStartupTui(settingsManager);
-	return new Promise((resolve) => {
-		let settled = false;
-		const finish = async (result: FirstTimeSetupResult | undefined) => {
-			if (settled) {
-				return;
-			}
-			settled = true;
-			if (result) {
-				settingsManager.setEnableAnalytics(result.shareAnalytics);
-				await settingsManager.flush();
-			}
-			await clearStartupTui(ui);
-			ui.stop();
-			resolve();
-		};
-
-		ui.start();
-		const component = new FirstTimeSetupComponent({
-			onSubmit: (result) => void finish(result),
-			onCancel: () => void finish(undefined),
-		});
-		ui.addChild(component);
-		ui.setFocus(component);
-		ui.requestRender();
-		// The terminal's colors regenerate the system theme; re-rendering rebuilds the dialog with it.
-		queryStartupTerminalColors(ui);
 	});
 }
 

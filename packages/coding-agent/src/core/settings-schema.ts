@@ -260,21 +260,12 @@ export const SettingsSchema = Type.Object(
 				default: SETTINGS_DEFAULTS.collapseChangelog,
 			}),
 		),
-		enableInstallTelemetry: Type.Optional(
+		enableProviderAttribution: Type.Optional(
 			Type.Boolean({
 				description:
 					"Send provider attribution headers (HTTP-Referer and similar) with requests to OpenRouter and other gateways.",
-				default: SETTINGS_DEFAULTS.enableInstallTelemetry,
+				default: SETTINGS_DEFAULTS.enableProviderAttribution,
 			}),
-		),
-		enableAnalytics: Type.Optional(
-			Type.Boolean({
-				description: "Opt in to analytics data sharing.",
-				default: SETTINGS_DEFAULTS.enableAnalytics,
-			}),
-		),
-		trackingId: Type.Optional(
-			Type.String({ description: "Analytics tracking identifier, generated when analytics is enabled." }),
 		),
 		deviceId: Type.Optional(
 			Type.String({
